@@ -29,14 +29,9 @@ pub async fn search_assets(
             ..AssetList::default()
         });
     }
-    let filter =  if let Err(e) = &filter_result {
-        return Err(DbErr::Custom(e.to_string()));
-    } else {
-        filter_result.as_ref().unwrap()
-    };
-
+    let filter = filter_result.as_ref().map_err(|e| DbErr::Custom(e.to_string()))?;
     let keys = index_client
-        .get_asset_pubkeys_filtered(&filter, &sort_by.into(), limit, page, before, after)
+        .get_asset_pubkeys_filtered(filter, &sort_by.into(), limit, page, before, after)
         .await
         .map_err(|e| DbErr::Custom(e))?;
     let asset_ids = keys
