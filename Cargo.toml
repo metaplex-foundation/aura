@@ -1,0 +1,15 @@
+[workspace]
+members = [
+  "digital_asset_types",
+  "nft_ingester",
+  "metrics_utils",
+  "rocks-db",
+  "postgre-client"
+]
+exclude = [
+  "migration",
+]
+
+[profile.release]
+lto = true
+codegen-units = 1

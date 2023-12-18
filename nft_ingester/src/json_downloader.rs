@@ -1,0 +1,165 @@
+use crate::config::{setup_config, BackgroundTaskConfig, BackgroundTaskRunnerConfig};
+use crate::db_v2::{DBClient, TaskStatus, UpdatedTask};
+use log::{debug, error, info};
+use metrics_utils::utils::setup_metrics;
+use metrics_utils::{BgTaskRunnerMetricsConfig, MetricState, MetricStatus, MetricsTrait};
+use reqwest::{Client, ClientBuilder};
+use rocks_db::{offchain_data::OffChainData, Storage};
+use std::sync::Arc;
+use tokio::task::JoinSet;
+use tokio::time::{self, Instant};
+
+pub struct JsonDownloader {
+    pub db_client: Arc<DBClient>,
+    pub rocks_db: Arc<Storage>,
+    pub config: BackgroundTaskRunnerConfig,
+    pub metrics: Arc<BgTaskRunnerMetricsConfig>,
+}
+
+impl JsonDownloader {
+    pub async fn new(rocks_db: Arc<Storage>) -> Self {
+        let config: BackgroundTaskConfig = setup_config();
+        let database_pool = DBClient::new(&config.database_config).await.unwrap();
+
+        let mut metrics_state = MetricState::new(BgTaskRunnerMetricsConfig::new());
+        metrics_state.register_metrics();
+        let metrics = Arc::new(metrics_state.metrics);
+
+        tokio::spawn(async move {
+            match setup_metrics(metrics_state.registry, config.bg_task_runner_metrics_port).await {
+                Ok(_) => {
+                    info!("Setup metrics successfully")
+                }
+                Err(e) => {
+                    error!("Setup metrics failed: {}", e)
+                }
+            }
+        });
+
+        Self {
+            db_client: Arc::new(database_pool),
+            config: config.background_task_runner_config.unwrap_or_default(),
+            metrics,
+            rocks_db,
+        }
+    }
+
+    pub async fn run(&self) {
+        let retry_interval = tokio::time::Duration::from_secs(self.config.retry_interval.unwrap());
+
+        let mut interval = time::interval(retry_interval);
+
+        let mut tasks_set = JoinSet::new();
+
+        loop {
+            interval.tick().await; // ticks immediately
+
+            let tasks = self.db_client.get_pending_tasks().await;
+
+            match tasks {
+                Ok(tasks) => {
+                    debug!("tasks that need to be executed: {}", tasks.len());
+
+                    for task in tasks {
+                        let cloned_task = task.clone();
+                        let cloned_db_client = self.db_client.clone();
+                        let cloned_metrics = self.metrics.clone();
+                        let cloned_rocks = self.rocks_db.clone();
+                        tasks_set.spawn(async move {
+                            let begin_processing = Instant::now();
+
+                            let client = ClientBuilder::new()
+                                .timeout(time::Duration::from_secs(5))
+                                .build()
+                                .map_err(|e| format!("Failed to create client: {:?}", e))
+                                .unwrap();
+                            let response = Client::get(&client, cloned_task.metadata_url)
+                                .send()
+                                .await
+                                .map_err(|e| format!("Failed to make request: {:?}", e));
+
+                            cloned_metrics.set_latency_task_executed(
+                                "json_downloader",
+                                begin_processing.elapsed().as_secs_f64(),
+                            );
+
+                            match response {
+                                Ok(response) => {
+                                    if response.status() != reqwest::StatusCode::OK {
+                                        let status = {
+                                            if task.attempts >= task.max_attempts {
+                                                TaskStatus::Failed
+                                            } else {
+                                                TaskStatus::Pending
+                                            }
+                                        };
+                                        let data_to_insert = UpdatedTask {
+                                            status,
+                                            metadata_url: task.metadata_url,
+                                            attempts: task.attempts + 1,
+                                            error: response.status().as_str().to_string(),
+                                        };
+                                        cloned_db_client
+                                            .update_tasks(vec![data_to_insert])
+                                            .await
+                                            .unwrap();
+
+                                        cloned_metrics.inc_tasks(MetricStatus::FAILURE);
+                                    } else {
+                                        let metadata_body = response.text().await;
+                                        if let Ok(metadata) = metadata_body {
+                                            cloned_rocks
+                                                .asset_offchain_data
+                                                .put(
+                                                    task.metadata_url.clone(),
+                                                    &OffChainData {
+                                                        url: task.metadata_url.clone(),
+                                                        metadata: metadata.trim().replace('\0', ""),
+                                                    },
+                                                )
+                                                .unwrap();
+                                            let data_to_insert = UpdatedTask {
+                                                status: TaskStatus::Success,
+                                                metadata_url: task.metadata_url,
+                                                attempts: task.attempts + 1,
+                                                error: "".to_string(),
+                                            };
+                                            cloned_db_client
+                                                .update_tasks(vec![data_to_insert])
+                                                .await
+                                                .unwrap();
+
+                                            info!("Saved metadata successfully...");
+                                            cloned_metrics.inc_tasks(MetricStatus::SUCCESS);
+                                        } else {
+                                            let data_to_insert = UpdatedTask {
+                                                status: TaskStatus::Failed,
+                                                metadata_url: task.metadata_url,
+                                                attempts: task.attempts + 1,
+                                                error: "Failed to deserialize metadata body"
+                                                    .to_string(),
+                                            };
+                                            cloned_db_client
+                                                .update_tasks(vec![data_to_insert])
+                                                .await
+                                                .unwrap();
+                                            cloned_metrics.inc_tasks(MetricStatus::FAILURE);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Error downloading metadata: {}", e);
+                                    cloned_metrics.inc_tasks(MetricStatus::FAILURE);
+                                }
+                            }
+                        });
+                    }
+                    while let Some(_) = tasks_set.join_next().await {}
+                }
+                Err(e) => {
+                    error!("Error getting pending tasks: {}", e);
+                }
+            }
+        }
+    }
+}

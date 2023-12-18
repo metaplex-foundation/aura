@@ -1,0 +1,16 @@
+[package]
+name = "metrics-utils"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+prometheus-client = "0.21.2"
+hyper = "0.14.23"
+chrono = "0.4.19"
+tokio = {version="1.23.0"}
+figment = { version = "0.10.6", features = ["env", "toml", "yaml"] }
+thiserror = "1.0.31"
+serde = "1.0.136"
+log = "0.4.17"

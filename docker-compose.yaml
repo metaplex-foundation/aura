@@ -1,0 +1,127 @@
+version: "3.9"
+services:
+  migrator:
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgres://solana:solana@db:5432/v1
+    build:
+      context: .
+      dockerfile: migrator.Dockerfile
+
+  ingester-first-consumer:
+    container_name: ingester-first-consumer
+    restart: always
+    entrypoint: "./ingester"
+    env_file:
+      - .env
+    environment:
+      INGESTER_CONSUMER_NUMBER: 0
+    network_mode: host
+    volumes:
+      - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
+      - ${INGESTER_ROCKS_BACKUP_DIR}:${INGESTER_ROCKS_BACKUP_DIR}:rw
+      - ${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:rw
+      - ./creds.json:/usr/src/app/creds.json
+    depends_on:
+      - db
+    build:
+      context: .
+      dockerfile: ingester.Dockerfile
+    logging:
+      options:
+        max-size: "2048m"
+
+  ingester-second-consumer:
+    container_name: ingester-second-consumer
+    restart: always
+    entrypoint: "./ingester"
+    env_file:
+      - .env
+    environment:
+      INGESTER_CONSUMER_NUMBER: 1
+    depends_on:
+      - db
+    network_mode: host
+    volumes:
+      - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
+      - ${INGESTER_ROCKS_BACKUP_DIR}:${INGESTER_ROCKS_BACKUP_DIR}:rw
+      - ${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:rw
+    build:
+      context: .
+      dockerfile: ingester.Dockerfile
+    logging:
+      options:
+        max-size: "2048m"
+
+  backfiller:
+    container_name: backfiller
+    restart: always
+    entrypoint: "./backfiller"
+    env_file:
+      - .env
+    depends_on:
+      - db
+    build:
+      context: .
+      dockerfile: backfiller.Dockerfile
+    volumes:
+      - ./creds.json:/usr/src/app/creds.json
+    logging:
+      options:
+        max-size: "2048m"
+
+  backfiller-consumer:
+    container_name: backfiller-consumer
+    restart: always
+    entrypoint: "./backfiller_consumer"
+    env_file:
+      - .env
+    ports:
+      - "${INGESTER_BACKFILL_CONSUMER_METRICS_PORT}:${INGESTER_BACKFILL_CONSUMER_METRICS_PORT}"
+    depends_on:
+      - db
+    build:
+      context: .
+      dockerfile: backfiller.Dockerfile
+    logging:
+      options:
+        max-size: "2048m"
+
+  bg_task_runner:
+    container_name: bg_task_runner
+    restart: always
+    entrypoint: "./bg_task_runner"
+    env_file:
+      - .env
+    ports:
+      - "${INGESTER_BG_TASK_RUNNER_METRICS_PORT}:${INGESTER_BG_TASK_RUNNER_METRICS_PORT}"
+    depends_on:
+      - db
+    build:
+      context: .
+      dockerfile: ingester.Dockerfile
+    logging:
+      options:
+        max-size: "2048m"
+
+  db:
+    container_name: db
+    image: 'postgres:14'
+    command: [ "postgres", "-c", "log_statement=none", "-c", "log_destination=stderr" ,"-c","max_connections=2000", "-c", "max_parallel_workers=32", "-c", "max_parallel_workers_per_gather=24", "-c", "max_parallel_maintenance_workers=8", "-c", "shared_buffers=30GB", "-c", "effective_cache_size=55GB", "-c", "work_mem=1GB" ]
+    shm_size: 1g
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: solana # The PostgreSQL user (useful to connect to the database)
+      POSTGRES_PASSWORD: solana # The PostgreSQL password (useful to connect to the database)
+      POSTGRES_DB: solana
+    volumes:
+      - ./db-data/:/var/lib/postgresql/data/:rw
+    logging:
+      options:
+        max-size: "100m"
+
+volumes:
+  grafana_data: { }
+  graphite_data: { }
