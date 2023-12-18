@@ -24,6 +24,7 @@ use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashSet, VecDeque};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::Instant;
 
@@ -69,10 +70,10 @@ impl BubblegumTxProcessor {
         order_instructions(ref_set, tx)
     }
 
-    pub async fn run(&self) {
+    pub async fn run(&self, keep_running: Arc<AtomicBool>) {
         let cloned_buffer = self.buffer.clone();
 
-        loop {
+        while keep_running.load(Ordering::SeqCst) {
             let mut buffer = cloned_buffer.transactions.lock().await;
             if let Some(data) = buffer.pop_front() {
                 drop(buffer);
@@ -85,7 +86,7 @@ impl BubblegumTxProcessor {
                     let tx_update =
                         utils::flatbuffer::transaction_info_generated::transaction_info::root_as_transaction_info(
                             &data.transaction,
-                    ).unwrap();
+                        ).unwrap();
                     transaction_info_bytes = self
                         .transaction_parser
                         .map_tx_fb_bytes(tx_update, seen_at)

@@ -14,6 +14,7 @@ use solana_storage_bigtable::{DEFAULT_APP_PROFILE_ID, DEFAULT_INSTANCE_NAME};
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::collections::HashSet;
 use std::num::ParseIntError;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::task::{JoinError, JoinSet};
 use tokio::time::Duration;
@@ -77,6 +78,7 @@ impl Backfiller {
     pub async fn start_backfill(
         &self,
         tasks: &mut JoinSet<Result<(), JoinError>>,
+        keep_running: Arc<AtomicBool>,
     ) -> Result<(), IngesterError> {
         info!("Backfiller is started");
 
@@ -88,10 +90,11 @@ impl Backfiller {
         )
         .await;
 
+        let cloned_keep_running = keep_running.clone();
         tasks.spawn(tokio::spawn(async move {
             info!("Running slots parser...");
 
-            slots_collector.collect_slots().await;
+            slots_collector.collect_slots(cloned_keep_running).await;
         }));
 
         let transactions_parser = TransactionsParser::new(
@@ -101,10 +104,13 @@ impl Backfiller {
         )
         .await;
 
+        let cloned_keep_running = keep_running.clone();
         tasks.spawn(tokio::spawn(async move {
             info!("Running transactions parser...");
 
-            transactions_parser.parse_transactions().await;
+            transactions_parser
+                .parse_transactions(cloned_keep_running)
+                .await;
         }));
 
         Ok(())
@@ -133,10 +139,10 @@ impl SlotsCollector {
         }
     }
 
-    pub async fn collect_slots(&self) {
+    pub async fn collect_slots(&self, keep_running: Arc<AtomicBool>) {
         let mut start_at_slot = self.slot_start_from;
 
-        loop {
+        while keep_running.load(Ordering::SeqCst) {
             let slots = self
                 .big_table_inner_client
                 .client()
@@ -259,10 +265,10 @@ impl TransactionsParser {
         }
     }
 
-    pub async fn parse_transactions(&self) {
+    pub async fn parse_transactions(&self, keep_running: Arc<AtomicBool>) {
         let mut counter = GET_SLOT_RETRIES;
 
-        'outer: loop {
+        'outer: while keep_running.load(Ordering::SeqCst) {
             let mut slots_to_parse_iter = self
                 .rocks_client
                 .bubblegum_slots
