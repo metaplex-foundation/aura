@@ -19,11 +19,15 @@ impl TryFrom<SearchAssetsQuery> for postgre_client::model::SearchAssetsFilter {
     type Error = ConversionError;
 
     fn try_from(query: SearchAssetsQuery) -> Result<Self, Self::Error> {
-        let collection = match query.grouping {
-            Some((key, val)) if key == "collection" => Some(val),
-            Some((key, _)) => return Err(ConversionError::IncompatibleGroupingKey(key)),
-            _ => None,
-        };
+        let collection = query
+            .grouping
+            .map(|(key, val)| {
+                if key != "collection" {
+                    return Err(ConversionError::IncompatibleGroupingKey(key))
+                }
+                Ok(val)
+            })
+            .transpose()?;
         Ok(Self {
             specification_version: query.specification_version.map(|v| v.into()),
             specification_asset_class: query.specification_asset_class.map(|v| v.into()),
@@ -177,5 +181,23 @@ impl From<crate::rpc::RoyaltyModel> for RoyaltyTargetType {
             crate::rpc::RoyaltyModel::Fanout => Self::Fanout,
             crate::rpc::RoyaltyModel::Single => Self::Single,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::dao::SearchAssetsQuery;
+
+    #[test]
+    fn test_search_assets_filter_from_search_assets_query_conversion_error() {
+        let query = SearchAssetsQuery {
+            grouping: Some((
+                "not_collection".to_string(),
+                "test".to_string().into_bytes(),
+            )),
+            ..Default::default()
+        };
+        let result = postgre_client::model::SearchAssetsFilter::try_from(query);
+        assert!(result.is_err());
     }
 }

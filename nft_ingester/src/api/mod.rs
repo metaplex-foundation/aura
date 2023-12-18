@@ -143,15 +143,15 @@ pub struct SearchAssets {
 impl TryFrom<SearchAssets> for digital_asset_types::dao::SearchAssetsQuery {
     type Error = DasApiError;
     fn try_from(search_assets: SearchAssets) -> Result<Self, Self::Error> {
-        let grouping = if let Some((key,val)) = search_assets.grouping {
-            if key != "collection" {
-                return Err(DasApiError::InvalidGroupingKey(key));
-            };
-            let pubkey = validate_pubkey(val)?;
-            Some((key, pubkey.to_bytes().to_vec()))
-        } else {
-            None
-        };
+        let grouping = search_assets
+            .grouping
+            .map(|(key, val)| {
+                if key != "collection" {
+                    return Err(DasApiError::InvalidGroupingKey(key));
+                }
+                validate_pubkey(val).map(|pubkey| (key, pubkey.to_bytes().to_vec()))
+            })
+            .transpose()?;
         Ok(digital_asset_types::dao::SearchAssetsQuery {
             negate: search_assets.negate,
             condition_type: search_assets.condition_type.map(|s| s.into()), 

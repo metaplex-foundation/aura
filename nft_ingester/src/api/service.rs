@@ -72,7 +72,7 @@ pub async fn start_api(
         ]))
         .request_middleware(request_middleware)
         .cors_allow_headers(AccessControlAllowHeaders::Any)
-        .cors_max_age(MAX_CORS_AGE)
+        .cors_max_age(MAX_CORS_AGE as u32)
         .max_request_body_size(MAX_REQUEST_BODY_SIZE)
         .health_api(("/health", "health"))
         .start_http(&addr);
