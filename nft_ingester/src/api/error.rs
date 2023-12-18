@@ -28,6 +28,8 @@ pub enum DasApiError {
     InternalServerError(String),
     #[error("No data found.")]
     NoDataFoundError,
+    #[error("Invalid Grouping Key: {0}")]
+    InvalidGroupingKey(String),
 }
 
 impl From<DasApiError> for jsonrpc_core::Error {

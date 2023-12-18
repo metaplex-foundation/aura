@@ -36,3 +36,4 @@ log = "0.4.17"
 indexmap = "1.9.3"
 hex = "0.4.3"
 rocks-db = { path = "../rocks-db" }
+postgre-client = { path = "../postgre-client" }

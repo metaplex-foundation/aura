@@ -1,6 +1,8 @@
+mod converters;
 mod full_asset;
 mod generated;
 pub mod scopes;
+pub use converters::*;
 pub use full_asset::*;
 #[allow(ambiguous_glob_reexports)]
 pub use generated::*;
@@ -9,10 +11,7 @@ use self::sea_orm_active_enums::{
     OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
 };
 use sea_orm::{
-    entity::*,
-    sea_query::Expr,
-    sea_query::{ConditionType, IntoCondition},
-    Condition, DbErr, RelationDef,
+    entity::*, sea_query::Expr, sea_query::IntoCondition, Condition, DbErr, RelationDef,
 };
 
 pub struct GroupingSize {
@@ -29,6 +28,12 @@ pub enum Pagination {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConditionType {
+    Any,
+    All,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SearchAssetsQuery {
     // Conditions
@@ -42,7 +47,7 @@ pub struct SearchAssetsQuery {
     pub creator_address: Option<Vec<u8>>,
     pub creator_verified: Option<bool>,
     pub authority_address: Option<Vec<u8>>,
-    pub grouping: Option<(String, String)>,
+    pub grouping: Option<(String, Vec<u8>)>,
     pub delegate: Option<Vec<u8>>,
     pub frozen: Option<bool>,
     pub supply: Option<u64>,
