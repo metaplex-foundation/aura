@@ -9,17 +9,19 @@ use blockbuster::{
     programs::{bubblegum::BubblegumParser, ProgramParseResult},
 };
 use chrono::Utc;
+use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
+use entities::models::Creator;
 use log::{debug, error, info};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::state::leaf_schema::LeafSchema;
 use mpl_bubblegum::InstructionName;
 use num_traits::FromPrimitive;
 use plerkle_serialization::{Pubkey as FBPubkey, TransactionInfo};
+use rocks_db::asset::AssetOwner;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
-    ChainDataV1, Creator, RoyaltyTargetType, SpecificationAssetClass,
+    ChainDataV1,
 };
-use rocks_db::asset::{AssetOwner, OwnerType};
 use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;

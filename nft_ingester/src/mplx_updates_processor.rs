@@ -8,10 +8,11 @@ use num_traits::FromPrimitive;
 use serde_json::json;
 use tokio::time::Instant;
 
+use entities::enums::{RoyaltyTargetType, SpecificationAssetClass};
+use entities::models::Creator;
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
 use rocks_db::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails, ChainDataV1, Creator,
-    RoyaltyTargetType, SpecificationAssetClass,
+    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails, ChainDataV1,
 };
 use rocks_db::columns::Mint;
 use rocks_db::Storage;

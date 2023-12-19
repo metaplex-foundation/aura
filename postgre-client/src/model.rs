@@ -47,35 +47,6 @@ pub struct LastSyncedKey {
     last_synced_asset_update_key: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, FromRow, PartialEq)]
-pub struct AssetIndex {
-    pub pubkey: Vec<u8>,
-    pub specification_version: SpecificationVersions,
-    pub specification_asset_class: SpecificationAssetClass,
-    pub royalty_target_type: RoyaltyTargetType,
-    pub slot_created: i64,
-    pub owner_type: Option<OwnerType>,
-    pub owner: Option<Vec<u8>>,
-    pub delegate: Option<Vec<u8>>,
-    pub authority: Option<Vec<u8>>,
-    pub collection: Option<Vec<u8>>,
-    pub royalty_amount: i64,
-    pub is_collection_verified: Option<bool>,
-    pub is_burnt: bool,
-    pub is_compressible: bool,
-    pub is_compressed: bool,
-    pub is_frozen: bool,
-    pub supply: i64,
-    pub metadata_url: Option<String>,
-    pub slot_updated: i64,
-    pub creators: Vec<Creator>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, FromRow, PartialEq)]
-pub struct Creator {
-    pub creator: Vec<u8>,
-    pub creator_verified: bool,
-}
 #[derive(Debug)]
 pub struct AssetSortedIndex {
     pub pubkey: Vec<u8>,

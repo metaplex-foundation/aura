@@ -1,5 +1,6 @@
 use bincode::deserialize;
 use blockbuster::token_metadata::state::{TokenStandard, Uses};
+use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
 use log::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
@@ -8,46 +9,6 @@ use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use crate::key_encoders::{decode_pubkey, encode_pubkey};
 use crate::Result;
 use crate::TypedColumn;
-
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Default)]
-pub enum RoyaltyTargetType {
-    #[default]
-    Unknown,
-    Creators,
-    Fanout,
-    Single,
-}
-
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Default)]
-pub enum SpecificationVersions {
-    #[default]
-    Unknown,
-    V0,
-    V1,
-    V2,
-}
-
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Default)]
-pub enum SpecificationAssetClass {
-    #[default]
-    Unknown,
-    FungibleToken,
-    FungibleAsset,
-    Nft,
-    PrintableNft,
-    ProgrammableNft,
-    Print,
-    TransferRestrictedNft,
-    NonTransferableNft,
-    IdentityNft,
-}
-
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
-pub enum OwnerType {
-    Unknown,
-    Token,
-    Single,
-}
 
 // The following structures are used to store the asset data in the rocksdb database. The data is spread across multiple columns based on the update pattern.
 // The final representation of the asset should be reconstructed by querying the database for the asset and its associated columns.
@@ -71,7 +32,7 @@ pub struct AssetDynamicDetails {
     pub is_burnt: bool,
     pub was_decompressed: bool,
     pub onchain_data: Option<String>,
-    pub creators: Vec<Creator>,
+    pub creators: Vec<entities::models::Creator>,
     pub royalty_amount: u16,
     pub slot_updated: u64,
 }
@@ -117,14 +78,6 @@ pub struct AssetCollection {
     pub slot_updated: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct Creator {
-    pub creator: Pubkey,
-    pub creator_verified: bool,
-    // In percentages, NOT basis points
-    pub creator_share: u8,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChainDataV1 {
     pub name: String,
@@ -143,33 +96,6 @@ impl ChainDataV1 {
         self.name = self.name.trim().replace('\0', "");
         self.symbol = self.symbol.trim().replace('\0', "");
     }
-}
-
-// AssetIndex is the struct that is stored in the postgres database and is used to query the asset pubkeys.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
-pub struct AssetIndex {
-    // immutable fields
-    pub pubkey: Pubkey,
-    pub specification_version: SpecificationVersions,
-    pub specification_asset_class: SpecificationAssetClass,
-    pub royalty_target_type: RoyaltyTargetType,
-    pub slot_created: i64,
-    // mutable fields
-    pub owner_type: Option<OwnerType>,
-    pub owner: Option<Pubkey>,
-    pub delegate: Option<Pubkey>,
-    pub authority: Option<Pubkey>,
-    pub collection: Option<Pubkey>,
-    pub is_collection_verified: Option<bool>,
-    pub creators: Vec<Creator>,
-    pub royalty_amount: i64,
-    pub is_burnt: bool,
-    pub is_compressible: bool,
-    pub is_compressed: bool,
-    pub is_frozen: bool,
-    pub supply: i64,
-    pub metadata_url: Option<String>,
-    pub slot_updated: i64,
 }
 
 impl TypedColumn for AssetStaticDetails {
