@@ -1,11 +1,11 @@
-use crate::cl_items::ClLeaf;
-use crate::{Result, Storage};
-use bincode::deserialize;
-use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 
+use solana_sdk::pubkey::Pubkey;
+
+use crate::{Result, Storage};
+
 impl Storage {
-    pub async fn get_owners(&self, assets: Vec<Pubkey>) -> Result<HashMap<Pubkey, String>> {
+    pub async fn get_owners(&self, _assets: Vec<Pubkey>) -> Result<HashMap<Pubkey, String>> {
         // let mut result = HashMap::new();
         //
         // for asset in assets {
@@ -37,7 +37,7 @@ impl Storage {
         Ok(HashMap::new())
     }
 
-    pub async fn get_assets_by_owner(&self, owner: Pubkey) -> Result<Vec<String>> {
+    pub async fn get_assets_by_owner(&self, _owner: Pubkey) -> Result<Vec<String>> {
         // let accounts_pks = self
         //     .select_all_pubkey_by_secondary_idx(&self.account_token_owner_idx, owner)
         //     .await?;

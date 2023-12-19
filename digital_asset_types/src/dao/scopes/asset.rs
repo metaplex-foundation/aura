@@ -1,27 +1,28 @@
-use crate::dao::{
-    asset, asset_authority, asset_creators, asset_data, asset_grouping, FullAsset, GroupingSize,
-    Pagination,
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::string::ToString;
+use std::sync::Arc;
+
+use log::error;
+use sea_orm::prelude::Json;
+use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult, Order};
+use solana_sdk::pubkey::Pubkey;
+
+use rocks_db::asset::{
+    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetStaticDetails,
 };
+use rocks_db::offchain_data::OffChainData;
+use rocks_db::Storage;
 
 use crate::dao::asset::Column;
 use crate::dao::sea_orm_active_enums::{
     ChainMutability, Mutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
     SpecificationVersions,
 };
-
-use log::error;
-use rocks_db::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetStaticDetails,
+use crate::dao::{
+    asset, asset_authority, asset_creators, asset_data, asset_grouping, FullAsset, GroupingSize,
+    Pagination,
 };
-use rocks_db::offchain_data::OffChainData;
-use rocks_db::Storage;
-use sea_orm::prelude::{DateTimeWithTimeZone, Json};
-use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult, Order};
-use solana_sdk::pubkey::Pubkey;
-use std::collections::HashMap;
-use std::str::FromStr;
-use std::string::ToString;
-use std::sync::Arc;
 
 pub const PROCESSING_METADATA_STATE: &str = "processing";
 
@@ -58,9 +59,10 @@ pub fn paginate(
         }
     }
 
-    Ok((condition.to_string(), values, offset))
+    Ok((condition, values, offset))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn get_by_creator(
     conn: &impl ConnectionTrait,
     rocks_db: Arc<Storage>,
@@ -101,7 +103,7 @@ pub async fn get_grouping(
     group_key: String,
     group_value: String,
 ) -> Result<GroupingSize, DbErr> {
-    if group_value != "collection".to_string() {
+    if group_value != *"collection" {
         return Ok(GroupingSize { size: 0 });
     }
 
@@ -110,7 +112,7 @@ pub async fn get_grouping(
     let size = conn
         .query_one(Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            &query,
+            query,
             [Set(bs58::decode(group_key)
                 .into_vec()
                 .map_err(|e| DbErr::Custom(e.to_string()))?
@@ -123,12 +125,13 @@ pub async fn get_grouping(
         .map(|res| res.try_get::<i64>("", "count").unwrap_or_default())
         .collect::<Vec<_>>()
         .last()
-        .map(|i| *i)
+        .copied()
         .unwrap_or_default();
 
     Ok(GroupingSize { size: size as u64 })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn get_by_grouping(
     conn: &impl ConnectionTrait,
     rocks_db: Arc<Storage>,
@@ -139,7 +142,7 @@ pub async fn get_by_grouping(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    if group_key != "collection".to_string() {
+    if group_key != *"collection" {
         return Ok(vec![]);
     }
 
@@ -190,7 +193,7 @@ pub async fn get_assets_by_owner(
     get_by_related_condition(
         conn,
         rocks_db,
-        &condition,
+        condition,
         values,
         sort_by,
         sort_direction,
@@ -232,6 +235,7 @@ pub async fn get_by_authority(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn get_by_related_condition(
     conn: &impl ConnectionTrait,
     rocks_db: Arc<Storage>,
@@ -340,125 +344,7 @@ struct AssetWithMetadata {
     ofd_chain_data_mutability: Option<ChainMutability>,
 }
 
-impl AssetWithMetadata {
-    pub fn into_asset_model(
-        &self,
-        owner: Option<String>,
-        owners: &HashMap<Pubkey, String>,
-        id: Pubkey,
-    ) -> asset::Model {
-        let creator_hash = self
-            .ast_creator_hash
-            .clone()
-            .as_ref()
-            .map(|s| s.trim())
-            .map(|s| s.replace("\\x", ""))
-            .and_then(|hash| hex::decode(&hash).ok())
-            .map(|bytes| bs58::encode(bytes).into_string());
-        let data_hash = self
-            .ast_data_hash
-            .clone()
-            .as_ref()
-            .map(|s| s.trim())
-            .map(|s| s.replace("\\x", ""))
-            .and_then(|hash| hex::decode(&hash).ok())
-            .map(|bytes| bs58::encode(bytes).into_string());
-
-        asset::Model {
-            id: self.ast_pubkey.clone(),
-            alt_id: None,
-            specification_version: Some(self.ast_specification_version.clone()),
-            specification_asset_class: self.ast_specification_asset_class.clone(),
-            owner: self
-                .ast_owner
-                .clone()
-                .or(owner.map(|owner| {
-                    Pubkey::from_str(&owner)
-                        .unwrap_or_default()
-                        .to_bytes()
-                        .to_vec()
-                }))
-                .or(owners.get(&id).map(|owner| {
-                    Pubkey::from_str(owner)
-                        .unwrap_or_default()
-                        .to_bytes()
-                        .to_vec()
-                })),
-            owner_type: self.ast_owner_type.clone(),
-            delegate: self.ast_delegate.clone(),
-            frozen: self.ast_is_frozen,
-            supply: self.ast_supply.unwrap_or_default(),
-            supply_mint: Some(self.ast_pubkey.clone()),
-            compressed: self.ast_is_compressed,
-            compressible: self.ast_is_compressible,
-            seq: self.ast_seq,
-            tree_id: self.ast_tree_id.clone(),
-            leaf: self.ast_leaf.clone(),
-            nonce: self.ast_nonce,
-            royalty_target_type: self.ast_royalty_target_type.clone(),
-            royalty_target: self.ast_royalty_target.clone(),
-            royalty_amount: self.ast_royalty_amount as i32,
-            asset_data: Some(self.ast_pubkey.clone()),
-            created_at: Some(self.ast_created_at.clone()),
-            burnt: self.ast_is_burnt,
-            slot_updated: self.ast_slot_updated,
-            data_hash,
-            creator_hash,
-            owner_delegate_seq: self.ast_owner_delegate_seq,
-            was_decompressed: self.ast_was_decompressed,
-            leaf_seq: self.ast_leaf_seq,
-        }
-    }
-    pub fn into_asset_data_model(&self) -> Result<asset_data::Model, DbErr> {
-        let mut metadata = self.ofd_metadata.clone().unwrap_or("{}".to_string());
-
-        if metadata == PROCESSING_METADATA_STATE {
-            metadata = "{}".to_string();
-        }
-
-        Ok(asset_data::Model {
-            id: self.ast_pubkey.clone(),
-            chain_data_mutability: self
-                .ofd_chain_data_mutability
-                .clone()
-                .unwrap_or(ChainMutability::Mutable),
-            chain_data: Json::from_str(&self.ast_onchain_data.clone().unwrap_or("{}".to_string()))
-                .map_err(|e| DbErr::Custom(e.to_string()))?,
-            metadata_url: self.ofd_metadata_url.clone().unwrap_or_default(),
-            metadata_mutability: Mutability::Immutable,
-            metadata: Json::from_str(metadata.as_str())
-                .map_err(|e| DbErr::Custom(e.to_string()))?,
-            slot_updated: self.ast_slot_updated.unwrap_or_default(),
-            reindex: None,
-        })
-    }
-
-    pub fn into_asset_authority_model(&self) -> asset_authority::Model {
-        asset_authority::Model {
-            id: 0,
-            asset_id: self.ast_pubkey.clone(),
-            scopes: None,
-            authority: self.ast_authority.clone().unwrap_or(vec![0; 32]),
-            seq: 0,
-            slot_updated: 0,
-        }
-    }
-    pub fn into_asset_grouping_model(&self) -> asset_grouping::Model {
-        asset_grouping::Model {
-            id: 0,
-            asset_id: self.ast_pubkey.clone(),
-            group_key: "collection".to_string(),
-            group_value: self
-                .ast_collection
-                .clone()
-                .map(|pk| bs58::encode(pk.clone()).into_string()),
-            seq: self.ast_seq,
-            slot_updated: self.ast_slot_updated,
-            verified: Some(self.ast_is_collection_verified),
-            group_info_seq: self.ast_collection_seq,
-        }
-    }
-}
+impl AssetWithMetadata {}
 
 fn convert_rocks_offchain_data(
     asset_pubkey: &Pubkey,
@@ -512,11 +398,10 @@ fn convert_rocks_asset_model(
         .get(asset_pubkey)
         .ok_or(DbErr::Custom("No relevant assets_owners".to_string()))?;
 
-    let binding = AssetLeaf::default();
     let leaf = assets_leaf
         .get(asset_pubkey)
-        .map(|a| a.clone())
-        .unwrap_or(&binding); // Asset can do not have leaf, but we still can make conversion
+        .cloned()
+        .unwrap_or(AssetLeaf::default()); // Asset can do not have leaf, but we still can make conversion
 
     let tree_id = if leaf.tree_id == Pubkey::default() {
         None
@@ -536,9 +421,9 @@ fn convert_rocks_asset_model(
         id: static_data.pubkey.to_bytes().to_vec(),
         alt_id: None,
         specification_version: Some(SpecificationVersions::V1),
-        specification_asset_class: Some(static_data.specification_asset_class.clone().into()),
+        specification_asset_class: Some(static_data.specification_asset_class.into()),
         owner: Some(owner.owner.to_bytes().to_vec()),
-        owner_type: owner.owner_type.clone().into(),
+        owner_type: owner.owner_type.into(),
         delegate: owner.delegate.map(|pk| pk.to_bytes().to_vec()),
         frozen: dynamic_data.is_frozen,
         supply: dynamic_data
@@ -548,11 +433,11 @@ fn convert_rocks_asset_model(
         supply_mint: Some(static_data.pubkey.to_bytes().to_vec()),
         compressed: dynamic_data.is_compressed,
         compressible: dynamic_data.is_compressible,
-        seq: dynamic_data.seq.map(|u| u.try_into().ok()).flatten(),
+        seq: dynamic_data.seq.and_then(|u| u.try_into().ok()),
         tree_id,
         leaf: leaf.leaf.clone(),
         nonce: leaf.nonce.map(|nonce| nonce as i64),
-        royalty_target_type: static_data.royalty_target_type.clone().into(),
+        royalty_target_type: static_data.royalty_target_type.into(),
         royalty_target: None, // TODO
         royalty_amount: dynamic_data.royalty_amount as i32,
         asset_data: Some(static_data.pubkey.to_bytes().to_vec()),
@@ -625,7 +510,7 @@ fn convert_rocks_authority_model(
 ) -> asset_authority::Model {
     let authority = assets_authority
         .get(asset_pubkey)
-        .map(|a| a.clone())
+        .cloned()
         .unwrap_or(AssetAuthority::default());
 
     asset_authority::Model {
@@ -637,6 +522,7 @@ fn convert_rocks_authority_model(
         slot_updated: authority.slot_updated as i64,
     }
 }
+
 fn convert_rocks_grouping_model(
     asset_pubkey: &Pubkey,
     assets_collection: &HashMap<Pubkey, AssetCollection>,
@@ -661,7 +547,7 @@ fn convert_rocks_creators_model(
 ) -> Vec<asset_creators::Model> {
     let dynamic_data = assets_dynamic_data
         .get(asset_pubkey)
-        .map(|a| a.clone())
+        .cloned()
         .unwrap_or(AssetDynamicDetails::default());
 
     dynamic_data
@@ -679,32 +565,6 @@ fn convert_rocks_creators_model(
             position: position as i16,
         })
         .collect::<Vec<_>>()
-}
-
-#[derive(FromQueryResult, Debug, Clone, PartialEq)]
-struct Creator {
-    asc_asset: Vec<u8>,
-    asc_creator: Vec<u8>,
-    asc_share: i32,
-    asc_verified: bool,
-    asc_seq: i64,
-    asc_slot_updated: i64,
-    asc_position: i64,
-}
-
-impl Creator {
-    pub fn into_asset_creators_model(&self) -> asset_creators::Model {
-        asset_creators::Model {
-            id: 0,
-            asset_id: self.asc_asset.clone(),
-            creator: self.asc_creator.clone(),
-            share: self.asc_share,
-            verified: self.asc_verified,
-            seq: Some(self.asc_seq),
-            slot_updated: Some(self.asc_slot_updated),
-            position: self.asc_position as i16,
-        }
-    }
 }
 
 #[derive(FromQueryResult, Debug, Clone, PartialEq)]
@@ -785,7 +645,7 @@ async fn get_asset_selected_maps(
         .map(|asset| {
             (
                 bs58::encode(asset.ast_pubkey.as_slice()).into_string(),
-                asset.ast_metadata_url.unwrap_or_default().clone(),
+                asset.ast_metadata_url.unwrap_or_default(),
             )
         })
         .collect();
@@ -822,35 +682,30 @@ fn asset_selected_maps_into_full_asset(
     {
         Some(offchain_data) => {
             match convert_rocks_offchain_data(
-                &id,
+                id,
                 offchain_data,
                 &asset_selected_maps.assets_dynamic,
             ) {
                 Ok(data) => convert_rocks_asset_model(
-                    &id,
+                    id,
                     &asset_selected_maps.assets_static,
                     &asset_selected_maps.assets_owner,
                     &asset_selected_maps.assets_dynamic,
                     &asset_selected_maps.assets_leaf,
                 )
                 .ok()
-                .and_then(|asset| {
-                    Some(FullAsset {
-                        asset,
-                        data,
-                        authorities: vec![convert_rocks_authority_model(
-                            &id,
-                            &asset_selected_maps.assets_authority,
-                        )],
-                        creators: convert_rocks_creators_model(
-                            &id,
-                            &asset_selected_maps.assets_dynamic,
-                        ),
-                        groups: vec![convert_rocks_grouping_model(
-                            &id,
-                            &asset_selected_maps.assets_collection,
-                        )],
-                    })
+                .map(|asset| FullAsset {
+                    asset,
+                    data,
+                    authorities: vec![convert_rocks_authority_model(
+                        id,
+                        &asset_selected_maps.assets_authority,
+                    )],
+                    creators: convert_rocks_creators_model(id, &asset_selected_maps.assets_dynamic),
+                    groups: vec![convert_rocks_grouping_model(
+                        id,
+                        &asset_selected_maps.assets_collection,
+                    )],
                 }),
                 Err(e) => {
                     error!(
@@ -875,7 +730,7 @@ pub async fn get_by_ids(
     let mut unique_asset_ids_map = HashMap::new();
     for (index, id) in asset_ids.iter().enumerate() {
         unique_asset_ids_map
-            .entry(id.clone())
+            .entry(*id)
             .or_insert_with(Vec::new)
             .push(index);
     }

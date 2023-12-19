@@ -1,7 +1,5 @@
 use crate::buffer::Buffer;
 use crate::db_v2::DBClient;
-use crate::error::IngesterError;
-use jsonrpc_http_server::cors::AccessControlAllowHeaders;
 use log::error;
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner, OwnerType};
@@ -50,20 +48,16 @@ impl TokenAccsProcessor {
 
             if prev_buffer_size == 0 {
                 prev_buffer_size = buffer_size;
+            } else if prev_buffer_size == buffer_size {
+                counter -= 1;
             } else {
-                if prev_buffer_size == buffer_size {
-                    counter -= 1;
-                } else {
-                    prev_buffer_size = buffer_size;
-                }
+                prev_buffer_size = buffer_size;
             }
 
-            if buffer_size < self.batch_size {
-                if counter != 0 {
-                    drop(token_accounts);
-                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                    continue;
-                }
+            if buffer_size < self.batch_size && counter != 0 {
+                drop(token_accounts);
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                continue;
             }
 
             counter = BUFFER_PROCESSING_COUNTER;
@@ -86,7 +80,7 @@ impl TokenAccsProcessor {
 
             for acc in accs_to_save.iter() {
                 let res = self.rocks_db.asset_owner_data.merge(
-                    acc.mint.clone(),
+                    acc.mint,
                     &AssetOwner {
                         pubkey: acc.mint,
                         owner: acc.owner,
@@ -110,7 +104,7 @@ impl TokenAccsProcessor {
 
                         let upd_res = self
                             .rocks_db
-                            .asset_updated(acc.slot_updated as u64, acc.mint.clone());
+                            .asset_updated(acc.slot_updated as u64, acc.mint);
 
                         if let Err(e) = upd_res {
                             error!("Error while updating assets update idx: {}", e);
@@ -136,20 +130,16 @@ impl TokenAccsProcessor {
 
             if prev_buffer_size == 0 {
                 prev_buffer_size = buffer_size;
+            } else if prev_buffer_size == buffer_size {
+                counter -= 1;
             } else {
-                if prev_buffer_size == buffer_size {
-                    counter -= 1;
-                } else {
-                    prev_buffer_size = buffer_size;
-                }
+                prev_buffer_size = buffer_size;
             }
 
-            if buffer_size < self.batch_size / 5 {
-                if counter != 0 {
-                    drop(mint_accounts);
-                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                    continue;
-                }
+            if buffer_size < self.batch_size / 5 && counter != 0 {
+                drop(mint_accounts);
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                continue;
             }
 
             counter = BUFFER_PROCESSING_COUNTER;
@@ -171,7 +161,7 @@ impl TokenAccsProcessor {
             let begin_processing = Instant::now();
 
             for mint in mint_accs_to_save.iter() {
-                let existing_value = self.rocks_db.asset_dynamic_data.get(mint.pubkey.clone());
+                let existing_value = self.rocks_db.asset_dynamic_data.get(mint.pubkey);
 
                 match existing_value {
                     Ok(existing_value) => {
@@ -180,7 +170,7 @@ impl TokenAccsProcessor {
                         if let Some(existing_value) = existing_value {
                             if existing_value.slot_updated < mint.slot_updated as u64 {
                                 let updated_dynamic_data = AssetDynamicDetails {
-                                    pubkey: mint.pubkey.clone(),
+                                    pubkey: mint.pubkey,
                                     is_compressible: existing_value.is_compressible,
                                     is_compressed: existing_value.is_compressed,
                                     is_frozen: existing_value.is_frozen,
@@ -197,7 +187,7 @@ impl TokenAccsProcessor {
                             }
                         } else {
                             let new_dynamic_data = AssetDynamicDetails {
-                                pubkey: mint.pubkey.clone(),
+                                pubkey: mint.pubkey,
                                 supply: Some(mint.supply as u64),
                                 seq: Some(mint.slot_updated as u64),
                                 slot_updated: mint.slot_updated as u64,
@@ -207,10 +197,7 @@ impl TokenAccsProcessor {
                         }
 
                         if let Some(data) = value_to_insert {
-                            let res = self
-                                .rocks_db
-                                .asset_dynamic_data
-                                .put(data.pubkey.clone(), &data);
+                            let res = self.rocks_db.asset_dynamic_data.put(data.pubkey, &data);
 
                             match res {
                                 Err(e) => {
@@ -221,10 +208,9 @@ impl TokenAccsProcessor {
                                 Ok(_) => {
                                     self.metrics
                                         .inc_process("mint_update_supply", MetricStatus::SUCCESS);
-                                    let upd_res = self.rocks_db.asset_updated(
-                                        mint.slot_updated as u64,
-                                        mint.pubkey.clone(),
-                                    );
+                                    let upd_res = self
+                                        .rocks_db
+                                        .asset_updated(mint.slot_updated as u64, mint.pubkey);
 
                                     if let Err(e) = upd_res {
                                         error!("Error while updating assets update idx: {}", e);

@@ -8,7 +8,7 @@ use blockbuster::{
     program_handler::ProgramParser,
     programs::{bubblegum::BubblegumParser, ProgramParseResult},
 };
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use log::{debug, error, info};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::state::leaf_schema::LeafSchema;
@@ -17,7 +17,7 @@ use num_traits::FromPrimitive;
 use plerkle_serialization::{Pubkey as FBPubkey, TransactionInfo};
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
-    ChainDataV1, Creator, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
+    ChainDataV1, Creator, RoyaltyTargetType, SpecificationAssetClass,
 };
 use rocks_db::asset::{AssetOwner, OwnerType};
 use serde_json::json;
@@ -160,10 +160,6 @@ impl BubblegumTxProcessor {
         let mut not_impl = 0;
         let ixlen = instructions.len();
 
-        let contains = instructions
-            .iter()
-            .filter(|(ib, _inner)| ib.0 .0.as_ref() == mpl_bubblegum::id().as_ref());
-
         for (outer_ix, inner_ix) in instructions {
             let (program, instruction) = outer_ix;
             let ix_accounts = instruction.accounts().unwrap().iter().collect::<Vec<_>>();
@@ -187,7 +183,7 @@ impl BubblegumTxProcessor {
                     });
 
             let ix = InstructionBundle {
-                txn_id: txn_id,
+                txn_id,
                 program,
                 instruction: Some(instruction),
                 inner_ix,
@@ -213,7 +209,7 @@ impl BubblegumTxProcessor {
                                     sig, err
                                 );
 
-                                return err;
+                                err
                             })?;
                     }
                     _ => {
@@ -368,32 +364,29 @@ impl BubblegumTxProcessor {
             self.rocks_client.asset_updated(bundle.slot, asset_id)?;
 
             let asset_data = self.rocks_client.asset_dynamic_data.get(asset_id).unwrap();
-            if let Some(current_asset_data) = asset_data {
-                let mut new_asset_data = current_asset_data.clone();
-                new_asset_data.is_burnt = true;
-                new_asset_data.supply = Some(0);
-                new_asset_data.seq = Some(cl.seq);
-                new_asset_data.slot_updated = bundle.slot;
+            if let Some(mut asset_data) = asset_data {
+                asset_data.is_burnt = true;
+                asset_data.supply = Some(0);
+                asset_data.seq = Some(cl.seq);
+                asset_data.slot_updated = bundle.slot;
 
-                if let Some(current_seq) = current_asset_data.seq {
+                if let Some(current_seq) = asset_data.seq {
                     if current_seq < cl.seq {
                         if let Err(e) = self
                             .rocks_client
                             .asset_dynamic_data
-                            .put(asset_id, &new_asset_data)
+                            .put(asset_id, &asset_data)
                         {
                             error!("Error while saving asset data for cNFT: {}", e);
                         };
                     }
-                } else {
-                    if let Err(e) = self
-                        .rocks_client
-                        .asset_dynamic_data
-                        .put(asset_id, &new_asset_data)
-                    {
-                        error!("Error while saving asset data for cNFT: {}", e);
-                    };
-                }
+                } else if let Err(e) = self
+                    .rocks_client
+                    .asset_dynamic_data
+                    .put(asset_id, &asset_data)
+                {
+                    error!("Error while saving asset data for cNFT: {}", e);
+                };
             } else {
                 let new_asset_data = AssetDynamicDetails {
                     pubkey: asset_id,
@@ -573,7 +566,7 @@ impl BubblegumTxProcessor {
 
                     let asset_authority = AssetAuthority {
                         pubkey: id,
-                        authority: authority,
+                        authority,
                         slot_updated: bundle.slot,
                     };
 
@@ -764,17 +757,12 @@ impl BubblegumTxProcessor {
                     };
 
                     let asset_data = self.rocks_client.asset_dynamic_data.get(id).unwrap();
-                    if let Some(current_asset_data) = asset_data {
-                        let mut new_asset_data = current_asset_data.clone();
-                        new_asset_data.seq = None;
-                        new_asset_data.was_decompressed = true;
-                        new_asset_data.slot_updated = bundle.slot;
+                    if let Some(mut asset_data) = asset_data {
+                        asset_data.seq = None;
+                        asset_data.was_decompressed = true;
+                        asset_data.slot_updated = bundle.slot;
 
-                        if let Err(e) = self
-                            .rocks_client
-                            .asset_dynamic_data
-                            .put(id, &new_asset_data)
-                        {
+                        if let Err(e) = self.rocks_client.asset_dynamic_data.put(id, &asset_data) {
                             error!("Error while saving asset data for cNFT: {}", e);
                         };
                     } else {
@@ -857,7 +845,7 @@ impl BubblegumTxProcessor {
 
                     let asset_data = self.rocks_client.asset_dynamic_data.get(id).unwrap();
                     if let Some(current_asset_data) = asset_data {
-                        let mut new_asset_data = current_asset_data.clone();
+                        let mut new_asset_data = current_asset_data;
                         new_asset_data.seq = Some(cl.seq);
                         new_asset_data.slot_updated = bundle.slot;
 
@@ -959,7 +947,7 @@ impl BubblegumTxProcessor {
 
                     let collection = AssetCollection {
                         pubkey: id,
-                        collection: collection,
+                        collection,
                         is_collection_verified: verify,
                         collection_seq: Some(cl.seq),
                         slot_updated: bundle.slot,

@@ -1,8 +1,10 @@
-use crate::{error::IngesterError, error::IngesterError::MissingFlatbuffersFieldError};
+use std::str::FromStr;
+
 use chrono::{DateTime, Utc};
 use flatbuffers::FlatBufferBuilder;
 use solana_sdk::pubkey::Pubkey;
-use std::{str::FromStr, sync::Arc};
+
+use crate::{error::IngesterError, error::IngesterError::MissingFlatbuffersFieldError};
 
 #[derive(Clone)]
 pub struct FlatbufferMapper {}

@@ -148,7 +148,7 @@ impl SlotsCollector {
                 .client()
                 .get_row_keys(
                     "tx-by-addr",
-                    Some(self.slot_to_row(BBG_PREFIX, start_at_slot as u64)),
+                    Some(self.slot_to_row(BBG_PREFIX, start_at_slot)),
                     Some(self.slot_to_row(BBG_PREFIX, Slot::MIN)),
                     GET_SIGNATURES_LIMIT as i64,
                 )
@@ -203,7 +203,7 @@ impl SlotsCollector {
         }
     }
 
-    async fn save_slots(&self, slots: &Vec<u64>) {
+    async fn save_slots(&self, slots: &[u64]) {
         let mut slots_set = HashSet::new();
         for slot in slots.iter() {
             slots_set.insert(*slot);
@@ -321,11 +321,11 @@ impl TransactionsParser {
 
             for slot in slots_to_parse_vec.iter() {
                 let bg_client = self.big_table_client.clone();
-                let s = slot.clone();
+                let s = *slot;
                 let buffer = self.buffer.clone();
 
                 let task = tokio::spawn(async move {
-                    let block = match bg_client.get_confirmed_block(s as u64).await {
+                    let block = match bg_client.get_confirmed_block(s).await {
                         Ok(block) => block,
                         Err(err) => {
                             error!("Error getting block: {}", err);

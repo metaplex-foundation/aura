@@ -1,12 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
+use async_trait::async_trait;
+use sqlx::{Postgres, QueryBuilder};
+
 use crate::{
     model::{AssetIndex, Creator},
     storage_traits::AssetIndexStorage,
     PgClient,
 };
-use async_trait::async_trait;
-use sqlx::{Postgres, QueryBuilder};
 
 #[async_trait]
 impl AssetIndexStorage for PgClient {
@@ -39,7 +40,7 @@ impl AssetIndexStorage for PgClient {
             .into_iter()
             .collect();
 
-        let mut metadata_url_map: std::collections::HashMap<String, i64> = HashMap::new();
+        let mut metadata_url_map: HashMap<String, i64> = HashMap::new();
 
         if !metadata_urls.is_empty() {
             metadata_urls.sort();
@@ -58,8 +59,8 @@ impl AssetIndexStorage for PgClient {
             // convert metadata_ids to a map
             metadata_url_map = metadata_ids
                 .iter()
-                .map(|(id, url)| (url.clone(), id.clone()))
-                .collect::<std::collections::HashMap<String, i64>>();
+                .map(|(id, url)| (url.clone(), *id))
+                .collect::<HashMap<String, i64>>();
         }
 
         let mut asset_indexes = asset_indexes.to_vec();
@@ -118,7 +119,7 @@ impl AssetIndexStorage for PgClient {
         );
         query_builder.push_values(asset_indexes, |mut builder, asset_index| {
             let metadata_id = match asset_index.metadata_url {
-                Some(ref url) => metadata_url_map.get(url).clone(),
+                Some(ref url) => metadata_url_map.get(url),
                 None => None,
             };
             builder
@@ -183,7 +184,7 @@ impl AssetIndexStorage for PgClient {
             query_builder.push_tuples(
                 valid_creators_key_tupples,
                 |mut builder, (pubkey, creator)| {
-                    builder.push_bind(creator.clone()).push_bind(pubkey.clone());
+                    builder.push_bind(creator).push_bind(pubkey);
                 },
             );
 

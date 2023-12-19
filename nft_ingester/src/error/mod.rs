@@ -1,16 +1,14 @@
-// use crate::tasks::TaskData;
-// use aerospike_storage::error::AerospikeError;
 use blockbuster::error::BlockbusterError;
 use flatbuffers::InvalidFlatbuffer;
 use plerkle_messenger::MessengerError;
 use plerkle_serialization::error::PlerkleSerializationError;
-use rocks_db::errors::{BackupServiceError, StorageError};
 use sea_orm::{DbErr, TransactionError};
 use solana_sdk::pubkey::ParsePubkeyError;
 use solana_sdk::signature::ParseSignatureError;
 use solana_transaction_status::EncodeError;
 use thiserror::Error;
-use tokio::sync::mpsc::error::SendError;
+
+use rocks_db::errors::{BackupServiceError, StorageError};
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum IngesterError {
@@ -138,12 +136,6 @@ impl From<TransactionError<IngesterError>> for IngesterError {
     }
 }
 
-// impl From<SendError<TaskData>> for IngesterError {
-//     fn from(err: SendError<TaskData>) -> Self {
-//         IngesterError::TaskManagerError(format!("Could not create task: {:?}", err.to_string()))
-//     }
-// }
-
 impl From<MessengerError> for IngesterError {
     fn from(e: MessengerError) -> Self {
         IngesterError::MessengerError(e.to_string())
@@ -216,15 +208,3 @@ impl From<String> for IngesterError {
         IngesterError::DatabaseError(e)
     }
 }
-
-// impl From<IngesterError> for AerospikeError {
-//     fn from(err: IngesterError) -> Self {
-//         AerospikeError::Ingester(err.to_string())
-//     }
-// }
-
-// impl From<AerospikeError> for IngesterError {
-//     fn from(err: AerospikeError) -> Self {
-//         IngesterError::DatabaseError(err.to_string())
-//     }
-// }

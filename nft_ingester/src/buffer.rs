@@ -1,13 +1,16 @@
-use metrics_utils::IngesterMetricsConfig;
-use rocks_db::columns::{Mint, TokenAccount};
-use spl_account_compression::events::ChangeLogEventV1;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
+
+use spl_account_compression::events::ChangeLogEventV1;
 use tokio::sync::Mutex;
+
+use metrics_utils::IngesterMetricsConfig;
+use rocks_db::columns::{Mint, TokenAccount};
 
 use crate::mplx_updates_processor::MetadataInfo;
 
+#[derive(Default)]
 pub struct Buffer {
     pub transactions: Mutex<VecDeque<BufferedTransaction>>,
 

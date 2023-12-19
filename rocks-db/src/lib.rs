@@ -27,10 +27,10 @@ pub mod storage_traits;
 pub type Result<T> = std::result::Result<T, StorageError>;
 
 pub struct Storage {
-    pub asset_static_data: Column<asset::AssetStaticDetails>,
-    pub asset_dynamic_data: Column<asset::AssetDynamicDetails>,
-    pub asset_authority_data: Column<asset::AssetAuthority>,
-    pub asset_owner_data: Column<asset::AssetOwner>,
+    pub asset_static_data: Column<AssetStaticDetails>,
+    pub asset_dynamic_data: Column<AssetDynamicDetails>,
+    pub asset_authority_data: Column<AssetAuthority>,
+    pub asset_owner_data: Column<AssetOwner>,
     pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_collection_data: Column<asset::AssetCollection>,
     pub asset_offchain_data: Column<offchain_data::OffChainData>,
@@ -41,7 +41,7 @@ pub struct Storage {
     pub account_token_owner_idx: Column<columns::TokenAccountOwnerIdx>,
     pub account_token_mint_idx: Column<columns::TokenAccountMintIdx>,
     pub db: Arc<DB>,
-    pub assets_update_idx: Column<asset::AssetsUpdateIdx>,
+    pub assets_update_idx: Column<AssetsUpdateIdx>,
     assets_update_last_seq: AtomicU64,
 }
 
@@ -52,10 +52,10 @@ impl Storage {
             db_path,
             vec![
                 Self::new_cf_descriptor::<offchain_data::OffChainData>(),
-                Self::new_cf_descriptor::<asset::AssetStaticDetails>(),
-                Self::new_cf_descriptor::<asset::AssetDynamicDetails>(),
-                Self::new_cf_descriptor::<asset::AssetAuthority>(),
-                Self::new_cf_descriptor::<asset::AssetOwner>(),
+                Self::new_cf_descriptor::<AssetStaticDetails>(),
+                Self::new_cf_descriptor::<AssetDynamicDetails>(),
+                Self::new_cf_descriptor::<AssetAuthority>(),
+                Self::new_cf_descriptor::<AssetOwner>(),
                 Self::new_cf_descriptor::<asset::AssetLeaf>(),
                 Self::new_cf_descriptor::<asset::AssetCollection>(),
                 Self::new_cf_descriptor::<cl_items::ClItem>(),

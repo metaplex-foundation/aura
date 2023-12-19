@@ -1,9 +1,10 @@
+use std::sync::atomic::Ordering;
+
+use solana_sdk::pubkey::Pubkey;
+
 use crate::asset::AssetsUpdateIdx;
-use crate::column::TypedColumn;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
-use solana_sdk::pubkey::Pubkey;
-use std::sync::atomic::Ordering;
 
 impl Storage {
     fn get_next_asset_update_seq(&self) -> Result<u64> {
