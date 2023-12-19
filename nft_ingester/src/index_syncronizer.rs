@@ -8,6 +8,7 @@ use rocks_db::{
     AssetsUpdateIdx,
 };
 use solana_sdk::pubkey::Pubkey;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::HashSet, sync::Arc};
 
 use crate::error::IngesterError;
@@ -36,7 +37,10 @@ where
         }
     }
 
-    pub async fn synchronize_asset_indexes(&self) -> Result<(), IngesterError> {
+    pub async fn synchronize_asset_indexes(
+        &self,
+        keep_running: Arc<AtomicBool>,
+    ) -> Result<(), IngesterError> {
         // Retrieve the last synced ID from the secondary storage
         let last_indexed_key = self.index_storage.fetch_last_synced_id().await?;
         let last_indexed_key = match last_indexed_key {
@@ -59,7 +63,7 @@ where
         let mut starting_key = last_indexed_key;
         let mut processed_keys = HashSet::<Pubkey>::new();
         // Loop until no more new keys are returned
-        loop {
+        while keep_running.load(Ordering::SeqCst) {
             let (updated_keys, last_included_key) = self.primary_storage.fetch_asset_updated_keys(
                 starting_key,
                 last_key,

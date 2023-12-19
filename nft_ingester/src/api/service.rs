@@ -1,18 +1,18 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use cadence_macros::is_global_default_set;
 use log::{error, info};
 
+use metrics_utils::utils::setup_metrics;
+use metrics_utils::{ApiMetricsConfig, MetricState, MetricsTrait};
+use rocks_db::Storage;
 use {crate::api::DasApi, std::env, std::net::SocketAddr};
 use {
     crossbeam_channel::unbounded,
-    jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder},
     jsonrpc_http_server::cors::AccessControlAllowHeaders,
+    jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder},
 };
-use metrics_utils::{ApiMetricsConfig, MetricState, MetricsTrait};
-use metrics_utils::utils::setup_metrics;
-use rocks_db::Storage;
 
 use crate::api::builder::RpcApiBuilder;
 use crate::api::config::load_config;
@@ -28,7 +28,7 @@ pub fn safe_metric<F: Fn()>(f: F) {
 pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10);
 // 50kB
 pub const RUNTIME_WORKER_THREAD_COUNT: usize = 2000;
-pub const MAX_CORS_AGE: usize = 86400;
+pub const MAX_CORS_AGE: u32 = 86400;
 
 pub async fn start_api(
     rocks_db: Arc<Storage>,
@@ -72,7 +72,7 @@ pub async fn start_api(
         ]))
         .request_middleware(request_middleware)
         .cors_allow_headers(AccessControlAllowHeaders::Any)
-        .cors_max_age(MAX_CORS_AGE)
+        .cors_max_age(Some(MAX_CORS_AGE))
         .max_request_body_size(MAX_REQUEST_BODY_SIZE)
         .health_api(("/health", "health"))
         .start_http(&addr);

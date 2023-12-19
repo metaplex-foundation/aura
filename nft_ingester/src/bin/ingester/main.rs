@@ -1,17 +1,16 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use clap::Parser;
 use log::{error, info};
 use tokio::task::JoinSet;
 
-use metrics_utils::{IngesterMetricsConfig, MetricState, MetricsTrait};
 use metrics_utils::utils::setup_metrics;
-use nft_ingester::{config::init_logger, error::IngesterError};
+use metrics_utils::{IngesterMetricsConfig, MetricState, MetricsTrait};
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
-use nft_ingester::config::{BackfillerConfig, INGESTER_BACKUP_NAME, IngesterConfig, setup_config};
+use nft_ingester::config::{setup_config, BackfillerConfig, IngesterConfig, INGESTER_BACKUP_NAME};
 use nft_ingester::db_v2::DBClient as DBClientV2;
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::graceful_stop;
@@ -20,10 +19,11 @@ use nft_ingester::message_handler::MessageHandler;
 use nft_ingester::mplx_updates_processor::MplxAccsProcessor;
 use nft_ingester::tcp_receiver::TcpReceiver;
 use nft_ingester::token_updates_processor::TokenAccsProcessor;
+use nft_ingester::{config::init_logger, error::IngesterError};
 use postgre_client::PgClient;
-use rocks_db::{backup_service, Storage};
 use rocks_db::backup_service::BackupService;
 use rocks_db::errors::BackupServiceError;
+use rocks_db::{backup_service, Storage};
 
 mod backfiller;
 
@@ -128,7 +128,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .clone()
             .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
     )
-        .unwrap();
+    .unwrap();
 
     let rocks_storage = Arc::new(storage);
 
@@ -180,8 +180,11 @@ pub async fn main() -> Result<(), IngesterError> {
 
         let cloned_token_parser = token_accs_parser.clone();
 
+        let cloned_keep_running = keep_running.clone();
         tasks.spawn(tokio::spawn(async move {
-            cloned_token_parser.process_mint_accs().await;
+            cloned_token_parser
+                .process_mint_accs(cloned_keep_running)
+                .await;
         }));
     }
 
@@ -199,14 +202,16 @@ pub async fn main() -> Result<(), IngesterError> {
     let bubblegum_updates_processor =
         BubblegumTxProcessor::new(rocks_storage.clone(), buffer.clone(), metrics.clone());
 
+    let cloned_keep_running = keep_running.clone();
     tasks.spawn(tokio::spawn(async move {
-        bubblegum_updates_processor.run().await;
+        bubblegum_updates_processor.run(cloned_keep_running).await;
     }));
 
     let json_downloader = JsonDownloader::new(rocks_storage.clone()).await;
 
+    let cloned_keep_running = keep_running.clone();
     tasks.spawn(tokio::spawn(async move {
-        json_downloader.run().await;
+        json_downloader.run(cloned_keep_running).await;
     }));
 
     if config.run_bubblegum_backfiller {
@@ -216,7 +221,10 @@ pub async fn main() -> Result<(), IngesterError> {
             .await
             .unwrap();
 
-        backfiller.start_backfill(&mut tasks).await.unwrap();
+        backfiller
+            .start_backfill(&mut tasks, keep_running.clone())
+            .await
+            .unwrap();
     }
 
     let max_postgre_connections = config
@@ -230,7 +238,7 @@ pub async fn main() -> Result<(), IngesterError> {
             100,
             max_postgre_connections,
         )
-            .await,
+        .await,
     );
 
     let synchronizer = Synchronizer::new(
@@ -239,9 +247,12 @@ pub async fn main() -> Result<(), IngesterError> {
         config.synchronizer_batch_size,
     );
 
+    let cloned_keep_running = keep_running.clone();
     tasks.spawn(tokio::spawn(async move {
-        loop {
-            let res = synchronizer.synchronize_asset_indexes().await;
+        while cloned_keep_running.load(Ordering::SeqCst) {
+            let res = synchronizer
+                .synchronize_asset_indexes(cloned_keep_running.clone())
+                .await;
             match res {
                 Ok(_) => {
                     info!("Synchronization finished successfully");

@@ -126,11 +126,11 @@ impl TokenAccsProcessor {
         }
     }
 
-    pub async fn process_mint_accs(&self) {
+    pub async fn process_mint_accs(&self, keep_running: Arc<AtomicBool>) {
         let mut counter = BUFFER_PROCESSING_COUNTER;
         let mut prev_buffer_size = 0;
 
-        loop {
+        while keep_running.load(Ordering::SeqCst) {
             let mut mint_accounts = self.buffer.mints.lock().await;
             let buffer_size = mint_accounts.len();
 

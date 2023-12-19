@@ -5,6 +5,7 @@ use metrics_utils::utils::setup_metrics;
 use metrics_utils::{BgTaskRunnerMetricsConfig, MetricState, MetricStatus, MetricsTrait};
 use reqwest::{Client, ClientBuilder};
 use rocks_db::{offchain_data::OffChainData, Storage};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use tokio::time::{self, Instant};
@@ -44,14 +45,14 @@ impl JsonDownloader {
         }
     }
 
-    pub async fn run(&self) {
+    pub async fn run(&self, keep_running: Arc<AtomicBool>) {
         let retry_interval = tokio::time::Duration::from_secs(self.config.retry_interval.unwrap());
 
         let mut interval = time::interval(retry_interval);
 
         let mut tasks_set = JoinSet::new();
 
-        loop {
+        while keep_running.load(Ordering::SeqCst) {
             interval.tick().await; // ticks immediately
 
             let tasks = self.db_client.get_pending_tasks().await;
