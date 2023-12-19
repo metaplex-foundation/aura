@@ -113,6 +113,18 @@ impl RpcApiBuilder {
         });
         module.add_alias("getGrouping", "get_grouping");
 
+        let cloned_api = api.clone();
+        module.add_method("searchAssets", move |rpc_params: Params| {
+            let api: Arc<DasApi> = cloned_api.clone();
+            async move {
+                api.search_assets(rpc_params.parse()?)
+                    .await
+                    .map_err(Into::into)
+            }
+        });
+        module.add_alias("searchAssets", "search_assets");
+
+
         Ok(module)
     }
 }
