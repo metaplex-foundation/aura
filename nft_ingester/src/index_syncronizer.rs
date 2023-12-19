@@ -121,6 +121,7 @@ mod tests {
     use rocks_db::storage_traits::MockAssetIndexStorage as MockPrimaryStorage;
     use std::collections::HashMap;
     use tokio;
+    use rocks_db::asset::AssetIndex;
 
     fn create_test_asset_index(pubkey: &Pubkey) -> AssetIndex {
         AssetIndex {

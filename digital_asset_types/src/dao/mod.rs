@@ -35,7 +35,7 @@ pub enum ConditionType {
     All,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct SearchAssetsQuery {
     // Conditions
     pub negate: Option<bool>,
