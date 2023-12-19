@@ -12,6 +12,7 @@ use digital_asset_types::rpc::{filter::AssetSorting, response::GetGroupingRespon
 use digital_asset_types::rpc::{Asset, AssetProof};
 
 use crate::api::error::DasApiError;
+use crate::extract_some_field_names;
 
 use self::validation::{validate_opt_pubkey, validate_pubkey};
 
@@ -21,6 +22,7 @@ pub mod config;
 pub mod error;
 pub mod middleware;
 pub mod service;
+mod util;
 pub mod validation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -127,7 +129,7 @@ pub struct SearchAssets {
     pub limit: Option<u32>,
     pub page: Option<u32>,
     // before and after are base64 encoded sorting keys, which is NOT a pubkey, passing any non empty base64 encoded string will not cause an error
-    pub before: Option<String>, 
+    pub before: Option<String>,
     pub after: Option<String>,
     #[serde(default)]
     pub json_uri: Option<String>,
@@ -139,6 +141,37 @@ pub struct SearchAssets {
     #[serde(default)]
     pub name: Option<String>,
 }
+
+// Use the macro to generate the Some fields names extraction function
+extract_some_field_names!(SearchAssets {
+    negate,
+    condition_type,
+    interface,
+    owner_address,
+    owner_type,
+    creator_address,
+    creator_verified,
+    authority_address,
+    grouping,
+    delegate,
+    frozen,
+    supply,
+    supply_mint,
+    compressed,
+    compressible,
+    royalty_target_type,
+    royalty_target,
+    royalty_amount,
+    burnt,
+    sort_by,
+    limit,
+    page,
+    before,
+    after,
+    json_uri,
+    cursor,
+    name
+});
 
 impl TryFrom<SearchAssets> for digital_asset_types::dao::SearchAssetsQuery {
     type Error = DasApiError;
@@ -154,7 +187,7 @@ impl TryFrom<SearchAssets> for digital_asset_types::dao::SearchAssetsQuery {
             .transpose()?;
         Ok(digital_asset_types::dao::SearchAssetsQuery {
             negate: search_assets.negate,
-            condition_type: search_assets.condition_type.map(|s| s.into()), 
+            condition_type: search_assets.condition_type.map(|s| s.into()),
             owner_address: validate_opt_pubkey(&search_assets.owner_address)?,
             owner_type: search_assets.owner_type.map(|s| s.into()),
             creator_address: validate_opt_pubkey(&search_assets.creator_address)?,

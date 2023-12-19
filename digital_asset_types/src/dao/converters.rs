@@ -23,7 +23,7 @@ impl TryFrom<SearchAssetsQuery> for postgre_client::model::SearchAssetsFilter {
             .grouping
             .map(|(key, val)| {
                 if key != "collection" {
-                    return Err(ConversionError::IncompatibleGroupingKey(key))
+                    return Err(ConversionError::IncompatibleGroupingKey(key));
                 }
                 Ok(val)
             })

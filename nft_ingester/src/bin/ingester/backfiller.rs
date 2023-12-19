@@ -1,5 +1,6 @@
 use flatbuffers::FlatBufferBuilder;
 use log::{debug, error, info, warn};
+use metrics_utils::{BackfillerMetricsConfig, MetricStatus};
 use nft_ingester::buffer::{Buffer, BufferedTransaction};
 use nft_ingester::config::BackfillerConfig;
 use nft_ingester::error::IngesterError;
@@ -79,6 +80,7 @@ impl Backfiller {
         &self,
         tasks: &mut JoinSet<Result<(), JoinError>>,
         keep_running: Arc<AtomicBool>,
+        metrics: Arc<BackfillerMetricsConfig>,
     ) -> Result<(), IngesterError> {
         info!("Backfiller is started");
 
@@ -87,6 +89,7 @@ impl Backfiller {
             self.big_table_inner_client.clone(),
             self.slot_start_from,
             self.slot_parse_until,
+            metrics.clone(),
         )
         .await;
 
@@ -101,6 +104,7 @@ impl Backfiller {
             self.rocks_client.clone(),
             self.big_table_client.clone(),
             self.buffer.clone(),
+            metrics.clone(),
         )
         .await;
 
@@ -122,6 +126,7 @@ pub struct SlotsCollector {
     big_table_inner_client: Arc<BigTableConnection>,
     slot_start_from: u64,
     slot_parse_until: u64,
+    metrics: Arc<BackfillerMetricsConfig>,
 }
 
 impl SlotsCollector {
@@ -130,12 +135,14 @@ impl SlotsCollector {
         big_table_inner_client: Arc<BigTableConnection>,
         slot_start_from: u64,
         slot_parse_until: u64,
+        metrics: Arc<BackfillerMetricsConfig>,
     ) -> SlotsCollector {
         SlotsCollector {
             rocks_client,
             big_table_inner_client,
             slot_start_from,
             slot_parse_until,
+            metrics,
         }
     }
 
@@ -156,6 +163,9 @@ impl SlotsCollector {
 
             match slots {
                 Ok(bg_slots) => {
+                    self.metrics
+                        .inc_slots_collected("backfiller_slots_collected", MetricStatus::SUCCESS);
+
                     let mut slots = Vec::new();
 
                     for slot in bg_slots.iter() {
@@ -194,6 +204,8 @@ impl SlotsCollector {
                     }
                 }
                 Err(err) => {
+                    self.metrics
+                        .inc_slots_collected("backfiller_slots_collected", MetricStatus::FAILURE);
                     error!("Error getting slots: {}", err);
                     tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_GET_SLOT_FROM_BG))
                         .await;
@@ -250,6 +262,7 @@ pub struct TransactionsParser {
     rocks_client: Arc<rocks_db::Storage>,
     big_table_client: Arc<LedgerStorage>,
     buffer: Arc<Buffer>,
+    metrics: Arc<BackfillerMetricsConfig>,
 }
 
 impl TransactionsParser {
@@ -257,11 +270,13 @@ impl TransactionsParser {
         rocks_client: Arc<rocks_db::Storage>,
         big_table_client: Arc<LedgerStorage>,
         buffer: Arc<Buffer>,
+        metrics: Arc<BackfillerMetricsConfig>,
     ) -> TransactionsParser {
         TransactionsParser {
             rocks_client,
             big_table_client,
             buffer,
+            metrics,
         }
     }
 
@@ -323,6 +338,8 @@ impl TransactionsParser {
                 let bg_client = self.big_table_client.clone();
                 let s = slot.clone();
                 let buffer = self.buffer.clone();
+
+                let cloned_metrics = self.metrics.clone();
 
                 let task = tokio::spawn(async move {
                     let block = match bg_client.get_confirmed_block(s as u64).await {
@@ -414,7 +431,10 @@ impl TransactionsParser {
                             transaction: tx,
                             map_flatbuffer: false,
                         });
+
+                        cloned_metrics.inc_data_processed("backfiller_tx_processed");
                     }
+                    cloned_metrics.inc_data_processed("backfiller_slot_processed");
                 });
 
                 tasks.push(task);

@@ -2,7 +2,7 @@ use crate::config::{setup_config, BackgroundTaskConfig, BackgroundTaskRunnerConf
 use crate::db_v2::{DBClient, TaskStatus, UpdatedTask};
 use log::{debug, error, info};
 use metrics_utils::utils::setup_metrics;
-use metrics_utils::{BgTaskRunnerMetricsConfig, MetricState, MetricStatus, MetricsTrait};
+use metrics_utils::{JsonDownloaderMetricsConfig, MetricState, MetricStatus, MetricsTrait};
 use reqwest::{Client, ClientBuilder};
 use rocks_db::{offchain_data::OffChainData, Storage};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,28 +14,13 @@ pub struct JsonDownloader {
     pub db_client: Arc<DBClient>,
     pub rocks_db: Arc<Storage>,
     pub config: BackgroundTaskRunnerConfig,
-    pub metrics: Arc<BgTaskRunnerMetricsConfig>,
+    pub metrics: Arc<JsonDownloaderMetricsConfig>,
 }
 
 impl JsonDownloader {
-    pub async fn new(rocks_db: Arc<Storage>) -> Self {
+    pub async fn new(rocks_db: Arc<Storage>, metrics: Arc<JsonDownloaderMetricsConfig>) -> Self {
         let config: BackgroundTaskConfig = setup_config();
         let database_pool = DBClient::new(&config.database_config).await.unwrap();
-
-        let mut metrics_state = MetricState::new(BgTaskRunnerMetricsConfig::new());
-        metrics_state.register_metrics();
-        let metrics = Arc::new(metrics_state.metrics);
-
-        tokio::spawn(async move {
-            match setup_metrics(metrics_state.registry, config.bg_task_runner_metrics_port).await {
-                Ok(_) => {
-                    info!("Setup metrics successfully")
-                }
-                Err(e) => {
-                    error!("Setup metrics failed: {}", e)
-                }
-            }
-        });
 
         Self {
             db_client: Arc::new(database_pool),

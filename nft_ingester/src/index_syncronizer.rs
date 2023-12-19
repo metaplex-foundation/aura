@@ -156,6 +156,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_synchronizer_over_2_empty_storages() {
+        let keep_running = Arc::new(AtomicBool::new(true));
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
         index_storage
@@ -169,11 +170,15 @@ mod tests {
             .return_once(|| Ok(None));
         let synchronizer =
             Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 1000);
-        synchronizer.synchronize_asset_indexes().await.unwrap();
+        synchronizer
+            .synchronize_asset_indexes(keep_running.clone())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn test_synchronizer_with_records_in_primary_storage() {
+        let keep_running = Arc::new(AtomicBool::new(true));
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
 
@@ -222,11 +227,15 @@ mod tests {
             .return_once(|_, _| Ok(()));
         let synchronizer =
             Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 1000);
-        synchronizer.synchronize_asset_indexes().await.unwrap();
+        synchronizer
+            .synchronize_asset_indexes(keep_running.clone())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn test_synchronizer_with_small_batch_size() {
+        let keep_running = Arc::new(AtomicBool::new(true));
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
 
@@ -284,11 +293,15 @@ mod tests {
             .return_once(|_, _| Ok(()));
 
         let synchronizer = Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 1); // Small batch size
-        synchronizer.synchronize_asset_indexes().await.unwrap();
+        synchronizer
+            .synchronize_asset_indexes(keep_running.clone())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn test_synchronizer_with_existing_index_data() {
+        let keep_running = Arc::new(AtomicBool::new(true));
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
 
@@ -388,11 +401,15 @@ mod tests {
             .return_once(|_, _| Ok(()));
 
         let synchronizer = Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 2);
-        synchronizer.synchronize_asset_indexes().await.unwrap();
+        synchronizer
+            .synchronize_asset_indexes(keep_running.clone())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn test_synchronizer_with_synced_databases() {
+        let keep_running = Arc::new(AtomicBool::new(true));
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
 
@@ -423,6 +440,9 @@ mod tests {
 
         let synchronizer =
             Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 1000);
-        synchronizer.synchronize_asset_indexes().await.unwrap();
+        synchronizer
+            .synchronize_asset_indexes(keep_running.clone())
+            .await
+            .unwrap();
     }
 }
