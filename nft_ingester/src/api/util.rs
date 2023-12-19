@@ -12,6 +12,10 @@ macro_rules! extract_some_field_names {
                 }
             )*
 
+            if result.is_empty() {
+                return result;
+            }
+
             result[..result.len()-1].to_string()
         }
     };

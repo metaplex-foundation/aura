@@ -102,7 +102,7 @@ pub struct GetGrouping {
     pub group_value: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SearchAssets {
     // todo: negate and condition_type are not used in the current implementation
@@ -208,5 +208,32 @@ impl TryFrom<SearchAssets> for digital_asset_types::dao::SearchAssetsQuery {
             specification_version: search_assets.interface.as_ref().map(|s| s.into()),
             specification_asset_class: search_assets.interface.as_ref().map(|s| s.into()).filter(|v| v != &digital_asset_types::dao::sea_orm_active_enums::SpecificationAssetClass::Unknown),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_some_field_names_with_default_structure() {
+        let search_assets = SearchAssets::default();
+
+        let extracted_fields = extract_some_fields(&search_assets);
+
+        assert_eq!(extracted_fields, "".to_string());
+    }
+
+    #[test]
+    fn extract_some_field_names_with_partially_filled_structure() {
+        let search_assets = SearchAssets {
+            burnt: Some(false),
+            negate: Some(true),
+            ..Default::default()
+        };
+
+        let extracted_fields = extract_some_fields(&search_assets);
+
+        assert_eq!(extracted_fields, "negate_burnt".to_string());
     }
 }
