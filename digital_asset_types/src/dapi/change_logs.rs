@@ -1,15 +1,18 @@
-use crate::fetch_asset_data;
-use log::debug;
-use rocks_db::Storage;
-use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use log::debug;
+use solana_sdk::pubkey::Pubkey;
+
+use rocks_db::Storage;
 use {
     crate::dao::cl_items,
     crate::rpc::AssetProof,
-    sea_orm::{entity::*, query::*, DbErr, FromQueryResult},
+    sea_orm::{DbErr, FromQueryResult},
     spl_concurrent_merkle_tree::node::empty_node,
 };
+
+use crate::fetch_asset_data;
 
 #[derive(FromQueryResult, Debug, Default, Clone, Eq, PartialEq)]
 struct SimpleChangeLog {
@@ -44,7 +47,7 @@ pub async fn get_proof_for_assets(
         .map(|asset| {
             (
                 asset.tree_id,
-                (asset.pubkey, asset.nonce.unwrap_or_default() as u64),
+                (asset.pubkey, asset.nonce.unwrap_or_default()),
             )
         })
         .collect::<HashMap<_, _>>();
@@ -76,8 +79,8 @@ pub async fn get_proof_for_assets(
         .into_iter()
         .filter_map(|leaf| {
             leaf.and_then(|leaf| {
-                tree_ids.get(&leaf.cli_tree_key).and_then(|(pubkey, _)| {
-                    Some((
+                tree_ids.get(&leaf.cli_tree_key).map(|(pubkey, _)| {
+                    (
                         pubkey.to_bytes().to_vec(),
                         cl_items::Model {
                             id: 0,
@@ -88,7 +91,7 @@ pub async fn get_proof_for_assets(
                             level: leaf.cli_level as i64,
                             hash: leaf.cli_hash,
                         },
-                    ))
+                    )
                 })
             })
         })
@@ -99,7 +102,7 @@ pub async fn get_proof_for_assets(
         .flat_map(|(node, tree)| {
             get_required_nodes_for_proof(node as i64)
                 .into_iter()
-                .map(move |node| (node as u64, tree.clone()))
+                .map(move |node| (node as u64, tree))
         })
         .collect();
     let all_nodes = rocks_db
@@ -108,7 +111,7 @@ pub async fn get_proof_for_assets(
         .await
         .map_err(|e| DbErr::Custom(e.to_string()))?
         .into_iter()
-        .filter_map(|node| node)
+        .flatten()
         .map(|node| SimpleChangeLog {
             cli_hash: node.cli_hash,
             cli_level: node.cli_level as i64,
@@ -128,7 +131,7 @@ pub async fn get_proof_for_assets(
 
 fn get_asset_proof(
     asset_id: &Pubkey,
-    nodes: &Vec<SimpleChangeLog>,
+    nodes: &[SimpleChangeLog],
     leaves: &HashMap<Vec<u8>, cl_items::Model>,
 ) -> Option<AssetProof> {
     let leaf_key = asset_id.to_bytes().to_vec();
@@ -214,5 +217,5 @@ pub fn get_required_nodes_for_proof(index: i64) -> Vec<i64> {
         idx >>= 1
     }
     indexes.push(1);
-    return indexes;
+    indexes
 }

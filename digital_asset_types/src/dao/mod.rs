@@ -1,18 +1,19 @@
-mod converters;
-mod full_asset;
-mod generated;
-pub mod scopes;
-pub use converters::*;
+use sea_orm::{
+    entity::*, sea_query::Expr, sea_query::IntoCondition, Condition, DbErr, RelationDef,
+};
+
 pub use full_asset::*;
-#[allow(ambiguous_glob_reexports)]
 pub use generated::*;
 
 use self::sea_orm_active_enums::{
     OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
 };
-use sea_orm::{
-    entity::*, sea_query::Expr, sea_query::IntoCondition, Condition, DbErr, RelationDef,
-};
+
+mod converters;
+mod full_asset;
+mod generated;
+pub mod scopes;
+pub use converters::*;
 
 pub struct GroupingSize {
     pub size: u64,
@@ -208,7 +209,7 @@ impl SearchAssetsQuery {
         }
 
         if let Some(a) = self.authority_address.to_owned() {
-            conditions = conditions.add(asset_authority::Column::Authority.eq(a.clone()));
+            conditions = conditions.add(asset_authority::Column::Authority.eq(a));
             let rel = asset_authority::Relation::Asset
                 .def()
                 .rev()

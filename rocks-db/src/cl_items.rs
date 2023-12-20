@@ -1,12 +1,13 @@
-use crate::column::TypedColumn;
-use crate::key_encoders::{decode_u64_pubkey, encode_u64_pubkey};
-use crate::{Result, Storage};
 use bincode::deserialize;
 use log::error;
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
+
+use crate::column::TypedColumn;
+use crate::key_encoders::{decode_u64_pubkey, encode_u64_pubkey};
+use crate::{Result, Storage};
 
 /// This column family stores change log items for asset proof construction.
 /// Basically, it stores all nodes of the tree.
@@ -33,7 +34,8 @@ pub struct ClLeaf {
 
 impl TypedColumn for ClItem {
     type KeyType = (u64, Pubkey);
-    type ValueType = Self; // The value type is the change log struct itself
+    // The value type is the change log struct itself
+    type ValueType = Self;
     const NAME: &'static str = "CL_ITEMS"; // Name of the column family
 
     fn encode_key((node_id, tree_id): (u64, Pubkey)) -> Vec<u8> {
@@ -66,7 +68,7 @@ impl ClItem {
         }
 
         for op in operands {
-            match deserialize::<ClItem>(&op) {
+            match deserialize::<ClItem>(op) {
                 Ok(new_val) => {
                     if new_val.cli_seq > cli_seq {
                         cli_seq = new_val.cli_seq;
@@ -85,7 +87,8 @@ impl ClItem {
 
 impl TypedColumn for ClLeaf {
     type KeyType = (u64, Pubkey);
-    type ValueType = Self; // The value type is the leaf node id
+    // The value type is the leaf node id
+    type ValueType = Self;
     const NAME: &'static str = "CL_LEAF"; // Name of the column family
 
     fn encode_key((node_id, tree_id): (u64, Pubkey)) -> Vec<u8> {

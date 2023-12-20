@@ -1,14 +1,16 @@
-use crate::dao::sea_orm_active_enums::{
-    OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
-};
 #[cfg(feature = "sql_types")]
 use std::collections::BTreeMap;
 
-use crate::dao::sea_orm_active_enums::ChainMutability;
 use schemars::JsonSchema;
+
 use {
     serde::{Deserialize, Serialize},
     std::collections::HashMap,
+};
+
+use crate::dao::sea_orm_active_enums::ChainMutability;
+use crate::dao::sea_orm_active_enums::{
+    OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -56,9 +58,9 @@ impl From<(&SpecificationVersions, &SpecificationAssetClass)> for Interface {
     }
 }
 
-impl Into<(SpecificationVersions, SpecificationAssetClass)> for Interface {
-    fn into(self) -> (SpecificationVersions, SpecificationAssetClass) {
-        match self {
+impl From<Interface> for (SpecificationVersions, SpecificationAssetClass) {
+    fn from(val: Interface) -> Self {
+        match val {
             Interface::V1NFT => (SpecificationVersions::V1, SpecificationAssetClass::Nft),
             Interface::LegacyNft => (SpecificationVersions::V0, SpecificationAssetClass::Nft),
             Interface::ProgrammableNFT => (
@@ -115,7 +117,7 @@ pub struct File {
 
 pub type Files = Vec<File>;
 
-#[derive(PartialEq, Eq, Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[derive(PartialEq, Eq, Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 pub struct MetadataMap(BTreeMap<String, serde_json::Value>);
 
 impl MetadataMap {

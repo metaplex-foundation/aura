@@ -1,7 +1,5 @@
-use crate::buffer::{Buffer, BufferedTransaction};
-use crate::error::IngesterError;
-use crate::error::IngesterError::MissingFlatbuffersFieldError;
-use crate::mplx_updates_processor::MetadataInfo;
+use std::{str::FromStr, sync::Arc};
+
 use blockbuster::programs::token_account::TokenProgramAccount;
 use blockbuster::{
     program_handler::ProgramParser,
@@ -13,14 +11,17 @@ use blockbuster::{
 };
 use chrono::Utc;
 use flatbuffers::FlatBufferBuilder;
-use futures_util::Future;
 use log::{error, warn};
 use plerkle_serialization::AccountInfo;
-use rocks_db::columns::{Mint, TokenAccount};
 use solana_sdk::pubkey::Pubkey;
-use std::pin::Pin;
-use std::{str::FromStr, sync::Arc};
 use utils::flatbuffer::account_data_generated::account_data::root_as_account_data;
+
+use rocks_db::columns::{Mint, TokenAccount};
+
+use crate::buffer::{Buffer, BufferedTransaction};
+use crate::error::IngesterError;
+use crate::error::IngesterError::MissingFlatbuffersFieldError;
+use crate::mplx_updates_processor::MetadataInfo;
 
 const BYTE_PREFIX_TX_SIMPLE_FINALIZED: u8 = 22;
 const BYTE_PREFIX_TX_FINALIZED: u8 = 12;
@@ -149,7 +150,7 @@ impl MessageHandler {
                 let mut token_accounts = self.buffer.token_accs.lock().await;
 
                 if let Some(existing_model) = token_accounts.get(key_bytes.as_slice()) {
-                    if token_acc_model.slot_updated.clone() > existing_model.slot_updated.clone() {
+                    if token_acc_model.slot_updated > existing_model.slot_updated {
                         token_accounts.insert(key_bytes, token_acc_model);
                     }
                 } else {
@@ -173,7 +174,7 @@ impl MessageHandler {
                 let mut mints = self.buffer.mints.lock().await;
 
                 if let Some(existing_model) = mints.get(key_bytes.as_slice()) {
-                    if mint_acc_model.slot_updated.clone() > existing_model.slot_updated.clone() {
+                    if mint_acc_model.slot_updated > existing_model.slot_updated {
                         mints.insert(key_bytes, mint_acc_model);
                     }
                 } else {
@@ -188,7 +189,7 @@ impl MessageHandler {
         &self,
         account_info: &'a AccountInfo<'a>,
     ) -> Result<(), IngesterError> {
-        let acc_parse_result = self.mplx_acc_parser.handle_account(&account_info);
+        let acc_parse_result = self.mplx_acc_parser.handle_account(account_info);
 
         match acc_parse_result {
             Ok(acc_parsed) => {
@@ -237,11 +238,6 @@ impl MessageHandler {
 
         Ok(())
     }
-}
-
-pub async fn new_message_handler_callback(
-) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-    move |msg: Vec<u8>| Box::pin(async move {})
 }
 
 fn map_account_info_fb_bytes(

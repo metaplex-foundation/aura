@@ -1,11 +1,8 @@
 use log::warn;
 use postgre_client::storage_traits::AssetIndexStorage;
 use rocks_db::{
-    asset::AssetIndex,
-    column::TypedColumn,
     key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey},
     storage_traits::AssetIndexStorage as AssetIndexSourceStorage,
-    AssetsUpdateIdx,
 };
 use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -68,7 +65,7 @@ where
                 starting_key,
                 last_key,
                 self.batch_size,
-                Some(&processed_keys),
+                Some(processed_keys.clone()),
             )?;
             if updated_keys.is_empty() || last_included_key.is_none() {
                 break;
@@ -77,7 +74,7 @@ where
             starting_key = last_included_key;
             let last_included_key = last_included_key.unwrap();
             // fetch the asset indexes from the primary storage
-            let updated_keys_refs: Vec<Pubkey> = updated_keys.iter().map(|k| *k).collect();
+            let updated_keys_refs: Vec<Pubkey> = updated_keys.iter().copied().collect();
             let asset_indexes = self
                 .primary_storage
                 .get_asset_indexes(updated_keys_refs.as_slice())
@@ -99,7 +96,7 @@ where
                 .update_asset_indexes_batch(
                     asset_indexes
                         .values()
-                        .map(|ai| postgre_client::model::AssetIndex::from(ai))
+                        .map(postgre_client::model::AssetIndex::from)
                         .collect::<Vec<postgre_client::model::AssetIndex>>()
                         .as_slice(),
                     last_included_key.as_slice(),
@@ -124,6 +121,7 @@ mod tests {
     use rocks_db::storage_traits::MockAssetIndexStorage as MockPrimaryStorage;
     use std::collections::HashMap;
     use tokio;
+    use rocks_db::asset::AssetIndex;
 
     fn create_test_asset_index(pubkey: &Pubkey) -> AssetIndex {
         AssetIndex {
@@ -169,7 +167,11 @@ mod tests {
             .return_once(|| Ok(None));
         let synchronizer =
             Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 1000);
-        synchronizer.synchronize_asset_indexes().await.unwrap();
+        let keep_running = Arc::new(AtomicBool::new(true));
+        synchronizer
+            .synchronize_asset_indexes(keep_running)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -222,7 +224,11 @@ mod tests {
             .return_once(|_, _| Ok(()));
         let synchronizer =
             Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 1000);
-        synchronizer.synchronize_asset_indexes().await.unwrap();
+        let keep_running = Arc::new(AtomicBool::new(true));
+        synchronizer
+            .synchronize_asset_indexes(keep_running)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -284,7 +290,11 @@ mod tests {
             .return_once(|_, _| Ok(()));
 
         let synchronizer = Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 1); // Small batch size
-        synchronizer.synchronize_asset_indexes().await.unwrap();
+        let keep_running = Arc::new(AtomicBool::new(true));
+        synchronizer
+            .synchronize_asset_indexes(keep_running)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -388,7 +398,11 @@ mod tests {
             .return_once(|_, _| Ok(()));
 
         let synchronizer = Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 2);
-        synchronizer.synchronize_asset_indexes().await.unwrap();
+        let keep_running = Arc::new(AtomicBool::new(true));
+        synchronizer
+            .synchronize_asset_indexes(keep_running)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -423,6 +437,10 @@ mod tests {
 
         let synchronizer =
             Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 1000);
-        synchronizer.synchronize_asset_indexes().await.unwrap();
+        let keep_running = Arc::new(AtomicBool::new(true));
+        synchronizer
+            .synchronize_asset_indexes(keep_running)
+            .await
+            .unwrap();
     }
 }

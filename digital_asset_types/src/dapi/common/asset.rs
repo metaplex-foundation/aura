@@ -1,3 +1,15 @@
+use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::path::Path;
+
+use jsonpath_lib::JsonPathError;
+use log::error;
+use log::warn;
+use mime_guess::Mime;
+use sea_orm::DbErr;
+use serde_json::Value;
+use url::Url;
+
 use crate::dao::sea_orm_active_enums::SpecificationAssetClass;
 use crate::dao::sea_orm_active_enums::SpecificationVersions;
 use crate::dao::FullAsset;
@@ -9,20 +21,9 @@ use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
     MetadataMap, Ownership, Royalty, Scope, Supply, Uses,
 };
-use jsonpath_lib::JsonPathError;
-use log::error;
-use log::warn;
-use mime_guess::Mime;
-
-use sea_orm::DbErr;
-use serde_json::Value;
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::path::Path;
-use url::Url;
 
 pub fn to_uri(uri: String) -> Option<Url> {
-    Url::parse(&*uri).ok()
+    Url::parse(uri.as_str()).ok()
 }
 
 pub fn get_mime(url: Url) -> Option<Mime> {
@@ -93,10 +94,7 @@ pub fn create_pagination(
     page: Option<u64>,
 ) -> Result<Pagination, DbErr> {
     match (&before, &after, &page) {
-        (_, _, None) => Ok(Pagination::Keyset {
-            before: before.map(|x| x.into()),
-            after: after.map(|x| x.into()),
-        }),
+        (_, _, None) => Ok(Pagination::Keyset { before, after }),
         (None, None, Some(p)) => Ok(Pagination::Page { page: *p }),
         _ => Err(DbErr::Custom("Invalid Pagination".to_string())),
     }
@@ -318,8 +316,8 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         compression: Some(Compression {
             eligible: asset.compressible,
             compressed: asset.compressed,
-            leaf_id: asset.nonce.unwrap_or(0 as i64),
-            seq: asset.seq.unwrap_or(0 as i64),
+            leaf_id: asset.nonce.unwrap_or(0_i64),
+            seq: asset.seq.unwrap_or(0_i64),
             tree: asset
                 .tree_id
                 .map(|s| bs58::encode(s).into_string())
@@ -382,7 +380,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
 pub fn asset_list_to_rpc(asset_list: Vec<FullAsset>) -> (Vec<RpcAsset>, Vec<AssetError>) {
     asset_list
         .into_iter()
-        .fold((vec![], vec![]), |(mut assets, mut errors), asset| {
+        .fold((vec![], vec![]), |(mut assets, errors), asset| {
             match asset_to_rpc(asset.clone()) {
                 Ok(rpc_asset) => assets.push(rpc_asset.unwrap()),
                 Err(e) => {

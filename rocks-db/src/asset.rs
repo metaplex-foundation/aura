@@ -1,12 +1,13 @@
-use crate::key_encoders::{decode_pubkey, decode_u64x2_pubkey, encode_pubkey, encode_u64x2_pubkey};
-use crate::Result;
-use bincode::{deserialize, serialize};
+use bincode::deserialize;
 use blockbuster::token_metadata::state::{TokenStandard, Uses};
 use log::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
+
+use crate::key_encoders::{decode_pubkey, encode_pubkey};
+use crate::Result;
+use crate::TypedColumn;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Default)]
 pub enum RoyaltyTargetType {
@@ -94,7 +95,7 @@ pub struct AssetOwner {
 /// Leaf information about compressed asset
 /// Nonce - is basically the leaf index. It takes from tree supply.
 /// NOTE: leaf index is not the same as node index. Leaf index is specifically the index of the leaf in the tree.
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct AssetLeaf {
     pub pubkey: Pubkey,
     pub tree_id: Pubkey,
@@ -138,8 +139,8 @@ pub struct ChainDataV1 {
 
 impl ChainDataV1 {
     pub fn sanitize(&mut self) {
-        self.name = self.name.trim().replace("\0", "").to_string();
-        self.symbol = self.symbol.trim().replace("\0", "").to_string();
+        self.name = self.name.trim().replace('\0', "");
+        self.symbol = self.symbol.trim().replace('\0', "");
     }
 }
 
@@ -170,11 +171,10 @@ pub struct AssetIndex {
     pub slot_updated: i64,
 }
 
-use crate::TypedColumn;
-
 impl TypedColumn for AssetStaticDetails {
     type KeyType = Pubkey;
-    type ValueType = Self; // The value type is the Asset struct itself
+    type ValueType = Self;
+    // The value type is the Asset struct itself
     const NAME: &'static str = "ASSET_STATIC"; // Name of the column family
 
     fn encode_key(pubkey: Pubkey) -> Vec<u8> {
@@ -229,7 +229,7 @@ impl AssetStaticDetails {
             return Some(result);
         }
 
-        for op in operands {
+        if let Some(op) = operands.into_iter().next() {
             result = op.to_vec();
 
             return Some(result);
@@ -267,7 +267,7 @@ impl AssetDynamicDetails {
         }
 
         for op in operands {
-            match deserialize::<AssetDynamicDetails>(&op) {
+            match deserialize::<AssetDynamicDetails>(op) {
                 Ok(new_val) => {
                     result = Some(if let Some(mut current_val) = result {
                         update_field(&mut current_val.is_compressible, &new_val.is_compressible);
@@ -317,7 +317,7 @@ impl AssetAuthority {
         }
 
         for op in operands {
-            match deserialize::<AssetAuthority>(&op) {
+            match deserialize::<AssetAuthority>(op) {
                 Ok(new_val) => {
                     if new_val.slot_updated > slot {
                         slot = new_val.slot_updated;
@@ -371,7 +371,7 @@ impl AssetOwner {
         }
 
         for op in operands {
-            match deserialize::<AssetOwner>(&op) {
+            match deserialize::<AssetOwner>(op) {
                 Ok(new_val) => {
                     if let Some(current_seq) = owner_delegate_seq {
                         if let Some(new_seq) = new_val.owner_delegate_seq {
@@ -382,11 +382,9 @@ impl AssetOwner {
                         } else {
                             warn!("RocksDB: AssetOwner deserialize new_val: new owner_delegate_seq is None");
                         }
-                    } else {
-                        if new_val.slot_updated > slot {
-                            slot = new_val.slot_updated;
-                            result = op.to_vec();
-                        }
+                    } else if new_val.slot_updated > slot {
+                        slot = new_val.slot_updated;
+                        result = op.to_vec();
                     }
                 }
                 Err(e) => {
@@ -436,7 +434,7 @@ impl AssetLeaf {
         }
 
         for op in operands {
-            match deserialize::<AssetLeaf>(&op) {
+            match deserialize::<AssetLeaf>(op) {
                 Ok(new_val) => {
                     if let Some(current_seq) = leaf_seq {
                         if let Some(new_seq) = new_val.leaf_seq {
@@ -447,11 +445,9 @@ impl AssetLeaf {
                         } else {
                             warn!("RocksDB: AssetLeaf deserialize new_val: new leaf_seq is None");
                         }
-                    } else {
-                        if new_val.slot_updated > slot {
-                            slot = new_val.slot_updated;
-                            result = op.to_vec();
-                        }
+                    } else if new_val.slot_updated > slot {
+                        slot = new_val.slot_updated;
+                        result = op.to_vec();
                     }
                 }
                 Err(e) => {
@@ -501,7 +497,7 @@ impl AssetCollection {
         }
 
         for op in operands {
-            match deserialize::<AssetCollection>(&op) {
+            match deserialize::<AssetCollection>(op) {
                 Ok(new_val) => {
                     if let Some(current_seq) = collection_seq {
                         if let Some(new_seq) = new_val.collection_seq {
@@ -512,11 +508,9 @@ impl AssetCollection {
                         } else {
                             warn!("RocksDB: AssetCollection deserialize new_val: new collection_seq is None");
                         }
-                    } else {
-                        if new_val.slot_updated > slot {
-                            slot = new_val.slot_updated;
-                            result = op.to_vec();
-                        }
+                    } else if new_val.slot_updated > slot {
+                        slot = new_val.slot_updated;
+                        result = op.to_vec();
                     }
                 }
                 Err(e) => {

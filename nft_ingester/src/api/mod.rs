@@ -1,15 +1,9 @@
-use std::collections::HashMap;
-
 use anchor_lang::solana_program::pubkey;
-use async_trait::async_trait;
-use open_rpc_derive::document_rpc;
 use open_rpc_schema::schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub use api_impl::*;
-use digital_asset_types::rpc::response::AssetList;
 use digital_asset_types::rpc::{filter::AssetSorting, response::GetGroupingResponse};
-use digital_asset_types::rpc::{Asset, AssetProof};
 
 use crate::api::error::DasApiError;
 
@@ -160,7 +154,7 @@ impl TryFrom<SearchAssets> for digital_asset_types::dao::SearchAssetsQuery {
             creator_address: validate_opt_pubkey(&search_assets.creator_address)?,
             creator_verified: search_assets.creator_verified,
             authority_address: validate_opt_pubkey(&search_assets.authority_address)?,
-            grouping: grouping,
+            grouping,
             delegate: validate_opt_pubkey(&search_assets.delegate)?,
             frozen: search_assets.frozen,
             supply: search_assets.supply,
