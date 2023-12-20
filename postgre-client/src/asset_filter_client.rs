@@ -1,12 +1,13 @@
+use async_trait::async_trait;
+use base64::{engine::general_purpose, Engine as _};
+use sqlx::{Postgres, QueryBuilder};
+
 use crate::{
     model::{AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, SearchAssetsFilter},
     storage_traits::AssetPubkeyFilteredFetcher,
     PgClient,
 };
 
-use async_trait::async_trait;
-use base64::{engine::general_purpose, Engine as _};
-use sqlx::{Postgres, QueryBuilder};
 #[derive(sqlx::FromRow, Debug)]
 struct AssetRawResponse {
     pub pubkey: Vec<u8>,
@@ -23,7 +24,7 @@ impl PgClient {
         before: Option<String>,
         after: Option<String>,
     ) -> (QueryBuilder<'a, Postgres>, bool) {
-        let mut query_builder= QueryBuilder::new(
+        let mut query_builder = QueryBuilder::new(
             "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 ",
         );
         let mut group_clause_required = false;
@@ -147,7 +148,7 @@ impl PgClient {
 
         if let Some(before) = before {
             let res = AssetRawResponse::decode_sorting_key(before.as_str());
-            if let Some((slot, pubkey)) = res.ok() {
+            if let Ok((slot, pubkey)) = res {
                 query_builder.push(" AND (");
                 query_builder.push(order_field);
                 let comparison = match order.sort_direction {
@@ -169,7 +170,7 @@ impl PgClient {
 
         if let Some(after) = after {
             let res = AssetRawResponse::decode_sorting_key(&after);
-            if let Some((slot, pubkey)) = res.ok() {
+            if let Ok((slot, pubkey)) = res {
                 query_builder.push(" AND (");
                 query_builder.push(order_field);
                 let comparison = match order.sort_direction {

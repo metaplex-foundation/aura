@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use jsonrpc_core::types::params::Params;
-use jsonrpc_core::{futures::prelude::*, IoHandler};
+use jsonrpc_core::IoHandler;
 
 use crate::api::*;
 
@@ -113,9 +113,8 @@ impl RpcApiBuilder {
         });
         module.add_alias("getGrouping", "get_grouping");
 
-        let cloned_api = api.clone();
         module.add_method("searchAssets", move |rpc_params: Params| {
-            let api: Arc<DasApi> = cloned_api.clone();
+            let api: Arc<DasApi> = api.clone();
             async move {
                 api.search_assets(rpc_params.parse()?)
                     .await
@@ -123,7 +122,6 @@ impl RpcApiBuilder {
             }
         });
         module.add_alias("searchAssets", "search_assets");
-
 
         Ok(module)
     }

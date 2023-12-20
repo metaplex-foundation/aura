@@ -1,13 +1,17 @@
+use std::sync::Arc;
+
+use sea_orm::DatabaseConnection;
+use sea_orm::DbErr;
+
+use rocks_db::Storage;
+
 use crate::dao::scopes;
 use crate::rpc::filter::AssetSorting;
 use crate::rpc::response::AssetList;
-use rocks_db::Storage;
-use sea_orm::DatabaseConnection;
-use sea_orm::DbErr;
-use std::sync::Arc;
 
 use super::common::{build_asset_response, create_pagination, create_sorting};
 
+#[allow(clippy::too_many_arguments)]
 pub async fn get_assets_by_creator(
     db: &DatabaseConnection,
     rocks_db: Arc<Storage>,

@@ -136,7 +136,7 @@ fn test_fetch_asset_updated_keys_with_limit_and_skip() {
     assert!(last_key.is_some(), "Expected a last key");
     // Verify fetch_asset_updated_keys with the last key from previous call
     let (new_keys, new_last_key) = storage
-        .fetch_asset_updated_keys(last_key, None, 1, Some(&keys))
+        .fetch_asset_updated_keys(last_key, None, 1, Some(keys))
         .unwrap();
     assert!(
         new_keys.is_empty(),
@@ -163,7 +163,7 @@ fn test_fetch_asset_updated_keys_with_skip() {
             None,
             None,
             1,
-            Some(&HashSet::from_iter(vec![DEFAULT_PUBKEY_OF_ONES.clone()])),
+            Some(HashSet::from_iter(vec![DEFAULT_PUBKEY_OF_ONES.clone()])),
         )
         .unwrap();
     assert_eq!(keys.len(), 0, "Expected no keys");

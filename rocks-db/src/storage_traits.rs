@@ -1,22 +1,23 @@
 use std::collections::{HashMap, HashSet};
 
+use async_trait::async_trait;
 use mockall::automock;
 use solana_sdk::pubkey::Pubkey;
 
-use async_trait::async_trait;
-
+use crate::asset::AssetIndex;
 pub use crate::Result;
-use crate::{asset::AssetIndex, Storage};
+use crate::Storage;
 
 #[automock]
 pub trait AssetUpdateIndexStorage {
     fn last_known_asset_updated_key(&self) -> Result<Option<(u64, u64, Pubkey)>>;
-    fn fetch_asset_updated_keys<'a>(
+    #[allow(clippy::type_complexity)]
+    fn fetch_asset_updated_keys(
         &self,
         from: Option<(u64, u64, Pubkey)>,
         up_to: Option<(u64, u64, Pubkey)>,
         limit: usize,
-        skip_keys: Option<&'a HashSet<Pubkey>>,
+        skip_keys: Option<HashSet<Pubkey>>,
     ) -> Result<(HashSet<Pubkey>, Option<(u64, u64, Pubkey)>)>;
 }
 
@@ -28,6 +29,7 @@ pub trait AssetIndexReader {
 
 pub trait AssetIndexStorage: AssetIndexReader + AssetUpdateIndexStorage {}
 
+#[derive(Default)]
 pub struct MockAssetIndexStorage {
     pub mock_update_index_storage: MockAssetUpdateIndexStorage,
     pub mock_asset_index_reader: MockAssetIndexReader,
@@ -48,12 +50,12 @@ impl AssetUpdateIndexStorage for MockAssetIndexStorage {
             .last_known_asset_updated_key()
     }
 
-    fn fetch_asset_updated_keys<'a>(
+    fn fetch_asset_updated_keys(
         &self,
         from: Option<(u64, u64, Pubkey)>,
         up_to: Option<(u64, u64, Pubkey)>,
         limit: usize,
-        skip_keys: Option<&'a HashSet<Pubkey>>,
+        skip_keys: Option<HashSet<Pubkey>>,
     ) -> Result<(HashSet<Pubkey>, Option<(u64, u64, Pubkey)>)> {
         self.mock_update_index_storage
             .fetch_asset_updated_keys(from, up_to, limit, skip_keys)

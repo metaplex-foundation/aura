@@ -76,9 +76,7 @@ impl From<&rocks_db::asset::AssetIndex> for AssetIndex {
             ),
             royalty_target_type: RoyaltyTargetType::from(asset_index.royalty_target_type),
             slot_created: asset_index.slot_created,
-            owner_type: asset_index
-                .owner_type
-                .map(|owner_type| OwnerType::from(owner_type)),
+            owner_type: asset_index.owner_type.map(OwnerType::from),
             owner: asset_index.owner.map(|owner| owner.to_bytes().to_vec()),
             delegate: asset_index
                 .delegate
@@ -98,11 +96,7 @@ impl From<&rocks_db::asset::AssetIndex> for AssetIndex {
             supply: asset_index.supply,
             metadata_url: asset_index.metadata_url.clone(),
             slot_updated: asset_index.slot_updated,
-            creators: asset_index
-                .creators
-                .iter()
-                .map(|creator| Creator::from(creator))
-                .collect(),
+            creators: asset_index.creators.iter().map(Creator::from).collect(),
         }
     }
 }

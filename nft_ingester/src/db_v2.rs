@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use anchor_lang::prelude::Pubkey;
 use blockbuster::{
     programs::bubblegum::Payload,
@@ -5,38 +7,17 @@ use blockbuster::{
 };
 use mpl_bubblegum::state::leaf_schema::{LeafSchema, LeafSchemaEvent};
 use num_traits::FromPrimitive;
-use rocks_db::columns::Mint;
-use serde::{Deserialize, Serialize};
 use spl_account_compression::events::ChangeLogEventV1;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions, Postgres},
     ConnectOptions, PgPool, QueryBuilder, Row,
 };
-use std::collections::{HashMap, HashSet};
+
+use digital_asset_types::json::ChainDataV1;
+use rocks_db::columns::Mint;
 
 use crate::config::DatabaseConfig;
 use crate::error::IngesterError;
-use crate::mplx_updates_processor::RocksMetadataModels;
-
-#[derive(Serialize, Deserialize)]
-pub struct ChainDataV1 {
-    pub name: String,
-    pub symbol: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub edition_nonce: Option<u8>,
-    pub primary_sale_happened: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_standard: Option<TokenStandard>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub uses: Option<Uses>,
-}
-
-impl ChainDataV1 {
-    pub fn sanitize(&mut self) {
-        self.name = self.name.trim().replace("\0", "").to_string();
-        self.symbol = self.symbol.trim().replace("\0", "").to_string();
-    }
-}
 
 #[derive(Clone)]
 pub struct DBClient {
@@ -74,6 +55,7 @@ pub enum RoyaltyTargetType {
     Clone,
 )]
 #[sqlx(type_name = "specification_asset_class", rename_all = "lowercase")]
+#[allow(non_camel_case_types)]
 pub enum SpecificationAssetClass {
     Unknown,
     Fungible_Token,
@@ -332,12 +314,12 @@ impl DBClient {
         Ok(tasks)
     }
 
-    pub async fn insert_pubkeys(&self, keys: &Vec<Vec<u8>>) -> Result<(), IngesterError> {
+    pub async fn insert_pubkeys(&self, keys: &[Vec<u8>]) -> Result<(), IngesterError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("INSERT INTO pubkeys (pbk_key) ");
 
-        let mut ordered_keys = keys.clone();
-        ordered_keys.sort_by(|a, b| a.cmp(b));
+        let mut ordered_keys = keys.to_owned();
+        ordered_keys.sort();
 
         query_builder.push_values(ordered_keys, |mut b, key| {
             b.push_bind(key);
@@ -362,9 +344,7 @@ impl DBClient {
 
         let keys = keys.into_iter().collect::<Vec<Vec<u8>>>();
         let ids_keys = self.get_pubkey_ids(&keys).await?;
-        let keys_map = ids_keys
-            .into_iter()
-            .collect::<std::collections::HashMap<Vec<u8>, i64>>();
+        let keys_map = ids_keys.into_iter().collect::<HashMap<Vec<u8>, i64>>();
 
         let mut supply_to_update = Vec::new();
 
@@ -376,7 +356,7 @@ impl DBClient {
             });
         }
 
-        supply_to_update.sort_by(|a, b| a.ast_pubkey.cmp(&b.ast_pubkey));
+        supply_to_update.sort_by(|a, b| a.ast_pubkey.cmp(b.ast_pubkey));
 
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("UPDATE assets SET ast_supply = tmp.supply, ast_supply_slot_updated = tmp.supply_slot_updated FROM (");
@@ -687,7 +667,7 @@ impl DBClient {
             offchain_data_to_insert.push(TaskForInsert {
                 ofd_metadata_url: ids_keys
                     .get(&offchain_d.ofd_metadata_url)
-                    .map(|i| *i)
+                    .copied()
                     .unwrap_or_default(),
                 ofd_locked_until: offchain_d.ofd_locked_until,
                 ofd_attempts: offchain_d.ofd_attempts,
@@ -710,11 +690,11 @@ impl DBClient {
         );
 
         query_builder.push_values(offchain_data_to_insert, |mut b, off_d| {
-            b.push_bind(off_d.ofd_metadata_url.clone());
+            b.push_bind(off_d.ofd_metadata_url);
             b.push_bind(off_d.ofd_locked_until);
             b.push_bind(off_d.ofd_attempts);
             b.push_bind(off_d.ofd_max_attempts);
-            b.push_bind(off_d.ofd_error.clone());
+            b.push_bind(off_d.ofd_error);
             b.push_bind(TaskStatus::Pending);
         });
 
@@ -729,10 +709,7 @@ impl DBClient {
         Ok(())
     }
 
-    pub async fn drop_creators_for_assets(
-        &self,
-        assets: &Vec<Vec<u8>>,
-    ) -> Result<(), IngesterError> {
+    pub async fn drop_creators_for_assets(&self, assets: &[Vec<u8>]) -> Result<(), IngesterError> {
         let mut keys = HashSet::new();
         for key in assets.iter() {
             keys.insert(key.clone());
@@ -818,9 +795,7 @@ impl DBClient {
         self.insert_pubkeys(&pubkeys).await?;
 
         let ids_keys = self.get_pubkey_ids(&pubkeys).await?;
-        let keys_map = ids_keys
-            .into_iter()
-            .collect::<std::collections::HashMap<Vec<u8>, i64>>();
+        let keys_map = ids_keys.into_iter().collect::<HashMap<Vec<u8>, i64>>();
 
         Ok(keys_map)
     }
@@ -958,6 +933,7 @@ impl DBClient {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn update_asset_leaf_info(
         &self,
         asset_id: i64,
@@ -969,7 +945,7 @@ impl DBClient {
         creator_hash: Vec<u8>,
     ) -> Result<(), IngesterError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
-        QueryBuilder::new("INSERT INTO assets (ast_pubkey, ast_nonce, ast_tree_id, ast_leaf, ast_leaf_seq, ast_data_hash,
+            QueryBuilder::new("INSERT INTO assets (ast_pubkey, ast_nonce, ast_tree_id, ast_leaf, ast_leaf_seq, ast_data_hash,
                                 ast_creator_hash, ast_is_collection_verified, ast_is_compressed, ast_is_frozen) ");
 
         query_builder.push_values(vec![asset_id], |mut b, asset| {
@@ -1479,7 +1455,7 @@ impl DBClient {
                                         ast_nonce, ast_royalty_target_type, ast_royalty_target, ast_royalty_amount, ast_is_burnt,
                                         ast_slot_updated, ast_was_decompressed, ast_is_collection_verified, ast_specification_asset_class, ast_onchain_data) ");
 
-                query_builder.push_values(vec![asset_id.clone()], |mut b, asset| {
+                query_builder.push_values(vec![*asset_id], |mut b, asset| {
                     b.push_bind(asset);
                     b.push_bind(true);
                     b.push_bind(false);
@@ -1684,29 +1660,5 @@ impl DBClient {
         let mut result: [u8; 8] = [0; 8];
         result[..4].copy_from_slice(&bytes);
         result
-    }
-
-    fn build_raw_sql(&self, args_count: usize, batch_zise: usize) -> String {
-        let mut raw_sql = String::new();
-        let mut current_args_count = 0;
-
-        for _ in 0..batch_zise {
-            if !raw_sql.is_empty() {
-                raw_sql.push_str(",");
-            }
-            raw_sql.push_str("(");
-
-            for i in current_args_count..current_args_count + args_count {
-                if i != current_args_count {
-                    raw_sql.push_str(",");
-                }
-                raw_sql.push_str(&format!("${}", i + 1));
-            }
-            current_args_count += args_count;
-
-            raw_sql.push_str(")");
-        }
-
-        return raw_sql;
     }
 }

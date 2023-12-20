@@ -1,9 +1,10 @@
+use std::{marker::PhantomData, sync::Arc, vec};
+
 use bincode::{deserialize, serialize};
 use log::error;
 use rocksdb::{ColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
 use serde::{de::DeserializeOwned, Serialize};
 use solana_sdk::pubkey::Pubkey;
-use std::{marker::PhantomData, sync::Arc, vec};
 
 use crate::{Result, StorageError};
 pub trait TypedColumn {
@@ -38,7 +39,7 @@ where
         let serialized_value = serialize(value)?;
 
         self.backend
-            .put_cf(self.handle(), &C::encode_key(key), serialized_value)?;
+            .put_cf(self.handle(), C::encode_key(key), serialized_value)?;
 
         Ok(())
     }
@@ -47,7 +48,7 @@ where
         let serialized_value = serialize(value)?;
 
         self.backend
-            .merge_cf(self.handle(), &C::encode_key(key), serialized_value)?;
+            .merge_cf(self.handle(), C::encode_key(key), serialized_value)?;
 
         Ok(())
     }
@@ -55,7 +56,7 @@ where
     pub fn get(&self, key: C::KeyType) -> Result<Option<C::ValueType>> {
         let mut result = Ok(None);
 
-        if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::encode_key(key))? {
+        if let Some(serialized_value) = self.backend.get_cf(self.handle(), C::encode_key(key))? {
             let value = deserialize(&serialized_value)?;
 
             result = Ok(Some(value))
@@ -113,7 +114,7 @@ where
     }
 
     pub fn delete(&self, key: C::KeyType) -> Result<()> {
-        self.backend.delete_cf(self.handle(), &C::encode_key(key))?;
+        self.backend.delete_cf(self.handle(), C::encode_key(key))?;
         Ok(())
     }
 }
@@ -188,7 +189,7 @@ impl columns::TokenAccount {
         }
 
         for op in operands {
-            match deserialize::<columns::TokenAccount>(&op) {
+            match deserialize::<columns::TokenAccount>(op) {
                 Ok(new_val) => {
                     if new_val.slot_updated > slot {
                         slot = new_val.slot_updated;

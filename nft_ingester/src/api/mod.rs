@@ -1,15 +1,9 @@
-use std::collections::HashMap;
-
 use anchor_lang::solana_program::pubkey;
-use async_trait::async_trait;
-use open_rpc_derive::document_rpc;
 use open_rpc_schema::schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub use api_impl::*;
-use digital_asset_types::rpc::response::AssetList;
 use digital_asset_types::rpc::{filter::AssetSorting, response::GetGroupingResponse};
-use digital_asset_types::rpc::{Asset, AssetProof};
 
 use crate::api::error::DasApiError;
 
@@ -127,7 +121,7 @@ pub struct SearchAssets {
     pub limit: Option<u32>,
     pub page: Option<u32>,
     // before and after are base64 encoded sorting keys, which is NOT a pubkey, passing any non empty base64 encoded string will not cause an error
-    pub before: Option<String>, 
+    pub before: Option<String>,
     pub after: Option<String>,
     #[serde(default)]
     pub json_uri: Option<String>,
@@ -154,13 +148,13 @@ impl TryFrom<SearchAssets> for digital_asset_types::dao::SearchAssetsQuery {
             .transpose()?;
         Ok(digital_asset_types::dao::SearchAssetsQuery {
             negate: search_assets.negate,
-            condition_type: search_assets.condition_type.map(|s| s.into()), 
+            condition_type: search_assets.condition_type.map(|s| s.into()),
             owner_address: validate_opt_pubkey(&search_assets.owner_address)?,
             owner_type: search_assets.owner_type.map(|s| s.into()),
             creator_address: validate_opt_pubkey(&search_assets.creator_address)?,
             creator_verified: search_assets.creator_verified,
             authority_address: validate_opt_pubkey(&search_assets.authority_address)?,
-            grouping: grouping,
+            grouping,
             delegate: validate_opt_pubkey(&search_assets.delegate)?,
             frozen: search_assets.frozen,
             supply: search_assets.supply,

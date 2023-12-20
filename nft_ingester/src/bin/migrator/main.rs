@@ -1,13 +1,15 @@
+use std::sync::Arc;
+
 use log::error;
+use sqlx::{QueryBuilder, Row};
+use tokio::sync::Semaphore;
+use tokio::time::Instant;
+
 use nft_ingester::config::{setup_config, IngesterConfig};
 use nft_ingester::db_v2::DBClient;
 use nft_ingester::error::IngesterError;
 use rocks_db::offchain_data::OffChainData;
 use rocks_db::Storage;
-use sqlx::{Executor, QueryBuilder, Row};
-use std::sync::Arc;
-use tokio::sync::Semaphore;
-use tokio::time::Instant;
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
