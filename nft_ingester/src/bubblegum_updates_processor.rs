@@ -2,24 +2,23 @@ use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::flatbuffer_mapper::FlatbufferMapper;
 use blockbuster::programs::bubblegum::{BubblegumInstruction, Payload};
-use blockbuster::token_metadata::state::{TokenStandard, UseMethod, Uses};
 use blockbuster::{
     instruction::{order_instructions, InstructionBundle, IxPair},
     program_handler::ProgramParser,
     programs::{bubblegum::BubblegumParser, ProgramParseResult},
 };
 use chrono::Utc;
+use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard};
+use entities::models::{ChainDataV1, Creator, Uses};
 use log::{debug, error, info};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::state::leaf_schema::LeafSchema;
 use mpl_bubblegum::InstructionName;
-use num_traits::FromPrimitive;
 use plerkle_serialization::{Pubkey as FBPubkey, TransactionInfo};
+use rocks_db::asset::AssetOwner;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
-    ChainDataV1, Creator, RoyaltyTargetType, SpecificationAssetClass,
 };
-use rocks_db::asset::{AssetOwner, OwnerType};
 use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -506,7 +505,7 @@ impl BubblegumTxProcessor {
                         primary_sale_happened: args.primary_sale_happened,
                         token_standard: Some(TokenStandard::NonFungible),
                         uses: args.uses.clone().map(|u| Uses {
-                            use_method: UseMethod::from_u8(u.use_method as u8).unwrap(),
+                            use_method: use_method_from_mpl_bubblegum_state(&u.use_method),
                             remaining: u.remaining,
                             total: u.total,
                         }),
@@ -968,5 +967,21 @@ impl BubblegumTxProcessor {
         Err(IngesterError::ParsingError(
             "Ix not parsed correctly".to_string(),
         ))
+    }
+}
+
+fn use_method_from_mpl_bubblegum_state(
+    value: &mpl_bubblegum::state::metaplex_adapter::UseMethod,
+) -> entities::enums::UseMethod {
+    match value {
+        mpl_bubblegum::state::metaplex_adapter::UseMethod::Burn => {
+            entities::enums::UseMethod::Burn
+        }
+        mpl_bubblegum::state::metaplex_adapter::UseMethod::Multiple => {
+            entities::enums::UseMethod::Multiple
+        }
+        mpl_bubblegum::state::metaplex_adapter::UseMethod::Single => {
+            entities::enums::UseMethod::Single
+        }
     }
 }

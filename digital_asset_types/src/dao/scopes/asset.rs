@@ -452,54 +452,55 @@ fn convert_rocks_asset_model(
     })
 }
 
-impl From<rocks_db::asset::SpecificationAssetClass> for SpecificationAssetClass {
-    fn from(value: rocks_db::asset::SpecificationAssetClass) -> Self {
+// todo: remove this and following functions as part of dropping the old db and sea orm, use the entities directly in the business logic and the specific implementations from the pg_client or rocks_client for the db interactions
+impl From<entities::enums::SpecificationAssetClass> for SpecificationAssetClass {
+    fn from(value: entities::enums::SpecificationAssetClass) -> Self {
         match value {
-            rocks_db::asset::SpecificationAssetClass::FungibleAsset => {
+            entities::enums::SpecificationAssetClass::FungibleAsset => {
                 SpecificationAssetClass::FungibleAsset
             }
-            rocks_db::asset::SpecificationAssetClass::FungibleToken => {
+            entities::enums::SpecificationAssetClass::FungibleToken => {
                 SpecificationAssetClass::FungibleToken
             }
-            rocks_db::asset::SpecificationAssetClass::IdentityNft => {
+            entities::enums::SpecificationAssetClass::IdentityNft => {
                 SpecificationAssetClass::IdentityNft
             }
-            rocks_db::asset::SpecificationAssetClass::Nft => SpecificationAssetClass::Nft,
-            rocks_db::asset::SpecificationAssetClass::NonTransferableNft => {
+            entities::enums::SpecificationAssetClass::Nft => SpecificationAssetClass::Nft,
+            entities::enums::SpecificationAssetClass::NonTransferableNft => {
                 SpecificationAssetClass::NonTransferableNft
             }
-            rocks_db::asset::SpecificationAssetClass::Print => SpecificationAssetClass::Print,
-            rocks_db::asset::SpecificationAssetClass::PrintableNft => {
+            entities::enums::SpecificationAssetClass::Print => SpecificationAssetClass::Print,
+            entities::enums::SpecificationAssetClass::PrintableNft => {
                 SpecificationAssetClass::PrintableNft
             }
-            rocks_db::asset::SpecificationAssetClass::ProgrammableNft => {
+            entities::enums::SpecificationAssetClass::ProgrammableNft => {
                 SpecificationAssetClass::ProgrammableNft
             }
-            rocks_db::asset::SpecificationAssetClass::TransferRestrictedNft => {
+            entities::enums::SpecificationAssetClass::TransferRestrictedNft => {
                 SpecificationAssetClass::TransferRestrictedNft
             }
-            rocks_db::asset::SpecificationAssetClass::Unknown => SpecificationAssetClass::Unknown,
+            entities::enums::SpecificationAssetClass::Unknown => SpecificationAssetClass::Unknown,
         }
     }
 }
 
-impl From<rocks_db::asset::OwnerType> for OwnerType {
-    fn from(value: rocks_db::asset::OwnerType) -> Self {
+impl From<entities::enums::OwnerType> for OwnerType {
+    fn from(value: entities::enums::OwnerType) -> Self {
         match value {
-            rocks_db::asset::OwnerType::Single => OwnerType::Single,
-            rocks_db::asset::OwnerType::Token => OwnerType::Token,
-            rocks_db::asset::OwnerType::Unknown => OwnerType::Unknown,
+            entities::enums::OwnerType::Single => OwnerType::Single,
+            entities::enums::OwnerType::Token => OwnerType::Token,
+            entities::enums::OwnerType::Unknown => OwnerType::Unknown,
         }
     }
 }
 
-impl From<rocks_db::asset::RoyaltyTargetType> for RoyaltyTargetType {
-    fn from(value: rocks_db::asset::RoyaltyTargetType) -> Self {
+impl From<entities::enums::RoyaltyTargetType> for RoyaltyTargetType {
+    fn from(value: entities::enums::RoyaltyTargetType) -> Self {
         match value {
-            rocks_db::asset::RoyaltyTargetType::Creators => RoyaltyTargetType::Creators,
-            rocks_db::asset::RoyaltyTargetType::Fanout => RoyaltyTargetType::Fanout,
-            rocks_db::asset::RoyaltyTargetType::Single => RoyaltyTargetType::Single,
-            rocks_db::asset::RoyaltyTargetType::Unknown => RoyaltyTargetType::Unknown,
+            entities::enums::RoyaltyTargetType::Creators => RoyaltyTargetType::Creators,
+            entities::enums::RoyaltyTargetType::Fanout => RoyaltyTargetType::Fanout,
+            entities::enums::RoyaltyTargetType::Single => RoyaltyTargetType::Single,
+            entities::enums::RoyaltyTargetType::Unknown => RoyaltyTargetType::Unknown,
         }
     }
 }
