@@ -1,8 +1,7 @@
 use crate::config::{setup_config, BackgroundTaskConfig, BackgroundTaskRunnerConfig};
 use crate::db_v2::{DBClient, TaskStatus, UpdatedTask};
 use log::{debug, error, info};
-use metrics_utils::utils::setup_metrics;
-use metrics_utils::{JsonDownloaderMetricsConfig, MetricState, MetricStatus, MetricsTrait};
+use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use reqwest::{Client, ClientBuilder};
 use rocks_db::{offchain_data::OffChainData, Storage};
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -6,7 +6,6 @@ pub use api_impl::*;
 use digital_asset_types::rpc::{filter::AssetSorting, response::GetGroupingResponse};
 
 use crate::api::error::DasApiError;
-use crate::extract_some_field_names;
 
 use self::validation::{validate_opt_pubkey, validate_pubkey};
 
@@ -16,7 +15,6 @@ pub mod config;
 pub mod error;
 pub mod middleware;
 pub mod service;
-mod util;
 pub mod validation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -136,36 +134,53 @@ pub struct SearchAssets {
     pub name: Option<String>,
 }
 
-// Use the macro to generate the Some fields names extraction function
-extract_some_field_names!(SearchAssets {
-    negate,
-    condition_type,
-    interface,
-    owner_address,
-    owner_type,
-    creator_address,
-    creator_verified,
-    authority_address,
-    grouping,
-    delegate,
-    frozen,
-    supply,
-    supply_mint,
-    compressed,
-    compressible,
-    royalty_target_type,
-    royalty_target,
-    royalty_amount,
-    burnt,
-    sort_by,
-    limit,
-    page,
-    before,
-    after,
-    json_uri,
-    cursor,
-    name
-});
+impl SearchAssets {
+    pub fn extract_some_fields(&self) -> String {
+        let mut result = String::new();
+        fn check_and_append<T>(current: &mut String, field: &Option<T>, field_name: &str) {
+            if field.is_some() {
+                current.push_str(&format!("{}_", field_name));
+            }
+        }
+
+        check_and_append(&mut result, &self.negate, "negate");
+        check_and_append(&mut result, &self.condition_type, "condition_type");
+        check_and_append(&mut result, &self.interface, "interface");
+        check_and_append(&mut result, &self.owner_address, "owner_address");
+        check_and_append(&mut result, &self.owner_type, "owner_type");
+        check_and_append(&mut result, &self.creator_address, "creator_address");
+        check_and_append(&mut result, &self.creator_verified, "creator_verified");
+        check_and_append(&mut result, &self.authority_address, "authority_address");
+        check_and_append(&mut result, &self.grouping, "grouping");
+        check_and_append(&mut result, &self.delegate, "delegate");
+        check_and_append(&mut result, &self.frozen, "frozen");
+        check_and_append(&mut result, &self.supply, "supply");
+        check_and_append(&mut result, &self.supply_mint, "supply_mint");
+        check_and_append(&mut result, &self.compressed, "compressed");
+        check_and_append(&mut result, &self.compressible, "compressible");
+        check_and_append(
+            &mut result,
+            &self.royalty_target_type,
+            "royalty_target_type",
+        );
+        check_and_append(&mut result, &self.royalty_target, "royalty_target");
+        check_and_append(&mut result, &self.royalty_amount, "royalty_amount");
+        check_and_append(&mut result, &self.burnt, "burnt");
+        check_and_append(&mut result, &self.sort_by, "sort_by");
+        check_and_append(&mut result, &self.limit, "limit");
+        check_and_append(&mut result, &self.page, "page");
+        check_and_append(&mut result, &self.before, "before");
+        check_and_append(&mut result, &self.after, "after");
+        check_and_append(&mut result, &self.json_uri, "json_uri");
+        check_and_append(&mut result, &self.cursor, "cursor");
+        check_and_append(&mut result, &self.name, "name");
+
+        if result.is_empty() {
+            return "no_filters".to_string();
+        }
+        result[..result.len() - 1].to_string()
+    }
+}
 
 impl TryFrom<SearchAssets> for digital_asset_types::dao::SearchAssetsQuery {
     type Error = DasApiError;
@@ -213,9 +228,9 @@ mod tests {
     fn extract_some_field_names_with_default_structure() {
         let search_assets = SearchAssets::default();
 
-        let extracted_fields = extract_some_fields(&search_assets);
+        let extracted_fields = search_assets.extract_some_fields();
 
-        assert_eq!(extracted_fields, "".to_string());
+        assert_eq!(extracted_fields, "no_filters".to_string());
     }
 
     #[test]
@@ -226,7 +241,7 @@ mod tests {
             ..Default::default()
         };
 
-        let extracted_fields = extract_some_fields(&search_assets);
+        let extracted_fields = search_assets.extract_some_fields();
 
         assert_eq!(extracted_fields, "negate_burnt".to_string());
     }

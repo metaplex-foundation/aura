@@ -118,10 +118,10 @@ mod tests {
     use super::*;
     use mockall;
     use postgre_client::storage_traits::MockAssetIndexStorage as MockIndexStorage;
+    use rocks_db::asset::AssetIndex;
     use rocks_db::storage_traits::MockAssetIndexStorage as MockPrimaryStorage;
     use std::collections::HashMap;
     use tokio;
-    use rocks_db::asset::AssetIndex;
 
     fn create_test_asset_index(pubkey: &Pubkey) -> AssetIndex {
         AssetIndex {
