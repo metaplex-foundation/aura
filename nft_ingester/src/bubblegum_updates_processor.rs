@@ -364,12 +364,12 @@ impl BubblegumTxProcessor {
 
             let asset_data = self.rocks_client.asset_dynamic_data.get(asset_id).unwrap();
             if let Some(current_asset_data) = asset_data {
-                let mut new_asset_data = current_asset_data.clone();
+                let mut new_asset_data = current_asset_data;
                 new_asset_data.is_burnt = (bundle.slot, true);
                 new_asset_data.supply = (bundle.slot, Some(0));
                 new_asset_data.seq = (bundle.slot, Some(cl.seq));
 
-                if let Some(current_seq) = current_asset_data.seq.1 {
+                if let Some(current_seq) = new_asset_data.seq.1 {
                     if current_seq < cl.seq {
                         if let Err(e) = self
                             .rocks_client
@@ -755,7 +755,7 @@ impl BubblegumTxProcessor {
 
                     let asset_data = self.rocks_client.asset_dynamic_data.get(id).unwrap();
                     if let Some(current_asset_data) = asset_data {
-                        let mut new_asset_data = current_asset_data.clone();
+                        let mut new_asset_data = current_asset_data;
                         new_asset_data.seq = (bundle.slot, None);
                         new_asset_data.was_decompressed = (bundle.slot, true);
 
@@ -841,7 +841,7 @@ impl BubblegumTxProcessor {
 
                     let asset_data = self.rocks_client.asset_dynamic_data.get(id).unwrap();
                     if let Some(current_asset_data) = asset_data {
-                        let mut new_asset_data = current_asset_data.clone();
+                        let mut new_asset_data = current_asset_data;
                         new_asset_data.seq = (bundle.slot, Some(cl.seq));
 
                         for crt in new_asset_data.creators.1.iter_mut() {

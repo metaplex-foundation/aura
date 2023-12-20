@@ -1,4 +1,3 @@
-use anchor_lang::solana_program::pubkey;
 use open_rpc_schema::schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

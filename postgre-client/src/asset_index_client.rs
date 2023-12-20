@@ -74,7 +74,7 @@ impl AssetIndexStorage for PgClient {
             .flat_map(|asset_index| {
                 asset_index.creators.iter().map(move |creator| {
                     (
-                        asset_index.pubkey.clone(),
+                        asset_index.pubkey,
                         creator.clone(),
                         asset_index.slot_updated,
                     )
@@ -143,7 +143,7 @@ impl AssetIndexStorage for PgClient {
                 .push_bind(
                     asset_index
                         .owner_type
-                        .map(|owner_type| OwnerType::from(owner_type)),
+                        .map(OwnerType::from),
                 )
                 .push_bind(asset_index.owner.map(|owner| owner.to_bytes().to_vec()))
                 .push_bind(asset_index.delegate.map(|k| k.to_bytes().to_vec()))

@@ -163,9 +163,9 @@ impl TokenAccsProcessor {
 
             for mint in mint_accs_to_save.iter() {
                 let res = self.rocks_db.asset_dynamic_data.merge(
-                    mint.pubkey.clone(),
+                    mint.pubkey,
                     &AssetDynamicDetails {
-                        pubkey: mint.pubkey.clone(),
+                        pubkey: mint.pubkey,
                         supply: (mint.slot_updated as u64, Some(mint.supply as u64)),
                         seq: (mint.slot_updated as u64, Some(mint.slot_updated as u64)),
                         ..Default::default()
@@ -183,7 +183,7 @@ impl TokenAccsProcessor {
                             .inc_process("mint_update_supply", MetricStatus::SUCCESS);
                         let upd_res = self
                             .rocks_db
-                            .asset_updated(mint.slot_updated as u64, mint.pubkey.clone());
+                            .asset_updated(mint.slot_updated as u64, mint.pubkey);
 
                         if let Err(e) = upd_res {
                             error!("Error while updating assets update idx: {}", e);

@@ -1,7 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-
-use cadence_macros::is_global_default_set;
 use log::{error, info};
 
 use metrics_utils::utils::setup_metrics;
@@ -9,7 +7,6 @@ use metrics_utils::{ApiMetricsConfig, MetricState, MetricsTrait};
 use rocks_db::Storage;
 use {crate::api::DasApi, std::env, std::net::SocketAddr};
 use {
-    crossbeam_channel::unbounded,
     jsonrpc_http_server::cors::AccessControlAllowHeaders,
     jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder},
 };
@@ -18,12 +15,6 @@ use crate::api::builder::RpcApiBuilder;
 use crate::api::config::load_config;
 use crate::api::error::DasApiError;
 use crate::api::middleware::RpcRequestMiddleware;
-
-pub fn safe_metric<F: Fn()>(f: F) {
-    if is_global_default_set() {
-        f()
-    }
-}
 
 pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10);
 // 50kB
@@ -77,16 +68,7 @@ pub async fn start_api(
         .health_api(("/health", "health"))
         .start_http(&addr);
 
-    let (close_handle_sender, _close_handle_receiver) = unbounded();
-
-    if let Err(e) = server {
-        close_handle_sender.send(Err(e.to_string())).unwrap();
-        panic!("{}", e);
-    }
-
     let server = server.unwrap();
-    close_handle_sender.send(Ok(server.close_handle())).unwrap();
-
     info!("API Server Started");
 
     while keep_running.load(Ordering::SeqCst) {

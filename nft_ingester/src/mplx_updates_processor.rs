@@ -323,7 +323,7 @@ impl MplxAccsProcessor {
             let chain_data = json!(chain_data);
 
             models.asset_dynamic.push(AssetDynamicDetails {
-                pubkey: mint.clone(),
+                pubkey: mint,
                 is_compressible: (metadata_info.slot, false),
                 is_compressed: (metadata_info.slot, false),
                 is_frozen: (metadata_info.slot, false),
