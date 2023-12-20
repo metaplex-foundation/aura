@@ -1,5 +1,5 @@
 use bincode::{deserialize, serialize};
-use entities::enums::{SpecificationAssetClass, RoyaltyTargetType, OwnerType};
+use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
 use log::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
@@ -21,18 +21,33 @@ pub struct AssetStaticDetails {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct Updated<T> {
+    pub slot_updated: u64,
+    pub value: T,
+}
+
+impl<T> Updated<T> {
+    pub fn new(slot_updated: u64, value: T) -> Self {
+        Self {
+            slot_updated,
+            value,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AssetDynamicDetails {
     pub pubkey: Pubkey,
-    pub is_compressible: (u64, bool),
-    pub is_compressed: (u64, bool),
-    pub is_frozen: (u64, bool),
-    pub supply: (u64, Option<u64>),
-    pub seq: (u64, Option<u64>),
-    pub is_burnt: (u64, bool),
-    pub was_decompressed: (u64, bool),
-    pub onchain_data: (u64, Option<String>),
-    pub creators: (u64, Vec<entities::models::Creator>),
-    pub royalty_amount: (u64, u16),
+    pub is_compressible: Updated<bool>,
+    pub is_compressed: Updated<bool>,
+    pub is_frozen: Updated<bool>,
+    pub supply: Updated<Option<u64>>,
+    pub seq: Updated<Option<u64>>,
+    pub is_burnt: Updated<bool>,
+    pub was_decompressed: Updated<bool>,
+    pub onchain_data: Updated<Option<String>>,
+    pub creators: Updated<Vec<entities::models::Creator>>,
+    pub royalty_amount: Updated<u16>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -165,8 +180,8 @@ impl AssetDynamicDetails {
             }
         }
 
-        fn update_field<T: Clone + PartialEq>(current: &mut (u64, T), new: &(u64, T)) {
-            if new.0 > current.0 {
+        fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
+            if new.slot_updated > current.slot_updated {
                 *current = new.clone();
             }
         }
@@ -198,6 +213,24 @@ impl AssetDynamicDetails {
         }
 
         result.and_then(|result| serialize(&result).ok())
+    }
+
+    pub fn get_slot_updated(&self) -> u64 {
+        [
+            self.is_compressible.slot_updated,
+            self.is_compressed.slot_updated,
+            self.is_frozen.slot_updated,
+            self.supply.slot_updated,
+            self.seq.slot_updated,
+            self.is_burnt.slot_updated,
+            self.was_decompressed.slot_updated,
+            self.onchain_data.slot_updated,
+            self.creators.slot_updated,
+            self.royalty_amount.slot_updated,
+        ]
+        .into_iter()
+        .max()
+        .unwrap() // unwrap here is safe, because vec is not empty
     }
 }
 

@@ -1,13 +1,13 @@
 use crate::buffer::Buffer;
 use crate::db_v2::DBClient;
+use entities::enums::OwnerType;
 use log::error;
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
-use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
+use rocks_db::asset::{AssetDynamicDetails, AssetOwner, Updated};
 use rocks_db::Storage;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::Instant;
-use entities::enums::OwnerType;
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
 
@@ -166,8 +166,8 @@ impl TokenAccsProcessor {
                     mint.pubkey,
                     &AssetDynamicDetails {
                         pubkey: mint.pubkey,
-                        supply: (mint.slot_updated as u64, Some(mint.supply as u64)),
-                        seq: (mint.slot_updated as u64, Some(mint.slot_updated as u64)),
+                        supply: Updated::new(mint.slot_updated as u64, Some(mint.supply as u64)),
+                        seq: Updated::new(mint.slot_updated as u64, Some(mint.slot_updated as u64)),
                         ..Default::default()
                     },
                 );

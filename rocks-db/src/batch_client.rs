@@ -102,32 +102,31 @@ impl AssetIndexReader for Storage {
         }
 
         for dynamic_info in asset_dynamic_details.iter().flatten() {
-                if let Some(existed_index) = asset_indexes.get_mut(&dynamic_info.pubkey) {
-                    existed_index.is_compressible = dynamic_info.is_compressible.1;
-                    existed_index.is_compressed = dynamic_info.is_compressed.1;
-                    existed_index.is_frozen = dynamic_info.is_frozen.1;
-                    existed_index.supply = dynamic_info.supply.1.map_or(0, |s| s as i64);
-                    existed_index.is_burnt = dynamic_info.is_burnt.1;
-                    existed_index.creators = dynamic_info.creators.clone().1;
-                    existed_index.royalty_amount = dynamic_info.royalty_amount.1 as i64;
-                    existed_index.slot_updated = 0; // TODO
-                } else {
-                    let asset_index = AssetIndex {
-                        pubkey: dynamic_info.pubkey,
-                        is_compressible: dynamic_info.is_compressible.1,
-                        is_compressed: dynamic_info.is_compressed.1,
-                        is_frozen: dynamic_info.is_frozen.1,
-                        supply: dynamic_info.supply.1.map_or(0, |s| s as i64),
-                        is_burnt: dynamic_info.is_burnt.1,
-                        creators: dynamic_info.creators.clone().1,
-                        royalty_amount: dynamic_info.royalty_amount.1 as i64,
-                        slot_updated: 0, // TODO
-                        ..Default::default()
-                    };
+            if let Some(existed_index) = asset_indexes.get_mut(&dynamic_info.pubkey) {
+                existed_index.is_compressible = dynamic_info.is_compressible.value;
+                existed_index.is_compressed = dynamic_info.is_compressed.value;
+                existed_index.is_frozen = dynamic_info.is_frozen.value;
+                existed_index.supply = dynamic_info.supply.value.map_or(0, |s| s as i64);
+                existed_index.is_burnt = dynamic_info.is_burnt.value;
+                existed_index.creators = dynamic_info.creators.clone().value;
+                existed_index.royalty_amount = dynamic_info.royalty_amount.value as i64;
+                existed_index.slot_updated = dynamic_info.get_slot_updated() as i64;
+            } else {
+                let asset_index = AssetIndex {
+                    pubkey: dynamic_info.pubkey,
+                    is_compressible: dynamic_info.is_compressible.value,
+                    is_compressed: dynamic_info.is_compressed.value,
+                    is_frozen: dynamic_info.is_frozen.value,
+                    supply: dynamic_info.supply.value.map_or(0, |s| s as i64),
+                    is_burnt: dynamic_info.is_burnt.value,
+                    creators: dynamic_info.creators.clone().value,
+                    royalty_amount: dynamic_info.royalty_amount.value as i64,
+                    slot_updated: dynamic_info.get_slot_updated() as i64,
+                    ..Default::default()
+                };
 
-                    asset_indexes.insert(asset_index.pubkey, asset_index);
-                }
-
+                asset_indexes.insert(asset_index.pubkey, asset_index);
+            }
         }
 
         for data in asset_authority_details.iter().flatten() {

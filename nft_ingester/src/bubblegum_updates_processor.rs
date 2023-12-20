@@ -15,10 +15,10 @@ use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::state::leaf_schema::LeafSchema;
 use mpl_bubblegum::InstructionName;
 use plerkle_serialization::{Pubkey as FBPubkey, TransactionInfo};
-use rocks_db::asset::AssetOwner;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
 };
+use rocks_db::asset::{AssetOwner, Updated};
 use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -365,11 +365,11 @@ impl BubblegumTxProcessor {
             let asset_data = self.rocks_client.asset_dynamic_data.get(asset_id).unwrap();
             if let Some(current_asset_data) = asset_data {
                 let mut new_asset_data = current_asset_data;
-                new_asset_data.is_burnt = (bundle.slot, true);
-                new_asset_data.supply = (bundle.slot, Some(0));
-                new_asset_data.seq = (bundle.slot, Some(cl.seq));
+                new_asset_data.is_burnt = Updated::new(bundle.slot, true);
+                new_asset_data.supply = Updated::new(bundle.slot, Some(0));
+                new_asset_data.seq = Updated::new(bundle.slot, Some(cl.seq));
 
-                if let Some(current_seq) = new_asset_data.seq.1 {
+                if let Some(current_seq) = new_asset_data.seq.value {
                     if current_seq < cl.seq {
                         if let Err(e) = self
                             .rocks_client
@@ -389,16 +389,16 @@ impl BubblegumTxProcessor {
             } else {
                 let new_asset_data = AssetDynamicDetails {
                     pubkey: asset_id,
-                    is_compressible: (bundle.slot, false),
-                    is_compressed: (bundle.slot, true),
-                    is_frozen: (bundle.slot, false),
-                    supply: (bundle.slot, Some(0)),
-                    seq: (bundle.slot, Some(cl.seq)),
-                    is_burnt: (bundle.slot, true),
-                    was_decompressed: (bundle.slot, false),
-                    onchain_data: (bundle.slot, None),
-                    creators: (bundle.slot, vec![]),
-                    royalty_amount: (bundle.slot, 0),
+                    is_compressible: Updated::new(bundle.slot, false),
+                    is_compressed: Updated::new(bundle.slot, true),
+                    is_frozen: Updated::new(bundle.slot, false),
+                    supply: Updated::new(bundle.slot, Some(0)),
+                    seq: Updated::new(bundle.slot, Some(cl.seq)),
+                    is_burnt: Updated::new(bundle.slot, true),
+                    was_decompressed: Updated::new(bundle.slot, false),
+                    onchain_data: Updated::new(bundle.slot, None),
+                    creators: Updated::new(bundle.slot, vec![]),
+                    royalty_amount: Updated::new(bundle.slot, 0),
                 };
                 if let Err(e) = self
                     .rocks_client
@@ -541,16 +541,16 @@ impl BubblegumTxProcessor {
 
                     let asset_dynamic_details = AssetDynamicDetails {
                         pubkey: id,
-                        is_compressible: (bundle.slot, false),
-                        is_compressed: (bundle.slot, true),
-                        is_frozen: (bundle.slot, false),
-                        supply: (bundle.slot, Some(1)),
-                        seq: (bundle.slot, Some(cl.seq)),
-                        is_burnt: (bundle.slot, false),
-                        was_decompressed: (bundle.slot, false),
-                        onchain_data: (bundle.slot, Some(chain_data.to_string())),
-                        creators: (bundle.slot, creators),
-                        royalty_amount: (bundle.slot, args.seller_fee_basis_points),
+                        is_compressible: Updated::new(bundle.slot, false),
+                        is_compressed: Updated::new(bundle.slot, true),
+                        is_frozen: Updated::new(bundle.slot, false),
+                        supply: Updated::new(bundle.slot, Some(1)),
+                        seq: Updated::new(bundle.slot, Some(cl.seq)),
+                        is_burnt: Updated::new(bundle.slot, false),
+                        was_decompressed: Updated::new(bundle.slot, false),
+                        onchain_data: Updated::new(bundle.slot, Some(chain_data.to_string())),
+                        creators: Updated::new(bundle.slot, creators),
+                        royalty_amount: Updated::new(bundle.slot, args.seller_fee_basis_points),
                     };
 
                     if let Err(e) = self
@@ -756,25 +756,29 @@ impl BubblegumTxProcessor {
                     let asset_data = self.rocks_client.asset_dynamic_data.get(id).unwrap();
                     if let Some(current_asset_data) = asset_data {
                         let mut new_asset_data = current_asset_data;
-                        new_asset_data.seq = (bundle.slot, None);
-                        new_asset_data.was_decompressed = (bundle.slot, true);
+                        new_asset_data.seq = Updated::new(bundle.slot, None);
+                        new_asset_data.was_decompressed = Updated::new(bundle.slot, true);
 
-                        if let Err(e) = self.rocks_client.asset_dynamic_data.put(id, &new_asset_data) {
+                        if let Err(e) = self
+                            .rocks_client
+                            .asset_dynamic_data
+                            .put(id, &new_asset_data)
+                        {
                             error!("Error while saving asset data for cNFT: {}", e);
                         };
                     } else {
                         let new_asset_data = AssetDynamicDetails {
                             pubkey: id,
-                            is_compressible: (bundle.slot, true),
-                            is_compressed: (bundle.slot, false),
-                            is_frozen: (bundle.slot, false),
-                            supply: (bundle.slot, Some(1)),
-                            seq: (bundle.slot, None),
-                            is_burnt: (bundle.slot, false),
-                            was_decompressed: (bundle.slot, true),
-                            onchain_data: (bundle.slot, None),
-                            creators: (bundle.slot, vec![]),
-                            royalty_amount: (bundle.slot, 0),
+                            is_compressible: Updated::new(bundle.slot, true),
+                            is_compressed: Updated::new(bundle.slot, false),
+                            is_frozen: Updated::new(bundle.slot, false),
+                            supply: Updated::new(bundle.slot, Some(1)),
+                            seq: Updated::new(bundle.slot, None),
+                            is_burnt: Updated::new(bundle.slot, false),
+                            was_decompressed: Updated::new(bundle.slot, true),
+                            onchain_data: Updated::new(bundle.slot, None),
+                            creators: Updated::new(bundle.slot, vec![]),
+                            royalty_amount: Updated::new(bundle.slot, 0),
                         };
                         if let Err(e) = self
                             .rocks_client
@@ -842,9 +846,9 @@ impl BubblegumTxProcessor {
                     let asset_data = self.rocks_client.asset_dynamic_data.get(id).unwrap();
                     if let Some(current_asset_data) = asset_data {
                         let mut new_asset_data = current_asset_data;
-                        new_asset_data.seq = (bundle.slot, Some(cl.seq));
+                        new_asset_data.seq = Updated::new(bundle.slot, Some(cl.seq));
 
-                        for crt in new_asset_data.creators.1.iter_mut() {
+                        for crt in new_asset_data.creators.value.iter_mut() {
                             if crt.creator == *creator {
                                 crt.creator_verified = *verify;
                             }
@@ -866,16 +870,16 @@ impl BubblegumTxProcessor {
 
                         let new_asset_data = AssetDynamicDetails {
                             pubkey: id,
-                            is_compressible: (bundle.slot, false),
-                            is_compressed: (bundle.slot, true),
-                            is_frozen: (bundle.slot, false),
-                            supply: (bundle.slot, Some(1)),
-                            seq: (bundle.slot, Some(cl.seq)),
-                            is_burnt: (bundle.slot, false),
-                            was_decompressed: (bundle.slot, false),
-                            onchain_data: (bundle.slot, None),
-                            creators: (bundle.slot, vec![creator]),
-                            royalty_amount: (bundle.slot, 0),
+                            is_compressible: Updated::new(bundle.slot, false),
+                            is_compressed: Updated::new(bundle.slot, true),
+                            is_frozen: Updated::new(bundle.slot, false),
+                            supply: Updated::new(bundle.slot, Some(1)),
+                            seq: Updated::new(bundle.slot, Some(cl.seq)),
+                            is_burnt: Updated::new(bundle.slot, false),
+                            was_decompressed: Updated::new(bundle.slot, false),
+                            onchain_data: Updated::new(bundle.slot, None),
+                            creators: Updated::new(bundle.slot, vec![creator]),
+                            royalty_amount: Updated::new(bundle.slot, 0),
                         };
                         if let Err(e) = self
                             .rocks_client
@@ -969,9 +973,7 @@ fn use_method_from_mpl_bubblegum_state(
     value: &mpl_bubblegum::state::metaplex_adapter::UseMethod,
 ) -> entities::enums::UseMethod {
     match value {
-        mpl_bubblegum::state::metaplex_adapter::UseMethod::Burn => {
-            entities::enums::UseMethod::Burn
-        }
+        mpl_bubblegum::state::metaplex_adapter::UseMethod::Burn => entities::enums::UseMethod::Burn,
         mpl_bubblegum::state::metaplex_adapter::UseMethod::Multiple => {
             entities::enums::UseMethod::Multiple
         }

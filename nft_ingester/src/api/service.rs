@@ -1,6 +1,6 @@
+use log::{error, info};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use log::{error, info};
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{ApiMetricsConfig, MetricState, MetricsTrait};
