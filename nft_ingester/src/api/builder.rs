@@ -124,7 +124,6 @@ impl RpcApiBuilder {
         });
         module.add_alias("searchAssets", "search_assets");
 
-
         Ok(module)
     }
 }

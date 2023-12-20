@@ -1,6 +1,6 @@
 use crate::key_encoders::{decode_pubkey, decode_u64x2_pubkey, encode_pubkey, encode_u64x2_pubkey};
 use crate::Result;
-use bincode::deserialize;
+use bincode::{deserialize, serialize};
 use blockbuster::token_metadata::state::{TokenStandard, Uses};
 use log::{error, warn};
 use rocksdb::MergeOperands;
@@ -62,17 +62,16 @@ pub struct AssetStaticDetails {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AssetDynamicDetails {
     pub pubkey: Pubkey,
-    pub is_compressible: bool,
-    pub is_compressed: bool,
-    pub is_frozen: bool,
-    pub supply: Option<u64>,
-    pub seq: Option<u64>,
-    pub is_burnt: bool,
-    pub was_decompressed: bool,
-    pub onchain_data: Option<String>,
-    pub creators: Vec<Creator>,
-    pub royalty_amount: u16,
-    pub slot_updated: u64,
+    pub is_compressible: (u64, bool),
+    pub is_compressed: (u64, bool),
+    pub is_frozen: (u64, bool),
+    pub supply: (u64, Option<u64>),
+    pub seq: (u64, Option<u64>),
+    pub is_burnt: (u64, bool),
+    pub was_decompressed: (u64, bool),
+    pub onchain_data: (u64, Option<String>),
+    pub creators: (u64, Vec<Creator>),
+    pub royalty_amount: (u64, u16),
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -246,13 +245,11 @@ impl AssetDynamicDetails {
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
-        let mut result = vec![];
-        let mut slot = 0;
+        let mut result: Option<AssetDynamicDetails> = None;
         if let Some(existing_val) = existing_val {
             match deserialize::<AssetDynamicDetails>(existing_val) {
                 Ok(value) => {
-                    slot = value.slot_updated;
-                    result = existing_val.to_vec();
+                    result = Some(value);
                 }
                 Err(e) => {
                     error!(
@@ -263,13 +260,31 @@ impl AssetDynamicDetails {
             }
         }
 
+        fn update_field<T: Clone + PartialEq>(current: &mut (u64, T), new: &(u64, T)) {
+            if new.0 > current.0 {
+                *current = new.clone();
+            }
+        }
+
         for op in operands {
             match deserialize::<AssetDynamicDetails>(&op) {
                 Ok(new_val) => {
-                    if new_val.slot_updated > slot {
-                        slot = new_val.slot_updated;
-                        result = op.to_vec();
-                    }
+                    result = Some(if let Some(mut current_val) = result {
+                        update_field(&mut current_val.is_compressible, &new_val.is_compressible);
+                        update_field(&mut current_val.is_compressed, &new_val.is_compressed);
+                        update_field(&mut current_val.is_frozen, &new_val.is_frozen);
+                        update_field(&mut current_val.supply, &new_val.supply);
+                        update_field(&mut current_val.seq, &new_val.seq);
+                        update_field(&mut current_val.is_burnt, &new_val.is_burnt);
+                        update_field(&mut current_val.creators, &new_val.creators);
+                        update_field(&mut current_val.royalty_amount, &new_val.royalty_amount);
+                        update_field(&mut current_val.was_decompressed, &new_val.was_decompressed);
+                        update_field(&mut current_val.onchain_data, &new_val.onchain_data);
+
+                        current_val
+                    } else {
+                        new_val
+                    });
                 }
                 Err(e) => {
                     error!("RocksDB: AssetDynamicDetails deserialize new_val: {}", e)
@@ -277,7 +292,7 @@ impl AssetDynamicDetails {
             }
         }
 
-        Some(result)
+        result.and_then(|result| serialize(&result).ok())
     }
 }
 

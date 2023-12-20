@@ -370,12 +370,11 @@ impl BubblegumTxProcessor {
             let asset_data = self.rocks_client.asset_dynamic_data.get(asset_id).unwrap();
             if let Some(current_asset_data) = asset_data {
                 let mut new_asset_data = current_asset_data.clone();
-                new_asset_data.is_burnt = true;
-                new_asset_data.supply = Some(0);
-                new_asset_data.seq = Some(cl.seq);
-                new_asset_data.slot_updated = bundle.slot;
+                new_asset_data.is_burnt = (bundle.slot, true);
+                new_asset_data.supply = (bundle.slot, Some(0));
+                new_asset_data.seq = (bundle.slot, Some(cl.seq));
 
-                if let Some(current_seq) = current_asset_data.seq {
+                if let Some(current_seq) = current_asset_data.seq.1 {
                     if current_seq < cl.seq {
                         if let Err(e) = self
                             .rocks_client
@@ -397,17 +396,16 @@ impl BubblegumTxProcessor {
             } else {
                 let new_asset_data = AssetDynamicDetails {
                     pubkey: asset_id,
-                    is_compressible: false,
-                    is_compressed: true,
-                    is_frozen: false,
-                    supply: Some(0),
-                    seq: Some(cl.seq),
-                    is_burnt: true,
-                    was_decompressed: false,
-                    onchain_data: None,
-                    creators: vec![],
-                    royalty_amount: 0,
-                    slot_updated: bundle.slot,
+                    is_compressible: (bundle.slot, false),
+                    is_compressed: (bundle.slot, true),
+                    is_frozen: (bundle.slot, false),
+                    supply: (bundle.slot, Some(0)),
+                    seq: (bundle.slot, Some(cl.seq)),
+                    is_burnt: (bundle.slot, true),
+                    was_decompressed: (bundle.slot, false),
+                    onchain_data: (bundle.slot, None),
+                    creators: (bundle.slot, vec![]),
+                    royalty_amount: (bundle.slot, 0),
                 };
                 if let Err(e) = self
                     .rocks_client
@@ -550,23 +548,22 @@ impl BubblegumTxProcessor {
 
                     let asset_dynamic_details = AssetDynamicDetails {
                         pubkey: id,
-                        is_compressible: false,
-                        is_compressed: true,
-                        is_frozen: false,
-                        supply: Some(1),
-                        seq: Some(cl.seq),
-                        is_burnt: false,
-                        was_decompressed: false,
-                        onchain_data: Some(chain_data.to_string()),
-                        creators,
-                        royalty_amount: args.seller_fee_basis_points,
-                        slot_updated: bundle.slot,
+                        is_compressible: (bundle.slot, false),
+                        is_compressed: (bundle.slot, true),
+                        is_frozen: (bundle.slot, false),
+                        supply: (bundle.slot, Some(1)),
+                        seq: (bundle.slot, Some(cl.seq)),
+                        is_burnt: (bundle.slot, false),
+                        was_decompressed: (bundle.slot, false),
+                        onchain_data: (bundle.slot, Some(chain_data.to_string())),
+                        creators: (bundle.slot, creators),
+                        royalty_amount: (bundle.slot, args.seller_fee_basis_points),
                     };
 
                     if let Err(e) = self
                         .rocks_client
                         .asset_dynamic_data
-                        .put(id, &asset_dynamic_details)
+                        .merge(id, &asset_dynamic_details)
                     {
                         error!("Error while saving dynamic data for cNFT: {}", e);
                     };
@@ -766,9 +763,8 @@ impl BubblegumTxProcessor {
                     let asset_data = self.rocks_client.asset_dynamic_data.get(id).unwrap();
                     if let Some(current_asset_data) = asset_data {
                         let mut new_asset_data = current_asset_data.clone();
-                        new_asset_data.seq = None;
-                        new_asset_data.was_decompressed = true;
-                        new_asset_data.slot_updated = bundle.slot;
+                        new_asset_data.seq = (bundle.slot, None);
+                        new_asset_data.was_decompressed = (bundle.slot, true);
 
                         if let Err(e) = self
                             .rocks_client
@@ -780,17 +776,16 @@ impl BubblegumTxProcessor {
                     } else {
                         let new_asset_data = AssetDynamicDetails {
                             pubkey: id,
-                            is_compressible: true,
-                            is_compressed: false,
-                            is_frozen: false,
-                            supply: Some(1),
-                            seq: None,
-                            is_burnt: false,
-                            was_decompressed: true,
-                            onchain_data: None,
-                            creators: vec![],
-                            royalty_amount: 0,
-                            slot_updated: bundle.slot,
+                            is_compressible: (bundle.slot, true),
+                            is_compressed: (bundle.slot, false),
+                            is_frozen: (bundle.slot, false),
+                            supply: (bundle.slot, Some(1)),
+                            seq: (bundle.slot, None),
+                            is_burnt: (bundle.slot, false),
+                            was_decompressed: (bundle.slot, true),
+                            onchain_data: (bundle.slot, None),
+                            creators: (bundle.slot, vec![]),
+                            royalty_amount: (bundle.slot, 0),
                         };
                         if let Err(e) = self
                             .rocks_client
@@ -858,10 +853,9 @@ impl BubblegumTxProcessor {
                     let asset_data = self.rocks_client.asset_dynamic_data.get(id).unwrap();
                     if let Some(current_asset_data) = asset_data {
                         let mut new_asset_data = current_asset_data.clone();
-                        new_asset_data.seq = Some(cl.seq);
-                        new_asset_data.slot_updated = bundle.slot;
+                        new_asset_data.seq = (bundle.slot, Some(cl.seq));
 
-                        for crt in new_asset_data.creators.iter_mut() {
+                        for crt in new_asset_data.creators.1.iter_mut() {
                             if crt.creator == *creator {
                                 crt.creator_verified = *verify;
                             }
@@ -883,17 +877,16 @@ impl BubblegumTxProcessor {
 
                         let new_asset_data = AssetDynamicDetails {
                             pubkey: id,
-                            is_compressible: false,
-                            is_compressed: true,
-                            is_frozen: false,
-                            supply: Some(1),
-                            seq: Some(cl.seq),
-                            is_burnt: false,
-                            was_decompressed: false,
-                            onchain_data: None,
-                            creators: vec![creator],
-                            royalty_amount: 0,
-                            slot_updated: bundle.slot,
+                            is_compressible: (bundle.slot, false),
+                            is_compressed: (bundle.slot, true),
+                            is_frozen: (bundle.slot, false),
+                            supply: (bundle.slot, Some(1)),
+                            seq: (bundle.slot, Some(cl.seq)),
+                            is_burnt: (bundle.slot, false),
+                            was_decompressed: (bundle.slot, false),
+                            onchain_data: (bundle.slot, None),
+                            creators: (bundle.slot, vec![creator]),
+                            royalty_amount: (bundle.slot, 0),
                         };
                         if let Err(e) = self
                             .rocks_client

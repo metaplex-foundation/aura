@@ -1680,6 +1680,7 @@ dependencies = [
  "mime_guess",
  "num-derive",
  "num-traits",
+ "postgre-client",
  "reqwest",
  "rocks-db",
  "schemars",

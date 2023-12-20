@@ -171,72 +171,32 @@ impl TokenAccsProcessor {
             let begin_processing = Instant::now();
 
             for mint in mint_accs_to_save.iter() {
-                let existing_value = self.rocks_db.asset_dynamic_data.get(mint.pubkey.clone());
+                let res = self.rocks_db.asset_dynamic_data.merge(
+                    mint.pubkey.clone(),
+                    &AssetDynamicDetails {
+                        pubkey: mint.pubkey.clone(),
+                        supply: (mint.slot_updated as u64, Some(mint.supply as u64)),
+                        seq: (mint.slot_updated as u64, Some(mint.slot_updated as u64)),
+                        ..Default::default()
+                    },
+                );
 
-                match existing_value {
-                    Ok(existing_value) => {
-                        let mut value_to_insert = None;
-
-                        if let Some(existing_value) = existing_value {
-                            if existing_value.slot_updated < mint.slot_updated as u64 {
-                                let updated_dynamic_data = AssetDynamicDetails {
-                                    pubkey: mint.pubkey.clone(),
-                                    is_compressible: existing_value.is_compressible,
-                                    is_compressed: existing_value.is_compressed,
-                                    is_frozen: existing_value.is_frozen,
-                                    supply: Some(mint.supply as u64),
-                                    seq: Some(mint.slot_updated as u64),
-                                    is_burnt: existing_value.is_burnt,
-                                    was_decompressed: existing_value.was_decompressed,
-                                    onchain_data: existing_value.onchain_data.clone(),
-                                    creators: existing_value.creators.clone(),
-                                    royalty_amount: existing_value.royalty_amount,
-                                    slot_updated: mint.slot_updated as u64,
-                                };
-                                value_to_insert = Some(updated_dynamic_data);
-                            }
-                        } else {
-                            let new_dynamic_data = AssetDynamicDetails {
-                                pubkey: mint.pubkey.clone(),
-                                supply: Some(mint.supply as u64),
-                                seq: Some(mint.slot_updated as u64),
-                                slot_updated: mint.slot_updated as u64,
-                                ..Default::default()
-                            };
-                            value_to_insert = Some(new_dynamic_data);
-                        }
-
-                        if let Some(data) = value_to_insert {
-                            let res = self
-                                .rocks_db
-                                .asset_dynamic_data
-                                .put(data.pubkey.clone(), &data);
-
-                            match res {
-                                Err(e) => {
-                                    self.metrics
-                                        .inc_process("mint_update_supply", MetricStatus::FAILURE);
-                                    error!("Error while saving mints: {}", e);
-                                }
-                                Ok(_) => {
-                                    self.metrics
-                                        .inc_process("mint_update_supply", MetricStatus::SUCCESS);
-                                    let upd_res = self.rocks_db.asset_updated(
-                                        mint.slot_updated as u64,
-                                        mint.pubkey.clone(),
-                                    );
-
-                                    if let Err(e) = upd_res {
-                                        error!("Error while updating assets update idx: {}", e);
-                                    }
-                                }
-                            }
-                        }
-                    }
+                match res {
                     Err(e) => {
                         self.metrics
                             .inc_process("mint_update_supply", MetricStatus::FAILURE);
-                        error!("Error while fetching mints: {}", e);
+                        error!("Error while saving mints: {}", e);
+                    }
+                    Ok(_) => {
+                        self.metrics
+                            .inc_process("mint_update_supply", MetricStatus::SUCCESS);
+                        let upd_res = self
+                            .rocks_db
+                            .asset_updated(mint.slot_updated as u64, mint.pubkey.clone());
+
+                        if let Err(e) = upd_res {
+                            error!("Error while updating assets update idx: {}", e);
+                        }
                     }
                 }
             }

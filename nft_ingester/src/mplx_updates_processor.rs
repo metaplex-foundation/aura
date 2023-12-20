@@ -174,7 +174,6 @@ impl MplxAccsProcessor {
                                 onchain_data: asset.onchain_data.clone(),
                                 creators: asset.creators.clone(),
                                 royalty_amount: asset.royalty_amount,
-                                slot_updated: asset.slot_updated,
                             }
                         } else {
                             asset.clone()
@@ -194,9 +193,7 @@ impl MplxAccsProcessor {
                                 self.metrics
                                     .inc_process("accounts_saving_dynamic", MetricStatus::SUCCESS);
 
-                                let upd_res = self
-                                    .rocks_db
-                                    .asset_updated(asset.slot_updated as u64, asset.pubkey.clone());
+                                let upd_res = self.rocks_db.asset_updated(0, asset.pubkey.clone()); // TODO
 
                                 if let Err(e) = upd_res {
                                     error!("Error while updating assets update idx: {}", e);
@@ -332,27 +329,28 @@ impl MplxAccsProcessor {
 
             models.asset_dynamic.push(AssetDynamicDetails {
                 pubkey: mint.clone(),
-                is_compressible: false,
-                is_compressed: false,
-                is_frozen: false,
-                supply,
-                seq: None,
-                is_burnt: false,
-                was_decompressed: false,
-                onchain_data: Some(chain_data.to_string()),
-                creators: data
-                    .clone()
-                    .creators
-                    .unwrap_or_default()
-                    .iter()
-                    .map(|creator| Creator {
-                        creator: creator.address,
-                        creator_verified: creator.verified,
-                        creator_share: creator.share,
-                    })
-                    .collect(),
-                royalty_amount: data.seller_fee_basis_points,
-                slot_updated: metadata_info.slot,
+                is_compressible: (metadata_info.slot, false),
+                is_compressed: (metadata_info.slot, false),
+                is_frozen: (metadata_info.slot, false),
+                supply: (metadata_info.slot, supply),
+                seq: (metadata_info.slot, None),
+                is_burnt: (metadata_info.slot, false),
+                was_decompressed: (metadata_info.slot, false),
+                onchain_data: (metadata_info.slot, Some(chain_data.to_string())),
+                creators: (
+                    metadata_info.slot,
+                    data.clone()
+                        .creators
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|creator| Creator {
+                            creator: creator.address,
+                            creator_verified: creator.verified,
+                            creator_share: creator.share,
+                        })
+                        .collect(),
+                ),
+                royalty_amount: (metadata_info.slot, data.seller_fee_basis_points),
             });
 
             models.tasks.push(Task {

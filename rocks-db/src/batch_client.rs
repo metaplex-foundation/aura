@@ -104,25 +104,25 @@ impl AssetIndexReader for Storage {
         for dynamic_info in asset_dynamic_details.iter() {
             if let Some(data) = dynamic_info {
                 if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
-                    existed_index.is_compressible = data.is_compressible;
-                    existed_index.is_compressed = data.is_compressed;
-                    existed_index.is_frozen = data.is_frozen;
-                    existed_index.supply = data.supply.map_or(0, |s| s as i64);
-                    existed_index.is_burnt = data.is_burnt;
-                    existed_index.creators = data.creators.clone();
-                    existed_index.royalty_amount = data.royalty_amount as i64;
-                    existed_index.slot_updated = data.slot_updated as i64;
+                    existed_index.is_compressible = data.is_compressible.1;
+                    existed_index.is_compressed = data.is_compressed.1;
+                    existed_index.is_frozen = data.is_frozen.1;
+                    existed_index.supply = data.supply.1.map_or(0, |s| s as i64);
+                    existed_index.is_burnt = data.is_burnt.1;
+                    existed_index.creators = data.creators.clone().1;
+                    existed_index.royalty_amount = data.royalty_amount.1 as i64;
+                    existed_index.slot_updated = 0; // TODO
                 } else {
                     let asset_index = AssetIndex {
                         pubkey: data.pubkey,
-                        is_compressible: data.is_compressible,
-                        is_compressed: data.is_compressed,
-                        is_frozen: data.is_frozen,
-                        supply: data.supply.map_or(0, |s| s as i64),
-                        is_burnt: data.is_burnt,
-                        creators: data.creators.clone(),
-                        royalty_amount: data.royalty_amount as i64,
-                        slot_updated: data.slot_updated as i64,
+                        is_compressible: data.is_compressible.1,
+                        is_compressed: data.is_compressed.1,
+                        is_frozen: data.is_frozen.1,
+                        supply: data.supply.1.map_or(0, |s| s as i64),
+                        is_burnt: data.is_burnt.1,
+                        creators: data.creators.clone().1,
+                        royalty_amount: data.royalty_amount.1 as i64,
+                        slot_updated: 0, // TODO
                         ..Default::default()
                     };
 
