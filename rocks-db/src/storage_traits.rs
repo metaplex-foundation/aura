@@ -4,9 +4,9 @@ use async_trait::async_trait;
 use mockall::automock;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::asset::AssetIndex;
 pub use crate::Result;
 use crate::Storage;
+use entities::models::AssetIndex;
 
 #[automock]
 pub trait AssetUpdateIndexStorage {

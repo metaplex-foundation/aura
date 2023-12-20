@@ -1,7 +1,9 @@
-use postgre_client::model::AssetIndex;
+use entities::enums::*;
+use entities::models::{AssetIndex, Creator};
 use postgre_client::storage_traits::AssetIndexStorage;
 use postgre_client::PgClient;
 use rand::Rng;
+use solana_sdk::pubkey::Pubkey;
 use sqlx::{Executor, Pool, Postgres};
 use std::fs;
 use testcontainers::*;
@@ -86,20 +88,25 @@ pub fn generate_random_vec(n: usize) -> Vec<u8> {
 }
 
 #[cfg(test)]
+pub fn generate_random_pubkey() -> Pubkey {
+    Pubkey::new_unique()
+}
+
+#[cfg(test)]
 pub fn generate_asset_index_records(n: usize) -> Vec<AssetIndex> {
     let mut asset_indexes = Vec::new();
     for i in 0..n {
         let asset_index = AssetIndex {
-            pubkey: generate_random_vec(32),
-            specification_version: postgre_client::model::SpecificationVersions::V1,
-            specification_asset_class: postgre_client::model::SpecificationAssetClass::Nft,
-            royalty_target_type: postgre_client::model::RoyaltyTargetType::Creators,
+            pubkey: generate_random_pubkey(),
+            specification_version: SpecificationVersions::V1,
+            specification_asset_class: SpecificationAssetClass::Nft,
+            royalty_target_type: RoyaltyTargetType::Creators,
             royalty_amount: 1,
             slot_created: (n - i) as i64,
-            owner: Some(generate_random_vec(32)),
-            delegate: Some(generate_random_vec(32)),
-            authority: Some(generate_random_vec(32)),
-            collection: Some(generate_random_vec(32)),
+            owner: Some(generate_random_pubkey()),
+            delegate: Some(generate_random_pubkey()),
+            authority: Some(generate_random_pubkey()),
+            collection: Some(generate_random_pubkey()),
             is_collection_verified: Some(rand::thread_rng().gen_bool(0.5)),
             is_burnt: false,
             is_compressible: false,
@@ -108,11 +115,12 @@ pub fn generate_asset_index_records(n: usize) -> Vec<AssetIndex> {
             supply: 1,
             metadata_url: Some("https://www.google.com".to_string()),
             slot_updated: (n + 10 + i) as i64,
-            creators: vec![postgre_client::model::Creator {
-                creator: generate_random_vec(32),
+            creators: vec![Creator {
+                creator: generate_random_pubkey(),
                 creator_verified: rand::thread_rng().gen_bool(0.5),
+                creator_share: 100,
             }],
-            owner_type: Some(postgre_client::model::OwnerType::Single),
+            owner_type: Some(OwnerType::Single),
         };
         asset_indexes.push(asset_index);
     }

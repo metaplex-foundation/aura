@@ -3,11 +3,12 @@ use std::collections::{HashMap, HashSet};
 use async_trait::async_trait;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::asset::{AssetIndex, AssetsUpdateIdx};
+use crate::asset::AssetsUpdateIdx;
 use crate::column::TypedColumn;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
 use crate::storage_traits::{AssetIndexReader, AssetUpdateIndexStorage};
 use crate::{Result, Storage};
+use entities::models::AssetIndex;
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<(u64, u64, Pubkey)>> {

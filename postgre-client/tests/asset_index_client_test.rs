@@ -4,7 +4,7 @@ mod db_setup;
 #[cfg(test)]
 mod tests {
     use super::db_setup;
-    use postgre_client::model::AssetIndex;
+    use entities::models::{AssetIndex, Creator};
     use postgre_client::storage_traits::AssetIndexStorage;
     use postgre_client::PgClient;
     use rand::Rng;
@@ -114,13 +114,15 @@ mod tests {
         let mut asset_indexes = db_setup::generate_asset_index_records(100);
         // every asset_index will have 3 creators
         for asset_index in asset_indexes.iter_mut() {
-            asset_index.creators.push(postgre_client::model::Creator {
-                creator: db_setup::generate_random_vec(32),
+            asset_index.creators.push(Creator {
+                creator: db_setup::generate_random_pubkey(),
                 creator_verified: rand::thread_rng().gen_bool(0.5),
+                creator_share: 30,
             });
-            asset_index.creators.push(postgre_client::model::Creator {
-                creator: db_setup::generate_random_vec(32),
+            asset_index.creators.push(Creator {
+                creator: db_setup::generate_random_pubkey(),
                 creator_verified: rand::thread_rng().gen_bool(0.5),
+                creator_share: 30,
             });
         }
 
@@ -145,7 +147,7 @@ mod tests {
             .map(|asset_index| {
                 let mut ai = asset_index.clone();
                 ai.creators.pop();
-                ai.creators[1].creator = db_setup::generate_random_vec(32);
+                ai.creators[1].creator = db_setup::generate_random_pubkey();
                 ai.creators[0].creator_verified = !ai.creators[0].creator_verified;
                 ai
             })

@@ -77,22 +77,22 @@ mod tests {
 
         let ref_value = &asset_indexes[asset_indexes.len() - 1];
         let filter = SearchAssetsFilter {
-            specification_version: Some(ref_value.specification_version),
-            specification_asset_class: Some(ref_value.specification_asset_class),
-            owner_address: ref_value.owner.clone(),
-            owner_type: ref_value.owner_type,
-            creator_address: Some(ref_value.creators[0].creator.clone()),
+            specification_version: Some(ref_value.specification_version.into()),
+            specification_asset_class: Some(ref_value.specification_asset_class.into()),
+            owner_address: ref_value.owner.map(|k|k.to_bytes().to_vec()),
+            owner_type: ref_value.owner_type.map(|k|k.into()),
+            creator_address: Some(ref_value.creators[0].creator.to_bytes().to_vec()),
             creator_verified: Some(ref_value.creators[0].creator_verified),
-            authority_address: ref_value.authority.clone(),
-            collection: ref_value.collection.clone(),
-            delegate: ref_value.delegate.clone(),
+            authority_address: ref_value.authority.map(|k|k.to_bytes().to_vec()),
+            collection: ref_value.collection.map(|k|k.to_bytes().to_vec()),
+            delegate: ref_value.delegate.map(|k|k.to_bytes().to_vec()),
             frozen: Some(ref_value.is_frozen),
             supply: Some(ref_value.supply as u64),
-            supply_mint: Some(ref_value.pubkey.clone()),
+            supply_mint: Some(ref_value.pubkey.to_bytes().to_vec()),
             compressed: Some(ref_value.is_compressed),
             compressible: Some(ref_value.is_compressible),
-            royalty_target_type: Some(ref_value.royalty_target_type),
-            royalty_target: Some(ref_value.creators[0].creator.clone()),
+            royalty_target_type: Some(ref_value.royalty_target_type.into()),
+            royalty_target: Some(ref_value.creators[0].creator.to_bytes().to_vec()),
             royalty_amount: Some(ref_value.royalty_amount as u32),
             burnt: Some(ref_value.is_burnt),
             json_uri: ref_value.metadata_url.clone(),
@@ -110,9 +110,9 @@ mod tests {
             .unwrap();
         assert_eq!(res.len(), 1);
         let filter = SearchAssetsFilter {
-            specification_version: Some(ref_value.specification_version),
-            specification_asset_class: Some(ref_value.specification_asset_class),
-            owner_type: ref_value.owner_type,
+            specification_version: Some(ref_value.specification_version.into()),
+            specification_asset_class: Some(ref_value.specification_asset_class.into()),
+            owner_type: ref_value.owner_type.map(|k|k.into()),
             ..Default::default()
         };
         let limit = 5;
@@ -126,7 +126,7 @@ mod tests {
             for j in 0..5usize {
                 assert_eq!(
                     res[j].pubkey,
-                    asset_indexes[i * 5 + j].pubkey,
+                    asset_indexes[i * 5 + j].pubkey.to_bytes(),
                     "i: {}, j: {}",
                     i,
                     j
@@ -143,7 +143,7 @@ mod tests {
                 .unwrap();
             assert_eq!(res.len(), 5);
             for j in 0..5usize {
-                assert_eq!(res[j].pubkey, asset_indexes[i * 5 + j].pubkey);
+                assert_eq!(res[j].pubkey, asset_indexes[i * 5 + j].pubkey.to_bytes());
             }
             let a = res[4].sorting_id.clone();
             after = Some(a);
@@ -159,7 +159,7 @@ mod tests {
             for j in 0..5usize {
                 assert_eq!(
                     res[j].pubkey,
-                    asset_indexes[i * 5 + j].pubkey,
+                    asset_indexes[i * 5 + j].pubkey.to_bytes(),
                     "i: {}, j: {}",
                     i,
                     j
