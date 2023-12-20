@@ -17,7 +17,6 @@ pub mod backup_service;
 mod batch_client;
 pub mod bubblegum_slots;
 pub mod cl_items;
-pub mod client;
 pub mod column;
 pub mod errors;
 pub mod key_encoders;
