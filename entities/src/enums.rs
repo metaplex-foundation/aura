@@ -39,3 +39,20 @@ pub enum OwnerType {
     Token,
     Single,
 }
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub enum TokenStandard {
+    NonFungible,                    // This is a master edition
+    FungibleAsset,                  // A token with metadata that can also have attributes
+    Fungible,                       // A token with simple metadata
+    NonFungibleEdition,             // This is a limited edition
+    ProgrammableNonFungible,        // NonFungible with programmable configuration
+    ProgrammableNonFungibleEdition, // NonFungible with programmable configuration
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum UseMethod {
+    Burn,
+    Multiple,
+    Single,
+}

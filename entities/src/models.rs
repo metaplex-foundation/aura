@@ -1,4 +1,7 @@
-use crate::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions};
+use crate::enums::{
+    OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TokenStandard,
+    UseMethod,
+};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
 
@@ -85,28 +88,11 @@ pub struct AssetLeaf {
     pub slot_updated: u64,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub enum TokenStandard {
-    NonFungible,                    // This is a master edition
-    FungibleAsset,                  // A token with metadata that can also have attributes
-    Fungible,                       // A token with simple metadata
-    NonFungibleEdition,             // This is a limited edition
-    ProgrammableNonFungible,        // NonFungible with programmable configuration
-    ProgrammableNonFungibleEdition, // NonFungible with programmable configuration
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum UseMethod {
-    Burn,
-    Multiple,
-    Single,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Uses {
-    pub use_method: UseMethod, 
-    pub remaining: u64,        
-    pub total: u64,            
+    pub use_method: UseMethod,
+    pub remaining: u64,
+    pub total: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -8,8 +8,8 @@ use blockbuster::{
     programs::{bubblegum::BubblegumParser, ProgramParseResult},
 };
 use chrono::Utc;
-use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::{Creator,ChainDataV1,TokenStandard, Uses};
+use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard};
+use entities::models::{ChainDataV1, Creator, Uses};
 use log::{debug, error, info};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::state::leaf_schema::LeafSchema;
@@ -970,10 +970,18 @@ impl BubblegumTxProcessor {
     }
 }
 
-fn use_method_from_mpl_bubblegum_state(value: &mpl_bubblegum::state::metaplex_adapter::UseMethod) -> entities::models::UseMethod {
+fn use_method_from_mpl_bubblegum_state(
+    value: &mpl_bubblegum::state::metaplex_adapter::UseMethod,
+) -> entities::enums::UseMethod {
     match value {
-        mpl_bubblegum::state::metaplex_adapter::UseMethod::Burn => entities::models::UseMethod::Burn,
-        mpl_bubblegum::state::metaplex_adapter::UseMethod::Multiple => entities::models::UseMethod::Multiple,
-        mpl_bubblegum::state::metaplex_adapter::UseMethod::Single => entities::models::UseMethod::Single,
-    } 
+        mpl_bubblegum::state::metaplex_adapter::UseMethod::Burn => {
+            entities::enums::UseMethod::Burn
+        }
+        mpl_bubblegum::state::metaplex_adapter::UseMethod::Multiple => {
+            entities::enums::UseMethod::Multiple
+        }
+        mpl_bubblegum::state::metaplex_adapter::UseMethod::Single => {
+            entities::enums::UseMethod::Single
+        }
+    }
 }

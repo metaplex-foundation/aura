@@ -8,11 +8,9 @@ use serde_json::json;
 use tokio::time::Instant;
 
 use entities::enums::{RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::{Creator,ChainDataV1, Uses};
+use entities::models::{ChainDataV1, Creator, Uses};
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
-use rocks_db::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails,
-};
+use rocks_db::asset::{AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails};
 use rocks_db::columns::Mint;
 use rocks_db::Storage;
 
@@ -312,7 +310,9 @@ impl MplxAccsProcessor {
                 symbol: data.symbol.clone(),
                 edition_nonce: metadata.edition_nonce,
                 primary_sale_happened: metadata.primary_sale_happened,
-                token_standard: metadata.token_standard.map(|s|token_standard_from_mpl_state(&s)),
+                token_standard: metadata
+                    .token_standard
+                    .map(|s| token_standard_from_mpl_state(&s)),
                 uses: metadata.uses.map(|u| Uses {
                     use_method: use_method_from_mpl_state(&u.use_method),
                     remaining: u.remaining,
@@ -387,21 +387,29 @@ impl MplxAccsProcessor {
     }
 }
 
-pub fn use_method_from_mpl_state(value: &mpl_token_metadata::state::UseMethod) -> entities::models::UseMethod {
+pub fn use_method_from_mpl_state(
+    value: &mpl_token_metadata::state::UseMethod,
+) -> entities::enums::UseMethod {
     match value {
-        mpl_token_metadata::state::UseMethod::Burn => entities::models::UseMethod::Burn,
-        mpl_token_metadata::state::UseMethod::Multiple => entities::models::UseMethod::Multiple,
-        mpl_token_metadata::state::UseMethod::Single => entities::models::UseMethod::Single,
-    } 
+        mpl_token_metadata::state::UseMethod::Burn => entities::enums::UseMethod::Burn,
+        mpl_token_metadata::state::UseMethod::Multiple => entities::enums::UseMethod::Multiple,
+        mpl_token_metadata::state::UseMethod::Single => entities::enums::UseMethod::Single,
+    }
 }
 
-pub fn token_standard_from_mpl_state(value: &mpl_token_metadata::state::TokenStandard) -> entities::models::TokenStandard {
+pub fn token_standard_from_mpl_state(
+    value: &mpl_token_metadata::state::TokenStandard,
+) -> entities::enums::TokenStandard {
     match value {
-        TokenStandard::NonFungible => entities::models::TokenStandard::NonFungible,
-        TokenStandard::FungibleAsset => entities::models::TokenStandard::FungibleAsset,
-        TokenStandard::Fungible => entities::models::TokenStandard::Fungible,
-        TokenStandard::NonFungibleEdition => entities::models::TokenStandard::NonFungibleEdition,
-        TokenStandard::ProgrammableNonFungible => entities::models::TokenStandard::ProgrammableNonFungible,
-        TokenStandard::ProgrammableNonFungibleEdition => entities::models::TokenStandard::ProgrammableNonFungibleEdition,
+        TokenStandard::NonFungible => entities::enums::TokenStandard::NonFungible,
+        TokenStandard::FungibleAsset => entities::enums::TokenStandard::FungibleAsset,
+        TokenStandard::Fungible => entities::enums::TokenStandard::Fungible,
+        TokenStandard::NonFungibleEdition => entities::enums::TokenStandard::NonFungibleEdition,
+        TokenStandard::ProgrammableNonFungible => {
+            entities::enums::TokenStandard::ProgrammableNonFungible
+        }
+        TokenStandard::ProgrammableNonFungibleEdition => {
+            entities::enums::TokenStandard::ProgrammableNonFungibleEdition
+        }
     }
 }
