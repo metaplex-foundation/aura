@@ -406,7 +406,7 @@ impl DBClient {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("INSERT INTO metadata (mtd_url)");
 
-        query_builder.push_values(vec![urls], |mut b, key| {
+        query_builder.push_values(urls, |mut b, key| {
             b.push_bind(key);
         });
 

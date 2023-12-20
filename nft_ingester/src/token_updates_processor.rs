@@ -175,7 +175,7 @@ impl TokenAccsProcessor {
                                     is_compressed: existing_value.is_compressed,
                                     is_frozen: existing_value.is_frozen,
                                     supply: Some(mint.supply as u64),
-                                    seq: Some(mint.slot_updated as u64),
+                                    seq: None,
                                     is_burnt: existing_value.is_burnt,
                                     was_decompressed: existing_value.was_decompressed,
                                     onchain_data: existing_value.onchain_data.clone(),
@@ -189,7 +189,7 @@ impl TokenAccsProcessor {
                             let new_dynamic_data = AssetDynamicDetails {
                                 pubkey: mint.pubkey,
                                 supply: Some(mint.supply as u64),
-                                seq: Some(mint.slot_updated as u64),
+                                seq: None,
                                 slot_updated: mint.slot_updated as u64,
                                 ..Default::default()
                             };
