@@ -51,8 +51,8 @@ message ChainDataV1 {
     string symbol = 2;
     uint32 edition_nonce = 3;
     bool primary_sale_happened = 4;
-    string token_standard = 5; // Optional, use empty string for None
-    string uses = 6; // Optional, use empty string for None
+    string token_standard = 5;
+    string uses = 6;
     uint64 slot_updated = 7;
 }
 
