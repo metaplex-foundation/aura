@@ -2,17 +2,16 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use blockbuster::token_metadata::state::{Metadata, TokenStandard, UseMethod, Uses};
+use blockbuster::token_metadata::state::{Metadata, TokenStandard};
 use log::error;
-use num_traits::FromPrimitive;
 use serde_json::json;
 use tokio::time::Instant;
 
 use entities::enums::{RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::Creator;
+use entities::models::{Creator,ChainDataV1, Uses};
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
 use rocks_db::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails, ChainDataV1,
+    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails,
 };
 use rocks_db::columns::Mint;
 use rocks_db::Storage;
@@ -313,9 +312,9 @@ impl MplxAccsProcessor {
                 symbol: data.symbol.clone(),
                 edition_nonce: metadata.edition_nonce,
                 primary_sale_happened: metadata.primary_sale_happened,
-                token_standard: metadata.token_standard,
+                token_standard: metadata.token_standard.map(|s|token_standard_from_mpl_state(&s)),
                 uses: metadata.uses.map(|u| Uses {
-                    use_method: UseMethod::from_u8(u.use_method as u8).unwrap(),
+                    use_method: use_method_from_mpl_state(&u.use_method),
                     remaining: u.remaining,
                     total: u.total,
                 }),
@@ -385,5 +384,24 @@ impl MplxAccsProcessor {
         }
 
         models
+    }
+}
+
+pub fn use_method_from_mpl_state(value: &mpl_token_metadata::state::UseMethod) -> entities::models::UseMethod {
+    match value {
+        mpl_token_metadata::state::UseMethod::Burn => entities::models::UseMethod::Burn,
+        mpl_token_metadata::state::UseMethod::Multiple => entities::models::UseMethod::Multiple,
+        mpl_token_metadata::state::UseMethod::Single => entities::models::UseMethod::Single,
+    } 
+}
+
+pub fn token_standard_from_mpl_state(value: &mpl_token_metadata::state::TokenStandard) -> entities::models::TokenStandard {
+    match value {
+        TokenStandard::NonFungible => entities::models::TokenStandard::NonFungible,
+        TokenStandard::FungibleAsset => entities::models::TokenStandard::FungibleAsset,
+        TokenStandard::Fungible => entities::models::TokenStandard::Fungible,
+        TokenStandard::NonFungibleEdition => entities::models::TokenStandard::NonFungibleEdition,
+        TokenStandard::ProgrammableNonFungible => entities::models::TokenStandard::ProgrammableNonFungible,
+        TokenStandard::ProgrammableNonFungibleEdition => entities::models::TokenStandard::ProgrammableNonFungibleEdition,
     }
 }

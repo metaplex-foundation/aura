@@ -1,6 +1,5 @@
 use bincode::deserialize;
-use blockbuster::token_metadata::state::{TokenStandard, Uses};
-use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
+use entities::enums::{SpecificationAssetClass, RoyaltyTargetType, OwnerType};
 use log::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
@@ -76,26 +75,6 @@ pub struct AssetCollection {
     pub is_collection_verified: bool,
     pub collection_seq: Option<u64>,
     pub slot_updated: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ChainDataV1 {
-    pub name: String,
-    pub symbol: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub edition_nonce: Option<u8>,
-    pub primary_sale_happened: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_standard: Option<TokenStandard>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub uses: Option<Uses>,
-}
-
-impl ChainDataV1 {
-    pub fn sanitize(&mut self) {
-        self.name = self.name.trim().replace('\0', "");
-        self.symbol = self.symbol.trim().replace('\0', "");
-    }
 }
 
 impl TypedColumn for AssetStaticDetails {

@@ -2,7 +2,6 @@ use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::flatbuffer_mapper::FlatbufferMapper;
 use blockbuster::programs::bubblegum::{BubblegumInstruction, Payload};
-use blockbuster::token_metadata::state::{TokenStandard, UseMethod, Uses};
 use blockbuster::{
     instruction::{order_instructions, InstructionBundle, IxPair},
     program_handler::ProgramParser,
@@ -10,17 +9,15 @@ use blockbuster::{
 };
 use chrono::Utc;
 use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::Creator;
+use entities::models::{Creator,ChainDataV1,TokenStandard, Uses};
 use log::{debug, error, info};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::state::leaf_schema::LeafSchema;
 use mpl_bubblegum::InstructionName;
-use num_traits::FromPrimitive;
 use plerkle_serialization::{Pubkey as FBPubkey, TransactionInfo};
 use rocks_db::asset::AssetOwner;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
-    ChainDataV1,
 };
 use serde_json::json;
 use solana_sdk::hash::Hash;
@@ -508,7 +505,7 @@ impl BubblegumTxProcessor {
                         primary_sale_happened: args.primary_sale_happened,
                         token_standard: Some(TokenStandard::NonFungible),
                         uses: args.uses.clone().map(|u| Uses {
-                            use_method: UseMethod::from_u8(u.use_method as u8).unwrap(),
+                            use_method: use_method_from_mpl_bubblegum_state(&u.use_method),
                             remaining: u.remaining,
                             total: u.total,
                         }),
@@ -971,4 +968,12 @@ impl BubblegumTxProcessor {
             "Ix not parsed correctly".to_string(),
         ))
     }
+}
+
+fn use_method_from_mpl_bubblegum_state(value: &mpl_bubblegum::state::metaplex_adapter::UseMethod) -> entities::models::UseMethod {
+    match value {
+        mpl_bubblegum::state::metaplex_adapter::UseMethod::Burn => entities::models::UseMethod::Burn,
+        mpl_bubblegum::state::metaplex_adapter::UseMethod::Multiple => entities::models::UseMethod::Multiple,
+        mpl_bubblegum::state::metaplex_adapter::UseMethod::Single => entities::models::UseMethod::Single,
+    } 
 }
