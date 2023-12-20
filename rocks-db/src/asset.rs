@@ -1,4 +1,4 @@
-use bincode::deserialize;
+use bincode::{deserialize, serialize};
 use blockbuster::token_metadata::state::{TokenStandard, Uses};
 use log::{error, warn};
 use rocksdb::MergeOperands;

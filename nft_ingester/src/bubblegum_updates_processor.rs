@@ -760,7 +760,7 @@ impl BubblegumTxProcessor {
                         new_asset_data.seq = (bundle.slot, None);
                         new_asset_data.was_decompressed = (bundle.slot, true);
 
-                        if let Err(e) = self.rocks_client.asset_dynamic_data.put(id, &asset_data) {
+                        if let Err(e) = self.rocks_client.asset_dynamic_data.put(id, &new_asset_data) {
                             error!("Error while saving asset data for cNFT: {}", e);
                         };
                     } else {

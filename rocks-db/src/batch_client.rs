@@ -101,33 +101,32 @@ impl AssetIndexReader for Storage {
         }
 
         for dynamic_info in asset_dynamic_details.iter().flatten() {
-            if let Some(data) = dynamic_info {
-                if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
-                    existed_index.is_compressible = data.is_compressible.1;
-                    existed_index.is_compressed = data.is_compressed.1;
-                    existed_index.is_frozen = data.is_frozen.1;
-                    existed_index.supply = data.supply.1.map_or(0, |s| s as i64);
-                    existed_index.is_burnt = data.is_burnt.1;
-                    existed_index.creators = data.creators.clone().1;
-                    existed_index.royalty_amount = data.royalty_amount.1 as i64;
+                if let Some(existed_index) = asset_indexes.get_mut(&dynamic_info.pubkey) {
+                    existed_index.is_compressible = dynamic_info.is_compressible.1;
+                    existed_index.is_compressed = dynamic_info.is_compressed.1;
+                    existed_index.is_frozen = dynamic_info.is_frozen.1;
+                    existed_index.supply = dynamic_info.supply.1.map_or(0, |s| s as i64);
+                    existed_index.is_burnt = dynamic_info.is_burnt.1;
+                    existed_index.creators = dynamic_info.creators.clone().1;
+                    existed_index.royalty_amount = dynamic_info.royalty_amount.1 as i64;
                     existed_index.slot_updated = 0; // TODO
                 } else {
                     let asset_index = AssetIndex {
-                        pubkey: data.pubkey,
-                        is_compressible: data.is_compressible.1,
-                        is_compressed: data.is_compressed.1,
-                        is_frozen: data.is_frozen.1,
-                        supply: data.supply.1.map_or(0, |s| s as i64),
-                        is_burnt: data.is_burnt.1,
-                        creators: data.creators.clone().1,
-                        royalty_amount: data.royalty_amount.1 as i64,
+                        pubkey: dynamic_info.pubkey,
+                        is_compressible: dynamic_info.is_compressible.1,
+                        is_compressed: dynamic_info.is_compressed.1,
+                        is_frozen: dynamic_info.is_frozen.1,
+                        supply: dynamic_info.supply.1.map_or(0, |s| s as i64),
+                        is_burnt: dynamic_info.is_burnt.1,
+                        creators: dynamic_info.creators.clone().1,
+                        royalty_amount: dynamic_info.royalty_amount.1 as i64,
                         slot_updated: 0, // TODO
                         ..Default::default()
                     };
 
                     asset_indexes.insert(asset_index.pubkey, asset_index);
                 }
-            }
+
         }
 
         for data in asset_authority_details.iter().flatten() {

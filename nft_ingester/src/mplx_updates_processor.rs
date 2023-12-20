@@ -191,7 +191,7 @@ impl MplxAccsProcessor {
 
                                 let upd_res = self
                                     .rocks_db
-                                    .asset_updated(asset.slot_updated, asset.pubkey);
+                                    .asset_updated(0, asset.pubkey); // TODO
 
                                 if let Err(e) = upd_res {
                                     error!("Error while updating assets update idx: {}", e);
