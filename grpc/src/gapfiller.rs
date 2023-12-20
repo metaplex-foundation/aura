@@ -29,10 +29,8 @@ pub struct ChainDataV1 {
     pub edition_nonce: u32,
     #[prost(bool, tag = "4")]
     pub primary_sale_happened: bool,
-    /// Optional, use empty string for None
     #[prost(string, tag = "5")]
     pub token_standard: ::prost::alloc::string::String,
-    /// Optional, use empty string for None
     #[prost(string, tag = "6")]
     pub uses: ::prost::alloc::string::String,
     #[prost(uint64, tag = "7")]
