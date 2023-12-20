@@ -105,7 +105,7 @@ impl AssetIndexReader for Storage {
                 existed_index.is_compressible = data.is_compressible;
                 existed_index.is_compressed = data.is_compressed;
                 existed_index.is_frozen = data.is_frozen;
-                existed_index.supply = data.supply.map_or(0, |s| s as i64);
+                existed_index.supply = data.supply.map(|s| s as i64);
                 existed_index.is_burnt = data.is_burnt;
                 existed_index.creators = data.creators.clone();
                 existed_index.royalty_amount = data.royalty_amount as i64;
@@ -116,7 +116,7 @@ impl AssetIndexReader for Storage {
                     is_compressible: data.is_compressible,
                     is_compressed: data.is_compressed,
                     is_frozen: data.is_frozen,
-                    supply: data.supply.map_or(0, |s| s as i64),
+                    supply: data.supply.map(|s| s as i64),
                     is_burnt: data.is_burnt,
                     creators: data.creators.clone(),
                     royalty_amount: data.royalty_amount as i64,
