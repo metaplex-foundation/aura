@@ -1,8 +1,9 @@
+use std::io;
+use std::path::{Path, PathBuf};
+
 use jsonrpc_http_server::jsonrpc_core::futures::TryStreamExt;
 use jsonrpc_http_server::{hyper, RequestMiddleware, RequestMiddlewareAction};
 use log::info;
-use std::io;
-use std::path::{Path, PathBuf};
 use tokio_util::codec::{BytesCodec, FramedRead};
 
 const FULL_BACKUP_REQUEST_PATH: &str = "/snapshot";
@@ -65,7 +66,7 @@ impl RpcRequestMiddleware {
     }
 
     fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
-        let mut filename = PathBuf::default();
+        let filename;
         match self.get_last_backup() {
             Ok(backup) => {
                 if let Some(backup_path) = backup {
@@ -77,7 +78,7 @@ impl RpcRequestMiddleware {
                     };
                 };
             }
-            Err(e) => {
+            Err(_e) => {
                 return RequestMiddlewareAction::Respond {
                     should_validate_hosts: true,
                     response: Box::pin(async move { Ok(Self::internal_server_error()) }),

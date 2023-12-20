@@ -1,7 +1,9 @@
-use rocks_db::Storage;
+use std::sync::Arc;
+
 use sea_orm::{DatabaseConnection, DbErr};
 use solana_sdk::pubkey::Pubkey;
-use std::sync::Arc;
+
+use rocks_db::Storage;
 
 use crate::{dao::scopes, rpc::Asset};
 

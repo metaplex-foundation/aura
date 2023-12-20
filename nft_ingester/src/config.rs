@@ -1,14 +1,11 @@
 use core::time;
-use figment::{
-    providers::{Env, Format, Yaml},
-    Figment,
-};
-use serde::Deserialize;
 use std::{
     env,
     net::{SocketAddr, ToSocketAddrs},
-    path::PathBuf,
 };
+
+use figment::{providers::Env, Figment};
+use serde::Deserialize;
 use tracing_subscriber::fmt;
 
 use crate::error::IngesterError;
@@ -110,14 +107,12 @@ impl IngesterConfig {
         match consumer_number {
             0 => Ok(self.metrics_port_first_consumer),
             1 => Ok(self.metrics_port_second_consumer),
-            _ => {
-                return Err(IngesterError::ConfigurationError {
-                    msg: format!(
-                        "invalid consumer number: {}, expected to be lower than: {}",
-                        consumer_number, INGESTER_CONSUMERS_COUNT
-                    ),
-                });
-            }
+            _ => Err(IngesterError::ConfigurationError {
+                msg: format!(
+                    "invalid consumer number: {}, expected to be lower than: {}",
+                    consumer_number, INGESTER_CONSUMERS_COUNT
+                ),
+            }),
         }
     }
 
@@ -146,7 +141,7 @@ impl DatabaseConfig {
     pub fn get_max_postgres_connections(&self) -> Option<u32> {
         self.0
             .get(MAX_POSTGRES_CONNECTIONS)
-            .and_then(|a| a.to_u128().and_then(|res| Some(res as u32)))
+            .and_then(|a| a.to_u128().map(|res| res as u32))
     }
 }
 
@@ -189,7 +184,7 @@ impl MetricsConfig {
     pub fn get_metrics_port(&self) -> Result<u16, IngesterError> {
         self.0
             .get(METRICS_PORT_KEY)
-            .and_then(|a| a.to_u128().and_then(|res| Some(res as u16)))
+            .and_then(|a| a.to_u128().map(|res| res as u16))
             .ok_or(IngesterError::ConfigurationError {
                 msg: format!("get_metrics_port missing: {}", METRICS_PORT_KEY),
             })
@@ -269,7 +264,7 @@ impl TcpConfig {
     }
 
     pub fn get_snapshot_addr_ingester(&self) -> Result<SocketAddr, IngesterError> {
-        return self.get_addr(TCP_SNAPSHOT_RECEIVER_ADDR);
+        self.get_addr(TCP_SNAPSHOT_RECEIVER_ADDR)
     }
 
     fn get_duration(&self, key: &str) -> Result<time::Duration, IngesterError> {
@@ -360,21 +355,18 @@ impl TcpConfig {
 }
 
 pub fn setup_config<'a, T: Deserialize<'a>>() -> T {
-    let mut figment = Figment::new().join(Env::prefixed("INGESTER_"));
+    let figment = Figment::new().join(Env::prefixed("INGESTER_"));
 
-    let config = figment
+    figment
         .extract()
         .map_err(|config_error| IngesterError::ConfigurationError {
             msg: format!("{}", config_error),
         })
-        .unwrap();
-    config
+        .unwrap()
 }
 
 pub fn init_logger() {
-    let env_filter = env::var("RUST_LOG")
-        .or::<Result<String, ()>>(Ok("info".to_string()))
-        .unwrap();
+    let env_filter = env::var("RUST_LOG").unwrap_or("info".to_string());
     let t = tracing_subscriber::fmt().with_env_filter(env_filter);
     t.event_format(fmt::format::json()).init();
 }

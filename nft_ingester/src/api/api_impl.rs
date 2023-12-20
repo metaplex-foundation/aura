@@ -102,7 +102,7 @@ pub fn not_found() -> DasApiError {
 impl DasApi {
     pub async fn check_health(self: &DasApi) -> Result<Value, DasApiError> {
         let label = "check_health";
-        self.metrics.inc_requests(&label);
+        self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         self.db_connection
@@ -113,7 +113,7 @@ impl DasApi {
             .await?;
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_secs_f64());
 
         Ok(json!("ok"))
     }
@@ -123,20 +123,20 @@ impl DasApi {
         payload: GetAssetProof,
     ) -> Result<Value, DasApiError> {
         let label = "get_asset_proof";
-        self.metrics.inc_requests(&label);
+        self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let id = validate_pubkey(payload.id.clone())?;
         let assets = get_proof_for_assets(self.rocks_db.clone(), vec![id]).await?;
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_secs_f64());
 
         let res = assets
             .get(&id.to_string())
             .ok_or(not_found())?
             .as_ref()
-            .ok_or::<DasApiError>(not_found().into())
+            .ok_or::<DasApiError>(not_found())
             .cloned()
             .map_err(Into::<DasApiError>::into);
 
@@ -148,7 +148,7 @@ impl DasApi {
         payload: GetAssetProofBatch,
     ) -> Result<Value, DasApiError> {
         let label = "get_asset_proof_batch";
-        self.metrics.inc_requests(&label);
+        self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         if payload.ids.len() > MAX_ITEMS_IN_BATCH_REQ {
@@ -158,7 +158,7 @@ impl DasApi {
         let ids: Vec<solana_sdk::pubkey::Pubkey> = payload
             .ids
             .into_iter()
-            .map(|p| validate_pubkey(p.clone()))
+            .map(validate_pubkey)
             .collect::<Result<Vec<_>, _>>()?;
 
         let res = get_proof_for_assets(self.rocks_db.clone(), ids)
@@ -166,14 +166,14 @@ impl DasApi {
             .map_err(Into::<DasApiError>::into);
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_secs_f64());
 
         Ok(json!(res?))
     }
 
     pub async fn get_asset(self: &DasApi, payload: GetAsset) -> Result<Value, DasApiError> {
         let label = "get_asset";
-        self.metrics.inc_requests(&label);
+        self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let id = validate_pubkey(payload.id.clone())?;
@@ -182,7 +182,7 @@ impl DasApi {
             .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_secs_f64());
 
         if res.is_none() {
             return Err(not_found());
@@ -196,17 +196,17 @@ impl DasApi {
         payload: GetAssetBatch,
     ) -> Result<Value, DasApiError> {
         let label = "get_asset_batch";
-        self.metrics.inc_requests(&label);
+        self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         if payload.ids.len() > MAX_ITEMS_IN_BATCH_REQ {
             return Err(DasApiError::BatchSizeError(MAX_ITEMS_IN_BATCH_REQ));
         }
 
-        let ids: Vec<solana_sdk::pubkey::Pubkey> = payload
+        let ids: Vec<pubkey::Pubkey> = payload
             .ids
             .into_iter()
-            .map(|p| validate_pubkey(p.clone()))
+            .map(validate_pubkey)
             .collect::<Result<Vec<_>, _>>()?;
 
         let res = get_asset_batch(&self.db_connection, self.rocks_db.clone(), ids)
@@ -214,7 +214,7 @@ impl DasApi {
             .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_secs_f64());
 
         if res.is_empty() {
             return Err(not_found());
@@ -228,7 +228,7 @@ impl DasApi {
         payload: GetAssetsByOwner,
     ) -> Result<Value, DasApiError> {
         let label = "get_assets_by_owner";
-        self.metrics.inc_requests(&label);
+        self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let GetAssetsByOwner {
@@ -258,7 +258,7 @@ impl DasApi {
         .map_err(Into::<DasApiError>::into);
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_secs_f64());
 
         Ok(json!(res?))
     }
@@ -268,7 +268,7 @@ impl DasApi {
         payload: GetAssetsByGroup,
     ) -> Result<Value, DasApiError> {
         let label = "get_assets_by_group";
-        self.metrics.inc_requests(&label);
+        self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let GetAssetsByGroup {
@@ -300,7 +300,7 @@ impl DasApi {
         .map_err(Into::<DasApiError>::into);
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_secs_f64());
 
         Ok(json!(res?))
     }
@@ -310,7 +310,7 @@ impl DasApi {
         payload: GetAssetsByCreator,
     ) -> Result<Value, DasApiError> {
         let label = "get_assets_by_creator";
-        self.metrics.inc_requests(&label);
+        self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let GetAssetsByCreator {
@@ -343,7 +343,7 @@ impl DasApi {
         .map_err(Into::<DasApiError>::into);
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_secs_f64());
 
         Ok(json!(res?))
     }
@@ -353,7 +353,7 @@ impl DasApi {
         payload: GetAssetsByAuthority,
     ) -> Result<Value, DasApiError> {
         let label = "get_assets_by_authority";
-        self.metrics.inc_requests(&label);
+        self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let GetAssetsByAuthority {
@@ -382,15 +382,14 @@ impl DasApi {
         .await;
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_secs_f64());
 
         Ok(json!(res?))
     }
 
     pub async fn search_assets(self: &DasApi, payload: SearchAssets) -> Result<Value, DasApiError> {
-        // use names of the filter fields as a label for better understanding of the endpoint usage
-        let label = extract_some_fields(&payload);
-        self.metrics.inc_search_asset_requests(&label);
+        let label = "search_assets";
+        self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let limit = payload.limit;
@@ -415,14 +414,14 @@ impl DasApi {
         .await;
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_secs_f64());
 
         Ok(json!(res?))
     }
 
     pub async fn get_grouping(self: &DasApi, payload: GetGrouping) -> Result<Value, DasApiError> {
         let label = "get_grouping";
-        self.metrics.inc_requests(&label);
+        self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let GetGrouping {
@@ -437,7 +436,7 @@ impl DasApi {
         };
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_secs_f64());
 
         Ok(json!(res))
     }

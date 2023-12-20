@@ -85,20 +85,16 @@ impl MplxAccsProcessor {
 
             if prev_buffer_size == 0 {
                 prev_buffer_size = buffer_size;
+            } else if prev_buffer_size == buffer_size {
+                counter -= 1;
             } else {
-                if prev_buffer_size == buffer_size {
-                    counter -= 1;
-                } else {
-                    prev_buffer_size = buffer_size;
-                }
+                prev_buffer_size = buffer_size;
             }
 
-            if buffer_size < self.batch_size {
-                if counter != 0 {
-                    drop(metadata_info_buffer);
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                    continue;
-                }
+            if buffer_size < self.batch_size && counter != 0 {
+                drop(metadata_info_buffer);
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                continue;
             }
 
             counter = BUFFER_PROCESSING_COUNTER;
@@ -142,8 +138,8 @@ impl MplxAccsProcessor {
             let res = metadata_models
                 .asset_static
                 .iter()
-                .map(|asset| self.rocks_db.asset_static_data.merge(asset.pubkey, asset))
-                .collect::<Result<(), _>>();
+                .try_for_each(|asset| self.rocks_db.asset_static_data.merge(asset.pubkey, asset));
+
             match res {
                 Err(e) => {
                     self.metrics
@@ -157,7 +153,7 @@ impl MplxAccsProcessor {
             }
 
             for asset in metadata_models.asset_dynamic.iter() {
-                let existing_value = self.rocks_db.asset_dynamic_data.get(asset.pubkey.clone());
+                let existing_value = self.rocks_db.asset_dynamic_data.get(asset.pubkey);
 
                 match existing_value {
                     Ok(existing_value) => {
@@ -196,7 +192,7 @@ impl MplxAccsProcessor {
 
                                 let upd_res = self
                                     .rocks_db
-                                    .asset_updated(asset.slot_updated as u64, asset.pubkey.clone());
+                                    .asset_updated(asset.slot_updated, asset.pubkey);
 
                                 if let Err(e) = upd_res {
                                     error!("Error while updating assets update idx: {}", e);
@@ -215,12 +211,11 @@ impl MplxAccsProcessor {
             let res = metadata_models
                 .asset_authority
                 .iter()
-                .map(|asset| {
+                .try_for_each(|asset| {
                     self.rocks_db
                         .asset_authority_data
                         .merge(asset.pubkey, asset)
-                })
-                .collect::<Result<(), _>>();
+                });
             match res {
                 Err(e) => {
                     self.metrics
@@ -236,12 +231,11 @@ impl MplxAccsProcessor {
             let res = metadata_models
                 .asset_collection
                 .iter()
-                .map(|asset| {
+                .try_for_each(|asset| {
                     self.rocks_db
                         .asset_collection_data
                         .merge(asset.pubkey, asset)
-                })
-                .collect::<Result<(), _>>();
+                });
             match res {
                 Err(e) => {
                     self.metrics
@@ -293,14 +287,13 @@ impl MplxAccsProcessor {
             };
 
             models.asset_static.push(AssetStaticDetails {
-                pubkey: mint.clone(),
+                pubkey: mint,
                 specification_asset_class: class,
                 royalty_target_type: RoyaltyTargetType::Creators,
                 created_at: metadata_info.slot as i64,
             });
 
-            let mut supply = None;
-
+            let supply;
             let mint_bytes = mint.to_bytes().to_vec();
             if let Some(mint_data) = mints.get_mut(&mint_bytes) {
                 if mint_data.slot_updated > metadata_info.slot as i64 {
@@ -331,7 +324,7 @@ impl MplxAccsProcessor {
             let chain_data = json!(chain_data);
 
             models.asset_dynamic.push(AssetDynamicDetails {
-                pubkey: mint.clone(),
+                pubkey: mint,
                 is_compressible: false,
                 is_compressed: false,
                 is_frozen: false,
@@ -365,28 +358,26 @@ impl MplxAccsProcessor {
 
             if let Some(c) = &metadata.collection {
                 models.asset_collection.push(AssetCollection {
-                    pubkey: mint.clone(),
-                    collection: c.key.clone(),
+                    pubkey: mint,
+                    collection: c.key,
                     is_collection_verified: c.verified,
                     collection_seq: None,
                     slot_updated: metadata_info.slot,
                 });
-            } else {
-                if let Some(creators) = data.creators {
-                    if creators.len() > 0 {
-                        models.asset_collection.push(AssetCollection {
-                            pubkey: mint.clone(),
-                            collection: creators[0].address,
-                            is_collection_verified: true,
-                            collection_seq: None,
-                            slot_updated: metadata_info.slot,
-                        });
-                    }
+            } else if let Some(creators) = data.creators {
+                if !creators.is_empty() {
+                    models.asset_collection.push(AssetCollection {
+                        pubkey: mint,
+                        collection: creators[0].address,
+                        is_collection_verified: true,
+                        collection_seq: None,
+                        slot_updated: metadata_info.slot,
+                    });
                 }
             }
 
             models.asset_authority.push(AssetAuthority {
-                pubkey: mint.clone(),
+                pubkey: mint,
                 authority,
                 slot_updated: metadata_info.slot,
             });

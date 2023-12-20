@@ -140,7 +140,7 @@ impl JsonDownloader {
                             }
                         });
                     }
-                    while let Some(_) = tasks_set.join_next().await {}
+                    while tasks_set.join_next().await.is_some() {}
                 }
                 Err(e) => {
                     error!("Error getting pending tasks: {}", e);

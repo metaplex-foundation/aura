@@ -1,7 +1,6 @@
-use std::marker;
+use solana_sdk::pubkey::Pubkey;
 
 use crate::Result;
-use solana_sdk::pubkey::Pubkey;
 
 pub fn encode_u64x2_pubkey(seq: u64, slot: u64, pubkey: Pubkey) -> Vec<u8> {
     // create a key that is a concatenation of the seq, slot and the pubkey allocating memory immediately
@@ -76,8 +75,10 @@ pub fn decode_u64(bytes: Vec<u8>) -> Result<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::*; // Import functions from the parent module
     use solana_sdk::pubkey::Pubkey;
+
+    // Import functions from the parent module
+    use super::*;
 
     #[test]
     fn test_encode_decode_u64_pubkey() {
