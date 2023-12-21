@@ -323,11 +323,10 @@ impl BubblegumTxProcessor {
 
                     let asset_owner = AssetOwner {
                         pubkey: id,
-                        owner,
-                        delegate: Some(delegate),
-                        owner_type: OwnerType::Single,
-                        owner_delegate_seq: Some(cl.seq),
-                        slot_updated: bundle.slot,
+                        owner: Updated::new(bundle.slot, owner),
+                        delegate: Updated::new(bundle.slot, Some(delegate)),
+                        owner_type: Updated::new(bundle.slot, OwnerType::Single),
+                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq)),
                     };
 
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(id, &asset_owner) {
@@ -450,11 +449,10 @@ impl BubblegumTxProcessor {
 
                     let asset_owner = AssetOwner {
                         pubkey: id,
-                        owner,
-                        delegate: Some(delegate),
-                        owner_type: OwnerType::Single,
-                        owner_delegate_seq: Some(cl.seq),
-                        slot_updated: bundle.slot,
+                        owner: Updated::new(bundle.slot, owner),
+                        delegate: Updated::new(bundle.slot, Some(delegate)),
+                        owner_type: Updated::new(bundle.slot, OwnerType::Single),
+                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq)),
                     };
 
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(id, &asset_owner) {
@@ -577,11 +575,10 @@ impl BubblegumTxProcessor {
 
                     let asset_owner = AssetOwner {
                         pubkey: id,
-                        owner,
-                        delegate: Some(delegate),
-                        owner_type: OwnerType::Single,
-                        owner_delegate_seq: Some(cl.seq),
-                        slot_updated: bundle.slot,
+                        owner: Updated::new(bundle.slot, owner),
+                        delegate: Updated::new(bundle.slot, Some(delegate)),
+                        owner_type: Updated::new(bundle.slot, OwnerType::Single),
+                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq)),
                     };
 
                     if let Err(e) = self.rocks_client.asset_owner_data.put(id, &asset_owner) {
@@ -705,11 +702,10 @@ impl BubblegumTxProcessor {
 
                     let asset_owner = AssetOwner {
                         pubkey: id,
-                        owner,
-                        delegate: Some(delegate),
-                        owner_type: OwnerType::Single,
-                        owner_delegate_seq: Some(cl.seq),
-                        slot_updated: bundle.slot,
+                        owner: Updated::new(bundle.slot, owner),
+                        delegate: Updated::new(bundle.slot, Some(delegate)),
+                        owner_type: Updated::new(bundle.slot, OwnerType::Single),
+                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq)),
                     };
 
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(id, &asset_owner) {

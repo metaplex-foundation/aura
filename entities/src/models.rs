@@ -57,7 +57,7 @@ pub struct CompleteAssetDetails {
     pub is_burnt: (bool, u64),
     pub was_decompressed: (bool, u64),
     pub onchain_data: (Option<ChainDataV1>, u64), // Serialized ChainDataV1
-    pub creators: Vec<Creator>,
+    pub creators: (Vec<Creator>, u64),
     pub royalty_amount: (u16, u64),
 
     // From AssetAuthority as Tuple

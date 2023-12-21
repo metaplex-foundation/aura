@@ -409,7 +409,7 @@ fn convert_rocks_asset_model(
     } else {
         Some(leaf.tree_id.to_bytes().to_vec())
     };
-    let slot_updated = vec![owner.slot_updated, leaf.slot_updated]
+    let slot_updated = vec![owner.get_slot_updated(), leaf.slot_updated]
         .into_iter()
         .max()
         .unwrap(); // unwrap here is safe, because vec is not empty
@@ -419,9 +419,9 @@ fn convert_rocks_asset_model(
         alt_id: None,
         specification_version: Some(SpecificationVersions::V1),
         specification_asset_class: Some(static_data.specification_asset_class.into()),
-        owner: Some(owner.owner.to_bytes().to_vec()),
-        owner_type: owner.owner_type.into(),
-        delegate: owner.delegate.map(|pk| pk.to_bytes().to_vec()),
+        owner: Some(owner.owner.value.to_bytes().to_vec()),
+        owner_type: owner.owner_type.value.into(),
+        delegate: owner.delegate.value.map(|pk| pk.to_bytes().to_vec()),
         frozen: dynamic_data.is_frozen.value,
         supply: dynamic_data
             .supply
@@ -444,7 +444,7 @@ fn convert_rocks_asset_model(
         slot_updated: Some(slot_updated as i64),
         data_hash: leaf.data_hash.map(|h| h.to_string()),
         creator_hash: leaf.creator_hash.map(|h| h.to_string()),
-        owner_delegate_seq: owner.owner_delegate_seq.map(|seq| seq as i64),
+        owner_delegate_seq: owner.owner_delegate_seq.value.map(|seq| seq as i64),
         was_decompressed: dynamic_data.was_decompressed.value,
         leaf_seq: leaf.leaf_seq.map(|seq| seq as i64),
     })

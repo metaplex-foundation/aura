@@ -84,11 +84,10 @@ impl TokenAccsProcessor {
                     acc.mint,
                     &AssetOwner {
                         pubkey: acc.mint,
-                        owner: acc.owner,
-                        delegate: acc.delegate,
-                        owner_type: OwnerType::Token,
-                        owner_delegate_seq: None,
-                        slot_updated: acc.slot_updated as u64,
+                        owner: Updated::new(acc.slot_updated as u64, acc.owner),
+                        delegate: Updated::new(acc.slot_updated as u64, acc.delegate),
+                        owner_type: Updated::new(acc.slot_updated as u64, OwnerType::Token),
+                        owner_delegate_seq: Updated::new(acc.slot_updated as u64, None),
                     },
                 );
 

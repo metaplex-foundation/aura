@@ -60,11 +60,10 @@ pub struct AssetAuthority {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AssetOwner {
     pub pubkey: Pubkey,
-    pub owner: Pubkey,
-    pub delegate: Option<Pubkey>,
-    pub owner_type: OwnerType,
-    pub owner_delegate_seq: Option<u64>,
-    pub slot_updated: u64,
+    pub owner: Updated<Pubkey>,
+    pub delegate: Updated<Option<Pubkey>>,
+    pub owner_type: Updated<OwnerType>,
+    pub owner_delegate_seq: Updated<Option<u64>>,
 }
 
 /// Leaf information about compressed asset
@@ -89,6 +88,12 @@ pub struct AssetCollection {
     pub is_collection_verified: bool,
     pub collection_seq: Option<u64>,
     pub slot_updated: u64,
+}
+
+fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
+    if new.slot_updated > current.slot_updated {
+        *current = new.clone();
+    }
 }
 
 impl TypedColumn for AssetStaticDetails {
@@ -165,9 +170,9 @@ impl AssetDynamicDetails {
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
-        let mut result: Option<AssetDynamicDetails> = None;
+        let mut result: Option<Self> = None;
         if let Some(existing_val) = existing_val {
-            match deserialize::<AssetDynamicDetails>(existing_val) {
+            match deserialize::<Self>(existing_val) {
                 Ok(value) => {
                     result = Some(value);
                 }
@@ -180,14 +185,8 @@ impl AssetDynamicDetails {
             }
         }
 
-        fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
-            if new.slot_updated > current.slot_updated {
-                *current = new.clone();
-            }
-        }
-
         for op in operands {
-            match deserialize::<AssetDynamicDetails>(op) {
+            match deserialize::<Self>(op) {
                 Ok(new_val) => {
                     result = Some(if let Some(mut current_val) = result {
                         update_field(&mut current_val.is_compressible, &new_val.is_compressible);
@@ -292,15 +291,11 @@ impl AssetOwner {
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
-        let mut result = vec![];
-        let mut slot = 0;
-        let mut owner_delegate_seq = None;
+        let mut result: Option<Self> = None;
         if let Some(existing_val) = existing_val {
-            match deserialize::<AssetOwner>(existing_val) {
+            match deserialize::<Self>(existing_val) {
                 Ok(value) => {
-                    slot = value.slot_updated;
-                    owner_delegate_seq = value.owner_delegate_seq;
-                    result = existing_val.to_vec();
+                    result = Some(value);
                 }
                 Err(e) => {
                     error!("RocksDB: AssetOwner deserialize existing_val: {}", e)
@@ -309,21 +304,21 @@ impl AssetOwner {
         }
 
         for op in operands {
-            match deserialize::<AssetOwner>(op) {
+            match deserialize::<Self>(op) {
                 Ok(new_val) => {
-                    if let Some(current_seq) = owner_delegate_seq {
-                        if let Some(new_seq) = new_val.owner_delegate_seq {
-                            if new_seq > current_seq {
-                                owner_delegate_seq = new_val.owner_delegate_seq;
-                                result = op.to_vec();
-                            }
-                        } else {
-                            warn!("RocksDB: AssetOwner deserialize new_val: new owner_delegate_seq is None");
-                        }
-                    } else if new_val.slot_updated > slot {
-                        slot = new_val.slot_updated;
-                        result = op.to_vec();
-                    }
+                    result = Some(if let Some(mut current_val) = result {
+                        update_field(&mut current_val.owner_type, &new_val.owner_type);
+                        update_field(&mut current_val.owner, &new_val.owner);
+                        update_field(
+                            &mut current_val.owner_delegate_seq,
+                            &new_val.owner_delegate_seq,
+                        );
+                        update_field(&mut current_val.delegate, &new_val.delegate);
+
+                        current_val
+                    } else {
+                        new_val
+                    });
                 }
                 Err(e) => {
                     error!("RocksDB: AssetOwner deserialize new_val: {}", e)
@@ -331,7 +326,19 @@ impl AssetOwner {
             }
         }
 
-        Some(result)
+        result.and_then(|result| serialize(&result).ok())
+    }
+
+    pub fn get_slot_updated(&self) -> u64 {
+        [
+            self.owner.slot_updated,
+            self.delegate.slot_updated,
+            self.owner_type.slot_updated,
+            self.owner_delegate_seq.slot_updated,
+        ]
+        .into_iter()
+        .max()
+        .unwrap() // unwrap here is safe, because vec is not empty
     }
 }
 
