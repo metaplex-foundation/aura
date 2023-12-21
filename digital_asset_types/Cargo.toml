@@ -21,6 +21,7 @@ blockbuster = { git = "https://github.com/metaplex-foundation/blockbuster.git", 
 jsonpath_lib = "0.3.0"
 mime_guess = "2.0.4"
 url = "2.3.1"
+tokio = { version = "1.22.0", features = ["full"] }
 schemars = "0.8.6"
 log = "0.4.17"
 rocks-db = { path = "../rocks-db" }

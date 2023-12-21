@@ -20,7 +20,7 @@ pub struct AssetStaticDetails {
     pub created_at: i64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Updated<T> {
     pub slot_updated: u64,
     pub value: T,
