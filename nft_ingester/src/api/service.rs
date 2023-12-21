@@ -24,6 +24,7 @@ pub const MAX_CORS_AGE: u32 = 86400;
 pub async fn start_api(
     rocks_db: Arc<Storage>,
     keep_running: Arc<AtomicBool>,
+    metrics: Arc<ApiMetricsConfig>,
 ) -> Result<(), DasApiError> {
     env::set_var(
         env_logger::DEFAULT_FILTER_ENV,
@@ -33,21 +34,8 @@ pub async fn start_api(
     let config = load_config()?;
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server_port));
 
-    let mut metrics_state = MetricState::new(ApiMetricsConfig::new());
-    metrics_state.register_metrics();
-    tokio::spawn(async move {
-        match setup_metrics(metrics_state.registry, config.metrics_port).await {
-            Ok(_) => {
-                info!("Setup metrics successfully")
-            }
-            Err(e) => {
-                error!("Setup metrics failed: {}", e)
-            }
-        }
-    });
-
     let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
-    let api = DasApi::from_config(config, metrics_state.metrics, rocks_db).await?;
+    let api = DasApi::from_config(config, metrics, rocks_db).await?;
     let rpc = RpcApiBuilder::build(api)?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(RUNTIME_WORKER_THREAD_COUNT)

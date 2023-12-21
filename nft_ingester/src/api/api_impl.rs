@@ -25,13 +25,13 @@ pub struct DasApi {
     db_connection: DatabaseConnection,
     pg_client: PgClient,
     rocks_db: Arc<Storage>,
-    metrics: ApiMetricsConfig,
+    metrics: Arc<ApiMetricsConfig>,
 }
 
 impl DasApi {
     pub async fn from_config(
         config: Config,
-        metrics: ApiMetricsConfig,
+        metrics: Arc<ApiMetricsConfig>,
         rocks_db: Arc<Storage>,
     ) -> Result<Self, DasApiError> {
         let pool = PgPoolOptions::new()
@@ -389,8 +389,9 @@ impl DasApi {
     }
 
     pub async fn search_assets(self: &DasApi, payload: SearchAssets) -> Result<Value, DasApiError> {
-        let label = "search_assets";
-        self.metrics.inc_requests(label);
+        // use names of the filter fields as a label for better understanding of the endpoint usage
+        let label = payload.extract_some_fields();
+        self.metrics.inc_search_asset_requests(&label);
         let latency_timer = Instant::now();
 
         let limit = payload.limit;
@@ -415,7 +416,7 @@ impl DasApi {
         .await;
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
 
         Ok(json!(res?))
     }
