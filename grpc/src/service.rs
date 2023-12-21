@@ -2,7 +2,7 @@ use std::{pin::Pin, sync::Arc};
 
 use crate::gapfiller::{gap_filler_service_server::GapFillerService, AssetDetails, RangeRequest};
 use futures::{stream::Stream, StreamExt};
-use interface::AssetDetailsStreamer;
+use interface::{error::UsecaseError, AssetDetailsStreamer};
 use tonic::{async_trait, Request, Response, Status};
 
 pub struct PeerGapFillerServiceImpl {
@@ -33,7 +33,10 @@ impl GapFillerService for PeerGapFillerServiceImpl {
         let asset_stream = match asset_stream_result {
             Ok(stream) => stream,
             Err(e) => {
-                // Convert your business logic error to tonic::Status
+                if let Some(usecase_error) = e.downcast_ref::<UsecaseError>() {
+                    return Err(usecase_error_to_status(usecase_error));
+                }
+                // If it's not a UsecaseError, or if you don't have specific handling for it
                 return Err(Status::internal(format!("Internal error: {}", e)));
             }
         };
@@ -47,19 +50,33 @@ impl GapFillerService for PeerGapFillerServiceImpl {
     }
 }
 
+fn usecase_error_to_status(err: &UsecaseError) -> Status {
+    match err {
+        UsecaseError::InvalidRange(start, end) => Status::invalid_argument(format!(
+            "Invalid range: start {} is greater than end {}",
+            start, end
+        )),
+        // Add more cases here for other UsecaseError variants if needed
+        // _ => Status::internal(format!("Internal error: {:?}", err)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use futures::stream;
-    use mockall::predicate::*;
+    use interface::error::UsecaseError;
     use interface::AssetDetailsStream;
-    
+    use interface::MockAssetDetailsStreamer;
+    use mockall::predicate::*;
+
     #[tokio::test]
     async fn test_get_assets_updated_within_empty_range() {
-        let mut mock_streamer = interface::MockAssetDetailsStreamer::new();
-        
+        let mut mock_streamer = MockAssetDetailsStreamer::new();
+
         // Expect the method to be called and return an empty stream
-        mock_streamer.expect_get_asset_details_stream_in_range()
+        mock_streamer
+            .expect_get_asset_details_stream_in_range()
             .with(eq(0), eq(10))
             .times(1)
             .returning(
@@ -82,4 +99,70 @@ mod tests {
         // Check that the stream is empty
         assert!(stream.next().await.is_none());
     }
+
+    #[tokio::test]
+    async fn test_get_assets_updated_within_invalid_range() {
+        let mut mock = MockAssetDetailsStreamer::new();
+
+        // Set expectation for an invalid range
+        mock.expect_get_asset_details_stream_in_range()
+            .with(eq(10), eq(0)) // Invalid range
+            .times(1)
+            .returning(|_start_slot, _end_slot| {
+                Err(Box::new(UsecaseError::InvalidRange(10, 0)) as interface::AsyncError)
+            });
+
+        let service = PeerGapFillerServiceImpl {
+            asset_details_streamer: Arc::new(mock),
+        };
+
+        let response = service
+            .get_assets_updated_within(Request::new(RangeRequest {
+                start_slot: 10,
+                end_slot: 0,
+            }))
+            .await;
+
+        // Check for a specific error response
+        match response {
+            Ok(_) => panic!("Expected an error for invalid range, but got OK"),
+            Err(status) => assert_eq!(status.code(), tonic::Code::InvalidArgument),
+        }
+    }
+
+    // #[tokio::test]
+    // async fn test_get_assets_updated_within_with_assets() {
+    //     let mut mock = MockAssetDetailsStreamer::new();
+
+    //     // Expect the method to be called and return a stream with asset details
+    //     mock.expect_get_asset_details_stream_in_range()
+    //         .with(eq(0), eq(10))
+    //         .times(1)
+    //         .returning(|_start_slot, _end_slot| {
+    //             let (tx, rx) = tokio::sync::mpsc::channel(10);
+
+    //             // Simulate sending some asset details
+    //             tokio::spawn(async move {
+    //                 let asset_details = CompleteAssetDetails { /* ... */ };
+    //                 let _ = tx.send(Ok(asset_details)).await;
+    //             });
+
+    //             Ok(Box::pin(ReceiverStream::new(rx)) as AssetDetailsStream)
+    //         });
+
+    //     let service = PeerGapFillerServiceImpl {
+    //         asset_details_streamer: Arc::new(mock),
+    //     };
+
+    //     let response = service
+    //         .get_assets_updated_within(Request::new(RangeRequest {
+    //             start_slot: 0,
+    //             end_slot: 10,
+    //         }))
+    //         .await
+    //         .unwrap();
+
+    //     // Check that the stream contains items
+    //     assert!(response.into_inner().next().await.is_some());
+    // }
 }
