@@ -2049,7 +2049,13 @@ dependencies = [
 name = "grpc"
 version = "0.1.0"
 dependencies = [
+ "entities",
+ "futures",
+ "interface",
+ "mockall 0.12.0",
  "prost 0.12.3",
+ "solana-sdk",
+ "tokio",
  "tonic 0.10.2",
  "tonic-build 0.10.2",
 ]
@@ -2445,6 +2451,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5bbe824c507c5da5956355e86a746d82e0e1464f65d862cc5e71da70e94b2c"
 dependencies = [
  "cfg-if 1.0.0",
+]
+
+[[package]]
+name = "interface"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "entities",
+ "futures",
+ "mockall 0.12.0",
+ "thiserror",
 ]
 
 [[package]]
