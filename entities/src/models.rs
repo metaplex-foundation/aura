@@ -46,32 +46,32 @@ pub struct CompleteAssetDetails {
     pub pubkey: Pubkey,
     pub specification_asset_class: SpecificationAssetClass,
     pub royalty_target_type: RoyaltyTargetType,
-    pub created_at: i64,
+    pub slot_created: u64,
 
     // From AssetDynamicDetails as Tuples
-    pub is_compressible: (bool, u64, Option<u64>),
-    pub is_compressed: (bool, u64, Option<u64>),
-    pub is_frozen: (bool, u64, Option<u64>),
-    pub supply: (Option<u64>, u64, Option<u64>),
-    pub seq: (Option<u64>, u64, Option<u64>),
-    pub is_burnt: (bool, u64, Option<u64>),
-    pub was_decompressed: (bool, u64, Option<u64>),
-    pub onchain_data: (Option<ChainDataV1>, u64, Option<u64>), // Serialized ChainDataV1
-    pub creators: (Vec<Creator>, u64, Option<u64>),
-    pub royalty_amount: (u16, u64, Option<u64>),
+    pub is_compressible: Updated<bool>,
+    pub is_compressed: Updated<bool>,
+    pub is_frozen: Updated<bool>,
+    pub supply: Option<Updated<u64>>,
+    pub seq: Option<Updated<u64>>,
+    pub is_burnt: Updated<bool>,
+    pub was_decompressed: Updated<bool>,
+    pub onchain_data: Option<Updated<ChainDataV1>>,
+    pub creators: Updated<Vec<Creator>>,
+    pub royalty_amount: Updated<u16>,
 
     // From AssetAuthority as Tuple
-    pub authority: (Pubkey, u64, Option<u64>),
+    pub authority: Updated<Pubkey>,
 
     // From AssetOwner as Tuples
-    pub owner: (Pubkey, u64, Option<u64>),
-    pub delegate: (Option<Pubkey>, u64, Option<u64>),
-    pub owner_type: (OwnerType, u64, Option<u64>),
-    pub owner_delegate_seq: (Option<u64>, u64, Option<u64>),
+    pub owner: Updated<Pubkey>,
+    pub delegate: Option<Updated<Pubkey>>,
+    pub owner_type: Updated<OwnerType>,
+    pub owner_delegate_seq: Option<Updated<u64>>,
 
     // Separate fields
-    pub leaves: Vec<AssetLeaf>,
-    pub collection: AssetCollection,
+    pub leaves: Vec<Updated<AssetLeaf>>,
+    pub collection: Option<Updated<AssetCollection>>,
 }
 
 /// Leaf information about compressed asset
@@ -85,7 +85,6 @@ pub struct AssetLeaf {
     pub data_hash: Option<Hash>,
     pub creator_hash: Option<Hash>,
     pub leaf_seq: Option<u64>,
-    pub slot_updated: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -120,7 +119,6 @@ pub struct AssetCollection {
     pub collection: Pubkey,
     pub is_collection_verified: bool,
     pub collection_seq: Option<u64>,
-    pub slot_updated: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]

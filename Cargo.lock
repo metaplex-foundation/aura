@@ -3892,7 +3892,7 @@ dependencies = [
  "prost 0.12.3",
  "prost-types 0.12.3",
  "regex",
- "syn 2.0.37",
+ "syn 2.0.42",
  "tempfile",
  "which",
 ]
@@ -3931,9 +3931,9 @@ checksum = "efb6c9a1dd1def8e2124d17e83a20af56f1570d6c2d2bd9e266ccb768df3840e"
 dependencies = [
  "anyhow",
  "itertools 0.11.0",
- "proc-macro2 1.0.67",
- "quote 1.0.33",
- "syn 2.0.37",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.42",
 ]
 
 [[package]]
@@ -6366,7 +6366,7 @@ dependencies = [
  "http-body",
  "hyper",
  "hyper-timeout",
- "percent-encoding 2.3.0",
+ "percent-encoding",
  "pin-project",
  "prost 0.12.3",
  "tokio",
@@ -6410,10 +6410,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d021fc044c18582b9a2408cd0dd05b1596e3ecdb5c4df822bb0183545683889"
 dependencies = [
  "prettyplease 0.2.15",
- "proc-macro2 1.0.67",
+ "proc-macro2",
  "prost-build 0.12.3",
- "quote 1.0.33",
- "syn 2.0.37",
+ "quote",
+ "syn 2.0.42",
 ]
 
 [[package]]
