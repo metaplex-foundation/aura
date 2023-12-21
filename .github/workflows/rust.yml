@@ -11,18 +11,19 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Install Rust
+    - name: Install Rust specific version
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: stable
+        toolchain: 1.70.0
         profile: minimal
+        components: clippy, rustfmt
         override: true
 
     - name: Check formatting
       uses: actions-rs/cargo@v1
       with:
         command: fmt
-        args: -- --check
+        args: --all -- --check
 
     - name: Lint with Clippy
       uses: actions-rs/clippy-check@v1
