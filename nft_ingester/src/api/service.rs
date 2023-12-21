@@ -1,9 +1,8 @@
-use log::{error, info};
+use log::info;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use metrics_utils::utils::setup_metrics;
-use metrics_utils::{ApiMetricsConfig, MetricState, MetricsTrait};
+use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use {crate::api::DasApi, std::env, std::net::SocketAddr};
 use {
