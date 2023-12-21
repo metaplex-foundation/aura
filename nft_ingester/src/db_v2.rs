@@ -23,104 +23,12 @@ pub struct DBClient {
     Copy,
     Clone,
 )]
-#[sqlx(type_name = "royalty_target_type", rename_all = "lowercase")]
-pub enum RoyaltyTargetType {
-    Unknown,
-    Creators,
-    Fanout,
-    Single,
-}
-
-#[derive(
-    serde_derive::Deserialize,
-    serde_derive::Serialize,
-    PartialEq,
-    Debug,
-    Eq,
-    Hash,
-    sqlx::Type,
-    Copy,
-    Clone,
-)]
-#[sqlx(type_name = "specification_asset_class", rename_all = "lowercase")]
-#[allow(non_camel_case_types)]
-pub enum SpecificationAssetClass {
-    Unknown,
-    Fungible_Token,
-    Fungible_Asset,
-    Nft,
-    Printable_Nft,
-    Print,
-    Transfer_Restricted_Nft,
-    Non_Transferable_Nft,
-    Identity_Nft,
-}
-
-#[derive(
-    serde_derive::Deserialize,
-    serde_derive::Serialize,
-    PartialEq,
-    Debug,
-    Eq,
-    Hash,
-    sqlx::Type,
-    Copy,
-    Clone,
-)]
-#[sqlx(type_name = "owner_type", rename_all = "lowercase")]
-pub enum OwnerType {
-    Unknown,
-    Token,
-    Single,
-}
-
-#[derive(
-    serde_derive::Deserialize,
-    serde_derive::Serialize,
-    PartialEq,
-    Debug,
-    Eq,
-    Hash,
-    sqlx::Type,
-    Copy,
-    Clone,
-)]
 #[sqlx(type_name = "task_status", rename_all = "lowercase")]
 pub enum TaskStatus {
     Pending,
     Running,
     Success,
     Failed,
-}
-
-pub struct Asset {
-    pub ast_pubkey: Vec<u8>,
-    pub ast_owner: Option<Vec<u8>>,
-    pub ast_delegate: Option<Vec<u8>>,
-    pub ast_authority: Option<Vec<u8>>,
-    pub ast_collection: Option<Vec<u8>>,
-    pub ast_is_collection_verified: bool,
-    pub ast_is_compressed: bool,
-    pub ast_is_frozen: bool,
-    pub ast_supply: Option<i64>,
-    pub ast_seq: Option<i64>,
-    pub ast_tree_id: Option<Vec<u8>>,
-    pub ast_leaf: Option<Vec<u8>>,
-    pub ast_nonce: Option<i64>,
-    pub ast_royalty_target_type: RoyaltyTargetType,
-    pub ast_royalty_target: Option<Vec<u8>>,
-    pub ast_royalty_amount: i64,
-    pub ast_is_burnt: bool,
-    pub ast_slot_updated: i64,
-    pub ast_data_hash: Option<String>,
-    pub ast_creator_hash: Option<String>,
-    pub ast_owner_delegate_seq: Option<i64>,
-    pub ast_was_decompressed: bool,
-    pub ast_leaf_seq: Option<i64>,
-    pub ast_specification_asset_class: SpecificationAssetClass,
-    pub ast_owner_type: OwnerType,
-    pub ast_onchain_data: String,
-    pub ast_supply_slot_updated: Option<i64>,
 }
 
 #[derive(Debug)]

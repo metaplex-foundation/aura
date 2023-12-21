@@ -16,18 +16,9 @@ use rocks_db::columns::Mint;
 use rocks_db::Storage;
 
 use crate::buffer::Buffer;
-use crate::db_v2::{Asset, DBClient as DBClientV2, Task};
+use crate::db_v2::{DBClient as DBClientV2, Task};
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
-
-#[derive(Default)]
-pub struct MetadataModels {
-    pub asset_pubkeys: Vec<Vec<u8>>,
-    pub all_pubkeys: Vec<Vec<u8>>,
-    pub asset: Vec<Asset>,
-    pub asset_creators: Vec<Creator>,
-    pub asset_data: Vec<Task>,
-}
 
 #[derive(Default, Debug)]
 pub struct RocksMetadataModels {
