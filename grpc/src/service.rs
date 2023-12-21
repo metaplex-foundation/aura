@@ -46,3 +46,40 @@ impl GapFillerService for PeerGapFillerServiceImpl {
         Ok(Response::new(Box::pin(response_stream)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::stream;
+    use mockall::predicate::*;
+    use interface::AssetDetailsStream;
+    
+    #[tokio::test]
+    async fn test_get_assets_updated_within_empty_range() {
+        let mut mock_streamer = interface::MockAssetDetailsStreamer::new();
+        
+        // Expect the method to be called and return an empty stream
+        mock_streamer.expect_get_asset_details_stream_in_range()
+            .with(eq(0), eq(10))
+            .times(1)
+            .returning(
+                |_start_slot, _end_slot| Ok(Box::pin(stream::empty()) as AssetDetailsStream),
+            );
+        let service = super::PeerGapFillerServiceImpl {
+            asset_details_streamer: Arc::new(mock_streamer),
+        };
+
+        let response = service
+            .get_assets_updated_within(Request::new(RangeRequest {
+                start_slot: 0,
+                end_slot: 10,
+            }))
+            .await;
+
+        assert!(response.is_ok());
+        let mut stream = response.unwrap().into_inner();
+
+        // Check that the stream is empty
+        assert!(stream.next().await.is_none());
+    }
+}
