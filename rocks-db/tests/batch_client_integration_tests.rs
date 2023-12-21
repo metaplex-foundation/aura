@@ -8,7 +8,7 @@ use rocks_db::key_encoders::encode_u64x2_pubkey;
 use rocks_db::storage_traits::AssetUpdateIndexStorage;
 use rocks_db::{AssetDynamicDetails, Storage};
 
-pub struct TestEnvironment {
+struct TestEnvironment {
     storage: Storage,
     _temp_dir: TempDir,
 }

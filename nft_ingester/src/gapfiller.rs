@@ -5,7 +5,7 @@ use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetai
 use serde_json::json;
 use std::sync::Arc;
 
-pub fn insert_gap_data(
+pub fn insert_gaped_data(
     rocks_storage: Arc<Storage>,
     data: CompleteAssetDetails,
 ) -> Result<(), IngesterError> {
