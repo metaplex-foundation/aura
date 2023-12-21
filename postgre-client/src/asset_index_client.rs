@@ -2,12 +2,14 @@ use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
 use sqlx::{Postgres, QueryBuilder};
+use solana_sdk::pubkey::Pubkey;
 
 use crate::{
-    model::{AssetIndex, Creator},
+    model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
     storage_traits::AssetIndexStorage,
     PgClient,
 };
+use entities::models::{AssetIndex, Creator};
 
 #[async_trait]
 impl AssetIndexStorage for PgClient {
@@ -67,7 +69,7 @@ impl AssetIndexStorage for PgClient {
         asset_indexes.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
 
         // Collect all creators from all assets
-        let mut all_creators: Vec<(Vec<u8>, Creator, i64)> = asset_indexes
+        let mut all_creators: Vec<(Pubkey, Creator, i64)> = asset_indexes
             .iter()
             .flat_map(|asset_index| {
                 asset_index.creators.iter().map(move |creator| {
@@ -87,11 +89,16 @@ impl AssetIndexStorage for PgClient {
 
         let updated_keys = asset_indexes
             .iter()
-            .map(|asset_index| asset_index.pubkey.clone())
+            .map(|asset_index| asset_index.pubkey.to_bytes().to_vec())
             .collect::<Vec<Vec<u8>>>();
         let valid_creators_key_tupples = all_creators
             .iter()
-            .map(|(pubkey, creator, _slot_updated)| (pubkey.clone(), creator.creator.clone()))
+            .map(|(pubkey, creator, _slot_updated)| {
+                (
+                    pubkey.to_bytes().to_vec(),
+                    creator.creator.to_bytes().to_vec(),
+                )
+            })
             .collect::<Vec<(Vec<u8>, Vec<u8>)>>();
 
         // Bulk insert/update for assets_v3
@@ -123,17 +130,25 @@ impl AssetIndexStorage for PgClient {
                 None => None,
             };
             builder
-                .push_bind(asset_index.pubkey)
-                .push_bind(asset_index.specification_version)
-                .push_bind(asset_index.specification_asset_class)
-                .push_bind(asset_index.royalty_target_type)
+                .push_bind(asset_index.pubkey.to_bytes().to_vec())
+                .push_bind(SpecificationVersions::from(
+                    asset_index.specification_version,
+                ))
+                .push_bind(SpecificationAssetClass::from(
+                    asset_index.specification_asset_class,
+                ))
+                .push_bind(RoyaltyTargetType::from(asset_index.royalty_target_type))
                 .push_bind(asset_index.royalty_amount)
                 .push_bind(asset_index.slot_created)
-                .push_bind(asset_index.owner_type)
-                .push_bind(asset_index.owner)
-                .push_bind(asset_index.delegate)
-                .push_bind(asset_index.authority)
-                .push_bind(asset_index.collection)
+                .push_bind(
+                    asset_index
+                        .owner_type
+                        .map(|owner_type| OwnerType::from(owner_type)),
+                )
+                .push_bind(asset_index.owner.map(|owner| owner.to_bytes().to_vec()))
+                .push_bind(asset_index.delegate.map(|k| k.to_bytes().to_vec()))
+                .push_bind(asset_index.authority.map(|k| k.to_bytes().to_vec()))
+                .push_bind(asset_index.collection.map(|k| k.to_bytes().to_vec()))
                 .push_bind(asset_index.is_collection_verified)
                 .push_bind(asset_index.is_burnt)
                 .push_bind(asset_index.is_compressible)
@@ -204,8 +219,8 @@ impl AssetIndexStorage for PgClient {
                 all_creators.iter(),
                 |mut builder, (pubkey, creator, slot_updated)| {
                     builder
-                        .push_bind(pubkey)
-                        .push_bind(&creator.creator)
+                        .push_bind(pubkey.to_bytes().to_vec())
+                        .push_bind(creator.creator.to_bytes().to_vec())
                         .push_bind(creator.creator_verified)
                         .push_bind(slot_updated);
                 },

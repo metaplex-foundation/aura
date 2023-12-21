@@ -2,11 +2,12 @@ use crate::buffer::Buffer;
 use crate::db_v2::DBClient;
 use log::error;
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
-use rocks_db::asset::{AssetDynamicDetails, AssetOwner, OwnerType};
+use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
 use rocks_db::Storage;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::Instant;
+use entities::enums::OwnerType;
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
 
@@ -175,7 +176,7 @@ impl TokenAccsProcessor {
                                     is_compressed: existing_value.is_compressed,
                                     is_frozen: existing_value.is_frozen,
                                     supply: Some(mint.supply as u64),
-                                    seq: Some(mint.slot_updated as u64),
+                                    seq: None,
                                     is_burnt: existing_value.is_burnt,
                                     was_decompressed: existing_value.was_decompressed,
                                     onchain_data: existing_value.onchain_data.clone(),
@@ -189,7 +190,7 @@ impl TokenAccsProcessor {
                             let new_dynamic_data = AssetDynamicDetails {
                                 pubkey: mint.pubkey,
                                 supply: Some(mint.supply as u64),
-                                seq: Some(mint.slot_updated as u64),
+                                seq: None,
                                 slot_updated: mint.slot_updated as u64,
                                 ..Default::default()
                             };

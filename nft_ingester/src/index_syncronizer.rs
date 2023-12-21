@@ -1,3 +1,4 @@
+use entities::models::AssetIndex;
 use log::warn;
 use postgre_client::storage_traits::AssetIndexStorage;
 use rocks_db::{
@@ -96,8 +97,8 @@ where
                 .update_asset_indexes_batch(
                     asset_indexes
                         .values()
-                        .map(postgre_client::model::AssetIndex::from)
-                        .collect::<Vec<postgre_client::model::AssetIndex>>()
+                        .cloned()
+                        .collect::<Vec<AssetIndex>>()
                         .as_slice(),
                     last_included_key.as_slice(),
                 )
@@ -118,7 +119,7 @@ mod tests {
     use super::*;
     use mockall;
     use postgre_client::storage_traits::MockAssetIndexStorage as MockIndexStorage;
-    use rocks_db::asset::AssetIndex;
+    use entities::models::AssetIndex;
     use rocks_db::storage_traits::MockAssetIndexStorage as MockPrimaryStorage;
     use std::collections::HashMap;
     use tokio;
@@ -126,17 +127,17 @@ mod tests {
     fn create_test_asset_index(pubkey: &Pubkey) -> AssetIndex {
         AssetIndex {
             pubkey: pubkey.clone(),
-            specification_version: rocks_db::asset::SpecificationVersions::V1,
-            specification_asset_class: rocks_db::asset::SpecificationAssetClass::Nft,
-            royalty_target_type: rocks_db::asset::RoyaltyTargetType::Creators,
+            specification_version: entities::enums::SpecificationVersions::V1,
+            specification_asset_class: entities::enums::SpecificationAssetClass::Nft,
+            royalty_target_type: entities::enums::RoyaltyTargetType::Creators,
             slot_created: 123456,
             owner: Some(pubkey.clone()),
-            owner_type: Some(rocks_db::asset::OwnerType::Single),
+            owner_type: Some(entities::enums::OwnerType::Single),
             delegate: Some(pubkey.clone()),
             authority: Some(pubkey.clone()),
             collection: Some(Pubkey::new_unique()),
             is_collection_verified: Some(true),
-            creators: vec![rocks_db::asset::Creator {
+            creators: vec![entities::models::Creator {
                 creator: Pubkey::new_unique(),
                 creator_verified: true,
                 creator_share: 100,
@@ -206,10 +207,7 @@ mod tests {
 
         let mut map_of_asset_indexes = HashMap::<Pubkey, AssetIndex>::new();
         map_of_asset_indexes.insert(key.clone(), create_test_asset_index(&key));
-        let expected_indexes: Vec<postgre_client::model::AssetIndex> = map_of_asset_indexes
-            .values()
-            .map(|ai| postgre_client::model::AssetIndex::from(ai))
-            .collect();
+        let expected_indexes: Vec<AssetIndex> = map_of_asset_indexes.values().cloned().collect();
         primary_storage
             .mock_asset_index_reader
             .expect_get_asset_indexes()
@@ -273,10 +271,7 @@ mod tests {
 
         let mut map_of_asset_indexes = HashMap::<Pubkey, AssetIndex>::new();
         map_of_asset_indexes.insert(key.clone(), create_test_asset_index(&key));
-        let expected_indexes: Vec<postgre_client::model::AssetIndex> = map_of_asset_indexes
-            .values()
-            .map(|ai| postgre_client::model::AssetIndex::from(ai))
-            .collect();
+        let expected_indexes: Vec<AssetIndex> = map_of_asset_indexes.values().cloned().collect();
         primary_storage
             .mock_asset_index_reader
             .expect_get_asset_indexes()
@@ -358,17 +353,11 @@ mod tests {
 
         let mut map_of_asset_indexes = HashMap::<Pubkey, AssetIndex>::new();
         map_of_asset_indexes.insert(key.clone(), create_test_asset_index(&key));
-        let expected_indexes_first_batch: Vec<postgre_client::model::AssetIndex> =
-            map_of_asset_indexes
-                .values()
-                .map(|ai| postgre_client::model::AssetIndex::from(ai))
-                .collect();
+        let expected_indexes_first_batch: Vec<AssetIndex> =
+            map_of_asset_indexes.values().cloned().collect();
 
-        let expected_indexes_second_batch: Vec<postgre_client::model::AssetIndex> =
-            map_of_asset_indexes
-                .values()
-                .map(|ai| postgre_client::model::AssetIndex::from(ai))
-                .collect();
+        let expected_indexes_second_batch: Vec<AssetIndex> =
+            map_of_asset_indexes.values().cloned().collect();
         let second_call_map = map_of_asset_indexes.clone();
         let mut call_count2 = 0;
         primary_storage

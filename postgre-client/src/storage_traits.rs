@@ -1,4 +1,5 @@
-use crate::model::{AssetIndex, AssetSortedIndex, AssetSorting, SearchAssetsFilter};
+use crate::model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter};
+use entities::models::AssetIndex;
 use async_trait::async_trait;
 use mockall::automock;
 

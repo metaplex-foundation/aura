@@ -5,6 +5,7 @@ members = [
   "metrics_utils",
   "rocks-db",
   "postgre-client",
+  "entities",
 ]
 exclude = [
   "migration",

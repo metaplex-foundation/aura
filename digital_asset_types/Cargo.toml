@@ -37,3 +37,4 @@ indexmap = "1.9.3"
 hex = "0.4.3"
 rocks-db = { path = "../rocks-db" }
 postgre-client = { path = "../postgre-client" }
+entities = { path = "../entities" }
