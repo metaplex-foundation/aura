@@ -376,13 +376,11 @@ fn create_test_dynamic_data(pubkey: Pubkey, slot: u64) -> AssetDynamicDetails {
         is_compressible: Updated::new(slot, None, false),
         is_compressed: Updated::new(slot, None, false),
         is_frozen: Updated::new(slot, None, false),
-        supply: None,
-        seq: None,
         is_burnt: Updated::new(slot, None, false),
         was_decompressed: Updated::new(slot, None, false),
-        onchain_data: None,
         creators: Updated::new(slot, None, Vec::new()),
         royalty_amount: Updated::new(slot, None, 0),
+        ..Default::default()
     }
 }
 
