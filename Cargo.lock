@@ -1672,6 +1672,7 @@ dependencies = [
  "borsh 0.9.3",
  "borsh-derive 0.9.3",
  "bs58 0.4.0",
+ "entities",
  "futures 0.3.28",
  "hex",
  "indexmap 1.9.3",
@@ -1864,6 +1865,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7268b386296a025e474d5140678f75d6de9493ae55a5d709eeb9dd08149945e1"
 dependencies = [
  "cfg-if 1.0.0",
+]
+
+[[package]]
+name = "entities"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "solana-sdk",
 ]
 
 [[package]]
@@ -3537,6 +3546,7 @@ dependencies = [
  "clap 4.4.5",
  "crossbeam-channel",
  "digital_asset_types",
+ "entities",
  "env_logger 0.10.0",
  "figment",
  "flatbuffers",
@@ -3554,6 +3564,7 @@ dependencies = [
  "metrics-utils",
  "mockall 0.11.4",
  "mpl-bubblegum",
+ "mpl-token-metadata",
  "num-integer",
  "num-traits",
  "open-rpc-derive",
@@ -4200,12 +4211,14 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "base64 0.21.5",
+ "entities",
  "lazy_static",
  "mockall 0.11.4",
  "once_cell",
  "rand 0.8.5",
  "rocks-db",
  "serde",
+ "solana-sdk",
  "sqlx",
  "testcontainers",
  "tokio",
@@ -5041,6 +5054,7 @@ dependencies = [
  "bincode",
  "blockbuster",
  "chrono",
+ "entities",
  "env_logger 0.10.0",
  "figment",
  "futures-util",
