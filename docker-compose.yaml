@@ -23,28 +23,6 @@ services:
       options:
         max-size: "2048m"
 
-  ingester-second-consumer:
-    container_name: ingester-second-consumer
-    restart: always
-    entrypoint: "./ingester"
-    env_file:
-      - .env
-    environment:
-      INGESTER_CONSUMER_NUMBER: 1
-    depends_on:
-      - db
-    network_mode: host
-    volumes:
-      - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
-      - ${INGESTER_ROCKS_BACKUP_DIR}:${INGESTER_ROCKS_BACKUP_DIR}:rw
-      - ${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:rw
-    build:
-      context: .
-      dockerfile: ingester.Dockerfile
-    logging:
-      options:
-        max-size: "2048m"
-
   db:
     container_name: db
     image: 'postgres:14'

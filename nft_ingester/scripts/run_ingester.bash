@@ -33,7 +33,7 @@ export INGESTER_SLOT_UNTIL=0
 export INGESTER_SLOT_START_FROM=236032212
 export INGESTER_BIG_TABLE_CONFIG='{creds="./creds.json", timeout=1000}'
 
-export ingester_synchronizer_batch_size=500
+export INGESTER_SYNCHRONIZER_BATCH_SIZE=500
 
 cargo run --package nft_ingester --bin ingester
 # start with restore rocks DB
