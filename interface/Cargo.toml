@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 async-trait="0.1.74"
 futures="0.3.29"
+entities = { path = "../entities" }

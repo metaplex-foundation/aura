@@ -8,6 +8,10 @@ edition = "2021"
 [dependencies]
 tonic = "0.10.2"
 prost = "0.12.3"
+futures = "0.3.29"
+solana-sdk = { version = "~1.14.14" }
+interface = { path = "../interface" }
+entities = { path = "../entities" }
 
 [build-dependencies]
 tonic-build = "0.10.2"  # Corresponding build tool for tonic
