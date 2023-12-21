@@ -80,6 +80,12 @@ pub struct BackfillerMetricsConfig {
     data_processed: Family<MetricLabel, Counter>, // slots & transactions
 }
 
+impl Default for BackfillerMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BackfillerMetricsConfig {
     pub fn new() -> Self {
         Self {

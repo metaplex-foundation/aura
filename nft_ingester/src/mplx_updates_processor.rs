@@ -8,6 +8,7 @@ use serde_json::json;
 use tokio::time::Instant;
 
 use entities::enums::{RoyaltyTargetType, SpecificationAssetClass};
+use entities::models::Updated;
 use entities::models::{ChainDataV1, Creator, Uses};
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
 use rocks_db::asset::{AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails};
@@ -15,18 +16,9 @@ use rocks_db::columns::Mint;
 use rocks_db::Storage;
 
 use crate::buffer::Buffer;
-use crate::db_v2::{Asset, DBClient as DBClientV2, Task};
+use crate::db_v2::{DBClient as DBClientV2, Task};
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
-
-#[derive(Default)]
-pub struct MetadataModels {
-    pub asset_pubkeys: Vec<Vec<u8>>,
-    pub all_pubkeys: Vec<Vec<u8>>,
-    pub asset: Vec<Asset>,
-    pub asset_creators: Vec<Creator>,
-    pub asset_data: Vec<Task>,
-}
 
 #[derive(Default, Debug)]
 pub struct RocksMetadataModels {
@@ -161,14 +153,13 @@ impl MplxAccsProcessor {
                                 is_compressible: existing_value.is_compressible,
                                 is_compressed: existing_value.is_compressed,
                                 is_frozen: existing_value.is_frozen,
-                                supply: asset.supply,
-                                seq: asset.seq,
+                                supply: asset.supply.clone(),
+                                seq: asset.seq.clone(),
                                 is_burnt: existing_value.is_burnt,
                                 was_decompressed: existing_value.was_decompressed,
                                 onchain_data: asset.onchain_data.clone(),
                                 creators: asset.creators.clone(),
-                                royalty_amount: asset.royalty_amount,
-                                slot_updated: asset.slot_updated,
+                                royalty_amount: asset.royalty_amount.clone(),
                             }
                         } else {
                             asset.clone()
@@ -190,7 +181,7 @@ impl MplxAccsProcessor {
 
                                 let upd_res = self
                                     .rocks_db
-                                    .asset_updated(asset.slot_updated, asset.pubkey);
+                                    .asset_updated(asset.get_slot_updated(), asset.pubkey);
 
                                 if let Err(e) = upd_res {
                                     error!("Error while updating assets update idx: {}", e);
@@ -325,27 +316,37 @@ impl MplxAccsProcessor {
 
             models.asset_dynamic.push(AssetDynamicDetails {
                 pubkey: mint,
-                is_compressible: false,
-                is_compressed: false,
-                is_frozen: false,
-                supply,
+                is_compressible: Updated::new(metadata_info.slot, None, false),
+                is_compressed: Updated::new(metadata_info.slot, None, false),
+                is_frozen: Updated::new(metadata_info.slot, None, false),
+                supply: supply.map(|supply| Updated::new(metadata_info.slot, None, supply)),
                 seq: None,
-                is_burnt: false,
-                was_decompressed: false,
-                onchain_data: Some(chain_data.to_string()),
-                creators: data
-                    .clone()
-                    .creators
-                    .unwrap_or_default()
-                    .iter()
-                    .map(|creator| Creator {
-                        creator: creator.address,
-                        creator_verified: creator.verified,
-                        creator_share: creator.share,
-                    })
-                    .collect(),
-                royalty_amount: data.seller_fee_basis_points,
-                slot_updated: metadata_info.slot,
+                is_burnt: Updated::new(metadata_info.slot, None, false),
+                was_decompressed: Updated::new(metadata_info.slot, None, false),
+                onchain_data: Some(Updated::new(
+                    metadata_info.slot,
+                    None,
+                    chain_data.to_string(),
+                )),
+                creators: Updated::new(
+                    metadata_info.slot,
+                    None,
+                    data.clone()
+                        .creators
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|creator| Creator {
+                            creator: creator.address,
+                            creator_verified: creator.verified,
+                            creator_share: creator.share,
+                        })
+                        .collect(),
+                ),
+                royalty_amount: Updated::new(
+                    metadata_info.slot,
+                    None,
+                    data.seller_fee_basis_points,
+                ),
             });
 
             models.tasks.push(Task {

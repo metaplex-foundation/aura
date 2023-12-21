@@ -33,8 +33,9 @@ pub enum SpecificationAssetClass {
     IdentityNft,
 }
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Default)]
 pub enum OwnerType {
+    #[default]
     Unknown,
     Token,
     Single,
