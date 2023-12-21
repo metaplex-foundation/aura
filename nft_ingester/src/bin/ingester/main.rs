@@ -6,7 +6,10 @@ use log::{error, info};
 use tokio::task::JoinSet;
 
 use metrics_utils::utils::setup_metrics;
-use metrics_utils::{IngesterMetricsConfig, MetricState, MetricsTrait};
+use metrics_utils::{
+    ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
+    MetricState, MetricsTrait,
+};
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
@@ -47,9 +50,13 @@ pub async fn main() -> Result<(), IngesterError> {
         .background_task_runner_config
         .unwrap_or_default();
 
-    let mut metrics_state = MetricState::new(IngesterMetricsConfig::new());
+    let mut metrics_state = MetricState::new(
+        IngesterMetricsConfig::new(),
+        ApiMetricsConfig::new(),
+        JsonDownloaderMetricsConfig::new(),
+        BackfillerMetricsConfig::new(),
+    );
     metrics_state.register_metrics();
-    let metrics = Arc::new(metrics_state.metrics);
 
     if !config.get_is_snapshot() {
         let metrics_port = config.get_metrics_port(config.consumer_number)?;
@@ -112,7 +119,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let cloned_buffer = buffer.clone();
     let cloned_keep_running = keep_running.clone();
-    let cloned_metrics = metrics.clone();
+    let cloned_metrics = metrics_state.ingester_metrics.clone();
     tasks.spawn(tokio::spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
             cloned_buffer.debug().await;
@@ -135,7 +142,7 @@ pub async fn main() -> Result<(), IngesterError> {
     // start backup service
     let backup_cfg = backup_service::load_config()?;
     let mut backup_service = BackupService::new(rocks_storage.db.clone(), &backup_cfg)?;
-    let cloned_metrics = metrics.clone();
+    let cloned_metrics = metrics_state.ingester_metrics.clone();
 
     let cloned_keep_running = keep_running.clone();
     tasks.spawn(tokio::spawn(async move {
@@ -148,14 +155,14 @@ pub async fn main() -> Result<(), IngesterError> {
         buffer.clone(),
         db_client_v2.clone(),
         rocks_storage.clone(),
-        metrics.clone(),
+        metrics_state.ingester_metrics.clone(),
     );
 
     let token_accs_parser = TokenAccsProcessor::new(
         rocks_storage.clone(),
         db_client_v2.clone(),
         buffer.clone(),
-        metrics.clone(),
+        metrics_state.ingester_metrics.clone(),
         config.spl_buffer_size,
     );
 
@@ -191,7 +198,13 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
     tasks.spawn(tokio::spawn(async move {
-        match start_api(cloned_rocks_storage.clone(), cloned_keep_running).await {
+        match start_api(
+            cloned_rocks_storage.clone(),
+            cloned_keep_running,
+            metrics_state.api_metrics.clone(),
+        )
+        .await
+        {
             Ok(_) => {}
             Err(e) => {
                 error!("Start API: {}", e);
@@ -199,15 +212,22 @@ pub async fn main() -> Result<(), IngesterError> {
         };
     }));
 
-    let bubblegum_updates_processor =
-        BubblegumTxProcessor::new(rocks_storage.clone(), buffer.clone(), metrics.clone());
+    let bubblegum_updates_processor = BubblegumTxProcessor::new(
+        rocks_storage.clone(),
+        buffer.clone(),
+        metrics_state.ingester_metrics.clone(),
+    );
 
     let cloned_keep_running = keep_running.clone();
     tasks.spawn(tokio::spawn(async move {
         bubblegum_updates_processor.run(cloned_keep_running).await;
     }));
 
-    let json_downloader = JsonDownloader::new(rocks_storage.clone()).await;
+    let json_downloader = JsonDownloader::new(
+        rocks_storage.clone(),
+        metrics_state.json_downloader_metrics.clone(),
+    )
+    .await;
 
     let cloned_keep_running = keep_running.clone();
     tasks.spawn(tokio::spawn(async move {
@@ -222,7 +242,11 @@ pub async fn main() -> Result<(), IngesterError> {
             .unwrap();
 
         backfiller
-            .start_backfill(&mut tasks, keep_running.clone())
+            .start_backfill(
+                &mut tasks,
+                keep_running.clone(),
+                metrics_state.backfiller_metrics.clone(),
+            )
             .await
             .unwrap();
     }

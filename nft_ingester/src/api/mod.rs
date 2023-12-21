@@ -94,7 +94,7 @@ pub struct GetGrouping {
     pub group_value: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SearchAssets {
     // todo: negate and condition_type are not used in the current implementation
@@ -134,6 +134,54 @@ pub struct SearchAssets {
     pub name: Option<String>,
 }
 
+impl SearchAssets {
+    pub fn extract_some_fields(&self) -> String {
+        let mut result = String::new();
+        fn check_and_append<T>(current: &mut String, field: &Option<T>, field_name: &str) {
+            if field.is_some() {
+                current.push_str(&format!("{}_", field_name));
+            }
+        }
+
+        check_and_append(&mut result, &self.negate, "negate");
+        check_and_append(&mut result, &self.condition_type, "condition_type");
+        check_and_append(&mut result, &self.interface, "interface");
+        check_and_append(&mut result, &self.owner_address, "owner_address");
+        check_and_append(&mut result, &self.owner_type, "owner_type");
+        check_and_append(&mut result, &self.creator_address, "creator_address");
+        check_and_append(&mut result, &self.creator_verified, "creator_verified");
+        check_and_append(&mut result, &self.authority_address, "authority_address");
+        check_and_append(&mut result, &self.grouping, "grouping");
+        check_and_append(&mut result, &self.delegate, "delegate");
+        check_and_append(&mut result, &self.frozen, "frozen");
+        check_and_append(&mut result, &self.supply, "supply");
+        check_and_append(&mut result, &self.supply_mint, "supply_mint");
+        check_and_append(&mut result, &self.compressed, "compressed");
+        check_and_append(&mut result, &self.compressible, "compressible");
+        check_and_append(
+            &mut result,
+            &self.royalty_target_type,
+            "royalty_target_type",
+        );
+        check_and_append(&mut result, &self.royalty_target, "royalty_target");
+        check_and_append(&mut result, &self.royalty_amount, "royalty_amount");
+        check_and_append(&mut result, &self.burnt, "burnt");
+        check_and_append(&mut result, &self.sort_by, "sort_by");
+        check_and_append(&mut result, &self.limit, "limit");
+        check_and_append(&mut result, &self.page, "page");
+        check_and_append(&mut result, &self.before, "before");
+        check_and_append(&mut result, &self.after, "after");
+        check_and_append(&mut result, &self.json_uri, "json_uri");
+        check_and_append(&mut result, &self.cursor, "cursor");
+        check_and_append(&mut result, &self.name, "name");
+
+        if result.is_empty() {
+            return "no_filters".to_string();
+        }
+        result[..result.len() - 1].to_string()
+    }
+}
+
 impl TryFrom<SearchAssets> for digital_asset_types::dao::SearchAssetsQuery {
     type Error = DasApiError;
     fn try_from(search_assets: SearchAssets) -> Result<Self, Self::Error> {
@@ -169,5 +217,32 @@ impl TryFrom<SearchAssets> for digital_asset_types::dao::SearchAssetsQuery {
             specification_version: search_assets.interface.as_ref().map(|s| s.into()),
             specification_asset_class: search_assets.interface.as_ref().map(|s| s.into()).filter(|v| v != &digital_asset_types::dao::sea_orm_active_enums::SpecificationAssetClass::Unknown),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_some_field_names_with_default_structure() {
+        let search_assets = SearchAssets::default();
+
+        let extracted_fields = search_assets.extract_some_fields();
+
+        assert_eq!(extracted_fields, "no_filters".to_string());
+    }
+
+    #[test]
+    fn extract_some_field_names_with_partially_filled_structure() {
+        let search_assets = SearchAssets {
+            burnt: Some(false),
+            negate: Some(true),
+            ..Default::default()
+        };
+
+        let extracted_fields = search_assets.extract_some_fields();
+
+        assert_eq!(extracted_fields, "negate_burnt".to_string());
     }
 }
