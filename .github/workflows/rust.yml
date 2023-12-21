@@ -19,11 +19,11 @@ jobs:
         components: clippy, rustfmt
         override: true
 
-    - name: Run tests
+    - name: Check formatting
       uses: actions-rs/cargo@v1
       with:
-        command: test
-        args: --features integration_tests
+        command: fmt
+        args: --all -- --check
 
     - name: Lint with Clippy
       uses: actions-rs/clippy-check@v1
@@ -31,8 +31,8 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         args: -- -D warnings
 
-    - name: Check formatting
+    - name: Run tests
       uses: actions-rs/cargo@v1
       with:
-        command: fmt
-        args: --all -- --check
+        command: test
+        args: --features integration_tests
