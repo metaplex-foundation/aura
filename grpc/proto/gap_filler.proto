@@ -35,24 +35,44 @@ enum OwnerType {
     OWNER_TYPE_SINGLE = 2;
 }
 
-message AssetLeaf {
-    bytes pubkey = 1;
-    bytes tree_id = 2;
-    bytes leaf = 3;
-    uint64 nonce = 4;
-    bytes data_hash = 5;
-    bytes creator_hash = 6;
-    uint64 leaf_seq = 7;
-    uint64 slot_updated = 8;
+enum TokenStandard {
+    NON_FUNGIBLE = 0;
+    FUNGIBLE_ASSET = 1;
+    FUNGIBLE = 2;
+    NON_FUNGIBLE_EDITION = 3;
+    PROGRAMMABLE_NON_FUNGIBLE = 4;
+    PROGRAMMABLE_NON_FUNGIBLE_EDITION = 5;
+}
+
+enum UseMethod {
+    BURN = 0;
+    MULTIPLE = 1;
+    SINGLE = 2;
+}
+
+message Uses {
+    UseMethod use_method = 1;
+    uint64 remaining = 2;
+    uint64 total = 3;
 }
 
 message ChainDataV1 {
     string name = 1;
     string symbol = 2;
-    uint32 edition_nonce = 3;
+    uint32 edition_nonce = 3;  // Changed from u8 to uint32 as Protobuf does not have a u8 type
     bool primary_sale_happened = 4;
-    string token_standard = 5;
-    string uses = 6;
+    TokenStandard token_standard = 5;
+    Uses uses = 6;
+    uint64 slot_updated = 7;
+}
+
+message AssetLeaf {
+    bytes tree_id = 1;
+    bytes leaf = 2;
+    uint64 nonce = 3;
+    bytes data_hash = 4;
+    bytes creator_hash = 5;
+    uint64 leaf_seq = 6;
     uint64 slot_updated = 7;
 }
 
@@ -123,17 +143,13 @@ message DynamicEnumField {
     uint64 slot_updated = 2;
 }
 
-// SyncRequest and SyncResponse for data synchronization
-message SyncRequest {
-    int64 start_slot = 1;
-    int64 end_slot = 2;
-}
-
-message SyncResponse {
-    repeated AssetDetails assets = 1;
+// RangeRequest and AssetDetailsResponse for data synchronization
+message RangeRequest {
+    uint64 start_slot = 1;
+    uint64 end_slot = 2;
 }
 
 // Define the gRPC service
 service GapFillerService {
-    rpc SyncData(SyncRequest) returns (stream SyncResponse);
+    rpc GetAssetsUpdatedWithin(RangeRequest) returns (stream AssetDetails);
 }

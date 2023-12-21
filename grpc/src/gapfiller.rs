@@ -1,22 +1,12 @@
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct AssetLeaf {
-    #[prost(bytes = "vec", tag = "1")]
-    pub pubkey: ::prost::alloc::vec::Vec<u8>,
-    #[prost(bytes = "vec", tag = "2")]
-    pub tree_id: ::prost::alloc::vec::Vec<u8>,
-    #[prost(bytes = "vec", tag = "3")]
-    pub leaf: ::prost::alloc::vec::Vec<u8>,
-    #[prost(uint64, tag = "4")]
-    pub nonce: u64,
-    #[prost(bytes = "vec", tag = "5")]
-    pub data_hash: ::prost::alloc::vec::Vec<u8>,
-    #[prost(bytes = "vec", tag = "6")]
-    pub creator_hash: ::prost::alloc::vec::Vec<u8>,
-    #[prost(uint64, tag = "7")]
-    pub leaf_seq: u64,
-    #[prost(uint64, tag = "8")]
-    pub slot_updated: u64,
+pub struct Uses {
+    #[prost(enumeration = "UseMethod", tag = "1")]
+    pub use_method: i32,
+    #[prost(uint64, tag = "2")]
+    pub remaining: u64,
+    #[prost(uint64, tag = "3")]
+    pub total: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -25,14 +15,33 @@ pub struct ChainDataV1 {
     pub name: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub symbol: ::prost::alloc::string::String,
+    /// Changed from u8 to uint32 as Protobuf does not have a u8 type
     #[prost(uint32, tag = "3")]
     pub edition_nonce: u32,
     #[prost(bool, tag = "4")]
     pub primary_sale_happened: bool,
-    #[prost(string, tag = "5")]
-    pub token_standard: ::prost::alloc::string::String,
-    #[prost(string, tag = "6")]
-    pub uses: ::prost::alloc::string::String,
+    #[prost(enumeration = "TokenStandard", tag = "5")]
+    pub token_standard: i32,
+    #[prost(message, optional, tag = "6")]
+    pub uses: ::core::option::Option<Uses>,
+    #[prost(uint64, tag = "7")]
+    pub slot_updated: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AssetLeaf {
+    #[prost(bytes = "vec", tag = "1")]
+    pub tree_id: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "2")]
+    pub leaf: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint64, tag = "3")]
+    pub nonce: u64,
+    #[prost(bytes = "vec", tag = "4")]
+    pub data_hash: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "5")]
+    pub creator_hash: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint64, tag = "6")]
+    pub leaf_seq: u64,
     #[prost(uint64, tag = "7")]
     pub slot_updated: u64,
 }
@@ -148,20 +157,14 @@ pub struct DynamicEnumField {
     #[prost(uint64, tag = "2")]
     pub slot_updated: u64,
 }
-/// SyncRequest and SyncResponse for data synchronization
+/// RangeRequest and AssetDetailsResponse for data synchronization
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SyncRequest {
-    #[prost(int64, tag = "1")]
-    pub start_slot: i64,
-    #[prost(int64, tag = "2")]
-    pub end_slot: i64,
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SyncResponse {
-    #[prost(message, repeated, tag = "1")]
-    pub assets: ::prost::alloc::vec::Vec<AssetDetails>,
+pub struct RangeRequest {
+    #[prost(uint64, tag = "1")]
+    pub start_slot: u64,
+    #[prost(uint64, tag = "2")]
+    pub end_slot: u64,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -324,6 +327,77 @@ impl OwnerType {
         }
     }
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum TokenStandard {
+    NonFungible = 0,
+    FungibleAsset = 1,
+    Fungible = 2,
+    NonFungibleEdition = 3,
+    ProgrammableNonFungible = 4,
+    ProgrammableNonFungibleEdition = 5,
+}
+impl TokenStandard {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            TokenStandard::NonFungible => "NON_FUNGIBLE",
+            TokenStandard::FungibleAsset => "FUNGIBLE_ASSET",
+            TokenStandard::Fungible => "FUNGIBLE",
+            TokenStandard::NonFungibleEdition => "NON_FUNGIBLE_EDITION",
+            TokenStandard::ProgrammableNonFungible => "PROGRAMMABLE_NON_FUNGIBLE",
+            TokenStandard::ProgrammableNonFungibleEdition => {
+                "PROGRAMMABLE_NON_FUNGIBLE_EDITION"
+            }
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "NON_FUNGIBLE" => Some(Self::NonFungible),
+            "FUNGIBLE_ASSET" => Some(Self::FungibleAsset),
+            "FUNGIBLE" => Some(Self::Fungible),
+            "NON_FUNGIBLE_EDITION" => Some(Self::NonFungibleEdition),
+            "PROGRAMMABLE_NON_FUNGIBLE" => Some(Self::ProgrammableNonFungible),
+            "PROGRAMMABLE_NON_FUNGIBLE_EDITION" => {
+                Some(Self::ProgrammableNonFungibleEdition)
+            }
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum UseMethod {
+    Burn = 0,
+    Multiple = 1,
+    Single = 2,
+}
+impl UseMethod {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            UseMethod::Burn => "BURN",
+            UseMethod::Multiple => "MULTIPLE",
+            UseMethod::Single => "SINGLE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "BURN" => Some(Self::Burn),
+            "MULTIPLE" => Some(Self::Multiple),
+            "SINGLE" => Some(Self::Single),
+            _ => None,
+        }
+    }
+}
 /// Generated client implementations.
 pub mod gap_filler_service_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
@@ -410,11 +484,11 @@ pub mod gap_filler_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
-        pub async fn sync_data(
+        pub async fn get_assets_updated_within(
             &mut self,
-            request: impl tonic::IntoRequest<super::SyncRequest>,
+            request: impl tonic::IntoRequest<super::RangeRequest>,
         ) -> std::result::Result<
-            tonic::Response<tonic::codec::Streaming<super::SyncResponse>>,
+            tonic::Response<tonic::codec::Streaming<super::AssetDetails>>,
             tonic::Status,
         > {
             self.inner
@@ -428,11 +502,16 @@ pub mod gap_filler_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/gapfiller.GapFillerService/SyncData",
+                "/gapfiller.GapFillerService/GetAssetsUpdatedWithin",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("gapfiller.GapFillerService", "SyncData"));
+                .insert(
+                    GrpcMethod::new(
+                        "gapfiller.GapFillerService",
+                        "GetAssetsUpdatedWithin",
+                    ),
+                );
             self.inner.server_streaming(req, path, codec).await
         }
     }
@@ -444,16 +523,19 @@ pub mod gap_filler_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with GapFillerServiceServer.
     #[async_trait]
     pub trait GapFillerService: Send + Sync + 'static {
-        /// Server streaming response type for the SyncData method.
-        type SyncDataStream: tonic::codegen::tokio_stream::Stream<
-                Item = std::result::Result<super::SyncResponse, tonic::Status>,
+        /// Server streaming response type for the GetAssetsUpdatedWithin method.
+        type GetAssetsUpdatedWithinStream: tonic::codegen::tokio_stream::Stream<
+                Item = std::result::Result<super::AssetDetails, tonic::Status>,
             >
             + Send
             + 'static;
-        async fn sync_data(
+        async fn get_assets_updated_within(
             &self,
-            request: tonic::Request<super::SyncRequest>,
-        ) -> std::result::Result<tonic::Response<Self::SyncDataStream>, tonic::Status>;
+            request: tonic::Request<super::RangeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<Self::GetAssetsUpdatedWithinStream>,
+            tonic::Status,
+        >;
     }
     /// Define the gRPC service
     #[derive(Debug)]
@@ -535,26 +617,30 @@ pub mod gap_filler_service_server {
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             let inner = self.inner.clone();
             match req.uri().path() {
-                "/gapfiller.GapFillerService/SyncData" => {
+                "/gapfiller.GapFillerService/GetAssetsUpdatedWithin" => {
                     #[allow(non_camel_case_types)]
-                    struct SyncDataSvc<T: GapFillerService>(pub Arc<T>);
+                    struct GetAssetsUpdatedWithinSvc<T: GapFillerService>(pub Arc<T>);
                     impl<
                         T: GapFillerService,
-                    > tonic::server::ServerStreamingService<super::SyncRequest>
-                    for SyncDataSvc<T> {
-                        type Response = super::SyncResponse;
-                        type ResponseStream = T::SyncDataStream;
+                    > tonic::server::ServerStreamingService<super::RangeRequest>
+                    for GetAssetsUpdatedWithinSvc<T> {
+                        type Response = super::AssetDetails;
+                        type ResponseStream = T::GetAssetsUpdatedWithinStream;
                         type Future = BoxFuture<
                             tonic::Response<Self::ResponseStream>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::SyncRequest>,
+                            request: tonic::Request<super::RangeRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GapFillerService>::sync_data(&inner, request).await
+                                <T as GapFillerService>::get_assets_updated_within(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
                             };
                             Box::pin(fut)
                         }
@@ -566,7 +652,7 @@ pub mod gap_filler_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = SyncDataSvc(inner);
+                        let method = GetAssetsUpdatedWithinSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
