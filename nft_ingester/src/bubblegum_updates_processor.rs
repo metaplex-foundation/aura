@@ -9,16 +9,17 @@ use blockbuster::{
 };
 use chrono::Utc;
 use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard};
+use entities::models::Updated;
 use entities::models::{ChainDataV1, Creator, Uses};
 use log::{debug, error, info};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::state::leaf_schema::LeafSchema;
 use mpl_bubblegum::InstructionName;
 use plerkle_serialization::{Pubkey as FBPubkey, TransactionInfo};
+use rocks_db::asset::AssetOwner;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
 };
-use rocks_db::asset::{AssetOwner, Updated};
 use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -323,10 +324,10 @@ impl BubblegumTxProcessor {
 
                     let asset_owner = AssetOwner {
                         pubkey: id,
-                        owner: Updated::new(bundle.slot, owner),
-                        delegate: Updated::new(bundle.slot, Some(delegate)),
-                        owner_type: Updated::new(bundle.slot, OwnerType::Single),
-                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq)),
+                        owner: Updated::new(bundle.slot, Some(cl.seq), owner),
+                        delegate: Updated::new(bundle.slot, Some(cl.seq), Some(delegate)),
+                        owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
+                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
                     };
 
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(id, &asset_owner) {
@@ -361,52 +362,14 @@ impl BubblegumTxProcessor {
 
             self.rocks_client.asset_updated(bundle.slot, asset_id)?;
 
-            let asset_data = self.rocks_client.asset_dynamic_data.get(asset_id).unwrap();
-            if let Some(current_asset_data) = asset_data {
-                let mut new_asset_data = current_asset_data;
-                new_asset_data.is_burnt = Updated::new(bundle.slot, true);
-                new_asset_data.supply = Updated::new(bundle.slot, Some(0));
-                new_asset_data.seq = Updated::new(bundle.slot, Some(cl.seq));
-
-                if let Some(current_seq) = new_asset_data.seq.value {
-                    if current_seq < cl.seq {
-                        if let Err(e) = self
-                            .rocks_client
-                            .asset_dynamic_data
-                            .put(asset_id, &new_asset_data)
-                        {
-                            error!("Error while saving asset data for cNFT: {}", e);
-                        };
-                    }
-                } else if let Err(e) = self
-                    .rocks_client
-                    .asset_dynamic_data
-                    .put(asset_id, &new_asset_data)
-                {
-                    error!("Error while saving asset data for cNFT: {}", e);
-                };
-            } else {
-                let new_asset_data = AssetDynamicDetails {
-                    pubkey: asset_id,
-                    is_compressible: Updated::new(bundle.slot, false),
-                    is_compressed: Updated::new(bundle.slot, true),
-                    is_frozen: Updated::new(bundle.slot, false),
-                    supply: Updated::new(bundle.slot, Some(0)),
-                    seq: Updated::new(bundle.slot, Some(cl.seq)),
-                    is_burnt: Updated::new(bundle.slot, true),
-                    was_decompressed: Updated::new(bundle.slot, false),
-                    onchain_data: Updated::new(bundle.slot, None),
-                    creators: Updated::new(bundle.slot, vec![]),
-                    royalty_amount: Updated::new(bundle.slot, 0),
-                };
-                if let Err(e) = self
-                    .rocks_client
-                    .asset_dynamic_data
-                    .put(asset_id, &new_asset_data)
-                {
-                    error!("Error while saving asset data for cNFT: {}", e);
-                };
-            }
+            self.rocks_client.asset_dynamic_data.merge(asset_id, &AssetDynamicDetails {
+                pubkey: asset_id,
+                supply: Updated::new(bundle.slot, Some(cl.seq), Some(0)),
+                is_burnt: Updated::new(bundle.slot, Some(cl.seq), true),
+                seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
+                is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
+                ..Default::default()
+            })?;
         }
 
         Ok(())
@@ -449,10 +412,10 @@ impl BubblegumTxProcessor {
 
                     let asset_owner = AssetOwner {
                         pubkey: id,
-                        owner: Updated::new(bundle.slot, owner),
-                        delegate: Updated::new(bundle.slot, Some(delegate)),
-                        owner_type: Updated::new(bundle.slot, OwnerType::Single),
-                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq)),
+                        owner: Updated::new(bundle.slot, Some(cl.seq), owner),
+                        delegate: Updated::new(bundle.slot, Some(cl.seq), Some(delegate)),
+                        owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
+                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
                     };
 
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(id, &asset_owner) {
@@ -539,16 +502,21 @@ impl BubblegumTxProcessor {
 
                     let asset_dynamic_details = AssetDynamicDetails {
                         pubkey: id,
-                        is_compressible: Updated::new(bundle.slot, false),
-                        is_compressed: Updated::new(bundle.slot, true),
-                        is_frozen: Updated::new(bundle.slot, false),
-                        supply: Updated::new(bundle.slot, Some(1)),
-                        seq: Updated::new(bundle.slot, Some(cl.seq)),
-                        is_burnt: Updated::new(bundle.slot, false),
-                        was_decompressed: Updated::new(bundle.slot, false),
-                        onchain_data: Updated::new(bundle.slot, Some(chain_data.to_string())),
-                        creators: Updated::new(bundle.slot, creators),
-                        royalty_amount: Updated::new(bundle.slot, args.seller_fee_basis_points),
+                        is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
+                        supply: Updated::new(bundle.slot, Some(cl.seq), Some(1)),
+                        seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
+                        onchain_data: Updated::new(
+                            bundle.slot,
+                            Some(cl.seq),
+                            Some(chain_data.to_string()),
+                        ),
+                        creators: Updated::new(bundle.slot, Some(cl.seq), creators),
+                        royalty_amount: Updated::new(
+                            bundle.slot,
+                            Some(cl.seq),
+                            args.seller_fee_basis_points,
+                        ),
+                        ..Default::default()
                     };
 
                     if let Err(e) = self
@@ -575,10 +543,10 @@ impl BubblegumTxProcessor {
 
                     let asset_owner = AssetOwner {
                         pubkey: id,
-                        owner: Updated::new(bundle.slot, owner),
-                        delegate: Updated::new(bundle.slot, Some(delegate)),
-                        owner_type: Updated::new(bundle.slot, OwnerType::Single),
-                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq)),
+                        owner: Updated::new(bundle.slot, Some(cl.seq), owner),
+                        delegate: Updated::new(bundle.slot, Some(cl.seq), Some(delegate)),
+                        owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
+                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
                     };
 
                     if let Err(e) = self.rocks_client.asset_owner_data.put(id, &asset_owner) {
@@ -702,10 +670,10 @@ impl BubblegumTxProcessor {
 
                     let asset_owner = AssetOwner {
                         pubkey: id,
-                        owner: Updated::new(bundle.slot, owner),
-                        delegate: Updated::new(bundle.slot, Some(delegate)),
-                        owner_type: Updated::new(bundle.slot, OwnerType::Single),
-                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq)),
+                        owner: Updated::new(bundle.slot, Some(cl.seq), owner),
+                        delegate: Updated::new(bundle.slot, Some(cl.seq), Some(delegate)),
+                        owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
+                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
                     };
 
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(id, &asset_owner) {
@@ -749,41 +717,14 @@ impl BubblegumTxProcessor {
                         error!("Error while saving leaf for cNFT: {}", e);
                     };
 
-                    let asset_data = self.rocks_client.asset_dynamic_data.get(id).unwrap();
-                    if let Some(current_asset_data) = asset_data {
-                        let mut new_asset_data = current_asset_data;
-                        new_asset_data.seq = Updated::new(bundle.slot, None);
-                        new_asset_data.was_decompressed = Updated::new(bundle.slot, true);
-
-                        if let Err(e) = self
-                            .rocks_client
-                            .asset_dynamic_data
-                            .put(id, &new_asset_data)
-                        {
-                            error!("Error while saving asset data for cNFT: {}", e);
-                        };
-                    } else {
-                        let new_asset_data = AssetDynamicDetails {
-                            pubkey: id,
-                            is_compressible: Updated::new(bundle.slot, true),
-                            is_compressed: Updated::new(bundle.slot, false),
-                            is_frozen: Updated::new(bundle.slot, false),
-                            supply: Updated::new(bundle.slot, Some(1)),
-                            seq: Updated::new(bundle.slot, None),
-                            is_burnt: Updated::new(bundle.slot, false),
-                            was_decompressed: Updated::new(bundle.slot, true),
-                            onchain_data: Updated::new(bundle.slot, None),
-                            creators: Updated::new(bundle.slot, vec![]),
-                            royalty_amount: Updated::new(bundle.slot, 0),
-                        };
-                        if let Err(e) = self
-                            .rocks_client
-                            .asset_dynamic_data
-                            .put(id, &new_asset_data)
-                        {
-                            error!("Error while saving asset data for cNFT: {}", e);
-                        };
-                    }
+                    self.rocks_client.asset_dynamic_data.merge(id, &AssetDynamicDetails {
+                        pubkey: id,
+                        was_decompressed: Updated::new(bundle.slot, Some(cl.seq), true),
+                        seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
+                        is_compressible: Updated::new(bundle.slot, Some(cl.seq), true), // TODO
+                        supply: Updated::new(bundle.slot, Some(cl.seq), Some(1)),
+                        ..Default::default()
+                    })?;
                 }
             }
 
@@ -842,7 +783,7 @@ impl BubblegumTxProcessor {
                     let asset_data = self.rocks_client.asset_dynamic_data.get(id).unwrap();
                     if let Some(current_asset_data) = asset_data {
                         let mut new_asset_data = current_asset_data;
-                        new_asset_data.seq = Updated::new(bundle.slot, Some(cl.seq));
+                        new_asset_data.seq = Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq));
 
                         for crt in new_asset_data.creators.value.iter_mut() {
                             if crt.creator == *creator {
@@ -866,16 +807,16 @@ impl BubblegumTxProcessor {
 
                         let new_asset_data = AssetDynamicDetails {
                             pubkey: id,
-                            is_compressible: Updated::new(bundle.slot, false),
-                            is_compressed: Updated::new(bundle.slot, true),
-                            is_frozen: Updated::new(bundle.slot, false),
-                            supply: Updated::new(bundle.slot, Some(1)),
-                            seq: Updated::new(bundle.slot, Some(cl.seq)),
-                            is_burnt: Updated::new(bundle.slot, false),
-                            was_decompressed: Updated::new(bundle.slot, false),
-                            onchain_data: Updated::new(bundle.slot, None),
-                            creators: Updated::new(bundle.slot, vec![creator]),
-                            royalty_amount: Updated::new(bundle.slot, 0),
+                            is_compressible: Updated::new(bundle.slot, Some(cl.seq), false),
+                            is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
+                            is_frozen: Updated::new(bundle.slot, Some(cl.seq), false),
+                            supply: Updated::new(bundle.slot, Some(cl.seq), Some(1)),
+                            seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
+                            is_burnt: Updated::new(bundle.slot, Some(cl.seq), false),
+                            was_decompressed: Updated::new(bundle.slot, Some(cl.seq), false),
+                            onchain_data: Updated::new(bundle.slot, Some(cl.seq), None),
+                            creators: Updated::new(bundle.slot, Some(cl.seq), vec![creator]),
+                            royalty_amount: Updated::new(bundle.slot, Some(cl.seq), 0),
                         };
                         if let Err(e) = self
                             .rocks_client

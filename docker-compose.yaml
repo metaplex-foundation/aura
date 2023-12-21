@@ -1,14 +1,5 @@
 version: "3.9"
 services:
-  migrator:
-    depends_on:
-      - db
-    environment:
-      DATABASE_URL: postgres://solana:solana@db:5432/v1
-    build:
-      context: .
-      dockerfile: migrator.Dockerfile
-
   ingester-first-consumer:
     container_name: ingester-first-consumer
     restart: always

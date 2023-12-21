@@ -1,6 +1,7 @@
 use crate::error::IngesterError;
 use entities::models::CompleteAssetDetails;
-use rocks_db::asset::{AssetCollection, AssetLeaf, Updated};
+use entities::models::Updated;
+use rocks_db::asset::{AssetCollection, AssetLeaf};
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
 use serde_json::json;
 use std::sync::Arc;
@@ -24,16 +25,32 @@ pub fn insert_gaped_data(
         data.pubkey,
         &AssetDynamicDetails {
             pubkey: data.pubkey,
-            is_compressible: Updated::new(data.is_compressible.1, data.is_compressible.0),
-            is_compressed: Updated::new(data.is_compressed.1, data.is_compressed.0),
-            is_frozen: Updated::new(data.is_frozen.1, data.is_frozen.0),
-            supply: Updated::new(data.supply.1, data.supply.0),
-            seq: Updated::new(data.seq.1, data.seq.0),
-            is_burnt: Updated::new(data.is_burnt.1, data.is_burnt.0),
-            was_decompressed: Updated::new(data.was_decompressed.1, data.was_decompressed.0),
-            onchain_data: Updated::new(data.onchain_data.1, chain_data),
-            creators: Updated::new(data.creators.1, data.creators.0),
-            royalty_amount: Updated::new(data.royalty_amount.1, data.royalty_amount.0),
+            is_compressible: Updated::new(
+                data.is_compressible.1,
+                data.is_compressible.2,
+                data.is_compressible.0,
+            ),
+            is_compressed: Updated::new(
+                data.is_compressed.1,
+                data.is_compressed.2,
+                data.is_compressed.0,
+            ),
+            is_frozen: Updated::new(data.is_frozen.1, data.is_frozen.2, data.is_frozen.0),
+            supply: Updated::new(data.supply.1, data.supply.2, data.supply.0),
+            seq: Updated::new(data.seq.1, data.seq.2, data.seq.0),
+            is_burnt: Updated::new(data.is_burnt.1, data.is_burnt.2, data.is_burnt.0),
+            was_decompressed: Updated::new(
+                data.was_decompressed.1,
+                data.was_decompressed.2,
+                data.was_decompressed.0,
+            ),
+            onchain_data: Updated::new(data.onchain_data.1, data.onchain_data.2, chain_data),
+            creators: Updated::new(data.creators.1, data.creators.2, data.creators.0),
+            royalty_amount: Updated::new(
+                data.royalty_amount.1,
+                data.royalty_amount.2,
+                data.royalty_amount.0,
+            ),
         },
     )?;
 
@@ -77,10 +94,14 @@ pub fn insert_gaped_data(
         data.pubkey,
         &AssetOwner {
             pubkey: data.pubkey,
-            owner: Updated::new(data.owner.1, data.owner.0),
-            delegate: Updated::new(data.delegate.1, data.delegate.0),
-            owner_type: Updated::new(data.owner_type.1, data.owner_type.0),
-            owner_delegate_seq: Updated::new(data.owner_delegate_seq.1, data.owner_delegate_seq.0),
+            owner: Updated::new(data.owner.1, data.owner.2, data.owner.0),
+            delegate: Updated::new(data.delegate.1, data.delegate.2, data.delegate.0),
+            owner_type: Updated::new(data.owner_type.1, data.owner_type.2, data.owner_type.0),
+            owner_delegate_seq: Updated::new(
+                data.owner_delegate_seq.1,
+                data.owner_delegate_seq.2,
+                data.owner_delegate_seq.0,
+            ),
         },
     )?;
 

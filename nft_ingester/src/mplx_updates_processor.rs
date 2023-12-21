@@ -8,11 +8,10 @@ use serde_json::json;
 use tokio::time::Instant;
 
 use entities::enums::{RoyaltyTargetType, SpecificationAssetClass};
+use entities::models::Updated;
 use entities::models::{ChainDataV1, Creator, Uses};
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
-use rocks_db::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails, Updated,
-};
+use rocks_db::asset::{AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails};
 use rocks_db::columns::Mint;
 use rocks_db::Storage;
 
@@ -326,16 +325,17 @@ impl MplxAccsProcessor {
 
             models.asset_dynamic.push(AssetDynamicDetails {
                 pubkey: mint,
-                is_compressible: Updated::new(metadata_info.slot, false),
-                is_compressed: Updated::new(metadata_info.slot, false),
-                is_frozen: Updated::new(metadata_info.slot, false),
-                supply: Updated::new(metadata_info.slot, supply),
-                seq: Updated::new(metadata_info.slot, None),
-                is_burnt: Updated::new(metadata_info.slot, false),
-                was_decompressed: Updated::new(metadata_info.slot, false),
-                onchain_data: Updated::new(metadata_info.slot, Some(chain_data.to_string())),
+                is_compressible: Updated::new(metadata_info.slot, None, false),
+                is_compressed: Updated::new(metadata_info.slot, None, false),
+                is_frozen: Updated::new(metadata_info.slot, None, false),
+                supply: Updated::new(metadata_info.slot, None, supply),
+                seq: Updated::new(metadata_info.slot, None, None),
+                is_burnt: Updated::new(metadata_info.slot, None, false),
+                was_decompressed: Updated::new(metadata_info.slot, None, false),
+                onchain_data: Updated::new(metadata_info.slot, None, Some(chain_data.to_string())),
                 creators: Updated::new(
                     metadata_info.slot,
+                    None,
                     data.clone()
                         .creators
                         .unwrap_or_default()
@@ -347,7 +347,11 @@ impl MplxAccsProcessor {
                         })
                         .collect(),
                 ),
-                royalty_amount: Updated::new(metadata_info.slot, data.seller_fee_basis_points),
+                royalty_amount: Updated::new(
+                    metadata_info.slot,
+                    None,
+                    data.seller_fee_basis_points,
+                ),
             });
 
             models.tasks.push(Task {

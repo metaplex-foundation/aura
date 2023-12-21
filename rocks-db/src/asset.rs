@@ -1,5 +1,6 @@
 use bincode::{deserialize, serialize};
 use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
+use entities::models::Updated;
 use log::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
@@ -18,21 +19,6 @@ pub struct AssetStaticDetails {
     pub specification_asset_class: SpecificationAssetClass,
     pub royalty_target_type: RoyaltyTargetType,
     pub created_at: i64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
-pub struct Updated<T> {
-    pub slot_updated: u64,
-    pub value: T,
-}
-
-impl<T> Updated<T> {
-    pub fn new(slot_updated: u64, value: T) -> Self {
-        Self {
-            slot_updated,
-            value,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -92,6 +78,10 @@ pub struct AssetCollection {
 
 fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
     if new.slot_updated > current.slot_updated {
+        *current = new.clone();
+        return;
+    }
+    if new.seq.unwrap_or_default() > current.seq.unwrap_or_default() {
         *current = new.clone();
     }
 }

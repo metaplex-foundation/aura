@@ -49,25 +49,25 @@ pub struct CompleteAssetDetails {
     pub created_at: i64,
 
     // From AssetDynamicDetails as Tuples
-    pub is_compressible: (bool, u64),
-    pub is_compressed: (bool, u64),
-    pub is_frozen: (bool, u64),
-    pub supply: (Option<u64>, u64),
-    pub seq: (Option<u64>, u64),
-    pub is_burnt: (bool, u64),
-    pub was_decompressed: (bool, u64),
-    pub onchain_data: (Option<ChainDataV1>, u64), // Serialized ChainDataV1
-    pub creators: (Vec<Creator>, u64),
-    pub royalty_amount: (u16, u64),
+    pub is_compressible: (bool, u64, Option<u64>),
+    pub is_compressed: (bool, u64, Option<u64>),
+    pub is_frozen: (bool, u64, Option<u64>),
+    pub supply: (Option<u64>, u64, Option<u64>),
+    pub seq: (Option<u64>, u64, Option<u64>),
+    pub is_burnt: (bool, u64, Option<u64>),
+    pub was_decompressed: (bool, u64, Option<u64>),
+    pub onchain_data: (Option<ChainDataV1>, u64, Option<u64>), // Serialized ChainDataV1
+    pub creators: (Vec<Creator>, u64, Option<u64>),
+    pub royalty_amount: (u16, u64, Option<u64>),
 
     // From AssetAuthority as Tuple
-    pub authority: (Pubkey, u64),
+    pub authority: (Pubkey, u64, Option<u64>),
 
     // From AssetOwner as Tuples
-    pub owner: (Pubkey, u64),
-    pub delegate: (Option<Pubkey>, u64),
-    pub owner_type: (OwnerType, u64),
-    pub owner_delegate_seq: (Option<u64>, u64),
+    pub owner: (Pubkey, u64, Option<u64>),
+    pub delegate: (Option<Pubkey>, u64, Option<u64>),
+    pub owner_type: (OwnerType, u64, Option<u64>),
+    pub owner_delegate_seq: (Option<u64>, u64, Option<u64>),
 
     // Separate fields
     pub leaves: Vec<AssetLeaf>,
@@ -121,4 +121,21 @@ pub struct AssetCollection {
     pub is_collection_verified: bool,
     pub collection_seq: Option<u64>,
     pub slot_updated: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct Updated<T> {
+    pub slot_updated: u64,
+    pub seq: Option<u64>,
+    pub value: T,
+}
+
+impl<T> Updated<T> {
+    pub fn new(slot_updated: u64, seq: Option<u64>, value: T) -> Self {
+        Self {
+            slot_updated,
+            seq,
+            value,
+        }
+    }
 }

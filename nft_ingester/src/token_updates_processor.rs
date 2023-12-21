@@ -1,9 +1,10 @@
 use crate::buffer::Buffer;
 use crate::db_v2::DBClient;
 use entities::enums::OwnerType;
+use entities::models::Updated;
 use log::error;
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
-use rocks_db::asset::{AssetDynamicDetails, AssetOwner, Updated};
+use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
 use rocks_db::Storage;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -84,10 +85,10 @@ impl TokenAccsProcessor {
                     acc.mint,
                     &AssetOwner {
                         pubkey: acc.mint,
-                        owner: Updated::new(acc.slot_updated as u64, acc.owner),
-                        delegate: Updated::new(acc.slot_updated as u64, acc.delegate),
-                        owner_type: Updated::new(acc.slot_updated as u64, OwnerType::Token),
-                        owner_delegate_seq: Updated::new(acc.slot_updated as u64, None),
+                        owner: Updated::new(acc.slot_updated as u64, None, acc.owner),
+                        delegate: Updated::new(acc.slot_updated as u64, None, acc.delegate),
+                        owner_type: Updated::new(acc.slot_updated as u64, None, OwnerType::Token),
+                        owner_delegate_seq: Updated::new(acc.slot_updated as u64, None, None),
                     },
                 );
 
@@ -165,8 +166,16 @@ impl TokenAccsProcessor {
                     mint.pubkey,
                     &AssetDynamicDetails {
                         pubkey: mint.pubkey,
-                        supply: Updated::new(mint.slot_updated as u64, Some(mint.supply as u64)),
-                        seq: Updated::new(mint.slot_updated as u64, Some(mint.slot_updated as u64)),
+                        supply: Updated::new(
+                            mint.slot_updated as u64,
+                            None,
+                            Some(mint.supply as u64),
+                        ),
+                        seq: Updated::new(
+                            mint.slot_updated as u64,
+                            None,
+                            Some(mint.slot_updated as u64),
+                        ),
                         ..Default::default()
                     },
                 );
