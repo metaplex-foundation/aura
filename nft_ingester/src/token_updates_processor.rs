@@ -86,9 +86,11 @@ impl TokenAccsProcessor {
                     &AssetOwner {
                         pubkey: acc.mint,
                         owner: Updated::new(acc.slot_updated as u64, None, acc.owner),
-                        delegate: Updated::new(acc.slot_updated as u64, None, acc.delegate),
+                        delegate: acc
+                            .delegate
+                            .map(|delegate| Updated::new(acc.slot_updated as u64, None, delegate)),
                         owner_type: Updated::new(acc.slot_updated as u64, None, OwnerType::Token),
-                        owner_delegate_seq: Updated::new(acc.slot_updated as u64, None, None),
+                        owner_delegate_seq: None,
                     },
                 );
 
@@ -166,16 +168,16 @@ impl TokenAccsProcessor {
                     mint.pubkey,
                     &AssetDynamicDetails {
                         pubkey: mint.pubkey,
-                        supply: Updated::new(
+                        supply: Some(Updated::new(
                             mint.slot_updated as u64,
                             None,
-                            Some(mint.supply as u64),
-                        ),
-                        seq: Updated::new(
+                            mint.supply as u64,
+                        )),
+                        seq: Some(Updated::new(
                             mint.slot_updated as u64,
                             None,
-                            Some(mint.slot_updated as u64),
-                        ),
+                            mint.slot_updated as u64,
+                        )),
                         ..Default::default()
                     },
                 );

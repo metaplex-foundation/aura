@@ -363,8 +363,8 @@ fn convert_rocks_offchain_data(
     let ch_data: serde_json::Value = serde_json::from_str(
         dynamic_data
             .onchain_data
-            .value
             .clone()
+            .map(|onchain_data| onchain_data.value)
             .unwrap_or_default()
             .as_ref(),
     )
@@ -421,17 +421,23 @@ fn convert_rocks_asset_model(
         specification_asset_class: Some(static_data.specification_asset_class.into()),
         owner: Some(owner.owner.value.to_bytes().to_vec()),
         owner_type: owner.owner_type.value.into(),
-        delegate: owner.delegate.value.map(|pk| pk.to_bytes().to_vec()),
+        delegate: owner
+            .delegate
+            .clone()
+            .map(|pk| pk.value.to_bytes().to_vec()),
         frozen: dynamic_data.is_frozen.value,
         supply: dynamic_data
             .supply
-            .value
-            .map(|supply| supply as i64)
+            .clone()
+            .map(|supply| supply.value as i64)
             .unwrap_or_default(),
         supply_mint: Some(static_data.pubkey.to_bytes().to_vec()),
         compressed: dynamic_data.is_compressed.value,
         compressible: dynamic_data.is_compressible.value,
-        seq: dynamic_data.seq.value.and_then(|u| u.try_into().ok()),
+        seq: dynamic_data
+            .seq
+            .clone()
+            .and_then(|u| u.value.try_into().ok()),
         tree_id,
         leaf: leaf.leaf.clone(),
         nonce: leaf.nonce.map(|nonce| nonce as i64),
@@ -444,7 +450,7 @@ fn convert_rocks_asset_model(
         slot_updated: Some(slot_updated as i64),
         data_hash: leaf.data_hash.map(|h| h.to_string()),
         creator_hash: leaf.creator_hash.map(|h| h.to_string()),
-        owner_delegate_seq: owner.owner_delegate_seq.value.map(|seq| seq as i64),
+        owner_delegate_seq: owner.owner_delegate_seq.clone().map(|seq| seq.value as i64),
         was_decompressed: dynamic_data.was_decompressed.value,
         leaf_seq: leaf.leaf_seq.map(|seq| seq as i64),
     })
@@ -560,7 +566,7 @@ fn convert_rocks_creators_model(
             creator: creator.creator.to_bytes().to_vec(),
             share: creator.creator_share as i32,
             verified: creator.creator_verified,
-            seq: dynamic_data.seq.value.map(|seq| seq as i64),
+            seq: dynamic_data.seq.clone().map(|seq| seq.value as i64),
             slot_updated: Some(dynamic_data.get_slot_updated() as i64),
             position: position as i16,
         })

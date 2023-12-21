@@ -328,11 +328,15 @@ impl MplxAccsProcessor {
                 is_compressible: Updated::new(metadata_info.slot, None, false),
                 is_compressed: Updated::new(metadata_info.slot, None, false),
                 is_frozen: Updated::new(metadata_info.slot, None, false),
-                supply: Updated::new(metadata_info.slot, None, supply),
-                seq: Updated::new(metadata_info.slot, None, None),
+                supply: supply.map(|supply| Updated::new(metadata_info.slot, None, supply)),
+                seq: None,
                 is_burnt: Updated::new(metadata_info.slot, None, false),
                 was_decompressed: Updated::new(metadata_info.slot, None, false),
-                onchain_data: Updated::new(metadata_info.slot, None, Some(chain_data.to_string())),
+                onchain_data: Some(Updated::new(
+                    metadata_info.slot,
+                    None,
+                    chain_data.to_string(),
+                )),
                 creators: Updated::new(
                     metadata_info.slot,
                     None,

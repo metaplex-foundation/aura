@@ -27,11 +27,11 @@ pub struct AssetDynamicDetails {
     pub is_compressible: Updated<bool>,
     pub is_compressed: Updated<bool>,
     pub is_frozen: Updated<bool>,
-    pub supply: Updated<Option<u64>>,
-    pub seq: Updated<Option<u64>>,
+    pub supply: Option<Updated<u64>>,
+    pub seq: Option<Updated<u64>>,
     pub is_burnt: Updated<bool>,
     pub was_decompressed: Updated<bool>,
-    pub onchain_data: Updated<Option<String>>,
+    pub onchain_data: Option<Updated<String>>,
     pub creators: Updated<Vec<entities::models::Creator>>,
     pub royalty_amount: Updated<u16>,
 }
@@ -47,9 +47,9 @@ pub struct AssetAuthority {
 pub struct AssetOwner {
     pub pubkey: Pubkey,
     pub owner: Updated<Pubkey>,
-    pub delegate: Updated<Option<Pubkey>>,
+    pub delegate: Option<Updated<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
-    pub owner_delegate_seq: Updated<Option<u64>>,
+    pub owner_delegate_seq: Option<Updated<u64>>,
 }
 
 /// Leaf information about compressed asset
@@ -82,6 +82,23 @@ fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
         return;
     }
     if new.seq.unwrap_or_default() > current.seq.unwrap_or_default() {
+        *current = new.clone();
+    }
+}
+
+fn update_optional_field<T: Clone + Default>(
+    current: &mut Option<Updated<T>>,
+    new: &Option<Updated<T>>,
+) {
+    if new.clone().unwrap_or_default().slot_updated
+        > current.clone().unwrap_or_default().slot_updated
+    {
+        *current = new.clone();
+        return;
+    }
+    if new.clone().unwrap_or_default().seq.unwrap_or_default()
+        > current.clone().unwrap_or_default().seq.unwrap_or_default()
+    {
         *current = new.clone();
     }
 }
@@ -182,13 +199,13 @@ impl AssetDynamicDetails {
                         update_field(&mut current_val.is_compressible, &new_val.is_compressible);
                         update_field(&mut current_val.is_compressed, &new_val.is_compressed);
                         update_field(&mut current_val.is_frozen, &new_val.is_frozen);
-                        update_field(&mut current_val.supply, &new_val.supply);
-                        update_field(&mut current_val.seq, &new_val.seq);
+                        update_optional_field(&mut current_val.supply, &new_val.supply);
+                        update_optional_field(&mut current_val.seq, &new_val.seq);
                         update_field(&mut current_val.is_burnt, &new_val.is_burnt);
                         update_field(&mut current_val.creators, &new_val.creators);
                         update_field(&mut current_val.royalty_amount, &new_val.royalty_amount);
                         update_field(&mut current_val.was_decompressed, &new_val.was_decompressed);
-                        update_field(&mut current_val.onchain_data, &new_val.onchain_data);
+                        update_optional_field(&mut current_val.onchain_data, &new_val.onchain_data);
 
                         current_val
                     } else {
@@ -209,11 +226,13 @@ impl AssetDynamicDetails {
             self.is_compressible.slot_updated,
             self.is_compressed.slot_updated,
             self.is_frozen.slot_updated,
-            self.supply.slot_updated,
-            self.seq.slot_updated,
+            self.supply.clone().map_or(0, |supply| supply.slot_updated),
+            self.seq.clone().map_or(0, |seq| seq.slot_updated),
             self.is_burnt.slot_updated,
             self.was_decompressed.slot_updated,
-            self.onchain_data.slot_updated,
+            self.onchain_data
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
             self.creators.slot_updated,
             self.royalty_amount.slot_updated,
         ]
@@ -299,11 +318,11 @@ impl AssetOwner {
                     result = Some(if let Some(mut current_val) = result {
                         update_field(&mut current_val.owner_type, &new_val.owner_type);
                         update_field(&mut current_val.owner, &new_val.owner);
-                        update_field(
+                        update_optional_field(
                             &mut current_val.owner_delegate_seq,
                             &new_val.owner_delegate_seq,
                         );
-                        update_field(&mut current_val.delegate, &new_val.delegate);
+                        update_optional_field(&mut current_val.delegate, &new_val.delegate);
 
                         current_val
                     } else {
@@ -322,9 +341,13 @@ impl AssetOwner {
     pub fn get_slot_updated(&self) -> u64 {
         [
             self.owner.slot_updated,
-            self.delegate.slot_updated,
+            self.delegate
+                .clone()
+                .map_or(0, |delegate| delegate.slot_updated),
             self.owner_type.slot_updated,
-            self.owner_delegate_seq.slot_updated,
+            self.owner_delegate_seq
+                .clone()
+                .map_or(0, |owner_delegate_seq| owner_delegate_seq.slot_updated),
         ]
         .into_iter()
         .max()

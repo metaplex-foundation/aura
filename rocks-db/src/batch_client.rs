@@ -106,7 +106,7 @@ impl AssetIndexReader for Storage {
                 existed_index.is_compressible = dynamic_info.is_compressible.value;
                 existed_index.is_compressed = dynamic_info.is_compressed.value;
                 existed_index.is_frozen = dynamic_info.is_frozen.value;
-                existed_index.supply = dynamic_info.supply.value.map_or(0, |s| s as i64);
+                existed_index.supply = dynamic_info.supply.clone().map_or(0, |s| s.value as i64);
                 existed_index.is_burnt = dynamic_info.is_burnt.value;
                 existed_index.creators = dynamic_info.creators.clone().value;
                 existed_index.royalty_amount = dynamic_info.royalty_amount.value as i64;
@@ -117,7 +117,7 @@ impl AssetIndexReader for Storage {
                     is_compressible: dynamic_info.is_compressible.value,
                     is_compressed: dynamic_info.is_compressed.value,
                     is_frozen: dynamic_info.is_frozen.value,
-                    supply: dynamic_info.supply.value.map_or(0, |s| s as i64),
+                    supply: dynamic_info.supply.clone().map_or(0, |s| s.value as i64),
                     is_burnt: dynamic_info.is_burnt.value,
                     creators: dynamic_info.creators.clone().value,
                     royalty_amount: dynamic_info.royalty_amount.value as i64,
@@ -150,7 +150,7 @@ impl AssetIndexReader for Storage {
         for data in asset_owner_details.iter().flatten() {
             if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
                 existed_index.owner = Some(data.owner.value);
-                existed_index.delegate = data.delegate.value;
+                existed_index.delegate = data.delegate.clone().map(|delegate| delegate.value);
                 existed_index.owner_type = Some(data.owner_type.value);
                 if data.get_slot_updated() as i64 > existed_index.slot_updated {
                     existed_index.slot_updated = data.get_slot_updated() as i64;
@@ -159,7 +159,7 @@ impl AssetIndexReader for Storage {
                 let asset_index = AssetIndex {
                     pubkey: data.pubkey,
                     owner: Some(data.owner.value),
-                    delegate: data.delegate.value,
+                    delegate: data.delegate.clone().map(|delegate| delegate.value),
                     owner_type: Some(data.owner_type.value),
                     slot_updated: data.get_slot_updated() as i64,
                     ..Default::default()

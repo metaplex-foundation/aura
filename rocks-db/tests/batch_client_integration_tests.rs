@@ -373,16 +373,16 @@ fn test_process_asset_updates_batch_iteration_results() {
 fn create_test_dynamic_data(pubkey: Pubkey, slot: u64) -> AssetDynamicDetails {
     AssetDynamicDetails {
         pubkey,
-        is_compressible: Updated::new(slot, None,false),
-        is_compressed: Updated::new(slot, None,false),
-        is_frozen: Updated::new(slot, None,false),
-        supply: Updated::new(slot, None,None),
-        seq: Updated::new(slot, None,None),
-        is_burnt: Updated::new(slot, None,false),
-        was_decompressed: Updated::new(slot, None,false),
-        onchain_data: Updated::new(slot, None,None),
-        creators: Updated::new(slot, None,Vec::new()),
-        royalty_amount: Updated::new(slot, None,0),
+        is_compressible: Updated::new(slot, None, false),
+        is_compressed: Updated::new(slot, None, false),
+        is_frozen: Updated::new(slot, None, false),
+        supply: None,
+        seq: None,
+        is_burnt: Updated::new(slot, None, false),
+        was_decompressed: Updated::new(slot, None, false),
+        onchain_data: None,
+        creators: Updated::new(slot, None, Vec::new()),
+        royalty_amount: Updated::new(slot, None, 0),
     }
 }
 
@@ -400,8 +400,9 @@ fn test_multiple_slot_updates() {
 
     let new_data = AssetDynamicDetails {
         pubkey: pk,
-        is_compressible: Updated::new(10, None,true),
-        is_compressed: Updated::new(0,None, true),
+        is_compressible: Updated::new(10, None, true),
+        is_compressed: Updated::new(0, None, true),
+        supply: Some(Updated::new(0, None, 5)),
         ..Default::default()
     };
     storage
@@ -410,14 +411,15 @@ fn test_multiple_slot_updates() {
         .unwrap();
 
     let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
-    assert_eq!(selected_data.is_compressible, Updated::new(10, None,true));
-    assert_eq!(selected_data.is_compressed, Updated::new(0, None,false)); // slot in new_data not greater than slot in start data, so that field must not change
+    assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
+    assert_eq!(selected_data.is_compressed, Updated::new(0, None, false)); // slot in new_data not greater than slot in start data, so that field must not change
+    assert_eq!(selected_data.supply, None); // slot in new_data not greater than slot in start data, so that field must not change
 
     let new_data = AssetDynamicDetails {
         pubkey: pk,
-        is_compressible: Updated::new(5, None,false),
-        is_compressed: Updated::new(0, None,true),
-        supply: Updated::new(3, None,Some(5)),
+        is_compressible: Updated::new(5, None, false),
+        is_compressed: Updated::new(0, None, true),
+        supply: Some(Updated::new(3, None, 5)),
         ..Default::default()
     };
     storage
@@ -426,14 +428,13 @@ fn test_multiple_slot_updates() {
         .unwrap();
 
     let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
-    assert_eq!(selected_data.is_compressible, Updated::new(10, None,true));
-    assert_eq!(selected_data.is_compressed, Updated::new(0, None,false));
-    assert_eq!(selected_data.supply, Updated::new(3, None,Some(5)));
-
+    assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
+    assert_eq!(selected_data.is_compressed, Updated::new(0, None, false));
+    assert_eq!(selected_data.supply, Some(Updated::new(3, None, 5)));
 
     let new_data = AssetDynamicDetails {
         pubkey: pk,
-        is_compressible: Updated::new(5, Some(1),false),
+        is_compressible: Updated::new(5, Some(1), false),
         ..Default::default()
     };
     storage
@@ -442,5 +443,8 @@ fn test_multiple_slot_updates() {
         .unwrap();
 
     let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
-    assert_eq!(selected_data.is_compressible, Updated::new(5, Some(1),false));
+    assert_eq!(
+        selected_data.is_compressible,
+        Updated::new(5, Some(1), false)
+    );
 }

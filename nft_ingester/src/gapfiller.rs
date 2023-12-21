@@ -36,15 +36,23 @@ pub fn insert_gaped_data(
                 data.is_compressed.0,
             ),
             is_frozen: Updated::new(data.is_frozen.1, data.is_frozen.2, data.is_frozen.0),
-            supply: Updated::new(data.supply.1, data.supply.2, data.supply.0),
-            seq: Updated::new(data.seq.1, data.seq.2, data.seq.0),
+            supply: data
+                .supply
+                .0
+                .map(|supply| Updated::new(data.supply.1, data.supply.2, supply)),
+            seq: data
+                .seq
+                .0
+                .map(|seq| Updated::new(data.seq.1, data.seq.2, seq)),
             is_burnt: Updated::new(data.is_burnt.1, data.is_burnt.2, data.is_burnt.0),
             was_decompressed: Updated::new(
                 data.was_decompressed.1,
                 data.was_decompressed.2,
                 data.was_decompressed.0,
             ),
-            onchain_data: Updated::new(data.onchain_data.1, data.onchain_data.2, chain_data),
+            onchain_data: chain_data.map(|chain_data| {
+                Updated::new(data.onchain_data.1, data.onchain_data.2, chain_data)
+            }),
             creators: Updated::new(data.creators.1, data.creators.2, data.creators.0),
             royalty_amount: Updated::new(
                 data.royalty_amount.1,
@@ -95,13 +103,18 @@ pub fn insert_gaped_data(
         &AssetOwner {
             pubkey: data.pubkey,
             owner: Updated::new(data.owner.1, data.owner.2, data.owner.0),
-            delegate: Updated::new(data.delegate.1, data.delegate.2, data.delegate.0),
+            delegate: data
+                .delegate
+                .0
+                .map(|delegate| Updated::new(data.delegate.1, data.delegate.2, delegate)),
             owner_type: Updated::new(data.owner_type.1, data.owner_type.2, data.owner_type.0),
-            owner_delegate_seq: Updated::new(
-                data.owner_delegate_seq.1,
-                data.owner_delegate_seq.2,
-                data.owner_delegate_seq.0,
-            ),
+            owner_delegate_seq: data.owner_delegate_seq.0.map(|owner_delegate_seq| {
+                Updated::new(
+                    data.owner_delegate_seq.1,
+                    data.owner_delegate_seq.2,
+                    owner_delegate_seq,
+                )
+            }),
         },
     )?;
 
