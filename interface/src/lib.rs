@@ -11,7 +11,7 @@ pub type AssetDetailsStream =
 
 #[mockall::automock]
 #[async_trait]
-pub trait AssetDetailsStreamer: Send + Sync {   
+pub trait AssetDetailsStreamer: Send + Sync {
     async fn get_asset_details_stream_in_range(
         &self,
         start_slot: u64,

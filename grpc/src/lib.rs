@@ -1,3 +1,3 @@
 pub mod gapfiller;
-pub mod service;
 mod mapper;
+pub mod service;

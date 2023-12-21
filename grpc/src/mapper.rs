@@ -1,9 +1,10 @@
 use crate::gapfiller::{
-    AssetDetails, AssetLeaf, Creator, DynamicBoolField, DynamicBytesField, DynamicEnumField,
-    DynamicUint32Field, DynamicUint64Field, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
-    SpecificationVersions, AssetCollection, ChainDataV1, TokenStandard, UseMethod, Uses,
+    AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, Creator, DynamicBoolField,
+    DynamicBytesField, DynamicCreatorsField, DynamicEnumField, DynamicUint32Field,
+    DynamicUint64Field, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
+    SpecificationVersions, TokenStandard, UseMethod, Uses,
 };
-use entities::models::CompleteAssetDetails;
+use entities::models::{CompleteAssetDetails, Updated};
 use solana_sdk::pubkey::Pubkey;
 impl From<CompleteAssetDetails> for AssetDetails {
     fn from(value: CompleteAssetDetails) -> Self {
@@ -22,65 +23,66 @@ impl From<CompleteAssetDetails> for AssetDetails {
             seq: value.seq.map(|v| v.into()),
             is_burnt: Some(value.is_burnt.into()),
             was_decompressed: Some(value.was_decompressed.into()),
-            creators: value.creators.iter().map(|c| Creator::from(c)).collect(),
+            creators: Some(value.creators.into()),
             royalty_amount: Some(value.royalty_amount.into()),
             authority: Some(value.authority.into()),
             owner: Some(value.owner.into()),
             delegate: value.delegate.map(|v| v.into()),
             owner_type: Some(value.owner_type.into()),
             owner_delegate_seq: value.owner_delegate_seq.map(|v| v.into()),
-            leaves: value
-                .leaves
-                .iter()
-                .map(|leaf| AssetLeaf::from(leaf))
-                .collect(),
-            collection: value.collection.map(|v| (&v).into()),
+            leaves: value.leaves.iter().map(AssetLeaf::from).collect(),
+            collection: value.collection.map(|v| v.into()),
             chain_data: value.onchain_data.map(|v| v.into()),
         }
     }
 }
 
-impl From<(bool, u64)> for DynamicBoolField {
-    fn from(value: (bool, u64)) -> Self {
+impl From<Updated<bool>> for DynamicBoolField {
+    fn from(value: Updated<bool>) -> Self {
         Self {
-            value: value.0,
-            slot_updated: value.1,
+            value: value.value,
+            slot_updated: value.slot_updated,
+            seq_updated: value.seq,
         }
     }
 }
 
-impl From<(u64, u64)> for DynamicUint64Field {
-    fn from(value: (u64, u64)) -> Self {
+impl From<Updated<u64>> for DynamicUint64Field {
+    fn from(value: Updated<u64>) -> Self {
         Self {
-            value: value.0,
-            slot_updated: value.1,
+            value: value.value,
+            slot_updated: value.slot_updated,
+            seq_updated: value.seq,
         }
     }
 }
 
-impl From<(u16, u64)> for DynamicUint32Field {
-    fn from(value: (u16, u64)) -> Self {
+impl From<Updated<u16>> for DynamicUint32Field {
+    fn from(value: Updated<u16>) -> Self {
         Self {
-            value: value.0 as u32,
-            slot_updated: value.1,
+            value: value.value as u32,
+            slot_updated: value.slot_updated,
+            seq_updated: value.seq,
         }
     }
 }
 
-impl From<(Pubkey, u64)> for DynamicBytesField {
-    fn from(value: (Pubkey, u64)) -> Self {
+impl From<Updated<Pubkey>> for DynamicBytesField {
+    fn from(value: Updated<Pubkey>) -> Self {
         Self {
-            value: value.0.to_bytes().to_vec(),
-            slot_updated: value.1,
+            value: value.value.to_bytes().to_vec(),
+            slot_updated: value.slot_updated,
+            seq_updated: value.seq,
         }
     }
 }
 
-impl From<(entities::enums::OwnerType, u64)> for DynamicEnumField {
-    fn from(value: (entities::enums::OwnerType, u64)) -> Self {
+impl From<Updated<entities::enums::OwnerType>> for DynamicEnumField {
+    fn from(value: Updated<entities::enums::OwnerType>) -> Self {
         Self {
-            value: OwnerType::from(value.0).into(),
-            slot_updated: value.1,
+            value: OwnerType::from(value.value).into(),
+            slot_updated: value.slot_updated,
+            seq_updated: value.seq,
         }
     }
 }
@@ -94,49 +96,58 @@ impl From<&entities::models::Creator> for Creator {
         }
     }
 }
-
-impl From<&entities::models::AssetLeaf> for AssetLeaf {
-    fn from(value: &entities::models::AssetLeaf) -> Self {
+impl From<Updated<Vec<entities::models::Creator>>> for DynamicCreatorsField {
+    fn from(value: Updated<Vec<entities::models::Creator>>) -> Self {
         Self {
-            tree_id: value.tree_id.to_bytes().to_vec(),
-            leaf: value.leaf.clone().unwrap_or_default(),
-            nonce: value.nonce.unwrap_or_default(),
-            data_hash: value
-                .data_hash
-                .map(|h| h.to_bytes().to_vec())
-                .unwrap_or_default(),
-            creator_hash: value
-                .creator_hash
-                .map(|h| h.to_bytes().to_vec())
-                .unwrap_or_default(),
-            leaf_seq: value.leaf_seq.unwrap_or_default(),
+            creators: value.value.iter().map(|v| v.into()).collect(),
             slot_updated: value.slot_updated,
+            seq_updated: value.seq,
         }
     }
 }
 
-impl From<&entities::models::AssetCollection> for AssetCollection {
-    fn from(value: &entities::models::AssetCollection) -> Self {
+impl From<&Updated<entities::models::AssetLeaf>> for AssetLeaf {
+    fn from(value: &Updated<entities::models::AssetLeaf>) -> Self {
         Self {
-            collection: value.collection.to_bytes().to_vec(),
-            is_collection_verified: value.is_collection_verified,
-            collection_seq: value.collection_seq.unwrap_or_default(),
+            tree_id: value.value.tree_id.to_bytes().to_vec(),
+            leaf: value.value.leaf.clone(),
+            nonce: value.value.nonce,
+            data_hash: value.value.data_hash.map(|h| h.to_bytes().to_vec()),
+            creator_hash: value.value.creator_hash.map(|h| h.to_bytes().to_vec()),
+            leaf_seq: value.value.leaf_seq,
             slot_updated: value.slot_updated,
+            seq_updated: value.seq,
         }
     }
 }
 
-impl From<(entities::models::ChainDataV1, u64)> for ChainDataV1 {
-    fn from(value: (entities::models::ChainDataV1, u64)) -> Self {
-        let (value, slot_updated) = value;
+impl From<Updated<entities::models::AssetCollection>> for AssetCollection {
+    fn from(value: Updated<entities::models::AssetCollection>) -> Self {
         Self {
-            name: value.name.clone(),
-            symbol: value.symbol.clone(),
-            edition_nonce: value.edition_nonce.unwrap_or_default() as u32,
-            primary_sale_happened: value.primary_sale_happened,
-            token_standard: value.token_standard.map(|v| TokenStandard::from(v).into()).unwrap_or_default(),
-            uses: value.uses.map(|v| v.into()),
-            slot_updated:slot_updated,
+            collection: value.value.collection.to_bytes().to_vec(),
+            is_collection_verified: value.value.is_collection_verified,
+            collection_seq: value.value.collection_seq,
+            slot_updated: value.slot_updated,
+            seq_updated: value.seq,
+        }
+    }
+}
+
+impl From<Updated<entities::models::ChainDataV1>> for ChainDataV1 {
+    fn from(value: Updated<entities::models::ChainDataV1>) -> Self {
+        Self {
+            name: value.value.name.clone(),
+            symbol: value.value.symbol.clone(),
+            edition_nonce: value.value.edition_nonce.map(|v| v as u32),
+            primary_sale_happened: value.value.primary_sale_happened,
+            token_standard: value
+                .value
+                .token_standard
+                .map(|v| TokenStandard::from(v).into())
+                .unwrap_or_default(),
+            uses: value.value.uses.map(|v| v.into()),
+            slot_updated: value.slot_updated,
+            seq_updated: value.seq,
         }
     }
 }
