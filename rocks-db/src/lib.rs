@@ -14,6 +14,7 @@ use crate::errors::StorageError;
 
 pub mod asset;
 mod asset_client;
+pub mod asset_streaming_client;
 pub mod backup_service;
 mod batch_client;
 pub mod bubblegum_slots;
@@ -23,7 +24,6 @@ pub mod errors;
 pub mod key_encoders;
 pub mod offchain_data;
 pub mod storage_traits;
-pub mod asset_streaming_client;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
