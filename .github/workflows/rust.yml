@@ -11,6 +11,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
     - name: Install Rust specific version
       uses: actions-rs/toolchain@v1
       with:
