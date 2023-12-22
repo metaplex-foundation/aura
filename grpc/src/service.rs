@@ -129,40 +129,4 @@ mod tests {
             Err(status) => assert_eq!(status.code(), tonic::Code::InvalidArgument),
         }
     }
-
-    // #[tokio::test]
-    // async fn test_get_assets_updated_within_with_assets() {
-    //     let mut mock = MockAssetDetailsStreamer::new();
-
-    //     // Expect the method to be called and return a stream with asset details
-    //     mock.expect_get_asset_details_stream_in_range()
-    //         .with(eq(0), eq(10))
-    //         .times(1)
-    //         .returning(|_start_slot, _end_slot| {
-    //             let (tx, rx) = tokio::sync::mpsc::channel(10);
-
-    //             // Simulate sending some asset details
-    //             tokio::spawn(async move {
-    //                 let asset_details = CompleteAssetDetails { /* ... */ };
-    //                 let _ = tx.send(Ok(asset_details)).await;
-    //             });
-
-    //             Ok(Box::pin(ReceiverStream::new(rx)) as AssetDetailsStream)
-    //         });
-
-    //     let service = PeerGapFillerServiceImpl {
-    //         asset_details_streamer: Arc::new(mock),
-    //     };
-
-    //     let response = service
-    //         .get_assets_updated_within(Request::new(RangeRequest {
-    //             start_slot: 0,
-    //             end_slot: 10,
-    //         }))
-    //         .await
-    //         .unwrap();
-
-    //     // Check that the stream contains items
-    //     assert!(response.into_inner().next().await.is_some());
-    // }
 }
