@@ -40,6 +40,7 @@ jobs:
     - name: Lint with Clippy
       uses: actions-rs/clippy-check@v1
       with:
+        token: ${{ secrets.GITHUB_TOKEN }}
         args: --tests --all-targets -- -D warnings
 
     - name: Run tests
