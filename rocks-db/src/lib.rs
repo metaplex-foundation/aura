@@ -1,6 +1,7 @@
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
+use asset::SlotAssetIdx;
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 pub use asset::{
@@ -22,6 +23,7 @@ pub mod errors;
 pub mod key_encoders;
 pub mod offchain_data;
 pub mod storage_traits;
+pub mod asset_streaming_client;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
@@ -41,6 +43,7 @@ pub struct Storage {
     pub account_token_mint_idx: Column<columns::TokenAccountMintIdx>,
     pub db: Arc<DB>,
     pub assets_update_idx: Column<AssetsUpdateIdx>,
+    pub slot_asset_idx: Column<SlotAssetIdx>,
     assets_update_last_seq: AtomicU64,
 }
 
@@ -84,6 +87,7 @@ impl Storage {
         let account_token_owner_idx = Self::column(db.clone());
         let account_token_mint_idx = Self::column(db.clone());
         let assets_update_idx = Self::column(db.clone());
+        let slot_asset_idx = Self::column(db.clone());
 
         Ok(Self {
             asset_static_data,
@@ -101,6 +105,7 @@ impl Storage {
             account_token_mint_idx,
             db,
             assets_update_idx,
+            slot_asset_idx,
             assets_update_last_seq: AtomicU64::new(0),
         })
     }

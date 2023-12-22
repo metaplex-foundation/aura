@@ -61,7 +61,6 @@ where
 
             result = Ok(Some(value))
         }
-
         result
     }
 
