@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
-use sqlx::{Postgres, QueryBuilder};
 use solana_sdk::pubkey::Pubkey;
+use sqlx::{Postgres, QueryBuilder};
 
 use crate::{
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
@@ -74,7 +74,7 @@ impl AssetIndexStorage for PgClient {
             .flat_map(|asset_index| {
                 asset_index.creators.iter().map(move |creator| {
                     (
-                        asset_index.pubkey.clone(),
+                        asset_index.pubkey,
                         creator.clone(),
                         asset_index.slot_updated,
                     )
@@ -140,11 +140,7 @@ impl AssetIndexStorage for PgClient {
                 .push_bind(RoyaltyTargetType::from(asset_index.royalty_target_type))
                 .push_bind(asset_index.royalty_amount)
                 .push_bind(asset_index.slot_created)
-                .push_bind(
-                    asset_index
-                        .owner_type
-                        .map(|owner_type| OwnerType::from(owner_type)),
-                )
+                .push_bind(asset_index.owner_type.map(OwnerType::from))
                 .push_bind(asset_index.owner.map(|owner| owner.to_bytes().to_vec()))
                 .push_bind(asset_index.delegate.map(|k| k.to_bytes().to_vec()))
                 .push_bind(asset_index.authority.map(|k| k.to_bytes().to_vec()))

@@ -5,6 +5,7 @@ pub mod config;
 pub mod db_v2;
 pub mod error;
 pub mod flatbuffer_mapper;
+pub mod gapfiller;
 pub mod index_syncronizer;
 pub mod init;
 pub mod json_downloader;

@@ -79,15 +79,15 @@ mod tests {
         let filter = SearchAssetsFilter {
             specification_version: Some(ref_value.specification_version.into()),
             specification_asset_class: Some(ref_value.specification_asset_class.into()),
-            owner_address: ref_value.owner.map(|k|k.to_bytes().to_vec()),
-            owner_type: ref_value.owner_type.map(|k|k.into()),
+            owner_address: ref_value.owner.map(|k| k.to_bytes().to_vec()),
+            owner_type: ref_value.owner_type.map(|k| k.into()),
             creator_address: Some(ref_value.creators[0].creator.to_bytes().to_vec()),
             creator_verified: Some(ref_value.creators[0].creator_verified),
-            authority_address: ref_value.authority.map(|k|k.to_bytes().to_vec()),
-            collection: ref_value.collection.map(|k|k.to_bytes().to_vec()),
-            delegate: ref_value.delegate.map(|k|k.to_bytes().to_vec()),
+            authority_address: ref_value.authority.map(|k| k.to_bytes().to_vec()),
+            collection: ref_value.collection.map(|k| k.to_bytes().to_vec()),
+            delegate: ref_value.delegate.map(|k| k.to_bytes().to_vec()),
             frozen: Some(ref_value.is_frozen),
-            supply: Some(ref_value.supply as u64),
+            supply: ref_value.supply.map(|s| s as u64),
             supply_mint: Some(ref_value.pubkey.to_bytes().to_vec()),
             compressed: Some(ref_value.is_compressed),
             compressible: Some(ref_value.is_compressible),
@@ -112,7 +112,7 @@ mod tests {
         let filter = SearchAssetsFilter {
             specification_version: Some(ref_value.specification_version.into()),
             specification_asset_class: Some(ref_value.specification_asset_class.into()),
-            owner_type: ref_value.owner_type.map(|k|k.into()),
+            owner_type: ref_value.owner_type.map(|k| k.into()),
             ..Default::default()
         };
         let limit = 5;

@@ -1,6 +1,0 @@
-datasources:
-  - name: Graphite
-    type: graphite
-    url: http://graphite
-    access: proxy
-    isDefault: true

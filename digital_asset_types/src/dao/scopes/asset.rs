@@ -364,6 +364,7 @@ fn convert_rocks_offchain_data(
         dynamic_data
             .onchain_data
             .clone()
+            .map(|onchain_data| onchain_data.value)
             .unwrap_or_default()
             .as_ref(),
     )
@@ -376,7 +377,7 @@ fn convert_rocks_offchain_data(
         metadata_url: offchain_data.url.clone(),
         metadata_mutability: Mutability::Immutable,
         metadata: Json::from_str(metadata.as_str()).map_err(|e| DbErr::Custom(e.to_string()))?,
-        slot_updated: dynamic_data.slot_updated as i64,
+        slot_updated: dynamic_data.get_slot_updated() as i64,
         reindex: None,
     })
 }
@@ -408,46 +409,49 @@ fn convert_rocks_asset_model(
     } else {
         Some(leaf.tree_id.to_bytes().to_vec())
     };
-    let slot_updated = vec![
-        dynamic_data.slot_updated,
-        owner.slot_updated,
-        leaf.slot_updated,
-    ]
-    .into_iter()
-    .max()
-    .unwrap(); // unwrap here is save, because vec is not empty
+    let slot_updated = vec![owner.get_slot_updated(), leaf.slot_updated]
+        .into_iter()
+        .max()
+        .unwrap(); // unwrap here is safe, because vec is not empty
 
     Ok(asset::Model {
         id: static_data.pubkey.to_bytes().to_vec(),
         alt_id: None,
         specification_version: Some(SpecificationVersions::V1),
         specification_asset_class: Some(static_data.specification_asset_class.into()),
-        owner: Some(owner.owner.to_bytes().to_vec()),
-        owner_type: owner.owner_type.into(),
-        delegate: owner.delegate.map(|pk| pk.to_bytes().to_vec()),
-        frozen: dynamic_data.is_frozen,
+        owner: Some(owner.owner.value.to_bytes().to_vec()),
+        owner_type: owner.owner_type.value.into(),
+        delegate: owner
+            .delegate
+            .clone()
+            .map(|pk| pk.value.to_bytes().to_vec()),
+        frozen: dynamic_data.is_frozen.value,
         supply: dynamic_data
             .supply
-            .map(|supply| supply as i64)
+            .clone()
+            .map(|supply| supply.value as i64)
             .unwrap_or_default(),
         supply_mint: Some(static_data.pubkey.to_bytes().to_vec()),
-        compressed: dynamic_data.is_compressed,
-        compressible: dynamic_data.is_compressible,
-        seq: dynamic_data.seq.and_then(|u| u.try_into().ok()),
+        compressed: dynamic_data.is_compressed.value,
+        compressible: dynamic_data.is_compressible.value,
+        seq: dynamic_data
+            .seq
+            .clone()
+            .and_then(|u| u.value.try_into().ok()),
         tree_id,
         leaf: leaf.leaf.clone(),
         nonce: leaf.nonce.map(|nonce| nonce as i64),
         royalty_target_type: static_data.royalty_target_type.into(),
         royalty_target: None, // TODO
-        royalty_amount: dynamic_data.royalty_amount as i32,
+        royalty_amount: dynamic_data.royalty_amount.value as i32,
         asset_data: Some(static_data.pubkey.to_bytes().to_vec()),
-        burnt: dynamic_data.is_burnt,
+        burnt: dynamic_data.is_burnt.value,
         created_at: Some(static_data.created_at),
         slot_updated: Some(slot_updated as i64),
         data_hash: leaf.data_hash.map(|h| h.to_string()),
         creator_hash: leaf.creator_hash.map(|h| h.to_string()),
-        owner_delegate_seq: owner.owner_delegate_seq.map(|seq| seq as i64),
-        was_decompressed: dynamic_data.was_decompressed,
+        owner_delegate_seq: owner.owner_delegate_seq.clone().map(|seq| seq.value as i64),
+        was_decompressed: dynamic_data.was_decompressed.value,
         leaf_seq: leaf.leaf_seq.map(|seq| seq as i64),
     })
 }
@@ -553,6 +557,7 @@ fn convert_rocks_creators_model(
 
     dynamic_data
         .creators
+        .value
         .iter()
         .enumerate()
         .map(|(position, creator)| asset_creators::Model {
@@ -561,8 +566,8 @@ fn convert_rocks_creators_model(
             creator: creator.creator.to_bytes().to_vec(),
             share: creator.creator_share as i32,
             verified: creator.creator_verified,
-            seq: Some(dynamic_data.slot_updated as i64),
-            slot_updated: Some(dynamic_data.slot_updated as i64),
+            seq: dynamic_data.seq.clone().map(|seq| seq.value as i64),
+            slot_updated: Some(dynamic_data.get_slot_updated() as i64),
             position: position as i16,
         })
         .collect::<Vec<_>>()

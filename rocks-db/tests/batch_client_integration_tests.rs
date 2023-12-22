@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 
+use entities::models::Updated;
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 
 use rocks_db::key_encoders::encode_u64x2_pubkey;
 use rocks_db::storage_traits::AssetUpdateIndexStorage;
-use rocks_db::Storage;
+use rocks_db::{AssetDynamicDetails, Storage};
 
 struct TestEnvironment {
     storage: Storage,
@@ -367,4 +368,81 @@ fn test_process_asset_updates_batch_iteration_results() {
         }
         last_seen_key = last_key.clone();
     }
+}
+
+fn create_test_dynamic_data(pubkey: Pubkey, slot: u64) -> AssetDynamicDetails {
+    AssetDynamicDetails {
+        pubkey,
+        is_compressible: Updated::new(slot, None, false),
+        is_compressed: Updated::new(slot, None, false),
+        is_frozen: Updated::new(slot, None, false),
+        is_burnt: Updated::new(slot, None, false),
+        was_decompressed: Updated::new(slot, None, false),
+        creators: Updated::new(slot, None, Vec::new()),
+        royalty_amount: Updated::new(slot, None, 0),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn test_multiple_slot_updates() {
+    let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
+    let storage = TestEnvironment::new(temp_dir, &[]).storage;
+    let pk = Pubkey::new_unique();
+    let dynamic_data = create_test_dynamic_data(pk, 0);
+
+    storage
+        .asset_dynamic_data
+        .merge(dynamic_data.pubkey, &dynamic_data)
+        .unwrap();
+
+    let new_data = AssetDynamicDetails {
+        pubkey: pk,
+        is_compressible: Updated::new(10, None, true),
+        is_compressed: Updated::new(0, None, true),
+        supply: Some(Updated::new(0, None, 5)),
+        ..Default::default()
+    };
+    storage
+        .asset_dynamic_data
+        .merge(dynamic_data.pubkey, &new_data)
+        .unwrap();
+
+    let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
+    assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
+    assert_eq!(selected_data.is_compressed, Updated::new(0, None, false)); // slot in new_data not greater than slot in start data, so that field must not change
+    assert_eq!(selected_data.supply, None); // slot in new_data not greater than slot in start data, so that field must not change
+
+    let new_data = AssetDynamicDetails {
+        pubkey: pk,
+        is_compressible: Updated::new(5, None, false),
+        is_compressed: Updated::new(0, None, true),
+        supply: Some(Updated::new(3, None, 5)),
+        ..Default::default()
+    };
+    storage
+        .asset_dynamic_data
+        .merge(dynamic_data.pubkey, &new_data)
+        .unwrap();
+
+    let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
+    assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
+    assert_eq!(selected_data.is_compressed, Updated::new(0, None, false));
+    assert_eq!(selected_data.supply, Some(Updated::new(3, None, 5)));
+
+    let new_data = AssetDynamicDetails {
+        pubkey: pk,
+        is_compressible: Updated::new(5, Some(1), false),
+        ..Default::default()
+    };
+    storage
+        .asset_dynamic_data
+        .merge(dynamic_data.pubkey, &new_data)
+        .unwrap();
+
+    let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
+    assert_eq!(
+        selected_data.is_compressible,
+        Updated::new(5, Some(1), false)
+    );
 }

@@ -101,27 +101,27 @@ impl AssetIndexReader for Storage {
             asset_indexes.insert(asset_index.pubkey, asset_index);
         }
 
-        for data in asset_dynamic_details.iter().flatten() {
-            if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
-                existed_index.is_compressible = data.is_compressible;
-                existed_index.is_compressed = data.is_compressed;
-                existed_index.is_frozen = data.is_frozen;
-                existed_index.supply = data.supply.map(|s| s as i64);
-                existed_index.is_burnt = data.is_burnt;
-                existed_index.creators = data.creators.clone();
-                existed_index.royalty_amount = data.royalty_amount as i64;
-                existed_index.slot_updated = data.slot_updated as i64;
+        for dynamic_info in asset_dynamic_details.iter().flatten() {
+            if let Some(existed_index) = asset_indexes.get_mut(&dynamic_info.pubkey) {
+                existed_index.is_compressible = dynamic_info.is_compressible.value;
+                existed_index.is_compressed = dynamic_info.is_compressed.value;
+                existed_index.is_frozen = dynamic_info.is_frozen.value;
+                existed_index.supply = dynamic_info.supply.clone().map(|s| s.value as i64);
+                existed_index.is_burnt = dynamic_info.is_burnt.value;
+                existed_index.creators = dynamic_info.creators.clone().value;
+                existed_index.royalty_amount = dynamic_info.royalty_amount.value as i64;
+                existed_index.slot_updated = dynamic_info.get_slot_updated() as i64;
             } else {
                 let asset_index = AssetIndex {
-                    pubkey: data.pubkey,
-                    is_compressible: data.is_compressible,
-                    is_compressed: data.is_compressed,
-                    is_frozen: data.is_frozen,
-                    supply: data.supply.map(|s| s as i64),
-                    is_burnt: data.is_burnt,
-                    creators: data.creators.clone(),
-                    royalty_amount: data.royalty_amount as i64,
-                    slot_updated: data.slot_updated as i64,
+                    pubkey: dynamic_info.pubkey,
+                    is_compressible: dynamic_info.is_compressible.value,
+                    is_compressed: dynamic_info.is_compressed.value,
+                    is_frozen: dynamic_info.is_frozen.value,
+                    supply: dynamic_info.supply.clone().map(|s| s.value as i64),
+                    is_burnt: dynamic_info.is_burnt.value,
+                    creators: dynamic_info.creators.clone().value,
+                    royalty_amount: dynamic_info.royalty_amount.value as i64,
+                    slot_updated: dynamic_info.get_slot_updated() as i64,
                     ..Default::default()
                 };
 
@@ -149,19 +149,19 @@ impl AssetIndexReader for Storage {
 
         for data in asset_owner_details.iter().flatten() {
             if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
-                existed_index.owner = Some(data.owner);
-                existed_index.delegate = data.delegate;
-                existed_index.owner_type = Some(data.owner_type);
-                if data.slot_updated as i64 > existed_index.slot_updated {
-                    existed_index.slot_updated = data.slot_updated as i64;
+                existed_index.owner = Some(data.owner.value);
+                existed_index.delegate = data.delegate.clone().map(|delegate| delegate.value);
+                existed_index.owner_type = Some(data.owner_type.value);
+                if data.get_slot_updated() as i64 > existed_index.slot_updated {
+                    existed_index.slot_updated = data.get_slot_updated() as i64;
                 }
             } else {
                 let asset_index = AssetIndex {
                     pubkey: data.pubkey,
-                    owner: Some(data.owner),
-                    delegate: data.delegate,
-                    owner_type: Some(data.owner_type),
-                    slot_updated: data.slot_updated as i64,
+                    owner: Some(data.owner.value),
+                    delegate: data.delegate.clone().map(|delegate| delegate.value),
+                    owner_type: Some(data.owner_type.value),
+                    slot_updated: data.get_slot_updated() as i64,
                     ..Default::default()
                 };
 
