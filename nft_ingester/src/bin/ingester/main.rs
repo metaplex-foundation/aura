@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use clap::Parser;
 use log::{error, info};
@@ -86,11 +87,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let buffer = Arc::new(Buffer::new());
 
     // setup receiver
-    let first_processed_slot = Arc::new(AtomicU64::new(0));
-    let message_handler = Arc::new(MessageHandler::new(
-        buffer.clone(),
-        first_processed_slot.clone(),
-    ));
+    let message_handler = Arc::new(MessageHandler::new(buffer.clone()));
 
     let geyser_tcp_receiver = TcpReceiver::new(
         message_handler.clone(),
@@ -143,7 +140,7 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
-    let _newest_restored_slot = rocks_storage
+    let newest_restored_slot = rocks_storage
         .last_saved_slot()
         .unwrap()
         .ok_or(IngesterError::EmptyDataBase)?;
@@ -203,6 +200,21 @@ pub async fn main() -> Result<(), IngesterError> {
                 .await;
         }));
     }
+
+    let first_processed_slot = Arc::new(AtomicU64::new(0));
+    let first_processed_slot_clone = first_processed_slot.clone();
+    let cloned_rocks_storage = rocks_storage.clone();
+    tasks.spawn(tokio::spawn(async move {
+        loop {
+            let slot = cloned_rocks_storage.last_saved_slot().unwrap().unwrap();
+            if slot != newest_restored_slot {
+                first_processed_slot_clone.store(slot, Ordering::SeqCst);
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }));
 
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
