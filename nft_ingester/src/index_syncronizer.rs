@@ -117,9 +117,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use entities::models::AssetIndex;
     use mockall;
     use postgre_client::storage_traits::MockAssetIndexStorage as MockIndexStorage;
-    use entities::models::AssetIndex;
     use rocks_db::storage_traits::MockAssetIndexStorage as MockPrimaryStorage;
     use std::collections::HashMap;
     use tokio;

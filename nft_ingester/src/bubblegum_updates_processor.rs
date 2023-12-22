@@ -974,9 +974,7 @@ fn use_method_from_mpl_bubblegum_state(
     value: &mpl_bubblegum::state::metaplex_adapter::UseMethod,
 ) -> entities::enums::UseMethod {
     match value {
-        mpl_bubblegum::state::metaplex_adapter::UseMethod::Burn => {
-            entities::enums::UseMethod::Burn
-        }
+        mpl_bubblegum::state::metaplex_adapter::UseMethod::Burn => entities::enums::UseMethod::Burn,
         mpl_bubblegum::state::metaplex_adapter::UseMethod::Multiple => {
             entities::enums::UseMethod::Multiple
         }

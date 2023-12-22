@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
-use sqlx::{Postgres, QueryBuilder};
 use solana_sdk::pubkey::Pubkey;
+use sqlx::{Postgres, QueryBuilder};
 
 use crate::{
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
