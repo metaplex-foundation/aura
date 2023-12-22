@@ -46,7 +46,6 @@ impl JsonDownloader {
                     debug!("tasks that need to be executed: {}", tasks.len());
 
                     for task in tasks {
-                        let cloned_task = task.clone();
                         let cloned_db_client = self.db_client.clone();
                         let cloned_metrics = self.metrics.clone();
                         let cloned_rocks = self.rocks_db.clone();
@@ -58,7 +57,7 @@ impl JsonDownloader {
                                 .build()
                                 .map_err(|e| format!("Failed to create client: {:?}", e))
                                 .unwrap();
-                            let response = Client::get(&client, cloned_task.metadata_url)
+                            let response = Client::get(&client, task.metadata_url.clone())
                                 .send()
                                 .await
                                 .map_err(|e| format!("Failed to make request: {:?}", e));
@@ -80,7 +79,7 @@ impl JsonDownloader {
                                         };
                                         let data_to_insert = UpdatedTask {
                                             status,
-                                            metadata_url: task.metadata_url,
+                                            metadata_url_key: task.metadata_url_key,
                                             attempts: task.attempts + 1,
                                             error: response.status().as_str().to_string(),
                                         };
@@ -105,7 +104,7 @@ impl JsonDownloader {
                                                 .unwrap();
                                             let data_to_insert = UpdatedTask {
                                                 status: TaskStatus::Success,
-                                                metadata_url: task.metadata_url,
+                                                metadata_url_key: task.metadata_url_key,
                                                 attempts: task.attempts + 1,
                                                 error: "".to_string(),
                                             };
@@ -119,7 +118,7 @@ impl JsonDownloader {
                                         } else {
                                             let data_to_insert = UpdatedTask {
                                                 status: TaskStatus::Failed,
-                                                metadata_url: task.metadata_url,
+                                                metadata_url_key: task.metadata_url_key,
                                                 attempts: task.attempts + 1,
                                                 error: "Failed to deserialize metadata body"
                                                     .to_string(),
