@@ -28,7 +28,9 @@ serde_json = "1.0.81"
 mockall = "0.12.0"
 async-trait = "0.1.74"
 itertools = "0.12.0"
+tokio-stream = "0.1.14"
 entities = { path = "../entities" }
+interface = { path = "../interface" }
 
 [dev-dependencies]
 tempfile = "3.8.1"
