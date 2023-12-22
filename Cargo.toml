@@ -6,6 +6,7 @@ members = [
   "rocks-db",
   "postgre-client",
   "entities",
+  "grpc",
 ]
 
 [profile.release]

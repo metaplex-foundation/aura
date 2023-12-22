@@ -1,0 +1,170 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+package gapfiller;
+
+enum RoyaltyTargetType {
+    ROYALTY_TARGET_TYPE_UNKNOWN = 0;
+    ROYALTY_TARGET_TYPE_CREATORS = 1;
+    ROYALTY_TARGET_TYPE_FANOUT = 2;
+    ROYALTY_TARGET_TYPE_SINGLE = 3;
+}
+
+enum SpecificationVersions {
+    SPECIFICATION_VERSIONS_UNKNOWN = 0;
+    SPECIFICATION_VERSIONS_V0 = 1;
+    SPECIFICATION_VERSIONS_V1 = 2;
+    SPECIFICATION_VERSIONS_V2 = 3;
+}
+
+enum SpecificationAssetClass {
+    SPECIFICATION_ASSET_CLASS_UNKNOWN = 0;
+    SPECIFICATION_ASSET_CLASS_FUNGIBLE_TOKEN = 1;
+    SPECIFICATION_ASSET_CLASS_FUNGIBLE_ASSET = 2;
+    SPECIFICATION_ASSET_CLASS_NFT = 3;
+    SPECIFICATION_ASSET_CLASS_PRINTABLE_NFT = 4;
+    SPECIFICATION_ASSET_CLASS_PROGRAMMABLE_NFT = 5;
+    SPECIFICATION_ASSET_CLASS_PRINT = 6;
+    SPECIFICATION_ASSET_CLASS_TRANSFER_RESTRICTED_NFT = 7;
+    SPECIFICATION_ASSET_CLASS_NON_TRANSFERABLE_NFT = 8;
+    SPECIFICATION_ASSET_CLASS_IDENTITY_NFT = 9;
+}
+
+enum OwnerType {
+    OWNER_TYPE_UNKNOWN = 0;
+    OWNER_TYPE_TOKEN = 1;
+    OWNER_TYPE_SINGLE = 2;
+}
+
+enum TokenStandard {
+    NON_FUNGIBLE = 0;
+    FUNGIBLE_ASSET = 1;
+    FUNGIBLE = 2;
+    NON_FUNGIBLE_EDITION = 3;
+    PROGRAMMABLE_NON_FUNGIBLE = 4;
+    PROGRAMMABLE_NON_FUNGIBLE_EDITION = 5;
+}
+
+enum UseMethod {
+    BURN = 0;
+    MULTIPLE = 1;
+    SINGLE = 2;
+}
+
+message Uses {
+    UseMethod use_method = 1;
+    uint64 remaining = 2;
+    uint64 total = 3;
+}
+
+message ChainDataV1 {
+    string name = 1;
+    string symbol = 2;
+    google.protobuf.UInt32Value edition_nonce = 3;  // Changed from u8 to uint32 as Protobuf does not have a u8 type
+    bool primary_sale_happened = 4;
+    TokenStandard token_standard = 5;
+    Uses uses = 6;
+    google.protobuf.UInt64Value seq_updated = 7;
+    uint64 slot_updated = 8;
+}
+
+message AssetLeaf {
+    bytes tree_id = 1;
+    google.protobuf.BytesValue leaf = 2;
+    google.protobuf.UInt64Value nonce = 3;
+    google.protobuf.BytesValue data_hash = 4;
+    google.protobuf.BytesValue creator_hash = 5;
+    google.protobuf.UInt64Value leaf_seq = 6;
+    google.protobuf.UInt64Value seq_updated = 7;
+    uint64 slot_updated = 8;
+}
+
+message AssetCollection {
+    bytes collection = 1;
+    bool is_collection_verified = 2;
+    google.protobuf.UInt64Value collection_seq = 3;
+    google.protobuf.UInt64Value seq_updated = 4;
+    uint64 slot_updated = 5;
+}
+
+message Creator {
+    bytes creator = 1;
+    bool creator_verified = 2;
+    uint32 creator_share = 3; // Percentage
+}
+
+message AssetDetails {
+    // From AssetStaticDetails
+    bytes pubkey = 1;
+    SpecificationAssetClass specification_asset_class = 2;
+    RoyaltyTargetType royalty_target_type = 3;
+    uint64 slot_created = 4;
+
+    // From AssetDynamicDetails as Tuples
+    DynamicBoolField is_compressible = 5;
+    DynamicBoolField is_compressed = 6;
+    DynamicBoolField is_frozen = 7;
+    DynamicUint64Field supply = 8;
+    DynamicUint64Field seq = 9;
+    DynamicBoolField is_burnt = 10;
+    DynamicBoolField was_decompressed = 11;
+    DynamicCreatorsField creators = 12;
+    DynamicUint32Field royalty_amount = 13;
+    DynamicBytesField authority = 14;
+    DynamicBytesField owner = 15;
+    DynamicBytesField delegate = 16;
+    DynamicEnumField owner_type = 17;
+    DynamicUint64Field owner_delegate_seq = 18;
+
+    repeated AssetLeaf leaves = 19;
+    AssetCollection collection = 20;
+    ChainDataV1 chain_data = 21;
+}
+
+// Dynamic field messages
+message DynamicBoolField {
+    bool value = 1;
+    google.protobuf.UInt64Value seq_updated = 2;
+    uint64 slot_updated = 3;
+}
+
+message DynamicUint64Field {
+    uint64 value = 1;
+    google.protobuf.UInt64Value seq_updated = 2;
+    uint64 slot_updated = 3;
+}
+
+message DynamicUint32Field {
+    uint32 value = 1;
+    google.protobuf.UInt64Value seq_updated = 2;
+    uint64 slot_updated = 3;
+}
+
+message DynamicBytesField {
+    bytes value = 1;
+    google.protobuf.UInt64Value seq_updated = 2;
+    uint64 slot_updated = 3;
+}
+
+message DynamicEnumField {
+    OwnerType value = 1;
+    google.protobuf.UInt64Value seq_updated = 2;
+    uint64 slot_updated = 3;
+}
+
+message DynamicCreatorsField {
+    repeated Creator creators = 1;
+    google.protobuf.UInt64Value seq_updated = 2;
+    uint64 slot_updated = 3;
+}
+
+// RangeRequest and AssetDetailsResponse for data synchronization
+message RangeRequest {
+    uint64 start_slot = 1;
+    uint64 end_slot = 2;
+}
+
+// Define the gRPC service
+service GapFillerService {
+    rpc GetAssetsUpdatedWithin(RangeRequest) returns (stream AssetDetails);
+}
