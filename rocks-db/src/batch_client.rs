@@ -3,10 +3,10 @@ use std::collections::{HashMap, HashSet};
 use async_trait::async_trait;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::asset::AssetsUpdateIdx;
+use crate::asset::{AssetsUpdateIdx, SlotAssetIdx};
 use crate::column::TypedColumn;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
-use crate::storage_traits::{AssetIndexReader, AssetUpdateIndexStorage};
+use crate::storage_traits::{AssetIndexReader, AssetSlotStorage, AssetUpdateIndexStorage};
 use crate::{Result, Storage};
 use entities::models::AssetIndex;
 
@@ -188,5 +188,18 @@ impl AssetIndexReader for Storage {
         }
 
         Ok(asset_indexes)
+    }
+}
+
+impl AssetSlotStorage for Storage {
+    fn last_saved_slot(&self) -> Result<Option<u64>> {
+        let mut iter = self.slot_asset_idx.iter_end();
+        if let Some(pair) = iter.next() {
+            let (last_key, _) = pair?;
+            let (slot, _) = SlotAssetIdx::decode_key(last_key.to_vec())?;
+            return Ok(Some(slot));
+        }
+
+        Ok(None)
     }
 }

@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{str::FromStr, sync::Arc};
 
 use blockbuster::programs::token_account::TokenProgramAccount;
@@ -33,10 +34,11 @@ pub struct MessageHandler {
     buffer: Arc<Buffer>,
     token_acc_parser: Arc<TokenAccountParser>,
     mplx_acc_parser: Arc<TokenMetadataParser>,
+    first_processed_slot: Arc<AtomicU64>,
 }
 
 impl MessageHandler {
-    pub fn new(buffer: Arc<Buffer>) -> Self {
+    pub fn new(buffer: Arc<Buffer>, first_processed_slot: Arc<AtomicU64>) -> Self {
         let token_acc_parser = Arc::new(TokenAccountParser {});
         let mplx_acc_parser = Arc::new(TokenMetadataParser {});
 
@@ -44,6 +46,7 @@ impl MessageHandler {
             buffer,
             token_acc_parser,
             mplx_acc_parser,
+            first_processed_slot,
         }
     }
 
@@ -69,10 +72,20 @@ impl MessageHandler {
             _ => {}
         }
     }
+    fn store_first_processed_slot(&self, slot: u64) {
+        if self.first_processed_slot.load(Ordering::SeqCst) != 0 {
+            // slot already stored
+            return;
+        }
+
+        self.first_processed_slot.store(slot, Ordering::SeqCst)
+    }
 
     async fn handle_account(&self, data: Vec<u8>) -> Result<(), IngesterError> {
         let account_update =
             utils::flatbuffer::account_info_generated::account_info::root_as_account_info(&data)?;
+
+        self.store_first_processed_slot(account_update.slot());
 
         let account_info_bytes = map_account_info_fb_bytes(account_update)?;
 

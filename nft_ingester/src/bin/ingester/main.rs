@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use clap::Parser;
@@ -26,6 +26,7 @@ use nft_ingester::{config::init_logger, error::IngesterError};
 use postgre_client::PgClient;
 use rocks_db::backup_service::BackupService;
 use rocks_db::errors::BackupServiceError;
+use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::{backup_service, Storage};
 
 mod backfiller;
@@ -85,7 +86,11 @@ pub async fn main() -> Result<(), IngesterError> {
     let buffer = Arc::new(Buffer::new());
 
     // setup receiver
-    let message_handler = Arc::new(MessageHandler::new(buffer.clone()));
+    let first_processed_slot = Arc::new(AtomicU64::new(0));
+    let message_handler = Arc::new(MessageHandler::new(
+        buffer.clone(),
+        first_processed_slot.clone(),
+    ));
 
     let geyser_tcp_receiver = TcpReceiver::new(
         message_handler.clone(),
@@ -138,6 +143,10 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
+    let _newest_restored_slot = rocks_storage
+        .last_saved_slot()
+        .unwrap()
+        .ok_or(IngesterError::EmptyDataBase)?;
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;

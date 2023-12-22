@@ -92,6 +92,8 @@ pub enum IngesterError {
     TransactionNotProcessedError(String),
     #[error("backup service {0}")]
     BackupError(String),
+    #[error("Trying to run services with empty DB. Please restart app with added --restore-rocks-db flag")]
+    EmptyDataBase,
 }
 
 impl From<reqwest::Error> for IngesterError {
