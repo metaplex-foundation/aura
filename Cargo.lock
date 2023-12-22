@@ -4388,6 +4388,7 @@ dependencies = [
  "metrics-utils",
  "mockall 0.12.0",
  "num_cpus",
+ "rand 0.8.5",
  "reqwest",
  "rocksdb",
  "serde",
