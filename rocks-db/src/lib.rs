@@ -23,7 +23,6 @@ pub mod errors;
 pub mod key_encoders;
 pub mod offchain_data;
 pub mod storage_traits;
-pub mod asset_streaming_client;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
