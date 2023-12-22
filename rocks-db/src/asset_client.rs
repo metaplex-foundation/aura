@@ -2,7 +2,7 @@ use std::sync::atomic::Ordering;
 
 use solana_sdk::pubkey::Pubkey;
 
-use crate::asset::AssetsUpdateIdx;
+use crate::asset::{AssetsUpdateIdx, SlotAssetIdx};
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
 
@@ -25,9 +25,12 @@ impl Storage {
         Ok(seq)
     }
 
+    // TODO: Add a backfiller to fill the slot_asset_idx based on the assets_update_idx
+
     pub fn asset_updated(&self, slot: u64, pubkey: Pubkey) -> Result<()> {
         let seq = self.get_next_asset_update_seq()?;
         let value = encode_u64x2_pubkey(seq, slot, pubkey);
-        self.assets_update_idx.put(value, &AssetsUpdateIdx {})
+        self.assets_update_idx.put(value, &AssetsUpdateIdx {})?;
+        self.slot_asset_idx.put((slot, pubkey), &SlotAssetIdx {})
     }
 }

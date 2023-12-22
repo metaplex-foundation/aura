@@ -6,7 +6,7 @@ use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
 
-use crate::key_encoders::{decode_pubkey, encode_pubkey};
+use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
 use crate::Result;
 use crate::TypedColumn;
 
@@ -501,20 +501,19 @@ impl TypedColumn for AssetsUpdateIdx {
     }
 }
 
-// Asset modifications as of now:
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SlotAssetIdx {}
 
-// upsert_assets - all of the fields
-// asset_decompress - ast_tree_id, ast_leaf, ast_nonce,
-//                                         ast_data_hash, ast_creator_hash, ast_is_compressed,
-//                                         ast_supply, ast_was_decompressed, ast_seq
-// asset_mint - ast_is_compressed, ast_is_frozen, ast_supply, ast_tree_id,
-//                                         ast_nonce, ast_royalty_target_type, ast_royalty_target, ast_royalty_amount, ast_is_burnt,
-//                                         ast_slot_updated, ast_was_decompressed, ast_is_collection_verified, ast_specification_asset_class, ast_onchain_data
+impl TypedColumn for SlotAssetIdx {
+    type KeyType = (u64, Pubkey);
+    type ValueType = Self;
+    const NAME: &'static str = "SLOT_ASSET_IDX";
 
-// upsert_asset_seq - ast_seq
-// mark_asset_as_burned - ast_is_burnt, ast_seq, ast_is_compressed;          ast_is_collection_verified
+    fn encode_key(key: (u64, Pubkey)) -> Vec<u8> {
+        encode_u64_pubkey(key.0, key.1)
+    }
 
-// update_asset_collection_info - ast_collection, ast_is_collection_verified, ast_collection_seq
-// update_asset_leaf_info - ast_nonce, ast_tree_id, ast_leaf, ast_leaf_seq, ast_data_hash, ast_creator_hash;        ast_is_collection_verified, ast_is_compressed, ast_is_frozen
-// update_asset_owner_and_delegate_info - ast_owner, ast_delegate, ast_owner_delegate_seq;           ast_is_compressed
-// update_authority - ast_authority
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_u64_pubkey(bytes)
+    }
+}
