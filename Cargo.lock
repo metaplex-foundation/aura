@@ -3110,6 +3110,7 @@ dependencies = [
 name = "nft_ingester"
 version = "0.7.2"
 dependencies = [
+ "async-trait",
  "bincode",
  "blockbuster",
  "bs58 0.4.0",
@@ -3120,6 +3121,7 @@ dependencies = [
  "env_logger 0.10.1",
  "figment",
  "flatbuffers",
+ "futures",
  "jsonrpc-core",
  "jsonrpc-http-server",
  "libc",
@@ -3148,6 +3150,7 @@ dependencies = [
  "spl-token",
  "sqlx",
  "stretto",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-util 0.7.10",

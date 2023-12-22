@@ -40,7 +40,7 @@ pub struct Creator {
     pub creator_share: u8,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct CompleteAssetDetails {
     // From AssetStaticDetails
     pub pubkey: Pubkey,
