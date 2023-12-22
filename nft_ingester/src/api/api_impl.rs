@@ -11,6 +11,7 @@ use crate::api::{config::Config, validation::validate_pubkey};
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
+use solana_sdk::pubkey::Pubkey;
 use {
     crate::api::*,
     sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, SqlxPostgresConnector, Statement},
@@ -203,7 +204,7 @@ impl DasApi {
             return Err(DasApiError::BatchSizeError(MAX_ITEMS_IN_BATCH_REQ));
         }
 
-        let ids: Vec<pubkey::Pubkey> = payload
+        let ids: Vec<Pubkey> = payload
             .ids
             .into_iter()
             .map(validate_pubkey)

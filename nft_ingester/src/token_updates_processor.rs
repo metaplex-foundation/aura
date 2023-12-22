@@ -1,6 +1,7 @@
 use crate::buffer::Buffer;
 use crate::db_v2::DBClient;
 use entities::enums::OwnerType;
+use entities::models::Updated;
 use log::error;
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
@@ -84,11 +85,12 @@ impl TokenAccsProcessor {
                     acc.mint,
                     &AssetOwner {
                         pubkey: acc.mint,
-                        owner: acc.owner,
-                        delegate: acc.delegate,
-                        owner_type: OwnerType::Token,
+                        owner: Updated::new(acc.slot_updated as u64, None, acc.owner),
+                        delegate: acc
+                            .delegate
+                            .map(|delegate| Updated::new(acc.slot_updated as u64, None, delegate)),
+                        owner_type: Updated::new(acc.slot_updated as u64, None, OwnerType::Token),
                         owner_delegate_seq: None,
-                        slot_updated: acc.slot_updated as u64,
                     },
                 );
 
@@ -162,68 +164,40 @@ impl TokenAccsProcessor {
             let begin_processing = Instant::now();
 
             for mint in mint_accs_to_save.iter() {
-                let existing_value = self.rocks_db.asset_dynamic_data.get(mint.pubkey);
+                let res = self.rocks_db.asset_dynamic_data.merge(
+                    mint.pubkey,
+                    &AssetDynamicDetails {
+                        pubkey: mint.pubkey,
+                        supply: Some(Updated::new(
+                            mint.slot_updated as u64,
+                            None,
+                            mint.supply as u64,
+                        )),
+                        seq: Some(Updated::new(
+                            mint.slot_updated as u64,
+                            None,
+                            mint.slot_updated as u64,
+                        )),
+                        ..Default::default()
+                    },
+                );
 
-                match existing_value {
-                    Ok(existing_value) => {
-                        let mut value_to_insert = None;
-
-                        if let Some(existing_value) = existing_value {
-                            if existing_value.slot_updated < mint.slot_updated as u64 {
-                                let updated_dynamic_data = AssetDynamicDetails {
-                                    pubkey: mint.pubkey,
-                                    is_compressible: existing_value.is_compressible,
-                                    is_compressed: existing_value.is_compressed,
-                                    is_frozen: existing_value.is_frozen,
-                                    supply: Some(mint.supply as u64),
-                                    seq: None,
-                                    is_burnt: existing_value.is_burnt,
-                                    was_decompressed: existing_value.was_decompressed,
-                                    onchain_data: existing_value.onchain_data.clone(),
-                                    creators: existing_value.creators.clone(),
-                                    royalty_amount: existing_value.royalty_amount,
-                                    slot_updated: mint.slot_updated as u64,
-                                };
-                                value_to_insert = Some(updated_dynamic_data);
-                            }
-                        } else {
-                            let new_dynamic_data = AssetDynamicDetails {
-                                pubkey: mint.pubkey,
-                                supply: Some(mint.supply as u64),
-                                seq: None,
-                                slot_updated: mint.slot_updated as u64,
-                                ..Default::default()
-                            };
-                            value_to_insert = Some(new_dynamic_data);
-                        }
-
-                        if let Some(data) = value_to_insert {
-                            let res = self.rocks_db.asset_dynamic_data.put(data.pubkey, &data);
-
-                            match res {
-                                Err(e) => {
-                                    self.metrics
-                                        .inc_process("mint_update_supply", MetricStatus::FAILURE);
-                                    error!("Error while saving mints: {}", e);
-                                }
-                                Ok(_) => {
-                                    self.metrics
-                                        .inc_process("mint_update_supply", MetricStatus::SUCCESS);
-                                    let upd_res = self
-                                        .rocks_db
-                                        .asset_updated(mint.slot_updated as u64, mint.pubkey);
-
-                                    if let Err(e) = upd_res {
-                                        error!("Error while updating assets update idx: {}", e);
-                                    }
-                                }
-                            }
-                        }
-                    }
+                match res {
                     Err(e) => {
                         self.metrics
                             .inc_process("mint_update_supply", MetricStatus::FAILURE);
-                        error!("Error while fetching mints: {}", e);
+                        error!("Error while saving mints: {}", e);
+                    }
+                    Ok(_) => {
+                        self.metrics
+                            .inc_process("mint_update_supply", MetricStatus::SUCCESS);
+                        let upd_res = self
+                            .rocks_db
+                            .asset_updated(mint.slot_updated as u64, mint.pubkey);
+
+                        if let Err(e) = upd_res {
+                            error!("Error while updating assets update idx: {}", e);
+                        }
                     }
                 }
             }

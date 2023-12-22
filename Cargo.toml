@@ -7,9 +7,6 @@ members = [
   "postgre-client",
   "entities",
 ]
-exclude = [
-  "migration",
-]
 
 [profile.release]
 lto = true
