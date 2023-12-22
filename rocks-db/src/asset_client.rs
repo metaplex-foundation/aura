@@ -24,7 +24,7 @@ impl Storage {
         let seq = self.assets_update_last_seq.fetch_add(1, Ordering::SeqCst) + 1;
         Ok(seq)
     }
-    
+
     // TODO: Add a backfiller to fill the slot_asset_idx based on the assets_update_idx
 
     pub fn asset_updated(&self, slot: u64, pubkey: Pubkey) -> Result<()> {

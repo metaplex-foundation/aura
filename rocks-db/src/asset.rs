@@ -6,7 +6,7 @@ use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
 
-use crate::key_encoders::{decode_pubkey, encode_pubkey, encode_u64_pubkey, decode_u64_pubkey};
+use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
 use crate::Result;
 use crate::TypedColumn;
 
@@ -502,7 +502,7 @@ impl TypedColumn for AssetsUpdateIdx {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SlotAssetIdx{}
+pub struct SlotAssetIdx {}
 
 impl TypedColumn for SlotAssetIdx {
     type KeyType = (u64, Pubkey);
@@ -517,4 +517,3 @@ impl TypedColumn for SlotAssetIdx {
         decode_u64_pubkey(bytes)
     }
 }
-    
