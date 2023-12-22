@@ -112,7 +112,7 @@ pub fn generate_asset_index_records(n: usize) -> Vec<AssetIndex> {
             is_compressible: false,
             is_compressed: false,
             is_frozen: false,
-            supply: 1,
+            supply: Some(1),
             metadata_url: Some("https://www.google.com".to_string()),
             slot_updated: (n + 10 + i) as i64,
             creators: vec![Creator {

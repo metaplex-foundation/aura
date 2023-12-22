@@ -87,7 +87,7 @@ mod tests {
             collection: ref_value.collection.map(|k| k.to_bytes().to_vec()),
             delegate: ref_value.delegate.map(|k| k.to_bytes().to_vec()),
             frozen: Some(ref_value.is_frozen),
-            supply: Some(ref_value.supply as u64),
+            supply: ref_value.supply.map(|s| s as u64),
             supply_mint: Some(ref_value.pubkey.to_bytes().to_vec()),
             compressed: Some(ref_value.is_compressed),
             compressible: Some(ref_value.is_compressible),
