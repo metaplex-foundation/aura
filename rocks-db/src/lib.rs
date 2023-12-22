@@ -66,6 +66,7 @@ impl Storage {
                 Self::new_cf_descriptor::<columns::TokenAccountOwnerIdx>(),
                 Self::new_cf_descriptor::<columns::TokenAccountMintIdx>(),
                 Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(),
+                Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
             ],
         )?);
         let asset_offchain_data = Self::column(db.clone());
