@@ -21,63 +21,46 @@ impl AssetDetailsStreamer for Storage {
         start_slot: u64,
         end_slot: u64,
     ) -> Result<AssetDetailsStream, AsyncError> {
-        let (tx, rx) = tokio::sync::mpsc::channel(32); // Adjust the channel size as needed
-        let start_key = (start_slot, solana_sdk::pubkey::Pubkey::default());
-        // let backend = self.backend.clone();
-        // let asset_details_cf = self.asset_details_cf.clone();
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
         let backend = self.slot_asset_idx.backend.clone();
-        // Spawn a background task to query RocksDB
+
         tokio::spawn(async move {
-            let slot_asset_idx = Storage::column::<SlotAssetIdx>(backend.clone());
-            let iterator = slot_asset_idx.iter(start_key);
-            for pair in iterator {
-                // if we got an error, send it over the tx and stop
-                match pair {
-                    Ok((idx_key, _)) => {
-                        match SlotAssetIdx::decode_key(idx_key.to_vec()) {
-                            Ok((slot, pubkey)) => {
-                                if slot > end_slot {
-                                    break;
-                                }
-                                match get_complete_asset_details(backend.clone(), pubkey) {
-                                    Ok(details) => {
-                                        if tx.send(Ok(details)).await.is_err() {
-                                            // If receiver is dropped, stop sending
-                                            break;
-                                        }
-                                    }
-                                    Err(e) => {
-                                        let _ = tx
-                                            .send(Err(Box::new(e) as interface::AsyncError))
-                                            .await; // Send error and break
-                                        break;
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                // Send error and continue
-                                if tx
-                                    .send(Err(Box::new(e) as interface::AsyncError))
-                                    .await
-                                    .is_err()
-                                {
-                                    // If receiver is dropped, stop sending
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        let _ = tx.send(Err(Box::new(e) as interface::AsyncError)).await;
-                        break;
-                    }
-                }
+            if let Err(e) =
+                process_asset_details_range(backend, start_slot, end_slot, tx.clone()).await
+            {
+                let _ = tx.send(Err(e)).await;
             }
-            // todo: do we need to close the channel?
         });
 
         Ok(Box::pin(ReceiverStream::new(rx)) as AssetDetailsStream)
     }
+}
+
+async fn process_asset_details_range(
+    backend: Arc<DB>,
+    start_slot: u64,
+    end_slot: u64,
+    tx: tokio::sync::mpsc::Sender<Result<CompleteAssetDetails, AsyncError>>,
+) -> Result<(), AsyncError> {
+    let slot_asset_idx = Storage::column::<SlotAssetIdx>(backend.clone());
+    let iterator = slot_asset_idx.iter((start_slot, solana_sdk::pubkey::Pubkey::default()));
+
+    for pair in iterator {
+        let (idx_key, _) = pair.map_err(|e| Box::new(e) as AsyncError)?;
+        let (slot, pubkey) =
+            SlotAssetIdx::decode_key(idx_key.to_vec()).map_err(|e| Box::new(e) as AsyncError)?;
+
+        if slot > end_slot {
+            break;
+        }
+
+        let details = get_complete_asset_details(backend.clone(), pubkey)?;
+        if tx.send(Ok(details)).await.is_err() {
+            break; // Receiver is dropped
+        }
+    }
+
+    Ok(())
 }
 
 fn get_complete_asset_details(
