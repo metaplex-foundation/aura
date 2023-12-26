@@ -28,7 +28,7 @@ impl AssetDetailsStreamer for AssetStreamer {
         if start_slot > end_slot {
             return Err(Box::new(UsecaseError::InvalidRange(start_slot, end_slot)));
         }
-        if end_slot - start_slot >= self.max_window_size as u64 {
+        if end_slot - start_slot >= self.max_window_size {
             return Err(Box::new(UsecaseError::InvalidRangeTooWide(
                 start_slot,
                 end_slot,
