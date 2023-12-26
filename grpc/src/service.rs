@@ -2,8 +2,8 @@ use std::{pin::Pin, sync::Arc};
 
 use crate::gapfiller::{gap_filler_service_server::GapFillerService, AssetDetails, RangeRequest};
 use futures::{stream::Stream, StreamExt};
-use interface::error::UsecaseError;
 use interface::asset_streaming_and_discovery::AssetDetailsStreamer;
+use interface::error::UsecaseError;
 use tonic::{async_trait, Request, Response, Status};
 
 pub struct PeerGapFillerServiceImpl {
@@ -66,9 +66,9 @@ fn usecase_error_to_status(err: &UsecaseError) -> Status {
 mod tests {
     use super::*;
     use futures::stream;
-    use interface::error::UsecaseError;
     use interface::asset_streaming_and_discovery::AssetDetailsStream;
     use interface::asset_streaming_and_discovery::MockAssetDetailsStreamer;
+    use interface::error::UsecaseError;
     use mockall::predicate::*;
 
     #[tokio::test]
@@ -110,7 +110,8 @@ mod tests {
             .with(eq(10), eq(0)) // Invalid range
             .times(1)
             .returning(|_start_slot, _end_slot| {
-                Err(Box::new(UsecaseError::InvalidRange(10, 0)) as interface::asset_streaming_and_discovery::AsyncError)
+                Err(Box::new(UsecaseError::InvalidRange(10, 0))
+                    as interface::asset_streaming_and_discovery::AsyncError)
             });
 
         let service = PeerGapFillerServiceImpl {
