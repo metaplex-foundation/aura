@@ -207,12 +207,13 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_keep_running = keep_running.clone();
     tasks.spawn(tokio::spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
-            let slot = cloned_rocks_storage.last_saved_slot().unwrap_or(
-                {
+            let slot = cloned_rocks_storage
+                .last_saved_slot()
+                .unwrap_or({
                     cloned_keep_running.store(false, Ordering::SeqCst);
                     None
-                }
-            ).unwrap();
+                })
+                .unwrap();
             if slot != newest_restored_slot {
                 first_processed_slot_clone.store(slot, Ordering::SeqCst);
                 break;
