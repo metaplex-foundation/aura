@@ -17,7 +17,7 @@ pub struct StorageV0 {
     pub asset_dynamic_data: Column<columns::asset::AssetDynamicDetails>,
     pub asset_authority_data: Column<crate::asset::AssetAuthority>,
     pub asset_owner_data: Column<columns::asset::AssetOwner>,
-    pub asset_leaf_data: Column<crate::asset::AssetLeaf>,
+    pub asset_leaf_data: Column<columns::asset::AssetLeaf>,
     pub asset_collection_data: Column<crate::asset::AssetCollection>,
     pub asset_offchain_data: Column<crate::offchain_data::OffChainData>,
     pub cl_items: Column<crate::cl_items::ClItem>,
@@ -42,7 +42,7 @@ impl StorageV0 {
                 Self::new_cf_descriptor::<columns::asset::AssetDynamicDetails>(),
                 Self::new_cf_descriptor::<crate::asset::AssetAuthority>(),
                 Self::new_cf_descriptor::<columns::asset::AssetOwner>(),
-                Self::new_cf_descriptor::<crate::asset::AssetLeaf>(),
+                Self::new_cf_descriptor::<columns::asset::AssetLeaf>(),
                 Self::new_cf_descriptor::<crate::asset::AssetCollection>(),
                 Self::new_cf_descriptor::<crate::cl_items::ClItem>(),
                 Self::new_cf_descriptor::<crate::cl_items::ClLeaf>(),
@@ -177,10 +177,10 @@ impl StorageV0 {
                 columns::asset::AssetOwner::merge_asset_owner,
             );
         }
-        if C::NAME == crate::asset::AssetLeaf::NAME {
+        if C::NAME == columns::asset::AssetLeaf::NAME {
             cf_options.set_merge_operator_associative(
                 "merge_fn_merge_asset_leaf",
-                crate::asset::AssetLeaf::merge_asset_leaf,
+                columns::asset::AssetLeaf::merge_asset_leaf,
             );
         }
         if C::NAME == crate::asset::AssetCollection::NAME {

@@ -74,6 +74,83 @@ pub struct AssetOwner {
     pub slot_updated: u64,
 }
 
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct AssetLeaf {
+    pub pubkey: Pubkey,
+    pub tree_id: Pubkey,
+    pub leaf: Option<Vec<u8>>,
+    pub nonce: Option<u32>,
+    pub data_hash: Option<Hash>,
+    pub creator_hash: Option<Hash>,
+    pub leaf_seq: Option<u64>,
+    pub slot_updated: u64,
+}
+
+impl TypedColumn for AssetLeaf {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_LEAF";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl AssetLeaf {
+    pub fn merge_asset_leaf(
+        _new_key: &[u8],
+        existing_val: Option<&[u8]>,
+        operands: &MergeOperands,
+    ) -> Option<Vec<u8>> {
+        let mut result = vec![];
+        let mut slot = 0;
+        let mut leaf_seq = None;
+        if let Some(existing_val) = existing_val {
+            match deserialize::<AssetLeaf>(existing_val) {
+                Ok(value) => {
+                    slot = value.slot_updated;
+                    leaf_seq = value.leaf_seq;
+                    result = existing_val.to_vec();
+                }
+                Err(e) => {
+                    error!("RocksDB: AssetLeaf deserialize existing_val: {}", e)
+                }
+            }
+        }
+
+        for op in operands {
+            match deserialize::<AssetLeaf>(&op) {
+                Ok(new_val) => {
+                    if let Some(current_seq) = leaf_seq {
+                        if let Some(new_seq) = new_val.leaf_seq {
+                            if new_seq > current_seq {
+                                leaf_seq = new_val.leaf_seq;
+                                result = op.to_vec();
+                            }
+                        } else {
+                            warn!("RocksDB: AssetLeaf deserialize new_val: new leaf_seq is None");
+                        }
+                    } else {
+                        if new_val.slot_updated > slot {
+                            slot = new_val.slot_updated;
+                            result = op.to_vec();
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("RocksDB: AssetLeaf deserialize new_val: {}", e)
+                }
+            }
+        }
+
+        Some(result)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Creator {
     pub creator: Pubkey,
