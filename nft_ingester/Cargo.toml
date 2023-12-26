@@ -51,6 +51,7 @@ libc = "0.2.144"
 mockall = "0.11.4"
 entities = { path = "../entities" }
 mpl-token-metadata = "1.13.2"
+interface = { path = "../interface" }
 
 [dependencies.utils]
 version = "0.1.8"

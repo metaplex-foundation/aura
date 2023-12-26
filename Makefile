@@ -1,4 +1,4 @@
-.PHONY: build start dev stop
+.PHONY: build start dev stop clippy test
 
 SHELL := /bin/bash
 
@@ -13,3 +13,13 @@ dev:
 
 stop:
 	@docker compose -f docker-compose.yaml stop ingester-first-consumer
+
+clippy:
+	@cargo clean -p postgre-client
+	@cargo clean -p rocks-db
+	@cargo clippy
+
+test:
+	@cargo clean -p postgre-client
+	@cargo clean -p rocks-db
+	@cargo test --features integration_tests
