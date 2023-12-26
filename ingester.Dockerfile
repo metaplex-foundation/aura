@@ -10,6 +10,7 @@ COPY nft_ingester ./nft_ingester
 COPY digital_asset_types ./digital_asset_types
 COPY entities ./entities
 COPY grpc ./grpc
+COPY interface ./interface
 COPY metrics_utils ./metrics_utils
 COPY rocks-db ./rocks-db
 COPY postgre-client ./postgre-client
