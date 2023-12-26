@@ -74,10 +74,12 @@ pub async fn teardown(node: &Container<'_, images::postgres::Postgres>, db_name:
     let default_pool = Pool::<Postgres>::connect(&default_connection_string)
         .await
         .unwrap();
-    default_pool
+    if let Err(err) = default_pool
         .execute(format!("DROP DATABASE IF EXISTS {}", db_name).as_str())
         .await
-        .unwrap();
+    {
+        println!("Failed to drop database: {}", err);
+    }
 }
 
 #[cfg(test)]
