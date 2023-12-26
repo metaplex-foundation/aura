@@ -1,2 +1,2 @@
 pub mod error;
-pub mod grpc;
+pub mod asset_streaming_and_discovery;

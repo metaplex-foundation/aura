@@ -5,7 +5,7 @@ use std::{
 };
 
 use figment::{providers::Env, Figment};
-use interface::grpc::PeerDiscovery;
+use interface::asset_streaming_and_discovery::PeerDiscovery;
 use serde::Deserialize;
 use tracing_subscriber::fmt;
 
