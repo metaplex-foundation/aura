@@ -2,7 +2,7 @@ use crate::error::IngesterError;
 use entities::models::CompleteAssetDetails;
 use entities::models::Updated;
 use futures::StreamExt;
-use interface::AssetDetailsStream;
+use interface::grpc::AssetDetailsStream;
 use log::error;
 use rocks_db::asset::{AssetCollection, AssetLeaf};
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
