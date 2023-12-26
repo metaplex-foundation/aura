@@ -72,3 +72,8 @@ impl AssetIndexReader for MockAssetIndexStorage {
 impl AssetIndexStorage for MockAssetIndexStorage {}
 
 impl AssetIndexStorage for Storage {}
+
+#[automock]
+pub trait AssetSlotStorage {
+    fn last_saved_slot(&self) -> Result<Option<u64>>;
+}

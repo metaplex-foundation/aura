@@ -1,5 +1,6 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use clap::Parser;
 use log::{error, info};
@@ -26,6 +27,7 @@ use nft_ingester::{config::init_logger, error::IngesterError};
 use postgre_client::PgClient;
 use rocks_db::backup_service::BackupService;
 use rocks_db::errors::BackupServiceError;
+use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::{backup_service, Storage};
 
 mod backfiller;
@@ -138,6 +140,10 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
+    let newest_restored_slot = rocks_storage
+        .last_saved_slot()
+        .unwrap()
+        .ok_or(IngesterError::EmptyDataBase)?;
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;
@@ -194,6 +200,28 @@ pub async fn main() -> Result<(), IngesterError> {
                 .await;
         }));
     }
+
+    let first_processed_slot = Arc::new(AtomicU64::new(0));
+    let first_processed_slot_clone = first_processed_slot.clone();
+    let cloned_rocks_storage = rocks_storage.clone();
+    let cloned_keep_running = keep_running.clone();
+    tasks.spawn(tokio::spawn(async move {
+        while cloned_keep_running.load(Ordering::SeqCst) {
+            let slot = cloned_rocks_storage
+                .last_saved_slot()
+                .unwrap_or({
+                    cloned_keep_running.store(false, Ordering::SeqCst);
+                    None
+                }) // If error returned from DB - stop all services
+                .unwrap(); // DB is not empty, so panic only in error case
+            if slot != newest_restored_slot {
+                first_processed_slot_clone.store(slot, Ordering::SeqCst);
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }));
 
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();

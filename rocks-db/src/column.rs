@@ -143,12 +143,6 @@ pub mod columns {
         pub mint_authority: Option<Pubkey>,
         pub freeze_authority: Option<Pubkey>,
     }
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct TokenAccountOwnerIdx {}
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct TokenAccountMintIdx {}
 }
 
 impl TypedColumn for columns::TokenAccount {
@@ -202,49 +196,5 @@ impl columns::TokenAccount {
         }
 
         Some(result)
-    }
-}
-
-impl TypedColumn for columns::TokenAccountOwnerIdx {
-    const NAME: &'static str = "ACCOUNTS_TOKEN_OWNER_IDX";
-
-    type KeyType = (Pubkey, Pubkey);
-    type ValueType = Self;
-
-    fn encode_key((owner, pubkey): (Pubkey, Pubkey)) -> Vec<u8> {
-        let mut key = vec![0; 32 + 32]; // size_of Pubkey + size_of Pubkey
-        key[0..32].clone_from_slice(&owner.as_ref()[0..32]);
-        key[32..64].clone_from_slice(&pubkey.as_ref()[0..32]);
-
-        key
-    }
-
-    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        let owner = Pubkey::try_from(&bytes[0..32])?;
-        let pubkey = Pubkey::try_from(&bytes[32..64])?;
-
-        Ok((owner, pubkey))
-    }
-}
-
-impl TypedColumn for columns::TokenAccountMintIdx {
-    const NAME: &'static str = "ACCOUNTS_TOKEN_MINT_IDX";
-
-    type KeyType = (Pubkey, Pubkey);
-    type ValueType = Self;
-
-    fn encode_key((owner, pubkey): (Pubkey, Pubkey)) -> Vec<u8> {
-        let mut key = vec![0; 32 + 32]; // size_of Pubkey + size_of Pubkey
-        key[0..32].clone_from_slice(&owner.as_ref()[0..32]);
-        key[32..64].clone_from_slice(&pubkey.as_ref()[0..32]);
-
-        key
-    }
-
-    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        let owner = Pubkey::try_from(&bytes[0..32])?;
-        let pubkey = Pubkey::try_from(&bytes[32..64])?;
-
-        Ok((owner, pubkey))
     }
 }
