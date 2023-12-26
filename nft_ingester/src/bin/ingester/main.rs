@@ -204,9 +204,15 @@ pub async fn main() -> Result<(), IngesterError> {
     let first_processed_slot = Arc::new(AtomicU64::new(0));
     let first_processed_slot_clone = first_processed_slot.clone();
     let cloned_rocks_storage = rocks_storage.clone();
+    let cloned_keep_running = keep_running.clone();
     tasks.spawn(tokio::spawn(async move {
-        loop {
-            let slot = cloned_rocks_storage.last_saved_slot().unwrap().unwrap();
+        while cloned_keep_running.load(Ordering::SeqCst) {
+            let slot = cloned_rocks_storage.last_saved_slot().unwrap_or(
+                {
+                    cloned_keep_running.store(false, Ordering::SeqCst);
+                    None
+                }
+            ).unwrap();
             if slot != newest_restored_slot {
                 first_processed_slot_clone.store(slot, Ordering::SeqCst);
                 break;
