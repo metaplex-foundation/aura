@@ -15,13 +15,9 @@ stop:
 	@docker compose -f docker-compose.yaml stop ingester-first-consumer
 
 clippy:
-	@cargo clean -p postgre-client
-	@cargo clean -p rocks-db
-	@cargo clean -p interface
+	@cargo clean -p postgre-client -p rocks-db -p interface
 	@cargo clippy
 
 test:
-	@cargo clean -p postgre-client
-	@cargo clean -p rocks-db
-	@cargo clean -p interface
+	@cargo clean -p postgre-client -p rocks-db -p interface
 	@cargo test --features integration_tests
