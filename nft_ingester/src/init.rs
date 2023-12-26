@@ -2,6 +2,7 @@ use log::{error, info};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::signal;
+use tokio::sync::oneshot::Sender;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
@@ -9,6 +10,7 @@ pub async fn graceful_stop(
     tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
     wait_all: bool,
     keep_running: Arc<AtomicBool>,
+    shutdown_tx: Sender<()>,
 ) {
     match signal::ctrl_c().await {
         Ok(()) => {}
@@ -18,6 +20,7 @@ pub async fn graceful_stop(
     }
     keep_running.store(false, Ordering::SeqCst);
 
+    let _ = shutdown_tx.send(());
     while let Some(task) = tasks.lock().await.join_next().await {
         match task {
             Ok(_) => {

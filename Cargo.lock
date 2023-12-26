@@ -3138,6 +3138,7 @@ dependencies = [
  "figment",
  "flatbuffers",
  "futures",
+ "grpc",
  "interface",
  "jsonrpc-core",
  "jsonrpc-http-server",
@@ -3171,7 +3172,9 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.10",
+ "tonic 0.10.2",
  "tracing-subscriber",
+ "usecase",
  "utils",
 ]
 
