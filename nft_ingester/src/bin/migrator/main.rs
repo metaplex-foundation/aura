@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use log::error;
 use sqlx::{QueryBuilder, Row};
-use tokio::sync::Semaphore;
+use tokio::sync::{Mutex, Semaphore};
+use tokio::task::JoinSet;
 use tokio::time::Instant;
 
 use nft_ingester::config::{setup_config, IngesterConfig};
@@ -21,6 +22,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .rocks_db_path_container
             .clone()
             .unwrap_or("./my_rocksdb".to_string()),
+        Arc::new(Mutex::new(JoinSet::new())),
     )
     .unwrap();
 

@@ -1,13 +1,14 @@
 mod setup;
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::{collections::HashSet, sync::Arc};
 
     use interface::AssetDetailsStreamer;
     use solana_sdk::pubkey::Pubkey;
     use tempfile::TempDir;
 
     use rocks_db::Storage;
+    use tokio::{sync::Mutex, task::JoinSet};
     use tokio_stream::StreamExt;
 
     use crate::setup::setup::*;
@@ -15,8 +16,11 @@ mod tests {
     #[tokio::test]
     async fn test_get_asset_details_stream_in_range_empty_db() {
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage =
-            Storage::open(temp_dir.path().to_str().unwrap()).expect("Failed to create a database");
+        let storage = Storage::open(
+            temp_dir.path().to_str().unwrap(),
+            Arc::new(Mutex::new(JoinSet::new())),
+        )
+        .expect("Failed to create a database");
 
         // Call get_asset_details_stream_in_range on an empty database
         let response = storage.get_asset_details_stream_in_range(100, 200).await;
@@ -31,8 +35,11 @@ mod tests {
     #[tokio::test]
     async fn test_get_asset_details_stream_in_range_data_only_before_target() {
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage =
-            Storage::open(temp_dir.path().to_str().unwrap()).expect("Failed to create a database");
+        let storage = Storage::open(
+            temp_dir.path().to_str().unwrap(),
+            Arc::new(Mutex::new(JoinSet::new())),
+        )
+        .expect("Failed to create a database");
         let pk = Pubkey::new_unique();
 
         storage.asset_updated(10, pk.clone()).unwrap();
@@ -49,8 +56,11 @@ mod tests {
     #[tokio::test]
     async fn test_get_asset_details_stream_in_range_data_only_after_target() {
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage =
-            Storage::open(temp_dir.path().to_str().unwrap()).expect("Failed to create a database");
+        let storage = Storage::open(
+            temp_dir.path().to_str().unwrap(),
+            Arc::new(Mutex::new(JoinSet::new())),
+        )
+        .expect("Failed to create a database");
         let pk = Pubkey::new_unique();
 
         storage.asset_updated(1000, pk.clone()).unwrap();
@@ -67,8 +77,11 @@ mod tests {
     #[tokio::test]
     async fn test_get_asset_details_stream_in_range_data_missing_data() {
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage =
-            Storage::open(temp_dir.path().to_str().unwrap()).expect("Failed to create a database");
+        let storage = Storage::open(
+            temp_dir.path().to_str().unwrap(),
+            Arc::new(Mutex::new(JoinSet::new())),
+        )
+        .expect("Failed to create a database");
         let pk = Pubkey::new_unique();
 
         storage.asset_updated(100, pk.clone()).unwrap();
@@ -92,8 +105,11 @@ mod tests {
     async fn test_get_asset_details_stream_in_range_data() {
         let cnt = 1000;
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage =
-            Storage::open(temp_dir.path().to_str().unwrap()).expect("Failed to create a database");
+        let storage = Storage::open(
+            temp_dir.path().to_str().unwrap(),
+            Arc::new(Mutex::new(JoinSet::new())),
+        )
+        .expect("Failed to create a database");
         let pks = (0..cnt).map(|_| Pubkey::new_unique()).collect::<Vec<_>>();
         let mut slot = 100;
         for pk in pks.iter() {

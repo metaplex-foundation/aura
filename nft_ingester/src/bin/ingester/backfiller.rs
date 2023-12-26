@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::num::ParseIntError;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tokio::time::Duration;
 
@@ -78,7 +79,7 @@ impl Backfiller {
 
     pub async fn start_backfill(
         &self,
-        tasks: &mut JoinSet<Result<(), JoinError>>,
+        tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
         keep_running: Arc<AtomicBool>,
         metrics: Arc<BackfillerMetricsConfig>,
     ) -> Result<(), IngesterError> {
@@ -94,7 +95,7 @@ impl Backfiller {
         .await;
 
         let cloned_keep_running = keep_running.clone();
-        tasks.spawn(tokio::spawn(async move {
+        tasks.lock().await.spawn(tokio::spawn(async move {
             info!("Running slots parser...");
 
             slots_collector.collect_slots(cloned_keep_running).await;
@@ -109,7 +110,7 @@ impl Backfiller {
         .await;
 
         let cloned_keep_running = keep_running.clone();
-        tasks.spawn(tokio::spawn(async move {
+        tasks.lock().await.spawn(tokio::spawn(async move {
             info!("Running transactions parser...");
 
             transactions_parser

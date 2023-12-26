@@ -2,6 +2,7 @@ mod setup;
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+    use std::sync::Arc;
 
     use entities::models::Updated;
     use solana_sdk::pubkey::Pubkey;
@@ -10,6 +11,8 @@ mod tests {
     use rocks_db::key_encoders::encode_u64x2_pubkey;
     use rocks_db::storage_traits::AssetUpdateIndexStorage;
     use rocks_db::{AssetDynamicDetails, Storage};
+    use tokio::sync::Mutex;
+    use tokio::task::JoinSet;
 
     use crate::setup::setup::{
         create_test_dynamic_data, TestEnvironment, DEFAULT_PUBKEY_OF_ONES, PUBKEY_OF_TWOS,
@@ -18,8 +21,11 @@ mod tests {
     #[test]
     fn test_process_asset_updates_batch_empty_db() {
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage =
-            Storage::open(temp_dir.path().to_str().unwrap()).expect("Failed to create a database");
+        let storage = Storage::open(
+            temp_dir.path().to_str().unwrap(),
+            Arc::new(Mutex::new(JoinSet::new())),
+        )
+        .expect("Failed to create a database");
 
         // Call fetch_asset_updated_keys on an empty database
         let (keys, last_key) = storage

@@ -1,11 +1,14 @@
 #[cfg(test)]
 pub mod setup {
+    use std::sync::Arc;
+
     use entities::models::Updated;
     use rand::Rng;
     use solana_sdk::pubkey::Pubkey;
     use tempfile::TempDir;
 
     use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
+    use tokio::{sync::Mutex, task::JoinSet};
 
     pub struct TestEnvironment {
         pub storage: Storage,
@@ -14,7 +17,8 @@ pub mod setup {
 
     impl TestEnvironment {
         pub fn new(temp_dir: TempDir, keys: &[(u64, Pubkey)]) -> Self {
-            let storage = Storage::open(temp_dir.path().to_str().unwrap())
+            let join_set = Arc::new(Mutex::new(JoinSet::new()));
+            let storage = Storage::open(temp_dir.path().to_str().unwrap(), join_set)
                 .expect("Failed to create a database");
             for &(slot, ref pubkey) in keys {
                 storage.asset_updated(slot, pubkey.clone()).unwrap();
