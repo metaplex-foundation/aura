@@ -1,29 +1,13 @@
 use crate::error::IngesterError;
-use async_trait::async_trait;
 use entities::models::CompleteAssetDetails;
 use entities::models::Updated;
-use futures::{Stream, StreamExt};
+use futures::StreamExt;
+use interface::AssetDetailsStream;
 use log::error;
-use mockall::automock;
 use rocks_db::asset::{AssetCollection, AssetLeaf};
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
 use serde_json::json;
-use std::pin::Pin;
 use std::sync::Arc;
-
-pub type AsyncError = Box<dyn std::error::Error + Send + Sync>;
-pub type AssetDetailsStream =
-    Pin<Box<dyn Stream<Item = Result<CompleteAssetDetails, AsyncError>> + Send + Sync>>;
-
-#[automock]
-#[async_trait]
-pub trait AssetDetailsStreamer: Send + Sync {
-    async fn get_asset_details_stream_in_range(
-        &self,
-        start_slot: u64,
-        end_slot: u64,
-    ) -> Result<AssetDetailsStream, AsyncError>;
-}
 
 pub async fn process_asset_details_stream(storage: Arc<Storage>, mut stream: AssetDetailsStream) {
     while let Some(result) = stream.next().await {

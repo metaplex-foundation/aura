@@ -1,6 +1,7 @@
 use entities::models::{CompleteAssetDetails, Updated};
 use futures::stream;
-use nft_ingester::gapfiller::{process_asset_details_stream, AsyncError};
+use interface::AsyncError;
+use nft_ingester::gapfiller::process_asset_details_stream;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use tempfile::TempDir;

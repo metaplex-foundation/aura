@@ -53,6 +53,7 @@ entities = { path = "../entities" }
 mpl-token-metadata = "1.13.2"
 futures = "0.3.29"
 async-trait = "0.1.74"
+interface = { path = "../interface" }
 
 [dev-dependencies]
 tempfile = "3.8.1"

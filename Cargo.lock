@@ -3139,6 +3139,7 @@ dependencies = [
  "figment",
  "flatbuffers",
  "futures",
+ "interface",
  "jsonrpc-core",
  "jsonrpc-http-server",
  "libc",
