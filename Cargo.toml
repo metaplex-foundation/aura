@@ -8,6 +8,7 @@ members = [
   "entities",
   "grpc",
   "interface",
+  "usecase",
 ]
 
 [profile.release]
