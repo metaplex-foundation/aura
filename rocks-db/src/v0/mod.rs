@@ -1,74 +1,56 @@
+pub mod columns;
+
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
-use asset::SlotAssetIdx;
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
-pub use asset::{
-    AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
-};
-pub use column::columns;
-use column::{Column, TypedColumn};
+use crate::{Column, TypedColumn};
+pub use columns::asset::{AssetDynamicDetails, AssetOwner};
 
 use crate::errors::StorageError;
 
-pub mod asset;
-mod asset_client;
-pub mod backup_service;
-mod batch_client;
-pub mod bubblegum_slots;
-pub mod cl_items;
-pub mod column;
-pub mod errors;
-pub mod key_encoders;
-pub mod offchain_data;
-pub mod storage_traits;
-
-pub mod v0;
-
 pub type Result<T> = std::result::Result<T, StorageError>;
 
-pub struct Storage {
-    pub asset_static_data: Column<AssetStaticDetails>,
-    pub asset_dynamic_data: Column<AssetDynamicDetails>,
-    pub asset_authority_data: Column<AssetAuthority>,
-    pub asset_owner_data: Column<AssetOwner>,
-    pub asset_leaf_data: Column<asset::AssetLeaf>,
-    pub asset_collection_data: Column<asset::AssetCollection>,
-    pub asset_offchain_data: Column<offchain_data::OffChainData>,
-    pub cl_items: Column<cl_items::ClItem>,
-    pub cl_leafs: Column<cl_items::ClLeaf>,
-    pub bubblegum_slots: Column<bubblegum_slots::BubblegumSlots>,
-    pub token_accounts: Column<columns::TokenAccount>,
-    pub account_token_owner_idx: Column<columns::TokenAccountOwnerIdx>,
-    pub account_token_mint_idx: Column<columns::TokenAccountMintIdx>,
+pub struct StorageV0 {
+    pub asset_static_data: Column<crate::asset::AssetStaticDetails>,
+    pub asset_dynamic_data: Column<columns::asset::AssetDynamicDetails>,
+    pub asset_authority_data: Column<crate::asset::AssetAuthority>,
+    pub asset_owner_data: Column<columns::asset::AssetOwner>,
+    pub asset_leaf_data: Column<crate::asset::AssetLeaf>,
+    pub asset_collection_data: Column<crate::asset::AssetCollection>,
+    pub asset_offchain_data: Column<crate::offchain_data::OffChainData>,
+    pub cl_items: Column<crate::cl_items::ClItem>,
+    pub cl_leafs: Column<crate::cl_items::ClLeaf>,
+    pub bubblegum_slots: Column<crate::bubblegum_slots::BubblegumSlots>,
+    pub token_accounts: Column<crate::column::columns::TokenAccount>,
+    pub account_token_owner_idx: Column<crate::column::columns::TokenAccountOwnerIdx>,
+    pub account_token_mint_idx: Column<crate::column::columns::TokenAccountMintIdx>,
     pub db: Arc<DB>,
-    pub assets_update_idx: Column<AssetsUpdateIdx>,
-    pub slot_asset_idx: Column<SlotAssetIdx>,
+    pub assets_update_idx: Column<columns::asset::AssetsUpdateIdx>,
     assets_update_last_seq: AtomicU64,
 }
 
-impl Storage {
+impl StorageV0 {
     pub fn open(db_path: &str) -> Result<Self> {
         let db = Arc::new(DB::open_cf_descriptors(
             &Self::get_db_options(),
             db_path,
             vec![
-                Self::new_cf_descriptor::<offchain_data::OffChainData>(),
-                Self::new_cf_descriptor::<AssetStaticDetails>(),
-                Self::new_cf_descriptor::<AssetDynamicDetails>(),
-                Self::new_cf_descriptor::<AssetAuthority>(),
-                Self::new_cf_descriptor::<AssetOwner>(),
-                Self::new_cf_descriptor::<asset::AssetLeaf>(),
-                Self::new_cf_descriptor::<asset::AssetCollection>(),
-                Self::new_cf_descriptor::<cl_items::ClItem>(),
-                Self::new_cf_descriptor::<cl_items::ClLeaf>(),
-                Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(),
-                Self::new_cf_descriptor::<columns::TokenAccount>(),
-                Self::new_cf_descriptor::<columns::TokenAccountOwnerIdx>(),
-                Self::new_cf_descriptor::<columns::TokenAccountMintIdx>(),
-                Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(),
-                Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
+                Self::new_cf_descriptor::<crate::offchain_data::OffChainData>(),
+                Self::new_cf_descriptor::<crate::asset::AssetStaticDetails>(),
+                Self::new_cf_descriptor::<columns::asset::AssetDynamicDetails>(),
+                Self::new_cf_descriptor::<crate::asset::AssetAuthority>(),
+                Self::new_cf_descriptor::<columns::asset::AssetOwner>(),
+                Self::new_cf_descriptor::<crate::asset::AssetLeaf>(),
+                Self::new_cf_descriptor::<crate::asset::AssetCollection>(),
+                Self::new_cf_descriptor::<crate::cl_items::ClItem>(),
+                Self::new_cf_descriptor::<crate::cl_items::ClLeaf>(),
+                Self::new_cf_descriptor::<crate::bubblegum_slots::BubblegumSlots>(),
+                Self::new_cf_descriptor::<crate::column::columns::TokenAccount>(),
+                Self::new_cf_descriptor::<crate::column::columns::TokenAccountOwnerIdx>(),
+                Self::new_cf_descriptor::<crate::column::columns::TokenAccountMintIdx>(),
+                Self::new_cf_descriptor::<crate::asset::AssetsUpdateIdx>(),
             ],
         )?);
         let asset_offchain_data = Self::column(db.clone());
@@ -89,7 +71,6 @@ impl Storage {
         let account_token_owner_idx = Self::column(db.clone());
         let account_token_mint_idx = Self::column(db.clone());
         let assets_update_idx = Self::column(db.clone());
-        let slot_asset_idx = Self::column(db.clone());
 
         Ok(Self {
             asset_static_data,
@@ -107,7 +88,6 @@ impl Storage {
             account_token_mint_idx,
             db,
             assets_update_idx,
-            slot_asset_idx,
             assets_update_last_seq: AtomicU64::new(0),
         })
     }
@@ -173,47 +153,46 @@ impl Storage {
         cf_options.set_target_file_size_base(file_size_base);
 
         // Optional merges
-        if C::NAME == asset::AssetStaticDetails::NAME {
+        if C::NAME == crate::asset::AssetStaticDetails::NAME {
             cf_options.set_merge_operator_associative(
                 "merge_fn_merge_static_details",
-                asset::AssetStaticDetails::merge_static_details,
+                crate::asset::AssetStaticDetails::merge_static_details,
             );
         }
-
-        if C::NAME == asset::AssetDynamicDetails::NAME {
+        if C::NAME == columns::asset::AssetDynamicDetails::NAME {
             cf_options.set_merge_operator_associative(
                 "merge_fn_merge_dynamic_details",
-                asset::AssetDynamicDetails::merge_dynamic_details,
+                columns::asset::AssetDynamicDetails::merge_dynamic_details,
             );
         }
-        if C::NAME == asset::AssetAuthority::NAME {
+        if C::NAME == crate::asset::AssetAuthority::NAME {
             cf_options.set_merge_operator_associative(
                 "merge_fn_merge_asset_authorities",
-                asset::AssetAuthority::merge_asset_authorities,
+                crate::asset::AssetAuthority::merge_asset_authorities,
             );
         }
-        if C::NAME == asset::AssetOwner::NAME {
+        if C::NAME == crate::asset::AssetOwner::NAME {
             cf_options.set_merge_operator_associative(
                 "merge_fn_merge_asset_owner",
-                asset::AssetOwner::merge_asset_owner,
+                columns::asset::AssetOwner::merge_asset_owner,
             );
         }
-        if C::NAME == asset::AssetLeaf::NAME {
+        if C::NAME == crate::asset::AssetLeaf::NAME {
             cf_options.set_merge_operator_associative(
                 "merge_fn_merge_asset_leaf",
-                asset::AssetLeaf::merge_asset_leaf,
+                crate::asset::AssetLeaf::merge_asset_leaf,
             );
         }
-        if C::NAME == asset::AssetCollection::NAME {
+        if C::NAME == crate::asset::AssetCollection::NAME {
             cf_options.set_merge_operator_associative(
                 "merge_fn_asset_collection",
-                asset::AssetCollection::merge_asset_collection,
+                crate::asset::AssetCollection::merge_asset_collection,
             );
         }
-        if C::NAME == cl_items::ClItem::NAME {
+        if C::NAME == crate::cl_items::ClItem::NAME {
             cf_options.set_merge_operator_associative(
                 "merge_fn_cl_item",
-                cl_items::ClItem::merge_cl_items,
+                crate::cl_items::ClItem::merge_cl_items,
             );
         }
 

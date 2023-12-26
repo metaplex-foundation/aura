@@ -61,3 +61,6 @@ name = "ingester"
 
 [[bin]]
 name = "migrator"
+
+[[bin]]
+name = "rocks_migrator"
