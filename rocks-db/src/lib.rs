@@ -60,6 +60,7 @@ impl Storage {
                 Self::new_cf_descriptor::<cl_items::ClLeaf>(),
                 Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(),
                 Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(),
+                Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
             ],
         )?);
         let asset_offchain_data = Self::column(db.clone());
