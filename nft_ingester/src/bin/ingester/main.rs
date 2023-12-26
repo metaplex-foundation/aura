@@ -212,8 +212,8 @@ pub async fn main() -> Result<(), IngesterError> {
                 .unwrap_or({
                     cloned_keep_running.store(false, Ordering::SeqCst);
                     None
-                })
-                .unwrap();
+                }) // If error returned from DB - stop all services
+                .unwrap(); // DB is not empty, so panic only in error case
             if slot != newest_restored_slot {
                 first_processed_slot_clone.store(slot, Ordering::SeqCst);
                 break;
