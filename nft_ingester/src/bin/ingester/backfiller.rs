@@ -389,7 +389,7 @@ impl TransactionsParser {
                             account_keys_vec
                         };
 
-                        let bubblegum = blockbuster::programs::bubblegum::program_id().to_bytes();
+                        let bubblegum = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID.to_bytes();
                         if account_keys.iter().all(|pk| *pk != bubblegum) {
                             continue;
                         }
