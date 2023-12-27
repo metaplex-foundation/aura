@@ -6,12 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-solana-sdk = "1.14.15"
+solana-sdk = "~1.16.16"
 tokio = { version ="1.25.0", features = ["full"] }
-solana-client = "1.14.15"
-mpl-token-metadata = { version = "1.8.3", features = ["no-entrypoint"] }
-spl-token = "3.5.0"
-solana-program = "1.14.15"
-spl-associated-token-account = "1.1.1"
+solana-client = "1.16.16"
+mpl-token-metadata = { version = "3.2.3" }
+spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
+solana-program = "1.16.16"
+spl-associated-token-account = "2.3.0"
 rand = "0.8.5"
 fake = "2.5.0"

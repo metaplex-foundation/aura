@@ -389,27 +389,27 @@ impl MplxAccsProcessor {
 }
 
 pub fn use_method_from_mpl_state(
-    value: &mpl_token_metadata::state::UseMethod,
+    value: &mpl_token_metadata::types::UseMethod,
 ) -> entities::enums::UseMethod {
     match value {
-        mpl_token_metadata::state::UseMethod::Burn => entities::enums::UseMethod::Burn,
-        mpl_token_metadata::state::UseMethod::Multiple => entities::enums::UseMethod::Multiple,
-        mpl_token_metadata::state::UseMethod::Single => entities::enums::UseMethod::Single,
+        mpl_token_metadata::types::UseMethod::Burn => entities::enums::UseMethod::Burn,
+        mpl_token_metadata::types::UseMethod::Multiple => entities::enums::UseMethod::Multiple,
+        mpl_token_metadata::types::UseMethod::Single => entities::enums::UseMethod::Single,
     }
 }
 
 pub fn token_standard_from_mpl_state(
-    value: &mpl_token_metadata::state::TokenStandard,
+    value: &mpl_token_metadata::types::TokenStandard,
 ) -> entities::enums::TokenStandard {
     match value {
-        TokenStandard::NonFungible => entities::enums::TokenStandard::NonFungible,
-        TokenStandard::FungibleAsset => entities::enums::TokenStandard::FungibleAsset,
-        TokenStandard::Fungible => entities::enums::TokenStandard::Fungible,
-        TokenStandard::NonFungibleEdition => entities::enums::TokenStandard::NonFungibleEdition,
-        TokenStandard::ProgrammableNonFungible => {
+        mpl_token_metadata::types::TokenStandard::NonFungible => entities::enums::TokenStandard::NonFungible,
+        mpl_token_metadata::types::TokenStandard::FungibleAsset => entities::enums::TokenStandard::FungibleAsset,
+        mpl_token_metadata::types::TokenStandard::Fungible => entities::enums::TokenStandard::Fungible,
+        mpl_token_metadata::types::TokenStandard::NonFungibleEdition => entities::enums::TokenStandard::NonFungibleEdition,
+        mpl_token_metadata::types::TokenStandard::ProgrammableNonFungible => {
             entities::enums::TokenStandard::ProgrammableNonFungible
         }
-        TokenStandard::ProgrammableNonFungibleEdition => {
+        mpl_token_metadata::types::TokenStandard::ProgrammableNonFungibleEdition => {
             entities::enums::TokenStandard::ProgrammableNonFungibleEdition
         }
     }

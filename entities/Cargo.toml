@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 serde = "1.0.193"
-solana-sdk = { version = "~1.14.14" }
+solana-sdk = "~1.16.16"

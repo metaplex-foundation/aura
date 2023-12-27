@@ -13,7 +13,7 @@ use entities::models::Updated;
 use entities::models::{ChainDataV1, Creator, Uses};
 use log::{debug, error, info};
 use metrics_utils::IngesterMetricsConfig;
-use mpl_bubblegum::state::leaf_schema::LeafSchema;
+use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
 use plerkle_serialization::{Pubkey as FBPubkey, TransactionInfo};
 use rocks_db::asset::AssetOwner;
@@ -127,6 +127,8 @@ impl BubblegumTxProcessor {
             InstructionName::VerifyCollection => "VerifyCollection",
             InstructionName::UnverifyCollection => "UnverifyCollection",
             InstructionName::SetAndVerifyCollection => "SetAndVerifyCollection",
+            InstructionName::SetDecompressibleState => todo!(),
+            InstructionName::UpdateMetadata => todo!(),
         }
     }
 
@@ -800,14 +802,14 @@ impl BubblegumTxProcessor {
 }
 
 fn use_method_from_mpl_bubblegum_state(
-    value: &mpl_bubblegum::state::metaplex_adapter::UseMethod,
+    value: &mpl_bubblegum::types::UseMethod,
 ) -> entities::enums::UseMethod {
     match value {
-        mpl_bubblegum::state::metaplex_adapter::UseMethod::Burn => entities::enums::UseMethod::Burn,
-        mpl_bubblegum::state::metaplex_adapter::UseMethod::Multiple => {
+        mpl_bubblegum::types::UseMethod::Burn => entities::enums::UseMethod::Burn,
+        mpl_bubblegum::types::UseMethod::Multiple => {
             entities::enums::UseMethod::Multiple
         }
-        mpl_bubblegum::state::metaplex_adapter::UseMethod::Single => {
+        mpl_bubblegum::types::UseMethod::Single => {
             entities::enums::UseMethod::Single
         }
     }
