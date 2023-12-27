@@ -143,9 +143,7 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
-    let newest_restored_slot = rocks_storage
-        .last_saved_slot()?
-        .unwrap_or(0);
+    let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap_or(0);
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;

@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use entities::models::{CompleteAssetDetails, Updated};
-use interface::asset_streaming_and_discovery::{AssetDetailsStream, AssetDetailsStreamer, AsyncError};
+use interface::asset_streaming_and_discovery::{
+    AssetDetailsStream, AssetDetailsStreamer, AsyncError,
+};
 use rocksdb::DB;
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
