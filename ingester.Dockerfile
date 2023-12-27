@@ -11,6 +11,7 @@ COPY digital_asset_types ./digital_asset_types
 COPY entities ./entities
 COPY grpc ./grpc
 COPY interface ./interface
+COPY usecase ./usecase
 COPY metrics_utils ./metrics_utils
 COPY rocks-db ./rocks-db
 COPY postgre-client ./postgre-client
