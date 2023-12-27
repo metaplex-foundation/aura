@@ -5,6 +5,7 @@ use std::{
 };
 
 use figment::{providers::Env, Figment};
+use interface::asset_streaming_and_discovery::PeerDiscovery;
 use serde::Deserialize;
 use tracing_subscriber::fmt;
 
@@ -79,7 +80,6 @@ pub struct IngesterConfig {
     pub background_task_runner_config: Option<BackgroundTaskRunnerConfig>,
     pub is_snapshot: Option<bool>,
     pub consumer_number: Option<usize>,
-    pub scylla_addr: Option<String>,
     pub migration_batch_size: Option<u32>,
     pub migrator_workers: Option<u32>,
     pub rocks_db_path_container: Option<String>,
@@ -88,6 +88,7 @@ pub struct IngesterConfig {
     pub rocks_backup_dir: String,
     pub run_bubblegum_backfiller: bool,
     pub synchronizer_batch_size: usize,
+    pub gapfiller_peer_addr: String,
 }
 
 impl IngesterConfig {
@@ -351,6 +352,12 @@ impl TcpConfig {
                     TCP_SENDER_BACKFILLER_BATCH_MAX_BYTES
                 ),
             })? as usize)
+    }
+}
+
+impl PeerDiscovery for IngesterConfig {
+    fn get_gapfiller_peer_addr(&self) -> String {
+        self.gapfiller_peer_addr.clone()
     }
 }
 
