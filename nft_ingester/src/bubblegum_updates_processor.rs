@@ -193,7 +193,7 @@ impl BubblegumTxProcessor {
                 slot,
             };
 
-            if ix.program.0 == mpl_bubblegum::id().to_bytes() {
+            if ix.program.0 == mpl_bubblegum::programs::MPL_BUBBLEGUM_ID.to_bytes() {
                 let result = self.instruction_parser.handle_instruction(&ix)?;
 
                 let concrete = result.result_type();
@@ -385,17 +385,25 @@ impl BubblegumTxProcessor {
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle<'c>,
     ) -> Result<(), IngesterError> {
-        if let (Some(le), Some(cl), Some(Payload::MintV1 { args })) = (
+        if let (
+            Some(le),
+            Some(cl),
+            Some(Payload::MintV1 {
+                args,
+                authority,
+                tree_id,
+            }),
+        ) = (
             &parsing_result.leaf_update,
             &parsing_result.tree_update,
             &parsing_result.payload,
         ) {
             self.rocks_client.save_changelog(cl, bundle.slot).await;
 
-            let tree_id =
-                Pubkey::new_from_array(bundle.keys.get(3).unwrap().0.to_vec().try_into().unwrap());
-            let authority =
-                Pubkey::new_from_array(bundle.keys.get(0).unwrap().0.to_vec().try_into().unwrap());
+            let tree_id = Pubkey::new_from_array(tree_id.to_owned());
+            //     Pubkey::new_from_array(bundle.keys.get(3).unwrap().0.to_vec().try_into().unwrap());
+            let authority =Pubkey::new_from_array(authority.to_owned());
+            //     Pubkey::new_from_array(bundle.keys.get(0).unwrap().0.to_vec().try_into().unwrap());
 
             match le.schema {
                 LeafSchema::V1 {

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use blockbuster::token_metadata::state::{Metadata, TokenStandard};
+use blockbuster::token_metadata::state::{Metadata, TokenStandard, UseMethod};
 use log::error;
 use serde_json::json;
 use tokio::time::Instant;
@@ -303,7 +303,7 @@ impl MplxAccsProcessor {
                 primary_sale_happened: metadata.primary_sale_happened,
                 token_standard: metadata
                     .token_standard
-                    .map(|s| token_standard_from_mpl_state(&s)),
+                    .map(|s: TokenStandard| token_standard_from_mpl_state(&s)),
                 uses: metadata.uses.map(|u| Uses {
                     use_method: use_method_from_mpl_state(&u.use_method),
                     remaining: u.remaining,
@@ -389,27 +389,27 @@ impl MplxAccsProcessor {
 }
 
 pub fn use_method_from_mpl_state(
-    value: &mpl_token_metadata::types::UseMethod,
+    value: &UseMethod,
 ) -> entities::enums::UseMethod {
     match value {
-        mpl_token_metadata::types::UseMethod::Burn => entities::enums::UseMethod::Burn,
-        mpl_token_metadata::types::UseMethod::Multiple => entities::enums::UseMethod::Multiple,
-        mpl_token_metadata::types::UseMethod::Single => entities::enums::UseMethod::Single,
+        UseMethod::Burn => entities::enums::UseMethod::Burn,
+        UseMethod::Multiple => entities::enums::UseMethod::Multiple,
+        UseMethod::Single => entities::enums::UseMethod::Single,
     }
 }
 
 pub fn token_standard_from_mpl_state(
-    value: &mpl_token_metadata::types::TokenStandard,
+    value: &TokenStandard,
 ) -> entities::enums::TokenStandard {
     match value {
-        mpl_token_metadata::types::TokenStandard::NonFungible => entities::enums::TokenStandard::NonFungible,
-        mpl_token_metadata::types::TokenStandard::FungibleAsset => entities::enums::TokenStandard::FungibleAsset,
-        mpl_token_metadata::types::TokenStandard::Fungible => entities::enums::TokenStandard::Fungible,
-        mpl_token_metadata::types::TokenStandard::NonFungibleEdition => entities::enums::TokenStandard::NonFungibleEdition,
-        mpl_token_metadata::types::TokenStandard::ProgrammableNonFungible => {
+        TokenStandard::NonFungible => entities::enums::TokenStandard::NonFungible,
+        TokenStandard::FungibleAsset => entities::enums::TokenStandard::FungibleAsset,
+        TokenStandard::Fungible => entities::enums::TokenStandard::Fungible,
+        TokenStandard::NonFungibleEdition => entities::enums::TokenStandard::NonFungibleEdition,
+        TokenStandard::ProgrammableNonFungible => {
             entities::enums::TokenStandard::ProgrammableNonFungible
         }
-        mpl_token_metadata::types::TokenStandard::ProgrammableNonFungibleEdition => {
+        TokenStandard::ProgrammableNonFungibleEdition => {
             entities::enums::TokenStandard::ProgrammableNonFungibleEdition
         }
     }
