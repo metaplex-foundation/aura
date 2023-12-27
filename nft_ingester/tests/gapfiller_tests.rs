@@ -5,6 +5,7 @@ use nft_ingester::gapfiller::process_asset_details_stream;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use tempfile::TempDir;
+use tokio::{sync::Mutex, task::JoinSet};
 
 use rocks_db::Storage;
 
@@ -20,7 +21,11 @@ fn create_test_complete_asset_details(pubkey: Pubkey) -> CompleteAssetDetails {
 async fn test_process_asset_details_stream() {
     let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
     let storage = Arc::new(
-        Storage::open(temp_dir.path().to_str().unwrap()).expect("Failed to create a database"),
+        Storage::open(
+            temp_dir.path().to_str().unwrap(),
+            Arc::new(Mutex::new(JoinSet::new())),
+        )
+        .expect("Failed to create a database"),
     );
 
     let first_key = Pubkey::new_unique();

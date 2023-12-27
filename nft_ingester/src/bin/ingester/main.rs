@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use log::{error, info};
+use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 use metrics_utils::utils::setup_metrics;
@@ -130,12 +131,14 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     }));
 
+    let mutexed_tasks = Arc::new(Mutex::new(tasks));
     // start parsers
     let storage = Storage::open(
         &config
             .rocks_db_path_container
             .clone()
             .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        mutexed_tasks.clone(),
     )
     .unwrap();
 
@@ -151,7 +154,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_metrics = metrics_state.ingester_metrics.clone();
 
     let cloned_keep_running = keep_running.clone();
-    tasks.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         backup_service.perform_backup(cloned_metrics, cloned_keep_running)
     }));
 
@@ -176,7 +179,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let cloned_mplx_parser = mplx_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
-        tasks.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
             cloned_mplx_parser
                 .process_metadata_accs(cloned_keep_running)
                 .await;
@@ -185,7 +188,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let cloned_token_parser = token_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
-        tasks.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
             cloned_token_parser
                 .process_token_accs(cloned_keep_running)
                 .await;
@@ -194,7 +197,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let cloned_token_parser = token_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
-        tasks.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
             cloned_token_parser
                 .process_mint_accs(cloned_keep_running)
                 .await;
@@ -205,7 +208,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let first_processed_slot_clone = first_processed_slot.clone();
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_keep_running = keep_running.clone();
-    tasks.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
             let slot = cloned_rocks_storage
                 .last_saved_slot()
@@ -225,7 +228,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
-    tasks.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
             cloned_rocks_storage.clone(),
             cloned_keep_running,
@@ -247,7 +250,7 @@ pub async fn main() -> Result<(), IngesterError> {
     );
 
     let cloned_keep_running = keep_running.clone();
-    tasks.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         bubblegum_updates_processor.run(cloned_keep_running).await;
     }));
 
@@ -258,7 +261,7 @@ pub async fn main() -> Result<(), IngesterError> {
     .await;
 
     let cloned_keep_running = keep_running.clone();
-    tasks.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         json_downloader.run(cloned_keep_running).await;
     }));
 
@@ -271,7 +274,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
         backfiller
             .start_backfill(
-                &mut tasks,
+                mutexed_tasks.clone(),
                 keep_running.clone(),
                 metrics_state.backfiller_metrics.clone(),
             )
@@ -300,7 +303,7 @@ pub async fn main() -> Result<(), IngesterError> {
     );
 
     let cloned_keep_running = keep_running.clone();
-    tasks.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
             let res = synchronizer
                 .synchronize_asset_indexes(cloned_keep_running.clone())
@@ -318,7 +321,7 @@ pub async fn main() -> Result<(), IngesterError> {
     }));
 
     // --stop
-    graceful_stop(tasks, true, keep_running.clone()).await;
+    graceful_stop(mutexed_tasks, true, keep_running.clone()).await;
 
     Ok(())
 }

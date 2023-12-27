@@ -9,11 +9,14 @@ pub use asset::{
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
+use tokio::sync::Mutex;
+use tokio::task::JoinSet;
 
 use crate::errors::StorageError;
 
 pub mod asset;
 mod asset_client;
+pub mod asset_streaming_client;
 pub mod backup_service;
 mod batch_client;
 pub mod bubblegum_slots;
@@ -41,10 +44,14 @@ pub struct Storage {
     pub assets_update_idx: Column<AssetsUpdateIdx>,
     pub slot_asset_idx: Column<SlotAssetIdx>,
     assets_update_last_seq: AtomicU64,
+    join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
 }
 
 impl Storage {
-    pub fn open(db_path: &str) -> Result<Self> {
+    pub fn open(
+        db_path: &str,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+    ) -> Result<Self> {
         let db = Arc::new(DB::open_cf_descriptors(
             &Self::get_db_options(),
             db_path,
@@ -95,6 +102,7 @@ impl Storage {
             assets_update_idx,
             slot_asset_idx,
             assets_update_last_seq: AtomicU64::new(0),
+            join_set,
         })
     }
 

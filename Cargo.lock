@@ -4381,12 +4381,14 @@ dependencies = [
  "env_logger 0.10.1",
  "figment",
  "futures-util",
+ "interface",
  "itertools 0.12.0",
  "log",
  "lz4",
  "metrics-utils",
  "mockall 0.12.0",
  "num_cpus",
+ "rand 0.8.5",
  "reqwest",
  "rocksdb",
  "serde",
@@ -4397,6 +4399,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
