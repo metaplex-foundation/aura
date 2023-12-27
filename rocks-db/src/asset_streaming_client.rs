@@ -46,14 +46,22 @@ async fn process_asset_details_range(
         let (idx_key, _) = pair.map_err(|e| Box::new(e) as AsyncError)?;
         let (slot, pubkey) =
             SlotAssetIdx::decode_key(idx_key.to_vec()).map_err(|e| Box::new(e) as AsyncError)?;
-
         if slot > end_slot {
             break;
         }
 
-        let details = get_complete_asset_details(backend.clone(), pubkey)?;
-        if tx.send(Ok(details)).await.is_err() {
-            break; // Receiver is dropped
+        let details = get_complete_asset_details(backend.clone(), pubkey);
+        match details {
+            Err(e) => {
+                if tx.send(Err(Box::new(e) as AsyncError)).await.is_err() {
+                    break; // Receiver is dropped
+                }
+            }
+            Ok(details) => {
+                if tx.send(Ok(details)).await.is_err() {
+                    break; // Receiver is dropped
+                }
+            }
         }
     }
 

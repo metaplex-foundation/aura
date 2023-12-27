@@ -111,7 +111,7 @@ mod tests {
         )
         .expect("Failed to create a database");
         let pks = (0..cnt).map(|_| Pubkey::new_unique()).collect::<Vec<_>>();
-        let mut slot = 100;
+        let slot = 100;
         for pk in pks.iter() {
             storage.asset_updated(slot, pk.clone()).unwrap();
         }
