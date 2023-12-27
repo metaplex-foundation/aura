@@ -144,9 +144,8 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rocks_storage = Arc::new(storage);
     let newest_restored_slot = rocks_storage
-        .last_saved_slot()
-        .unwrap()
-        .ok_or(IngesterError::EmptyDataBase)?;
+        .last_saved_slot()?
+        .unwrap_or(0);
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;
@@ -210,16 +209,23 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_keep_running = keep_running.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
-            let slot = cloned_rocks_storage
-                .last_saved_slot()
-                .unwrap_or({
+            let slot = cloned_rocks_storage.last_saved_slot();
+
+            match slot {
+                Ok(slot) => {
+                    if let Some(slot) = slot {
+                        if slot != newest_restored_slot {
+                            first_processed_slot_clone.store(slot, Ordering::SeqCst);
+                            break;
+                        }
+                    }
+                }
+                Err(e) => {
+                    // If error returned from DB - stop all services
+                    error!("Error while getting last saved slot: {}", e);
                     cloned_keep_running.store(false, Ordering::SeqCst);
-                    None
-                }) // If error returned from DB - stop all services
-                .unwrap(); // DB is not empty, so panic only in error case
-            if slot != newest_restored_slot {
-                first_processed_slot_clone.store(slot, Ordering::SeqCst);
-                break;
+                    break;
+                }
             }
 
             tokio::time::sleep(Duration::from_millis(100)).await;
