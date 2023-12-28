@@ -115,12 +115,16 @@ pub struct AssetDetails {
     pub owner_type: ::core::option::Option<DynamicEnumField>,
     #[prost(message, optional, tag = "18")]
     pub owner_delegate_seq: ::core::option::Option<DynamicUint64Field>,
-    #[prost(message, repeated, tag = "19")]
-    pub leaves: ::prost::alloc::vec::Vec<AssetLeaf>,
+    #[prost(message, optional, tag = "19")]
+    pub asset_leaf: ::core::option::Option<AssetLeaf>,
     #[prost(message, optional, tag = "20")]
     pub collection: ::core::option::Option<AssetCollection>,
     #[prost(message, optional, tag = "21")]
     pub chain_data: ::core::option::Option<ChainDataV1>,
+    #[prost(message, optional, tag = "22")]
+    pub cl_leaf: ::core::option::Option<ClLeaf>,
+    #[prost(message, repeated, tag = "23")]
+    pub cl_items: ::prost::alloc::vec::Vec<ClItem>,
 }
 /// Dynamic field messages
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -181,6 +185,34 @@ pub struct DynamicCreatorsField {
     #[prost(message, optional, tag = "2")]
     pub seq_updated: ::core::option::Option<u64>,
     #[prost(uint64, tag = "3")]
+    pub slot_updated: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ClLeaf {
+    #[prost(uint64, tag = "1")]
+    pub cli_leaf_idx: u64,
+    #[prost(bytes = "vec", tag = "2")]
+    pub cli_tree_key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint64, tag = "3")]
+    pub cli_node_idx: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ClItem {
+    #[prost(uint64, tag = "1")]
+    pub cli_node_idx: u64,
+    #[prost(bytes = "vec", tag = "2")]
+    pub cli_tree_key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(message, optional, tag = "3")]
+    pub cli_leaf_idx: ::core::option::Option<u64>,
+    #[prost(uint64, tag = "4")]
+    pub cli_seq: u64,
+    #[prost(uint64, tag = "5")]
+    pub cli_level: u64,
+    #[prost(bytes = "vec", tag = "6")]
+    pub cli_hash: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint64, tag = "7")]
     pub slot_updated: u64,
 }
 /// RangeRequest and AssetDetailsResponse for data synchronization

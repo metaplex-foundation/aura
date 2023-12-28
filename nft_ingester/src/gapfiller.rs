@@ -5,6 +5,7 @@ use futures::StreamExt;
 use interface::asset_streaming_and_discovery::AssetDetailsStream;
 use log::error;
 use rocks_db::asset::{AssetCollection, AssetLeaf};
+use rocks_db::cl_items::{ClItem, ClLeaf};
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
 use serde_json::json;
 use std::sync::Arc;
@@ -83,7 +84,7 @@ pub fn insert_gaped_data(
         )?;
     }
 
-    data.leaves.iter().try_for_each(|leaf| {
+    data.asset_leaf.iter().try_for_each(|leaf| {
         rocks_storage.asset_leaf_data.merge(
             data.pubkey,
             &AssetLeaf {
@@ -110,7 +111,31 @@ pub fn insert_gaped_data(
         },
     )?;
 
-    // TODO CLItems
+    data.cl_leaf.iter().try_for_each(|leaf| {
+        rocks_storage.cl_leafs.put(
+            (leaf.cli_leaf_idx, leaf.cli_tree_key),
+            &ClLeaf {
+                cli_leaf_idx: leaf.cli_leaf_idx,
+                cli_tree_key: leaf.cli_tree_key,
+                cli_node_idx: leaf.cli_node_idx,
+            },
+        )
+    })?;
+
+    data.cl_items.iter().try_for_each(|item| {
+        rocks_storage.cl_items.merge(
+            (item.cli_node_idx, item.cli_tree_key),
+            &ClItem {
+                cli_node_idx: item.cli_node_idx,
+                cli_tree_key: item.cli_tree_key,
+                cli_leaf_idx: item.cli_leaf_idx,
+                cli_seq: item.cli_seq,
+                cli_level: item.cli_level,
+                cli_hash: item.cli_hash.clone(),
+                slot_updated: item.slot_updated,
+            },
+        )
+    })?;
 
     Ok(())
 }

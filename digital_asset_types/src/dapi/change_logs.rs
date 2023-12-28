@@ -4,6 +4,7 @@ use std::sync::Arc;
 use log::debug;
 use solana_sdk::pubkey::Pubkey;
 
+use rocks_db::asset_streaming_client::get_required_nodes_for_proof;
 use rocks_db::Storage;
 use {
     crate::dao::cl_items,
@@ -203,19 +204,4 @@ fn make_empty_node(lvl: i64, node_index: i64) -> SimpleChangeLog {
         cli_seq: 0,
         cli_tree: vec![],
     }
-}
-
-pub fn get_required_nodes_for_proof(index: i64) -> Vec<i64> {
-    let mut indexes = vec![];
-    let mut idx = index;
-    while idx > 1 {
-        if idx % 2 == 0 {
-            indexes.push(idx + 1)
-        } else {
-            indexes.push(idx - 1)
-        }
-        idx >>= 1
-    }
-    indexes.push(1);
-    indexes
 }

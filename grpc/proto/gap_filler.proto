@@ -116,9 +116,12 @@ message AssetDetails {
     DynamicEnumField owner_type = 17;
     DynamicUint64Field owner_delegate_seq = 18;
 
-    repeated AssetLeaf leaves = 19;
+    AssetLeaf asset_leaf = 19;
     AssetCollection collection = 20;
     ChainDataV1 chain_data = 21;
+
+    ClLeaf cl_leaf = 22;
+    repeated ClItem cl_items = 23;
 }
 
 // Dynamic field messages
@@ -157,6 +160,23 @@ message DynamicCreatorsField {
     google.protobuf.UInt64Value seq_updated = 2;
     uint64 slot_updated = 3;
 }
+
+message ClLeaf {
+    uint64 cli_leaf_idx = 1;
+    bytes cli_tree_key = 2;
+    uint64 cli_node_idx = 3;
+}
+
+message ClItem {
+    uint64 cli_node_idx = 1;
+    bytes cli_tree_key = 2;
+    google.protobuf.UInt64Value cli_leaf_idx = 3;
+    uint64 cli_seq = 4;
+    uint64 cli_level = 5;
+    bytes cli_hash = 6;
+    uint64 slot_updated = 7;
+}
+
 
 // RangeRequest and AssetDetailsResponse for data synchronization
 message RangeRequest {
