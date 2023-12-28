@@ -402,7 +402,7 @@ impl BubblegumTxProcessor {
 
             let tree_id = Pubkey::new_from_array(tree_id.to_owned());
             //     Pubkey::new_from_array(bundle.keys.get(3).unwrap().0.to_vec().try_into().unwrap());
-            let authority =Pubkey::new_from_array(authority.to_owned());
+            let authority = Pubkey::new_from_array(authority.to_owned());
             //     Pubkey::new_from_array(bundle.keys.get(0).unwrap().0.to_vec().try_into().unwrap());
 
             match le.schema {
@@ -814,11 +814,7 @@ fn use_method_from_mpl_bubblegum_state(
 ) -> entities::enums::UseMethod {
     match value {
         mpl_bubblegum::types::UseMethod::Burn => entities::enums::UseMethod::Burn,
-        mpl_bubblegum::types::UseMethod::Multiple => {
-            entities::enums::UseMethod::Multiple
-        }
-        mpl_bubblegum::types::UseMethod::Single => {
-            entities::enums::UseMethod::Single
-        }
+        mpl_bubblegum::types::UseMethod::Multiple => entities::enums::UseMethod::Multiple,
+        mpl_bubblegum::types::UseMethod::Single => entities::enums::UseMethod::Single,
     }
 }

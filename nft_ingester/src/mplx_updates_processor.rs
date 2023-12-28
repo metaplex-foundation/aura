@@ -388,9 +388,7 @@ impl MplxAccsProcessor {
     }
 }
 
-pub fn use_method_from_mpl_state(
-    value: &UseMethod,
-) -> entities::enums::UseMethod {
+pub fn use_method_from_mpl_state(value: &UseMethod) -> entities::enums::UseMethod {
     match value {
         UseMethod::Burn => entities::enums::UseMethod::Burn,
         UseMethod::Multiple => entities::enums::UseMethod::Multiple,
@@ -398,9 +396,7 @@ pub fn use_method_from_mpl_state(
     }
 }
 
-pub fn token_standard_from_mpl_state(
-    value: &TokenStandard,
-) -> entities::enums::TokenStandard {
+pub fn token_standard_from_mpl_state(value: &TokenStandard) -> entities::enums::TokenStandard {
     match value {
         TokenStandard::NonFungible => entities::enums::TokenStandard::NonFungible,
         TokenStandard::FungibleAsset => entities::enums::TokenStandard::FungibleAsset,
