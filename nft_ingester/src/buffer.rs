@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::columns::{Mint, TokenAccount};
 
-use crate::mplx_updates_processor::MetadataInfo;
+use crate::{db_v2::Task, mplx_updates_processor::MetadataInfo};
 
 #[derive(Default)]
 pub struct Buffer {
@@ -20,7 +20,7 @@ pub struct Buffer {
 
     pub mints: Mutex<HashMap<Vec<u8>, Mint>>,
 
-    pub compressed_change_log: Mutex<HashMap<Vec<u8>, ChangeLogEventV1>>,
+    pub json_tasks: Mutex<VecDeque<Task>>,
 }
 
 #[derive(Clone)]
@@ -42,17 +42,18 @@ impl Buffer {
 
             mints: Mutex::new(HashMap::new()),
 
-            compressed_change_log: Mutex::new(HashMap::new()),
+            json_tasks: Mutex::new(VecDeque::<Task>::new()),
         }
     }
 
     pub async fn debug(&self) {
         println!(
-            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\n",
+            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\n",
             self.mplx_metadata_info.lock().await.len(),
             self.transactions.lock().await.len(),
             self.token_accs.lock().await.len(),
             self.mints.lock().await.len(),
+            self.json_tasks.lock().await.len(),
         );
     }
 
