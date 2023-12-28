@@ -89,6 +89,8 @@ pub struct IngesterConfig {
     pub run_bubblegum_backfiller: bool,
     pub synchronizer_batch_size: usize,
     pub gapfiller_peer_addr: String,
+    pub peer_grpc_port: u16,
+    pub peer_grpc_max_gap_slots: u64,
 }
 
 impl IngesterConfig {

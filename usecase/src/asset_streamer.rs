@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use interface::{error::UsecaseError, AssetDetailsStream, AssetDetailsStreamer, AsyncError};
+use interface::{
+    asset_streaming_and_discovery::{AssetDetailsStream, AssetDetailsStreamer, AsyncError},
+    error::UsecaseError,
+};
 
 pub struct AssetStreamer {
     pub max_window_size: u64,
@@ -46,7 +49,7 @@ impl AssetDetailsStreamer for AssetStreamer {
 mod tests {
     use super::*;
     use futures::stream::{self, StreamExt};
-    use interface::MockAssetDetailsStreamer;
+    use interface::asset_streaming_and_discovery::MockAssetDetailsStreamer;
     use mockall::predicate::*;
 
     #[tokio::test]

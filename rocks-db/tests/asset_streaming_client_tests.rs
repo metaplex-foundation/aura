@@ -3,7 +3,7 @@ mod setup;
 mod tests {
     use std::{collections::HashSet, sync::Arc};
 
-    use interface::AssetDetailsStreamer;
+    use interface::asset_streaming_and_discovery::AssetDetailsStreamer;
     use solana_sdk::pubkey::Pubkey;
     use tempfile::TempDir;
 
