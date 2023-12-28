@@ -84,7 +84,7 @@ pub fn insert_gaped_data(
         )?;
     }
 
-    data.asset_leaf.iter().try_for_each(|leaf| {
+    if let Some(leaf) = data.asset_leaf {
         rocks_storage.asset_leaf_data.merge(
             data.pubkey,
             &AssetLeaf {
@@ -97,8 +97,8 @@ pub fn insert_gaped_data(
                 leaf_seq: leaf.value.leaf_seq,
                 slot_updated: leaf.slot_updated,
             },
-        )
-    })?;
+        )?
+    }
 
     rocks_storage.asset_owner_data.merge(
         data.pubkey,
@@ -111,7 +111,7 @@ pub fn insert_gaped_data(
         },
     )?;
 
-    data.cl_leaf.iter().try_for_each(|leaf| {
+    if let Some(leaf) = data.cl_leaf {
         rocks_storage.cl_leafs.put(
             (leaf.cli_leaf_idx, leaf.cli_tree_key),
             &ClLeaf {
@@ -119,8 +119,8 @@ pub fn insert_gaped_data(
                 cli_tree_key: leaf.cli_tree_key,
                 cli_node_idx: leaf.cli_node_idx,
             },
-        )
-    })?;
+        )?
+    }
 
     data.cl_items.iter().try_for_each(|item| {
         rocks_storage.cl_items.merge(
