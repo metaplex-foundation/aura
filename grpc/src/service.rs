@@ -10,6 +10,14 @@ pub struct PeerGapFillerServiceImpl {
     asset_details_streamer: Arc<dyn AssetDetailsStreamer>, // Dependency injection of the streaming service
 }
 
+impl PeerGapFillerServiceImpl {
+    pub fn new(asset_details_streamer: Arc<dyn AssetDetailsStreamer>) -> Self {
+        PeerGapFillerServiceImpl {
+            asset_details_streamer,
+        }
+    }
+}
+
 #[async_trait]
 impl GapFillerService for PeerGapFillerServiceImpl {
     type GetAssetsUpdatedWithinStream =

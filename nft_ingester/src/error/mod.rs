@@ -1,3 +1,5 @@
+use std::net::AddrParseError;
+
 use blockbuster::error::BlockbusterError;
 use flatbuffers::InvalidFlatbuffer;
 use plerkle_messenger::MessengerError;
@@ -94,6 +96,10 @@ pub enum IngesterError {
     BackupError(String),
     #[error("Trying to run services with empty DB. Please restart app with added --restore-rocks-db flag")]
     EmptyDataBase,
+    #[error("Error on parsing {0}")]
+    ConfigurationParsingError(String),
+    #[error("Error on GRPC {0}")]
+    GrpcError(String),
 }
 
 impl From<reqwest::Error> for IngesterError {
@@ -208,5 +214,17 @@ impl From<StorageError> for IngesterError {
 impl From<String> for IngesterError {
     fn from(e: String) -> Self {
         IngesterError::DatabaseError(e)
+    }
+}
+
+impl From<AddrParseError> for IngesterError {
+    fn from(e: AddrParseError) -> Self {
+        IngesterError::ConfigurationParsingError(e.to_string())
+    }
+}
+
+impl From<tonic::transport::Error> for IngesterError {
+    fn from(e: tonic::transport::Error) -> Self {
+        IngesterError::GrpcError(e.to_string())
     }
 }

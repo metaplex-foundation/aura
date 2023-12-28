@@ -3,7 +3,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Parser;
+use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
+use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
@@ -30,6 +32,7 @@ use rocks_db::backup_service::BackupService;
 use rocks_db::errors::BackupServiceError;
 use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::{backup_service, Storage};
+use tonic::transport::Server;
 
 mod backfiller;
 
@@ -320,8 +323,31 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     }));
 
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    // setup dependencies for grpc server
+    let uc = usecase::asset_streamer::AssetStreamer::new(
+        config.peer_grpc_max_gap_slots,
+        rocks_storage.clone(),
+    );
+    let serv = grpc::service::PeerGapFillerServiceImpl::new(Arc::new(uc));
+    let addr = format!("0.0.0.0:{}", config.peer_grpc_port).parse()?;
+    // Spawn the gRPC server task and add to JoinSet
+    mutexed_tasks.lock().await.spawn(async move {
+        if let Err(e) = Server::builder()
+            .add_service(GapFillerServiceServer::new(serv))
+            .serve_with_shutdown(addr, async {
+                shutdown_rx.await.ok();
+            })
+            .await
+        {
+            eprintln!("Server error: {}", e);
+        }
+        Ok(())
+    });
+
     // --stop
-    graceful_stop(mutexed_tasks, true, keep_running.clone()).await;
+    graceful_stop(mutexed_tasks, true, keep_running.clone(), shutdown_tx).await;
 
     Ok(())
 }
