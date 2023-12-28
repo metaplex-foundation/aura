@@ -463,6 +463,7 @@ impl BubblegumTxProcessor {
                             Some(cl.seq),
                             args.seller_fee_basis_points,
                         ),
+                        url: Updated::new(bundle.slot, Some(cl.seq), args.uri.clone()),
                         ..Default::default()
                     };
 

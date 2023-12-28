@@ -59,6 +59,7 @@ pub struct CompleteAssetDetails {
     pub onchain_data: Option<Updated<ChainDataV1>>,
     pub creators: Updated<Vec<Creator>>,
     pub royalty_amount: Updated<u16>,
+    pub url: Updated<String>,
 
     // From AssetAuthority as Tuple
     pub authority: Updated<Pubkey>,

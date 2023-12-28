@@ -46,23 +46,11 @@ impl AssetIndexStorage for PgClient {
 
         if !metadata_urls.is_empty() {
             metadata_urls.sort();
-            let mut query_builder: QueryBuilder<'_, Postgres> =
-                QueryBuilder::new("INSERT INTO metadata (mtd_url) ");
-            query_builder.push_values(metadata_urls.iter(), |mut builder, metadata_url| {
-                builder.push_bind(metadata_url);
-            });
-            query_builder.push(" ON CONFLICT (mtd_url) DO NOTHING RETURNING mtd_id, mtd_url;");
-            let query = query_builder.build_query_as::<(i64, String)>();
-            let metadata_ids = query
-                .fetch_all(&mut transaction)
-                .await
-                .map_err(|e| e.to_string())?;
-
-            // convert metadata_ids to a map
-            metadata_url_map = metadata_ids
-                .iter()
-                .map(|(id, url)| (url.clone(), *id))
-                .collect::<HashMap<String, i64>>();
+            self.insert_metadata(&mut transaction, metadata_urls.clone())
+                .await?;
+            metadata_url_map = self
+                .get_metadata_ids(&mut transaction, metadata_urls)
+                .await?;
         }
 
         let mut asset_indexes = asset_indexes.to_vec();

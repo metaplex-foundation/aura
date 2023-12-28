@@ -160,6 +160,7 @@ impl MplxAccsProcessor {
                                 onchain_data: asset.onchain_data.clone(),
                                 creators: asset.creators.clone(),
                                 royalty_amount: asset.royalty_amount.clone(),
+                                url: asset.url.clone(),
                             }
                         } else {
                             asset.clone()
@@ -347,6 +348,7 @@ impl MplxAccsProcessor {
                     None,
                     data.seller_fee_basis_points,
                 ),
+                url: Updated::new(metadata_info.slot, None, uri.clone()),
             });
 
             models.tasks.push(Task {
