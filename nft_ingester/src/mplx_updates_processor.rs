@@ -303,7 +303,7 @@ impl MplxAccsProcessor {
                 primary_sale_happened: metadata.primary_sale_happened,
                 token_standard: metadata
                     .token_standard
-                    .map(|s: TokenStandard| token_standard_from_mpl_state(&s)),
+                    .map(|s| token_standard_from_mpl_state(&s)),
                 uses: metadata.uses.map(|u| Uses {
                     use_method: use_method_from_mpl_state(&u.use_method),
                     remaining: u.remaining,
