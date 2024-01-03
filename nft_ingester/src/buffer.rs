@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use spl_account_compression::events::ChangeLogEventV1;
 use tokio::sync::Mutex;
 
 use metrics_utils::IngesterMetricsConfig;
