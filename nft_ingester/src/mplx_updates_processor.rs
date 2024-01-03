@@ -249,7 +249,7 @@ impl MplxAccsProcessor {
             if number_of_tasks + tasks_to_insert.len() > MAX_BUFFERED_TASKS_TO_TAKE {
                 tasks_to_insert.extend(
                     tasks_buffer
-                        .drain(0..MAX_BUFFERED_TASKS_TO_TAKE.saturating_sub( tasks_to_insert.len()))
+                        .drain(0..MAX_BUFFERED_TASKS_TO_TAKE.saturating_sub(tasks_to_insert.len()))
                         .collect::<Vec<Task>>(),
                 );
             } else {
