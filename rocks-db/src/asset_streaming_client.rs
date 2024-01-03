@@ -9,6 +9,7 @@ use rocksdb::DB;
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
 
+use crate::cl_items::{ClItem, ClLeaf};
 use crate::{
     asset::{AssetCollection, AssetLeaf, SlotAssetIdx},
     column::TypedColumn,
@@ -52,7 +53,7 @@ async fn process_asset_details_range(
             break;
         }
 
-        let details = get_complete_asset_details(backend.clone(), pubkey);
+        let details = get_complete_asset_details(backend.clone(), pubkey).await;
         match details {
             Err(e) => {
                 if tx.send(Err(Box::new(e) as AsyncError)).await.is_err() {
@@ -70,7 +71,7 @@ async fn process_asset_details_range(
     Ok(())
 }
 
-fn get_complete_asset_details(
+async fn get_complete_asset_details(
     backend: Arc<DB>,
     pubkey: Pubkey,
 ) -> crate::Result<CompleteAssetDetails> {
@@ -112,8 +113,8 @@ fn get_complete_asset_details(
         Some(owner) => owner,
     };
 
-    let leaves = Storage::column::<AssetLeaf>(backend.clone()).get(pubkey)?;
-    let collection = Storage::column::<AssetCollection>(backend).get(pubkey)?;
+    let asset_leaf = Storage::column::<AssetLeaf>(backend.clone()).get(pubkey)?;
+    let collection = Storage::column::<AssetCollection>(backend.clone()).get(pubkey)?;
 
     let onchain_data = match dynamic_data.onchain_data {
         None => None,
@@ -123,6 +124,29 @@ fn get_complete_asset_details(
             Some(Updated::new(onchain_data.slot_updated, onchain_data.seq, v))
         }
     };
+
+    let cl_leaf = match asset_leaf {
+        None => None,
+        Some(ref leaf) => Storage::column::<ClLeaf>(backend.clone())
+            .get((leaf.nonce.unwrap_or_default(), leaf.tree_id))?,
+    };
+
+    let cl_items = match cl_leaf {
+        None => vec![],
+        Some(ref leaf) => {
+            Storage::column::<ClItem>(backend.clone())
+                .batch_get(
+                    get_required_nodes_for_proof(leaf.cli_node_idx as i64)
+                        .into_iter()
+                        .map(move |node| (node as u64, leaf.cli_tree_key))
+                        .collect::<Vec<_>>(),
+                )
+                .await?
+        }
+    }
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>();
 
     Ok(CompleteAssetDetails {
         pubkey: static_data.pubkey,
@@ -139,6 +163,7 @@ fn get_complete_asset_details(
         onchain_data,
         creators: dynamic_data.creators,
         royalty_amount: dynamic_data.royalty_amount,
+        url: dynamic_data.url,
         authority: Updated::new(
             authority.slot_updated,
             None, //todo: where do we get seq?
@@ -159,22 +184,51 @@ fn get_complete_asset_details(
                 },
             )
         }),
-        leaves: leaves
+        cl_leaf: cl_leaf.map(|leaf| entities::models::ClLeaf {
+            cli_leaf_idx: leaf.cli_leaf_idx,
+            cli_tree_key: leaf.cli_tree_key,
+            cli_node_idx: leaf.cli_node_idx,
+        }),
+        asset_leaf: asset_leaf.map(|leaf| {
+            Updated::new(
+                leaf.slot_updated,
+                None,
+                entities::models::AssetLeaf {
+                    leaf: leaf.leaf,
+                    tree_id: leaf.tree_id,
+                    nonce: leaf.nonce,
+                    data_hash: leaf.data_hash,
+                    creator_hash: leaf.creator_hash,
+                    leaf_seq: leaf.leaf_seq,
+                },
+            )
+        }),
+        cl_items: cl_items
             .into_iter()
-            .map(|leaf| {
-                Updated::new(
-                    leaf.slot_updated,
-                    None,
-                    entities::models::AssetLeaf {
-                        leaf: leaf.leaf,
-                        tree_id: leaf.tree_id,
-                        nonce: leaf.nonce,
-                        data_hash: leaf.data_hash,
-                        creator_hash: leaf.creator_hash,
-                        leaf_seq: leaf.leaf_seq,
-                    },
-                )
+            .map(|item| entities::models::ClItem {
+                cli_node_idx: item.cli_node_idx,
+                cli_tree_key: item.cli_tree_key,
+                cli_leaf_idx: item.cli_leaf_idx,
+                cli_seq: item.cli_seq,
+                cli_level: item.cli_level,
+                cli_hash: item.cli_hash,
+                slot_updated: item.slot_updated,
             })
             .collect(),
     })
+}
+
+pub fn get_required_nodes_for_proof(index: i64) -> Vec<i64> {
+    let mut indexes = vec![];
+    let mut idx = index;
+    while idx > 1 {
+        if idx % 2 == 0 {
+            indexes.push(idx + 1)
+        } else {
+            indexes.push(idx - 1)
+        }
+        idx >>= 1
+    }
+    indexes.push(1);
+    indexes
 }

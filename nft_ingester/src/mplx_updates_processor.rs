@@ -19,6 +19,8 @@ use crate::buffer::Buffer;
 use crate::db_v2::{DBClient as DBClientV2, Task};
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
+// arbitrary number, should be enough to not overflow batch insert command at Postgre
+pub const MAX_BUFFERED_TASKS_TO_TAKE: usize = 5000;
 
 #[derive(Default, Debug)]
 pub struct RocksMetadataModels {
@@ -160,6 +162,7 @@ impl MplxAccsProcessor {
                                 onchain_data: asset.onchain_data.clone(),
                                 creators: asset.creators.clone(),
                                 royalty_amount: asset.royalty_amount.clone(),
+                                url: asset.url.clone(),
                             }
                         } else {
                             asset.clone()
@@ -237,7 +240,27 @@ impl MplxAccsProcessor {
                 }
             }
 
-            let res = self.db_client_v2.insert_tasks(&metadata_models.tasks).await;
+            let mut tasks_to_insert = metadata_models.tasks.clone();
+
+            let mut tasks_buffer = self.buffer.json_tasks.lock().await;
+
+            let number_of_tasks = tasks_buffer.len();
+
+            if number_of_tasks + tasks_to_insert.len() > MAX_BUFFERED_TASKS_TO_TAKE {
+                tasks_to_insert.extend(
+                    tasks_buffer
+                        .drain(0..MAX_BUFFERED_TASKS_TO_TAKE.saturating_sub(tasks_to_insert.len()))
+                        .collect::<Vec<Task>>(),
+                );
+            } else {
+                tasks_to_insert.extend(
+                    tasks_buffer
+                        .drain(0..number_of_tasks)
+                        .collect::<Vec<Task>>(),
+                );
+            }
+
+            let res = self.db_client_v2.insert_tasks(&tasks_to_insert).await;
             match res {
                 Err(e) => {
                     self.metrics
@@ -347,6 +370,7 @@ impl MplxAccsProcessor {
                     None,
                     data.seller_fee_basis_points,
                 ),
+                url: Updated::new(metadata_info.slot, None, uri.clone()),
             });
 
             models.tasks.push(Task {

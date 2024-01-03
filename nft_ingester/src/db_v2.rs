@@ -31,7 +31,7 @@ pub enum TaskStatus {
     Failed,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Task {
     pub ofd_metadata_url: String,
     pub ofd_locked_until: Option<chrono::DateTime<chrono::Utc>>,

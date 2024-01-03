@@ -59,6 +59,7 @@ pub struct CompleteAssetDetails {
     pub onchain_data: Option<Updated<ChainDataV1>>,
     pub creators: Updated<Vec<Creator>>,
     pub royalty_amount: Updated<u16>,
+    pub url: Updated<String>,
 
     // From AssetAuthority as Tuple
     pub authority: Updated<Pubkey>,
@@ -70,8 +71,12 @@ pub struct CompleteAssetDetails {
     pub owner_delegate_seq: Option<Updated<u64>>,
 
     // Separate fields
-    pub leaves: Vec<Updated<AssetLeaf>>,
+    pub asset_leaf: Option<Updated<AssetLeaf>>,
     pub collection: Option<Updated<AssetCollection>>,
+
+    // Cl elements
+    pub cl_leaf: Option<ClLeaf>,
+    pub cl_items: Vec<ClItem>,
 }
 
 /// Leaf information about compressed asset
@@ -119,6 +124,24 @@ pub struct AssetCollection {
     pub collection: Pubkey,
     pub is_collection_verified: bool,
     pub collection_seq: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct ClItem {
+    pub cli_node_idx: u64,
+    pub cli_tree_key: Pubkey,
+    pub cli_leaf_idx: Option<u64>,
+    pub cli_seq: u64,
+    pub cli_level: u64,
+    pub cli_hash: Vec<u8>,
+    pub slot_updated: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct ClLeaf {
+    pub cli_leaf_idx: u64,
+    pub cli_tree_key: Pubkey,
+    pub cli_node_idx: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]

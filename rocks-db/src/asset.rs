@@ -34,6 +34,7 @@ pub struct AssetDynamicDetails {
     pub onchain_data: Option<Updated<String>>,
     pub creators: Updated<Vec<entities::models::Creator>>,
     pub royalty_amount: Updated<u16>,
+    pub url: Updated<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -206,6 +207,7 @@ impl AssetDynamicDetails {
                         update_field(&mut current_val.royalty_amount, &new_val.royalty_amount);
                         update_field(&mut current_val.was_decompressed, &new_val.was_decompressed);
                         update_optional_field(&mut current_val.onchain_data, &new_val.onchain_data);
+                        update_field(&mut current_val.url, &new_val.url);
 
                         current_val
                     } else {

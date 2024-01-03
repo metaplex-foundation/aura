@@ -1,7 +1,7 @@
 use crate::gapfiller::{
-    AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, Creator, DynamicBoolField,
-    DynamicBytesField, DynamicCreatorsField, DynamicEnumField, DynamicUint32Field,
-    DynamicUint64Field, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
+    AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ClItem, ClLeaf, Creator,
+    DynamicBoolField, DynamicBytesField, DynamicCreatorsField, DynamicEnumField,
+    DynamicUint32Field, DynamicUint64Field, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
     SpecificationVersions, TokenStandard, UseMethod, Uses,
 };
 use entities::models::{CompleteAssetDetails, Updated};
@@ -30,9 +30,11 @@ impl From<CompleteAssetDetails> for AssetDetails {
             delegate: value.delegate.map(|v| v.into()),
             owner_type: Some(value.owner_type.into()),
             owner_delegate_seq: value.owner_delegate_seq.map(|v| v.into()),
-            leaves: value.leaves.iter().map(AssetLeaf::from).collect(),
+            asset_leaf: value.asset_leaf.map(|v| v.into()),
             collection: value.collection.map(|v| v.into()),
             chain_data: value.onchain_data.map(|v| v.into()),
+            cl_leaf: value.cl_leaf.map(|v| v.into()),
+            cl_items: value.cl_items.into_iter().map(ClItem::from).collect(),
         }
     }
 }
@@ -106,8 +108,8 @@ impl From<Updated<Vec<entities::models::Creator>>> for DynamicCreatorsField {
     }
 }
 
-impl From<&Updated<entities::models::AssetLeaf>> for AssetLeaf {
-    fn from(value: &Updated<entities::models::AssetLeaf>) -> Self {
+impl From<Updated<entities::models::AssetLeaf>> for AssetLeaf {
+    fn from(value: Updated<entities::models::AssetLeaf>) -> Self {
         Self {
             tree_id: value.value.tree_id.to_bytes().to_vec(),
             leaf: value.value.leaf.clone(),
@@ -117,6 +119,30 @@ impl From<&Updated<entities::models::AssetLeaf>> for AssetLeaf {
             leaf_seq: value.value.leaf_seq,
             slot_updated: value.slot_updated,
             seq_updated: value.seq,
+        }
+    }
+}
+
+impl From<entities::models::ClLeaf> for ClLeaf {
+    fn from(value: entities::models::ClLeaf) -> Self {
+        Self {
+            cli_leaf_idx: value.cli_leaf_idx,
+            cli_tree_key: value.cli_tree_key.to_bytes().to_vec(),
+            cli_node_idx: value.cli_node_idx,
+        }
+    }
+}
+
+impl From<entities::models::ClItem> for ClItem {
+    fn from(value: entities::models::ClItem) -> Self {
+        Self {
+            cli_leaf_idx: value.cli_leaf_idx,
+            cli_seq: value.cli_seq,
+            cli_level: value.cli_level,
+            cli_hash: value.cli_hash,
+            cli_tree_key: value.cli_tree_key.to_bytes().to_vec(),
+            cli_node_idx: value.cli_node_idx,
+            slot_updated: value.slot_updated,
         }
     }
 }

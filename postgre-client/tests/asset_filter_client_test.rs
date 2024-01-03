@@ -4,9 +4,10 @@ mod db_setup;
 #[cfg(test)]
 mod tests {
     use super::db_setup;
-    use postgre_client::model::*;
     use postgre_client::storage_traits::{AssetIndexStorage, AssetPubkeyFilteredFetcher};
     use postgre_client::PgClient;
+    use postgre_client::{asset_filter_client, model::*};
+    use rocks_db::asset;
     use testcontainers::clients::Cli;
     use testcontainers::*;
     use tokio;
@@ -174,6 +175,71 @@ mod tests {
             .unwrap();
         assert_eq!(res.len(), limit as usize);
 
+        let res = asset_filter_storage
+            .get_asset_pubkeys_filtered(
+                &SearchAssetsFilter {
+                    json_uri: ref_value.metadata_url.clone(),
+                    ..Default::default()
+                },
+                &order,
+                1000,
+                None,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.len(), 100);
+        pool.close().await;
+        db_setup::teardown(&node, &db_name).await;
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_upsert_meatadata_urls() {
+        let cli = Cli::default();
+        let node = cli.run(images::postgres::Postgres::default());
+        let (pool, db_name) = db_setup::setup_database(&node).await;
+
+        let asset_filter_storage = PgClient::new_with_pool(pool.clone());
+        // Generate random asset indexes
+        let asset_indexes = db_setup::generate_asset_index_records(1);
+        let last_known_key = db_setup::generate_random_vec(8 + 8 + 32);
+        let ref_value = &asset_indexes[asset_indexes.len() - 1];
+
+        // Insert assets and last key using update_asset_indexes_batch
+        asset_filter_storage
+            .update_asset_indexes_batch(asset_indexes.as_slice(), &last_known_key)
+            .await
+            .unwrap();
+        let asset_indexes = db_setup::generate_asset_index_records(100);
+        let last_known_key = db_setup::generate_random_vec(8 + 8 + 32);
+
+        // Insert assets and last key using update_asset_indexes_batch
+        asset_filter_storage
+            .update_asset_indexes_batch(asset_indexes.as_slice(), &last_known_key)
+            .await
+            .unwrap();
+        let order = AssetSorting {
+            sort_by: AssetSortBy::SlotCreated,
+            sort_direction: AssetSortDirection::Asc,
+        };
+
+        let res = asset_filter_storage
+            .get_asset_pubkeys_filtered(
+                &SearchAssetsFilter {
+                    json_uri: ref_value.metadata_url.clone(),
+                    ..Default::default()
+                },
+                &order,
+                1000,
+                None,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.len(), 101);
         pool.close().await;
         db_setup::teardown(&node, &db_name).await;
     }

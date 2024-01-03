@@ -20,7 +20,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 # Caching dependencies
 FROM chef AS cacher
 WORKDIR /rust
-RUN apt update && apt install -y libclang-dev
+RUN apt update && apt install -y libclang-dev protobuf-compiler
 COPY --from=planner /rust/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 

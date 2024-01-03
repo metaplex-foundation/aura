@@ -111,6 +111,7 @@ impl AssetIndexReader for Storage {
                 existed_index.creators = dynamic_info.creators.clone().value;
                 existed_index.royalty_amount = dynamic_info.royalty_amount.value as i64;
                 existed_index.slot_updated = dynamic_info.get_slot_updated() as i64;
+                existed_index.metadata_url = Some(dynamic_info.url.value.clone());
             } else {
                 let asset_index = AssetIndex {
                     pubkey: dynamic_info.pubkey,
@@ -122,6 +123,7 @@ impl AssetIndexReader for Storage {
                     creators: dynamic_info.creators.clone().value,
                     royalty_amount: dynamic_info.royalty_amount.value as i64,
                     slot_updated: dynamic_info.get_slot_updated() as i64,
+                    metadata_url: Some(dynamic_info.url.value.clone()),
                     ..Default::default()
                 };
 
