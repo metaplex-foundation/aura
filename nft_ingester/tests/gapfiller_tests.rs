@@ -36,7 +36,7 @@ async fn test_process_asset_details_stream() {
     let details2 = create_test_complete_asset_details(second_key.clone());
 
     let mut mock = MockAssetDetailsConsumer::new();
-    mock.expect_consume_asset_details_stream_in_range()
+    mock.expect_get_consumable_stream_in_range()
         .returning(move |_, _| {
             Ok(Box::pin(stream::iter(vec![
                 Ok(details1.clone()),
