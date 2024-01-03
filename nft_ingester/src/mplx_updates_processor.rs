@@ -246,10 +246,10 @@ impl MplxAccsProcessor {
 
             let number_of_tasks = tasks_buffer.len();
 
-            if number_of_tasks + metadata_info.len() > MAX_BUFFERED_TASKS_TO_TAKE {
+            if number_of_tasks + tasks_to_insert.len() > MAX_BUFFERED_TASKS_TO_TAKE {
                 tasks_to_insert.extend(
                     tasks_buffer
-                        .drain(0..MAX_BUFFERED_TASKS_TO_TAKE - metadata_info.len())
+                        .drain(0..MAX_BUFFERED_TASKS_TO_TAKE - tasks_to_insert.len())
                         .collect::<Vec<Task>>(),
                 );
             } else {
