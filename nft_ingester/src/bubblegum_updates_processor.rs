@@ -1,4 +1,5 @@
 use crate::buffer::Buffer;
+use crate::db_v2::Task;
 use crate::error::IngesterError;
 use crate::flatbuffer_mapper::FlatbufferMapper;
 use blockbuster::programs::bubblegum::{BubblegumInstruction, Payload};
@@ -463,6 +464,7 @@ impl BubblegumTxProcessor {
                             Some(cl.seq),
                             args.seller_fee_basis_points,
                         ),
+                        url: Updated::new(bundle.slot, Some(cl.seq), args.uri.clone()),
                         ..Default::default()
                     };
 
@@ -540,6 +542,18 @@ impl BubblegumTxProcessor {
                     }
                 }
             }
+
+            let mut tasks_buffer = self.buffer.json_tasks.lock().await;
+
+            let task = Task {
+                ofd_metadata_url: args.uri.clone(),
+                ofd_locked_until: Some(chrono::Utc::now()),
+                ofd_attempts: 0,
+                ofd_max_attempts: 10,
+                ofd_error: None,
+            };
+
+            tasks_buffer.push_back(task);
 
             return Ok(());
         }

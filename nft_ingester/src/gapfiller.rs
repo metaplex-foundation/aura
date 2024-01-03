@@ -59,6 +59,7 @@ pub fn insert_gaped_data(
             }),
             creators: data.creators,
             royalty_amount: data.royalty_amount,
+            url: data.url,
         },
     )?;
 
