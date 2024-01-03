@@ -148,7 +148,7 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
-    let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap_or(0);
+    let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap(); // panic if we do not have any slots in DB
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;
@@ -354,6 +354,10 @@ pub async fn main() -> Result<(), IngesterError> {
 
     match Client::new(config).await {
         Ok(gaped_data_client) => {
+            while first_processed_slot.load(Ordering::SeqCst) == 0 {
+                tokio::time::sleep(Duration::from_millis(100)).await
+            }
+
             let cloned_keep_running = keep_running.clone();
             let cloned_rocks_storage = rocks_storage.clone();
             mutexed_tasks.lock().await.spawn(async move {
