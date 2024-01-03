@@ -9,6 +9,7 @@ use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
+use grpc::client::Client;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{
     ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
@@ -19,6 +20,7 @@ use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{setup_config, BackfillerConfig, IngesterConfig, INGESTER_BACKUP_NAME};
 use nft_ingester::db_v2::DBClient as DBClientV2;
+use nft_ingester::gapfiller::process_asset_details_stream;
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::json_downloader::JsonDownloader;
@@ -349,6 +351,28 @@ pub async fn main() -> Result<(), IngesterError> {
         }
         Ok(())
     });
+
+    match Client::new(config).await {
+        Ok(gaped_data_client) => {
+            let cloned_keep_running = keep_running.clone();
+            let cloned_rocks_storage = rocks_storage.clone();
+            mutexed_tasks.lock().await.spawn(async move {
+                info!(
+                    "Processed {} gaped slots",
+                    process_asset_details_stream(
+                        cloned_keep_running,
+                        cloned_rocks_storage,
+                        newest_restored_slot,
+                        first_processed_slot.load(Ordering::SeqCst),
+                        gaped_data_client,
+                    )
+                    .await
+                );
+                Ok(())
+            });
+        }
+        Err(e) => error!("GRPC Client new: {}", e),
+    };
 
     // --stop
     graceful_stop(mutexed_tasks, true, keep_running.clone(), shutdown_tx).await;

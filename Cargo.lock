@@ -2049,6 +2049,7 @@ dependencies = [
 name = "grpc"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "entities",
  "futures",
  "interface",

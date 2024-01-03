@@ -2,27 +2,52 @@ use crate::error::IngesterError;
 use entities::models::CompleteAssetDetails;
 use entities::models::Updated;
 use futures::StreamExt;
-use interface::asset_streaming_and_discovery::AssetDetailsStream;
+use interface::asset_streaming_and_discovery::AssetDetailsConsumer;
 use log::error;
 use rocks_db::asset::{AssetCollection, AssetLeaf};
 use rocks_db::cl_items::{ClItem, ClLeaf};
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
 use serde_json::json;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-pub async fn process_asset_details_stream(storage: Arc<Storage>, mut stream: AssetDetailsStream) {
+pub async fn process_asset_details_stream(
+    keep_running: Arc<AtomicBool>,
+    storage: Arc<Storage>,
+    start_slot: u64,
+    end_slot: u64,
+    mut consumer: impl AssetDetailsConsumer,
+) -> u64 {
+    let mut stream = match consumer
+        .get_consumable_stream_in_range(start_slot, end_slot)
+        .await
+    {
+        Ok(stream) => stream,
+        Err(e) => {
+            error!("Error consume asset details stream in range: {}", e);
+            return 0;
+        }
+    };
+
+    let mut processed_slots = 0;
     while let Some(result) = stream.next().await {
+        if !keep_running.load(Ordering::SeqCst) {
+            break;
+        }
         match result {
             Ok(details) => {
                 if let Some(e) = insert_gaped_data(storage.clone(), details).err() {
                     error!("Error processing gaped data: {}", e)
                 }
+                processed_slots += 1;
             }
             Err(e) => {
                 error!("Error processing stream item: {}", e);
             }
         }
     }
+
+    processed_slots
 }
 
 pub fn insert_gaped_data(

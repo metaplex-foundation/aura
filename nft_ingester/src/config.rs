@@ -358,8 +358,8 @@ impl TcpConfig {
 }
 
 impl PeerDiscovery for IngesterConfig {
-    fn get_gapfiller_peer_addr(&self) -> String {
-        self.gapfiller_peer_addr.clone()
+    fn get_gapfiller_peer_addr(&self) -> &'static str {
+        Box::leak(self.gapfiller_peer_addr.clone().into_boxed_str())
     }
 }
 
