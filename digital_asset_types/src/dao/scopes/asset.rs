@@ -73,7 +73,7 @@ pub async fn get_by_creator(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    let mut condition = "SELECT asc_pubkey FROM assets_v3 WHERE asc_creator = $1".to_string();
+    let mut condition = "SELECT asc_pubkey FROM assets_v3 LEFT JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey WHERE asc_creator = $1".to_string();
     if only_verified {
         condition = format!("{} AND asc_verified = true", condition);
     }
@@ -93,7 +93,6 @@ pub async fn get_by_creator(
         sort_direction,
         pagination,
         limit,
-        true,
     )
     .await
 }
@@ -163,7 +162,6 @@ pub async fn get_by_grouping(
         sort_direction,
         pagination,
         limit,
-        false,
     )
     .await
 }
@@ -199,7 +197,6 @@ pub async fn get_assets_by_owner(
         sort_direction,
         pagination,
         limit,
-        false,
     )
     .await
 }
@@ -230,7 +227,6 @@ pub async fn get_by_authority(
         sort_direction,
         pagination,
         limit,
-        false,
     )
     .await
 }
@@ -245,17 +241,9 @@ async fn get_by_related_condition(
     _sort_direction: Order,
     pagination: &Pagination,
     limit: u64,
-    need_creators_join: bool,
 ) -> Result<Vec<FullAsset>, DbErr> {
     let condition = &format!("{} AND ast_supply > 0", condition);
-
     let (mut condition, values, offset) = paginate(pagination, limit, condition, values)?;
-    if need_creators_join {
-        condition = format!(
-            "{} LEFT JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey",
-            condition
-        );
-    }
 
     condition = format!("{} LIMIT {}", condition, limit);
     if let Some(offset) = offset {
