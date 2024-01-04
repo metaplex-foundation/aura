@@ -49,8 +49,8 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Starting Ingester");
     let args = Args::parse();
 
-    init_logger();
     let config: IngesterConfig = setup_config();
+    init_logger(&config.get_log_level());
     let bg_tasks_config = config
         .clone()
         .background_task_runner_config
@@ -297,6 +297,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let index_storage = Arc::new(
         PgClient::new(
             &config.database_config.get_database_url().unwrap(),
+            &config.get_log_level(),
             100,
             max_postgre_connections,
         )

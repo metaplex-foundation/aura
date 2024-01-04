@@ -3,7 +3,6 @@ use sqlx::{
     ConnectOptions, PgPool, Postgres, QueryBuilder, Row, Transaction,
 };
 use std::collections::HashMap;
-use std::env;
 use std::str::FromStr;
 use tracing::log::LevelFilter;
 
@@ -18,10 +17,14 @@ pub struct PgClient {
 }
 
 impl PgClient {
-    pub async fn new(url: &str, min_connections: u32, max_connections: u32) -> Self {
+    pub async fn new(
+        url: &str,
+        log_level: &str,
+        min_connections: u32,
+        max_connections: u32,
+    ) -> Self {
         let mut options: PgConnectOptions = url.parse().unwrap();
-        let log_statements = env::var("RUST_LOG").unwrap_or_else(|_| "warn".to_string());
-        options.log_statements(LevelFilter::from_str(&log_statements).unwrap_or(LevelFilter::Warn));
+        options.log_statements(LevelFilter::from_str(log_level).unwrap_or(LevelFilter::Warn));
 
         let pool = PgPoolOptions::new()
             .min_connections(min_connections)
