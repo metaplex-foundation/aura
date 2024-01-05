@@ -3160,6 +3160,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "setup",
  "solana-bigtable-connection",
  "solana-sdk",
  "solana-storage-bigtable",
@@ -3169,11 +3170,14 @@ dependencies = [
  "sqlx",
  "stretto",
  "tempfile",
+ "testcontainers",
  "thiserror",
  "tokio",
  "tokio-util 0.7.10",
  "tonic 0.10.2",
+ "tracing",
  "tracing-subscriber",
+ "tracing-test",
  "usecase",
  "utils",
 ]
@@ -3628,6 +3632,7 @@ dependencies = [
  "rand 0.8.5",
  "rocks-db",
  "serde",
+ "setup",
  "solana-sdk",
  "sqlx",
  "testcontainers",
@@ -4398,6 +4403,7 @@ dependencies = [
  "rocksdb",
  "serde",
  "serde_json",
+ "setup",
  "solana-sdk",
  "spl-account-compression",
  "tar",
@@ -4855,6 +4861,25 @@ dependencies = [
  "ryu",
  "serde",
  "unsafe-libyaml",
+]
+
+[[package]]
+name = "setup"
+version = "0.1.0"
+dependencies = [
+ "entities",
+ "metrics-utils",
+ "nft_ingester",
+ "postgre-client",
+ "rand 0.8.5",
+ "rocks-db",
+ "solana-sdk",
+ "sqlx",
+ "tempfile",
+ "testcontainers",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

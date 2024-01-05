@@ -30,7 +30,7 @@ pub struct TestEnvironment<'a> {
 }
 
 impl<'a> TestEnvironment<'a> {
-    pub async fn new(cli: &'a Cli) -> Self {
+    pub async fn new(cli: &'a Cli) -> TestEnvironment<'a> {
         let node = cli.run(images::postgres::Postgres::default());
         let (pool, db_name) = setup_database(&node).await;
         let client = PgClient::new_with_pool(pool.clone());

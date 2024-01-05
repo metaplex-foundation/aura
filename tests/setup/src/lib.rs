@@ -19,7 +19,7 @@ impl<'a> TestEnvironment<'a> {
         cnt: usize,
         slot: u64,
     ) -> (
-        Self,
+        TestEnvironment<'a>,
         (
             Vec<Pubkey>,
             Vec<AssetStaticDetails>,
