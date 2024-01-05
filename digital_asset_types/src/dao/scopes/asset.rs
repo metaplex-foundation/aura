@@ -121,11 +121,7 @@ pub async fn get_grouping(
             .ok_or(DbErr::Custom("cannot get rows count".to_string()))?],
         ))
         .await?
-        .iter()
         .map(|res| res.try_get::<i64>("", "count").unwrap_or_default())
-        .collect::<Vec<_>>()
-        .last()
-        .copied()
         .unwrap_or_default();
 
     Ok(GroupingSize { size: size as u64 })

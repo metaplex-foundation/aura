@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
+use entities::enums::SpecificationVersions;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::asset::{AssetsUpdateIdx, SlotAssetIdx};
@@ -92,6 +93,7 @@ impl AssetIndexReader for Storage {
         for static_info in asset_static_details.iter().flatten() {
             let asset_index = AssetIndex {
                 pubkey: static_info.pubkey,
+                specification_version: SpecificationVersions::V1,
                 specification_asset_class: static_info.specification_asset_class,
                 royalty_target_type: static_info.royalty_target_type,
                 slot_created: static_info.created_at,
@@ -174,6 +176,7 @@ impl AssetIndexReader for Storage {
         for data in asset_collection_details.iter().flatten() {
             if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
                 existed_index.collection = Some(data.collection);
+                existed_index.is_collection_verified = Some(data.is_collection_verified);
                 if data.slot_updated as i64 > existed_index.slot_updated {
                     existed_index.slot_updated = data.slot_updated as i64;
                 }
@@ -181,6 +184,7 @@ impl AssetIndexReader for Storage {
                 let asset_index = AssetIndex {
                     pubkey: data.pubkey,
                     collection: Some(data.collection),
+                    is_collection_verified: Some(data.is_collection_verified),
                     slot_updated: data.slot_updated as i64,
                     ..Default::default()
                 };
