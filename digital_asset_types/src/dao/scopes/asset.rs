@@ -25,6 +25,7 @@ use crate::dao::{
 };
 
 pub const PROCESSING_METADATA_STATE: &str = "processing";
+const COLLECTION_GROUP_KEY: &str = "collection";
 
 pub fn paginate(
     pagination: &Pagination,
@@ -73,7 +74,7 @@ pub async fn get_by_creator(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    let mut condition = "SELECT asc_pubkey FROM assets_v3 WHERE asc_creator = $1".to_string();
+    let mut condition = "SELECT asc_pubkey FROM assets_v3 LEFT JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey WHERE asc_creator = $1".to_string();
     if only_verified {
         condition = format!("{} AND asc_verified = true", condition);
     }
@@ -93,7 +94,6 @@ pub async fn get_by_creator(
         sort_direction,
         pagination,
         limit,
-        true,
     )
     .await
 }
@@ -103,7 +103,7 @@ pub async fn get_grouping(
     group_key: String,
     group_value: String,
 ) -> Result<GroupingSize, DbErr> {
-    if group_value != *"collection" {
+    if group_value != COLLECTION_GROUP_KEY {
         return Ok(GroupingSize { size: 0 });
     }
 
@@ -138,7 +138,7 @@ pub async fn get_by_grouping(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    if group_key != *"collection" {
+    if group_key != COLLECTION_GROUP_KEY {
         return Ok(vec![]);
     }
 
@@ -159,7 +159,6 @@ pub async fn get_by_grouping(
         sort_direction,
         pagination,
         limit,
-        false,
     )
     .await
 }
@@ -195,7 +194,6 @@ pub async fn get_assets_by_owner(
         sort_direction,
         pagination,
         limit,
-        false,
     )
     .await
 }
@@ -226,7 +224,6 @@ pub async fn get_by_authority(
         sort_direction,
         pagination,
         limit,
-        false,
     )
     .await
 }
@@ -241,17 +238,9 @@ async fn get_by_related_condition(
     _sort_direction: Order,
     pagination: &Pagination,
     limit: u64,
-    need_creators_join: bool,
 ) -> Result<Vec<FullAsset>, DbErr> {
     let condition = &format!("{} AND ast_supply > 0", condition);
-
     let (mut condition, values, offset) = paginate(pagination, limit, condition, values)?;
-    if need_creators_join {
-        condition = format!(
-            "{} LEFT JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey",
-            condition
-        );
-    }
 
     condition = format!("{} LIMIT {}", condition, limit);
     if let Some(offset) = offset {
@@ -302,45 +291,6 @@ pub async fn get_related_for_assets(
 
     Ok(assets)
 }
-
-#[derive(FromQueryResult, Debug, Clone, PartialEq)]
-struct AssetWithMetadata {
-    ast_pubkey: Vec<u8>,
-    ast_delegate: Option<Vec<u8>>,
-    ast_owner: Option<Vec<u8>>,
-    ast_authority: Option<Vec<u8>>,
-    ast_collection: Option<Vec<u8>>,
-    ast_is_collection_verified: bool,
-    ast_collection_seq: Option<i64>,
-    ast_is_compressed: bool,
-    ast_is_compressible: bool,
-    ast_is_frozen: bool,
-    ast_supply: Option<i64>,
-    ast_seq: Option<i64>,
-    ast_tree_id: Option<Vec<u8>>,
-    ast_leaf: Option<Vec<u8>>,
-    ast_nonce: Option<i64>,
-    ast_royalty_target_type: RoyaltyTargetType,
-    ast_royalty_target: Option<Vec<u8>>,
-    ast_royalty_amount: i64,
-    ast_created_at: i64,
-    ast_is_burnt: bool,
-    ast_slot_updated: Option<i64>,
-    ast_data_hash: Option<String>,
-    ast_creator_hash: Option<String>,
-    ast_owner_delegate_seq: Option<i64>,
-    ast_was_decompressed: bool,
-    ast_leaf_seq: Option<i64>,
-    ast_specification_version: SpecificationVersions,
-    ast_specification_asset_class: Option<SpecificationAssetClass>,
-    ast_owner_type: OwnerType,
-    ast_onchain_data: Option<String>,
-    ofd_metadata_url: Option<String>,
-    ofd_metadata: Option<String>,
-    ofd_chain_data_mutability: Option<ChainMutability>,
-}
-
-impl AssetWithMetadata {}
 
 fn convert_rocks_offchain_data(
     asset_pubkey: &Pubkey,
@@ -533,7 +483,7 @@ fn convert_rocks_grouping_model(
     asset_grouping::Model {
         id: 0,
         asset_id: asset_pubkey.to_bytes().to_vec(),
-        group_key: "collection".to_string(),
+        group_key: COLLECTION_GROUP_KEY.to_string(),
         group_value: collection.map(|asset| asset.collection.to_string()),
         seq: collection.map(|asset| asset.slot_updated as i64),
         slot_updated: collection.map(|asset| asset.slot_updated as i64),
