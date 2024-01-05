@@ -97,6 +97,7 @@ impl AssetIndexReader for Storage {
                 specification_asset_class: static_info.specification_asset_class,
                 royalty_target_type: static_info.royalty_target_type,
                 slot_created: static_info.created_at,
+                specification_version: SpecificationVersions::V1, // as of now, we only have V1, let's keep it here.
                 ..Default::default()
             };
 

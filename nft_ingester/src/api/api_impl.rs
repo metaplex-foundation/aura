@@ -24,12 +24,27 @@ const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
 
 pub struct DasApi {
     db_connection: DatabaseConnection,
-    pg_client: PgClient,
+    pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
     metrics: Arc<ApiMetricsConfig>,
 }
 
 impl DasApi {
+    pub fn new(
+        pg_client: Arc<PgClient>,
+        rocks_db: Arc<Storage>,
+        metrics: Arc<ApiMetricsConfig>,
+    ) -> Self {
+        let db_connection = SqlxPostgresConnector::from_sqlx_postgres_pool(pg_client.pool.clone());
+
+        DasApi {
+            db_connection,
+            pg_client,
+            rocks_db,
+            metrics,
+        }
+    }
+
     pub async fn from_config(
         config: Config,
         metrics: Arc<ApiMetricsConfig>,
@@ -44,7 +59,7 @@ impl DasApi {
         let pg_client = PgClient::new_with_pool(pool);
         Ok(DasApi {
             db_connection: conn,
-            pg_client,
+            pg_client: Arc::new(pg_client),
             rocks_db,
             metrics,
         })
@@ -404,7 +419,7 @@ impl DasApi {
 
         let res = search_assets(
             &self.db_connection,
-            &self.pg_client,
+            self.pg_client.clone(),
             self.rocks_db.clone(),
             query,
             payload.sort_by.unwrap_or_default(),

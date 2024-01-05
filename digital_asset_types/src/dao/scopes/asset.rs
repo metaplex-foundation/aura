@@ -314,7 +314,7 @@ fn convert_rocks_offchain_data(
             .unwrap_or_default()
             .as_ref(),
     )
-    .unwrap();
+    .unwrap_or(serde_json::Value::Null);
 
     Ok(asset_data::Model {
         id: dynamic_data.pubkey.to_bytes().to_vec(),
@@ -539,6 +539,7 @@ macro_rules! fetch_asset_data {
     }};
 }
 
+#[derive(Debug)]
 struct AssetSelectedMaps {
     assets_static: HashMap<Pubkey, AssetStaticDetails>,
     assets_dynamic: HashMap<Pubkey, AssetDynamicDetails>,
@@ -677,6 +678,9 @@ pub async fn get_by_ids(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
 ) -> Result<Vec<Option<FullAsset>>, DbErr> {
+    if asset_ids.is_empty() {
+        return Ok(vec![]);
+    }
     // need to pass only unique asset_ids to select query
     // index need to save order of IDs in response
     let mut unique_asset_ids_map = HashMap::new();

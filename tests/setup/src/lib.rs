@@ -1,0 +1,51 @@
+pub mod pg;
+pub mod rocks;
+
+use rocks_db::{
+    asset::AssetCollection, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+};
+use solana_sdk::pubkey::Pubkey;
+use std::sync::{atomic::AtomicBool, Arc};
+use testcontainers::clients::Cli;
+
+pub struct TestEnvironment<'a> {
+    pub rocks_env: rocks::RocksTestEnvironment,
+    pub pg_env: pg::TestEnvironment<'a>,
+}
+
+impl<'a> TestEnvironment<'a> {
+    pub async fn create(
+        cli: &'a Cli,
+        cnt: usize,
+        slot: u64,
+    ) -> (
+        Self,
+        (
+            Vec<Pubkey>,
+            Vec<AssetStaticDetails>,
+            Vec<AssetAuthority>,
+            Vec<AssetOwner>,
+            Vec<AssetDynamicDetails>,
+            Vec<AssetCollection>,
+        ),
+    ) {
+        let rocks_env = rocks::RocksTestEnvironment::new(&[]);
+        let pg_env = pg::TestEnvironment::new(cli).await;
+        let generated_data = rocks_env.generate_assets(cnt, slot);
+        let env = Self { rocks_env, pg_env };
+        let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
+            cnt,
+        );
+        syncronizer
+            .synchronize_asset_indexes(Arc::new(AtomicBool::new(true)))
+            .await
+            .unwrap();
+        (env, generated_data)
+    }
+
+    pub async fn teardown(self) {
+        self.pg_env.teardown().await;
+    }
+}

@@ -1,4 +1,3 @@
-mod setup;
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
@@ -14,8 +13,8 @@ mod tests {
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
 
-    use crate::setup::setup::{
-        create_test_dynamic_data, TestEnvironment, DEFAULT_PUBKEY_OF_ONES, PUBKEY_OF_TWOS,
+    use setup::rocks::{
+        create_test_dynamic_data, RocksTestEnvironment, DEFAULT_PUBKEY_OF_ONES, PUBKEY_OF_TWOS,
     };
 
     #[test]
@@ -41,14 +40,10 @@ mod tests {
 
     #[test]
     fn test_process_asset_updates_batch_with_same_key_records_iteration_order() {
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage = TestEnvironment::new(
-            temp_dir,
-            &[
-                (4, DEFAULT_PUBKEY_OF_ONES.clone()),
-                (2, DEFAULT_PUBKEY_OF_ONES.clone()),
-            ],
-        )
+        let storage = RocksTestEnvironment::new(&[
+            (4, DEFAULT_PUBKEY_OF_ONES.clone()),
+            (2, DEFAULT_PUBKEY_OF_ONES.clone()),
+        ])
         .storage;
         // Verify iteration order
         let mut iter = storage.assets_update_idx.iter_start();
@@ -71,14 +66,10 @@ mod tests {
 
     #[test]
     fn test_process_asset_updates_batch_with_same_key_records() {
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage = TestEnvironment::new(
-            temp_dir,
-            &[
-                (4, DEFAULT_PUBKEY_OF_ONES.clone()),
-                (2, DEFAULT_PUBKEY_OF_ONES.clone()),
-            ],
-        )
+        let storage = RocksTestEnvironment::new(&[
+            (4, DEFAULT_PUBKEY_OF_ONES.clone()),
+            (2, DEFAULT_PUBKEY_OF_ONES.clone()),
+        ])
         .storage;
         // Verify fetch_asset_updated_keys with None as last key
         let (keys, last_key) = storage
@@ -105,14 +96,10 @@ mod tests {
 
     #[test]
     fn test_fetch_asset_updated_keys_with_limit_and_skip() {
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage = TestEnvironment::new(
-            temp_dir,
-            &[
-                (4, DEFAULT_PUBKEY_OF_ONES.clone()),
-                (2, DEFAULT_PUBKEY_OF_ONES.clone()),
-            ],
-        )
+        let storage = RocksTestEnvironment::new(&[
+            (4, DEFAULT_PUBKEY_OF_ONES.clone()),
+            (2, DEFAULT_PUBKEY_OF_ONES.clone()),
+        ])
         .storage;
         // Verify fetch_asset_updated_keys with None as last key
         let (keys, last_key) = storage
@@ -139,14 +126,10 @@ mod tests {
 
     #[test]
     fn test_fetch_asset_updated_keys_with_skip() {
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage = TestEnvironment::new(
-            temp_dir,
-            &[
-                (4, DEFAULT_PUBKEY_OF_ONES.clone()),
-                (2, DEFAULT_PUBKEY_OF_ONES.clone()),
-            ],
-        )
+        let storage = RocksTestEnvironment::new(&[
+            (4, DEFAULT_PUBKEY_OF_ONES.clone()),
+            (2, DEFAULT_PUBKEY_OF_ONES.clone()),
+        ])
         .storage;
         // Verify fetch_asset_updated_keys with None as last key
         let (keys, last_key) = storage
@@ -169,16 +152,12 @@ mod tests {
 
     #[test]
     fn test_up_to_filter() {
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage = TestEnvironment::new(
-            temp_dir,
-            &[
-                (4, DEFAULT_PUBKEY_OF_ONES.clone()), // seq = 1
-                (2, DEFAULT_PUBKEY_OF_ONES.clone()), // seq = 2
-                (5, DEFAULT_PUBKEY_OF_ONES.clone()), // seq = 3
-                (5, PUBKEY_OF_TWOS.clone()),         // seq = 4
-            ],
-        )
+        let storage = RocksTestEnvironment::new(&[
+            (4, DEFAULT_PUBKEY_OF_ONES.clone()), // seq = 1
+            (2, DEFAULT_PUBKEY_OF_ONES.clone()), // seq = 2
+            (5, DEFAULT_PUBKEY_OF_ONES.clone()), // seq = 3
+            (5, PUBKEY_OF_TWOS.clone()),         // seq = 4
+        ])
         .storage;
 
         // Verify fetch_asset_updated_keys with up to key which is less then the first key
@@ -234,8 +213,7 @@ mod tests {
 
     #[test]
     fn test_last_known_asset_updated_key_on_empty_db() {
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage = TestEnvironment::new(temp_dir, &[]).storage;
+        let storage = RocksTestEnvironment::new(&[]).storage;
         let last_key = storage
             .last_known_asset_updated_key()
             .expect("Failed to get last known asset updated key");
@@ -244,16 +222,12 @@ mod tests {
 
     #[test]
     fn test_last_known_asset_updated_key_on_non_empty_db() {
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage = TestEnvironment::new(
-            temp_dir,
-            &[
-                (4, DEFAULT_PUBKEY_OF_ONES.clone()), // seq = 1
-                (2, DEFAULT_PUBKEY_OF_ONES.clone()), // seq = 2
-                (5, DEFAULT_PUBKEY_OF_ONES.clone()), // seq = 3
-                (5, PUBKEY_OF_TWOS.clone()),         // seq = 4
-            ],
-        )
+        let storage = RocksTestEnvironment::new(&[
+            (4, DEFAULT_PUBKEY_OF_ONES.clone()), // seq = 1
+            (2, DEFAULT_PUBKEY_OF_ONES.clone()), // seq = 2
+            (5, DEFAULT_PUBKEY_OF_ONES.clone()), // seq = 3
+            (5, PUBKEY_OF_TWOS.clone()),         // seq = 4
+        ])
         .storage;
         let last_key = storage
             .last_known_asset_updated_key()
@@ -271,14 +245,10 @@ mod tests {
 
     #[test]
     fn test_process_asset_updates_batch_iteration_results() {
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage = TestEnvironment::new(
-            temp_dir,
-            &[
-                (4, DEFAULT_PUBKEY_OF_ONES.clone()),
-                (2, PUBKEY_OF_TWOS.clone()),
-            ],
-        )
+        let storage = RocksTestEnvironment::new(&[
+            (4, DEFAULT_PUBKEY_OF_ONES.clone()),
+            (2, PUBKEY_OF_TWOS.clone()),
+        ])
         .storage;
         let (keys, last_key) = storage
             .fetch_asset_updated_keys(None, None, 10, None)
@@ -362,10 +332,9 @@ mod tests {
 
     #[test]
     fn test_multiple_slot_updates() {
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let storage = TestEnvironment::new(temp_dir, &[]).storage;
+        let storage = RocksTestEnvironment::new(&[]).storage;
         let pk = Pubkey::new_unique();
-        let dynamic_data = create_test_dynamic_data(pk, 0);
+        let dynamic_data = create_test_dynamic_data(pk, 0, "http://example.com".to_string());
 
         storage
             .asset_dynamic_data
@@ -387,7 +356,7 @@ mod tests {
         let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
         assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
         assert_eq!(selected_data.is_compressed, Updated::new(0, None, false)); // slot in new_data not greater than slot in start data, so that field must not change
-        assert_eq!(selected_data.supply, None); // slot in new_data not greater than slot in start data, so that field must not change
+        assert_eq!(selected_data.supply, Some(Updated::new(0, None, 1))); // slot in new_data not greater than slot in start data, so that field must not change
 
         let new_data = AssetDynamicDetails {
             pubkey: pk,

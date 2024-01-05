@@ -1,0 +1,21 @@
+[package]
+name = "setup"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rocks-db = { path = "../../rocks-db" }
+entities = { path = "../../entities" }
+postgre-client = { path = "../../postgre-client" }
+nft_ingester = { path = "../../nft_ingester" }
+metrics-utils = { path = "../../metrics_utils" }
+solana-sdk = "~1.16"
+tempfile = "3.8.1"
+rand = "0.8.5"
+tokio = { version = "1.26.0", features = ["full", "tracing"] }
+sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json"] }
+testcontainers = "0.14.0"
+uuid = { version = "1.6.1", features = ["v4"] }
+tracing  ="0.1.40"
