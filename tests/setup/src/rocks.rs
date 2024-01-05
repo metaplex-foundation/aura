@@ -16,6 +16,14 @@ pub struct RocksTestEnvironment {
     _temp_dir: TempDir,
 }
 
+pub struct GeneratedAssets {
+    pub pubkeys: Vec<Pubkey>,
+    pub static_details: Vec<AssetStaticDetails>,
+    pub authorities: Vec<AssetAuthority>,
+    pub owners: Vec<AssetOwner>,
+    pub dynamic_details: Vec<AssetDynamicDetails>,
+    pub collections: Vec<AssetCollection>,
+}
 impl RocksTestEnvironment {
     pub fn new(keys: &[(u64, Pubkey)]) -> Self {
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
@@ -23,7 +31,7 @@ impl RocksTestEnvironment {
         let storage = Storage::open(temp_dir.path().to_str().unwrap(), join_set)
             .expect("Failed to create a database");
         for &(slot, ref pubkey) in keys {
-            storage.asset_updated(slot, pubkey.clone()).unwrap();
+            storage.asset_updated(slot, *pubkey).unwrap();
         }
 
         RocksTestEnvironment {
@@ -32,43 +40,32 @@ impl RocksTestEnvironment {
         }
     }
 
-    pub fn generate_assets(
-        &self,
-        cnt: usize,
-        slot: u64,
-    ) -> (
-        Vec<Pubkey>,
-        Vec<AssetStaticDetails>,
-        Vec<AssetAuthority>,
-        Vec<AssetOwner>,
-        Vec<AssetDynamicDetails>,
-        Vec<AssetCollection>,
-    ) {
-        let pks = (0..cnt).map(|_| Pubkey::new_unique()).collect::<Vec<_>>();
-        for pk in pks.iter() {
-            self.storage.asset_updated(slot, pk.clone()).unwrap();
+    pub fn generate_assets(&self, cnt: usize, slot: u64) -> GeneratedAssets {
+        let pubkeys = (0..cnt).map(|_| Pubkey::new_unique()).collect::<Vec<_>>();
+        for pk in pubkeys.iter() {
+            self.storage.asset_updated(slot, *pk).unwrap();
         }
         let url = "http://example.com";
         // generate 1000 units of data using generate_test_static_data,generate_test_authority,generate_test_owner and create_test_dynamic_data for a 1000 unique pubkeys
-        let static_data = pks
+        let static_details = pubkeys
             .iter()
-            .map(|pk| generate_test_static_data(pk.clone(), slot))
+            .map(|pk| generate_test_static_data(*pk, slot))
             .collect::<Vec<_>>();
-        let authority_data = pks
+        let authorities = pubkeys
             .iter()
-            .map(|pk| generate_test_authority(pk.clone()))
+            .map(|pk| generate_test_authority(*pk))
             .collect::<Vec<_>>();
-        let owner_data = pks
+        let owners = pubkeys
             .iter()
-            .map(|pk| generate_test_owner(pk.clone()))
+            .map(|pk| generate_test_owner(*pk))
             .collect::<Vec<_>>();
-        let dynamic_data = pks
+        let dynamic_details = pubkeys
             .iter()
-            .map(|pk| create_test_dynamic_data(pk.clone(), slot, url.to_string()))
+            .map(|pk| create_test_dynamic_data(*pk, slot, url.to_string()))
             .collect::<Vec<_>>();
-        let collection_data = pks
+        let collections = pubkeys
             .iter()
-            .map(|pk| generate_test_collection(pk.clone()))
+            .map(|pk| generate_test_collection(*pk))
             .collect::<Vec<_>>();
         // put everything in the database
 
@@ -83,12 +80,13 @@ impl RocksTestEnvironment {
             )
             .unwrap();
         for (((((pk, static_data), authority_data), owner_data), dynamic_data), collection_data) in
-            pks.iter()
-                .zip(static_data.iter())
-                .zip(authority_data.iter())
-                .zip(owner_data.iter())
-                .zip(dynamic_data.iter())
-                .zip(collection_data.iter())
+            pubkeys
+                .iter()
+                .zip(static_details.iter())
+                .zip(authorities.iter())
+                .zip(owners.iter())
+                .zip(dynamic_details.iter())
+                .zip(collections.iter())
         {
             self.storage
                 .asset_authority_data
@@ -109,14 +107,14 @@ impl RocksTestEnvironment {
                 .put(*pk, collection_data)
                 .unwrap();
         }
-        (
-            pks,
-            static_data,
-            authority_data,
-            owner_data,
-            dynamic_data,
-            collection_data,
-        )
+        GeneratedAssets {
+            pubkeys,
+            static_details,
+            authorities,
+            owners,
+            dynamic_details,
+            collections,
+        }
     }
 }
 

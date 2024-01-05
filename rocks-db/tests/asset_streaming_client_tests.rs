@@ -96,6 +96,6 @@ mod tests {
             pk_set.insert(resp.pubkey);
         }
         assert_eq!(pk_set.len(), cnt);
-        assert_eq!(pk_set, pks.0.into_iter().collect::<HashSet<_>>());
+        assert_eq!(pk_set, pks.pubkeys.into_iter().collect::<HashSet<_>>());
     }
 }

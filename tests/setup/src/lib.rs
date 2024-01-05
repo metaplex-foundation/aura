@@ -1,10 +1,6 @@
 pub mod pg;
 pub mod rocks;
 
-use rocks_db::{
-    asset::AssetCollection, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
-};
-use solana_sdk::pubkey::Pubkey;
 use std::sync::{atomic::AtomicBool, Arc};
 use testcontainers::clients::Cli;
 
@@ -18,17 +14,7 @@ impl<'a> TestEnvironment<'a> {
         cli: &'a Cli,
         cnt: usize,
         slot: u64,
-    ) -> (
-        TestEnvironment<'a>,
-        (
-            Vec<Pubkey>,
-            Vec<AssetStaticDetails>,
-            Vec<AssetAuthority>,
-            Vec<AssetOwner>,
-            Vec<AssetDynamicDetails>,
-            Vec<AssetCollection>,
-        ),
-    ) {
+    ) -> (TestEnvironment<'a>, rocks::GeneratedAssets) {
         let rocks_env = rocks::RocksTestEnvironment::new(&[]);
         let pg_env = pg::TestEnvironment::new(cli).await;
         let generated_data = rocks_env.generate_assets(cnt, slot);

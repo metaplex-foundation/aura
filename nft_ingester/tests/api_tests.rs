@@ -13,10 +13,7 @@ mod tests {
     async fn test_search_assets() {
         let cnt = 20;
         let cli = Cli::default();
-        let (
-            env,
-            (pubkeys, static_data, authority_data, owner_data, dynamic_data, collection_data),
-        ) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
         let api = nft_ingester::api::api_impl::DasApi::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -50,7 +47,7 @@ mod tests {
             for i in 0..limit {
                 assert_eq!(
                     res_obj.items[i as usize].id,
-                    pubkeys[cnt - 1 - i as usize].to_string(),
+                    generated_assets.pubkeys[cnt - 1 - i as usize].to_string(),
                     "asset should match the pubkey"
                 );
             }
@@ -67,7 +64,7 @@ mod tests {
             for i in 0..limit {
                 assert_eq!(
                     res_obj.items[i as usize].id,
-                    pubkeys[cnt - 1 - i as usize].to_string(),
+                    generated_assets.pubkeys[cnt - 1 - i as usize].to_string(),
                     "asset should match the pubkey"
                 );
             }
@@ -84,7 +81,7 @@ mod tests {
             for i in 0..limit {
                 assert_eq!(
                     res_obj.items[i as usize].id,
-                    pubkeys[cnt - 1 - limit as usize - i as usize].to_string(),
+                    generated_assets.pubkeys[cnt - 1 - limit as usize - i as usize].to_string(),
                     "asset should match the pubkey"
                 );
             }
@@ -112,7 +109,7 @@ mod tests {
             for i in 0..limit {
                 assert_eq!(
                     res_obj.items[i as usize].id,
-                    pubkeys[cnt - 1 - limit as usize - i as usize].to_string(),
+                    generated_assets.pubkeys[cnt - 1 - limit as usize - i as usize].to_string(),
                     "asset should match the pubkey"
                 );
             }
@@ -155,14 +152,14 @@ mod tests {
             for i in 0..limit {
                 assert_eq!(
                     res_obj.items[i as usize].id,
-                    pubkeys[cnt - 1 - i as usize].to_string(),
+                    generated_assets.pubkeys[cnt - 1 - i as usize].to_string(),
                     "asset should match the pubkey"
                 );
             }
         }
         // test a request with owner
         {
-            let ref_value = owner_data[8].clone();
+            let ref_value = generated_assets.owners[8].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
                 owner_address: Some(ref_value.owner.value.to_string()),
@@ -180,7 +177,7 @@ mod tests {
         }
         // test a request with a creator
         {
-            let ref_value = dynamic_data[5].clone();
+            let ref_value = generated_assets.dynamic_details[5].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
                 creator_address: Some(ref_value.creators.value[0].creator.to_string()),
@@ -207,7 +204,7 @@ mod tests {
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             // calculate the number of assets with creator verified true
             let mut cnt = 0;
-            for dynamic in dynamic_data.iter() {
+            for dynamic in generated_assets.dynamic_details.iter() {
                 if dynamic.creators.value[0].creator_verified {
                     cnt += 1;
                 }
@@ -216,7 +213,7 @@ mod tests {
         }
         // test a request with an authority_address field
         {
-            let ref_value = authority_data[9].clone();
+            let ref_value = generated_assets.authorities[9].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
                 authority_address: Some(ref_value.authority.to_string()),
@@ -234,7 +231,7 @@ mod tests {
         }
         // test a request with a collection set as grouping
         {
-            let ref_value = collection_data[12].clone();
+            let ref_value = generated_assets.collections[12].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
                 grouping: Some(("collection".to_string(), ref_value.collection.to_string())),
@@ -252,7 +249,7 @@ mod tests {
         }
         // test a request with a delegate field
         {
-            let ref_value = owner_data[13].clone();
+            let ref_value = generated_assets.owners[13].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
                 delegate: Some(ref_value.delegate.unwrap().value.to_string()),
@@ -270,7 +267,7 @@ mod tests {
         }
         // test a request with a supply mint field
         {
-            let ref_value = static_data[14].clone();
+            let ref_value = generated_assets.static_details[14].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
                 supply_mint: Some(ref_value.pubkey.to_string()),
@@ -288,7 +285,7 @@ mod tests {
         }
         // test a request with a royalty target
         {
-            let ref_value = dynamic_data[15].clone();
+            let ref_value = generated_assets.dynamic_details[15].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
                 royalty_target: Some(ref_value.creators.value[0].creator.to_string()),

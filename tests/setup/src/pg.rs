@@ -84,7 +84,7 @@ pub async fn setup_database(
     let default_pool = Pool::<Postgres>::connect(&default_connection_string)
         .await
         .unwrap();
-    let db_name = format!("test_{}", Uuid::new_v4()).replace("-", "_");
+    let db_name = format!("test_{}", Uuid::new_v4()).replace('-', "_");
     default_pool
         .execute(format!("CREATE DATABASE {}", db_name).as_str())
         .await
