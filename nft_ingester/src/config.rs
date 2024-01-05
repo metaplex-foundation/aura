@@ -91,6 +91,8 @@ pub struct IngesterConfig {
     pub gapfiller_peer_addr: String,
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
+    pub rust_log: Option<String>,
+    pub sql_log_level: Option<String>,
 }
 
 impl IngesterConfig {
@@ -121,6 +123,13 @@ impl IngesterConfig {
 
     pub fn get_is_snapshot(&self) -> bool {
         self.is_snapshot.unwrap_or_default()
+    }
+
+    pub fn get_log_level(&self) -> String {
+        self.rust_log.clone().unwrap_or("warn".to_string())
+    }
+    pub fn get_sql_log_level(&self) -> String {
+        self.sql_log_level.clone().unwrap_or("error".to_string())
     }
 }
 
@@ -364,7 +373,9 @@ impl PeerDiscovery for IngesterConfig {
 }
 
 pub fn setup_config<'a, T: Deserialize<'a>>() -> T {
-    let figment = Figment::new().join(Env::prefixed("INGESTER_"));
+    let figment = Figment::new()
+        .join(Env::prefixed("INGESTER_"))
+        .join(Env::raw());
 
     figment
         .extract()
@@ -374,8 +385,7 @@ pub fn setup_config<'a, T: Deserialize<'a>>() -> T {
         .unwrap()
 }
 
-pub fn init_logger() {
-    let env_filter = env::var("RUST_LOG").unwrap_or("info".to_string());
-    let t = tracing_subscriber::fmt().with_env_filter(env_filter);
+pub fn init_logger(log_level: &str) {
+    let t = tracing_subscriber::fmt().with_env_filter(log_level);
     t.event_format(fmt::format::json()).init();
 }

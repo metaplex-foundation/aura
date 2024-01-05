@@ -38,6 +38,7 @@ export INGESTER_SYNCHRONIZER_BATCH_SIZE=500
 export PEER_GRPC_PORT=9091
 export PEER_GRPC_MAX_GAP_SLOTS=1000000
 
+export INGESTER_SQL_LOG_LEVEL="error"
 cargo run --package nft_ingester --bin ingester
 # start with restore rocks DB
 #cargo run --package nft_ingester --bin ingester -- --restore-rocks-db
