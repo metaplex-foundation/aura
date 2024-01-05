@@ -4,6 +4,8 @@ use log::error;
 use rocks_db::errors::StorageError;
 use thiserror::Error;
 
+const STANDARD_ERROR_CODE: i64 = -32000;
+
 #[derive(Error, Debug)]
 pub enum DasApiError {
     #[error("Config Missing or Error: {0}")]
@@ -18,14 +20,10 @@ pub enum DasApiError {
     PaginationError,
     #[error("Pagination Error. No Pagination Method Selected")]
     PaginationEmptyError,
-    #[error("Deserialization error: {0}")]
-    DeserializationError(#[from] serde_json::Error),
     #[error("Batch Size Error. Batch size should not be greater than {0}.")]
     BatchSizeError(usize),
     #[error("RocksDB error: {0}")]
     RocksError(#[from] StorageError),
-    #[error("Internal server error: {0}")]
-    InternalServerError(String),
     #[error("No data found.")]
     NoDataFoundError,
     #[error("Invalid Grouping Key: {0}")]
@@ -35,24 +33,38 @@ pub enum DasApiError {
 impl From<DasApiError> for jsonrpc_core::Error {
     fn from(value: DasApiError) -> Self {
         match value {
-            DasApiError::PubkeyValidationError { .. } => jsonrpc_core::Error {
-                code: ErrorCode::InvalidParams,
-                message: "Pubkey Validation Error.".to_string(),
+            DasApiError::PubkeyValidationError { 0: key } => jsonrpc_core::Error {
+                code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
+                message: format!("Pubkey Validation Error: {} is invalid", key),
                 data: None,
             },
-            DasApiError::PaginationError { .. } => jsonrpc_core::Error {
-                code: ErrorCode::InvalidParams,
-                message: "Pagination parameters parsing error.".to_string(),
+            DasApiError::PaginationError => jsonrpc_core::Error {
+                code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
+                message: "Pagination Error. Only one pagination parameter supported per query."
+                    .to_string(),
                 data: None,
             },
-            DasApiError::PaginationEmptyError { .. } => jsonrpc_core::Error {
-                code: ErrorCode::InvalidParams,
-                message: "No pagination parameters provided.".to_string(),
+            DasApiError::PaginationEmptyError => jsonrpc_core::Error {
+                code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
+                message: "Pagination Error. No Pagination Method Selected".to_string(),
                 data: None,
             },
             DasApiError::NoDataFoundError => jsonrpc_core::Error {
-                code: ErrorCode::InvalidParams,
-                message: "No data found.".to_string(),
+                code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
+                message: "Database Error: RecordNotFound Error: Asset Not Found".to_string(),
+                data: None,
+            },
+            DasApiError::InvalidGroupingKey { 0: key } => jsonrpc_core::Error {
+                code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
+                message: format!("Invalid Grouping Key: {}", key),
+                data: None,
+            },
+            DasApiError::BatchSizeError { 0: size } => jsonrpc_core::Error {
+                code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
+                message: format!(
+                    "Batch Size Error. Batch size should not be greater than {}.",
+                    size
+                ),
                 data: None,
             },
             _ => jsonrpc_core::Error::new(ErrorCode::InternalError),

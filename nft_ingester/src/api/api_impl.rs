@@ -8,6 +8,7 @@ use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
 
 use crate::api::{config::Config, validation::validate_pubkey};
+use digital_asset_types::rpc::Asset;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
@@ -156,7 +157,7 @@ impl DasApi {
             return Err(DasApiError::BatchSizeError(MAX_ITEMS_IN_BATCH_REQ));
         }
 
-        let ids: Vec<solana_sdk::pubkey::Pubkey> = payload
+        let ids: Vec<Pubkey> = payload
             .ids
             .into_iter()
             .map(validate_pubkey)
@@ -203,6 +204,9 @@ impl DasApi {
         if payload.ids.len() > MAX_ITEMS_IN_BATCH_REQ {
             return Err(DasApiError::BatchSizeError(MAX_ITEMS_IN_BATCH_REQ));
         }
+        if payload.ids.is_empty() {
+            return Ok(json!(Vec::<Option<Asset>>::new()));
+        }
 
         let ids: Vec<Pubkey> = payload
             .ids
@@ -216,10 +220,6 @@ impl DasApi {
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_secs_f64());
-
-        if res.is_empty() {
-            return Err(not_found());
-        }
 
         Ok(json!(res))
     }
