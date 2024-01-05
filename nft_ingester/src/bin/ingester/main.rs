@@ -297,7 +297,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let index_storage = Arc::new(
         PgClient::new(
             &config.database_config.get_database_url().unwrap(),
-            &config.get_log_level(),
+            &config.get_sql_log_level(),
             100,
             max_postgre_connections,
         )
