@@ -314,7 +314,7 @@ fn convert_rocks_offchain_data(
             .unwrap_or_default()
             .as_ref(),
     )
-    .unwrap();
+    .unwrap_or(serde_json::Value::Null);
 
     Ok(asset_data::Model {
         id: dynamic_data.pubkey.to_bytes().to_vec(),
@@ -322,7 +322,9 @@ fn convert_rocks_offchain_data(
         chain_data: ch_data,
         metadata_url: offchain_data.url.clone(),
         metadata_mutability: Mutability::Immutable,
-        metadata: Json::from_str(metadata.as_str()).map_err(|e| DbErr::Custom(e.to_string()))?,
+        metadata: Json::from_str(metadata.as_str())
+            .map_err(|e| DbErr::Custom(e.to_string()))
+            .unwrap_or(serde_json::Value::Null),
         slot_updated: dynamic_data.get_slot_updated() as i64,
         reindex: None,
     })
