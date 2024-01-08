@@ -85,8 +85,8 @@ CREATE INDEX assets_v3_specification_asset_class ON assets_v3 (ast_specification
 -- so far we only know of creators as royalty target type, so we only index on others
 CREATE INDEX assets_v3_royalty_target_type ON assets_v3 (ast_royalty_target_type) WHERE ast_royalty_target_type <> 'creators'::royalty_target_type AND ast_metadata_present IS TRUE;
 -- so far I've seen only null royalty targets, this should be verified
-CREATE INDEX assets_v3_royalty_amount ON assets_v3 (ast_royalty_amount) AND ast_metadata_present IS TRUE;
-CREATE INDEX assets_v3_slot_created ON assets_v3 (ast_slot_created) AND ast_metadata_present IS TRUE;
+CREATE INDEX assets_v3_royalty_amount ON assets_v3 (ast_royalty_amount) WHERE ast_metadata_present IS TRUE;
+CREATE INDEX assets_v3_slot_created ON assets_v3 (ast_slot_created) WHERE ast_metadata_present IS TRUE;
 CREATE INDEX assets_v3_owner_type ON assets_v3 (ast_owner_type) WHERE ast_owner_type IS NOT NULL AND ast_owner_type <> 'unknown'::owner_type AND ast_metadata_present IS TRUE;
 
 -- indexes on the fields that will get updated:
@@ -100,12 +100,12 @@ CREATE INDEX assets_v3_collection_is_collection_verified ON assets_v3(ast_collec
 CREATE INDEX assets_v3_is_burnt ON assets_v3(ast_is_burnt) WHERE ast_is_burnt IS TRUE AND ast_metadata_present IS TRUE;
 -- all observed assets are not compressible, so we only index on compressible assets
 CREATE INDEX assets_v3_is_compressible ON assets_v3(ast_is_compressible) WHERE ast_is_compressible IS TRUE AND ast_metadata_present IS TRUE;
-CREATE INDEX assets_v3_is_compressed ON assets_v3(ast_is_compressed) AND ast_metadata_present IS TRUE;
+CREATE INDEX assets_v3_is_compressed ON assets_v3(ast_is_compressed) WHERE ast_metadata_present IS TRUE;
 -- all observed assets are not frozen, so we only index on frozen assets
 CREATE INDEX assets_v3_is_frozen ON assets_v3(ast_is_frozen) WHERE ast_is_frozen IS TRUE AND ast_metadata_present IS TRUE;
 
 CREATE INDEX assets_v3_supply ON assets_v3(ast_supply) WHERE ast_supply IS NOT NULL AND ast_metadata_present IS TRUE;
-CREATE INDEX assets_v3_slot_updated ON assets_v3(ast_slot_updated) AND ast_metadata_present IS TRUE;
+CREATE INDEX assets_v3_slot_updated ON assets_v3(ast_slot_updated) WHERE ast_metadata_present IS TRUE;
 
 CREATE TABLE tasks (
     tsk_id bigserial
