@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bincode::{deserialize, serialize};
 use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::Updated;
@@ -9,6 +11,18 @@ use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
 use crate::Result;
 use crate::TypedColumn;
+
+#[derive(Debug)]
+pub struct AssetSelectedMaps {
+    pub assets_static: HashMap<Pubkey, AssetStaticDetails>,
+    pub assets_dynamic: HashMap<Pubkey, AssetDynamicDetails>,
+    pub assets_authority: HashMap<Pubkey, AssetAuthority>,
+    pub assets_collection: HashMap<Pubkey, AssetCollection>,
+    pub assets_owner: HashMap<Pubkey, AssetOwner>,
+    pub assets_leaf: HashMap<Pubkey, AssetLeaf>,
+    pub offchain_data: HashMap<String, crate::offchain_data::OffChainData>,
+    pub urls: HashMap<String, String>,
+}
 
 // The following structures are used to store the asset data in the rocksdb database. The data is spread across multiple columns based on the update pattern.
 // The final representation of the asset should be reconstructed by querying the database for the asset and its associated columns.
