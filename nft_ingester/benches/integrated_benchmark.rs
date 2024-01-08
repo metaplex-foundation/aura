@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use nft_ingester::api::SearchAssets;
 use setup::TestEnvironment;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use metrics_utils::ApiMetricsConfig;
 use testcontainers::clients::Cli;
