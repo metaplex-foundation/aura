@@ -281,8 +281,7 @@ pub async fn get_related_for_assets(
         .map(|asset| Pubkey::try_from(asset.ast_pubkey.clone()).unwrap_or_default())
         .collect::<Vec<_>>();
 
-    let asset_selected_maps =
-        get_asset_selected_maps(conn, rocks_db, converted_pubkeys.clone()).await?;
+    let asset_selected_maps = get_asset_selected_maps(rocks_db, converted_pubkeys.clone()).await?;
 
     let assets = converted_pubkeys
         .into_iter()
@@ -552,7 +551,6 @@ struct AssetSelectedMaps {
 }
 
 async fn get_asset_selected_maps(
-    conn: &impl ConnectionTrait,
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
 ) -> Result<AssetSelectedMaps, DbErr> {
@@ -563,44 +561,9 @@ async fn get_asset_selected_maps(
     let assets_owner = fetch_asset_data!(rocks_db, asset_owner_data, asset_ids);
     let assets_leaf = fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids);
 
-    let query = format!("SELECT
-                    ast_pubkey,
-                    (SELECT mtd_url from metadata WHERE ast_metadata_url_id = mtd_id) AS ast_metadata_url
-                    FROM assets_v3
-                WHERE ast_pubkey IN ({});", asset_ids
+    let urls: HashMap<_, _> = assets_dynamic
         .iter()
-        .enumerate()
-        .map(|(index, _)| format!("${}", index + 1))
-        .collect::<Vec<_>>()
-        .join(", "));
-    let query_values = asset_ids
-        .iter()
-        .map(|asset_pk| {
-            Set(asset_pk.to_bytes().as_slice())
-                .into_value()
-                .ok_or(DbErr::Custom(format!(
-                    "cannot get value from asset_id: {:?}",
-                    asset_pk
-                )))
-        })
-        .collect::<Result<Vec<_>, DbErr>>()?;
-    let urls: HashMap<_, _> = conn
-        .query_all(Statement::from_sql_and_values(
-            sea_orm::DatabaseBackend::Postgres,
-            &query,
-            query_values.clone(),
-        ))
-        .await?
-        .iter()
-        .map(|q| AssetWithURL::from_query_result(q, "").unwrap())
-        .collect::<Vec<_>>()
-        .into_iter()
-        .map(|asset| {
-            (
-                bs58::encode(asset.ast_pubkey.as_slice()).into_string(),
-                asset.ast_metadata_url.unwrap_or_default(),
-            )
-        })
+        .map(|(key, asset)| (key.to_string(), asset.url.value.clone()))
         .collect();
 
     let offchain_data = rocks_db
@@ -674,7 +637,6 @@ fn asset_selected_maps_into_full_asset(
 }
 
 pub async fn get_by_ids(
-    conn: &impl ConnectionTrait,
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
 ) -> Result<Vec<Option<FullAsset>>, DbErr> {
@@ -692,8 +654,7 @@ pub async fn get_by_ids(
     }
 
     let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
-    let asset_selected_maps =
-        get_asset_selected_maps(conn, rocks_db, unique_asset_ids.clone()).await?;
+    let asset_selected_maps = get_asset_selected_maps(rocks_db, unique_asset_ids.clone()).await?;
 
     let mut results = vec![None; asset_ids.len()];
     for id in unique_asset_ids {
