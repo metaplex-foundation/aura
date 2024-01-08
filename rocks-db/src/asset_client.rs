@@ -46,7 +46,7 @@ impl Storage {
 macro_rules! fetch_data {
     ($db:expr, $type:ident, $asset_ids:expr) => {{
         $db.batched_multi_get_cf(
-            $db.cf_handle($type::NAME).unwrap(),
+            &$db.cf_handle($type::NAME).unwrap(),
             $asset_ids
                 .into_iter()
                 .cloned()
@@ -95,7 +95,7 @@ impl Storage {
 
         let offchain_data = db
             .batched_multi_get_cf(
-                db.cf_handle(OffChainData::NAME).unwrap(),
+                &db.cf_handle(OffChainData::NAME).unwrap(),
                 urls.clone()
                     .into_values()
                     .collect::<Vec<_>>()

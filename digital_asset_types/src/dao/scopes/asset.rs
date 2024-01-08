@@ -542,7 +542,6 @@ macro_rules! fetch_asset_data {
     }};
 }
 
-
 fn asset_selected_maps_into_full_asset(
     id: &Pubkey,
     asset_selected_maps: &AssetSelectedMaps,
