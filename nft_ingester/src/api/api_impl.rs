@@ -179,7 +179,7 @@ impl DasApi {
         let latency_timer = Instant::now();
 
         let id = validate_pubkey(payload.id.clone())?;
-        let res = get_asset(&self.db_connection, self.rocks_db.clone(), id)
+        let res = get_asset(self.rocks_db.clone(), id)
             .await
             .map_err(Into::<DasApiError>::into)?;
 
@@ -214,7 +214,7 @@ impl DasApi {
             .map(validate_pubkey)
             .collect::<Result<Vec<_>, _>>()?;
 
-        let res = get_asset_batch(&self.db_connection, self.rocks_db.clone(), ids)
+        let res = get_asset_batch(self.rocks_db.clone(), ids)
             .await
             .map_err(Into::<DasApiError>::into)?;
 
@@ -403,7 +403,6 @@ impl DasApi {
         let query: SearchAssetsQuery = payload.clone().try_into()?;
 
         let res = search_assets(
-            &self.db_connection,
             &self.pg_client,
             self.rocks_db.clone(),
             query,
