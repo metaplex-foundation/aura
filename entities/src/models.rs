@@ -27,6 +27,7 @@ pub struct AssetIndex {
     pub is_compressible: bool,
     pub is_compressed: bool,
     pub is_frozen: bool,
+    pub metadata_present: bool,
     pub supply: Option<i64>,
     pub metadata_url: Option<String>,
     pub slot_updated: i64,
