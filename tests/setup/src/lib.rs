@@ -8,7 +8,7 @@ pub struct TestEnvironment<'a> {
     pub rocks_env: rocks::RocksTestEnvironment,
     pub pg_env: pg::TestEnvironment<'a>,
 }
-
+const BATCH_SIZE: usize = 1000;
 impl<'a> TestEnvironment<'a> {
     pub async fn create(
         cli: &'a Cli,
@@ -22,7 +22,7 @@ impl<'a> TestEnvironment<'a> {
         let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
-            cnt,
+            BATCH_SIZE,
         );
         syncronizer
             .synchronize_asset_indexes(Arc::new(AtomicBool::new(true)))
