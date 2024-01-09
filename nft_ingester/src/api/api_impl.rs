@@ -8,6 +8,7 @@ use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
 
 use crate::api::{config::Config, validation::validate_pubkey};
+use digital_asset_types::rpc::Asset;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
@@ -156,7 +157,7 @@ impl DasApi {
             return Err(DasApiError::BatchSizeError(MAX_ITEMS_IN_BATCH_REQ));
         }
 
-        let ids: Vec<solana_sdk::pubkey::Pubkey> = payload
+        let ids: Vec<Pubkey> = payload
             .ids
             .into_iter()
             .map(validate_pubkey)
@@ -178,7 +179,7 @@ impl DasApi {
         let latency_timer = Instant::now();
 
         let id = validate_pubkey(payload.id.clone())?;
-        let res = get_asset(&self.db_connection, self.rocks_db.clone(), id)
+        let res = get_asset(self.rocks_db.clone(), id)
             .await
             .map_err(Into::<DasApiError>::into)?;
 
@@ -203,6 +204,9 @@ impl DasApi {
         if payload.ids.len() > MAX_ITEMS_IN_BATCH_REQ {
             return Err(DasApiError::BatchSizeError(MAX_ITEMS_IN_BATCH_REQ));
         }
+        if payload.ids.is_empty() {
+            return Ok(json!(Vec::<Option<Asset>>::new()));
+        }
 
         let ids: Vec<Pubkey> = payload
             .ids
@@ -210,16 +214,12 @@ impl DasApi {
             .map(validate_pubkey)
             .collect::<Result<Vec<_>, _>>()?;
 
-        let res = get_asset_batch(&self.db_connection, self.rocks_db.clone(), ids)
+        let res = get_asset_batch(self.rocks_db.clone(), ids)
             .await
             .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_secs_f64());
-
-        if res.is_empty() {
-            return Err(not_found());
-        }
 
         Ok(json!(res))
     }
@@ -403,7 +403,6 @@ impl DasApi {
         let query: SearchAssetsQuery = payload.clone().try_into()?;
 
         let res = search_assets(
-            &self.db_connection,
             &self.pg_client,
             self.rocks_db.clone(),
             query,
