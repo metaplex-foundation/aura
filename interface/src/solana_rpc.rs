@@ -5,7 +5,8 @@ use mockall::automock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 
-#[allow(dead_code)]
+//todo: move it to entities
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct SignatureWithSlot {
     pub signature: Signature,
     pub slot: u64,

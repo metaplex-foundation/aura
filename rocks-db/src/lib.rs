@@ -25,6 +25,7 @@ pub mod column;
 pub mod errors;
 pub mod key_encoders;
 pub mod offchain_data;
+pub mod signature_client;
 pub mod storage_traits;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
@@ -68,6 +69,7 @@ impl Storage {
                 Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(),
                 Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(),
                 Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
+                Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
             ],
         )?);
         let asset_offchain_data = Self::column(db.clone());
