@@ -7,8 +7,8 @@ use solana_sdk::signature::Signature;
 
 #[allow(dead_code)]
 pub struct SignatureWithSlot {
-    signature: Signature,
-    slot: u64,
+    pub signature: Signature,
+    pub slot: u64,
 }
 
 #[automock]
