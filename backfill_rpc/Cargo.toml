@@ -1,5 +1,5 @@
 [package]
-name = "interface"
+name = "backfill-rpc"
 version = "0.1.0"
 edition = "2021"
 
@@ -13,3 +13,6 @@ thiserror = "1.0.51"
 entities = { path = "../entities" }
 solana-sdk = "~1.14"
 solana-client = "~1.14"
+solana-program = "~1.14"
+interface = { path = "../interface" }
+tokio = { version = "1.26.0", features = ["full"] }

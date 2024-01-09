@@ -10,6 +10,8 @@ members = [
   "grpc",
   "interface",
   "usecase",
+  "tests/setup",
+  "backfill_rpc"
 ]
 
 [profile.release]

@@ -70,8 +70,9 @@ fn usecase_error_to_status(err: &UsecaseError) -> Status {
                 "Invalid range: start {} and end {} are more than {} slots apart",
                 start, end, max_window_size
             ))
-        } // Add more cases here for other UsecaseError variants if needed
-          // _ => Status::internal(format!("Internal error: {:?}", err)),
+        }
+        // Add more cases here for other UsecaseError variants if needed
+        _ => Status::internal(format!("Internal error: {:?}", err)),
     }
 }
 

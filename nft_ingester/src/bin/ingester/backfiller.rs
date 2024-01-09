@@ -1,7 +1,8 @@
+use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
 use log::{debug, error, info, warn};
 use metrics_utils::{BackfillerMetricsConfig, MetricStatus};
-use nft_ingester::buffer::{Buffer, BufferedTransaction};
+use nft_ingester::buffer::Buffer;
 use nft_ingester::config::BackfillerConfig;
 use nft_ingester::error::IngesterError;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;

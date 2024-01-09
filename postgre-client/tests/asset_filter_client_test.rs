@@ -1,42 +1,35 @@
-mod db_setup;
-
 #[cfg(feature = "integration_tests")]
 #[cfg(test)]
 mod tests {
-    use super::db_setup;
+    use postgre_client::model::*;
     use postgre_client::storage_traits::{AssetIndexStorage, AssetPubkeyFilteredFetcher};
-    use postgre_client::PgClient;
-    use postgre_client::{asset_filter_client, model::*};
-    use rocks_db::asset;
+    use setup::pg::*;
     use testcontainers::clients::Cli;
-    use testcontainers::*;
     use tokio;
 
     #[tokio::test]
     async fn test_get_asset_pubkeys_filtered_on_empty_db() {
         let cli = Cli::default();
-        let node = cli.run(images::postgres::Postgres::default());
-        let (pool, db_name) = db_setup::setup_database(&node).await;
-
-        let asset_filter_storage = PgClient::new_with_pool(pool.clone());
+        let env = TestEnvironment::new(&cli).await;
+        let asset_filter_storage = &env.client;
 
         let filter = SearchAssetsFilter {
             specification_version: Some(SpecificationVersions::V1),
             specification_asset_class: Some(SpecificationAssetClass::Nft),
-            owner_address: Some(db_setup::generate_random_vec(32)),
+            owner_address: Some(generate_random_vec(32)),
             owner_type: Some(OwnerType::Single),
-            creator_address: Some(db_setup::generate_random_vec(32)),
+            creator_address: Some(generate_random_vec(32)),
             creator_verified: Some(true),
-            authority_address: Some(db_setup::generate_random_vec(32)),
-            collection: Some(db_setup::generate_random_vec(32)),
-            delegate: Some(db_setup::generate_random_vec(32)),
+            authority_address: Some(generate_random_vec(32)),
+            collection: Some(generate_random_vec(32)),
+            delegate: Some(generate_random_vec(32)),
             frozen: Some(false),
             supply: Some(1),
-            supply_mint: Some(db_setup::generate_random_vec(32)),
+            supply_mint: Some(generate_random_vec(32)),
             compressed: Some(false),
             compressible: Some(false),
             royalty_target_type: Some(RoyaltyTargetType::Creators),
-            royalty_target: Some(db_setup::generate_random_vec(32)),
+            royalty_target: Some(generate_random_vec(32)),
             royalty_amount: Some(10),
             burnt: Some(false),
             json_uri: Some("https://www.google.com".to_string()),
@@ -55,20 +48,18 @@ mod tests {
             .unwrap();
         assert_eq!(res.len(), 0);
 
-        pool.close().await;
-        db_setup::teardown(&node, &db_name).await;
+        env.teardown().await;
     }
 
     #[tokio::test]
     async fn test_get_asset_pubkeys_filtered_on_filled_db() {
         let cli = Cli::default();
-        let node = cli.run(images::postgres::Postgres::default());
-        let (pool, db_name) = db_setup::setup_database(&node).await;
+        let env = TestEnvironment::new(&cli).await;
+        let asset_filter_storage = &env.client;
 
-        let asset_filter_storage = PgClient::new_with_pool(pool.clone());
         // Generate random asset indexes
-        let asset_indexes = db_setup::generate_asset_index_records(100);
-        let last_known_key = db_setup::generate_random_vec(8 + 8 + 32);
+        let asset_indexes = generate_asset_index_records(100);
+        let last_known_key = generate_random_vec(8 + 8 + 32);
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_filter_storage
@@ -190,21 +181,19 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.len(), 100);
-        pool.close().await;
-        db_setup::teardown(&node, &db_name).await;
+        env.teardown().await;
     }
 
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_upsert_meatadata_urls() {
         let cli = Cli::default();
-        let node = cli.run(images::postgres::Postgres::default());
-        let (pool, db_name) = db_setup::setup_database(&node).await;
+        let env = TestEnvironment::new(&cli).await;
+        let asset_filter_storage = &env.client;
 
-        let asset_filter_storage = PgClient::new_with_pool(pool.clone());
         // Generate random asset indexes
-        let asset_indexes = db_setup::generate_asset_index_records(1);
-        let last_known_key = db_setup::generate_random_vec(8 + 8 + 32);
+        let asset_indexes = generate_asset_index_records(1);
+        let last_known_key = generate_random_vec(8 + 8 + 32);
         let ref_value = &asset_indexes[asset_indexes.len() - 1];
 
         // Insert assets and last key using update_asset_indexes_batch
@@ -212,8 +201,8 @@ mod tests {
             .update_asset_indexes_batch(asset_indexes.as_slice(), &last_known_key)
             .await
             .unwrap();
-        let asset_indexes = db_setup::generate_asset_index_records(100);
-        let last_known_key = db_setup::generate_random_vec(8 + 8 + 32);
+        let asset_indexes = generate_asset_index_records(100);
+        let last_known_key = generate_random_vec(8 + 8 + 32);
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_filter_storage
@@ -240,7 +229,6 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.len(), 101);
-        pool.close().await;
-        db_setup::teardown(&node, &db_name).await;
+        env.teardown().await;
     }
 }

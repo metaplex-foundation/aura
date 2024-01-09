@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use entities::models::BufferedTransaction;
 use tokio::sync::Mutex;
 
 use metrics_utils::IngesterMetricsConfig;
@@ -20,14 +21,6 @@ pub struct Buffer {
     pub mints: Mutex<HashMap<Vec<u8>, Mint>>,
 
     pub json_tasks: Mutex<VecDeque<Task>>,
-}
-
-#[derive(Clone)]
-pub struct BufferedTransaction {
-    pub transaction: Vec<u8>,
-    // this flag tells if the transaction should be mapped from extrnode flatbuffer to mplx flatbuffer structure
-    // data from geyser should be mapped and data from BG should not
-    pub map_flatbuffer: bool,
 }
 
 impl Buffer {
