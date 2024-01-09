@@ -6760,7 +6760,9 @@ dependencies = [
  "futures",
  "interface",
  "mockall 0.12.0",
+ "solana-sdk",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

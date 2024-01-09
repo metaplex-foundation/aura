@@ -1,18 +1,12 @@
+use crate::{error::StorageError, solana_rpc::SignatureWithSlot};
 use async_trait::async_trait;
+use entities::models::BufferedTransaction;
 use mockall::automock;
 use solana_sdk::pubkey::Pubkey;
-
-use crate::{error::StorageError, solana_rpc::SignatureWithSlot};
 
 #[automock]
 #[async_trait]
 pub trait SignaturePersistence {
-    async fn persist_signature(
-        &self,
-        program_id: Pubkey,
-        signature: SignatureWithSlot,
-    ) -> Result<(), StorageError>;
-
     async fn first_persisted_signature_for(
         &self,
         program_id: Pubkey,
@@ -29,4 +23,9 @@ pub trait SignaturePersistence {
         program_id: Pubkey,
         signatures: Vec<SignatureWithSlot>,
     ) -> Result<Vec<SignatureWithSlot>, StorageError>;
+}
+
+#[async_trait]
+pub trait TransactionIngester {
+    async fn ingest_transaction(&self, tx: BufferedTransaction) -> Result<(), StorageError>;
 }

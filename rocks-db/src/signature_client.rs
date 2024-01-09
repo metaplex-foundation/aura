@@ -49,27 +49,6 @@ impl TypedColumn for SignatureIdx {
 
 #[async_trait]
 impl SignaturePersistence for Storage {
-    async fn persist_signature(
-        &self,
-        program_id: Pubkey,
-        signature: interface::solana_rpc::SignatureWithSlot,
-    ) -> Result<(), StorageError> {
-        let program_id = program_id;
-        let slot = signature.slot;
-        let signature = signature.signature;
-        let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
-            Self::put::<SignatureIdx>(db, (program_id, slot, signature), &SignatureIdx {}).map_err(|e| {
-                StorageError::Common(format!(
-                    "Failed to persist signature for program_id: {}, slot: {}, signature: {}, error: {}",
-                    program_id, slot, signature, e
-                ))
-            })
-        })
-        .await
-        .map_err(|e| StorageError::Common(e.to_string()))?
-    }
-
     async fn first_persisted_signature_for(
         &self,
         program_id: Pubkey,
@@ -144,6 +123,27 @@ impl SignaturePersistence for Storage {
 }
 
 impl Storage {
+    pub async fn persist_signature(
+        &self,
+        program_id: Pubkey,
+        signature: interface::solana_rpc::SignatureWithSlot,
+    ) -> Result<(), StorageError> {
+        let program_id = program_id;
+        let slot = signature.slot;
+        let signature = signature.signature;
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            Self::put::<SignatureIdx>(db, (program_id, slot, signature), &SignatureIdx {}).map_err(|e| {
+                StorageError::Common(format!(
+                    "Failed to persist signature for program_id: {}, slot: {}, signature: {}, error: {}",
+                    program_id, slot, signature, e
+                ))
+            })
+        })
+        .await
+        .map_err(|e| StorageError::Common(e.to_string()))?
+    }
+
     pub async fn signature_exists(
         &self,
         program_id: Pubkey,
