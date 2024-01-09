@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
+use interface::error::StorageError;
+use interface::signature_persistence::SignaturePersistence;
 use rocksdb::DB;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
-use crate::errors::StorageError;
-use crate::{column::TypedColumn, Result, Storage};
+use crate::{column::TypedColumn, Storage};
 use bincode::serialize;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -31,7 +33,7 @@ impl TypedColumn for SignatureIdx {
         key
     }
 
-    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+    fn decode_key(bytes: Vec<u8>) -> crate::Result<Self::KeyType> {
         let pubkey_size = std::mem::size_of::<Pubkey>();
         let slot_size = std::mem::size_of::<u64>();
         let signature_size = std::mem::size_of::<Signature>();
@@ -45,34 +47,46 @@ impl TypedColumn for SignatureIdx {
     }
 }
 
-impl Storage {
-    pub async fn persist_signature(
+#[async_trait]
+impl SignaturePersistence for Storage {
+    async fn persist_signature(
         &self,
         program_id: Pubkey,
         signature: interface::solana_rpc::SignatureWithSlot,
-    ) -> Result<()> {
+    ) -> Result<(), StorageError> {
         let program_id = program_id;
         let slot = signature.slot;
         let signature = signature.signature;
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            Self::put::<SignatureIdx>(db, (program_id, slot, signature), &SignatureIdx {})
+            Self::put::<SignatureIdx>(db, (program_id, slot, signature), &SignatureIdx {}).map_err(|e| {
+                StorageError::Common(format!(
+                    "Failed to persist signature for program_id: {}, slot: {}, signature: {}, error: {}",
+                    program_id, slot, signature, e
+                ))
+            })
         })
         .await
         .map_err(|e| StorageError::Common(e.to_string()))?
     }
 
-    pub async fn first_persisted_signature_for(
+    async fn first_persisted_signature_for(
         &self,
         program_id: Pubkey,
-    ) -> Result<Option<interface::solana_rpc::SignatureWithSlot>> {
+    ) -> Result<Option<interface::solana_rpc::SignatureWithSlot>, StorageError> {
         let program_id = program_id;
         let db = self.db.clone();
         let key = (program_id, 0, Signature::default());
-        let res =
-            tokio::task::spawn_blocking(move || Self::first_key_after::<SignatureIdx>(db, key))
-                .await
-                .map_err(|e| StorageError::Common(e.to_string()))?;
+        let res = tokio::task::spawn_blocking(move || {
+            Self::first_key_after::<SignatureIdx>(db, key).map_err(|e| {
+                StorageError::Common(format!(
+                    "Failed to get first persisted signature for program_id: {}, error: {}",
+                    program_id, e
+                ))
+            })
+        })
+        .await
+        .map_err(|e| StorageError::Common(e.to_string()))?;
         let res = res?;
 
         Ok(res.map(
@@ -80,11 +94,11 @@ impl Storage {
         ))
     }
 
-    pub async fn drop_signatures_before(
+    async fn drop_signatures_before(
         &self,
         program_id: Pubkey,
         signature: interface::solana_rpc::SignatureWithSlot,
-    ) -> Result<()> {
+    ) -> Result<(), StorageError> {
         let db = self.db.clone();
         let program_id = program_id;
         let slot = signature.slot;
@@ -93,53 +107,62 @@ impl Storage {
         let to = (program_id, slot, signature);
         tokio::task::spawn_blocking(move || {
             Self::sync_drop_signatures_before::<SignatureIdx>(db, from, to)
+                .map_err(|e| StorageError::Common(e.to_string()))
         })
         .await
         .map_err(|e| StorageError::Common(e.to_string()))?
     }
 
-    pub async fn signature_exists(
-        &self,
-        program_id: Pubkey,
-        signature: interface::solana_rpc::SignatureWithSlot,
-    ) -> Result<bool> {
-        let db = self.db.clone();
-        let program_id = program_id;
-        let slot = signature.slot;
-        let signature = signature.signature;
-        let key = (program_id, slot, signature);
-        tokio::task::spawn_blocking(move || Self::sync_has_key::<SignatureIdx>(db, key))
-            .await
-            .map_err(|e| StorageError::Common(e.to_string()))?
-    }
-
-    pub async fn missing_signatures(
+    async fn missing_signatures(
         &self,
         program_id: Pubkey,
         signatures: Vec<interface::solana_rpc::SignatureWithSlot>,
-    ) -> Result<Vec<interface::solana_rpc::SignatureWithSlot>> {
+    ) -> Result<Vec<interface::solana_rpc::SignatureWithSlot>, StorageError> {
         let db = self.db.clone();
         let program_id = program_id;
         let keys = signatures
             .into_iter()
             .map(|s| (program_id, s.slot, s.signature))
             .collect::<Vec<_>>();
-        tokio::task::spawn_blocking(move || Self::sync_missing_keys_of::<SignatureIdx>(db, keys))
-            .await
-            .map_err(|e| StorageError::Common(e.to_string()))?
-            .map(|keys| {
-                keys.into_iter()
-                    .map(
-                        |(_, slot, signature)| interface::solana_rpc::SignatureWithSlot {
-                            signature,
-                            slot,
-                        },
-                    )
-                    .collect::<Vec<_>>()
-            })
+        tokio::task::spawn_blocking(move || {
+            Self::sync_missing_keys_of::<SignatureIdx>(db, keys)
+                .map_err(|e| StorageError::Common(e.to_string()))
+        })
+        .await
+        .map_err(|e| StorageError::Common(e.to_string()))?
+        .map(|keys| {
+            keys.into_iter()
+                .map(
+                    |(_, slot, signature)| interface::solana_rpc::SignatureWithSlot {
+                        signature,
+                        slot,
+                    },
+                )
+                .collect::<Vec<_>>()
+        })
+    }
+}
+
+impl Storage {
+    pub async fn signature_exists(
+        &self,
+        program_id: Pubkey,
+        signature: interface::solana_rpc::SignatureWithSlot,
+    ) -> Result<bool, StorageError> {
+        let db = self.db.clone();
+        let program_id = program_id;
+        let slot = signature.slot;
+        let signature = signature.signature;
+        let key = (program_id, slot, signature);
+        tokio::task::spawn_blocking(move || {
+            Self::sync_has_key::<SignatureIdx>(db, key)
+                .map_err(|e| StorageError::Common(e.to_string()))
+        })
+        .await
+        .map_err(|e| StorageError::Common(e.to_string()))?
     }
 
-    fn sync_has_key<T>(db: Arc<DB>, key: T::KeyType) -> Result<bool>
+    fn sync_has_key<T>(db: Arc<DB>, key: T::KeyType) -> crate::Result<bool>
     where
         T: TypedColumn,
     {
@@ -152,7 +175,7 @@ impl Storage {
         Ok(res.is_some())
     }
 
-    fn sync_missing_keys_of<T>(db: Arc<DB>, keys: Vec<T::KeyType>) -> Result<Vec<T::KeyType>>
+    fn sync_missing_keys_of<T>(db: Arc<DB>, keys: Vec<T::KeyType>) -> crate::Result<Vec<T::KeyType>>
     where
         T: TypedColumn,
         T::KeyType: Clone + std::hash::Hash + Eq,
@@ -171,7 +194,7 @@ impl Storage {
         db: Arc<DB>,
         from_key: T::KeyType,
         to_key: T::KeyType,
-    ) -> Result<()>
+    ) -> crate::Result<()>
     where
         T: TypedColumn,
     {
@@ -181,7 +204,7 @@ impl Storage {
         Ok(())
     }
 
-    fn first_key_after<T>(db: Arc<DB>, key: T::KeyType) -> Result<Option<T::KeyType>>
+    fn first_key_after<T>(db: Arc<DB>, key: T::KeyType) -> crate::Result<Option<T::KeyType>>
     where
         T: TypedColumn,
     {
@@ -200,7 +223,7 @@ impl Storage {
         }
     }
 
-    fn put<T>(backend: Arc<DB>, key: T::KeyType, value: &T::ValueType) -> Result<()>
+    fn put<T>(backend: Arc<DB>, key: T::KeyType, value: &T::ValueType) -> crate::Result<()>
     where
         T: TypedColumn,
     {

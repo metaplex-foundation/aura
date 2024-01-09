@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
 
+    use interface::signature_persistence::SignaturePersistence;
     use interface::solana_rpc::SignatureWithSlot;
     use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
