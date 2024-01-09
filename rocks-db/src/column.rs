@@ -116,11 +116,6 @@ where
         self.backend.delete_cf(self.handle(), C::encode_key(key))?;
         Ok(())
     }
-
-    pub fn key_exist(&self, key: C::KeyType) -> bool {
-        self.backend
-            .key_may_exist_cf(self.handle(), C::encode_key(key))
-    }
 }
 
 pub mod columns {

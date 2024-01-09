@@ -107,7 +107,10 @@ impl AssetIndexReader for Storage {
                 slot_updated: dynamic_info.get_slot_updated() as i64,
                 metadata_present: self
                     .asset_offchain_data
-                    .key_exist(dynamic_info.url.value.clone()),
+                    .get(dynamic_info.url.value.clone())
+                    .ok()
+                    .flatten()
+                    .is_some(),
                 ..Default::default()
             };
 
