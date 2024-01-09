@@ -8,8 +8,9 @@ members = [
   "entities",
   "grpc",
   "interface",
-  "usecase", 
+  "usecase",
   "tests/setup",
+  "backfill_rpc"
 ]
 
 [profile.release]

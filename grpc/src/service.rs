@@ -72,7 +72,7 @@ fn usecase_error_to_status(err: &UsecaseError) -> Status {
             ))
         }
         // Add more cases here for other UsecaseError variants if needed
-        // _ => Status::internal(format!("Internal error: {:?}", err)),
+        _ => Status::internal(format!("Internal error: {:?}", err)),
     }
 }
 
