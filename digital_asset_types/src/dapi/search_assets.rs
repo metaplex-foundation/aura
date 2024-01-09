@@ -10,7 +10,7 @@ use super::common::asset_list_to_rpc;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn search_assets(
-    index_client: &impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher,
+    index_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
     rocks_db: Arc<Storage>,
     filter: SearchAssetsQuery,
     sort_by: AssetSorting,
