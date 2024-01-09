@@ -10,3 +10,9 @@ pub enum UsecaseError {
     )]
     InvalidRangeTooWide(u64, u64, u64),
 }
+
+#[derive(Error, Debug, PartialEq)]
+pub enum StorageError {
+    #[error("common error: {0}")]
+    Common(String),
+}

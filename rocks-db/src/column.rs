@@ -8,7 +8,7 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::{Result, StorageError};
 pub trait TypedColumn {
-    type KeyType;
+    type KeyType: Clone;
     type ValueType: Serialize + DeserializeOwned;
 
     const NAME: &'static str;
