@@ -12,10 +12,12 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn new(peer_discovery: impl PeerDiscovery) -> Result<Self, Error> {
-        let channel = Channel::from_static(peer_discovery.get_gapfiller_peer_addr())
-            .connect()
-            .await?;
+    pub async fn connect(peer_discovery: impl PeerDiscovery) -> Result<Self, Error> {
+        let channel = Channel::from_static(Box::leak(
+            peer_discovery.get_gapfiller_peer_addr().into_boxed_str(),
+        ))
+        .connect()
+        .await?;
 
         Ok(Self {
             inner: GapFillerServiceClient::new(channel),

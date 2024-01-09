@@ -31,5 +31,5 @@ pub trait AssetDetailsConsumer: Send {
 
 #[automock]
 pub trait PeerDiscovery: Send + Sync {
-    fn get_gapfiller_peer_addr(&self) -> &'static str;
+    fn get_gapfiller_peer_addr(&self) -> String;
 }

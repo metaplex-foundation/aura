@@ -148,7 +148,7 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
-    let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap(); // panic if we do not have any slots in DB
+    let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap_or_default(); // TODO: change to unwrap when we will have all gapfill logic implemented
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;
@@ -352,7 +352,7 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    match Client::new(config).await {
+    match Client::connect(config).await {
         Ok(gaped_data_client) => {
             while first_processed_slot.load(Ordering::SeqCst) == 0 {
                 tokio::time::sleep(Duration::from_millis(100)).await
