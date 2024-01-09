@@ -36,7 +36,7 @@ where
             .get_signatures_by_address(signature.signature, program_id)
             .await
             .map_err(|e| StorageError::Common(e.to_string()))?;
-        
+
         if all_signatures.is_empty() {
             return Ok(());
         }
@@ -44,7 +44,7 @@ where
         // we need to filter out the ones we already have and ingest the rest, if any
         // we need to sort them and process in batches, sorting is ascending by the slot
         all_signatures.sort_by(|a, b| a.slot.cmp(&b.slot));
-        // we need to split the list into batches of BATCH_SIZE 
+        // we need to split the list into batches of BATCH_SIZE
 
         let mut batch_start = 0;
         while batch_start < all_signatures.len() {
@@ -69,31 +69,38 @@ where
                 .map_err(|e| StorageError::Common(e.to_string()))?;
             let tx_cnt = transactions.len();
             for transaction in transactions {
-                self.ingester
-                    .ingest_transaction(transaction)
-                    .await?
+                self.ingester.ingest_transaction(transaction).await?
             }
             // now we may drop the old signatures before the last element of the batch
             // we do this by constructing a fake key at the start of the same slot
             // and then dropping all signatures before it
-            
+
             let fake_key = SignatureWithSlot {
                 signature: Default::default(),
                 slot: all_signatures[batch_end - 1].slot,
             };
-            tracing::info!("Ingested {} transactions. Dropping signatures for program {} before slot {}.", tx_cnt, program_id, fake_key.slot);
+            tracing::info!(
+                "Ingested {} transactions. Dropping signatures for program {} before slot {}.",
+                tx_cnt,
+                program_id,
+                fake_key.slot
+            );
             self.data_layer
                 .drop_signatures_before(program_id, fake_key)
                 .await?;
-            
+
             batch_start = batch_end;
         }
         let fake_key = SignatureWithSlot {
             signature: Default::default(),
             slot: all_signatures[all_signatures.len() - 1].slot,
         };
-        
-        tracing::info!("Finished fetching signatures for program {}. Dropping signatures before slot {}.", program_id, fake_key.slot);
+
+        tracing::info!(
+            "Finished fetching signatures for program {}. Dropping signatures before slot {}.",
+            program_id,
+            fake_key.slot
+        );
         self.data_layer
             .drop_signatures_before(program_id, fake_key)
             .await?;
