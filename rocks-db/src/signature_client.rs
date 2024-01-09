@@ -164,7 +164,7 @@ impl Storage {
             }
         }
         Ok(missing_keys)
-        //todo: Perform batched get, fuck it for now, needs optimisation, sorry for the commented out code
+        //todo: Perform batched get, for now, needs optimisation, sorry for the commented out code
     }
 
     fn sync_drop_signatures_before<T>(
