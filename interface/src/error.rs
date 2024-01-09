@@ -22,3 +22,9 @@ impl From<ClientError> for UsecaseError {
         Self::SolanaRPC(value.kind.to_string())
     }
 }
+
+#[derive(Error, Debug, PartialEq)]
+pub enum StorageError {
+    #[error("common error: {0}")]
+    Common(String),
+}

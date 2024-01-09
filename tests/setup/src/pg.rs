@@ -6,6 +6,8 @@ use rand::Rng;
 use solana_sdk::pubkey::Pubkey;
 use sqlx::{Executor, Pool, Postgres};
 use std::fs;
+use std::sync::Arc;
+use testcontainers::clients::Cli;
 use testcontainers::*;
 use uuid::Uuid;
 
@@ -20,7 +22,56 @@ async fn run_sql_script(pool: &Pool<Postgres>, file_path: &str) -> Result<(), sq
     Ok(())
 }
 
-#[cfg(test)]
+pub struct TestEnvironment<'a> {
+    pub client: Arc<PgClient>,
+    pub pool: Pool<Postgres>,
+    pub db_name: String,
+    pub node: Container<'a, images::postgres::Postgres>,
+}
+
+impl<'a> TestEnvironment<'a> {
+    pub async fn new(cli: &'a Cli) -> TestEnvironment<'a> {
+        let node = cli.run(images::postgres::Postgres::default());
+        let (pool, db_name) = setup_database(&node).await;
+        let client = PgClient::new_with_pool(pool.clone());
+
+        TestEnvironment {
+            client: Arc::new(client),
+            pool,
+            db_name,
+            node,
+        }
+    }
+
+    pub async fn teardown(&self) {
+        teardown(&self.node, &self.db_name).await;
+    }
+
+    pub async fn count_rows_in_assets(&self) -> Result<i64, sqlx::Error> {
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM assets_v3")
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(count)
+    }
+
+    pub async fn count_rows_in_creators(&self) -> Result<i64, sqlx::Error> {
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM asset_creators_v3")
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(count)
+    }
+
+    pub async fn count_rows_in_metadata(&self) -> Result<i64, sqlx::Error> {
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM metadata")
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(count)
+    }
+}
+
 pub async fn setup_database(
     node: &Container<'_, images::postgres::Postgres>,
 ) -> (Pool<Postgres>, String) {
@@ -33,7 +84,7 @@ pub async fn setup_database(
     let default_pool = Pool::<Postgres>::connect(&default_connection_string)
         .await
         .unwrap();
-    let db_name = format!("test_{}", Uuid::new_v4()).replace("-", "_");
+    let db_name = format!("test_{}", Uuid::new_v4()).replace('-', "_");
     default_pool
         .execute(format!("CREATE DATABASE {}", db_name).as_str())
         .await
@@ -63,7 +114,6 @@ pub async fn setup_database(
     (test_db_pool, db_name)
 }
 
-#[cfg(test)]
 pub async fn teardown(node: &Container<'_, images::postgres::Postgres>, db_name: &str) {
     let default_connection_string = format!(
         "postgres://postgres:postgres@localhost:{}",
@@ -82,19 +132,16 @@ pub async fn teardown(node: &Container<'_, images::postgres::Postgres>, db_name:
     }
 }
 
-#[cfg(test)]
 pub fn generate_random_vec(n: usize) -> Vec<u8> {
     let mut rng = rand::thread_rng();
     let random_vector: Vec<u8> = (0..n).map(|_| rng.gen()).collect();
     random_vector
 }
 
-#[cfg(test)]
 pub fn generate_random_pubkey() -> Pubkey {
     Pubkey::new_unique()
 }
 
-#[cfg(test)]
 pub fn generate_asset_index_records(n: usize) -> Vec<AssetIndex> {
     let mut asset_indexes = Vec::new();
     for i in 0..n {
