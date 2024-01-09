@@ -3,7 +3,7 @@ use crate::enums::{
     UseMethod,
 };
 use serde::{Deserialize, Serialize};
-use solana_sdk::{hash::Hash, pubkey::Pubkey};
+use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
 
 // AssetIndex is the struct that is stored in the postgres database and is used to query the asset pubkeys.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -167,4 +167,10 @@ pub struct BufferedTransaction {
     // this flag tells if the transaction should be mapped from extrnode flatbuffer to mplx flatbuffer structure
     // data from geyser should be mapped and data from BG should not
     pub map_flatbuffer: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SignatureWithSlot {
+    pub signature: Signature,
+    pub slot: u64,
 }

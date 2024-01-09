@@ -12,6 +12,7 @@ use chrono::Utc;
 use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard};
 use entities::models::Updated;
 use entities::models::{ChainDataV1, Creator, Uses};
+use interface::signature_persistence::SignaturePersistence;
 use log::{debug, error, info};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::state::leaf_schema::LeafSchema;
@@ -24,7 +25,9 @@ use rocks_db::asset::{
 use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Signature;
 use std::collections::{HashSet, VecDeque};
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::Instant;
@@ -274,7 +277,17 @@ impl BubblegumTxProcessor {
                 processed = false;
             }
         }
-
+        // save signature
+        self.rocks_client
+            .persist_signature(
+                solana_sdk::pubkey::Pubkey::new_from_array(bundle.program.0),
+                entities::models::SignatureWithSlot {
+                    signature: Signature::from_str(bundle.txn_id)?,
+                    slot: bundle.slot,
+                },
+            )
+            .await
+            .map_err(|e| IngesterError::TransactionNotProcessedError(e.to_string()))?;
         if processed {
             self.metrics.set_latency(
                 "transactions_parser",
