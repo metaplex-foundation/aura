@@ -160,3 +160,11 @@ impl<T> Updated<T> {
         }
     }
 }
+
+#[derive(Clone)]
+pub struct BufferedTransaction {
+    pub transaction: Vec<u8>,
+    // this flag tells if the transaction should be mapped from extrnode flatbuffer to mplx flatbuffer structure
+    // data from geyser should be mapped and data from BG should not
+    pub map_flatbuffer: bool,
+}

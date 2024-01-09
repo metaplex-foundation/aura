@@ -10,6 +10,7 @@ use blockbuster::{
     },
 };
 use chrono::Utc;
+use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
 use log::{error, warn};
 use plerkle_serialization::AccountInfo;
@@ -18,7 +19,7 @@ use utils::flatbuffer::account_data_generated::account_data::root_as_account_dat
 
 use rocks_db::columns::{Mint, TokenAccount};
 
-use crate::buffer::{Buffer, BufferedTransaction};
+use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
 use crate::mplx_updates_processor::MetadataInfo;
