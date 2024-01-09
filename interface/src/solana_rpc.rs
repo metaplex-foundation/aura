@@ -17,8 +17,9 @@ pub struct SignatureWithSlot {
 pub trait GetSignaturesByAddress: Send + Sync {
     async fn get_signatures_by_address(
         &self,
-        signature: Signature,
-        program_id: Pubkey,
+        until: Signature,
+        before: Option<Signature>,
+        address: Pubkey,
     ) -> Result<Vec<SignatureWithSlot>, UsecaseError>;
 }
 

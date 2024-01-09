@@ -10,7 +10,7 @@ members = [
   "interface",
   "usecase",
   "tests/setup",
-    "backfill_rpc"
+  "backfill_rpc"
 ]
 
 [profile.release]

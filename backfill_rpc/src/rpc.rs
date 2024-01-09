@@ -28,6 +28,7 @@ impl GetSignaturesByAddress for BackfillRPC {
     async fn get_signatures_by_address(
         &self,
         until: Signature,
+        before: Option<Signature>,
         address: Pubkey,
     ) -> Result<Vec<SignatureWithSlot>, UsecaseError> {
         Ok(self
@@ -39,6 +40,7 @@ impl GetSignaturesByAddress for BackfillRPC {
                     commitment: Some(CommitmentConfig {
                         commitment: CommitmentLevel::Finalized,
                     }),
+                    before,
                     ..Default::default()
                 },
             )
@@ -63,4 +65,19 @@ impl GetTransactionsBySignatures for BackfillRPC {
     ) -> Result<Vec<BufferedTransaction>, UsecaseError> {
         todo!()
     }
+}
+
+#[tokio::test]
+async fn test_get_signatures_by_address() {
+    let client = BackfillRPC::connect("https://api.mainnet-beta.solana.com".to_string());
+    let signatures = client
+        .get_signatures_by_address(
+            Signature::default(),
+            None,
+            Pubkey::from_str("Vote111111111111111111111111111111111111111").unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(signatures.len(), 1000)
 }
