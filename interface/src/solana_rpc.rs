@@ -7,18 +7,13 @@ use solana_sdk::signature::Signature;
 
 #[automock]
 #[async_trait]
-pub trait GetSignaturesByAddress: Send + Sync {
+pub trait TransactionsGetter: Send + Sync {
     async fn get_signatures_by_address(
         &self,
         until: Signature,
         before: Option<Signature>,
         address: Pubkey,
     ) -> Result<Vec<SignatureWithSlot>, UsecaseError>;
-}
-
-#[automock]
-#[async_trait]
-pub trait GetTransactionsBySignatures: Send + Sync {
     async fn get_txs_by_signatures(
         &self,
         signatures: Vec<Signature>,

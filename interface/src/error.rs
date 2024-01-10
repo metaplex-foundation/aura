@@ -1,3 +1,4 @@
+use plerkle_serialization::error::PlerkleSerializationError;
 use solana_client::client_error::ClientError;
 use solana_sdk::signature::ParseSignatureError;
 use thiserror::Error;
@@ -15,6 +16,8 @@ pub enum UsecaseError {
     SolanaRPC(String),
     #[error("ParseSignature {0}")]
     ParseSignature(#[from] ParseSignatureError),
+    #[error("PlerkleSerialization {0}")]
+    PlerkleSerialization(#[from] PlerkleSerializationError),
 }
 
 impl From<ClientError> for UsecaseError {
