@@ -14,20 +14,12 @@ pub struct SignatureWithSlot {
 
 #[automock]
 #[async_trait]
-pub trait GetSignaturesByAddress: Send + Sync {
+pub trait GetBackfillTransactions: Send + Sync {
     async fn get_signatures_by_address(
         &self,
         until: Signature,
         before: Option<Signature>,
         address: Pubkey,
     ) -> Result<Vec<SignatureWithSlot>, UsecaseError>;
-}
-
-#[automock]
-#[async_trait]
-pub trait GetTransactionsBySignatures: Send + Sync {
-    async fn get_txs_by_signatures(
-        &self,
-        signatures: Vec<Signature>,
-    ) -> Result<Vec<BufferedTransaction>, UsecaseError>;
+    async fn get_txs_by_signatures(&self, signatures: Vec<Signature>) -> Vec<BufferedTransaction>;
 }
