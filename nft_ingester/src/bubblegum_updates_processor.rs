@@ -24,7 +24,9 @@ use rocks_db::asset::{
 use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Signature;
 use std::collections::{HashSet, VecDeque};
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::Instant;
@@ -276,7 +278,17 @@ impl BubblegumTxProcessor {
                 processed = false;
             }
         }
-
+        // save signature
+        self.rocks_client
+            .persist_signature(
+                solana_sdk::pubkey::Pubkey::new_from_array(bundle.program.0),
+                entities::models::SignatureWithSlot {
+                    signature: Signature::from_str(bundle.txn_id)?,
+                    slot: bundle.slot,
+                },
+            )
+            .await
+            .map_err(|e| IngesterError::TransactionNotProcessedError(e.to_string()))?;
         if processed {
             self.metrics.set_latency(
                 "transactions_parser",

@@ -1,9 +1,7 @@
 use async_trait::async_trait;
-use entities::models::BufferedTransaction;
+use entities::models::{BufferedTransaction, SignatureWithSlot};
 use interface::error::UsecaseError;
-use interface::solana_rpc::{
-    GetSignaturesByAddress, GetTransactionsBySignatures, SignatureWithSlot,
-};
+use interface::solana_rpc::{GetSignaturesByAddress, GetTransactionsBySignatures};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
 use solana_program::pubkey::Pubkey;

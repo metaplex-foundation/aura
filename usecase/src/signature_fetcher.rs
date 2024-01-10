@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use entities::models::SignatureWithSlot;
 use interface::{
     error::StorageError,
     signature_persistence::{SignaturePersistence, TransactionIngester},
-    solana_rpc::{GetSignaturesByAddress, GetTransactionsBySignatures, SignatureWithSlot},
+    solana_rpc::{GetSignaturesByAddress, GetTransactionsBySignatures},
 };
 use solana_sdk::pubkey::Pubkey;
 
