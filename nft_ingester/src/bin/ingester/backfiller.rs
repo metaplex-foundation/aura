@@ -27,10 +27,10 @@ pub const GET_SIGNATURES_LIMIT: usize = 2000;
 pub const GET_SLOT_RETRIES: u32 = 3;
 pub const BATCH_SLOTS_TO_PARSE: usize = 100;
 pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 30;
-pub const SECONDS_TO_RETRY_GET_SLOT_FROM_BG: u64 = 5;
+pub const GET_DATA_FROM_BG_RETRIES: u32 = 5;
+pub const SECONDS_TO_RETRY_GET_DATA_FROM_BG: u64 = 5;
 pub const PUT_SLOT_RETRIES: u32 = 5;
-pub const SECONDS_TO_RETRY_PUT_SLOT: u64 = 5;
-pub const SECONDS_TO_RETRY_DELETE_SLOT: u64 = 5;
+pub const SECONDS_TO_RETRY_ROCKSDB_OPERATION: u64 = 5;
 pub const DELETE_SLOT_RETRIES: u32 = 5;
 
 pub struct Backfiller {
@@ -200,6 +200,9 @@ impl SlotsCollector {
                         start_at_slot = last_slot;
 
                         self.save_slots(&slots).await;
+
+                        self.metrics
+                            .set_last_processed_slot("collected_slot", last_slot as i64);
                     } else {
                         info!("All the slots are collected");
                         break;
@@ -209,7 +212,7 @@ impl SlotsCollector {
                     self.metrics
                         .inc_slots_collected("backfiller_slots_collected", MetricStatus::FAILURE);
                     error!("Error getting slots: {}", err);
-                    tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_GET_SLOT_FROM_BG))
+                    tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_GET_DATA_FROM_BG))
                         .await;
                     continue;
                 }
@@ -240,8 +243,10 @@ impl SlotsCollector {
                         Err(err) => {
                             error!("Error putting slot: {}", err);
                             counter -= 1;
-                            tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_PUT_SLOT))
-                                .await;
+                            tokio::time::sleep(Duration::from_secs(
+                                SECONDS_TO_RETRY_ROCKSDB_OPERATION,
+                            ))
+                            .await;
                             continue;
                         }
                     }
@@ -279,6 +284,34 @@ impl TransactionsParser {
             big_table_client,
             buffer,
             metrics,
+        }
+    }
+
+    async fn get_block_from_bg(
+        big_table_client: Arc<LedgerStorage>,
+        slot: u64,
+    ) -> Result<solana_transaction_status::ConfirmedBlock, IngesterError> {
+        let mut counter = GET_DATA_FROM_BG_RETRIES;
+
+        loop {
+            let block = match big_table_client.get_confirmed_block(slot).await {
+                Ok(block) => block,
+                Err(err) => {
+                    error!("Error getting block: {}", err);
+                    counter -= 1;
+                    if counter == 0 {
+                        return Err(IngesterError::BigTableError(format!(
+                            "Error getting block: {}",
+                            err
+                        )));
+                    }
+                    tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_GET_DATA_FROM_BG))
+                        .await;
+                    continue;
+                }
+            };
+
+            return Ok(block);
         }
     }
 
@@ -344,7 +377,7 @@ impl TransactionsParser {
                 let cloned_metrics = self.metrics.clone();
 
                 let task = tokio::spawn(async move {
-                    let block = match bg_client.get_confirmed_block(s).await {
+                    let block = match TransactionsParser::get_block_from_bg(bg_client, s).await {
                         Ok(block) => block,
                         Err(err) => {
                             error!("Error getting block: {}", err);
@@ -437,6 +470,8 @@ impl TransactionsParser {
                         cloned_metrics.inc_data_processed("backfiller_tx_processed");
                     }
                     cloned_metrics.inc_data_processed("backfiller_slot_processed");
+
+                    cloned_metrics.set_last_processed_slot("parsed_slot", block.parent_slot as i64);
                 });
 
                 tasks.push(task);
@@ -467,8 +502,10 @@ impl TransactionsParser {
                         Err(err) => {
                             error!("Error deleting slot: {}", err);
                             counter -= 1;
-                            tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_DELETE_SLOT))
-                                .await;
+                            tokio::time::sleep(Duration::from_secs(
+                                SECONDS_TO_RETRY_ROCKSDB_OPERATION,
+                            ))
+                            .await;
                             continue;
                         }
                     }

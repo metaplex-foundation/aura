@@ -78,6 +78,7 @@ pub struct MetricLabelWithStatus {
 pub struct BackfillerMetricsConfig {
     slots_collected: Family<MetricLabelWithStatus, Counter>,
     data_processed: Family<MetricLabel, Counter>, // slots & transactions
+    last_processed_slot: Family<MetricLabel, Gauge>,
 }
 
 impl Default for BackfillerMetricsConfig {
@@ -91,6 +92,7 @@ impl BackfillerMetricsConfig {
         Self {
             slots_collected: Family::<MetricLabelWithStatus, Counter>::default(),
             data_processed: Family::<MetricLabel, Counter>::default(),
+            last_processed_slot: Family::<MetricLabel, Gauge>::default(),
         }
     }
 
@@ -109,6 +111,14 @@ impl BackfillerMetricsConfig {
                 name: label.to_owned(),
             })
             .inc()
+    }
+
+    pub fn set_last_processed_slot(&self, label: &str, slot: i64) -> i64 {
+        self.last_processed_slot
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .set(slot)
     }
 }
 
@@ -270,6 +280,12 @@ impl MetricsTrait for MetricState {
             "backfiller_data_processed",
             "The number of data processed by backfiller",
             self.backfiller_metrics.data_processed.clone(),
+        );
+
+        self.registry.register(
+            "backfiller_last_processed_slot",
+            "The last processed slot by backfiller",
+            self.backfiller_metrics.last_processed_slot.clone(),
         );
     }
 }
