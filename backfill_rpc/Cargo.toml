@@ -11,12 +11,11 @@ futures="0.3.29"
 mockall = "0.12.0"
 thiserror = "1.0.51"
 entities = { path = "../entities" }
-solana-sdk = "~1.14"
-solana-client = "~1.14"
-solana-program = "~1.14"
-solana-transaction-status = "~1.14"
+solana-sdk = "~1.16"
+solana-client = "~1.16"
+solana-program = "~1.16"
+solana-transaction-status = "~1.16"
 interface = { path = "../interface" }
 tokio = { version = "1.26.0", features = ["full"] }
 plerkle_serialization = "1.5.2"
 flatbuffers = "23.1.21"
-

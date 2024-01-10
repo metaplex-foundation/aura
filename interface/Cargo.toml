@@ -11,5 +11,5 @@ futures="0.3.29"
 mockall = "0.12.0"
 thiserror = "1.0.51"
 entities = { path = "../entities" }
-solana-sdk = "~1.14"
-solana-client = "~1.14"
+solana-sdk = "~1.16"
+solana-client = "~1.16"
