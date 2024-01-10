@@ -3,7 +3,7 @@ use entities::models::{BufferedTransaction, SignatureWithSlot};
 use flatbuffers::FlatBufferBuilder;
 use futures::{stream, StreamExt, TryStreamExt};
 use interface::error::UsecaseError;
-use interface::solana_rpc::GetBackfillTransactions;
+use interface::solana_rpc::TransactionsGetter;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
@@ -16,19 +16,19 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 pub struct BackfillRPC {
-    client: RpcClient,
+    client: Arc<RpcClient>,
 }
 
 impl BackfillRPC {
     pub fn connect(addr: String) -> Self {
         Self {
-            client: RpcClient::new(addr),
+            client: Arc::new(RpcClient::new(addr)),
         }
     }
 }
 
 #[async_trait]
-impl GetBackfillTransactions for BackfillRPC {
+impl TransactionsGetter for BackfillRPC {
     async fn get_signatures_by_address(
         &self,
         until: Signature,
@@ -64,11 +64,9 @@ impl GetBackfillTransactions for BackfillRPC {
         &self,
         signatures: Vec<Signature>,
     ) -> Result<Vec<BufferedTransaction>, UsecaseError> {
-        let client = Arc::new(&self.client);
-
         stream::iter(signatures)
             .map(|signature| {
-                let client = client.clone();
+                let client = self.client.clone();
                 async move {
                     client
                         .get_transaction_with_config(

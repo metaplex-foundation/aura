@@ -7,7 +7,7 @@ use solana_sdk::signature::Signature;
 
 #[automock]
 #[async_trait]
-pub trait GetBackfillTransactions: Send + Sync {
+pub trait TransactionsGetter: Send + Sync {
     async fn get_signatures_by_address(
         &self,
         until: Signature,
