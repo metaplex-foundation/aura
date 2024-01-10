@@ -1,4 +1,3 @@
-use crate::buffer::Buffer;
 use crate::db_v2::Task;
 use crate::error::IngesterError;
 use crate::flatbuffer_mapper::FlatbufferMapper;
@@ -10,7 +9,7 @@ use blockbuster::{
 };
 use chrono::Utc;
 use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard};
-use entities::models::Updated;
+use entities::models::{BufferedTransaction, Updated};
 use entities::models::{ChainDataV1, Creator, Uses};
 use log::{debug, error, info};
 use metrics_utils::IngesterMetricsConfig;
@@ -27,8 +26,8 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::{HashSet, VecDeque};
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::time::Instant;
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
@@ -40,15 +39,15 @@ pub struct BubblegumTxProcessor {
 
     pub rocks_client: Arc<rocks_db::Storage>,
 
-    pub buffer: Arc<Buffer>,
+    pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
     pub metrics: Arc<IngesterMetricsConfig>,
 }
 
 impl BubblegumTxProcessor {
     pub fn new(
         rocks_client: Arc<rocks_db::Storage>,
-        buffer: Arc<Buffer>,
         metrics: Arc<IngesterMetricsConfig>,
+        json_tasks: Arc<Mutex<VecDeque<Task>>>,
     ) -> Self {
         let instruction_parser = Arc::new(BubblegumParser {});
 
@@ -58,7 +57,7 @@ impl BubblegumTxProcessor {
             transaction_parser,
             instruction_parser,
             rocks_client,
-            buffer,
+            json_tasks,
             metrics,
         }
     }
@@ -73,43 +72,29 @@ impl BubblegumTxProcessor {
         order_instructions(ref_set, tx)
     }
 
-    pub async fn run(&self, keep_running: Arc<AtomicBool>) {
-        let cloned_buffer = self.buffer.clone();
+    pub async fn process_transaction(
+        &self,
+        data: BufferedTransaction,
+    ) -> Result<(), IngesterError> {
+        let seen_at = Utc::now();
 
-        while keep_running.load(Ordering::SeqCst) {
-            let mut buffer = cloned_buffer.transactions.lock().await;
-            if let Some(data) = buffer.pop_front() {
-                drop(buffer);
+        let mut transaction_info_bytes = data.transaction.clone();
 
-                let seen_at = Utc::now();
-
-                let mut transaction_info_bytes = data.transaction.clone();
-
-                if data.map_flatbuffer {
-                    let tx_update =
-                        utils::flatbuffer::transaction_info_generated::transaction_info::root_as_transaction_info(
-                            &data.transaction,
-                        ).unwrap();
-                    transaction_info_bytes = self
-                        .transaction_parser
-                        .map_tx_fb_bytes(tx_update, seen_at)
-                        .unwrap();
-                }
-                let transaction_info = plerkle_serialization::root_as_transaction_info(
-                    transaction_info_bytes.as_slice(),
-                )
+        if data.map_flatbuffer {
+            let tx_update =
+                    utils::flatbuffer::transaction_info_generated::transaction_info::root_as_transaction_info(
+                        &data.transaction,
+                    ).unwrap();
+            transaction_info_bytes = self
+                .transaction_parser
+                .map_tx_fb_bytes(tx_update, seen_at)
+                .unwrap();
+        }
+        let transaction_info =
+            plerkle_serialization::root_as_transaction_info(transaction_info_bytes.as_slice())
                 .unwrap();
 
-                let parsed_data = self.handle_transaction(transaction_info).await;
-                if let Err(e) = parsed_data {
-                    if e != IngesterError::NotImplemented {
-                        error!("Background saver could not process received data: {}", e);
-                    }
-                }
-            } else {
-                drop(buffer);
-            }
-        }
+        self.handle_transaction(transaction_info).await
     }
 
     fn instruction_name_to_string(&self, ix: &InstructionName) -> &'static str {
@@ -565,7 +550,7 @@ impl BubblegumTxProcessor {
                 }
             }
 
-            let mut tasks_buffer = self.buffer.json_tasks.lock().await;
+            let mut tasks_buffer = self.json_tasks.lock().await;
 
             let task = Task {
                 ofd_metadata_url: args.uri.clone(),
