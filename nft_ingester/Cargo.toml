@@ -65,6 +65,11 @@ tempfile = "3.8.1"
 setup = { path = "../tests/setup" }
 testcontainers = "0.14.0"
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
+criterion = "0.5.1"
+
+[[bench]]
+name = "integrated_benchmark"
+harness = false
 
 [dependencies.utils]
 version = "0.1.8"

@@ -8,12 +8,13 @@ mod tests {
     use nft_ingester::api::SearchAssets;
     use testcontainers::clients::Cli;
 
+    const SLOT_UPDATED: u64 = 100;
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_search_assets() {
         let cnt = 20;
         let cli = Cli::default();
-        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
         let api = nft_ingester::api::api_impl::DasApi::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
