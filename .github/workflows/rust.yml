@@ -19,7 +19,7 @@ jobs:
           ~/.cargo/registry/
           ~/.cargo/git/
           target/
-        key: ${{ runner.os }}-cargo-utility-chain
+        key: ${{ runner.os }}-cargo-utility-chain-1.75
 
     - name: Install dependencies
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
@@ -27,7 +27,7 @@ jobs:
     - name: Install Rust specific version
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: 1.70.0
+        toolchain: 1.75
         profile: minimal
         components: clippy, rustfmt
         override: true

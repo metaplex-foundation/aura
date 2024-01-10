@@ -20,15 +20,15 @@ reqwest = "0.11.11"
 plerkle_messenger = { version = "1.5.2", features = ['redis'] }
 plerkle_serialization = { version = "1.5.2" }
 flatbuffers = "23.1.21"
-mpl-bubblegum = { git = "https://github.com/metaplex-foundation/mpl-bubblegum.git", rev = "3cb3976d", features = ["no-entrypoint"] }
-spl-account-compression = "0.1.8"
+mpl-bubblegum = "1.0.1-beta.4"
+spl-account-compression = "0.2.0"
 num-traits = "0.2.15"
-blockbuster = { git = "https://github.com/metaplex-foundation/blockbuster.git", rev = "552aba6a" }
+blockbuster = "=0.9.0-beta.5"
 figment = { version = "0.10.6", features = ["env", "toml", "yaml"] }
-solana-sdk = "~1.14"
-spl-token = { version = "3.5.0", features = ["no-entrypoint"] }
-solana-transaction-status = "~1.14"
-solana-storage-bigtable = "~1.14"
+solana-sdk = "~1.16"
+spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
+solana-transaction-status = "~1.16"
+solana-storage-bigtable = "~1.16"
 solana-bigtable-connection = "1.10.31"
 stretto = { version = "0.7", features = ["async"] }
 tokio-util = { version = "0.7.10", features = ["codec", "compat"] }
@@ -52,7 +52,8 @@ mockall = "0.11.4"
 entities = { path = "../entities" }
 usecase = { path = "../usecase" }
 grpc = { path = "../grpc" }
-mpl-token-metadata = "1.13.2"
+mpl-token-metadata = { version = "3.2.3"}
+
 futures = "0.3.29"
 interface = { path = "../interface" }
 tonic = "0.10.2"

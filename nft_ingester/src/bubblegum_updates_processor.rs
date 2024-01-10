@@ -15,7 +15,7 @@ use entities::models::{ChainDataV1, Creator, Uses};
 use interface::signature_persistence::SignaturePersistence;
 use log::{debug, error, info};
 use metrics_utils::IngesterMetricsConfig;
-use mpl_bubblegum::state::leaf_schema::LeafSchema;
+use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
 use plerkle_serialization::{Pubkey as FBPubkey, TransactionInfo};
 use rocks_db::asset::AssetOwner;
@@ -131,6 +131,8 @@ impl BubblegumTxProcessor {
             InstructionName::VerifyCollection => "VerifyCollection",
             InstructionName::UnverifyCollection => "UnverifyCollection",
             InstructionName::SetAndVerifyCollection => "SetAndVerifyCollection",
+            InstructionName::SetDecompressibleState => todo!(),
+            InstructionName::UpdateMetadata => todo!(),
         }
     }
 
@@ -195,7 +197,7 @@ impl BubblegumTxProcessor {
                 slot,
             };
 
-            if ix.program.0 == mpl_bubblegum::id().to_bytes() {
+            if ix.program.0 == mpl_bubblegum::programs::MPL_BUBBLEGUM_ID.to_bytes() {
                 let result = self.instruction_parser.handle_instruction(&ix)?;
 
                 let concrete = result.result_type();
@@ -397,17 +399,25 @@ impl BubblegumTxProcessor {
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle<'c>,
     ) -> Result<(), IngesterError> {
-        if let (Some(le), Some(cl), Some(Payload::MintV1 { args })) = (
+        if let (
+            Some(le),
+            Some(cl),
+            Some(Payload::MintV1 {
+                args,
+                authority,
+                tree_id,
+            }),
+        ) = (
             &parsing_result.leaf_update,
             &parsing_result.tree_update,
             &parsing_result.payload,
         ) {
             self.rocks_client.save_changelog(cl, bundle.slot).await;
 
-            let tree_id =
-                Pubkey::new_from_array(bundle.keys.get(3).unwrap().0.to_vec().try_into().unwrap());
-            let authority =
-                Pubkey::new_from_array(bundle.keys.get(0).unwrap().0.to_vec().try_into().unwrap());
+            let tree_id = Pubkey::new_from_array(tree_id.to_owned());
+            //     Pubkey::new_from_array(bundle.keys.get(3).unwrap().0.to_vec().try_into().unwrap());
+            let authority = Pubkey::new_from_array(authority.to_owned());
+            //     Pubkey::new_from_array(bundle.keys.get(0).unwrap().0.to_vec().try_into().unwrap());
 
             match le.schema {
                 LeafSchema::V1 {
@@ -827,15 +837,11 @@ impl BubblegumTxProcessor {
 }
 
 fn use_method_from_mpl_bubblegum_state(
-    value: &mpl_bubblegum::state::metaplex_adapter::UseMethod,
+    value: &mpl_bubblegum::types::UseMethod,
 ) -> entities::enums::UseMethod {
     match value {
-        mpl_bubblegum::state::metaplex_adapter::UseMethod::Burn => entities::enums::UseMethod::Burn,
-        mpl_bubblegum::state::metaplex_adapter::UseMethod::Multiple => {
-            entities::enums::UseMethod::Multiple
-        }
-        mpl_bubblegum::state::metaplex_adapter::UseMethod::Single => {
-            entities::enums::UseMethod::Single
-        }
+        mpl_bubblegum::types::UseMethod::Burn => entities::enums::UseMethod::Burn,
+        mpl_bubblegum::types::UseMethod::Multiple => entities::enums::UseMethod::Multiple,
+        mpl_bubblegum::types::UseMethod::Single => entities::enums::UseMethod::Single,
     }
 }

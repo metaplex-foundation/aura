@@ -43,7 +43,7 @@ impl TypedColumn for SignatureIdx {
         }
         let pubkey = Pubkey::try_from(&bytes[..pubkey_size])?;
         let slot = u64::from_be_bytes(bytes[pubkey_size..pubkey_size + slot_size].try_into()?);
-        let sig = Signature::new(&bytes[pubkey_size + slot_size..]);
+        let sig = Signature::try_from(&bytes[pubkey_size + slot_size..])?;
         Ok((pubkey, slot, sig))
     }
 }
@@ -55,7 +55,6 @@ impl SignaturePersistence for Storage {
         program_id: Pubkey,
         signature: SignatureWithSlot,
     ) -> Result<(), StorageError> {
-        let program_id = program_id;
         let slot = signature.slot;
         let signature = signature.signature;
         let db = self.db.clone();
@@ -75,7 +74,6 @@ impl SignaturePersistence for Storage {
         &self,
         program_id: Pubkey,
     ) -> Result<Option<SignatureWithSlot>, StorageError> {
-        let program_id = program_id;
         let db = self.db.clone();
         let key = (program_id, 0, Signature::default());
         let res = tokio::task::spawn_blocking(move || {
@@ -99,7 +97,6 @@ impl SignaturePersistence for Storage {
         signature: SignatureWithSlot,
     ) -> Result<(), StorageError> {
         let db = self.db.clone();
-        let program_id = program_id;
         let slot = signature.slot;
         let signature = signature.signature;
         let from = (program_id, 0, Signature::default());
@@ -118,7 +115,6 @@ impl SignaturePersistence for Storage {
         signatures: Vec<SignatureWithSlot>,
     ) -> Result<Vec<SignatureWithSlot>, StorageError> {
         let db = self.db.clone();
-        let program_id = program_id;
         let keys = signatures
             .into_iter()
             .map(|s| (program_id, s.slot, s.signature))
@@ -144,7 +140,6 @@ impl Storage {
         signature: SignatureWithSlot,
     ) -> Result<bool, StorageError> {
         let db = self.db.clone();
-        let program_id = program_id;
         let slot = signature.slot;
         let signature = signature.signature;
         let key = (program_id, slot, signature);
