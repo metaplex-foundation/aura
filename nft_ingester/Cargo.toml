@@ -58,6 +58,7 @@ futures = "0.3.29"
 interface = { path = "../interface" }
 tonic = "0.10.2"
 tracing  ="0.1.40"
+backfill-rpc = { path = "../backfill_rpc" }
 
 [dev-dependencies]
 tempfile = "3.8.1"

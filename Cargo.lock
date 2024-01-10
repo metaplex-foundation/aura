@@ -3615,6 +3615,7 @@ dependencies = [
 name = "nft_ingester"
 version = "0.7.2"
 dependencies = [
+ "backfill-rpc",
  "bincode",
  "blockbuster",
  "bs58 0.4.0",

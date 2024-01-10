@@ -9,6 +9,7 @@ use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
+use backfill_rpc::rpc::BackfillRPC;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{
     ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
@@ -350,6 +351,8 @@ pub async fn main() -> Result<(), IngesterError> {
         }
         Ok(())
     });
+
+    let _transactions_getter = BackfillRPC::connect(config.backfill_rpc_address);
 
     // --stop
     graceful_stop(mutexed_tasks, true, keep_running.clone(), shutdown_tx).await;
