@@ -12,7 +12,6 @@ use chrono::Utc;
 use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard};
 use entities::models::Updated;
 use entities::models::{ChainDataV1, Creator, Uses};
-use interface::signature_persistence::SignaturePersistence;
 use log::{debug, error, info};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;

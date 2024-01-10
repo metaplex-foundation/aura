@@ -1,18 +1,12 @@
 use crate::error::StorageError;
 use async_trait::async_trait;
-use entities::models::SignatureWithSlot;
+use entities::models::{BufferedTransaction, SignatureWithSlot};
 use mockall::automock;
 use solana_sdk::pubkey::Pubkey;
 
 #[automock]
 #[async_trait]
 pub trait SignaturePersistence {
-    async fn persist_signature(
-        &self,
-        program_id: Pubkey,
-        signature: SignatureWithSlot,
-    ) -> Result<(), StorageError>;
-
     async fn first_persisted_signature_for(
         &self,
         program_id: Pubkey,
@@ -29,4 +23,12 @@ pub trait SignaturePersistence {
         program_id: Pubkey,
         signatures: Vec<SignatureWithSlot>,
     ) -> Result<Vec<SignatureWithSlot>, StorageError>;
+}
+
+#[async_trait]
+pub trait TransactionIngester {
+    /// Ingests a transaction into the storage layer.
+    /// The transaction is expected to be in the format of a flatbuffer.
+    /// The ingester should return only after the transaction is fully processed, not just scheduled.
+    async fn ingest_transaction(&self, tx: BufferedTransaction) -> Result<(), StorageError>;
 }
