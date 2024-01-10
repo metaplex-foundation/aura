@@ -2,7 +2,7 @@ use std::{marker::PhantomData, sync::Arc, vec};
 
 use bincode::{deserialize, serialize};
 use log::error;
-use rocksdb::{ColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
+use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
 use serde::{de::DeserializeOwned, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
@@ -39,7 +39,7 @@ where
         let serialized_value = serialize(value)?;
 
         self.backend
-            .put_cf(self.handle(), C::encode_key(key), serialized_value)?;
+            .put_cf(&self.handle(), C::encode_key(key), serialized_value)?;
 
         Ok(())
     }
@@ -48,7 +48,7 @@ where
         let serialized_value = serialize(value)?;
 
         self.backend
-            .merge_cf(self.handle(), C::encode_key(key), serialized_value)?;
+            .merge_cf(&self.handle(), C::encode_key(key), serialized_value)?;
 
         Ok(())
     }
@@ -56,7 +56,7 @@ where
     pub fn get(&self, key: C::KeyType) -> Result<Option<C::ValueType>> {
         let mut result = Ok(None);
 
-        if let Some(serialized_value) = self.backend.get_cf(self.handle(), C::encode_key(key))? {
+        if let Some(serialized_value) = self.backend.get_cf(&self.handle(), C::encode_key(key))? {
             let value = deserialize(&serialized_value)?;
 
             result = Ok(Some(value))
@@ -67,7 +67,7 @@ where
     pub async fn batch_get(&self, keys: Vec<C::KeyType>) -> Result<Vec<Option<C::ValueType>>> {
         self.backend
             .batched_multi_get_cf(
-                self.handle(),
+                &self.handle(),
                 &keys.into_iter().map(C::encode_key).collect::<Vec<_>>(),
                 false,
             )
@@ -89,7 +89,7 @@ where
 
     pub fn iter(&self, key: C::KeyType) -> DBIteratorWithThreadMode<'_, DB> {
         let index_iterator = self.backend.iterator_cf(
-            self.handle(),
+            &self.handle(),
             rocksdb::IteratorMode::From(&C::encode_key(key), rocksdb::Direction::Forward),
         );
 
@@ -98,22 +98,22 @@ where
     // Method to get an iterator starting from the beginning of the column
     pub fn iter_start(&self) -> DBIteratorWithThreadMode<'_, DB> {
         self.backend
-            .iterator_cf(self.handle(), rocksdb::IteratorMode::Start)
+            .iterator_cf(&self.handle(), rocksdb::IteratorMode::Start)
     }
 
     // Method to get an iterator starting from the end of the column
     pub fn iter_end(&self) -> DBIteratorWithThreadMode<'_, DB> {
         self.backend
-            .iterator_cf(self.handle(), rocksdb::IteratorMode::End)
+            .iterator_cf(&self.handle(), rocksdb::IteratorMode::End)
     }
 
     #[inline]
-    fn handle(&self) -> &ColumnFamily {
+    fn handle(&self) -> Arc<BoundColumnFamily> {
         self.backend.cf_handle(C::NAME).unwrap()
     }
 
     pub fn delete(&self, key: C::KeyType) -> Result<()> {
-        self.backend.delete_cf(self.handle(), C::encode_key(key))?;
+        self.backend.delete_cf(&self.handle(), C::encode_key(key))?;
         Ok(())
     }
 }

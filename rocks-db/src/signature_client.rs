@@ -154,7 +154,7 @@ impl Storage {
     where
         T: TypedColumn,
     {
-        let cf = db.cf_handle(T::NAME).unwrap();
+        let cf = &db.cf_handle(T::NAME).unwrap();
         let encoded_key = T::encode_key(key);
         if !db.key_may_exist_cf(cf, &encoded_key) {
             return Ok(false);
@@ -188,7 +188,7 @@ impl Storage {
     {
         let from = T::encode_key(from_key);
         let to = T::encode_key(to_key);
-        db.delete_range_cf(db.cf_handle(T::NAME).unwrap(), from, to)?;
+        db.delete_range_cf(&db.cf_handle(T::NAME).unwrap(), from, to)?;
         Ok(())
     }
 
@@ -197,7 +197,7 @@ impl Storage {
         T: TypedColumn,
     {
         let mut iter = db.iterator_cf(
-            db.cf_handle(T::NAME).unwrap(),
+            &db.cf_handle(T::NAME).unwrap(),
             rocksdb::IteratorMode::From(T::encode_key(key).as_slice(), rocksdb::Direction::Forward),
         );
 
@@ -218,7 +218,7 @@ impl Storage {
         let serialized_value = serialize(value)?;
 
         backend.put_cf(
-            backend.cf_handle(T::NAME).unwrap(),
+            &backend.cf_handle(T::NAME).unwrap(),
             T::encode_key(key),
             serialized_value,
         )?;
