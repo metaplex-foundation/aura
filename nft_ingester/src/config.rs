@@ -93,6 +93,7 @@ pub struct IngesterConfig {
     pub peer_grpc_max_gap_slots: u64,
     pub rust_log: Option<String>,
     pub sql_log_level: Option<String>,
+    pub backfill_rpc_address: String,
 }
 
 impl IngesterConfig {
