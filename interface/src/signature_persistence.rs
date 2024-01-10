@@ -1,8 +1,8 @@
+use crate::error::StorageError;
 use async_trait::async_trait;
+use entities::models::SignatureWithSlot;
 use mockall::automock;
 use solana_sdk::pubkey::Pubkey;
-
-use crate::{error::StorageError, solana_rpc::SignatureWithSlot};
 
 #[automock]
 #[async_trait]
