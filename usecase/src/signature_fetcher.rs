@@ -33,7 +33,7 @@ where
         let signature = signature.unwrap();
         let mut all_signatures = self
             .rpc
-            .get_signatures_by_address(signature.signature, program_id)
+            .get_signatures_by_address(signature.signature, None, program_id) // todo: drop None from here, we should use a trait that expects all the signatures
             .await
             .map_err(|e| StorageError::Common(e.to_string()))?;
 

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use interface::error::StorageError;
 use interface::signature_persistence::SignaturePersistence;
+use interface::{error::StorageError, solana_rpc::SignatureWithSlot};
 use rocksdb::DB;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
