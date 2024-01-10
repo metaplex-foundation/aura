@@ -15,6 +15,7 @@ use solana_transaction_status::UiTransactionEncoding;
 use std::str::FromStr;
 use std::sync::Arc;
 
+const MAX_SIGNATURES_LIMIT: usize = 50_000_000;
 pub struct BackfillRPC {
     client: Arc<RpcClient>,
 }
@@ -31,33 +32,30 @@ impl BackfillRPC {
 impl TransactionsGetter for BackfillRPC {
     async fn get_signatures_by_address(
         &self,
-        until: Signature,
-        before: Option<Signature>,
+        until: SignatureWithSlot,
         address: Pubkey,
     ) -> Result<Vec<SignatureWithSlot>, UsecaseError> {
-        Ok(self
-            .client
-            .get_signatures_for_address_with_config(
-                &address,
-                GetConfirmedSignaturesForAddress2Config {
-                    until: Some(until),
-                    commitment: Some(CommitmentConfig {
-                        commitment: CommitmentLevel::Finalized,
-                    }),
-                    before,
-                    ..Default::default()
-                },
-            )
-            .await
-            .map_err(Into::<UsecaseError>::into)?
-            .into_iter()
-            .map(|response| {
-                Ok(SignatureWithSlot {
-                    signature: Signature::from_str(&response.signature)?,
-                    slot: response.slot,
-                })
-            })
-            .collect::<Result<Vec<_>, UsecaseError>>()?)
+        let mut before = None;
+        let mut txs = Vec::new();
+        loop {
+            let signatures = self
+                .get_signatures_by_address(until.signature, before, address)
+                .await?;
+            if signatures.is_empty() {
+                break;
+            }
+            let last = signatures.last().unwrap();
+            txs.extend(signatures.clone());
+            before = Some(last.signature);
+            if last.slot < until.slot || last.signature == until.signature {
+                break;
+            }
+            if txs.len() > MAX_SIGNATURES_LIMIT {
+                tracing::warn!("Too many signatures {} for address {}", txs.len(), address);
+                Err(UsecaseError::SolanaRPC("Too many signatures".to_string()))?;
+            }
+        }
+        Ok(txs)
     }
 
     async fn get_txs_by_signatures(
@@ -97,6 +95,38 @@ impl TransactionsGetter for BackfillRPC {
             .buffered(500) // max count of simultaneous requests
             .try_collect::<Vec<_>>()
             .await
+    }
+}
+
+impl BackfillRPC {
+    async fn get_signatures_by_address(
+        &self,
+        until: Signature,
+        before: Option<Signature>,
+        address: Pubkey,
+    ) -> Result<Vec<SignatureWithSlot>, UsecaseError> {
+        self.client
+            .get_signatures_for_address_with_config(
+                &address,
+                GetConfirmedSignaturesForAddress2Config {
+                    until: Some(until),
+                    commitment: Some(CommitmentConfig {
+                        commitment: CommitmentLevel::Finalized,
+                    }),
+                    before,
+                    ..Default::default()
+                },
+            )
+            .await
+            .map_err(Into::<UsecaseError>::into)?
+            .into_iter()
+            .map(|response| {
+                Ok(SignatureWithSlot {
+                    signature: Signature::from_str(&response.signature)?,
+                    slot: response.slot,
+                })
+            })
+            .collect::<Result<Vec<_>, UsecaseError>>()
     }
 }
 
