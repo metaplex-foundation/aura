@@ -32,3 +32,7 @@ pub trait TransactionIngester {
     /// The ingester should return only after the transaction is fully processed, not just scheduled.
     async fn ingest_transaction(&self, tx: BufferedTransaction) -> Result<(), StorageError>;
 }
+#[async_trait]
+pub trait ProcessingDataGetter {
+    async fn get_processing_transaction(&self) -> Option<BufferedTransaction>;
+}
