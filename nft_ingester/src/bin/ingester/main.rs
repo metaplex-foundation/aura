@@ -9,8 +9,8 @@ use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
-use interface::signature_persistence::ProcessingDataGetter;
 use backfill_rpc::rpc::BackfillRPC;
+use interface::signature_persistence::ProcessingDataGetter;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{
     ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
