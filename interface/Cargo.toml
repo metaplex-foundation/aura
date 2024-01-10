@@ -13,3 +13,4 @@ thiserror = "1.0.51"
 entities = { path = "../entities" }
 solana-sdk = "~1.16"
 solana-client = "~1.16"
+plerkle_serialization = "1.5.2"

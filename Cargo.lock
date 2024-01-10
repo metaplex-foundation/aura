@@ -2934,6 +2934,7 @@ dependencies = [
  "entities",
  "futures",
  "mockall 0.12.0",
+ "plerkle_serialization",
  "solana-client",
  "solana-sdk",
  "thiserror",

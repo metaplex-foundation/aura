@@ -21,5 +21,8 @@ pub trait GetBackfillTransactions: Send + Sync {
         before: Option<Signature>,
         address: Pubkey,
     ) -> Result<Vec<SignatureWithSlot>, UsecaseError>;
-    async fn get_txs_by_signatures(&self, signatures: Vec<Signature>) -> Vec<BufferedTransaction>;
+    async fn get_txs_by_signatures(
+        &self,
+        signatures: Vec<Signature>,
+    ) -> Result<Vec<BufferedTransaction>, UsecaseError>;
 }
