@@ -10,7 +10,7 @@ async-trait = "0.1.75"
 entities = { path = "../entities" }
 interface = { path = "../interface" }
 tracing = "0.1.40"
-solana-sdk = { version = "~1.14.14" }
+solana-sdk = { version = "~1.16" }
 
 [dev-dependencies]
 tokio = { version = "1.26.0", features = ["full", "tracing"] }

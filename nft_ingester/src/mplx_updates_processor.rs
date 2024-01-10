@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use blockbuster::token_metadata::state::{Metadata, TokenStandard};
+use blockbuster::token_metadata::state::{Metadata, TokenStandard, UseMethod};
 use log::error;
 use serde_json::json;
 use tokio::time::Instant;
@@ -412,19 +412,15 @@ impl MplxAccsProcessor {
     }
 }
 
-pub fn use_method_from_mpl_state(
-    value: &mpl_token_metadata::state::UseMethod,
-) -> entities::enums::UseMethod {
+pub fn use_method_from_mpl_state(value: &UseMethod) -> entities::enums::UseMethod {
     match value {
-        mpl_token_metadata::state::UseMethod::Burn => entities::enums::UseMethod::Burn,
-        mpl_token_metadata::state::UseMethod::Multiple => entities::enums::UseMethod::Multiple,
-        mpl_token_metadata::state::UseMethod::Single => entities::enums::UseMethod::Single,
+        UseMethod::Burn => entities::enums::UseMethod::Burn,
+        UseMethod::Multiple => entities::enums::UseMethod::Multiple,
+        UseMethod::Single => entities::enums::UseMethod::Single,
     }
 }
 
-pub fn token_standard_from_mpl_state(
-    value: &mpl_token_metadata::state::TokenStandard,
-) -> entities::enums::TokenStandard {
+pub fn token_standard_from_mpl_state(value: &TokenStandard) -> entities::enums::TokenStandard {
     match value {
         TokenStandard::NonFungible => entities::enums::TokenStandard::NonFungible,
         TokenStandard::FungibleAsset => entities::enums::TokenStandard::FungibleAsset,

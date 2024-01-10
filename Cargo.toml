@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 members = [
   "digital_asset_types",
   "nft_ingester",
@@ -8,8 +9,9 @@ members = [
   "entities",
   "grpc",
   "interface",
-  "usecase", 
+  "usecase",
   "tests/setup",
+  "backfill_rpc"
 ]
 
 [profile.release]
