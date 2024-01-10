@@ -115,7 +115,7 @@ async fn test_get_signatures_by_address() {
 
 #[tokio::test]
 async fn test_get_txs_by_signatures() {
-    let client = BackfillRPC::connect("https://api.mainnet-beta.solana.com".to_string());
+    let client = BackfillRPC::connect("https://docs-demo.solana-mainnet.quiknode.pro/".to_string());
     let signatures = vec![
                           Signature::from_str("2H4c1LcgWG2VuxE4rb318spyiMe1Aet5AysQHAB3Pm3z9nadxJH4C1GZD8yMeAgjdzojmLZGQppuiZqG2oKrtwF1").unwrap(), // transaction that does not exists
                           Signature::from_str("2H4c1LcgWG2VuxE4rb318spyiMe1Aet5AysQHAB3Pm3z9nadxJH4C1GZD8yMeAgjdzojmLZGQppuiZqG2oKrtwF2").unwrap(),
