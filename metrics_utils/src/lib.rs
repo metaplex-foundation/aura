@@ -17,6 +17,7 @@ pub struct MetricState {
     pub api_metrics: Arc<ApiMetricsConfig>,
     pub json_downloader_metrics: Arc<JsonDownloaderMetricsConfig>,
     pub backfiller_metrics: Arc<BackfillerMetricsConfig>,
+    pub rpc_backfiller_metrics: Arc<RpcBackfillerMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -26,6 +27,7 @@ impl MetricState {
         api_metrics: ApiMetricsConfig,
         json_downloader_metrics: JsonDownloaderMetricsConfig,
         backfiller_metrics: BackfillerMetricsConfig,
+        rpc_backfiller_metrics: RpcBackfillerMetricsConfig,
     ) -> Self {
         Self {
             ingester_metrics: Arc::new(ingester_metrics),
@@ -33,6 +35,7 @@ impl MetricState {
             json_downloader_metrics: Arc::new(json_downloader_metrics),
             registry: Registry::default(),
             backfiller_metrics: Arc::new(backfiller_metrics),
+            rpc_backfiller_metrics: Arc::new(rpc_backfiller_metrics),
         }
     }
 }
@@ -119,6 +122,64 @@ impl BackfillerMetricsConfig {
                 name: label.to_owned(),
             })
             .set(slot)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RpcBackfillerMetricsConfig {
+    fetch_signatures: Family<MetricLabelWithStatus, Counter>,
+    fetch_transactions: Family<MetricLabelWithStatus, Counter>,
+    transactions_processed: Family<MetricLabelWithStatus, Counter>,
+    run_fetch_signatures: Family<MetricLabelWithStatus, Counter>,
+}
+
+impl Default for RpcBackfillerMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RpcBackfillerMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
+
+    pub fn inc_transactions_processed(&self, label: &str, status: MetricStatus) -> u64 {
+        self.transactions_processed
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_string(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_fetch_transactions(&self, label: &str, status: MetricStatus) -> u64 {
+        self.fetch_transactions
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_string(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_fetch_signatures(&self, label: &str, status: MetricStatus) -> u64 {
+        self.fetch_signatures
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_string(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_run_fetch_signatures(&self, label: &str, status: MetricStatus) -> u64 {
+        self.run_fetch_signatures
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_string(),
+                status,
+            })
+            .inc()
     }
 }
 
@@ -286,6 +347,30 @@ impl MetricsTrait for MetricState {
             "backfiller_last_processed_slot",
             "The last processed slot by backfiller",
             self.backfiller_metrics.last_processed_slot.clone(),
+        );
+
+        self.registry.register(
+            "rpc_backfiller_transactions_processed",
+            "Count of transactions, processed by RPC backfiller",
+            self.rpc_backfiller_metrics.transactions_processed.clone(),
+        );
+
+        self.registry.register(
+            "rpc_backfiller_fetch_signatures",
+            "Count of RPC fetch_signatures calls",
+            self.rpc_backfiller_metrics.fetch_signatures.clone(),
+        );
+
+        self.registry.register(
+            "rpc_backfiller_fetch_transactions",
+            "Count of RPC fetch_transactions calls",
+            self.rpc_backfiller_metrics.fetch_transactions.clone(),
+        );
+
+        self.registry.register(
+            "rpc_backfiller_run_fetch_signatures",
+            "Count of fetch_signatures restarts",
+            self.rpc_backfiller_metrics.run_fetch_signatures.clone(),
         );
     }
 }

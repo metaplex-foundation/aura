@@ -11,6 +11,7 @@ entities = { path = "../entities" }
 interface = { path = "../interface" }
 tracing = "0.1.40"
 solana-sdk = { version = "~1.16" }
+metrics-utils = { path = "../metrics_utils" }
 
 [dev-dependencies]
 tokio = { version = "1.26.0", features = ["full", "tracing"] }
