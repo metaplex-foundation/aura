@@ -19,7 +19,7 @@ jobs:
           ~/.cargo/registry/
           ~/.cargo/git/
           target/
-        key: ${{ runner.os }}-cargo-utility-chain
+        key: ${{ runner.os }}-cargo-utility-chain-1.75
 
     - name: Install dependencies
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
