@@ -24,16 +24,6 @@ struct SimpleChangeLog {
     cli_tree: Vec<u8>,
 }
 
-#[derive(FromQueryResult, Debug, Default, Clone, Eq, PartialEq)]
-struct LeafWithAssetID {
-    ast_pubkey: Vec<u8>,
-    cli_tree: Vec<u8>,
-    cli_node_idx: i64,
-    cli_seq: i64,
-    cli_level: i64,
-    cli_hash: Vec<u8>,
-}
-
 pub async fn get_proof_for_assets(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
@@ -43,8 +33,6 @@ pub async fn get_proof_for_assets(
 
     let tree_ids = fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids)
         .values()
-        .collect::<Vec<_>>()
-        .into_iter()
         .map(|asset| {
             (
                 asset.tree_id,
