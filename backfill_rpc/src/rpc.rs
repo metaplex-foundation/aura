@@ -98,8 +98,9 @@ impl GetBackfillTransactions for BackfillRPC {
     }
 }
 
+#[cfg(feature = "rpc_tests")]
 #[tokio::test]
-async fn test_get_signatures_by_address() {
+async fn test_rpc_get_signatures_by_address() {
     let client = BackfillRPC::connect("https://api.mainnet-beta.solana.com".to_string());
     let signatures = client
         .get_signatures_by_address(
@@ -113,15 +114,16 @@ async fn test_get_signatures_by_address() {
     assert_eq!(signatures.len(), 1000)
 }
 
+#[cfg(feature = "rpc_tests")]
 #[tokio::test]
-async fn test_get_txs_by_signatures() {
+async fn test_rpc_get_txs_by_signatures() {
     let client = BackfillRPC::connect("https://docs-demo.solana-mainnet.quiknode.pro/".to_string());
     let signatures = vec![
-                          Signature::from_str("2H4c1LcgWG2VuxE4rb318spyiMe1Aet5AysQHAB3Pm3z9nadxJH4C1GZD8yMeAgjdzojmLZGQppuiZqG2oKrtwF1").unwrap(), // transaction that does not exists
-                          Signature::from_str("2H4c1LcgWG2VuxE4rb318spyiMe1Aet5AysQHAB3Pm3z9nadxJH4C1GZD8yMeAgjdzojmLZGQppuiZqG2oKrtwF2").unwrap(),
-                          Signature::from_str("2H4c1LcgWG2VuxE4rb318spyiMe1Aet5AysQHAB3Pm3z9nadxJH4C1GZD8yMeAgjdzojmLZGQppuiZqG2oKrtwF3").unwrap(), // transaction that does not exists
-                          Signature::from_str("265JP2HS6DwJPS4Htk2msUbxbrdeHLFVXUTFVSZ7CyMrHM8xXTxZJpLpt67kKHPAUVtEj7i3fWb5Z9vqMHREHmVm").unwrap(),
-    ];
+            Signature::from_str("2H4c1LcgWG2VuxE4rb318spyiMe1Aet5AysQHAB3Pm3z9nadxJH4C1GZD8yMeAgjdzojmLZGQppuiZqG2oKrtwF1").unwrap(), // transaction that does not exists
+            Signature::from_str("2H4c1LcgWG2VuxE4rb318spyiMe1Aet5AysQHAB3Pm3z9nadxJH4C1GZD8yMeAgjdzojmLZGQppuiZqG2oKrtwF2").unwrap(),
+            Signature::from_str("2H4c1LcgWG2VuxE4rb318spyiMe1Aet5AysQHAB3Pm3z9nadxJH4C1GZD8yMeAgjdzojmLZGQppuiZqG2oKrtwF3").unwrap(), // transaction that does not exists
+            Signature::from_str("265JP2HS6DwJPS4Htk2msUbxbrdeHLFVXUTFVSZ7CyMrHM8xXTxZJpLpt67kKHPAUVtEj7i3fWb5Z9vqMHREHmVm").unwrap(),
+        ];
 
     let txs = client.get_txs_by_signatures(signatures).await;
 

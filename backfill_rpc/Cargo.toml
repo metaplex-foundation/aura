@@ -19,3 +19,6 @@ interface = { path = "../interface" }
 tokio = { version = "1.26.0", features = ["full"] }
 plerkle_serialization = "1.5.2"
 flatbuffers = "23.1.21"
+
+[features]
+rpc_tests = []
