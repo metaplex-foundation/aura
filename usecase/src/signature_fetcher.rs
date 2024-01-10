@@ -4,25 +4,37 @@ use entities::models::SignatureWithSlot;
 use interface::{
     error::StorageError,
     signature_persistence::{SignaturePersistence, TransactionIngester},
-    solana_rpc::{GetSignaturesByAddress, GetTransactionsBySignatures},
+    solana_rpc::TransactionsGetter,
 };
 use solana_sdk::pubkey::Pubkey;
 
-pub struct SignatureFetcher<T>
+pub struct SignatureFetcher<T, SP, TI>
 where
-    T: GetSignaturesByAddress + GetTransactionsBySignatures,
+    T: TransactionsGetter,
+    SP: SignaturePersistence,
+    TI: TransactionIngester,
 {
-    pub data_layer: Arc<dyn SignaturePersistence>,
+    pub data_layer: Arc<SP>,
     pub rpc: Arc<T>,
-    pub ingester: Arc<dyn TransactionIngester>,
+    pub ingester: Arc<TI>,
 }
 
 const BATCH_SIZE: usize = 1000;
 
-impl<T> SignatureFetcher<T>
+impl<T, SP, TI> SignatureFetcher<T, SP, TI>
 where
-    T: GetSignaturesByAddress + GetTransactionsBySignatures,
+    T: TransactionsGetter,
+    SP: SignaturePersistence,
+    TI: TransactionIngester,
 {
+    pub fn new(data_layer: Arc<SP>, rpc: Arc<T>, ingester: Arc<TI>) -> Self {
+        Self {
+            data_layer,
+            rpc,
+            ingester,
+        }
+    }
+
     pub async fn fetch_signatures(&self, program_id: Pubkey) -> Result<(), StorageError> {
         let signature = self
             .data_layer
@@ -34,7 +46,7 @@ where
         let signature = signature.unwrap();
         let mut all_signatures = self
             .rpc
-            .get_signatures_by_address(signature.signature, None, program_id) // todo: drop None from here, we should use a trait that expects all the signatures
+            .get_signatures_by_address(signature, program_id)
             .await
             .map_err(|e| StorageError::Common(e.to_string()))?;
 
