@@ -18,7 +18,7 @@ impl BackfillTransactionIngester {
 impl TransactionIngester for BackfillTransactionIngester {
     async fn ingest_transaction(&self, tx: BufferedTransaction) -> Result<(), StorageError> {
         self.tx_processor
-            .process_transaction(Some(tx))
+            .process_transaction(tx)
             .await
             .map_err(|e| StorageError::Common(e.to_string()))
     }

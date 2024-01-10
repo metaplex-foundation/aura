@@ -74,31 +74,27 @@ impl BubblegumTxProcessor {
 
     pub async fn process_transaction(
         &self,
-        tx: Option<BufferedTransaction>,
+        data: BufferedTransaction,
     ) -> Result<(), IngesterError> {
-        if let Some(data) = tx {
-            let seen_at = Utc::now();
+        let seen_at = Utc::now();
 
-            let mut transaction_info_bytes = data.transaction.clone();
+        let mut transaction_info_bytes = data.transaction.clone();
 
-            if data.map_flatbuffer {
-                let tx_update =
+        if data.map_flatbuffer {
+            let tx_update =
                     utils::flatbuffer::transaction_info_generated::transaction_info::root_as_transaction_info(
                         &data.transaction,
                     ).unwrap();
-                transaction_info_bytes = self
-                    .transaction_parser
-                    .map_tx_fb_bytes(tx_update, seen_at)
-                    .unwrap();
-            }
-            let transaction_info =
-                plerkle_serialization::root_as_transaction_info(transaction_info_bytes.as_slice())
-                    .unwrap();
-
-            self.handle_transaction(transaction_info).await?;
+            transaction_info_bytes = self
+                .transaction_parser
+                .map_tx_fb_bytes(tx_update, seen_at)
+                .unwrap();
         }
+        let transaction_info =
+            plerkle_serialization::root_as_transaction_info(transaction_info_bytes.as_slice())
+                .unwrap();
 
-        Ok(())
+        self.handle_transaction(transaction_info).await
     }
 
     fn instruction_name_to_string(&self, ix: &InstructionName) -> &'static str {

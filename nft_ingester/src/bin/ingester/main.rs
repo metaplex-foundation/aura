@@ -263,12 +263,14 @@ pub async fn main() -> Result<(), IngesterError> {
     let bubblegum_updates_processor_clone = bubblegum_updates_processor.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
-            if let Err(e) = bubblegum_updates_processor_clone
-                .process_transaction(buffer_clone.get_processing_transaction().await)
-                .await
-            {
-                if e != IngesterError::NotImplemented {
-                    error!("Background saver could not process received data: {}", e);
+            if let Some(tx) = buffer_clone.get_processing_transaction().await {
+                if let Err(e) = bubblegum_updates_processor_clone
+                    .process_transaction(tx)
+                    .await
+                {
+                    if e != IngesterError::NotImplemented {
+                        error!("Background saver could not process received data: {}", e);
+                    }
                 }
             }
         }
