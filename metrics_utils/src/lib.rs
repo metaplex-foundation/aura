@@ -127,7 +127,10 @@ impl BackfillerMetricsConfig {
 
 #[derive(Debug, Clone)]
 pub struct RpcBackfillerMetricsConfig {
-    tx_processed: Counter,
+    fetch_signatures: Family<MetricLabelWithStatus, Counter>,
+    fetch_transactions: Family<MetricLabelWithStatus, Counter>,
+    transactions_processed: Family<MetricLabelWithStatus, Counter>,
+    run_fetch_signatures: Family<MetricLabelWithStatus, Counter>,
 }
 
 impl Default for RpcBackfillerMetricsConfig {
@@ -139,12 +142,44 @@ impl Default for RpcBackfillerMetricsConfig {
 impl RpcBackfillerMetricsConfig {
     pub fn new() -> Self {
         Self {
-            tx_processed: Counter::default(),
+            ..Default::default()
         }
     }
 
-    pub fn inc_tx_processed(&self) -> u64 {
-        self.tx_processed.inc()
+    pub fn inc_transactions_processed(&self, label: &str, status: MetricStatus) -> u64 {
+        self.transactions_processed
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_string(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_fetch_transactions(&self, label: &str, status: MetricStatus) -> u64 {
+        self.fetch_transactions
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_string(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_fetch_signatures(&self, label: &str, status: MetricStatus) -> u64 {
+        self.fetch_signatures
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_string(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_run_fetch_signatures(&self, label: &str, status: MetricStatus) -> u64 {
+        self.run_fetch_signatures
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_string(),
+                status,
+            })
+            .inc()
     }
 }
 
@@ -315,9 +350,27 @@ impl MetricsTrait for MetricState {
         );
 
         self.registry.register(
-            "rpc_backfiller_tx_processed",
+            "rpc_backfiller_transactions_processed",
             "Count of transactions, processed by RPC backfiller",
-            self.rpc_backfiller_metrics.tx_processed.clone(),
+            self.rpc_backfiller_metrics.transactions_processed.clone(),
+        );
+
+        self.registry.register(
+            "rpc_backfiller_fetch_signatures",
+            "Count of RPC fetch_signatures calls",
+            self.rpc_backfiller_metrics.fetch_signatures.clone(),
+        );
+
+        self.registry.register(
+            "rpc_backfiller_fetch_transactions",
+            "Count of RPC fetch_transactions calls",
+            self.rpc_backfiller_metrics.fetch_transactions.clone(),
+        );
+
+        self.registry.register(
+            "rpc_backfiller_run_fetch_signatures",
+            "Count of fetch_signatures restarts",
+            self.rpc_backfiller_metrics.run_fetch_signatures.clone(),
         );
     }
 }

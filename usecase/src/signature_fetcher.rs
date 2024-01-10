@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use entities::models::SignatureWithSlot;
+use entities::models::{BufferedTransaction, SignatureWithSlot};
 use interface::{
     error::StorageError,
     signature_persistence::{SignaturePersistence, TransactionIngester},
     solana_rpc::TransactionsGetter,
 };
-use metrics_utils::RpcBackfillerMetricsConfig;
+use metrics_utils::{MetricStatus, RpcBackfillerMetricsConfig};
 use solana_sdk::pubkey::Pubkey;
 
 pub struct SignatureFetcher<T, SP, TI>
@@ -52,11 +52,23 @@ where
             return Ok(());
         }
         let signature = signature.unwrap();
-        let mut all_signatures = self
+        let mut all_signatures = match self
             .rpc
             .get_signatures_by_address(signature, program_id)
             .await
-            .map_err(|e| StorageError::Common(e.to_string()))?;
+            .map_err(|e| StorageError::Common(e.to_string()))
+        {
+            Ok(all_signatures) => {
+                self.metrics
+                    .inc_fetch_signatures("get_signatures_by_address", MetricStatus::SUCCESS);
+                all_signatures
+            }
+            Err(e) => {
+                self.metrics
+                    .inc_fetch_signatures("get_signatures_by_address", MetricStatus::FAILURE);
+                return Err(e);
+            }
+        };
 
         if all_signatures.is_empty() {
             return Ok(());
@@ -83,15 +95,40 @@ where
                 missing_signatures.len(),
                 program_id
             );
-            let transactions: Vec<entities::models::BufferedTransaction> = self
+            let transactions: Vec<BufferedTransaction> = match self
                 .rpc
                 .get_txs_by_signatures(missing_signatures.iter().map(|s| s.signature).collect())
                 .await
-                .map_err(|e| StorageError::Common(e.to_string()))?;
+                .map_err(|e| StorageError::Common(e.to_string()))
+            {
+                Ok(transactions) => {
+                    self.metrics
+                        .inc_fetch_transactions("get_txs_by_signatures", MetricStatus::SUCCESS);
+                    transactions
+                }
+                Err(e) => {
+                    self.metrics
+                        .inc_fetch_transactions("get_txs_by_signatures", MetricStatus::FAILURE);
+                    return Err(e);
+                }
+            };
             let tx_cnt = transactions.len();
             for transaction in transactions {
-                self.ingester.ingest_transaction(transaction).await?;
-                self.metrics.inc_tx_processed();
+                match self.ingester.ingest_transaction(transaction).await {
+                    Ok(_) => {
+                        self.metrics.inc_transactions_processed(
+                            "ingest_transaction",
+                            MetricStatus::SUCCESS,
+                        );
+                    }
+                    Err(e) => {
+                        self.metrics.inc_transactions_processed(
+                            "ingest_transaction",
+                            MetricStatus::FAILURE,
+                        );
+                        return Err(e);
+                    }
+                };
             }
             // now we may drop the old signatures before the last element of the batch
             // we do this by constructing a fake key at the start of the same slot
