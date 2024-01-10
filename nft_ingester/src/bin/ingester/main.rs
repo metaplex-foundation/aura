@@ -15,7 +15,7 @@ use interface::signature_persistence::ProcessingDataGetter;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{
     ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
-    MetricState, MetricsTrait,
+    MetricState, MetricsTrait, RpcBackfillerMetricsConfig,
 };
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
@@ -64,6 +64,7 @@ pub async fn main() -> Result<(), IngesterError> {
         ApiMetricsConfig::new(),
         JsonDownloaderMetricsConfig::new(),
         BackfillerMetricsConfig::new(),
+        RpcBackfillerMetricsConfig::new(),
     );
     metrics_state.register_metrics();
 
@@ -368,14 +369,17 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     let transactions_getter = Arc::new(BackfillRPC::connect(config.backfill_rpc_address));
-    let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(bubblegum_updates_processor.clone()));
+    let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
+        bubblegum_updates_processor.clone(),
+    ));
     let signature_fetcher = usecase::signature_fetcher::SignatureFetcher::new(
         rocks_storage,
         transactions_getter,
         tx_ingester,
+        metrics_state.rpc_backfiller_metrics.clone(),
     );
     let cloned_keep_running = keep_running.clone();
-    
+
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         let program_id = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
         while cloned_keep_running.load(Ordering::SeqCst) {

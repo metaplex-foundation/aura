@@ -17,6 +17,7 @@ pub struct MetricState {
     pub api_metrics: Arc<ApiMetricsConfig>,
     pub json_downloader_metrics: Arc<JsonDownloaderMetricsConfig>,
     pub backfiller_metrics: Arc<BackfillerMetricsConfig>,
+    pub rpc_backfiller_metrics: Arc<RpcBackfillerMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -26,6 +27,7 @@ impl MetricState {
         api_metrics: ApiMetricsConfig,
         json_downloader_metrics: JsonDownloaderMetricsConfig,
         backfiller_metrics: BackfillerMetricsConfig,
+        rpc_backfiller_metrics: RpcBackfillerMetricsConfig,
     ) -> Self {
         Self {
             ingester_metrics: Arc::new(ingester_metrics),
@@ -33,6 +35,7 @@ impl MetricState {
             json_downloader_metrics: Arc::new(json_downloader_metrics),
             registry: Registry::default(),
             backfiller_metrics: Arc::new(backfiller_metrics),
+            rpc_backfiller_metrics: Arc::new(rpc_backfiller_metrics),
         }
     }
 }
@@ -119,6 +122,29 @@ impl BackfillerMetricsConfig {
                 name: label.to_owned(),
             })
             .set(slot)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RpcBackfillerMetricsConfig {
+    tx_processed: Counter,
+}
+
+impl Default for RpcBackfillerMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RpcBackfillerMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            tx_processed: Counter::default(),
+        }
+    }
+
+    pub fn inc_tx_processed(&self) -> u64 {
+        self.tx_processed.inc()
     }
 }
 
@@ -286,6 +312,12 @@ impl MetricsTrait for MetricState {
             "backfiller_last_processed_slot",
             "The last processed slot by backfiller",
             self.backfiller_metrics.last_processed_slot.clone(),
+        );
+
+        self.registry.register(
+            "rpc_backfiller_tx_processed",
+            "Count of transactions, processed by RPC backfiller",
+            self.rpc_backfiller_metrics.tx_processed.clone(),
         );
     }
 }

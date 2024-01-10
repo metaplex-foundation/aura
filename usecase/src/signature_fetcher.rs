@@ -6,6 +6,7 @@ use interface::{
     signature_persistence::{SignaturePersistence, TransactionIngester},
     solana_rpc::TransactionsGetter,
 };
+use metrics_utils::RpcBackfillerMetricsConfig;
 use solana_sdk::pubkey::Pubkey;
 
 pub struct SignatureFetcher<T, SP, TI>
@@ -17,6 +18,7 @@ where
     pub data_layer: Arc<SP>,
     pub rpc: Arc<T>,
     pub ingester: Arc<TI>,
+    pub metrics: Arc<RpcBackfillerMetricsConfig>,
 }
 
 const BATCH_SIZE: usize = 1000;
@@ -27,11 +29,17 @@ where
     SP: SignaturePersistence,
     TI: TransactionIngester,
 {
-    pub fn new(data_layer: Arc<SP>, rpc: Arc<T>, ingester: Arc<TI>) -> Self {
+    pub fn new(
+        data_layer: Arc<SP>,
+        rpc: Arc<T>,
+        ingester: Arc<TI>,
+        metrics: Arc<RpcBackfillerMetricsConfig>,
+    ) -> Self {
         Self {
             data_layer,
             rpc,
             ingester,
+            metrics,
         }
     }
 
@@ -82,7 +90,8 @@ where
                 .map_err(|e| StorageError::Common(e.to_string()))?;
             let tx_cnt = transactions.len();
             for transaction in transactions {
-                self.ingester.ingest_transaction(transaction).await?
+                self.ingester.ingest_transaction(transaction).await?;
+                self.metrics.inc_tx_processed();
             }
             // now we may drop the old signatures before the last element of the batch
             // we do this by constructing a fake key at the start of the same slot

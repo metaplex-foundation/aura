@@ -8412,6 +8412,7 @@ dependencies = [
  "entities",
  "futures",
  "interface",
+ "metrics-utils",
  "mockall 0.12.1",
  "solana-sdk",
  "tokio",
