@@ -200,6 +200,9 @@ impl SlotsCollector {
                         start_at_slot = last_slot;
 
                         self.save_slots(&slots).await;
+
+                        self.metrics
+                            .set_last_processed_slot("collected_slot", last_slot as i64);
                     } else {
                         info!("All the slots are collected");
                         break;
@@ -437,6 +440,8 @@ impl TransactionsParser {
                         cloned_metrics.inc_data_processed("backfiller_tx_processed");
                     }
                     cloned_metrics.inc_data_processed("backfiller_slot_processed");
+
+                    cloned_metrics.set_last_processed_slot("parsed_slot", block.parent_slot as i64);
                 });
 
                 tasks.push(task);
