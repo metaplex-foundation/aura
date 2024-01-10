@@ -8,13 +8,12 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.26.0", features = ["full", "tracing"] }
 sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json"] }
-rocks-db = { path = "../rocks-db" }
 mockall = "0.11.4"
 async-trait = "0.1.74"
 serde = "1.0.193"
 base64 = "0.21.5"
 entities = { path = "../entities" }
-solana-sdk = { version = "~1.14.14" }
+solana-sdk = "~1.16"
 tracing  ="0.1.40"
 
 [dev-dependencies]
