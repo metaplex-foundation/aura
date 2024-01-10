@@ -27,5 +27,8 @@ pub trait SignaturePersistence {
 
 #[async_trait]
 pub trait TransactionIngester {
+    /// Ingests a transaction into the storage layer.
+    /// The transaction is expected to be in the format of a flatbuffer.
+    /// The ingester should return only after the transaction is fully processed, not just scheduled.
     async fn ingest_transaction(&self, tx: BufferedTransaction) -> Result<(), StorageError>;
 }
