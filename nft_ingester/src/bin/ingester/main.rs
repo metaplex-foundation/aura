@@ -5,6 +5,7 @@ use std::time::Duration;
 use clap::Parser;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
+use nft_ingester::transaction_ingester;
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -366,7 +367,36 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    let _transactions_getter = BackfillRPC::connect(config.backfill_rpc_address);
+    let transactions_getter = Arc::new(BackfillRPC::connect(config.backfill_rpc_address));
+    let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(bubblegum_updates_processor.clone()));
+    let signature_fetcher = usecase::signature_fetcher::SignatureFetcher::new(
+        rocks_storage,
+        transactions_getter,
+        tx_ingester,
+    );
+    let cloned_keep_running = keep_running.clone();
+    
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        let program_id = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
+        while cloned_keep_running.load(Ordering::SeqCst) {
+            let res = signature_fetcher.fetch_signatures(program_id).await;
+            match res {
+                Ok(_) => {
+                    info!(
+                        "signatures sync finished successfully for program_id: {}",
+                        program_id
+                    );
+                }
+                Err(e) => {
+                    error!(
+                        "signatures sync failed: {:?} for program_id: {}",
+                        e, program_id
+                    );
+                }
+            }
+            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+        }
+    }));
 
     // --stop
     graceful_stop(mutexed_tasks, true, keep_running.clone(), shutdown_tx).await;
