@@ -125,7 +125,6 @@ impl Storage {
         program_id: Pubkey,
         signature: SignatureWithSlot,
     ) -> Result<(), StorageError> {
-        let program_id = program_id;
         let slot = signature.slot;
         let signature = signature.signature;
         let db = self.db.clone();
