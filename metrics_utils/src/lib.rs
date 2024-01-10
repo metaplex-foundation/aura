@@ -142,7 +142,10 @@ impl Default for RpcBackfillerMetricsConfig {
 impl RpcBackfillerMetricsConfig {
     pub fn new() -> Self {
         Self {
-            ..Default::default()
+            fetch_signatures: Family::<MetricLabelWithStatus, Counter>::default(),
+            fetch_transactions: Family::<MetricLabelWithStatus, Counter>::default(),
+            transactions_processed: Family::<MetricLabelWithStatus, Counter>::default(),
+            run_fetch_signatures: Family::<MetricLabelWithStatus, Counter>::default(),
         }
     }
 
