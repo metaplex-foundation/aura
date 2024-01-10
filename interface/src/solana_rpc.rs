@@ -1,16 +1,9 @@
 use crate::error::UsecaseError;
 use async_trait::async_trait;
-use entities::models::BufferedTransaction;
+use entities::models::{BufferedTransaction, SignatureWithSlot};
 use mockall::automock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-
-//todo: move it to entities
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct SignatureWithSlot {
-    pub signature: Signature,
-    pub slot: u64,
-}
 
 #[automock]
 #[async_trait]

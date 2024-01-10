@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use entities::models::SignatureWithSlot;
 use interface::error::StorageError;
 use interface::signature_persistence::SignaturePersistence;
 use rocksdb::DB;
@@ -52,7 +53,7 @@ impl SignaturePersistence for Storage {
     async fn persist_signature(
         &self,
         program_id: Pubkey,
-        signature: interface::solana_rpc::SignatureWithSlot,
+        signature: SignatureWithSlot,
     ) -> Result<(), StorageError> {
         let slot = signature.slot;
         let signature = signature.signature;
@@ -72,7 +73,7 @@ impl SignaturePersistence for Storage {
     async fn first_persisted_signature_for(
         &self,
         program_id: Pubkey,
-    ) -> Result<Option<interface::solana_rpc::SignatureWithSlot>, StorageError> {
+    ) -> Result<Option<SignatureWithSlot>, StorageError> {
         let db = self.db.clone();
         let key = (program_id, 0, Signature::default());
         let res = tokio::task::spawn_blocking(move || {
@@ -87,15 +88,13 @@ impl SignaturePersistence for Storage {
         .map_err(|e| StorageError::Common(e.to_string()))?;
         let res = res?;
 
-        Ok(res.map(
-            |(_, slot, signature)| interface::solana_rpc::SignatureWithSlot { signature, slot },
-        ))
+        Ok(res.map(|(_, slot, signature)| SignatureWithSlot { signature, slot }))
     }
 
     async fn drop_signatures_before(
         &self,
         program_id: Pubkey,
-        signature: interface::solana_rpc::SignatureWithSlot,
+        signature: SignatureWithSlot,
     ) -> Result<(), StorageError> {
         let db = self.db.clone();
         let slot = signature.slot;
@@ -113,8 +112,8 @@ impl SignaturePersistence for Storage {
     async fn missing_signatures(
         &self,
         program_id: Pubkey,
-        signatures: Vec<interface::solana_rpc::SignatureWithSlot>,
-    ) -> Result<Vec<interface::solana_rpc::SignatureWithSlot>, StorageError> {
+        signatures: Vec<SignatureWithSlot>,
+    ) -> Result<Vec<SignatureWithSlot>, StorageError> {
         let db = self.db.clone();
         let keys = signatures
             .into_iter()
@@ -128,12 +127,7 @@ impl SignaturePersistence for Storage {
         .map_err(|e| StorageError::Common(e.to_string()))?
         .map(|keys| {
             keys.into_iter()
-                .map(
-                    |(_, slot, signature)| interface::solana_rpc::SignatureWithSlot {
-                        signature,
-                        slot,
-                    },
-                )
+                .map(|(_, slot, signature)| SignatureWithSlot { signature, slot })
                 .collect::<Vec<_>>()
         })
     }
@@ -143,7 +137,7 @@ impl Storage {
     pub async fn signature_exists(
         &self,
         program_id: Pubkey,
-        signature: interface::solana_rpc::SignatureWithSlot,
+        signature: SignatureWithSlot,
     ) -> Result<bool, StorageError> {
         let db = self.db.clone();
         let slot = signature.slot;

@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use entities::models::BufferedTransaction;
+use entities::models::{BufferedTransaction, SignatureWithSlot};
 use flatbuffers::FlatBufferBuilder;
 use futures::{stream, StreamExt, TryStreamExt};
 use interface::error::UsecaseError;
-use interface::solana_rpc::{GetBackfillTransactions, SignatureWithSlot};
+use interface::solana_rpc::GetBackfillTransactions;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
