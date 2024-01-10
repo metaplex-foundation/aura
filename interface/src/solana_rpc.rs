@@ -7,18 +7,14 @@ use solana_sdk::signature::Signature;
 
 #[automock]
 #[async_trait]
-pub trait GetSignaturesByAddress: Send + Sync {
+pub trait TransactionsGetter: Send + Sync {
+    /// Returns all the signatures for the given address, starting from the newest signatures and going backwards up to until.
     async fn get_signatures_by_address(
         &self,
-        until: Signature,
-        before: Option<Signature>,
+        until: SignatureWithSlot,
         address: Pubkey,
     ) -> Result<Vec<SignatureWithSlot>, UsecaseError>;
-}
 
-#[automock]
-#[async_trait]
-pub trait GetTransactionsBySignatures: Send + Sync {
     async fn get_txs_by_signatures(
         &self,
         signatures: Vec<Signature>,

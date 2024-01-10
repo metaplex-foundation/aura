@@ -785,14 +785,16 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "entities",
+ "flatbuffers",
  "futures",
  "interface",
- "mockall 0.12.1",
+ "plerkle_serialization",
  "solana-client",
  "solana-program",
  "solana-sdk",
- "thiserror",
+ "solana-transaction-status",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2922,6 +2924,7 @@ dependencies = [
  "entities",
  "futures",
  "mockall 0.12.1",
+ "plerkle_serialization",
  "solana-client",
  "solana-sdk",
  "thiserror",
@@ -3327,11 +3330,9 @@ name = "metrics-utils"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "figment",
  "hyper",
  "log",
  "prometheus-client",
- "serde",
  "thiserror",
  "tokio",
 ]
