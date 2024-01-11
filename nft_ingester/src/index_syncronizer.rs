@@ -133,8 +133,8 @@ mod tests {
     use entities::models::AssetIndex;
     use metrics_utils::{
         ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig,
-        JsonDownloaderMetricsConfig, MetricState, MetricStatus, MetricsTrait,
-        RpcBackfillerMetricsConfig, SynchronizerMetricsConfig,
+        JsonDownloaderMetricsConfig, MetricState, MetricsTrait, RpcBackfillerMetricsConfig,
+        SynchronizerMetricsConfig,
     };
     use mockall;
     use postgre_client::storage_traits::MockAssetIndexStorage as MockIndexStorage;

@@ -1,6 +1,7 @@
 pub mod pg;
 pub mod rocks;
 
+use metrics_utils::MetricsTrait;
 use std::sync::{atomic::AtomicBool, Arc};
 use testcontainers::clients::Cli;
 
@@ -19,10 +20,22 @@ impl<'a> TestEnvironment<'a> {
         let pg_env = pg::TestEnvironment::new(cli).await;
         let generated_data = rocks_env.generate_assets(cnt, slot);
         let env = Self { rocks_env, pg_env };
+
+        let mut metrics_state = metrics_utils::MetricState::new(
+            metrics_utils::IngesterMetricsConfig::new(),
+            metrics_utils::ApiMetricsConfig::new(),
+            metrics_utils::JsonDownloaderMetricsConfig::new(),
+            metrics_utils::BackfillerMetricsConfig::new(),
+            metrics_utils::RpcBackfillerMetricsConfig::new(),
+            metrics_utils::SynchronizerMetricsConfig::new(),
+        );
+        metrics_state.register_metrics();
+
         let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             BATCH_SIZE,
+            metrics_state.synchronizer_metrics.clone(),
         );
         syncronizer
             .synchronize_asset_indexes(Arc::new(AtomicBool::new(true)))
