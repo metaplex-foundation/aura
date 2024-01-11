@@ -35,7 +35,7 @@ services:
       POSTGRES_PASSWORD: solana # The PostgreSQL password (useful to connect to the database)
       POSTGRES_DB: solana
     volumes:
-      - ${POSTGRE_DB_PATH}:/var/lib/postgresql/data/:rw
+      - ${POSTGRE_DB_PATH:-./db-data}:/var/lib/postgresql/data/:rw
     logging:
       options:
         max-size: "100m"
