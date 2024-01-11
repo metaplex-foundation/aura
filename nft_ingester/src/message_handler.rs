@@ -12,7 +12,7 @@ use blockbuster::{
 use chrono::Utc;
 use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
-use log::{error, warn, debug};
+use log::{debug, error, warn};
 use plerkle_serialization::AccountInfo;
 use solana_sdk::pubkey::Pubkey;
 use utils::flatbuffer::account_data_generated::account_data::root_as_account_data;
