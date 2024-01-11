@@ -241,7 +241,7 @@ impl ApiMetricsConfig {
             search_asset_requests: Family::<MethodLabel, Counter>::default(),
             start_time: Default::default(),
             latency: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new([25.0, 50.0, 100.0, 500.0].into_iter())
+                Histogram::new(exponential_buckets(20.0, 1.8, 10))
             }),
         }
     }
