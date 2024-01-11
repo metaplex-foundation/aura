@@ -241,7 +241,7 @@ impl ApiMetricsConfig {
             search_asset_requests: Family::<MethodLabel, Counter>::default(),
             start_time: Default::default(),
             latency: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 2.0, 10))
+                Histogram::new([25.0, 50.0, 100.0, 500.0].into_iter())
             }),
         }
     }
@@ -455,7 +455,7 @@ impl IngesterMetricsConfig {
         Self {
             start_time: Default::default(),
             latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 1.0, 10))
+                Histogram::new([1.0, 10.0, 50.0, 100.0].into_iter())
             }),
             parsers: Family::<MetricLabelWithStatus, Counter>::default(),
             process: Family::<MetricLabelWithStatus, Counter>::default(),

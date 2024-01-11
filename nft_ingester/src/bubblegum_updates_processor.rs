@@ -281,7 +281,7 @@ impl BubblegumTxProcessor {
         if processed {
             self.metrics.set_latency(
                 "transactions_parser",
-                begin_processing.elapsed().as_secs_f64(),
+                begin_processing.elapsed().as_millis() as f64,
             );
         }
         Ok(())

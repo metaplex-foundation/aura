@@ -279,8 +279,10 @@ impl MplxAccsProcessor {
                 }
             }
 
-            self.metrics
-                .set_latency("accounts_saving", begin_processing.elapsed().as_secs_f64());
+            self.metrics.set_latency(
+                "accounts_saving",
+                begin_processing.elapsed().as_millis() as f64,
+            );
 
             self.metrics
                 .set_last_processed_slot("mplx_metadata", max_slot as i64);
