@@ -93,6 +93,8 @@ impl MplxAccsProcessor {
 
             let mut metadata_info = HashMap::new();
 
+            let mut max_slot = 0;
+
             for key in metadata_info_buffer
                 .keys()
                 .take(self.batch_size)
@@ -100,6 +102,10 @@ impl MplxAccsProcessor {
                 .collect::<Vec<Vec<u8>>>()
             {
                 if let Some(value) = metadata_info_buffer.remove(&key) {
+                    if value.slot > max_slot {
+                        max_slot = value.slot;
+                    }
+
                     metadata_info.insert(key, value);
                 }
             }
@@ -275,6 +281,9 @@ impl MplxAccsProcessor {
 
             self.metrics
                 .set_latency("accounts_saving", begin_processing.elapsed().as_secs_f64());
+
+            self.metrics
+                .set_last_processed_slot("mplx_metadata", max_slot as i64);
         }
     }
 
