@@ -114,8 +114,10 @@ where
             self.metrics
                 .set_last_synchronized_slot("last_synchronized_slot", last_included_key.1 as i64);
 
-            self.metrics
-                .inc_data_batches_synchronized("synchronized_batches");
+            self.metrics.inc_number_of_records_synchronized(
+                "synchronized_records",
+                asset_indexes.len() as u64,
+            );
 
             if updated_keys.len() < self.batch_size {
                 break;

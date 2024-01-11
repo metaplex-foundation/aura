@@ -191,7 +191,7 @@ impl RpcBackfillerMetricsConfig {
 
 #[derive(Debug, Clone)]
 pub struct SynchronizerMetricsConfig {
-    data_batches_synchronized: Family<MetricLabel, Counter>,
+    number_of_records_synchronized: Family<MetricLabel, Counter>,
     last_synchronized_slot: Family<MetricLabel, Gauge>,
 }
 
@@ -204,17 +204,17 @@ impl Default for SynchronizerMetricsConfig {
 impl SynchronizerMetricsConfig {
     pub fn new() -> Self {
         Self {
-            data_batches_synchronized: Family::<MetricLabel, Counter>::default(),
+            number_of_records_synchronized: Family::<MetricLabel, Counter>::default(),
             last_synchronized_slot: Family::<MetricLabel, Gauge>::default(),
         }
     }
 
-    pub fn inc_data_batches_synchronized(&self, label: &str) -> u64 {
-        self.data_batches_synchronized
+    pub fn inc_number_of_records_synchronized(&self, label: &str, num_of_records: u64) -> u64 {
+        self.number_of_records_synchronized
             .get_or_create(&MetricLabel {
                 name: label.to_owned(),
             })
-            .inc()
+            .inc_by(num_of_records)
     }
 
     pub fn set_last_synchronized_slot(&self, label: &str, slot: i64) -> i64 {
@@ -422,9 +422,11 @@ impl MetricsTrait for MetricState {
         );
 
         self.registry.register(
-            "synchronizer_data_batches_synchronized",
-            "Count of data batches, synchronized by synchronizer",
-            self.synchronizer_metrics.data_batches_synchronized.clone(),
+            "synchronizer_number_of_records_synchronized",
+            "Count of records, synchronized by synchronizer",
+            self.synchronizer_metrics
+                .number_of_records_synchronized
+                .clone(),
         );
 
         self.registry.register(
