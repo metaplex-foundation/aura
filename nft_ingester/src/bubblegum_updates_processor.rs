@@ -212,6 +212,10 @@ impl BubblegumTxProcessor {
         if not_impl == ixlen {
             return Err(IngesterError::NotImplemented);
         }
+
+        self.metrics
+            .set_last_processed_slot("transaction", slot as i64);
+
         Ok(())
     }
 
@@ -277,7 +281,7 @@ impl BubblegumTxProcessor {
         if processed {
             self.metrics.set_latency(
                 "transactions_parser",
-                begin_processing.elapsed().as_secs_f64(),
+                begin_processing.elapsed().as_millis() as f64,
             );
         }
         Ok(())

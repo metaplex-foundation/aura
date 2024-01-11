@@ -15,7 +15,7 @@ use interface::signature_persistence::ProcessingDataGetter;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{
     ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
-    MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig,
+    MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig, SynchronizerMetricsConfig,
 };
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
@@ -65,6 +65,7 @@ pub async fn main() -> Result<(), IngesterError> {
         JsonDownloaderMetricsConfig::new(),
         BackfillerMetricsConfig::new(),
         RpcBackfillerMetricsConfig::new(),
+        SynchronizerMetricsConfig::new(),
     );
     metrics_state.register_metrics();
 
@@ -325,6 +326,7 @@ pub async fn main() -> Result<(), IngesterError> {
         rocks_storage.clone(),
         index_storage.clone(),
         config.synchronizer_batch_size,
+        metrics_state.synchronizer_metrics.clone(),
     );
 
     let cloned_keep_running = keep_running.clone();

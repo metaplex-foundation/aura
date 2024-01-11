@@ -130,7 +130,7 @@ impl DasApi {
             .await?;
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!("ok"))
     }
@@ -147,7 +147,7 @@ impl DasApi {
         let assets = get_proof_for_assets(self.rocks_db.clone(), vec![id]).await?;
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         let res = assets
             .get(&id.to_string())
@@ -183,7 +183,7 @@ impl DasApi {
             .map_err(Into::<DasApiError>::into);
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -199,7 +199,7 @@ impl DasApi {
             .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         if res.is_none() {
             return Err(not_found());
@@ -234,7 +234,7 @@ impl DasApi {
             .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }
@@ -274,7 +274,7 @@ impl DasApi {
         .map_err(Into::<DasApiError>::into);
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -316,7 +316,7 @@ impl DasApi {
         .map_err(Into::<DasApiError>::into);
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -359,7 +359,7 @@ impl DasApi {
         .map_err(Into::<DasApiError>::into);
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -398,7 +398,7 @@ impl DasApi {
         .await;
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -430,7 +430,7 @@ impl DasApi {
         .await;
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(&label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -452,7 +452,7 @@ impl DasApi {
         };
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }

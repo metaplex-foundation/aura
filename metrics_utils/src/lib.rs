@@ -18,6 +18,7 @@ pub struct MetricState {
     pub json_downloader_metrics: Arc<JsonDownloaderMetricsConfig>,
     pub backfiller_metrics: Arc<BackfillerMetricsConfig>,
     pub rpc_backfiller_metrics: Arc<RpcBackfillerMetricsConfig>,
+    pub synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -28,6 +29,7 @@ impl MetricState {
         json_downloader_metrics: JsonDownloaderMetricsConfig,
         backfiller_metrics: BackfillerMetricsConfig,
         rpc_backfiller_metrics: RpcBackfillerMetricsConfig,
+        synchronizer_metrics: SynchronizerMetricsConfig,
     ) -> Self {
         Self {
             ingester_metrics: Arc::new(ingester_metrics),
@@ -36,6 +38,7 @@ impl MetricState {
             registry: Registry::default(),
             backfiller_metrics: Arc::new(backfiller_metrics),
             rpc_backfiller_metrics: Arc::new(rpc_backfiller_metrics),
+            synchronizer_metrics: Arc::new(synchronizer_metrics),
         }
     }
 }
@@ -187,6 +190,43 @@ impl RpcBackfillerMetricsConfig {
 }
 
 #[derive(Debug, Clone)]
+pub struct SynchronizerMetricsConfig {
+    number_of_records_synchronized: Family<MetricLabel, Counter>,
+    last_synchronized_slot: Family<MetricLabel, Gauge>,
+}
+
+impl Default for SynchronizerMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SynchronizerMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            number_of_records_synchronized: Family::<MetricLabel, Counter>::default(),
+            last_synchronized_slot: Family::<MetricLabel, Gauge>::default(),
+        }
+    }
+
+    pub fn inc_number_of_records_synchronized(&self, label: &str, num_of_records: u64) -> u64 {
+        self.number_of_records_synchronized
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc_by(num_of_records)
+    }
+
+    pub fn set_last_synchronized_slot(&self, label: &str, slot: i64) -> i64 {
+        self.last_synchronized_slot
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .set(slot)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ApiMetricsConfig {
     requests: Family<MethodLabel, Counter>,
     search_asset_requests: Family<MethodLabel, Counter>,
@@ -201,7 +241,7 @@ impl ApiMetricsConfig {
             search_asset_requests: Family::<MethodLabel, Counter>::default(),
             start_time: Default::default(),
             latency: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 2.0, 10))
+                Histogram::new(exponential_buckets(20.0, 1.8, 10))
             }),
         }
     }
@@ -309,6 +349,11 @@ impl MetricsTrait for MetricState {
             "Histogram of rocksdb backup duration",
             self.ingester_metrics.rocksdb_backup_latency.clone(),
         );
+        self.registry.register(
+            "ingester_last_processed_slot",
+            "The last processed slot by ingester",
+            self.ingester_metrics.last_processed_slot.clone(),
+        );
 
         self.registry.register(
             "json_downloader_latency_task",
@@ -375,6 +420,20 @@ impl MetricsTrait for MetricState {
             "Count of fetch_signatures restarts",
             self.rpc_backfiller_metrics.run_fetch_signatures.clone(),
         );
+
+        self.registry.register(
+            "synchronizer_number_of_records_synchronized",
+            "Count of records, synchronized by synchronizer",
+            self.synchronizer_metrics
+                .number_of_records_synchronized
+                .clone(),
+        );
+
+        self.registry.register(
+            "synchronizer_last_synchronized_slot",
+            "The last synchronized slot by synchronizer",
+            self.synchronizer_metrics.last_synchronized_slot.clone(),
+        );
     }
 }
 
@@ -388,6 +447,7 @@ pub struct IngesterMetricsConfig {
     retries: Family<MetricLabel, Counter>,
     rocksdb_backup_latency: Histogram,
     instructions: Family<MetricLabel, Counter>,
+    last_processed_slot: Family<MetricLabel, Gauge>,
 }
 
 impl IngesterMetricsConfig {
@@ -395,7 +455,7 @@ impl IngesterMetricsConfig {
         Self {
             start_time: Default::default(),
             latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 1.0, 10))
+                Histogram::new([1.0, 10.0, 50.0, 100.0].into_iter())
             }),
             parsers: Family::<MetricLabelWithStatus, Counter>::default(),
             process: Family::<MetricLabelWithStatus, Counter>::default(),
@@ -408,6 +468,7 @@ impl IngesterMetricsConfig {
                 .into_iter(),
             ),
             instructions: Family::<MetricLabel, Counter>::default(),
+            last_processed_slot: Family::<MetricLabel, Gauge>::default(),
         }
     }
 
@@ -467,6 +528,14 @@ impl IngesterMetricsConfig {
             })
             .inc()
     }
+
+    pub fn set_last_processed_slot(&self, label: &str, slot: i64) -> i64 {
+        self.last_processed_slot
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .set(slot)
+    }
 }
 
 impl Default for IngesterMetricsConfig {
@@ -490,7 +559,7 @@ impl JsonDownloaderMetricsConfig {
             start_time: Default::default(),
             tasks_to_execute: Default::default(),
             latency_task_executed: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 2.0, 10))
+                Histogram::new([100.0, 500.0, 1000.0, 2000.0].into_iter())
             }),
         }
     }

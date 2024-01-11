@@ -80,7 +80,13 @@ impl TokenAccsProcessor {
 
             let begin_processing = Instant::now();
 
+            let mut max_slot = 0;
+
             for acc in accs_to_save.iter() {
+                if acc.slot_updated > max_slot {
+                    max_slot = acc.slot_updated;
+                }
+
                 let res = self.rocks_db.asset_owner_data.merge(
                     acc.mint,
                     &AssetOwner {
@@ -118,8 +124,11 @@ impl TokenAccsProcessor {
 
             self.metrics.set_latency(
                 "token_accounts_saving",
-                begin_processing.elapsed().as_secs_f64(),
+                begin_processing.elapsed().as_millis() as f64,
             );
+
+            self.metrics
+                .set_last_processed_slot("spl_token_acc", max_slot);
         }
     }
 
@@ -163,7 +172,13 @@ impl TokenAccsProcessor {
 
             let begin_processing = Instant::now();
 
+            let mut max_slot = 0;
+
             for mint in mint_accs_to_save.iter() {
+                if mint.slot_updated > max_slot {
+                    max_slot = mint.slot_updated;
+                }
+
                 let res = self.rocks_db.asset_dynamic_data.merge(
                     mint.pubkey,
                     &AssetDynamicDetails {
@@ -204,8 +219,10 @@ impl TokenAccsProcessor {
 
             self.metrics.set_latency(
                 "mint_accounts_saving",
-                begin_processing.elapsed().as_secs_f64(),
+                begin_processing.elapsed().as_millis() as f64,
             );
+
+            self.metrics.set_last_processed_slot("spl_mint", max_slot);
         }
     }
 }
