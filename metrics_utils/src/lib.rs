@@ -559,7 +559,7 @@ impl JsonDownloaderMetricsConfig {
             start_time: Default::default(),
             tasks_to_execute: Default::default(),
             latency_task_executed: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 2.0, 10))
+                Histogram::new([100.0, 500.0, 1000.0, 2000.0].into_iter())
             }),
         }
     }

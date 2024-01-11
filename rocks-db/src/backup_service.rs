@@ -102,7 +102,7 @@ impl BackupService {
             }
 
             let duration = chrono::Utc::now().signed_duration_since(start_time);
-            metrics.set_rocksdb_backup_latency(duration.num_seconds() as f64);
+            metrics.set_rocksdb_backup_latency(duration.num_milliseconds() as f64);
 
             info!("perform_backup {}", duration.num_seconds());
 
