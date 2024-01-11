@@ -1,20 +1,23 @@
 # Initial stage: install cargo-chef
-FROM rust:1.74-bullseye AS chef
+FROM rust:1.75-bullseye AS chef
 RUN cargo install cargo-chef
 
 # Planning stage: determine dependencies
 FROM chef AS planner
 WORKDIR /rust
 COPY Cargo.toml Cargo.toml
-COPY nft_ingester ./nft_ingester
+COPY backfill_rpc ./backfill_rpc
 COPY digital_asset_types ./digital_asset_types
 COPY entities ./entities
 COPY grpc ./grpc
 COPY interface ./interface
-COPY usecase ./usecase
 COPY metrics_utils ./metrics_utils
-COPY rocks-db ./rocks-db
+COPY nft_ingester ./nft_ingester
 COPY postgre-client ./postgre-client
+COPY rocks-db ./rocks-db
+COPY tests/setup ./tests/setup
+COPY usecase ./usecase
+
 RUN cargo chef prepare --recipe-path recipe.json
 
 # Caching dependencies
@@ -30,7 +33,7 @@ COPY . .
 RUN cargo build --release --bin ingester
 
 # Final image
-FROM rust:1.74-slim-bullseye
+FROM rust:1.75-slim-bullseye
 ARG APP=/usr/src/app
 RUN apt update && apt install -y curl ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
 ENV TZ=Etc/UTC APP_USER=appuser
