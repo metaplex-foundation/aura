@@ -89,24 +89,37 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rocks_storage = Arc::new(storage);
 
-    let bubblegum_updates_processor =
-        BubblegumTxProcessor::new(rocks_storage.clone(), buffer.clone(), metrics.clone());
+    if config.run_bubblegum_backfiller {
+        let bubblegum_updates_processor =
+            BubblegumTxProcessor::new(rocks_storage.clone(), buffer.clone(), metrics.clone());
+
+        let cloned_keep_running = keep_running.clone();
+        tasks.spawn(tokio::spawn(async move {
+            bubblegum_updates_processor.run(cloned_keep_running).await;
+        }));
+
+        let config: BackfillerConfig = setup_config();
+
+        let backfiller = backfiller::Backfiller::new(rocks_storage.clone(), buffer.clone(), config)
+            .await
+            .unwrap();
+
+        backfiller
+            .start_backfill(&mut tasks, keep_running.clone())
+            .await
+            .unwrap();
+    }
 
     let cloned_keep_running = keep_running.clone();
+    let cloned_rocks_storage = rocks_storage.clone();
     tasks.spawn(tokio::spawn(async move {
-        bubblegum_updates_processor.run(cloned_keep_running).await;
+        match start_api(cloned_rocks_storage.clone(), cloned_keep_running).await {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Start API: {}", e);
+            }
+        };
     }));
-
-    let config: BackfillerConfig = setup_config();
-
-    let backfiller = backfiller::Backfiller::new(rocks_storage.clone(), buffer.clone(), config)
-        .await
-        .unwrap();
-
-    backfiller
-        .start_backfill(&mut tasks, keep_running.clone())
-        .await
-        .unwrap();
 
     // --stop
     graceful_stop(tasks, true, keep_running.clone()).await;
