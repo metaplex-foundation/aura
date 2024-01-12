@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 serde = "1.0.193"
 solana-sdk = "~1.16"
+num-derive = "0.4.1"
+num-traits = "0.2.17"

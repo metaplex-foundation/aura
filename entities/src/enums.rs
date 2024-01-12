@@ -1,3 +1,4 @@
+use num_derive::FromPrimitive;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Default)]
@@ -51,9 +52,22 @@ pub enum TokenStandard {
     ProgrammableNonFungibleEdition, // NonFungible with programmable configuration
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
 pub enum UseMethod {
     Burn,
     Multiple,
     Single,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy)]
+pub enum ChainMutability {
+    // Original implementation also contain "Unknown"
+    // enum variant, which is default. But we do not saved any
+    // previous versions of ChainMutability, so if we will want to
+    // use unwrap_or_default() on Option<ChainMutability>, it is
+    // convenient to have Immutable variant as default, because
+    // previous we marked all ChainData as Immutable
+    #[default]
+    Immutable,
+    Mutable,
 }

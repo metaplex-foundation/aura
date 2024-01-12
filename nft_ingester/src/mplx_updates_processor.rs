@@ -343,6 +343,7 @@ impl MplxAccsProcessor {
                     remaining: u.remaining,
                     total: u.total,
                 }),
+                chain_mutability: None,
             };
             chain_data.sanitize();
 

@@ -8,13 +8,17 @@ use blockbuster::{
     programs::{bubblegum::BubblegumParser, ProgramParseResult},
 };
 use chrono::Utc;
-use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard};
+use entities::enums::{
+    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard,
+    UseMethod,
+};
 use entities::models::{BufferedTransaction, Updated};
 use entities::models::{ChainDataV1, Creator, Uses};
 use log::{debug, error, info};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
+use num_traits::FromPrimitive;
 use plerkle_serialization::{Pubkey as FBPubkey, TransactionInfo};
 use rocks_db::asset::AssetOwner;
 use rocks_db::asset::{
@@ -115,8 +119,8 @@ impl BubblegumTxProcessor {
             InstructionName::VerifyCollection => "VerifyCollection",
             InstructionName::UnverifyCollection => "UnverifyCollection",
             InstructionName::SetAndVerifyCollection => "SetAndVerifyCollection",
-            InstructionName::SetDecompressibleState => todo!(),
-            InstructionName::UpdateMetadata => todo!(),
+            InstructionName::SetDecompressibleState => "SetDecompressibleState",
+            InstructionName::UpdateMetadata => "UpdateMetadata",
         }
     }
 
@@ -261,6 +265,9 @@ impl BubblegumTxProcessor {
             | InstructionName::UnverifyCollection
             | InstructionName::SetAndVerifyCollection => {
                 self.collection_verification(parsing_result, bundle).await?;
+            }
+            InstructionName::UpdateMetadata => {
+                self.update_metadata(parsing_result, bundle).await?;
             }
             _ => {
                 debug!("Bubblegum: Not Implemented Instruction");
@@ -428,6 +435,7 @@ impl BubblegumTxProcessor {
                             remaining: u.remaining,
                             total: u.total,
                         }),
+                        chain_mutability: None,
                     };
                     chain_data.sanitize();
 
@@ -818,6 +826,180 @@ impl BubblegumTxProcessor {
 
             return Ok(());
         };
+        Err(IngesterError::ParsingError(
+            "Ix not parsed correctly".to_string(),
+        ))
+    }
+
+    pub async fn update_metadata<'c>(
+        &self,
+        parsing_result: &BubblegumInstruction,
+        bundle: &InstructionBundle<'c>,
+    ) -> Result<(), IngesterError> {
+        if let (
+            Some(le),
+            Some(cl),
+            Some(Payload::UpdateMetadata {
+                current_metadata,
+                update_args,
+                tree_id: _tree_id,
+            }),
+        ) = (
+            &parsing_result.leaf_update,
+            &parsing_result.tree_update,
+            &parsing_result.payload,
+        ) {
+            self.rocks_client.save_changelog(cl, bundle.slot).await;
+
+            return match le.schema {
+                LeafSchema::V1 { id, nonce, .. } => {
+                    let uri = if let Some(uri) = &update_args.uri {
+                        uri.replace('\0', "")
+                    } else {
+                        current_metadata.uri.replace('\0', "")
+                    };
+
+                    let name = if let Some(name) = update_args.name.clone() {
+                        name
+                    } else {
+                        current_metadata.name.clone()
+                    };
+
+                    let symbol = if let Some(symbol) = update_args.symbol.clone() {
+                        symbol
+                    } else {
+                        current_metadata.symbol.clone()
+                    };
+
+                    let primary_sale_happened =
+                        if let Some(primary_sale_happened) = update_args.primary_sale_happened {
+                            primary_sale_happened
+                        } else {
+                            current_metadata.primary_sale_happened
+                        };
+
+                    let is_mutable = if let Some(is_mutable) = update_args.is_mutable {
+                        is_mutable
+                    } else {
+                        current_metadata.is_mutable
+                    };
+
+                    let chain_mutability = if is_mutable {
+                        ChainMutability::Mutable
+                    } else {
+                        ChainMutability::Immutable
+                    };
+
+                    let mut chain_data = ChainDataV1 {
+                        name: name.clone(),
+                        symbol: symbol.clone(),
+                        edition_nonce: current_metadata.edition_nonce,
+                        primary_sale_happened,
+                        token_standard: Some(TokenStandard::NonFungible),
+                        uses: current_metadata
+                            .uses
+                            .clone()
+                            .map(|u| {
+                                Ok::<_, IngesterError>(Uses {
+                                    use_method: UseMethod::from_u8(u.use_method.clone() as u8)
+                                        .ok_or(IngesterError::ParsingError(format!(
+                                            "Invalid use_method: {}",
+                                            u.use_method as u8
+                                        )))?,
+                                    remaining: u.remaining,
+                                    total: u.total,
+                                })
+                            })
+                            .transpose()?,
+                        chain_mutability: Some(chain_mutability),
+                    };
+                    chain_data.sanitize();
+                    let chain_data_json = serde_json::to_value(chain_data)
+                        .map_err(|e| IngesterError::DeserializationError(e.to_string()))?;
+
+                    let seller_fee_basis_points = if let Some(seller_fee_basis_points) =
+                        update_args.seller_fee_basis_points
+                    {
+                        seller_fee_basis_points
+                    } else {
+                        current_metadata.seller_fee_basis_points
+                    };
+
+                    let creators_input = if let Some(creators) = &update_args.creators {
+                        creators
+                    } else {
+                        &current_metadata.creators
+                    };
+
+                    let creators = {
+                        let mut creators = vec![];
+                        for creator in creators_input.iter() {
+                            creators.push(Creator {
+                                creator: creator.address,
+                                creator_verified: creator.verified,
+                                creator_share: creator.share,
+                            });
+                        }
+                        creators
+                    };
+
+                    self.rocks_client.asset_dynamic_data.merge(
+                        id,
+                        &AssetDynamicDetails {
+                            pubkey: id,
+                            onchain_data: Some(Updated {
+                                slot_updated: bundle.slot,
+                                seq: Some(cl.seq),
+                                value: chain_data_json.to_string(),
+                            }),
+                            url: Updated {
+                                slot_updated: bundle.slot,
+                                seq: Some(cl.seq),
+                                value: uri.clone(),
+                            },
+                            creators: Updated {
+                                slot_updated: bundle.slot,
+                                seq: Some(cl.seq),
+                                value: creators,
+                            },
+                            royalty_amount: Updated::new(
+                                bundle.slot,
+                                Some(cl.seq),
+                                seller_fee_basis_points,
+                            ),
+                            ..Default::default()
+                        },
+                    )?;
+
+                    if let Err(e) = self.rocks_client.asset_leaf_data.merge(
+                        id,
+                        &AssetLeaf {
+                            pubkey: id,
+                            tree_id: cl.id,
+                            leaf: Some(le.leaf_hash.to_vec()),
+                            nonce: Some(nonce),
+                            data_hash: Some(Hash::from(le.schema.data_hash())),
+                            creator_hash: Some(Hash::from(le.schema.creator_hash())),
+                            leaf_seq: Some(cl.seq),
+                            slot_updated: bundle.slot,
+                        },
+                    ) {
+                        error!("Error while saving leaf for cNFT: {}", e);
+                    };
+
+                    let mut tasks_buffer = self.json_tasks.lock().await;
+                    tasks_buffer.push_back(Task {
+                        ofd_metadata_url: uri.clone(),
+                        ofd_locked_until: Some(chrono::Utc::now()),
+                        ofd_attempts: 0,
+                        ofd_max_attempts: 10,
+                        ofd_error: None,
+                    });
+
+                    Ok(())
+                }
+            };
+        }
         Err(IngesterError::ParsingError(
             "Ix not parsed correctly".to_string(),
         ))
