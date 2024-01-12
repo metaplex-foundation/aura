@@ -96,6 +96,29 @@ pub struct IngesterConfig {
     pub backfill_rpc_address: String,
 }
 
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct ApiConfig {
+    pub database_config: DatabaseConfig,
+    pub rocks_db_path_container: Option<String>,
+    pub rocks_db_secondary_path_container: Option<String>,
+    pub rocks_sync_interval_seconds: u64,
+    pub metrics_port: Option<u16>,
+    pub server_port: u16,
+    pub rust_log: Option<String>,
+    pub sql_log_level: Option<String>,
+    pub peer_grpc_port: u16,
+    pub peer_grpc_max_gap_slots: u64,
+}
+
+impl ApiConfig {
+    pub fn get_log_level(&self) -> String {
+        self.rust_log.clone().unwrap_or("warn".to_string())
+    }
+    pub fn get_sql_log_level(&self) -> String {
+        self.sql_log_level.clone().unwrap_or("error".to_string())
+    }
+}
+
 impl IngesterConfig {
     pub fn get_metrics_port(
         &self,
@@ -373,10 +396,8 @@ impl PeerDiscovery for IngesterConfig {
     }
 }
 
-pub fn setup_config<'a, T: Deserialize<'a>>() -> T {
-    let figment = Figment::new()
-        .join(Env::prefixed("INGESTER_"))
-        .join(Env::raw());
+pub fn setup_config<'a, T: Deserialize<'a>>(prefix: &str) -> T {
+    let figment = Figment::new().join(Env::prefixed(prefix)).join(Env::raw());
 
     figment
         .extract()

@@ -273,6 +273,29 @@ impl ApiMetricsConfig {
             })
             .observe(duration);
     }
+
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "api_http_requests",
+            "The number of HTTP requests made",
+            self.requests.clone(),
+        );
+        registry.register(
+            "api_http_search_asset_requests",
+            "The number of searchAsset requests made",
+            self.search_asset_requests.clone(),
+        );
+        registry.register(
+            "api_call_latency",
+            "A histogram of the request duration",
+            self.latency.clone(),
+        );
+        registry.register(
+            "api_start_time",
+            "Binary start time",
+            self.start_time.clone(),
+        );
+    }
 }
 
 impl Default for ApiMetricsConfig {
@@ -287,27 +310,7 @@ impl MetricsTrait for MetricState {
         self.ingester_metrics.start_time();
         self.json_downloader_metrics.start_time();
 
-        self.registry.register(
-            "api_http_requests",
-            "The number of HTTP requests made",
-            self.api_metrics.requests.clone(),
-        );
-        self.registry.register(
-            "api_http_search_asset_requests",
-            "The number of searchAsset requests made",
-            self.api_metrics.search_asset_requests.clone(),
-        );
-        self.registry.register(
-            "api_call_latency",
-            "A histogram of the request duration",
-            self.api_metrics.latency.clone(),
-        );
-        self.registry.register(
-            "api_start_time",
-            "Binary start time",
-            self.api_metrics.start_time.clone(),
-        );
-
+        self.api_metrics.register(&mut self.registry);
         self.registry.register(
             "ingester_start_time",
             "Binary start time",

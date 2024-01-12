@@ -1,6 +1,6 @@
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
-    ConnectOptions, PgPool, Postgres, QueryBuilder, Row, Transaction,
+    ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Row, Transaction,
 };
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -22,7 +22,7 @@ impl PgClient {
         log_level: &str,
         min_connections: u32,
         max_connections: u32,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         let mut options: PgConnectOptions = url.parse().unwrap();
         options.log_statements(LevelFilter::from_str(log_level).unwrap_or(LevelFilter::Warn));
 
@@ -30,10 +30,9 @@ impl PgClient {
             .min_connections(min_connections)
             .max_connections(max_connections)
             .connect_with(options)
-            .await
-            .unwrap();
+            .await?;
 
-        Self { pool }
+        Ok(Self { pool })
     }
 
     pub fn new_with_pool(pool: PgPool) -> Self {

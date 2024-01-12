@@ -52,7 +52,7 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Starting Ingester");
     let args = Args::parse();
 
-    let config: IngesterConfig = setup_config();
+    let config: IngesterConfig = setup_config("INGESTER_");
     init_logger(&config.get_log_level());
     let bg_tasks_config = config
         .clone()
@@ -291,7 +291,7 @@ pub async fn main() -> Result<(), IngesterError> {
     }));
 
     if config.run_bubblegum_backfiller {
-        let config: BackfillerConfig = setup_config();
+        let config: BackfillerConfig = setup_config("INGESTER_");
 
         let backfiller = backfiller::Backfiller::new(rocks_storage.clone(), buffer.clone(), config)
             .await
@@ -319,7 +319,7 @@ pub async fn main() -> Result<(), IngesterError> {
             100,
             max_postgre_connections,
         )
-        .await,
+        .await?,
     );
 
     let synchronizer = Synchronizer::new(

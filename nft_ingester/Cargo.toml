@@ -53,12 +53,12 @@ entities = { path = "../entities" }
 usecase = { path = "../usecase" }
 grpc = { path = "../grpc" }
 mpl-token-metadata = { version = "3.2.3"}
-
 futures = "0.3.29"
 interface = { path = "../interface" }
 tonic = "0.10.2"
 tracing  ="0.1.40"
 backfill-rpc = { path = "../backfill_rpc" }
+prometheus-client = "0.21.2"
 
 [dev-dependencies]
 tempfile = "3.8.1"
@@ -80,3 +80,6 @@ name = "ingester"
 
 [[bin]]
 name = "migrator"
+
+[[bin]]
+name = "api"

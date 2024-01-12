@@ -3724,6 +3724,7 @@ dependencies = [
  "plerkle_messenger",
  "plerkle_serialization",
  "postgre-client",
+ "prometheus-client",
  "reqwest",
  "rocks-db",
  "schemars",

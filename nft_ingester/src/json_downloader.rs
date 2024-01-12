@@ -18,7 +18,7 @@ pub struct JsonDownloader {
 
 impl JsonDownloader {
     pub async fn new(rocks_db: Arc<Storage>, metrics: Arc<JsonDownloaderMetricsConfig>) -> Self {
-        let config: BackgroundTaskConfig = setup_config();
+        let config: BackgroundTaskConfig = setup_config("INGESTER_");
         let database_pool = DBClient::new(&config.database_config).await.unwrap();
 
         Self {

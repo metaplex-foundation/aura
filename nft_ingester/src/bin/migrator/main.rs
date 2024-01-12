@@ -14,7 +14,7 @@ use rocks_db::Storage;
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
-    let config: IngesterConfig = setup_config();
+    let config: IngesterConfig = setup_config("INGESTER_");
     let database_pool = DBClient::new(&config.database_config.clone()).await?;
 
     let storage = Storage::open(
