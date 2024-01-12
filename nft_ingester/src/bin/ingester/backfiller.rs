@@ -14,7 +14,7 @@ use solana_sdk::clock::Slot;
 use solana_storage_bigtable::LedgerStorage;
 use solana_storage_bigtable::{DEFAULT_APP_PROFILE_ID, DEFAULT_INSTANCE_NAME};
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::num::ParseIntError;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -115,7 +115,7 @@ impl Backfiller {
             info!("Running transactions parser...");
 
             transactions_parser
-                .parse_transactions(cloned_keep_running)
+                .parse_transactions_v2(cloned_keep_running)
                 .await;
         }));
 
@@ -200,6 +200,10 @@ impl SlotsCollector {
                         start_at_slot = last_slot;
 
                         self.save_slots(&slots).await;
+
+                        println!("Saved slots: {:?}", slots.len());
+
+                        break;
 
                         self.metrics
                             .set_last_processed_slot("collected_slot", last_slot as i64);
@@ -318,6 +322,8 @@ impl TransactionsParser {
     pub async fn parse_transactions(&self, keep_running: Arc<AtomicBool>) {
         let mut counter = GET_SLOT_RETRIES;
 
+        let start_time = tokio::time::Instant::now();
+
         'outer: while keep_running.load(Ordering::SeqCst) {
             let mut slots_to_parse_iter = self
                 .rocks_client
@@ -354,8 +360,8 @@ impl TransactionsParser {
                             if counter == 0 {
                                 break 'outer;
                             }
-                            tokio::time::sleep(Duration::from_secs(SECONDS_TO_WAIT_NEW_SLOTS))
-                                .await;
+                            // tokio::time::sleep(Duration::from_secs(SECONDS_TO_WAIT_NEW_SLOTS))
+                            //     .await;
                             continue 'outer;
                         } else {
                             // got not enough slots to form usual batch
@@ -512,5 +518,199 @@ impl TransactionsParser {
                 }
             }
         }
+
+        println!("Spend: {:?}", start_time.elapsed().as_secs_f64());
+    }
+
+    // ATTENTION: this method will not work on prod
+    // because iterator will not be updated and new slots written to RocksDB
+    // use only for tests
+    pub async fn parse_transactions_v2(&self, keep_running: Arc<AtomicBool>) {
+        let mut counter = GET_SLOT_RETRIES;
+
+        let cloned_keep_running = keep_running.clone();
+
+        let mut slots_to_parse_iter = self
+            .rocks_client
+            .bubblegum_slots
+            .iter(BUBBLEGUM_SLOTS_PREFIX.to_string());
+
+        let mut slots_to_parse_vec = Arc::new(Mutex::new(VecDeque::<u64>::new()));
+
+        let cloned_keep_running = keep_running.clone();
+
+        while cloned_keep_running.load(Ordering::SeqCst) {
+            match slots_to_parse_iter.next() {
+                Some(result) => {
+                    match result {
+                        Ok((key, _)) => {
+                            let blgm_slot_key = String::from_utf8(key.to_vec());
+
+                            if blgm_slot_key.is_err() {
+                                error!("Error while converting key received from RocksDB to string");
+                                continue;
+                            }
+
+                            let slot = bubblegum_slots_key_to_value(blgm_slot_key.unwrap());
+                            slots_to_parse_vec.lock().await.push_back(slot);
+                        }
+                        Err(e) => {
+                            error!("Error while iterating over bubblegum slots: {:?}", e);
+                            break;
+                        }
+                    }
+                }
+                None => {
+                    info!("Iterator is ended");
+                    break;
+                }
+            }
+        }
+
+        let start_time = tokio::time::Instant::now();
+
+        counter = GET_SLOT_RETRIES;
+
+        let mut tasks = Vec::new();
+
+        for _ in 0..100 {
+            let bg_client = self.big_table_client.clone();
+            let buffer = self.buffer.clone();
+            let cloned_metrics = self.metrics.clone();
+            let cloned_rocks = self.rocks_client.clone();
+
+            let buff = slots_to_parse_vec.clone();
+
+            let cloned_keep_running = keep_running.clone();
+
+            let task = tokio::spawn(async move {
+                while cloned_keep_running.load(Ordering::SeqCst) {
+                    let mut locked_buff = buff.lock().await;
+                    let res = locked_buff.pop_front();
+                    drop(locked_buff);
+
+                    match res {
+                        Some(s) => {
+                            let block = match TransactionsParser::get_block_from_bg(bg_client.clone(), s).await {
+                                Ok(block) => block,
+                                Err(err) => {
+                                    error!("Error getting block: {}", err);
+                                    return;
+                                }
+                            };
+        
+                            for tx in block.transactions.iter() {
+                                let meta = if let Some(meta) = tx.get_status_meta() {
+                                    if let Err(_err) = meta.status {
+                                        continue;
+                                    }
+                                    meta
+                                } else {
+                                    error!(
+                                        "Unexpected, EncodedTransactionWithStatusMeta struct has no metadata"
+                                    );
+                                    continue;
+                                };
+        
+                                let decoded_tx = tx.get_transaction();
+                                let sig = decoded_tx.signatures[0].to_string();
+                                let msg = decoded_tx.message;
+                                let atl_keys = msg.address_table_lookups();
+        
+                                let account_keys = msg.static_account_keys();
+                                let account_keys = {
+                                    let mut account_keys_vec = vec![];
+                                    for key in account_keys.iter() {
+                                        account_keys_vec.push(key.to_bytes());
+                                    }
+                                    if atl_keys.is_some() {
+                                        let ad = meta.loaded_addresses;
+        
+                                        for i in &ad.writable {
+                                            account_keys_vec.push(i.to_bytes());
+                                        }
+        
+                                        for i in &ad.readonly {
+                                            account_keys_vec.push(i.to_bytes());
+                                        }
+                                    }
+                                    account_keys_vec
+                                };
+        
+                                let bubblegum = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID.to_bytes();
+                                if account_keys.iter().all(|pk| *pk != bubblegum) {
+                                    continue;
+                                }
+        
+                                let builder = FlatBufferBuilder::new();
+                                debug!("Serializing transaction in backfiller {}", sig);
+        
+                                let encoded_tx =
+                                    match tx
+                                        .clone()
+                                        .encode(UiTransactionEncoding::Base58, Some(0), false)
+                                    {
+                                        Ok(tx) => tx,
+                                        Err(err) => {
+                                            error!("Error encoding transaction: {}", err);
+                                            continue;
+                                        }
+                                    };
+        
+                                let tx_wrap = EncodedConfirmedTransactionWithStatusMeta {
+                                    transaction: encoded_tx,
+                                    slot: block.parent_slot,
+                                    block_time: block.block_time,
+                                };
+        
+                                let builder =
+                                    match seralize_encoded_transaction_with_status(builder, tx_wrap) {
+                                        Ok(builder) => builder,
+                                        Err(err) => {
+                                            error!("Error serializing transaction with plerkle: {}", err);
+                                            continue;
+                                        }
+                                    };
+        
+                                let tx = builder.finished_data().to_vec();
+        
+                                let mut d = buffer.transactions.lock().await;
+        
+                                d.push_back(BufferedTransaction {
+                                    transaction: tx,
+                                    map_flatbuffer: false,
+                                });
+        
+                                cloned_metrics.inc_data_processed("backfiller_tx_processed");
+                            }
+                            cloned_metrics.inc_data_processed("backfiller_slot_processed");
+        
+                            cloned_metrics.set_last_processed_slot("parsed_slot", block.parent_slot as i64);
+
+                            cloned_rocks
+                                .bubblegum_slots
+                                .delete(form_bubblegum_slots_key(s)).unwrap();
+                        }
+                        None => {
+                            return;
+                        }
+                    }
+                }
+
+            });
+
+            tasks.push(task);
+        }
+
+        for task in tasks {
+            match task.await {
+                Ok(_) => {}
+                Err(err) => {
+                    error!("Task for parsing slots was failed: {}", err);
+                }
+            };
+        }
+
+        println!("Processed slots for {:?}", start_time.elapsed().as_secs_f64());
     }
 }
