@@ -1,12 +1,10 @@
-use std::sync::atomic::Ordering;
 use solana_sdk::pubkey::Pubkey;
+use std::sync::atomic::Ordering;
 
-use crate::asset::{
-    AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx,
-};
+use crate::asset::{AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx};
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
-use crate::{ Result, Storage};
+use crate::{Result, Storage};
 use std::collections::HashMap;
 
 impl Storage {
@@ -92,7 +90,7 @@ impl Storage {
         Ok(AssetSelectedMaps {
             assets_static: to_map!(assets_static),
             assets_dynamic,
-            assets_authority:to_map!(assets_authority),
+            assets_authority: to_map!(assets_authority),
             assets_collection: to_map!(assets_collection),
             assets_owner: to_map!(assets_owner),
             assets_leaf: to_map!(assets_leaf),
