@@ -842,7 +842,7 @@ impl BubblegumTxProcessor {
             Some(Payload::UpdateMetadata {
                 current_metadata,
                 update_args,
-                tree_id: _tree_id,
+                tree_id,
             }),
         ) = (
             &parsing_result.leaf_update,
@@ -975,7 +975,7 @@ impl BubblegumTxProcessor {
                         id,
                         &AssetLeaf {
                             pubkey: id,
-                            tree_id: cl.id,
+                            tree_id: Pubkey::from(*tree_id),
                             leaf: Some(le.leaf_hash.to_vec()),
                             nonce: Some(nonce),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
