@@ -30,7 +30,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # Building the services
 FROM cacher AS builder
 COPY . .
-RUN cargo build --release --bin ingester
+RUN cargo build --release --bin ingester --bin api
 
 # Final image
 FROM rust:1.75-slim-bullseye
@@ -40,4 +40,5 @@ ENV TZ=Etc/UTC APP_USER=appuser
 RUN groupadd $APP_USER && useradd -g $APP_USER $APP_USER && mkdir -p ${APP}
 
 COPY --from=builder /rust/target/release/ingester ${APP}/ingester
+COPY --from=builder /rust/target/release/api ${APP}/api
 WORKDIR ${APP}
