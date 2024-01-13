@@ -81,7 +81,7 @@ impl SignaturePersistence for Storage {
         let from = (program_id, 0, Signature::default());
         let to = (program_id, slot, signature);
         tokio::task::spawn_blocking(move || {
-            Self::sync_drop_signatures_before::<SignatureIdx>(db, from, to)
+            Self::sync_drop_range::<SignatureIdx>(db, from, to)
                 .map_err(|e| StorageError::Common(e.to_string()))
         })
         .await
@@ -178,7 +178,7 @@ impl Storage {
         //todo: Perform batched get, for now, needs optimisation, sorry for the commented out code
     }
 
-    fn sync_drop_signatures_before<T>(
+    fn sync_drop_range<T>(
         db: Arc<DB>,
         from_key: T::KeyType,
         to_key: T::KeyType,

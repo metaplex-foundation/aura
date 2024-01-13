@@ -1,16 +1,10 @@
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
-
-use rocksdb::DB;
 use solana_sdk::pubkey::Pubkey;
+use std::sync::atomic::Ordering;
 
-use crate::asset::{AssetCollection, AssetLeaf, AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx};
-use crate::column::TypedColumn;
+use crate::asset::{AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx};
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
-use crate::offchain_data::OffChainData;
-use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage};
-use bincode::deserialize;
+use crate::{Result, Storage};
 use std::collections::HashMap;
 
 impl Storage {
@@ -43,89 +37,63 @@ impl Storage {
 }
 
 #[macro_export]
-macro_rules! fetch_data {
-    ($db:expr, $type:ident, $asset_ids:expr) => {{
-        $db.batched_multi_get_cf(
-            &$db.cf_handle($type::NAME).unwrap(),
-            $asset_ids
-                .into_iter()
-                .cloned()
-                .map($type::encode_key)
-                .collect::<Vec<_>>(),
-            false,
-        )
-        .into_iter()
-        .map(|res| {
-            res.map_err(StorageError::from).and_then(|opt| {
-                opt.map(|pinned| deserialize::<$type>(pinned.as_ref()).map_err(StorageError::from))
-                    .transpose()
-            })
-        })
-        .collect::<Result<Vec<Option<$type>>>>()
-        .map_err(|e| StorageError::Common(e.to_string()))?
-        .into_iter()
-        .filter_map(|asset| asset.map(|a| (a.pubkey, a)))
-        .collect::<HashMap<_, _>>()
+macro_rules! to_map {
+    ($res:expr) => {{
+        $res.map_err(|e| StorageError::Common(e.to_string()))?
+            .into_iter()
+            .filter_map(|asset| asset.map(|a| (a.pubkey, a)))
+            .collect::<HashMap<_, _>>()
     }};
 }
+
 impl Storage {
     pub async fn get_asset_selected_maps_async(
         &self,
         asset_ids: Vec<Pubkey>,
     ) -> Result<AssetSelectedMaps> {
-        let db = self.db.clone();
-        let asset_ids = asset_ids.clone();
-        tokio::task::spawn_blocking(move || Self::get_asset_selected_maps(db, asset_ids))
-            .await
-            .map_err(|e| StorageError::Common(e.to_string()))?
-    }
+        let assets_dynamic_fut = self.asset_dynamic_data.batch_get(asset_ids.clone());
+        let assets_static_fut = self.asset_static_data.batch_get(asset_ids.clone());
+        let assets_authority_fut = self.asset_authority_data.batch_get(asset_ids.clone());
+        let assets_collection_fut = self.asset_collection_data.batch_get(asset_ids.clone());
+        let assets_owner_fut = self.asset_owner_data.batch_get(asset_ids.clone());
+        let assets_leaf_fut = self.asset_leaf_data.batch_get(asset_ids.clone());
 
-    fn get_asset_selected_maps(db: Arc<DB>, asset_ids: Vec<Pubkey>) -> Result<AssetSelectedMaps> {
-        let assets_static = fetch_data!(db, AssetStaticDetails, &asset_ids);
-        let assets_dynamic = fetch_data!(db, AssetDynamicDetails, &asset_ids);
-        let assets_authority = fetch_data!(db, AssetAuthority, &asset_ids);
-        let assets_collection = fetch_data!(db, AssetCollection, &asset_ids);
-        let assets_owner = fetch_data!(db, AssetOwner, &asset_ids);
-        let assets_leaf = fetch_data!(db, AssetLeaf, &asset_ids);
-
+        let assets_dynamic = to_map!(assets_dynamic_fut.await);
         let urls: HashMap<_, _> = assets_dynamic
             .iter()
             .map(|(key, asset)| (key.to_string(), asset.url.value.clone()))
             .collect();
+        let offchain_data_fut = self
+            .asset_offchain_data
+            .batch_get(urls.clone().into_values().collect::<Vec<_>>());
 
-        let offchain_data = db
-            .batched_multi_get_cf(
-                &db.cf_handle(OffChainData::NAME).unwrap(),
-                urls.clone()
-                    .into_values()
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .map(OffChainData::encode_key)
-                    .collect::<Vec<_>>(),
-                false,
-            )
-            .into_iter()
-            .map(|res| {
-                res.map_err(StorageError::from).and_then(|opt| {
-                    opt.map(|pinned| {
-                        deserialize::<OffChainData>(pinned.as_ref()).map_err(StorageError::from)
-                    })
-                    .transpose()
-                })
-            })
-            .collect::<Result<Vec<Option<OffChainData>>>>()
-            .map_err(|e| StorageError::Common(e.to_string()))?
-            .into_iter()
-            .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
-            .collect::<HashMap<_, _>>();
-
-        Ok(AssetSelectedMaps {
+        let (
             assets_static,
-            assets_dynamic,
             assets_authority,
             assets_collection,
             assets_owner,
             assets_leaf,
+            offchain_data,
+        ) = tokio::join!(
+            assets_static_fut,
+            assets_authority_fut,
+            assets_collection_fut,
+            assets_owner_fut,
+            assets_leaf_fut,
+            offchain_data_fut
+        );
+        let offchain_data = offchain_data
+            .map_err(|e| StorageError::Common(e.to_string()))?
+            .into_iter()
+            .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
+            .collect::<HashMap<_, _>>();
+        Ok(AssetSelectedMaps {
+            assets_static: to_map!(assets_static),
+            assets_dynamic,
+            assets_authority: to_map!(assets_authority),
+            assets_collection: to_map!(assets_collection),
+            assets_owner: to_map!(assets_owner),
+            assets_leaf: to_map!(assets_leaf),
             offchain_data,
             urls,
         })
