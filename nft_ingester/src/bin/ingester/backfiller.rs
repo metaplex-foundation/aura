@@ -322,7 +322,7 @@ impl TransactionsParser {
             let mut slots_to_parse_iter = self
                 .rocks_client
                 .bubblegum_slots
-                .iter(BUBBLEGUM_SLOTS_PREFIX.to_string());
+                .iter_end();
 
             let mut slots_to_parse_vec = Vec::new();
 
