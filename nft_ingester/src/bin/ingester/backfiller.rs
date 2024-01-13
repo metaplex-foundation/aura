@@ -319,10 +319,7 @@ impl TransactionsParser {
         let mut counter = GET_SLOT_RETRIES;
 
         'outer: while keep_running.load(Ordering::SeqCst) {
-            let mut slots_to_parse_iter = self
-                .rocks_client
-                .bubblegum_slots
-                .iter_end();
+            let mut slots_to_parse_iter = self.rocks_client.bubblegum_slots.iter_end();
 
             let mut slots_to_parse_vec = Vec::new();
 
