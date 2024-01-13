@@ -5,6 +5,7 @@ members = [
   "nft_ingester",
   "metrics_utils",
   "rocks-db",
+  "rocks-db-v0",
   "postgre-client",
   "entities",
   "grpc",

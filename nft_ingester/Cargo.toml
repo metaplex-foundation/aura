@@ -41,6 +41,7 @@ clap = { version = "4.2.2", features = ["derive", "cargo"] }
 bincode = "1.3.3"
 metrics-utils = { path = "../metrics_utils" }
 rocks-db = { path = "../rocks-db" }
+rocks-db-v0 = { path = "../rocks-db-v0" }
 postgre-client = { path = "../postgre-client" }
 digital_asset_types = { path = "../digital_asset_types", features = ["json_types", "sql_types"] }
 open-rpc-schema = { version = "0.0.4" }
@@ -53,6 +54,7 @@ entities = { path = "../entities" }
 usecase = { path = "../usecase" }
 grpc = { path = "../grpc" }
 mpl-token-metadata = { version = "3.2.3"}
+hex = "0.4.3"
 
 futures = "0.3.29"
 interface = { path = "../interface" }
@@ -80,3 +82,6 @@ name = "ingester"
 
 [[bin]]
 name = "migrator"
+
+[[bin]]
+name = "cnft_migrator"

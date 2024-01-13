@@ -83,6 +83,7 @@ pub struct IngesterConfig {
     pub migration_batch_size: Option<u32>,
     pub migrator_workers: Option<u32>,
     pub rocks_db_path_container: Option<String>,
+    pub rocks_db_v0_path: Option<String>,
     pub rocks_backup_url: String,
     pub rocks_backup_archives_dir: String,
     pub rocks_backup_dir: String,
