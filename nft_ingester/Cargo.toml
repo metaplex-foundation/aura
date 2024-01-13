@@ -82,6 +82,3 @@ name = "ingester"
 
 [[bin]]
 name = "migrator"
-
-[[bin]]
-name = "cnft_migrator"

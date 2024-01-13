@@ -1,5 +1,5 @@
 use bincode::deserialize;
-use entities::enums::{SpecificationAssetClass, RoyaltyTargetType, OwnerType};
+use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
 use log::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};

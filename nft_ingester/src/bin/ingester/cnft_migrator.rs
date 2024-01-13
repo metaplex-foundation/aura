@@ -1,37 +1,24 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use rocks_db::column::TypedColumn;
-use sqlx::{QueryBuilder, Row};
-use nft_ingester::config::{setup_config, IngesterConfig};
+use entities::models::Updated;
+use nft_ingester::config::IngesterConfig;
 use nft_ingester::db_v2::DBClient;
+use rocks_db::column::TypedColumn;
 use rocks_db::Storage;
 use rocks_db_v0::Storage as StorageV0;
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
 use solana_sdk::pubkey::Pubkey;
-use entities::models::Updated;
+use sqlx::{QueryBuilder, Row};
+use std::collections::HashMap;
+use std::sync::Arc;
 
-#[tokio::main(flavor = "multi_thread")]
-pub async fn main() {
-    let config: IngesterConfig = setup_config();
-    let database_pool = DBClient::new(&config.database_config.clone()).await.unwrap();
-
-    let storage = Storage::open(
-        &config
-            .rocks_db_path_container
-            .clone()
-            .unwrap_or("./my_rocksdb".to_string()),
-        Arc::new(Mutex::new(JoinSet::new())),
-    )
-    .unwrap();
-
-    let rocks_db_st = Arc::new(storage);
-
+pub async fn migrate_cnft(
+    rocks_db_st: Arc<Storage>,
+    database_pool: DBClient,
+    config: &IngesterConfig,
+) {
     let storage_v0 = StorageV0::open(
         &config
             .rocks_db_v0_path
             .clone()
-            .unwrap_or("./my_rocksdb_v0".to_string())
+            .unwrap_or("./my_rocksdb_v0".to_string()),
     )
     .unwrap();
 
@@ -46,21 +33,46 @@ pub async fn main() {
     while let Some(res) = asset_static_details.next() {
         match res {
             Ok((key, value)) => {
-                let static_info: rocks_db::AssetStaticDetails = bincode::deserialize(&value).unwrap();
+                let static_info: rocks_db::AssetStaticDetails =
+                    bincode::deserialize(&value).unwrap();
 
                 let pubkey = Pubkey::new(&key);
 
                 let mut max_asset_slot = 0;
 
-                let old_dynamic_info: rocks_db_v0::AssetDynamicDetails = rocks_db_st_v0.asset_dynamic_data.get(pubkey.clone()).unwrap().unwrap();
-                let old_authority_info: rocks_db_v0::AssetAuthority = rocks_db_st_v0.asset_authority_data.get(pubkey.clone()).unwrap().unwrap();
-                let old_collection_info: rocks_db_v0::asset::AssetCollection = rocks_db_st_v0.asset_collection_data.get(pubkey.clone()).unwrap().unwrap();
-                let old_owner_info: rocks_db_v0::AssetOwner = rocks_db_st_v0.asset_owner_data.get(pubkey.clone()).unwrap().unwrap();
-                let old_leaf_info: rocks_db_v0::asset::AssetLeaf = rocks_db_st_v0.asset_leaf_data.get(pubkey.clone()).unwrap().unwrap();
+                let old_dynamic_info: rocks_db_v0::AssetDynamicDetails = rocks_db_st_v0
+                    .asset_dynamic_data
+                    .get(pubkey.clone())
+                    .unwrap()
+                    .unwrap();
+                let old_authority_info: rocks_db_v0::AssetAuthority = rocks_db_st_v0
+                    .asset_authority_data
+                    .get(pubkey.clone())
+                    .unwrap()
+                    .unwrap();
+                let old_collection_info: rocks_db_v0::asset::AssetCollection = rocks_db_st_v0
+                    .asset_collection_data
+                    .get(pubkey.clone())
+                    .unwrap()
+                    .unwrap();
+                let old_owner_info: rocks_db_v0::AssetOwner = rocks_db_st_v0
+                    .asset_owner_data
+                    .get(pubkey.clone())
+                    .unwrap()
+                    .unwrap();
+                let old_leaf_info: rocks_db_v0::asset::AssetLeaf = rocks_db_st_v0
+                    .asset_leaf_data
+                    .get(pubkey.clone())
+                    .unwrap()
+                    .unwrap();
 
                 let supply = {
                     if let Some(s) = old_dynamic_info.supply {
-                        Some(Updated{slot_updated: old_dynamic_info.slot_updated, seq: old_dynamic_info.seq, value: s})
+                        Some(Updated {
+                            slot_updated: old_dynamic_info.slot_updated,
+                            seq: old_dynamic_info.seq,
+                            value: s,
+                        })
                     } else {
                         None
                     }
@@ -68,7 +80,11 @@ pub async fn main() {
 
                 let seq = {
                     if let Some(s) = old_dynamic_info.seq {
-                        Some(Updated{slot_updated: old_dynamic_info.slot_updated, seq: old_dynamic_info.seq, value: s})
+                        Some(Updated {
+                            slot_updated: old_dynamic_info.slot_updated,
+                            seq: old_dynamic_info.seq,
+                            value: s,
+                        })
                     } else {
                         None
                     }
@@ -76,7 +92,11 @@ pub async fn main() {
 
                 let onchain_data = {
                     if let Some(s) = old_dynamic_info.onchain_data {
-                        Some(Updated{slot_updated: old_dynamic_info.slot_updated, seq: old_dynamic_info.seq, value: s})
+                        Some(Updated {
+                            slot_updated: old_dynamic_info.slot_updated,
+                            seq: old_dynamic_info.seq,
+                            value: s,
+                        })
                     } else {
                         None
                     }
@@ -88,17 +108,49 @@ pub async fn main() {
 
                 let dynamic_info = rocks_db::AssetDynamicDetails {
                     pubkey: pubkey.clone(),
-                    is_compressible: Updated{slot_updated: old_dynamic_info.slot_updated, seq: old_dynamic_info.seq, value: old_dynamic_info.is_compressible},
-                    is_compressed: Updated{slot_updated: old_dynamic_info.slot_updated, seq: old_dynamic_info.seq, value: old_dynamic_info.is_compressed},
-                    is_frozen: Updated{slot_updated: old_dynamic_info.slot_updated, seq: old_dynamic_info.seq, value: old_dynamic_info.is_frozen},
+                    is_compressible: Updated {
+                        slot_updated: old_dynamic_info.slot_updated,
+                        seq: old_dynamic_info.seq,
+                        value: old_dynamic_info.is_compressible,
+                    },
+                    is_compressed: Updated {
+                        slot_updated: old_dynamic_info.slot_updated,
+                        seq: old_dynamic_info.seq,
+                        value: old_dynamic_info.is_compressed,
+                    },
+                    is_frozen: Updated {
+                        slot_updated: old_dynamic_info.slot_updated,
+                        seq: old_dynamic_info.seq,
+                        value: old_dynamic_info.is_frozen,
+                    },
                     supply,
                     seq,
-                    is_burnt: Updated{slot_updated: old_dynamic_info.slot_updated, seq: old_dynamic_info.seq, value: old_dynamic_info.is_burnt},
-                    was_decompressed: Updated{slot_updated: old_dynamic_info.slot_updated, seq: old_dynamic_info.seq, value: old_dynamic_info.was_decompressed},
+                    is_burnt: Updated {
+                        slot_updated: old_dynamic_info.slot_updated,
+                        seq: old_dynamic_info.seq,
+                        value: old_dynamic_info.is_burnt,
+                    },
+                    was_decompressed: Updated {
+                        slot_updated: old_dynamic_info.slot_updated,
+                        seq: old_dynamic_info.seq,
+                        value: old_dynamic_info.was_decompressed,
+                    },
                     onchain_data,
-                    creators: Updated{slot_updated: old_dynamic_info.slot_updated, seq: old_dynamic_info.seq, value: old_dynamic_info.creators},
-                    royalty_amount: Updated{slot_updated: old_dynamic_info.slot_updated, seq: old_dynamic_info.seq, value: old_dynamic_info.royalty_amount},
-                    url: Updated{slot_updated: old_dynamic_info.slot_updated, seq: old_dynamic_info.seq, value: "".to_string()},
+                    creators: Updated {
+                        slot_updated: old_dynamic_info.slot_updated,
+                        seq: old_dynamic_info.seq,
+                        value: old_dynamic_info.creators,
+                    },
+                    royalty_amount: Updated {
+                        slot_updated: old_dynamic_info.slot_updated,
+                        seq: old_dynamic_info.seq,
+                        value: old_dynamic_info.royalty_amount,
+                    },
+                    url: Updated {
+                        slot_updated: old_dynamic_info.slot_updated,
+                        seq: old_dynamic_info.seq,
+                        value: "".to_string(),
+                    },
                 };
 
                 if old_dynamic_info.slot_updated > max_asset_slot {
@@ -129,7 +181,11 @@ pub async fn main() {
 
                 let delegate = {
                     if let Some(s) = old_owner_info.delegate {
-                        Some(Updated{slot_updated: old_owner_info.slot_updated, seq: old_owner_info.owner_delegate_seq, value: s})
+                        Some(Updated {
+                            slot_updated: old_owner_info.slot_updated,
+                            seq: old_owner_info.owner_delegate_seq,
+                            value: s,
+                        })
                     } else {
                         None
                     }
@@ -137,7 +193,11 @@ pub async fn main() {
 
                 let owner_delegate_seq = {
                     if let Some(s) = old_owner_info.owner_delegate_seq {
-                        Some(Updated{slot_updated: old_owner_info.slot_updated, seq: old_owner_info.owner_delegate_seq, value: s})
+                        Some(Updated {
+                            slot_updated: old_owner_info.slot_updated,
+                            seq: old_owner_info.owner_delegate_seq,
+                            value: s,
+                        })
                     } else {
                         None
                     }
@@ -145,9 +205,17 @@ pub async fn main() {
 
                 let owner_info = rocks_db::AssetOwner {
                     pubkey: pubkey.clone(),
-                    owner: Updated{slot_updated: old_owner_info.slot_updated, seq: old_owner_info.owner_delegate_seq, value: old_owner_info.owner},
+                    owner: Updated {
+                        slot_updated: old_owner_info.slot_updated,
+                        seq: old_owner_info.owner_delegate_seq,
+                        value: old_owner_info.owner,
+                    },
                     delegate,
-                    owner_type: Updated{slot_updated: old_owner_info.slot_updated, seq: old_owner_info.owner_delegate_seq, value: old_owner_info.owner_type},
+                    owner_type: Updated {
+                        slot_updated: old_owner_info.slot_updated,
+                        seq: old_owner_info.owner_delegate_seq,
+                        value: old_owner_info.owner_type,
+                    },
                     owner_delegate_seq,
                 };
 
@@ -245,9 +313,7 @@ pub async fn main() {
                 println!("Error while iterating over cl_leafs: {}", e);
             }
         }
-    
     }
-    
 }
 
 struct AllAssetInfo {
@@ -261,7 +327,11 @@ struct AllAssetInfo {
     pub max_asset_slot: u64,
 }
 
-async fn drain_batch(assets_to_migrate: &mut HashMap<Pubkey, AllAssetInfo>, database_pool: &DBClient, rocks_db_st: Arc<Storage>) {
+async fn drain_batch(
+    assets_to_migrate: &mut HashMap<Pubkey, AllAssetInfo>,
+    database_pool: &DBClient,
+    rocks_db_st: Arc<Storage>,
+) {
     let mut query = QueryBuilder::new(
         "select pbk_key, ofd_metadata_url, ofd_metadata from offchain_data inner join pubkeys on offchain_data.ofd_pubkey = pubkeys.pbk_id where pbk_key in (".to_string(),
     );
@@ -277,17 +347,14 @@ async fn drain_batch(assets_to_migrate: &mut HashMap<Pubkey, AllAssetInfo>, data
 
     let query = query.build();
 
-    let rows = query
-        .fetch_all(&database_pool.pool)
-        .await
-        .unwrap();
+    let rows = query.fetch_all(&database_pool.pool).await.unwrap();
 
     for r in rows.iter() {
         let pubkey: Pubkey = Pubkey::new(r.get("pbk_key"));
         let metadata_url: String = r.get("ofd_metadata_url");
         let metadata: String = r.get("ofd_metadata");
 
-        let mut asset_info = assets_to_migrate.get_mut(&pubkey).unwrap();
+        let asset_info = assets_to_migrate.get_mut(&pubkey).unwrap();
         asset_info.dynamic_info.url.value = metadata_url.clone();
         asset_info.offchain_data.url = metadata_url;
         // in Postgre we marked processing metadata as "processing"
@@ -316,13 +383,19 @@ async fn drain_batch(assets_to_migrate: &mut HashMap<Pubkey, AllAssetInfo>, data
                 println!("Error while merging asset dynamic data: {}", e);
             }
         }
-        match rocks_db_st.asset_authority_data.merge(*k, &v.authority_info) {
+        match rocks_db_st
+            .asset_authority_data
+            .merge(*k, &v.authority_info)
+        {
             Ok(_) => {}
             Err(e) => {
                 println!("Error while merging asset authority data: {}", e);
             }
         }
-        match rocks_db_st.asset_collection_data.merge(*k, &v.collection_info) {
+        match rocks_db_st
+            .asset_collection_data
+            .merge(*k, &v.collection_info)
+        {
             Ok(_) => {}
             Err(e) => {
                 println!("Error while merging asset collection data: {}", e);
@@ -340,7 +413,10 @@ async fn drain_batch(assets_to_migrate: &mut HashMap<Pubkey, AllAssetInfo>, data
                 println!("Error while merging asset leaf data: {}", e);
             }
         }
-        match rocks_db_st.asset_offchain_data.put(v.offchain_data.url.clone(), &v.offchain_data) {
+        match rocks_db_st
+            .asset_offchain_data
+            .put(v.offchain_data.url.clone(), &v.offchain_data)
+        {
             Ok(_) => {}
             Err(e) => {
                 println!("Error while merging asset offchain data: {}", e);

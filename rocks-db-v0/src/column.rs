@@ -2,7 +2,7 @@ use std::{marker::PhantomData, sync::Arc, vec};
 
 use bincode::{deserialize, serialize};
 use log::error;
-use rocksdb::{ColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB, BoundColumnFamily};
+use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
 use serde::{de::DeserializeOwned, Serialize};
 use solana_sdk::pubkey::Pubkey;
 

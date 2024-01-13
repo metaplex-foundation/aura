@@ -10,6 +10,7 @@ use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
+use crate::cnft_migrator::migrate_cnft;
 use backfill_rpc::rpc::BackfillRPC;
 use interface::signature_persistence::ProcessingDataGetter;
 use metrics_utils::utils::setup_metrics;
@@ -21,7 +22,7 @@ use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{setup_config, BackfillerConfig, IngesterConfig, INGESTER_BACKUP_NAME};
-use nft_ingester::db_v2::DBClient as DBClientV2;
+use nft_ingester::db_v2::{DBClient as DBClientV2, DBClient};
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::json_downloader::JsonDownloader;
@@ -38,6 +39,7 @@ use rocks_db::{backup_service, Storage};
 use tonic::transport::Server;
 
 mod backfiller;
+mod cnft_migrator;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 
@@ -152,6 +154,15 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rocks_storage = Arc::new(storage);
     let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap_or(0);
+
+    let cloned_storage = rocks_storage.clone();
+    let old_database_pool = DBClient::new(&config.clone().old_database_config.unwrap().clone())
+        .await
+        .unwrap(); // use unwraps, because this code will not be merged into "main" branch
+    let config_clone = config.clone();
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        migrate_cnft(cloned_storage, old_database_pool, &config_clone).await;
+    }));
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;
