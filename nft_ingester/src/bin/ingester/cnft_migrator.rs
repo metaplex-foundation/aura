@@ -1,6 +1,9 @@
 use entities::models::Updated;
 use nft_ingester::config::IngesterConfig;
 use nft_ingester::db_v2::DBClient;
+use nft_ingester::index_syncronizer::Synchronizer;
+use postgre_client::storage_traits::AssetIndexStorage;
+use postgre_client::PgClient;
 use rocks_db::column::TypedColumn;
 use rocks_db::Storage;
 use rocks_db_v0::Storage as StorageV0;
@@ -11,6 +14,7 @@ use std::sync::Arc;
 
 pub async fn migrate_cnft(
     rocks_db_st: Arc<Storage>,
+    pg_client: Arc<PgClient>,
     database_pool: DBClient,
     config: &IngesterConfig,
 ) {
@@ -28,43 +32,39 @@ pub async fn migrate_cnft(
 
     let mut assets_to_migrate: HashMap<Pubkey, AllAssetInfo> = HashMap::new();
 
-    let mut asset_static_details = rocks_db_st_v0.asset_static_data.iter_start();
+    let asset_static_details = rocks_db_st_v0.asset_static_data.iter_start();
 
-    while let Some(res) = asset_static_details.next() {
+    for res in asset_static_details {
         match res {
             Ok((key, value)) => {
                 let static_info: rocks_db::AssetStaticDetails =
                     bincode::deserialize(&value).unwrap();
-
                 let pubkey = Pubkey::new(&key);
 
-                let mut max_asset_slot = 0;
+                let mut max_asset_slot = 0u64;
 
                 let old_dynamic_info: rocks_db_v0::AssetDynamicDetails = rocks_db_st_v0
                     .asset_dynamic_data
-                    .get(pubkey.clone())
+                    .get(pubkey)
                     .unwrap()
                     .unwrap();
                 let old_authority_info: rocks_db_v0::AssetAuthority = rocks_db_st_v0
                     .asset_authority_data
-                    .get(pubkey.clone())
+                    .get(pubkey)
                     .unwrap()
                     .unwrap();
                 let old_collection_info: rocks_db_v0::asset::AssetCollection = rocks_db_st_v0
                     .asset_collection_data
-                    .get(pubkey.clone())
+                    .get(pubkey)
                     .unwrap()
                     .unwrap();
                 let old_owner_info: rocks_db_v0::AssetOwner = rocks_db_st_v0
                     .asset_owner_data
-                    .get(pubkey.clone())
+                    .get(pubkey)
                     .unwrap()
                     .unwrap();
-                let old_leaf_info: rocks_db_v0::asset::AssetLeaf = rocks_db_st_v0
-                    .asset_leaf_data
-                    .get(pubkey.clone())
-                    .unwrap()
-                    .unwrap();
+                let old_leaf_info: rocks_db_v0::asset::AssetLeaf =
+                    rocks_db_st_v0.asset_leaf_data.get(pubkey).unwrap().unwrap();
 
                 let supply = {
                     if let Some(s) = old_dynamic_info.supply {
@@ -102,12 +102,12 @@ pub async fn migrate_cnft(
                     }
                 };
 
-                if old_dynamic_info.slot_updated > max_asset_slot {
-                    max_asset_slot = old_dynamic_info.slot_updated;
+                if static_info.created_at as u64 > max_asset_slot {
+                    max_asset_slot = static_info.created_at as u64;
                 }
 
                 let dynamic_info = rocks_db::AssetDynamicDetails {
-                    pubkey: pubkey.clone(),
+                    pubkey,
                     is_compressible: Updated {
                         slot_updated: old_dynamic_info.slot_updated,
                         seq: old_dynamic_info.seq,
@@ -158,7 +158,7 @@ pub async fn migrate_cnft(
                 }
 
                 let authority_info = rocks_db::AssetAuthority {
-                    pubkey: pubkey.clone(),
+                    pubkey,
                     authority: old_authority_info.authority,
                     slot_updated: old_authority_info.slot_updated,
                 };
@@ -168,7 +168,7 @@ pub async fn migrate_cnft(
                 }
 
                 let collection_info = rocks_db::asset::AssetCollection {
-                    pubkey: pubkey.clone(),
+                    pubkey,
                     collection: old_collection_info.collection,
                     is_collection_verified: old_collection_info.is_collection_verified,
                     collection_seq: old_collection_info.collection_seq,
@@ -179,32 +179,20 @@ pub async fn migrate_cnft(
                     max_asset_slot = old_collection_info.slot_updated;
                 }
 
-                let delegate = {
-                    if let Some(s) = old_owner_info.delegate {
-                        Some(Updated {
-                            slot_updated: old_owner_info.slot_updated,
-                            seq: old_owner_info.owner_delegate_seq,
-                            value: s,
-                        })
-                    } else {
-                        None
-                    }
-                };
+                let delegate = old_owner_info.delegate.map(|s| Updated {
+                    slot_updated: old_owner_info.slot_updated,
+                    seq: old_owner_info.owner_delegate_seq,
+                    value: s,
+                });
 
-                let owner_delegate_seq = {
-                    if let Some(s) = old_owner_info.owner_delegate_seq {
-                        Some(Updated {
-                            slot_updated: old_owner_info.slot_updated,
-                            seq: old_owner_info.owner_delegate_seq,
-                            value: s,
-                        })
-                    } else {
-                        None
-                    }
-                };
+                let owner_delegate_seq = old_owner_info.owner_delegate_seq.map(|s| Updated {
+                    slot_updated: old_owner_info.slot_updated,
+                    seq: old_owner_info.owner_delegate_seq,
+                    value: s,
+                });
 
                 let owner_info = rocks_db::AssetOwner {
-                    pubkey: pubkey.clone(),
+                    pubkey,
                     owner: Updated {
                         slot_updated: old_owner_info.slot_updated,
                         seq: old_owner_info.owner_delegate_seq,
@@ -224,7 +212,7 @@ pub async fn migrate_cnft(
                 }
 
                 let leaf_info = rocks_db::asset::AssetLeaf {
-                    pubkey: pubkey.clone(),
+                    pubkey,
                     tree_id: old_leaf_info.tree_id,
                     leaf: old_leaf_info.leaf,
                     nonce: old_leaf_info.nonce,
@@ -257,23 +245,42 @@ pub async fn migrate_cnft(
                 assets_to_migrate.insert(pubkey, all_asset_info);
 
                 if assets_to_migrate.len() >= batch_to_migrate {
-                    drain_batch(&mut assets_to_migrate, &database_pool, rocks_db_st.clone()).await;
+                    drain_batch(
+                        &mut assets_to_migrate,
+                        &database_pool,
+                        rocks_db_st.clone(),
+                        pg_client.clone(),
+                    )
+                    .await;
                 }
             }
             Err(e) => {
                 println!("Error while iterating over asset static data: {}", e);
 
                 // TODO: test if this really return error when there is no more data
-                drain_batch(&mut assets_to_migrate, &database_pool, rocks_db_st.clone()).await;
+                drain_batch(
+                    &mut assets_to_migrate,
+                    &database_pool,
+                    rocks_db_st.clone(),
+                    pg_client.clone(),
+                )
+                .await;
 
                 break;
             }
         }
     }
+    drain_batch(
+        &mut assets_to_migrate,
+        &database_pool,
+        rocks_db_st.clone(),
+        pg_client.clone(),
+    )
+    .await;
 
-    let mut cl_items = rocks_db_st_v0.cl_items.iter_start();
+    let cl_items = rocks_db_st_v0.cl_items.iter_start();
 
-    while let Some(res) = cl_items.next() {
+    for res in cl_items {
         match res {
             Ok((key, value)) => {
                 let cl_item: rocks_db::cl_items::ClItem = bincode::deserialize(&value).unwrap();
@@ -293,9 +300,9 @@ pub async fn migrate_cnft(
         }
     }
 
-    let mut cl_leaf = rocks_db_st_v0.cl_leafs.iter_start();
+    let cl_leaf = rocks_db_st_v0.cl_leafs.iter_start();
 
-    while let Some(res) = cl_leaf.next() {
+    for res in cl_leaf {
         match res {
             Ok((key, value)) => {
                 let cl_leaf: rocks_db::cl_items::ClLeaf = bincode::deserialize(&value).unwrap();
@@ -331,6 +338,7 @@ async fn drain_batch(
     assets_to_migrate: &mut HashMap<Pubkey, AllAssetInfo>,
     database_pool: &DBClient,
     rocks_db_st: Arc<Storage>,
+    pg_client: Arc<PgClient>,
 ) {
     let mut query = QueryBuilder::new(
         "select pbk_key, ofd_metadata_url, ofd_metadata from offchain_data inner join pubkeys on offchain_data.ofd_pubkey = pubkeys.pbk_id where pbk_key in (".to_string(),
@@ -350,7 +358,8 @@ async fn drain_batch(
     let rows = query.fetch_all(&database_pool.pool).await.unwrap();
 
     for r in rows.iter() {
-        let pubkey: Pubkey = Pubkey::new(r.get("pbk_key"));
+        let pubkey: [u8; 32] = r.get("pbk_key");
+        let pubkey: Pubkey = Pubkey::from(pubkey);
         let metadata_url: String = r.get("ofd_metadata_url");
         let metadata: String = r.get("ofd_metadata");
 
@@ -364,13 +373,6 @@ async fn drain_batch(
     }
 
     for (k, v) in assets_to_migrate.iter() {
-        match rocks_db_st.asset_updated(v.max_asset_slot, k.clone()) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("Error while updating asset: {}", e);
-            }
-        }
-
         match rocks_db_st.asset_static_data.merge(*k, &v.static_info) {
             Ok(_) => {}
             Err(e) => {
@@ -422,6 +424,22 @@ async fn drain_batch(
                 println!("Error while merging asset offchain data: {}", e);
             }
         }
+        match rocks_db_st.asset_updated(v.max_asset_slot, *k) {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Error while updating asset: {}", e);
+            }
+        }
     }
+    let keys: Vec<Pubkey> = assets_to_migrate.iter().map(|(k, _)| *k).collect();
+    let last_included_rocks_key = pg_client.fetch_last_synced_id().await.unwrap().unwrap();
+    Synchronizer::syncronize_batch(
+        rocks_db_st.clone(),
+        pg_client.clone(),
+        keys.as_slice(),
+        last_included_rocks_key,
+    )
+    .await
+    .unwrap();
     assets_to_migrate.clear();
 }

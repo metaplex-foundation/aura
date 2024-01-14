@@ -155,13 +155,35 @@ pub async fn main() -> Result<(), IngesterError> {
     let rocks_storage = Arc::new(storage);
     let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap_or(0);
 
+    let max_postgre_connections = config
+        .database_config
+        .get_max_postgres_connections()
+        .unwrap_or(100);
+
+    let index_storage = Arc::new(
+        PgClient::new(
+            &config.database_config.get_database_url().unwrap(),
+            &config.get_sql_log_level(),
+            100,
+            max_postgre_connections,
+        )
+        .await,
+    );
+
     let cloned_storage = rocks_storage.clone();
     let old_database_pool = DBClient::new(&config.clone().old_database_config.unwrap().clone())
         .await
         .unwrap(); // use unwraps, because this code will not be merged into "main" branch
     let config_clone = config.clone();
+    let cloned_index_storage = index_storage.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        migrate_cnft(cloned_storage, old_database_pool, &config_clone).await;
+        migrate_cnft(
+            cloned_storage,
+            cloned_index_storage,
+            old_database_pool,
+            &config_clone,
+        )
+        .await;
     }));
 
     // start backup service
@@ -317,21 +339,6 @@ pub async fn main() -> Result<(), IngesterError> {
             .await
             .unwrap();
     }
-
-    let max_postgre_connections = config
-        .database_config
-        .get_max_postgres_connections()
-        .unwrap_or(100);
-
-    let index_storage = Arc::new(
-        PgClient::new(
-            &config.database_config.get_database_url().unwrap(),
-            &config.get_sql_log_level(),
-            100,
-            max_postgre_connections,
-        )
-        .await,
-    );
 
     let synchronizer = Synchronizer::new(
         rocks_storage.clone(),
