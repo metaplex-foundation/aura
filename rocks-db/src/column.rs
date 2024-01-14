@@ -8,8 +8,8 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::{Result, StorageError};
 pub trait TypedColumn {
-    type KeyType: Clone;
-    type ValueType: Serialize + DeserializeOwned;
+    type KeyType: Clone + Send;
+    type ValueType: Serialize + DeserializeOwned + Send;
 
     const NAME: &'static str;
 
@@ -26,6 +26,7 @@ pub trait TypedColumn {
 pub struct Column<C>
 where
     C: TypedColumn,
+    <C as TypedColumn>::KeyType: 'static,
 {
     pub backend: Arc<DB>,
     pub column: PhantomData<C>,
@@ -34,6 +35,7 @@ where
 impl<C> Column<C>
 where
     C: TypedColumn,
+    <C as TypedColumn>::ValueType: 'static,
 {
     pub fn put(&self, key: C::KeyType, value: &C::ValueType) -> Result<()> {
         let serialized_value = serialize(value)?;
@@ -64,10 +66,13 @@ where
         result
     }
 
-    pub async fn batch_get(&self, keys: Vec<C::KeyType>) -> Result<Vec<Option<C::ValueType>>> {
-        self.backend
+    fn batch_get_sync(
+        backend: Arc<DB>,
+        keys: Vec<C::KeyType>,
+    ) -> Result<Vec<Option<C::ValueType>>> {
+        backend
             .batched_multi_get_cf(
-                &self.handle(),
+                &backend.cf_handle(C::NAME).unwrap(),
                 &keys.into_iter().map(C::encode_key).collect::<Vec<_>>(),
                 false,
             )
@@ -81,6 +86,14 @@ where
                 })
             })
             .collect()
+    }
+
+    pub async fn batch_get(&self, keys: Vec<C::KeyType>) -> Result<Vec<Option<C::ValueType>>> {
+        let db = self.backend.clone();
+        let keys = keys.clone();
+        tokio::task::spawn_blocking(move || Self::batch_get_sync(db, keys))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?
     }
 
     pub fn decode_key(&self, bytes: Vec<u8>) -> Result<C::KeyType> {

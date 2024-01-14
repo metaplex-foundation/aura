@@ -7,7 +7,7 @@ use nft_ingester::config::BackfillerConfig;
 use nft_ingester::error::IngesterError;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use rocks_db::bubblegum_slots::{
-    bubblegum_slots_key_to_value, form_bubblegum_slots_key, BubblegumSlots, BUBBLEGUM_SLOTS_PREFIX,
+    bubblegum_slots_key_to_value, form_bubblegum_slots_key, BubblegumSlots,
 };
 use solana_bigtable_connection::{bigtable::BigTableConnection, CredentialType};
 use solana_sdk::clock::Slot;
@@ -319,10 +319,7 @@ impl TransactionsParser {
         let mut counter = GET_SLOT_RETRIES;
 
         'outer: while keep_running.load(Ordering::SeqCst) {
-            let mut slots_to_parse_iter = self
-                .rocks_client
-                .bubblegum_slots
-                .iter(BUBBLEGUM_SLOTS_PREFIX.to_string());
+            let mut slots_to_parse_iter = self.rocks_client.bubblegum_slots.iter_end();
 
             let mut slots_to_parse_vec = Vec::new();
 
