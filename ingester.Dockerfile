@@ -15,6 +15,7 @@ COPY metrics_utils ./metrics_utils
 COPY nft_ingester ./nft_ingester
 COPY postgre-client ./postgre-client
 COPY rocks-db ./rocks-db
+COPY rocks-db-v0 ./rocks-db-v0
 COPY tests/setup ./tests/setup
 COPY usecase ./usecase
 
