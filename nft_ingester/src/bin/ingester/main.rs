@@ -15,8 +15,9 @@ use backfill_rpc::rpc::BackfillRPC;
 use interface::signature_persistence::ProcessingDataGetter;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{
-    ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
-    MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig, SynchronizerMetricsConfig,
+    ApiMetricsConfig, BackfillerMetricsConfig, CnftMigratorMetricsConfig, IngesterMetricsConfig,
+    JsonDownloaderMetricsConfig, MetricState, MetricStatus, MetricsTrait,
+    RpcBackfillerMetricsConfig, SynchronizerMetricsConfig,
 };
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
@@ -68,6 +69,7 @@ pub async fn main() -> Result<(), IngesterError> {
         BackfillerMetricsConfig::new(),
         RpcBackfillerMetricsConfig::new(),
         SynchronizerMetricsConfig::new(),
+        CnftMigratorMetricsConfig::new(),
     );
     metrics_state.register_metrics();
 
@@ -182,6 +184,7 @@ pub async fn main() -> Result<(), IngesterError> {
             cloned_index_storage,
             old_database_pool,
             &config_clone,
+            metrics_state.cnft_migrator_metrics.clone(),
         )
         .await;
     }));

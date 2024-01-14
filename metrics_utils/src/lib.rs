@@ -19,6 +19,7 @@ pub struct MetricState {
     pub backfiller_metrics: Arc<BackfillerMetricsConfig>,
     pub rpc_backfiller_metrics: Arc<RpcBackfillerMetricsConfig>,
     pub synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
+    pub cnft_migrator_metrics: Arc<CnftMigratorMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -30,6 +31,7 @@ impl MetricState {
         backfiller_metrics: BackfillerMetricsConfig,
         rpc_backfiller_metrics: RpcBackfillerMetricsConfig,
         synchronizer_metrics: SynchronizerMetricsConfig,
+        cnft_migrator_metrics: CnftMigratorMetricsConfig,
     ) -> Self {
         Self {
             ingester_metrics: Arc::new(ingester_metrics),
@@ -39,6 +41,7 @@ impl MetricState {
             backfiller_metrics: Arc::new(backfiller_metrics),
             rpc_backfiller_metrics: Arc::new(rpc_backfiller_metrics),
             synchronizer_metrics: Arc::new(synchronizer_metrics),
+            cnft_migrator_metrics: Arc::new(cnft_migrator_metrics),
         }
     }
 }
@@ -223,6 +226,76 @@ impl SynchronizerMetricsConfig {
                 name: label.to_owned(),
             })
             .set(slot)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CnftMigratorMetricsConfig {
+    number_of_assets_migrated: Family<MetricLabel, Counter>,
+    getting_data_from_v0: Family<MetricLabelWithStatus, Counter>,
+    merging_data_to_v1: Family<MetricLabelWithStatus, Counter>,
+    missed_dynamic_data_during_url_setting: Family<MetricLabel, Counter>,
+    synchronizer_status: Family<MetricLabelWithStatus, Counter>,
+}
+
+impl Default for CnftMigratorMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CnftMigratorMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            number_of_assets_migrated: Family::<MetricLabel, Counter>::default(),
+            getting_data_from_v0: Family::<MetricLabelWithStatus, Counter>::default(),
+            merging_data_to_v1: Family::<MetricLabelWithStatus, Counter>::default(),
+            missed_dynamic_data_during_url_setting: Family::<MetricLabel, Counter>::default(),
+            synchronizer_status: Family::<MetricLabelWithStatus, Counter>::default(),
+        }
+    }
+
+    pub fn inc_number_of_assets_migrated(&self, label: &str, num_of_assets: u64) -> u64 {
+        self.number_of_assets_migrated
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc_by(num_of_assets)
+    }
+
+    pub fn inc_getting_data_from_v0(&self, label: &str, status: MetricStatus) -> u64 {
+        self.getting_data_from_v0
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_owned(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_merging_data_to_v1(&self, label: &str, status: MetricStatus) -> u64 {
+        self.merging_data_to_v1
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_owned(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_missed_dynamic_data_during_url_setting(&self, label: &str) -> u64 {
+        self.missed_dynamic_data_during_url_setting
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc()
+    }
+
+    pub fn inc_synchronizer_status(&self, label: &str, status: MetricStatus, num: u64) -> u64 {
+        self.synchronizer_status
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_owned(),
+                status,
+            })
+            .inc_by(num)
     }
 }
 
@@ -433,6 +506,38 @@ impl MetricsTrait for MetricState {
             "synchronizer_last_synchronized_slot",
             "The last synchronized slot by synchronizer",
             self.synchronizer_metrics.last_synchronized_slot.clone(),
+        );
+
+        self.registry.register(
+            "cnft_migrator_number_of_assets_migrated",
+            "Count of assets, migrated by cnft_migrator",
+            self.cnft_migrator_metrics.number_of_assets_migrated.clone(),
+        );
+
+        self.registry.register(
+            "cnft_migrator_getting_data_from_v0",
+            "Count of assets extracted from v0 Rocks",
+            self.cnft_migrator_metrics.getting_data_from_v0.clone(),
+        );
+
+        self.registry.register(
+            "cnft_migrator_merging_data_to_v1",
+            "Count of assets merged to v1 Rocks",
+            self.cnft_migrator_metrics.merging_data_to_v1.clone(),
+        );
+
+        self.registry.register(
+            "cnft_migrator_missed_dynamic_data_during_url_setting",
+            "Count of assets, that missed dynamic data during url setting",
+            self.cnft_migrator_metrics
+                .missed_dynamic_data_during_url_setting
+                .clone(),
+        );
+
+        self.registry.register(
+            "cnft_migrator_synchronizer_status",
+            "Count of assets synced by synchronizer",
+            self.cnft_migrator_metrics.synchronizer_status.clone(),
         );
     }
 }
