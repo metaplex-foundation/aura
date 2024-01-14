@@ -554,7 +554,7 @@ async fn migrate_cl_leaf(
                 Ok((key, value)) => {
                     let cl_leaf: rocks_db::cl_items::ClLeaf = bincode::deserialize(&value).unwrap();
                     let k = rocks_db::cl_items::ClLeaf::decode_key(key.to_vec()).unwrap();
-                    match rocks_clone.cl_leafs.merge(k, &cl_leaf) {
+                    match rocks_clone.cl_leafs.put(k, &cl_leaf) {
                         Ok(_) => {
                             metrics_clone.inc_merging_data_to_v1("cl_leaf", MetricStatus::SUCCESS);
                         }
