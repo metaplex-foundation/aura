@@ -28,6 +28,7 @@ impl<'a> TestEnvironment<'a> {
             metrics_utils::BackfillerMetricsConfig::new(),
             metrics_utils::RpcBackfillerMetricsConfig::new(),
             metrics_utils::SynchronizerMetricsConfig::new(),
+            metrics_utils::CnftMigratorMetricsConfig::new(),
         );
         metrics_state.register_metrics();
 
