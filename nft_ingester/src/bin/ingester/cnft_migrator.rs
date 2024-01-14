@@ -3,8 +3,8 @@ use log::error;
 use metrics_utils::{CnftMigratorMetricsConfig, MetricStatus};
 use nft_ingester::config::IngesterConfig;
 use nft_ingester::db_v2::DBClient;
-use nft_ingester::index_syncronizer::Synchronizer;
-use postgre_client::storage_traits::AssetIndexStorage;
+// use nft_ingester::index_syncronizer::Synchronizer;
+// use postgre_client::storage_traits::AssetIndexStorage;
 use postgre_client::PgClient;
 use rocks_db::column::TypedColumn;
 use rocks_db::{AssetStaticDetails, Storage};
@@ -655,7 +655,7 @@ async fn drain_batch(
     assets_to_migrate_mutex: Arc<Mutex<HashMap<Pubkey, AllAssetInfo>>>,
     database_pool: Arc<DBClient>,
     rocks_db_st: Arc<Storage>,
-    pg_client: Arc<PgClient>,
+    _pg_client: Arc<PgClient>,
     metrics: Arc<CnftMigratorMetricsConfig>,
 ) {
     let mut query = QueryBuilder::new(
@@ -866,47 +866,47 @@ async fn drain_batch(
         task.await
             .unwrap_or_else(|e| error!("drain_buffer task {}", e));
     }
-
-    let keys: Vec<Pubkey> = assets_to_migrate.iter().map(|(k, _)| *k).collect();
-
-    let last_incl_rocks_key_res = pg_client.fetch_last_synced_id().await;
-
-    match last_incl_rocks_key_res {
-        Ok(last_incl_rocks_key) => match last_incl_rocks_key {
-            Some(last_incl_rocks_key) => {
-                let data_sync_res = Synchronizer::syncronize_batch(
-                    rocks_db_st.clone(),
-                    pg_client.clone(),
-                    keys.as_slice(),
-                    last_incl_rocks_key,
-                )
-                .await;
-
-                match data_sync_res {
-                    Ok(_) => {
-                        metrics.inc_synchronizer_status(
-                            "synchronized",
-                            MetricStatus::SUCCESS,
-                            assets_to_migrate.len() as u64,
-                        );
-                    }
-                    Err(_) => {
-                        metrics.inc_synchronizer_status(
-                            "synchronized",
-                            MetricStatus::FAILURE,
-                            assets_to_migrate.len() as u64,
-                        );
-                    }
-                }
-            }
-            None => {
-                error!("Last synced id is None");
-            }
-        },
-        Err(e) => {
-            error!("Error while fetching last synced id: {}", e);
-        }
-    }
+    //
+    // let keys: Vec<Pubkey> = assets_to_migrate.iter().map(|(k, _)| *k).collect();
+    //
+    // let last_incl_rocks_key_res = pg_client.fetch_last_synced_id().await;
+    //
+    // match last_incl_rocks_key_res {
+    //     Ok(last_incl_rocks_key) => match last_incl_rocks_key {
+    //         Some(last_incl_rocks_key) => {
+    //             let data_sync_res = Synchronizer::syncronize_batch(
+    //                 rocks_db_st.clone(),
+    //                 pg_client.clone(),
+    //                 keys.as_slice(),
+    //                 last_incl_rocks_key,
+    //             )
+    //             .await;
+    //
+    //             match data_sync_res {
+    //                 Ok(_) => {
+    //                     metrics.inc_synchronizer_status(
+    //                         "synchronized",
+    //                         MetricStatus::SUCCESS,
+    //                         assets_to_migrate.len() as u64,
+    //                     );
+    //                 }
+    //                 Err(_) => {
+    //                     metrics.inc_synchronizer_status(
+    //                         "synchronized",
+    //                         MetricStatus::FAILURE,
+    //                         assets_to_migrate.len() as u64,
+    //                     );
+    //                 }
+    //             }
+    //         }
+    //         None => {
+    //             error!("Last synced id is None");
+    //         }
+    //     },
+    //     Err(e) => {
+    //         error!("Error while fetching last synced id: {}", e);
+    //     }
+    // }
 
     metrics.inc_number_of_assets_migrated("assets_migrated", assets_to_migrate.len() as u64);
 }
