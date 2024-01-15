@@ -328,8 +328,6 @@ impl BubblegumTxProcessor {
                         error!("Error while saving tx_data for cNFT: {}", e);
                     };
 
-                    self.rocks_client.asset_updated(bundle.slot, id)?;
-
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(
                         id,
                         &AssetOwner {
