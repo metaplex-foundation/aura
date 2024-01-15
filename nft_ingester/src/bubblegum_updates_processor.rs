@@ -229,7 +229,7 @@ impl BubblegumTxProcessor {
         let begin_processing = Instant::now();
 
         let ix_str = self.instruction_name_to_string(ix_type);
-        info!("BGUM instruction txn={:?}: {:?}", ix_str, bundle.txn_id);
+        debug!("BGUM instruction txn={:?}: {:?}", ix_str, bundle.txn_id);
 
         let mut processed = true;
 
