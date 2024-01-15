@@ -12,7 +12,7 @@ dev:
 	@docker compose -f docker-compose.yaml up -d db
 
 stop:
-	@docker compose -f docker-compose.yaml stop ingester-first-consumer
+	@docker stop --time 1000 ingester-first-consumer
 
 clippy:
 	@cargo clean -p postgre-client -p rocks-db -p interface
