@@ -156,13 +156,13 @@ impl Storage {
         leaf: Option<AssetLeaf>,
         dynamic_data: Option<AssetDynamicDetails>,
     ) -> Result<()> {
-        self.asset_updated(slot, pk)?;
         if let Some(leaf) = leaf {
             self.asset_leaf_data.merge(pk, &leaf)?
         };
         if let Some(dynamic_data) = dynamic_data {
             self.asset_dynamic_data.merge(pk, &dynamic_data)?;
         }
+        self.asset_updated(slot, pk)?;
 
         Ok(())
     }
