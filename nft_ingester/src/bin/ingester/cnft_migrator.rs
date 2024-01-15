@@ -4,6 +4,7 @@ use metrics_utils::{CnftMigratorMetricsConfig, MetricStatus};
 use nft_ingester::config::IngesterConfig;
 use nft_ingester::db_v2::DBClient;
 use nft_ingester::index_syncronizer::Synchronizer;
+use num_traits::Zero;
 use postgre_client::storage_traits::AssetIndexStorage;
 use postgre_client::PgClient;
 use rocks_db::column::TypedColumn;
@@ -13,6 +14,7 @@ use solana_sdk::pubkey::Pubkey;
 use sqlx::{QueryBuilder, Row};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tracing::info;
@@ -891,48 +893,63 @@ async fn synchronize(
     metrics: Arc<CnftMigratorMetricsConfig>,
     pubkeys_mutex: Arc<Mutex<Vec<Pubkey>>>,
 ) {
-    let mut keys = Vec::new();
-    {
-        let mut pubkeys = pubkeys_mutex.lock().await;
-        let drain_len = pubkeys.len().min(1000);
-        keys.extend(pubkeys.drain(0..drain_len));
-    }
+    let mut zero_len_counter = 10;
+    loop {
+        if zero_len_counter.is_zero() {
+            break;
+        }
 
-    let last_incl_rocks_key_res = pg_client.fetch_last_synced_id().await;
-    match last_incl_rocks_key_res {
-        Ok(last_incl_rocks_key) => match last_incl_rocks_key {
-            Some(last_incl_rocks_key) => {
-                let data_sync_res = Synchronizer::syncronize_batch(
-                    rocks_db_st.clone(),
-                    pg_client.clone(),
-                    keys.as_slice(),
-                    last_incl_rocks_key,
-                )
-                .await;
+        let mut keys = Vec::new();
+        {
+            let mut pubkeys = pubkeys_mutex.lock().await;
+            let drain_len = pubkeys.len().min(1000);
+            if drain_len.is_zero() {
+                zero_len_counter -= 1;
+            } else {
+                zero_len_counter = 10
+            }
 
-                match data_sync_res {
-                    Ok(_) => {
-                        metrics.inc_synchronizer_status(
-                            "synchronized",
-                            MetricStatus::SUCCESS,
-                            keys.len() as u64,
-                        );
-                    }
-                    Err(_) => {
-                        metrics.inc_synchronizer_status(
-                            "synchronized",
-                            MetricStatus::FAILURE,
-                            keys.len() as u64,
-                        );
+            keys.extend(pubkeys.drain(0..drain_len));
+        }
+
+        let last_incl_rocks_key_res = pg_client.fetch_last_synced_id().await;
+        match last_incl_rocks_key_res {
+            Ok(last_incl_rocks_key) => match last_incl_rocks_key {
+                Some(last_incl_rocks_key) => {
+                    let data_sync_res = Synchronizer::syncronize_batch(
+                        rocks_db_st.clone(),
+                        pg_client.clone(),
+                        keys.as_slice(),
+                        last_incl_rocks_key,
+                    )
+                    .await;
+
+                    match data_sync_res {
+                        Ok(_) => {
+                            metrics.inc_synchronizer_status(
+                                "synchronized",
+                                MetricStatus::SUCCESS,
+                                keys.len() as u64,
+                            );
+                        }
+                        Err(_) => {
+                            metrics.inc_synchronizer_status(
+                                "synchronized",
+                                MetricStatus::FAILURE,
+                                keys.len() as u64,
+                            );
+                        }
                     }
                 }
+                None => {
+                    error!("Last synced id is None");
+                }
+            },
+            Err(e) => {
+                error!("Error while fetching last synced id: {}", e);
             }
-            None => {
-                error!("Last synced id is None");
-            }
-        },
-        Err(e) => {
-            error!("Error while fetching last synced id: {}", e);
         }
+
+        tokio::time::sleep(Duration::from_millis(250)).await;
     }
 }
