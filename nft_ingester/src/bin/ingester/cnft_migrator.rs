@@ -389,6 +389,23 @@ async fn migrate_asset_detail(
 
     let semaphore = Arc::new(tokio::sync::Semaphore::new(750)); // there is not blocking tasks
     let mut tasks = JoinSet::new();
+
+    for _ in 0..5 {
+        let pg_client_clone = pg_client.clone();
+        let rocks_clone = rocks_db_st.clone();
+        let metrics_clone = metrics.clone();
+        let pubkeys_to_migrate_clone = pubkeys_to_migrate.clone();
+        tasks.spawn(tokio::spawn(async move {
+            synchronize(
+                pg_client_clone,
+                rocks_clone,
+                metrics_clone,
+                pubkeys_to_migrate_clone,
+            )
+            .await
+        }));
+    }
+
     for res in asset_static_details {
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         let assets_to_migrate_clone = assets_to_migrate.clone();
@@ -462,22 +479,6 @@ async fn migrate_asset_detail(
                     return;
                 }
             }
-        }));
-    }
-
-    for _ in 0..5 {
-        let pg_client_clone = pg_client.clone();
-        let rocks_clone = rocks_db_st.clone();
-        let metrics_clone = metrics.clone();
-        let pubkeys_to_migrate_clone = pubkeys_to_migrate.clone();
-        tasks.spawn(tokio::spawn(async move {
-            synchronize(
-                pg_client_clone,
-                rocks_clone,
-                metrics_clone,
-                pubkeys_to_migrate_clone,
-            )
-            .await
         }));
     }
 
