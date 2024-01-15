@@ -11,7 +11,9 @@ members = [
   "interface",
   "usecase",
   "tests/setup",
-  "backfill_rpc"
+  "backfill_rpc",
+  "ingegrity_verification",
+  "config"
 ]
 
 [profile.release]

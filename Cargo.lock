@@ -1529,6 +1529,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "config"
+version = "0.1.0"
+dependencies = [
+ "dotenvy",
+ "envious",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "console"
 version = "0.15.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2164,6 +2174,16 @@ dependencies = [
  "log",
  "regex",
  "termcolor",
+]
+
+[[package]]
+name = "envious"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e52788a407588138195a40c991f500621fea2cffa87e7345d86dbab77287dc7"
+dependencies = [
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -2995,6 +3015,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5bbe824c507c5da5956355e86a746d82e0e1464f65d862cc5e71da70e94b2c"
 dependencies = [
  "cfg-if 1.0.0",
+]
+
+[[package]]
+name = "integrity-verification"
+version = "0.1.0"
+dependencies = [
+ "clap 4.4.14",
+ "config",
+ "env_logger 0.10.1",
+ "metrics-utils",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

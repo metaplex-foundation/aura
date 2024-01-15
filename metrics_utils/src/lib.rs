@@ -11,6 +11,20 @@ use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
 
+pub struct IntegrityVerificationMetrics {
+    pub integrity_verification_metrics: Arc<IntegrityVerificationMetricsConfig>,
+    pub registry: Registry,
+}
+
+impl IntegrityVerificationMetrics {
+    pub fn new(integrity_verification_metrics: IntegrityVerificationMetricsConfig) -> Self {
+        Self {
+            integrity_verification_metrics: Arc::new(integrity_verification_metrics),
+            registry: Registry::default(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct MetricState {
     pub ingester_metrics: Arc<IngesterMetricsConfig>,
@@ -437,6 +451,12 @@ impl MetricsTrait for MetricState {
     }
 }
 
+impl MetricsTrait for IntegrityVerificationMetrics {
+    fn register_metrics(&mut self) {
+        self.integrity_verification_metrics.start_time();
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct IngesterMetricsConfig {
     start_time: Gauge,
@@ -592,5 +612,28 @@ impl JsonDownloaderMetricsConfig {
 impl Default for JsonDownloaderMetricsConfig {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct IntegrityVerificationMetricsConfig {
+    start_time: Gauge,
+}
+
+impl Default for IntegrityVerificationMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl IntegrityVerificationMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            start_time: Default::default(),
+        }
+    }
+
+    pub fn start_time(&self) -> i64 {
+        self.start_time.set(Utc::now().timestamp())
     }
 }
