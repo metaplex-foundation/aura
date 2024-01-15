@@ -3,8 +3,8 @@ use log::error;
 use metrics_utils::{CnftMigratorMetricsConfig, MetricStatus};
 use nft_ingester::config::IngesterConfig;
 use nft_ingester::db_v2::DBClient;
-// use nft_ingester::index_syncronizer::Synchronizer;
-// use postgre_client::storage_traits::AssetIndexStorage;
+use nft_ingester::index_syncronizer::Synchronizer;
+use postgre_client::storage_traits::AssetIndexStorage;
 use postgre_client::PgClient;
 use rocks_db::column::TypedColumn;
 use rocks_db::{AssetStaticDetails, Storage};
@@ -383,6 +383,7 @@ async fn migrate_asset_detail(
     let batch_to_migrate = 1000;
     let assets_to_migrate: Arc<Mutex<HashMap<Pubkey, AllAssetInfo>>> =
         Arc::new(Mutex::new(HashMap::new()));
+    let pubkeys_to_migrate: Arc<Mutex<Vec<Pubkey>>> = Arc::new(Mutex::new(Vec::new()));
     let asset_static_details = rocks_db_st_v0.asset_static_data.iter_start();
     let database_pool = Arc::new(database_pool);
 
@@ -391,10 +392,10 @@ async fn migrate_asset_detail(
     for res in asset_static_details {
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         let assets_to_migrate_clone = assets_to_migrate.clone();
+        let pubkeys_to_migrate_clone = pubkeys_to_migrate.clone();
         let rocks_clone = rocks_db_st.clone();
         let rocks_v0_clone = rocks_db_st_v0.clone();
         let metrics_clone = metrics.clone();
-        let pg_client_clone = pg_client.clone();
         let database_pool_clone = database_pool.clone();
 
         tasks.spawn(tokio::spawn(async move {
@@ -426,13 +427,13 @@ async fn migrate_asset_detail(
                                 .lock()
                                 .await
                                 .insert(pubkey, all_asset_info);
+                            pubkeys_to_migrate_clone.lock().await.push(pubkey);
 
                             if assets_to_migrate_clone.lock().await.len() >= batch_to_migrate {
                                 drain_batch(
                                     assets_to_migrate_clone.clone(),
                                     database_pool_clone.clone(),
                                     rocks_clone.clone(),
-                                    pg_client_clone.clone(),
                                     metrics_clone.clone(),
                                 )
                                 .await;
@@ -454,7 +455,6 @@ async fn migrate_asset_detail(
                         assets_to_migrate_clone.clone(),
                         database_pool_clone.clone(),
                         rocks_clone.clone(),
-                        pg_client_clone.clone(),
                         metrics_clone.clone(),
                     )
                     .await;
@@ -462,6 +462,22 @@ async fn migrate_asset_detail(
                     return;
                 }
             }
+        }));
+    }
+
+    for _ in 0..5 {
+        let pg_client_clone = pg_client.clone();
+        let rocks_clone = rocks_db_st.clone();
+        let metrics_clone = metrics.clone();
+        let pubkeys_to_migrate_clone = pubkeys_to_migrate.clone();
+        tasks.spawn(tokio::spawn(async move {
+            synchronize(
+                pg_client_clone,
+                rocks_clone,
+                metrics_clone,
+                pubkeys_to_migrate_clone,
+            )
+            .await
         }));
     }
 
@@ -485,7 +501,6 @@ async fn migrate_asset_detail(
         assets_to_migrate.clone(),
         database_pool.clone(),
         rocks_db_st.clone(),
-        pg_client.clone(),
         metrics.clone(),
     )
     .await;
@@ -655,7 +670,6 @@ async fn drain_batch(
     assets_to_migrate_mutex: Arc<Mutex<HashMap<Pubkey, AllAssetInfo>>>,
     database_pool: Arc<DBClient>,
     rocks_db_st: Arc<Storage>,
-    _pg_client: Arc<PgClient>,
     metrics: Arc<CnftMigratorMetricsConfig>,
 ) {
     let mut query = QueryBuilder::new(
@@ -866,47 +880,58 @@ async fn drain_batch(
         task.await
             .unwrap_or_else(|e| error!("drain_buffer task {}", e));
     }
-    //
-    // let keys: Vec<Pubkey> = assets_to_migrate.iter().map(|(k, _)| *k).collect();
-    //
-    // let last_incl_rocks_key_res = pg_client.fetch_last_synced_id().await;
-    //
-    // match last_incl_rocks_key_res {
-    //     Ok(last_incl_rocks_key) => match last_incl_rocks_key {
-    //         Some(last_incl_rocks_key) => {
-    //             let data_sync_res = Synchronizer::syncronize_batch(
-    //                 rocks_db_st.clone(),
-    //                 pg_client.clone(),
-    //                 keys.as_slice(),
-    //                 last_incl_rocks_key,
-    //             )
-    //             .await;
-    //
-    //             match data_sync_res {
-    //                 Ok(_) => {
-    //                     metrics.inc_synchronizer_status(
-    //                         "synchronized",
-    //                         MetricStatus::SUCCESS,
-    //                         assets_to_migrate.len() as u64,
-    //                     );
-    //                 }
-    //                 Err(_) => {
-    //                     metrics.inc_synchronizer_status(
-    //                         "synchronized",
-    //                         MetricStatus::FAILURE,
-    //                         assets_to_migrate.len() as u64,
-    //                     );
-    //                 }
-    //             }
-    //         }
-    //         None => {
-    //             error!("Last synced id is None");
-    //         }
-    //     },
-    //     Err(e) => {
-    //         error!("Error while fetching last synced id: {}", e);
-    //     }
-    // }
 
     metrics.inc_number_of_assets_migrated("assets_migrated", assets_to_migrate.len() as u64);
+}
+
+async fn synchronize(
+    pg_client: Arc<PgClient>,
+    rocks_db_st: Arc<Storage>,
+    metrics: Arc<CnftMigratorMetricsConfig>,
+    pubkeys_mutex: Arc<Mutex<Vec<Pubkey>>>,
+) {
+    let mut keys = Vec::new();
+    {
+        let mut pubkeys = pubkeys_mutex.lock().await;
+        let drain_len = pubkeys.len().min(1000);
+        keys.extend(pubkeys.drain(0..drain_len));
+    }
+
+    let last_incl_rocks_key_res = pg_client.fetch_last_synced_id().await;
+    match last_incl_rocks_key_res {
+        Ok(last_incl_rocks_key) => match last_incl_rocks_key {
+            Some(last_incl_rocks_key) => {
+                let data_sync_res = Synchronizer::syncronize_batch(
+                    rocks_db_st.clone(),
+                    pg_client.clone(),
+                    keys.as_slice(),
+                    last_incl_rocks_key,
+                )
+                .await;
+
+                match data_sync_res {
+                    Ok(_) => {
+                        metrics.inc_synchronizer_status(
+                            "synchronized",
+                            MetricStatus::SUCCESS,
+                            keys.len() as u64,
+                        );
+                    }
+                    Err(_) => {
+                        metrics.inc_synchronizer_status(
+                            "synchronized",
+                            MetricStatus::FAILURE,
+                            keys.len() as u64,
+                        );
+                    }
+                }
+            }
+            None => {
+                error!("Last synced id is None");
+            }
+        },
+        Err(e) => {
+            error!("Error while fetching last synced id: {}", e);
+        }
+    }
 }
