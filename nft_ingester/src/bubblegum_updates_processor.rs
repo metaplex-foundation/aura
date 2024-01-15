@@ -11,7 +11,7 @@ use chrono::Utc;
 use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard};
 use entities::models::{BufferedTransaction, Updated};
 use entities::models::{ChainDataV1, Creator, Uses};
-use log::{debug, error, info};
+use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
