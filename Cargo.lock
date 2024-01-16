@@ -2096,6 +2096,8 @@ dependencies = [
 name = "entities"
 version = "0.1.0"
 dependencies = [
+ "num-derive 0.4.1",
+ "num-traits",
  "serde",
  "solana-sdk",
 ]

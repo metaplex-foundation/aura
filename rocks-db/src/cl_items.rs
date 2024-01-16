@@ -5,9 +5,10 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
 
+use crate::asset::AssetLeaf;
 use crate::column::TypedColumn;
 use crate::key_encoders::{decode_u64_pubkey, encode_u64_pubkey};
-use crate::{Result, Storage};
+use crate::{AssetDynamicDetails, Result, Storage};
 
 /// This column family stores change log items for asset proof construction.
 /// Basically, it stores all nodes of the tree.
@@ -146,6 +147,24 @@ impl Storage {
                 }
             }
         }
+    }
+
+    pub fn save_tx_data_and_asset_updated(
+        &self,
+        pk: Pubkey,
+        slot: u64,
+        leaf: Option<AssetLeaf>,
+        dynamic_data: Option<AssetDynamicDetails>,
+    ) -> Result<()> {
+        if let Some(leaf) = leaf {
+            self.asset_leaf_data.merge(pk, &leaf)?
+        };
+        if let Some(dynamic_data) = dynamic_data {
+            self.asset_dynamic_data.merge(pk, &dynamic_data)?;
+        }
+        self.asset_updated(slot, pk)?;
+
+        Ok(())
     }
 }
 
