@@ -3040,6 +3040,7 @@ dependencies = [
  "plerkle_serialization",
  "solana-client",
  "solana-sdk",
+ "solana-transaction-status",
  "thiserror",
 ]
 
@@ -5359,6 +5360,7 @@ dependencies = [
  "serde_json",
  "setup",
  "solana-sdk",
+ "solana-transaction-status",
  "spl-account-compression",
  "tar",
  "tempfile",

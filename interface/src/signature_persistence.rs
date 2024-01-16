@@ -36,3 +36,11 @@ pub trait TransactionIngester {
 pub trait ProcessingDataGetter {
     async fn get_processing_transaction(&self) -> Option<BufferedTransaction>;
 }
+
+#[async_trait]
+pub trait BlockConsumer {
+    async fn consume_block(
+        &self,
+        block: solana_transaction_status::ConfirmedBlock,
+    ) -> Result<(), String>;
+}
