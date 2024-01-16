@@ -77,3 +77,16 @@ pub fn make_handler(
         })
     }
 }
+
+pub async fn start_metrics(register: Registry, port: Option<u16>) {
+    tokio::spawn(async move {
+        match setup_metrics(register, port).await {
+            Ok(_) => {
+                info!("Setup metrics successfully")
+            }
+            Err(e) => {
+                error!("Setup metrics failed: {:?}", e)
+            }
+        }
+    });
+}

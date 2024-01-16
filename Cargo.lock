@@ -3015,6 +3015,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "usecase",
 ]
 
 [[package]]
