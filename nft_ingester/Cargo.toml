@@ -53,11 +53,11 @@ entities = { path = "../entities" }
 usecase = { path = "../usecase" }
 grpc = { path = "../grpc" }
 mpl-token-metadata = { version = "3.2.3"}
-
+async-trait = "0.1.74"
 futures = "0.3.29"
 interface = { path = "../interface" }
 tonic = "0.10.2"
-tracing  ="0.1.40"
+tracing = "0.1.40"
 backfill-rpc = { path = "../backfill_rpc" }
 
 pprof = {version = "0.13.0", features = ["_protobuf", "protobuf-codec"]}
