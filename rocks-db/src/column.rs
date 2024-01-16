@@ -63,10 +63,7 @@ where
             .map_err(|e| StorageError::Common(e.to_string()))?
     }
 
-    pub fn put_batch_sync(
-        backend: Arc<DB>,
-        values: HashMap<C::KeyType, C::ValueType>,
-    ) -> Result<()> {
+    fn put_batch_sync(backend: Arc<DB>, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for (k, v) in values.iter() {
             let serialized_value = serialize(v)?;
@@ -153,6 +150,23 @@ where
     pub fn delete(&self, key: C::KeyType) -> Result<()> {
         self.backend.delete_cf(&self.handle(), C::encode_key(key))?;
         Ok(())
+    }
+
+    fn delete_batch_sync(backend: Arc<DB>, keys: Vec<C::KeyType>) -> Result<()> {
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        for key in keys {
+            batch.delete_cf(&backend.cf_handle(C::NAME).unwrap(), C::encode_key(key))
+        }
+        backend.write(batch)?;
+        Ok(())
+    }
+
+    pub async fn delete_batch(&self, keys: Vec<C::KeyType>) -> Result<()> {
+        let db = self.backend.clone();
+        let keys = keys.clone();
+        tokio::task::spawn_blocking(move || Self::delete_batch_sync(db, keys))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?
     }
 }
 
