@@ -90,3 +90,32 @@ pub enum AssetSortDirection {
     Asc,
     Desc,
 }
+
+impl From<entities::api_req_params::AssetSorting> for AssetSorting {
+    fn from(sorting: entities::api_req_params::AssetSorting) -> Self {
+        Self {
+            sort_by: sorting.sort_by.into(),
+            sort_direction: sorting
+                .sort_direction
+                .map_or(AssetSortDirection::Desc, |v| v.into()),
+        }
+    }
+}
+
+impl From<entities::api_req_params::AssetSortBy> for AssetSortBy {
+    fn from(sort_by: entities::api_req_params::AssetSortBy) -> Self {
+        match sort_by {
+            entities::api_req_params::AssetSortBy::Created => Self::SlotCreated,
+            _ => Self::SlotUpdated,
+        }
+    }
+}
+
+impl From<entities::api_req_params::AssetSortDirection> for AssetSortDirection {
+    fn from(sort_direction: entities::api_req_params::AssetSortDirection) -> Self {
+        match sort_direction {
+            entities::api_req_params::AssetSortDirection::Asc => Self::Asc,
+            entities::api_req_params::AssetSortDirection::Desc => Self::Desc,
+        }
+    }
+}

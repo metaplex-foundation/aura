@@ -7,12 +7,17 @@ use digital_asset_types::dapi::{
 use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
 
-use crate::api::{config::Config, validation::validate_pubkey};
+use crate::api::config::Config;
 use digital_asset_types::rpc::Asset;
+use entities::api_req_params::{
+    GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetsByAuthority,
+    GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetGrouping, SearchAssets,
+};
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
+use usecase::validation::validate_pubkey;
 use {
     crate::api::*,
     sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, SqlxPostgresConnector, Statement},

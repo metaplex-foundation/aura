@@ -9,7 +9,10 @@ use tokio::task::JoinSet;
 
 mod api;
 mod config;
+mod diff_checker;
 pub mod error;
+mod params;
+mod requests;
 
 #[derive(Parser, Debug)]
 struct Args {

@@ -3,21 +3,17 @@ use reqwest::Client;
 
 #[derive(Debug)]
 pub struct IntegrityVerificationApi {
-    pub reference_host: String,
-    pub tested_host: String,
-    pub client: Client,
+    client: Client,
 }
 
 impl IntegrityVerificationApi {
-    pub fn new(reference_host: String, tested_host: String) -> Self {
+    pub fn new() -> Self {
         Self {
-            reference_host,
-            tested_host,
             client: Client::new(),
         }
     }
 
-    async fn request(
+    pub async fn make_request(
         &self,
         url: &str,
         body: &str,

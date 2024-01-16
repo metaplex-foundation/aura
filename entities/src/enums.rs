@@ -1,4 +1,5 @@
 use num_derive::FromPrimitive;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Default)]
@@ -70,4 +71,44 @@ pub enum ChainMutability {
     #[default]
     Immutable,
     Mutable,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
+pub enum Interface {
+    #[serde(rename = "V1_NFT")]
+    V1NFT,
+    #[serde(rename = "V1_PRINT")]
+    V1PRINT,
+    #[serde(rename = "LEGACY_NFT")]
+    LegacyNft,
+    #[serde(rename = "V2_NFT")]
+    Nft,
+    #[serde(rename = "FungibleAsset")]
+    FungibleAsset,
+    #[serde(rename = "Custom")]
+    Custom,
+    #[serde(rename = "Identity")]
+    Identity,
+    #[serde(rename = "Executable")]
+    Executable,
+    #[serde(rename = "ProgrammableNFT")]
+    ProgrammableNFT,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
+pub enum OwnershipModel {
+    #[serde(rename = "single")]
+    Single,
+    #[serde(rename = "token")]
+    Token,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
+pub enum RoyaltyModel {
+    #[serde(rename = "creators")]
+    Creators,
+    #[serde(rename = "fanout")]
+    Fanout,
+    #[serde(rename = "single")]
+    Single,
 }

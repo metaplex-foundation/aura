@@ -18,6 +18,10 @@ pub enum UsecaseError {
     ParseSignature(#[from] ParseSignatureError),
     #[error("PlerkleSerialization {0}")]
     PlerkleSerialization(#[from] PlerkleSerializationError),
+    #[error("Pubkey Validation Err: {0} is invalid")]
+    PubkeyValidationError(String),
+    #[error("Invalid Grouping Key: {0}")]
+    InvalidGroupingKey(String),
 }
 
 impl From<ClientError> for UsecaseError {

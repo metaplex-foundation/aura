@@ -1927,6 +1927,7 @@ dependencies = [
  "blockbuster",
  "bs58 0.4.0",
  "entities",
+ "interface",
  "jsonpath_lib",
  "log",
  "mime_guess",
@@ -1941,6 +1942,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "url",
+ "usecase",
 ]
 
 [[package]]
@@ -2098,6 +2100,7 @@ version = "0.1.0"
 dependencies = [
  "num-derive 0.4.1",
  "num-traits",
+ "schemars",
  "serde",
  "solana-sdk",
 ]
