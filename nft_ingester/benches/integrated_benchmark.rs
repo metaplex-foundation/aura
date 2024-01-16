@@ -1,11 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use entities::models::{AssetIndex, Creator};
 use nft_ingester::{api::SearchAssets, index_syncronizer::Synchronizer};
 use rocks_db::storage_traits::AssetIndexReader;
 use setup::TestEnvironment;
-use solana_sdk::pubkey::Pubkey;
-use sqlx::{Postgres, QueryBuilder};
-use std::{default, sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use metrics_utils::ApiMetricsConfig;
 use testcontainers::clients::Cli;
@@ -28,7 +25,7 @@ async fn setup_environment<'a>(
     setup::TestEnvironment::create(cli, cnt, SLOT_UPDATED).await
 }
 
-fn criterion_benchmark(c: &mut Criterion) {
+fn search_assets_benchmark(c: &mut Criterion) {
     let cli: Cli = Cli::default();
     let limit: u32 = 1000; // Number of records to fetch
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -63,13 +60,12 @@ async fn bench_delete_op(
 }
 
 async fn bench_get_asset_indexes(
-    pg_client: Arc<postgre_client::PgClient>,
     rocks_db: Arc<rocks_db::Storage>,
     assets: setup::rocks::GeneratedAssets,
 ) {
     let pubkeys = assets.pubkeys[50000..51000].to_vec();
 
-    let asset_indexes = rocks_db.get_asset_indexes(&pubkeys).await.unwrap();
+    rocks_db.get_asset_indexes(&pubkeys).await.unwrap();
 }
 
 async fn bench_get_dynamic_data_batch(
@@ -103,7 +99,6 @@ fn pg_delete_benchmark(c: &mut Criterion) {
     group.bench_function("get asset indexes", |b| {
         b.iter(|| {
             rt.block_on(bench_get_asset_indexes(
-                env.pg_env.client.clone(),
                 env.rocks_env.storage.clone(),
                 generated_assets.clone(),
             ))
@@ -112,17 +107,15 @@ fn pg_delete_benchmark(c: &mut Criterion) {
 
     group.bench_function("get dynamic details batch", |b| {
         b.iter(|| {
-            rt.block_on(
-                (bench_get_dynamic_data_batch(
-                    env.rocks_env.storage.clone(),
-                    generated_assets.clone(),
-                )),
-            )
+            rt.block_on(bench_get_dynamic_data_batch(
+                env.rocks_env.storage.clone(),
+                generated_assets.clone(),
+            ))
         })
     });
     group.finish();
     rt.block_on(env.teardown());
 }
 
-criterion_group!(benches, criterion_benchmark, pg_delete_benchmark);
+criterion_group!(benches, search_assets_benchmark, pg_delete_benchmark,);
 criterion_main!(benches);
