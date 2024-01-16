@@ -350,10 +350,10 @@ mod tests {
         ];
         let existing_creators = vec![];
 
-        let (new_or_updated, removed) = PgClient::diff(all_creators.clone(), existing_creators);
+        let updates = PgClient::diff(all_creators.clone(), existing_creators);
 
-        assert_eq!(new_or_updated, all_creators);
-        assert!(removed.is_empty());
+        assert_eq!(updates.new_or_updated, all_creators);
+        assert!(updates.to_remove.is_empty());
     }
     #[test]
     fn test_all_existing_creators_are_removed() {
@@ -363,10 +363,10 @@ mod tests {
             (create_pubkey(2), create_creator(2, false)),
         ];
 
-        let (new_or_updated, removed) = PgClient::diff(all_creators, existing_creators.clone());
+        let updates = PgClient::diff(all_creators, existing_creators.clone());
 
-        assert!(new_or_updated.is_empty());
-        assert_eq!(removed, existing_creators);
+        assert!(updates.new_or_updated.is_empty());
+        assert_eq!(updates.to_remove, existing_creators);
     }
     #[test]
     fn test_all_creators_are_replaced() {
@@ -379,10 +379,10 @@ mod tests {
             (create_pubkey(2), create_creator(2, false)),
         ];
 
-        let (new_or_updated, removed) = PgClient::diff(all_creators.clone(), existing_creators);
+        let updates = PgClient::diff(all_creators.clone(), existing_creators);
 
-        assert_eq!(new_or_updated, all_creators);
-        assert_eq!(removed.len(), 2); // Assuming removed creators are (1, true) and (2, false)
+        assert_eq!(updates.new_or_updated, all_creators);
+        assert_eq!(updates.to_remove.len(), 2); // Assuming removed creators are (1, true) and (2, false)
     }
     #[test]
     fn test_some_creators_changed_verification() {
@@ -395,10 +395,10 @@ mod tests {
             (create_pubkey(2), create_creator(2, false)),
         ];
 
-        let (new_or_updated, removed) = PgClient::diff(all_creators.clone(), existing_creators);
+        let updates = PgClient::diff(all_creators.clone(), existing_creators);
 
-        assert_eq!(new_or_updated.len(), 1); // Assuming only creator (1, false) is new/updated
-        assert!(removed.is_empty()); // No creators are removed
+        assert_eq!(updates.new_or_updated.len(), 1); // Assuming only creator (1, false) is new/updated
+        assert!(updates.to_remove.is_empty()); // No creators are removed
     }
 
     #[test]
@@ -413,9 +413,9 @@ mod tests {
             .map(|(pk, c, _)| (pk, c))
             .collect();
 
-        let (new_or_updated, removed) = PgClient::diff(all_creators, existing_creators);
+        let updates = PgClient::diff(all_creators, existing_creators);
 
-        assert!(new_or_updated.is_empty());
-        assert!(removed.is_empty());
+        assert!(updates.new_or_updated.is_empty());
+        assert!(updates.to_remove.is_empty());
     }
 }
