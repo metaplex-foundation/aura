@@ -26,6 +26,8 @@ pub trait TypedColumn {
 pub struct Column<C>
 where
     C: TypedColumn,
+    <C as TypedColumn>::ValueType: 'static,
+    <C as TypedColumn>::ValueType: Clone,
     <C as TypedColumn>::KeyType: 'static,
 {
     pub backend: Arc<DB>,
@@ -37,12 +39,29 @@ where
     C: TypedColumn,
     <C as TypedColumn>::ValueType: 'static,
     <C as TypedColumn>::ValueType: Clone,
+    <C as TypedColumn>::KeyType: 'static,
 {
-    pub fn put(&self, key: C::KeyType, value: &C::ValueType) -> Result<()> {
-        let serialized_value = serialize(value)?;
+    pub async fn put_async(&self, key: C::KeyType, value: C::ValueType) -> Result<()> {
+        let backend = self.backend.clone();
+        tokio::task::spawn_blocking(move || Self::put_sync(backend, key, value))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?;
 
-        self.backend
-            .put_cf(&self.handle(), C::encode_key(key), serialized_value)?;
+        Ok(())
+    }
+
+    pub fn put(&self, key: C::KeyType, value: &C::ValueType) -> Result<()> {
+        Self::put_sync(self.backend.clone(), key, *value)
+    }
+
+    fn put_sync(backend: Arc<DB>, key: C::KeyType, value: C::ValueType) -> Result<()> {
+        let serialized_value = serialize(&value)?;
+
+        backend.put_cf(
+            &backend.cf_handle(C::NAME).unwrap(),
+            C::encode_key(key),
+            serialized_value,
+        )?;
         Ok(())
     }
 

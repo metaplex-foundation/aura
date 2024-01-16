@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
+use interface::signature_persistence::BlockConsumer;
 use log::{debug, error, info, warn};
 use metrics_utils::{BackfillerMetricsConfig, MetricStatus};
 use nft_ingester::buffer::Buffer;
@@ -41,11 +42,6 @@ pub struct Backfiller {
     buffer: Arc<Buffer>,
     slot_start_from: u64,
     slot_parse_until: u64,
-}
-
-#[async_trait]
-pub trait BlockConsumer {
-    async fn consume_block(&self, block: solana_transaction_status::ConfirmedBlock);
 }
 
 impl Backfiller {
@@ -344,7 +340,7 @@ where
 
             counter = GET_SLOT_RETRIES;
 
-            let mut tasks: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+            let mut tasks = Vec::new();
 
             for slot in slots_to_parse_vec.iter() {
                 let bg_client = self.big_table_client.clone();
@@ -355,10 +351,14 @@ where
                         Ok(block) => block,
                         Err(err) => {
                             error!("Error getting block: {}", err);
-                            return;
+                            return Ok(());
                         }
                     };
-                    c.consume_block(block).await;
+                    if let Err(err) = c.consume_block(block).await {
+                        error!("Error consuming block: {}", err);
+                        return Err(err);
+                    }
+                    Ok(())
                 });
 
                 tasks.push(task);
@@ -366,9 +366,15 @@ where
 
             for task in tasks {
                 match task.await {
-                    Ok(_) => {}
+                    Ok(r) => {
+                        if let Err(err) = r {
+                            error!("Task for parsing slots has failed: {}", err);
+                            return;
+                        }
+                    }
                     Err(err) => {
-                        error!("Task for parsing slots was failed: {}", err);
+                        error!("Task for parsing slots has failed: {}. Returning immediately", err);
+                        return;
                     }
                 };
             }
