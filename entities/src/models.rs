@@ -1,6 +1,6 @@
 use crate::enums::{
-    OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TokenStandard,
-    UseMethod,
+    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
+    TokenStandard, UseMethod,
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
@@ -110,6 +110,8 @@ pub struct ChainDataV1 {
     pub token_standard: Option<TokenStandard>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uses: Option<Uses>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain_mutability: Option<ChainMutability>, // TODO: move this feild to AssetDynamicDetails struct
 }
 
 impl ChainDataV1 {
