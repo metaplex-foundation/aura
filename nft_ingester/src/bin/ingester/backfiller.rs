@@ -14,7 +14,7 @@ use solana_sdk::clock::Slot;
 use solana_storage_bigtable::LedgerStorage;
 use solana_storage_bigtable::{DEFAULT_APP_PROFILE_ID, DEFAULT_INSTANCE_NAME};
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::num::ParseIntError;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -189,6 +189,10 @@ impl SlotsCollector {
                     if !slots.is_empty() {
                         // safe to call unwrap because we checked that slots is not empty
                         let last_slot = *slots.last().unwrap();
+                        self.save_slots(&slots).await;
+
+                        self.metrics
+                            .set_last_processed_slot("collected_slot", last_slot as i64);
 
                         if (slots.len() == 1 && slots[0] == start_at_slot)
                             || (last_slot < self.slot_parse_until)
@@ -196,13 +200,7 @@ impl SlotsCollector {
                             info!("All the slots are collected");
                             break;
                         }
-
                         start_at_slot = last_slot;
-
-                        self.save_slots(&slots).await;
-
-                        self.metrics
-                            .set_last_processed_slot("collected_slot", last_slot as i64);
                     } else {
                         info!("All the slots are collected");
                         break;
@@ -221,34 +219,33 @@ impl SlotsCollector {
     }
 
     async fn save_slots(&self, slots: &[u64]) {
-        let mut slots_set = HashSet::new();
-        for slot in slots.iter() {
-            slots_set.insert(*slot);
-        }
+        let slots_map: HashMap<String, BubblegumSlots> = slots.iter().fold(
+            HashMap::new(),
+            |mut acc: HashMap<String, BubblegumSlots>, slot| {
+                acc.insert(form_bubblegum_slots_key(*slot), BubblegumSlots {});
+                acc
+            },
+        );
 
-        if !slots_set.is_empty() {
-            for slot in slots_set.iter() {
-                let mut counter = PUT_SLOT_RETRIES;
+        if !slots_map.is_empty() {
+            let mut counter = PUT_SLOT_RETRIES;
+            while counter > 0 {
+                let put_result = self
+                    .rocks_client
+                    .bubblegum_slots
+                    .put_batch(slots_map.clone())
+                    .await;
 
-                while counter > 0 {
-                    let put_result = self
-                        .rocks_client
-                        .bubblegum_slots
-                        .put(form_bubblegum_slots_key(*slot), &BubblegumSlots {});
-
-                    match put_result {
-                        Ok(_) => {
-                            break;
-                        }
-                        Err(err) => {
-                            error!("Error putting slot: {}", err);
-                            counter -= 1;
-                            tokio::time::sleep(Duration::from_secs(
-                                SECONDS_TO_RETRY_ROCKSDB_OPERATION,
-                            ))
+                match put_result {
+                    Ok(_) => {
+                        break;
+                    }
+                    Err(err) => {
+                        error!("Error putting slots: {}", err);
+                        counter -= 1;
+                        tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_ROCKSDB_OPERATION))
                             .await;
-                            continue;
-                        }
+                        continue;
                     }
                 }
             }

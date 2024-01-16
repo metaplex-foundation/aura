@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Arc, vec};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc, vec};
 
 use bincode::{deserialize, serialize};
 use log::error;
@@ -36,13 +36,13 @@ impl<C> Column<C>
 where
     C: TypedColumn,
     <C as TypedColumn>::ValueType: 'static,
+    <C as TypedColumn>::ValueType: Clone,
 {
     pub fn put(&self, key: C::KeyType, value: &C::ValueType) -> Result<()> {
         let serialized_value = serialize(value)?;
 
         self.backend
             .put_cf(&self.handle(), C::encode_key(key), serialized_value)?;
-
         Ok(())
     }
 
@@ -52,6 +52,31 @@ where
         self.backend
             .merge_cf(&self.handle(), C::encode_key(key), serialized_value)?;
 
+        Ok(())
+    }
+
+    pub async fn put_batch(&self, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
+        let db = self.backend.clone();
+        let values = values.clone();
+        tokio::task::spawn_blocking(move || Self::put_batch_sync(db, values))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?
+    }
+
+    pub fn put_batch_sync(
+        backend: Arc<DB>,
+        values: HashMap<C::KeyType, C::ValueType>,
+    ) -> Result<()> {
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        for (k, v) in values.iter() {
+            let serialized_value = serialize(v)?;
+            batch.put_cf(
+                &backend.cf_handle(C::NAME).unwrap(),
+                C::encode_key(k.clone()),
+                serialized_value,
+            )
+        }
+        backend.write(batch)?;
         Ok(())
     }
 
