@@ -191,16 +191,18 @@ impl BubblegumTxProcessor {
                             self.instruction_name_to_string(&parsing_result.instruction),
                         );
 
-                        self.handle_bubblegum_instruction(parsing_result, &ix)
-                            .await
-                            .map_err(|err| {
+                        let ix_parse_res = self.handle_bubblegum_instruction(parsing_result, &ix)
+                            .await;
+
+                        match ix_parse_res {
+                            Ok(_) => {}
+                            Err(e) => {
                                 error!(
                                     "Failed to handle bubblegum instruction for txn {:?}: {:?}",
-                                    sig, err
+                                    sig, e
                                 );
-
-                                err
-                            })?;
+                            }
+                        }
                     }
                     _ => {
                         not_impl += 1;
@@ -249,7 +251,7 @@ impl BubblegumTxProcessor {
                 self.redeem(parsing_result, bundle).await?;
             }
             InstructionName::DecompressV1 => {
-                self.decompress(parsing_result, bundle).await?;
+                self.decompress(bundle).await?;
             }
             InstructionName::VerifyCreator => {
                 self.creator_verification(parsing_result, bundle).await?;
@@ -578,34 +580,41 @@ impl BubblegumTxProcessor {
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle<'c>,
     ) -> Result<(), IngesterError> {
-        if let (Some(le), Some(cl)) = (&parsing_result.leaf_update, &parsing_result.tree_update) {
+        if let Some(cl) = &parsing_result.tree_update {
             self.rocks_client.save_changelog(cl, bundle.slot).await;
 
-            match le.schema {
-                LeafSchema::V1 { id, nonce, .. } => {
-                    self.rocks_client.asset_updated(bundle.slot, id)?;
+            let leaf_index = cl.index;
+            let (asset_id, _) = Pubkey::find_program_address(
+                &[
+                    "asset".as_bytes(),
+                    cl.id.as_ref(),
+                    self.u32_to_u8_array(leaf_index).as_ref(),
+                ],
+                &mpl_bubblegum::ID,
+            );
 
-                    let tree = cl.id;
+            let nonce = cl.index as u64;
 
-                    let leaf_info = AssetLeaf {
-                        pubkey: id,
-                        tree_id: tree,
-                        leaf: None,
-                        nonce: Some(nonce),
-                        data_hash: None,
-                        creator_hash: None,
-                        leaf_seq: Some(cl.seq),
-                        slot_updated: bundle.slot,
-                    };
+            self.rocks_client.asset_updated(bundle.slot, asset_id)?;
 
-                    if let Err(e) = self.rocks_client.asset_leaf_data.merge(id, &leaf_info) {
-                        error!("Error while saving leaf for cNFT: {}", e);
-                    };
-                }
-            }
+            let leaf_info = AssetLeaf {
+                pubkey: asset_id,
+                tree_id: cl.id,
+                leaf: None,
+                nonce: Some(nonce),
+                data_hash: None,
+                creator_hash: None,
+                leaf_seq: Some(cl.seq),
+                slot_updated: bundle.slot,
+            };
+
+            if let Err(e) = self.rocks_client.asset_leaf_data.merge(asset_id, &leaf_info) {
+                error!("Error while saving leaf for cNFT: {}", e);
+            };
 
             return Ok(());
         }
+
         Err(IngesterError::ParsingError(
             "Ix not parsed correctly".to_string(),
         ))
@@ -613,52 +622,31 @@ impl BubblegumTxProcessor {
 
     pub async fn decompress<'c>(
         &self,
-        parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle<'c>,
     ) -> Result<(), IngesterError> {
-        if let (Some(le), Some(cl)) = (&parsing_result.leaf_update, &parsing_result.tree_update) {
-            match le.schema {
-                LeafSchema::V1 { id, .. } => {
-                    self.rocks_client.asset_updated(bundle.slot, id)?;
+        let id_bytes = bundle.keys.get(3).unwrap().0.as_slice();
+        let asset_id = Pubkey::new_from_array(id_bytes.try_into().unwrap());
 
-                    let tree = cl.id;
+        if let Err(e) = self.rocks_client.asset_leaf_data.delete(asset_id) {
+            error!("Error while saving leaf for cNFT: {}", e);
 
-                    let leaf_info = AssetLeaf {
-                        pubkey: id,
-                        tree_id: tree,
-                        leaf: None,
-                        nonce: None,
-                        data_hash: None,
-                        creator_hash: None,
-                        leaf_seq: None,
-                        slot_updated: bundle.slot,
-                    };
+            return Err(IngesterError::ParsingError(
+                "Ix not parsed correctly".to_string(),
+            ));
+        };
 
-                    // if we got decompress instruction we shouldn't even merge data
-                    if let Err(e) = self.rocks_client.asset_leaf_data.put(id, &leaf_info) {
-                        error!("Error while saving leaf for cNFT: {}", e);
-                    };
+        self.rocks_client.asset_dynamic_data.merge(
+            asset_id,
+            &AssetDynamicDetails {
+                pubkey: asset_id,
+                was_decompressed: Updated::new(bundle.slot, None, true),
+                is_compressible: Updated::new(bundle.slot, None, true), // TODO
+                supply: Some(Updated::new(bundle.slot, None, 1)),
+                ..Default::default()
+            },
+        )?;
 
-                    self.rocks_client.asset_dynamic_data.merge(
-                        id,
-                        &AssetDynamicDetails {
-                            pubkey: id,
-                            was_decompressed: Updated::new(bundle.slot, Some(cl.seq), true),
-                            seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
-                            is_compressible: Updated::new(bundle.slot, Some(cl.seq), true), // TODO
-                            supply: Some(Updated::new(bundle.slot, Some(cl.seq), 1)),
-                            ..Default::default()
-                        },
-                    )?;
-                }
-            }
-
-            return Ok(());
-        }
-
-        Err(IngesterError::ParsingError(
-            "Ix not parsed correctly".to_string(),
-        ))
+        Ok(())
     }
 
     pub async fn creator_verification<'c>(
