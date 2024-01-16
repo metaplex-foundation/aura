@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
 use solana_sdk::pubkey::Pubkey;
-use sqlx::{Postgres, QueryBuilder};
+use sqlx::{Postgres, QueryBuilder, Transaction};
 
 use crate::{
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
@@ -79,15 +79,6 @@ impl AssetIndexStorage for PgClient {
             .iter()
             .map(|asset_index| asset_index.pubkey.to_bytes().to_vec())
             .collect::<Vec<Vec<u8>>>();
-        let valid_creators_key_tupples = all_creators
-            .iter()
-            .map(|(pubkey, creator, _slot_updated)| {
-                (
-                    pubkey.to_bytes().to_vec(),
-                    creator.creator.to_bytes().to_vec(),
-                )
-            })
-            .collect::<Vec<(Vec<u8>, Vec<u8>)>>();
 
         // Bulk insert/update for assets_v3
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
@@ -174,16 +165,22 @@ impl AssetIndexStorage for PgClient {
         // 1. Delete creators for the assets that are being updated and don't exist anymore
         // 2. Upsert creators for the assets
         // Delete creators for the assets that are being updated and don't exist anymore
-        if !valid_creators_key_tupples.is_empty() {
-            let mut query_builder: QueryBuilder<'_, Postgres> =
-                QueryBuilder::new("DELETE FROM asset_creators_v3 WHERE asc_pubkey = ANY(");
-            query_builder.push_bind(updated_keys);
-            query_builder.push(") AND (asc_creator, asc_pubkey) NOT IN ");
+        let existing_creators = self
+            .batch_get_creators(&mut transaction, updated_keys.clone())
+            .await?;
+        let creator_updates = Self::diff(all_creators.clone(), existing_creators);
+
+        if !creator_updates.to_remove.is_empty() {
+            let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+                "DELETE FROM asset_creators_v3 WHERE (asc_creator, asc_pubkey) IN ",
+            );
 
             query_builder.push_tuples(
-                valid_creators_key_tupples,
+                creator_updates.to_remove,
                 |mut builder, (pubkey, creator)| {
-                    builder.push_bind(creator).push_bind(pubkey);
+                    builder
+                        .push_bind(creator.creator.to_bytes())
+                        .push_bind(pubkey.to_bytes());
                 },
             );
 
@@ -195,12 +192,12 @@ impl AssetIndexStorage for PgClient {
         }
 
         // Bulk upsert for asset_creators_v3
-        if !all_creators.is_empty() {
+        if !creator_updates.new_or_updated.is_empty() {
             let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
                 "INSERT INTO asset_creators_v3 (asc_pubkey, asc_creator, asc_verified, asc_slot_updated) ",
             );
             query_builder.push_values(
-                all_creators.iter(),
+                creator_updates.new_or_updated.iter(),
                 |mut builder, (pubkey, creator, slot_updated)| {
                     builder
                         .push_bind(pubkey.to_bytes().to_vec())
@@ -232,5 +229,193 @@ impl AssetIndexStorage for PgClient {
         transaction.commit().await.map_err(|e| e.to_string())?;
 
         Ok(())
+    }
+}
+
+#[derive(sqlx::FromRow, Debug)]
+struct CreatorRawResponse {
+    pub asc_pubkey: Vec<u8>,
+    pub asc_creator: Vec<u8>,
+    pub asc_verified: bool,
+}
+pub struct CreatorsUpdates {
+    pub new_or_updated: Vec<(Pubkey, Creator, i64)>,
+    pub to_remove: Vec<(Pubkey, Creator)>,
+}
+
+impl PgClient {
+    async fn batch_get_creators(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        pubkeys: Vec<Vec<u8>>,
+    ) -> Result<Vec<(Pubkey, Creator)>, String> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("SELECT asc_pubkey, asc_creator, asc_verified FROM asset_creators_v3 WHERE asc_pubkey in (");
+        let pubkey_len = pubkeys.len();
+        for (i, k) in pubkeys.iter().enumerate() {
+            query_builder.push_bind(k);
+            if i < pubkey_len - 1 {
+                query_builder.push(",");
+            }
+        }
+        query_builder.push(");");
+        let query = query_builder.build_query_as::<CreatorRawResponse>();
+        let creators_result = query
+            .fetch_all(transaction)
+            .await
+            .map_err(|err| err.to_string())?;
+
+        Ok(creators_result
+            .iter()
+            .map(|c| {
+                (
+                    Pubkey::try_from(c.asc_pubkey.clone()).unwrap(),
+                    Creator {
+                        creator: Pubkey::try_from(c.asc_creator.clone()).unwrap(),
+                        creator_verified: c.asc_verified,
+                        creator_share: 0,
+                    },
+                )
+            })
+            .collect())
+    }
+
+    pub fn diff(
+        all_creators: Vec<(Pubkey, Creator, i64)>,
+        existing_creators: Vec<(Pubkey, Creator)>,
+    ) -> CreatorsUpdates {
+        let mut existing_map: HashMap<Pubkey, Vec<Creator>> = HashMap::new();
+        for (pubkey, creator) in existing_creators.clone() {
+            existing_map.entry(pubkey).or_default().push(creator);
+        }
+
+        let mut active_creators_set: HashSet<(Pubkey, Pubkey)> = HashSet::new();
+        for (pubkey, creator, _slot) in all_creators.iter() {
+            active_creators_set.insert((*pubkey, creator.creator));
+        }
+
+        let mut new_or_updated = Vec::new();
+
+        let to_remove = existing_creators
+            .into_iter()
+            .filter(|(pubkey, creator)| !active_creators_set.contains(&(*pubkey, creator.creator)))
+            .to_owned()
+            .collect();
+        for (pubkey, creator, slot) in all_creators {
+            let existing_creators = existing_map.get(&pubkey);
+
+            match existing_creators {
+                Some(creators)
+                    if !creators.iter().any(|c| {
+                        c.creator == creator.creator
+                            && c.creator_verified == creator.creator_verified
+                    }) =>
+                {
+                    new_or_updated.push((pubkey, creator, slot))
+                }
+                None => new_or_updated.push((pubkey, creator, slot)),
+                _ => (),
+            }
+        }
+        CreatorsUpdates {
+            new_or_updated,
+            to_remove,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Helper function to create a creator
+    fn create_creator(creator_id: u8, verified: bool) -> Creator {
+        Creator {
+            creator: create_pubkey(creator_id),
+            creator_verified: verified,
+            creator_share: 100,
+        }
+    }
+
+    // Helper function to create a pubkey
+    fn create_pubkey(id: u8) -> Pubkey {
+        Pubkey::new_from_array([id; 32])
+    }
+
+    #[test]
+    fn test_all_creators_are_new() {
+        let all_creators = vec![
+            (create_pubkey(1), create_creator(1, true), 1000),
+            (create_pubkey(2), create_creator(2, false), 2000),
+        ];
+        let existing_creators = vec![];
+
+        let (new_or_updated, removed) = PgClient::diff(all_creators.clone(), existing_creators);
+
+        assert_eq!(new_or_updated, all_creators);
+        assert!(removed.is_empty());
+    }
+    #[test]
+    fn test_all_existing_creators_are_removed() {
+        let all_creators = vec![];
+        let existing_creators = vec![
+            (create_pubkey(1), create_creator(1, true)),
+            (create_pubkey(2), create_creator(2, false)),
+        ];
+
+        let (new_or_updated, removed) = PgClient::diff(all_creators, existing_creators.clone());
+
+        assert!(new_or_updated.is_empty());
+        assert_eq!(removed, existing_creators);
+    }
+    #[test]
+    fn test_all_creators_are_replaced() {
+        let all_creators = vec![
+            (create_pubkey(3), create_creator(3, true), 3000),
+            (create_pubkey(4), create_creator(4, false), 4000),
+        ];
+        let existing_creators = vec![
+            (create_pubkey(1), create_creator(1, true)),
+            (create_pubkey(2), create_creator(2, false)),
+        ];
+
+        let (new_or_updated, removed) = PgClient::diff(all_creators.clone(), existing_creators);
+
+        assert_eq!(new_or_updated, all_creators);
+        assert_eq!(removed.len(), 2); // Assuming removed creators are (1, true) and (2, false)
+    }
+    #[test]
+    fn test_some_creators_changed_verification() {
+        let all_creators = vec![
+            (create_pubkey(1), create_creator(1, false), 5000), // Changed
+            (create_pubkey(2), create_creator(2, false), 6000), // Unchanged
+        ];
+        let existing_creators = vec![
+            (create_pubkey(1), create_creator(1, true)),
+            (create_pubkey(2), create_creator(2, false)),
+        ];
+
+        let (new_or_updated, removed) = PgClient::diff(all_creators.clone(), existing_creators);
+
+        assert_eq!(new_or_updated.len(), 1); // Assuming only creator (1, false) is new/updated
+        assert!(removed.is_empty()); // No creators are removed
+    }
+
+    #[test]
+    fn test_no_changes_made() {
+        let all_creators = vec![
+            (create_pubkey(1), create_creator(1, true), 7000),
+            (create_pubkey(2), create_creator(2, false), 8000),
+        ];
+        let existing_creators = all_creators
+            .clone()
+            .into_iter()
+            .map(|(pk, c, _)| (pk, c))
+            .collect();
+
+        let (new_or_updated, removed) = PgClient::diff(all_creators, existing_creators);
+
+        assert!(new_or_updated.is_empty());
+        assert!(removed.is_empty());
     }
 }

@@ -1,7 +1,11 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use nft_ingester::api::SearchAssets;
+use entities::models::{AssetIndex, Creator};
+use nft_ingester::{api::SearchAssets, index_syncronizer::Synchronizer};
+use rocks_db::storage_traits::AssetIndexReader;
 use setup::TestEnvironment;
-use std::sync::Arc;
+use solana_sdk::pubkey::Pubkey;
+use sqlx::{Postgres, QueryBuilder};
+use std::{default, sync::Arc, time::Duration};
 
 use metrics_utils::ApiMetricsConfig;
 use testcontainers::clients::Cli;
@@ -17,17 +21,18 @@ async fn benchmark_search_assets(api: Arc<nft_ingester::api::api_impl::DasApi>, 
     // You can add more assertions or processing here as needed
 }
 
-async fn setup_environment<'a>(cli: &'a Cli) -> TestEnvironment<'a> {
-    let cnt = 100_000; // Number of records for setup
-    let (env, _generated_assets) = setup::TestEnvironment::create(cli, cnt, SLOT_UPDATED).await;
-    env
+async fn setup_environment<'a>(
+    cli: &'a Cli,
+) -> (TestEnvironment<'a>, setup::rocks::GeneratedAssets) {
+    let cnt = 1_000_000; // Number of records for setup
+    setup::TestEnvironment::create(cli, cnt, SLOT_UPDATED).await
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
     let cli: Cli = Cli::default();
-    let limit = 1000; // Number of records to fetch
+    let limit: u32 = 1000; // Number of records to fetch
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let env = rt.block_on(setup_environment(&cli));
+    let (env, _generated_assets) = rt.block_on(setup_environment(&cli));
     let api = nft_ingester::api::api_impl::DasApi::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
@@ -41,5 +46,83 @@ fn criterion_benchmark(c: &mut Criterion) {
     rt.block_on(env.teardown());
 }
 
-criterion_group!(benches, criterion_benchmark);
+async fn bench_delete_op(
+    pg_client: Arc<postgre_client::PgClient>,
+    rocks_db: Arc<rocks_db::Storage>,
+    assets: setup::rocks::GeneratedAssets,
+) {
+    let pubkeys = assets.pubkeys[50000..51000].to_vec();
+    Synchronizer::syncronize_batch(
+        rocks_db.clone(),
+        pg_client.clone(),
+        &pubkeys,
+        Default::default(),
+    )
+    .await
+    .unwrap();
+}
+
+async fn bench_get_asset_indexes(
+    pg_client: Arc<postgre_client::PgClient>,
+    rocks_db: Arc<rocks_db::Storage>,
+    assets: setup::rocks::GeneratedAssets,
+) {
+    let pubkeys = assets.pubkeys[50000..51000].to_vec();
+
+    let asset_indexes = rocks_db.get_asset_indexes(&pubkeys).await.unwrap();
+}
+
+async fn bench_get_dynamic_data_batch(
+    rocks_db: Arc<rocks_db::Storage>,
+    assets: setup::rocks::GeneratedAssets,
+) {
+    let pubkeys = assets.pubkeys[50000..51000].to_vec();
+    rocks_db
+        .asset_dynamic_data
+        .batch_get(pubkeys.clone())
+        .await
+        .unwrap();
+}
+
+fn pg_delete_benchmark(c: &mut Criterion) {
+    let cli: Cli = Cli::default();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (env, generated_assets) = rt.block_on(setup_environment(&cli));
+    let mut group = c.benchmark_group("My Group");
+
+    group.bench_function("delete_creators_with_select", |b| {
+        b.iter(|| {
+            rt.block_on(bench_delete_op(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                generated_assets.clone(),
+            ))
+        })
+    });
+
+    group.bench_function("get asset indexes", |b| {
+        b.iter(|| {
+            rt.block_on(bench_get_asset_indexes(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                generated_assets.clone(),
+            ))
+        })
+    });
+
+    group.bench_function("get dynamic details batch", |b| {
+        b.iter(|| {
+            rt.block_on(
+                (bench_get_dynamic_data_batch(
+                    env.rocks_env.storage.clone(),
+                    generated_assets.clone(),
+                )),
+            )
+        })
+    });
+    group.finish();
+    rt.block_on(env.teardown());
+}
+
+criterion_group!(benches, criterion_benchmark, pg_delete_benchmark);
 criterion_main!(benches);
