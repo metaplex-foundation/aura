@@ -12,8 +12,7 @@ members = [
   "usecase",
   "tests/setup",
   "backfill_rpc",
-  "ingegrity_verification",
-  "config"
+  "integrity_verification",
 ]
 
 [profile.release]

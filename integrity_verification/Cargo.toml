@@ -6,10 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }
+tokio = { version = "1.26.0", features = ["full", "tracing"] }
 thiserror = "1.0.56"
 clap = { version = "4.4.14", features = ["derive"] }
-config = { path = "../config" }
 metrics-utils = { path = "../metrics_utils" }
 tracing = "0.1.40"
 env_logger = "0.10.1"
+reqwest = { version = "0.11.23", features = ["json"] }
+figment = { version = "0.10.6", features = ["env"] }
+serde_json = "1.0"
+serde_derive = "1.0.190"
+serde = "1.0.136"
+dotenvy = "0.15.7"
