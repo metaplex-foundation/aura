@@ -30,40 +30,6 @@ impl IntegrityVerificationApi {
 
         Ok(serde_json::from_str(resp.as_str())?)
     }
-
-    // async fn diff(&self, body: &str, title: &str) -> Result<(), TestApiError> {
-    //     let actual_response = self.request(self.config.compare_url.as_str(), body).await?;
-    //     let expected_response = self.request(self.config.url.as_str(), body).await?;
-    //
-    //     let res = assert_json_matches_no_panic(
-    //         &actual_response,
-    //         &expected_response,
-    //         DiffConfig::new(CompareMode::Strict),
-    //     );
-    //     self.assert_output_eq(res, Ok(()), title);
-    //
-    //     Ok(())
-    // }
-
-    // fn assert_output_eq(
-    //     &self,
-    //     actual: Result<(), String>,
-    //     expected: Result<(), &str>,
-    //     title: &str,
-    // ) {
-    //     match (actual, expected) {
-    //         (Ok(()), Ok(())) => {
-    //             info!("No diff for: {}\n", title);
-    //         }
-    //         (Err(actual_error), Ok(())) => {
-    //             warn!("Diff for: {}\n", title);
-    //             warn!("{}", actual_error);
-    //         }
-    //         _ => {
-    //             warn!("Unexpected diff");
-    //         }
-    //     }
-    // }
 }
 
 #[tokio::test]

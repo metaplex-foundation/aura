@@ -23,6 +23,8 @@ serde = "1.0.136"
 dotenvy = "0.15.7"
 rand = "0.8.5"
 tokio-util = "0.7.10"
+assert-json-diff = "2.0.2"
+regex = "1.10.2"
 
 [dev-dependencies]
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
