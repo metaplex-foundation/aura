@@ -39,7 +39,6 @@ pub struct Backfiller {
     rocks_client: Arc<rocks_db::Storage>,
     big_table_client: Arc<LedgerStorage>,
     big_table_inner_client: Arc<BigTableConnection>,
-    buffer: Arc<Buffer>,
     slot_start_from: u64,
     slot_parse_until: u64,
 }
@@ -47,7 +46,6 @@ pub struct Backfiller {
 impl Backfiller {
     pub async fn new(
         rocks_client: Arc<rocks_db::Storage>,
-        buffer: Arc<Buffer>,
         config: BackfillerConfig,
     ) -> Result<Backfiller, IngesterError> {
         let big_table_creds = config.big_table_config.get_big_table_creds_key()?;
@@ -74,18 +72,21 @@ impl Backfiller {
             rocks_client,
             big_table_client: Arc::new(big_table_client),
             big_table_inner_client: Arc::new(big_table_inner_client),
-            buffer,
             slot_start_from: config.slot_start_from,
             slot_parse_until: config.get_slot_until(),
         })
     }
 
-    pub async fn start_backfill(
+    pub async fn start_backfill<C>(
         &self,
         tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
         keep_running: Arc<AtomicBool>,
         metrics: Arc<BackfillerMetricsConfig>,
-    ) -> Result<(), IngesterError> {
+        block_consumer: Arc<C>,
+    ) -> Result<(), IngesterError>
+    where
+        C: BlockConsumer + Send + Sync + 'static,
+    {
         info!("Backfiller is started");
 
         let slots_collector = SlotsCollector::new(
@@ -108,10 +109,7 @@ impl Backfiller {
             TransactionsParser::new(
                 self.rocks_client.clone(),
                 self.big_table_client.clone(),
-                Arc::new(DirectBlockParser {
-                    buffer: self.buffer.clone(),
-                    metrics: metrics.clone(),
-                }),
+                block_consumer,
             )
             .await,
         );
@@ -269,7 +267,7 @@ impl SlotsCollector {
 }
 
 #[derive(Clone)]
-pub struct TransactionsParser<C: BlockConsumer + Send + Clone> {
+pub struct TransactionsParser<C: BlockConsumer + Send> {
     rocks_client: Arc<rocks_db::Storage>,
     big_table_client: Arc<LedgerStorage>,
     consumer: Arc<C>,
@@ -277,7 +275,7 @@ pub struct TransactionsParser<C: BlockConsumer + Send + Clone> {
 
 impl<C> TransactionsParser<C>
 where
-    C: BlockConsumer + Send + Clone + Sync + 'static,
+    C: BlockConsumer + Send + Sync + 'static,
 {
     pub async fn new(
         rocks_client: Arc<rocks_db::Storage>,
@@ -373,7 +371,10 @@ where
                         }
                     }
                     Err(err) => {
-                        error!("Task for parsing slots has failed: {}. Returning immediately", err);
+                        error!(
+                            "Task for parsing slots has failed: {}. Returning immediately",
+                            err
+                        );
                         return;
                     }
                 };
@@ -415,10 +416,18 @@ pub struct DirectBlockParser {
     buffer: Arc<Buffer>,
     metrics: Arc<BackfillerMetricsConfig>,
 }
+impl DirectBlockParser {
+    pub fn new(buffer: Arc<Buffer>, metrics: Arc<BackfillerMetricsConfig>) -> DirectBlockParser {
+        DirectBlockParser { buffer, metrics }
+    }
+}
 
 #[async_trait]
 impl BlockConsumer for DirectBlockParser {
-    async fn consume_block(&self, block: solana_transaction_status::ConfirmedBlock) {
+    async fn consume_block(
+        &self,
+        block: solana_transaction_status::ConfirmedBlock,
+    ) -> Result<(), String> {
         for tx in block.transactions.iter() {
             let meta = if let Some(meta) = tx.get_status_meta() {
                 if let Err(_err) = meta.status {
@@ -503,6 +512,7 @@ impl BlockConsumer for DirectBlockParser {
 
         self.metrics
             .set_last_processed_slot("parsed_slot", block.parent_slot as i64);
+        Ok(())
     }
 }
 pub async fn get_block_from_bg(

@@ -466,7 +466,7 @@ impl BubblegumTxProcessor {
                     if let Err(e) = self
                         .rocks_client
                         .asset_static_data
-                        .merge(id, &asset_static_details)
+                        .merge(id, asset_static_details)
                     {
                         return Err(IngesterError::DatabaseError(format!(
                             "Error while saving AssetStaticDetails for cNFT: {}",
@@ -535,7 +535,7 @@ impl BubblegumTxProcessor {
                     if let Err(e) = self
                         .rocks_client
                         .asset_authority_data
-                        .merge(id, &asset_authority)
+                        .merge(id, asset_authority)
                     {
                         return Err(IngesterError::DatabaseError(format!(
                             "Error while saving AssetAuthority for cNFT: {}",
@@ -545,7 +545,7 @@ impl BubblegumTxProcessor {
 
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(
                         id,
-                        &AssetOwner {
+                        AssetOwner {
                             pubkey: id,
                             owner: Updated::new(bundle.slot, Some(cl.seq), owner),
                             delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),

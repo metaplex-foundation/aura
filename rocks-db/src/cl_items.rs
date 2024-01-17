@@ -141,7 +141,7 @@ impl Storage {
                         cli_node_idx: node_idx,
                     };
 
-                    if let Err(e) = self.cl_leafs.put((leaf_idx, tree), &cl_leaf) {
+                    if let Err(e) = self.cl_leafs.put((leaf_idx, tree), cl_leaf) {
                         error!("Error while saving change log for cNFT: {}", e);
                     };
                 }

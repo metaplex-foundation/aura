@@ -45,13 +45,11 @@ where
         let backend = self.backend.clone();
         tokio::task::spawn_blocking(move || Self::put_sync(backend, key, value))
             .await
-            .map_err(|e| StorageError::Common(e.to_string()))?;
-
-        Ok(())
+            .map_err(|e| StorageError::Common(e.to_string()))?
     }
 
-    pub fn put(&self, key: C::KeyType, value: &C::ValueType) -> Result<()> {
-        Self::put_sync(self.backend.clone(), key, *value)
+    pub fn put(&self, key: C::KeyType, value: C::ValueType) -> Result<()> {
+        Self::put_sync(self.backend.clone(), key, value)
     }
 
     fn put_sync(backend: Arc<DB>, key: C::KeyType, value: C::ValueType) -> Result<()> {

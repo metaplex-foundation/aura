@@ -5,7 +5,7 @@ use std::time::Duration;
 use clap::Parser;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
-use nft_ingester::transaction_ingester;
+use nft_ingester::{config, transaction_ingester};
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -36,6 +36,8 @@ use rocks_db::errors::BackupServiceError;
 use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::{backup_service, Storage};
 use tonic::transport::Server;
+
+use crate::backfiller::DirectBlockParser;
 
 mod backfiller;
 
@@ -303,18 +305,44 @@ pub async fn main() -> Result<(), IngesterError> {
     if config.run_bubblegum_backfiller {
         let config: BackfillerConfig = setup_config();
 
-        let backfiller = backfiller::Backfiller::new(rocks_storage.clone(), buffer.clone(), config)
+        let backfiller = backfiller::Backfiller::new(rocks_storage.clone(), config.clone())
             .await
             .unwrap();
 
-        backfiller
-            .start_backfill(
-                mutexed_tasks.clone(),
-                keep_running.clone(),
-                metrics_state.backfiller_metrics.clone(),
-            )
-            .await
-            .unwrap();
+        match config.backfiller_mode {
+            config::BackfillerMode::IngestDirectly => {
+                let consumer = Arc::new(DirectBlockParser::new(
+                    buffer.clone(),
+                    metrics_state.backfiller_metrics.clone(),
+                ));
+                backfiller
+                    .start_backfill(
+                        mutexed_tasks.clone(),
+                        keep_running.clone(),
+                        metrics_state.backfiller_metrics.clone(),
+                        consumer,
+                    )
+                    .await
+                    .unwrap();
+                info!("running backfiller directly from bigtable to ingester");
+            }
+            config::BackfillerMode::Persist | config::BackfillerMode::PersistAndIngest => {
+                let consumer = rocks_storage.clone();
+                backfiller
+                    .start_backfill(
+                        mutexed_tasks.clone(),
+                        keep_running.clone(),
+                        metrics_state.backfiller_metrics.clone(),
+                        consumer,
+                    )
+                    .await
+                    .unwrap();
+                info!("running backfiller to persist raw data");
+            }
+            config::BackfillerMode::None | config::BackfillerMode::IngestPersisted => {
+                info!("not running backfiller");
+            }
+        };
     }
 
     let max_postgre_connections = config
