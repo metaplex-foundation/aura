@@ -83,15 +83,6 @@ where
             let last_included_key = last_included_key.unwrap();
             // fetch the asset indexes from the primary storage
             let updated_keys_refs: Vec<Pubkey> = updated_keys.iter().copied().collect();
-            let asset_indexes = self
-                .primary_storage
-                .get_asset_indexes(updated_keys_refs.as_slice())
-                .await?;
-
-            if asset_indexes.is_empty() {
-                warn!("No asset indexes found for keys: {:?}", updated_keys_refs);
-                break;
-            }
 
             // Update the asset indexes in the index storage
             // let last_included_key = AssetsUpdateIdx::encode_key(last_included_key);
@@ -100,23 +91,20 @@ where
                 last_included_key.1,
                 last_included_key.2,
             );
-            self.index_storage
-                .update_asset_indexes_batch(
-                    asset_indexes
-                        .values()
-                        .cloned()
-                        .collect::<Vec<AssetIndex>>()
-                        .as_slice(),
-                    last_included_rocks_key.as_slice(),
-                )
-                .await?;
+            Self::syncronize_batch(
+                self.primary_storage.clone(),
+                self.index_storage.clone(),
+                updated_keys_refs.as_slice(),
+                last_included_rocks_key,
+            )
+            .await?;
 
             self.metrics
                 .set_last_synchronized_slot("last_synchronized_slot", last_included_key.1 as i64);
 
             self.metrics.inc_number_of_records_synchronized(
                 "synchronized_records",
-                asset_indexes.len() as u64,
+                updated_keys_refs.len() as u64,
             );
 
             if updated_keys.len() < self.batch_size {
@@ -125,6 +113,32 @@ where
             // add the processed keys to the set
             processed_keys.extend(updated_keys);
         }
+        Ok(())
+    }
+
+    pub async fn syncronize_batch(
+        primary_storage: Arc<T>,
+        index_storage: Arc<U>,
+        updated_keys_refs: &[Pubkey],
+        last_included_rocks_key: Vec<u8>,
+    ) -> Result<(), IngesterError> {
+        let asset_indexes = primary_storage.get_asset_indexes(updated_keys_refs).await?;
+
+        if asset_indexes.is_empty() {
+            warn!("No asset indexes found for keys: {:?}", updated_keys_refs);
+            return Ok(());
+        }
+
+        index_storage
+            .update_asset_indexes_batch(
+                asset_indexes
+                    .values()
+                    .cloned()
+                    .collect::<Vec<AssetIndex>>()
+                    .as_slice(),
+                last_included_rocks_key.as_slice(),
+            )
+            .await?;
         Ok(())
     }
 }

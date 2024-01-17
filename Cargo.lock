@@ -5341,6 +5341,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "chrono",
+ "criterion",
  "entities",
  "figment",
  "futures-util",
