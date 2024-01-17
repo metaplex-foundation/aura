@@ -561,6 +561,14 @@ impl MetricsTrait for IntegrityVerificationMetrics {
                 .network_errors_reference_host
                 .clone(),
         );
+
+        self.registry.register(
+            "fetch_keys_errors",
+            "Count of DB errors while fetching keys for tests",
+            self.integrity_verification_metrics
+                .fetch_keys_errors
+                .clone(),
+        );
     }
 }
 
@@ -742,6 +750,8 @@ pub struct IntegrityVerificationMetricsConfig {
 
     network_errors_testing_host: Counter,
     network_errors_reference_host: Counter,
+
+    fetch_keys_errors: Family<MetricLabel, Counter>,
 }
 
 impl Default for IntegrityVerificationMetricsConfig {
@@ -768,6 +778,7 @@ impl IntegrityVerificationMetricsConfig {
             failed_get_assets_by_group_tested: Default::default(),
             network_errors_testing_host: Default::default(),
             network_errors_reference_host: Default::default(),
+            fetch_keys_errors: Default::default(),
         }
     }
 
@@ -818,5 +829,13 @@ impl IntegrityVerificationMetricsConfig {
     }
     pub fn inc_network_errors_reference_host(&self) -> u64 {
         self.network_errors_reference_host.inc()
+    }
+
+    pub fn inc_fetch_keys_errors(&self, label: &str) -> u64 {
+        self.fetch_keys_errors
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc()
     }
 }
