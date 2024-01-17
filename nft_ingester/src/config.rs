@@ -411,9 +411,9 @@ pub fn init_logger(log_level: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
     use lazy_static::lazy_static;
-    
+    use std::sync::Mutex;
+
     lazy_static! {
         static ref ENV_MUTEX: Mutex<()> = Mutex::new(());
     }
