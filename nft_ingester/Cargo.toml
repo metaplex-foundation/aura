@@ -60,6 +60,8 @@ tonic = "0.10.2"
 tracing  ="0.1.40"
 backfill-rpc = { path = "../backfill_rpc" }
 
+pprof = {version = "0.13.0", features = ["_protobuf", "protobuf-codec"]}
+
 [dev-dependencies]
 tempfile = "3.8.1"
 setup = { path = "../tests/setup" }

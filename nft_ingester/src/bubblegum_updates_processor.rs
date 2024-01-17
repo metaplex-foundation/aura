@@ -14,7 +14,7 @@ use entities::enums::{
 };
 use entities::models::{BufferedTransaction, Updated};
 use entities::models::{ChainDataV1, Creator, Uses};
-use log::{debug, error, info};
+use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
@@ -233,7 +233,7 @@ impl BubblegumTxProcessor {
         let begin_processing = Instant::now();
 
         let ix_str = self.instruction_name_to_string(ix_type);
-        info!("BGUM instruction txn={:?}: {:?}", ix_str, bundle.txn_id);
+        debug!("BGUM instruction txn={:?}: {:?}", ix_str, bundle.txn_id);
 
         let mut processed = true;
 
