@@ -191,8 +191,8 @@ impl BubblegumTxProcessor {
                             self.instruction_name_to_string(&parsing_result.instruction),
                         );
 
-                        let ix_parse_res = self.handle_bubblegum_instruction(parsing_result, &ix)
-                            .await;
+                        let ix_parse_res =
+                            self.handle_bubblegum_instruction(parsing_result, &ix).await;
 
                         match ix_parse_res {
                             Ok(_) => {}
@@ -354,7 +354,7 @@ impl BubblegumTxProcessor {
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle<'c>,
     ) -> Result<(), IngesterError> {
-        if let (Some(_le), Some(cl)) = (&parsing_result.leaf_update, &parsing_result.tree_update) {
+        if let Some(cl) = &parsing_result.tree_update {
             self.rocks_client.save_changelog(cl, bundle.slot).await;
 
             let (asset_id, _) = Pubkey::find_program_address(
@@ -379,9 +379,13 @@ impl BubblegumTxProcessor {
                     ..Default::default()
                 },
             )?;
+
+            return Ok(());
         }
 
-        Ok(())
+        Err(IngesterError::ParsingError(
+            "Ix not parsed correctly".to_string(),
+        ))
     }
 
     pub async fn mint_v1<'c>(
@@ -600,15 +604,19 @@ impl BubblegumTxProcessor {
             let leaf_info = AssetLeaf {
                 pubkey: asset_id,
                 tree_id: cl.id,
-                leaf: None,
+                leaf: Some(vec![0; 32]),
                 nonce: Some(nonce),
-                data_hash: None,
-                creator_hash: None,
+                data_hash: Some(Hash::from([0; 32])),
+                creator_hash: Some(Hash::from([0; 32])),
                 leaf_seq: Some(cl.seq),
                 slot_updated: bundle.slot,
             };
 
-            if let Err(e) = self.rocks_client.asset_leaf_data.merge(asset_id, &leaf_info) {
+            if let Err(e) = self
+                .rocks_client
+                .asset_leaf_data
+                .merge(asset_id, &leaf_info)
+            {
                 error!("Error while saving leaf for cNFT: {}", e);
             };
 
