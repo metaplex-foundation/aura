@@ -852,6 +852,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cbbc9d0964165b47557570cce6c952866c2678457aca742aafc9fb771d30270"
 
 [[package]]
+name = "base58"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6107fe1be6682a68940da878d9e9f5e90ca5745b3dec9fd1bb393c8777d4f581"
+
+[[package]]
 name = "base64"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3008,9 +3014,12 @@ version = "0.1.0"
 dependencies = [
  "clap 4.4.14",
  "dotenvy",
+ "entities",
  "env_logger 0.10.1",
  "figment",
  "metrics-utils",
+ "postgre-client",
+ "rand 0.8.5",
  "reqwest",
  "serde",
  "serde_derive",
@@ -3018,6 +3027,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "tracing-test",
  "usecase",
 ]
 
@@ -4439,9 +4449,11 @@ name = "postgre-client"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base58",
  "base64 0.21.6",
  "entities",
  "lazy_static",
+ "log",
  "mockall 0.11.4",
  "once_cell",
  "rand 0.8.5",

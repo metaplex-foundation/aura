@@ -1,5 +1,8 @@
 use crate::error::IntegrityVerificationError;
+use crate::params::generate_get_assets_by_owner_params;
+use crate::requests::Body;
 use reqwest::Client;
+use serde_json::{json, Value};
 
 #[derive(Debug)]
 pub struct IntegrityVerificationApi {
@@ -64,111 +67,29 @@ impl IntegrityVerificationApi {
     //         }
     //     }
     // }
+}
 
-    // pub async fn test_get_asset(&self) -> Result<(), TestApiError> {
-    //     for params in &self.cases.assets_id {
-    //         let body = Body::new("getAsset", params);
-    //         let body = serde_json::to_string(&body)?;
-    //
-    //         self.diff(
-    //             body.as_str(),
-    //             format!("Asset ID: {}", params.id.clone().unwrap_or_default()).as_str(),
-    //         )
-    //             .await?;
-    //     }
-    //
-    //     Ok(())
-    // }
-    //
-    // pub async fn test_get_asset_proof(&self) -> Result<(), TestApiError> {
-    //     for params in &self.cases.assets_proof_id {
-    //         let body = Body::new("getAssetProof", params);
-    //         let body = serde_json::to_string(&body)?;
-    //
-    //         self.diff(
-    //             &body,
-    //             format!("Asset proof ID: {}", params.id.clone().unwrap_or_default()).as_str(),
-    //         )
-    //             .await?;
-    //     }
-    //
-    //     Ok(())
-    // }
-    //
-    // pub async fn test_get_asset_by_group(&self) -> Result<(), TestApiError> {
-    //     for params in &self.cases.asset_by_group {
-    //         let body = Body::new("getAssetsByGroup", params);
-    //         let body = serde_json::to_string(&body)?;
-    //
-    //         self.diff(
-    //             &body,
-    //             format!(
-    //                 "Asset by group - groupKey: {}, groupValue: {}",
-    //                 params.group_key.clone().unwrap_or_default(),
-    //                 params.group_value.clone().unwrap_or_default()
-    //             )
-    //                 .as_str(),
-    //         )
-    //             .await?
-    //     }
-    //
-    //     Ok(())
-    // }
-    //
-    // pub async fn test_get_asset_by_owner(&self) -> Result<(), TestApiError> {
-    //     for params in &self.cases.asset_by_owner {
-    //         let body = Body::new("getAssetsByOwner", params);
-    //         let body = serde_json::to_string(&body)?;
-    //
-    //         self.diff(
-    //             &body,
-    //             format!(
-    //                 "Asset by owner - owner address: {}",
-    //                 params.owner_address.clone().unwrap_or_default()
-    //             )
-    //                 .as_str(),
-    //         )
-    //             .await?;
-    //     }
-    //
-    //     Ok(())
-    // }
-    //
-    // pub async fn test_get_asset_by_creator(&self) -> Result<(), TestApiError> {
-    //     for params in &self.cases.asset_by_creator {
-    //         let body = Body::new("getAssetsByCreator", params);
-    //         let body = serde_json::to_string(&body)?;
-    //
-    //         self.diff(
-    //             &body,
-    //             format!(
-    //                 "Asset by creator - creator address: {}",
-    //                 params.creator_address.clone().unwrap_or_default()
-    //             )
-    //                 .as_str(),
-    //         )
-    //             .await?;
-    //     }
-    //
-    //     Ok(())
-    // }
-    //
-    // pub async fn test_get_assets_by_authority(&self) -> Result<(), TestApiError> {
-    //     for params in &self.cases.asset_by_authority {
-    //         let body = Body::new("getAssetsByAuthority", params);
-    //         let body = serde_json::to_string(&body)?;
-    //
-    //         self.diff(
-    //             &body,
-    //             format!(
-    //                 "Asset by authority - authority address: {}",
-    //                 params.authority_address.clone().unwrap_or_default()
-    //             )
-    //                 .as_str(),
-    //         )
-    //             .await?;
-    //     }
-    //
-    //     Ok(())
-    // }
+#[tokio::test]
+async fn test_api() {
+    let api = IntegrityVerificationApi::new();
+    let body = json!(Body::new(
+        "getAssetsByOwner",
+        json!(generate_get_assets_by_owner_params(
+            "m7QZ3fVbBYSDfgjFhZDDSHK7VAPYa6xwUu34x3RU4mY".to_string(),
+            None,
+            None
+        )),
+    ));
+
+    println!("{:#?}", &body);
+
+    assert_eq!(
+        Value::Null,
+        api.make_request(
+            "https://mainnet.helius-rpc.com/?api-key=0800bcca-7d4d-4a0a-800a-5aa9e1dc855f",
+            &body.to_string()
+        )
+        .await
+        .unwrap()
+    );
 }
