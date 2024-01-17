@@ -1,8 +1,8 @@
-use std::ops::DerefMut;
 use pprof::protos::Message;
 use pprof::ProfilerGuard;
 use std::fs::File;
 use std::io::Write;
+use std::ops::DerefMut;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::oneshot::Sender;
