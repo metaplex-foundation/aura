@@ -10,27 +10,23 @@ impl PgClient {
         field: &str,
     ) -> Result<Vec<String>, String> {
         let query = &format!(
-            "
-            WITH first_selection AS (
-                SELECT {0} FROM (
-                    SELECT {0}, ROW_NUMBER() OVER (PARTITION BY ast_slot_updated ORDER BY ast_slot_updated DESC) as rn
-                    FROM assets_v3
-                    WHERE {0} IS NOT NULL
-                ) sub
-                WHERE sub.rn = 1
+            "WITH sorted AS (
+                SELECT DISTINCT ON (ast_slot_updated) {0}
+                FROM assets_v3
+                WHERE {0} IS NOT NULL
+                ORDER BY ast_slot_updated DESC
                 LIMIT 50
             ),
-            additional_selection AS (
+            random AS (
                 SELECT {0}
                 FROM assets_v3
                 WHERE {0} IS NOT NULL
-                  AND {0} NOT IN (SELECT {0} FROM first_selection)
+                  AND {0} NOT IN (SELECT {0} FROM sorted)
                 ORDER BY RANDOM() LIMIT 50
             )
-            SELECT {0} FROM first_selection
+            SELECT {0} FROM sorted
             UNION ALL
-            SELECT {0} FROM additional_selection
-        ",
+            SELECT {0} FROM random",
             field
         );
 
