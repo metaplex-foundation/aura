@@ -16,6 +16,7 @@ pub struct RocksTestEnvironment {
     _temp_dir: TempDir,
 }
 
+#[derive(Debug, Clone)]
 pub struct GeneratedAssets {
     pub pubkeys: Vec<Pubkey>,
     pub static_details: Vec<AssetStaticDetails>,

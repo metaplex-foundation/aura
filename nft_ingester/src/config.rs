@@ -94,6 +94,8 @@ pub struct IngesterConfig {
     pub rust_log: Option<String>,
     pub sql_log_level: Option<String>,
     pub backfill_rpc_address: String,
+    pub run_profiling: Option<bool>,
+    pub profiling_file_path_container: Option<String>,
 }
 
 impl IngesterConfig {
@@ -131,6 +133,10 @@ impl IngesterConfig {
     }
     pub fn get_sql_log_level(&self) -> String {
         self.sql_log_level.clone().unwrap_or("error".to_string())
+    }
+
+    pub fn get_is_run_profiling(&self) -> bool {
+        self.run_profiling.unwrap_or_default()
     }
 }
 

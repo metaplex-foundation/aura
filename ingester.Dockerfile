@@ -41,3 +41,4 @@ RUN groupadd $APP_USER && useradd -g $APP_USER $APP_USER && mkdir -p ${APP}
 
 COPY --from=builder /rust/target/release/ingester ${APP}/ingester
 WORKDIR ${APP}
+STOPSIGNAL SIGINT
