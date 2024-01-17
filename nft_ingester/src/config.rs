@@ -54,6 +54,8 @@ pub struct BackfillerConfig {
     pub big_table_config: BigTableConfig,
     pub slot_until: Option<u64>,
     pub slot_start_from: u64,
+    #[serde(default)]
+    pub backfiller_mode: BackfillerMode,
 }
 
 impl BackfillerConfig {
@@ -62,6 +64,15 @@ impl BackfillerConfig {
     }
 }
 
+#[derive(Deserialize, Default, PartialEq, Debug, Clone)]
+pub enum BackfillerMode {
+    None,
+    Persist,
+    PersistAndIngest,
+    IngestPersisted,
+    #[default]
+    IngestDirectly,
+}
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {
     pub database_config: DatabaseConfig,

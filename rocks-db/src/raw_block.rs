@@ -47,7 +47,11 @@ impl BlockConsumer for Storage {
             slot,
             block: encoded,
         };
-        let res = self.raw_blocks.put_async(raw_block.slot, raw_block.clone()).await.map_err(|e|e.to_string());
+        let res = self
+            .raw_blocks
+            .put_async(raw_block.slot, raw_block.clone())
+            .await
+            .map_err(|e| e.to_string());
         if let Err(e) = res {
             error!(
                 "Failed to put raw block for slot: {}, error: {}",

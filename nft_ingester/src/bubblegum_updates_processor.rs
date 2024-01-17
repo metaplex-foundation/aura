@@ -450,7 +450,7 @@ impl BubblegumTxProcessor {
                     if let Err(e) = self
                         .rocks_client
                         .asset_static_data
-                        .put(id, &asset_static_details)
+                        .put(id, asset_static_details)
                     {
                         error!("Error while saving static data for cNFT: {}", e);
                     };
@@ -512,14 +512,14 @@ impl BubblegumTxProcessor {
                     if let Err(e) = self
                         .rocks_client
                         .asset_authority_data
-                        .put(id, &asset_authority)
+                        .put(id, asset_authority)
                     {
                         error!("Error while saving authority for cNFT: {}", e);
                     };
 
                     if let Err(e) = self.rocks_client.asset_owner_data.put(
                         id,
-                        &AssetOwner {
+                        AssetOwner {
                             pubkey: id,
                             owner: Updated::new(bundle.slot, Some(cl.seq), owner),
                             delegate: Some(Updated::new(bundle.slot, Some(cl.seq), delegate)),
