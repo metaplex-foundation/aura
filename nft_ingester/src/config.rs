@@ -407,3 +407,68 @@ pub fn init_logger(log_level: &str) {
     let t = tracing_subscriber::fmt().with_env_filter(log_level);
     t.event_format(fmt::format::json()).init();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+    use lazy_static::lazy_static;
+    
+    lazy_static! {
+        static ref ENV_MUTEX: Mutex<()> = Mutex::new(());
+    }
+
+    #[test]
+    fn test_setup_default_backfiller_config() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        std::env::set_var("INGESTER_DATABASE_CONFIG", "{}");
+        std::env::set_var("INGESTER_TCP_CONFIG", "{}");
+        std::env::set_var("INGESTER_BIG_TABLE_CONFIG", "{}");
+        std::env::set_var("INGESTER_SLOT_START_FROM", "0");
+        let config: BackfillerConfig = setup_config();
+        assert_eq!(
+            config,
+            BackfillerConfig {
+                database_config: DatabaseConfig(figment::value::Dict::new()),
+                tcp_config: TcpConfig(figment::value::Dict::new()),
+                env: None,
+                big_table_config: BigTableConfig(figment::value::Dict::new()),
+                slot_until: None,
+                slot_start_from: 0,
+                backfiller_mode: BackfillerMode::IngestDirectly
+            }
+        );
+        std::env::remove_var("INGESTER_DATABASE_CONFIG");
+        std::env::remove_var("INGESTER_TCP_CONFIG");
+        std::env::remove_var("INGESTER_BIG_TABLE_CONFIG");
+        std::env::remove_var("INGESTER_SLOT_START_FROM");
+    }
+
+    #[test]
+    fn test_setup_backfiller_config_backfill_mode() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        std::env::set_var("INGESTER_DATABASE_CONFIG", "{}");
+        std::env::set_var("INGESTER_TCP_CONFIG", "{}");
+        std::env::set_var("INGESTER_BIG_TABLE_CONFIG", "{}");
+        std::env::set_var("INGESTER_SLOT_START_FROM", "0");
+        std::env::set_var("INGESTER_BACKFILLER_MODE", "Persist");
+        let config: BackfillerConfig = setup_config();
+        assert_eq!(
+            config,
+            BackfillerConfig {
+                database_config: DatabaseConfig(figment::value::Dict::new()),
+                tcp_config: TcpConfig(figment::value::Dict::new()),
+                env: None,
+                big_table_config: BigTableConfig(figment::value::Dict::new()),
+                slot_until: None,
+                slot_start_from: 0,
+                backfiller_mode: BackfillerMode::Persist,
+            }
+        );
+        std::env::remove_var("INGESTER_DATABASE_CONFIG");
+        std::env::remove_var("INGESTER_TCP_CONFIG");
+        std::env::remove_var("INGESTER_BIG_TABLE_CONFIG");
+        std::env::remove_var("INGESTER_SLOT_START_FROM");
+        std::env::remove_var("INGESTER_BACKFILLER_MODE");
+    }
+}
