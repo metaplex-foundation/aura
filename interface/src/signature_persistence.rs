@@ -38,9 +38,17 @@ pub trait ProcessingDataGetter {
 }
 
 #[async_trait]
-pub trait BlockConsumer {
+pub trait BlockConsumer: Send + Sync + 'static {
     async fn consume_block(
         &self,
-        block: solana_transaction_status::ConfirmedBlock,
+        block: solana_transaction_status::UiConfirmedBlock,
     ) -> Result<(), String>;
+}
+
+#[async_trait]
+pub trait BlockProducer: Send + Sync + 'static {
+    async fn get_block(
+        &self,
+        slot: u64,
+    ) -> Result<solana_transaction_status::UiConfirmedBlock, StorageError>;
 }

@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
-use interface::signature_persistence::BlockConsumer;
-use log::{debug, error, info, warn};
+use interface::error::StorageError;
+use interface::signature_persistence::{BlockConsumer, BlockProducer};
+use log::{error, info, warn};
 use metrics_utils::{BackfillerMetricsConfig, MetricStatus};
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::BackfillerConfig;
@@ -15,7 +16,10 @@ use solana_bigtable_connection::{bigtable::BigTableConnection, CredentialType};
 use solana_sdk::clock::Slot;
 use solana_storage_bigtable::LedgerStorage;
 use solana_storage_bigtable::{DEFAULT_APP_PROFILE_ID, DEFAULT_INSTANCE_NAME};
-use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
+use solana_transaction_status::{
+    BlockEncodingOptions, EncodedConfirmedTransactionWithStatusMeta,
+    EncodedTransactionWithStatusMeta, TransactionDetails,
+};
 use std::collections::HashMap;
 use std::num::ParseIntError;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -37,61 +41,42 @@ pub const DELETE_SLOT_RETRIES: u32 = 5;
 
 pub struct Backfiller {
     rocks_client: Arc<rocks_db::Storage>,
-    big_table_client: Arc<LedgerStorage>,
-    big_table_inner_client: Arc<BigTableConnection>,
+    big_table_client: Arc<BigTableClient>,
     slot_start_from: u64,
     slot_parse_until: u64,
 }
 
 impl Backfiller {
-    pub async fn new(
+    pub fn new(
         rocks_client: Arc<rocks_db::Storage>,
+        big_table_client: Arc<BigTableClient>,
         config: BackfillerConfig,
-    ) -> Result<Backfiller, IngesterError> {
-        let big_table_creds = config.big_table_config.get_big_table_creds_key()?;
-        let big_table_timeout = config.big_table_config.get_big_table_timeout_key()?;
-
-        let big_table_client = LedgerStorage::new(
-            true,
-            Some(Duration::from_secs(big_table_timeout as u64)),
-            Some(big_table_creds.to_string()),
-        )
-        .await?;
-
-        let big_table_inner_client = solana_bigtable_connection::bigtable::BigTableConnection::new(
-            DEFAULT_INSTANCE_NAME,
-            DEFAULT_APP_PROFILE_ID,
-            true,
-            None,
-            CredentialType::Filepath(Some(big_table_creds)),
-        )
-        .await
-        .unwrap();
-
-        Ok(Backfiller {
+    ) -> Backfiller {
+        Backfiller {
             rocks_client,
-            big_table_client: Arc::new(big_table_client),
-            big_table_inner_client: Arc::new(big_table_inner_client),
+            big_table_client,
             slot_start_from: config.slot_start_from,
             slot_parse_until: config.get_slot_until(),
-        })
+        }
     }
 
-    pub async fn start_backfill<C>(
+    pub async fn start_backfill<C, P>(
         &self,
         tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
         keep_running: Arc<AtomicBool>,
         metrics: Arc<BackfillerMetricsConfig>,
         block_consumer: Arc<C>,
+        block_producer: Arc<P>,
     ) -> Result<(), IngesterError>
     where
-        C: BlockConsumer + Send + Sync + 'static,
+        C: BlockConsumer,
+        P: BlockProducer,
     {
         info!("Backfiller is started");
 
         let slots_collector = SlotsCollector::new(
             self.rocks_client.clone(),
-            self.big_table_inner_client.clone(),
+            self.big_table_client.big_table_inner_client.clone(),
             self.slot_start_from,
             self.slot_parse_until,
             metrics.clone(),
@@ -108,8 +93,9 @@ impl Backfiller {
         let transactions_parser = Arc::new(
             TransactionsParser::new(
                 self.rocks_client.clone(),
-                self.big_table_client.clone(),
                 block_consumer,
+                block_producer,
+                metrics.clone(),
             )
             .await,
         );
@@ -267,25 +253,29 @@ impl SlotsCollector {
 }
 
 #[derive(Clone)]
-pub struct TransactionsParser<C: BlockConsumer + Send> {
+pub struct TransactionsParser<C: BlockConsumer, P: BlockProducer> {
     rocks_client: Arc<rocks_db::Storage>,
-    big_table_client: Arc<LedgerStorage>,
     consumer: Arc<C>,
+    producer: Arc<P>,
+    metrics: Arc<BackfillerMetricsConfig>,
 }
 
-impl<C> TransactionsParser<C>
+impl<C, P> TransactionsParser<C, P>
 where
-    C: BlockConsumer + Send + Sync + 'static,
+    C: BlockConsumer,
+    P: BlockProducer,
 {
     pub async fn new(
         rocks_client: Arc<rocks_db::Storage>,
-        big_table_client: Arc<LedgerStorage>,
         consumer: Arc<C>,
-    ) -> TransactionsParser<C> {
+        producer: Arc<P>,
+        metrics: Arc<BackfillerMetricsConfig>,
+    ) -> TransactionsParser<C, P> {
         TransactionsParser {
             rocks_client,
-            big_table_client,
             consumer,
+            producer,
+            metrics,
         }
     }
 
@@ -341,21 +331,25 @@ where
             let mut tasks = Vec::new();
 
             for slot in slots_to_parse_vec.iter() {
-                let bg_client = self.big_table_client.clone();
                 let s = *slot;
                 let c = self.consumer.clone();
+                let p = self.producer.clone();
+                let m = self.metrics.clone();
                 let task = tokio::spawn(async move {
-                    let block = match get_block_from_bg(bg_client, s).await {
+                    let block = match p.get_block(s).await {
                         Ok(block) => block,
                         Err(err) => {
                             error!("Error getting block: {}", err);
                             return Ok(());
                         }
                     };
+
                     if let Err(err) = c.consume_block(block).await {
                         error!("Error consuming block: {}", err);
                         return Err(err);
                     }
+                    m.set_last_processed_slot("parsed_slot", s as i64);
+
                     Ok(())
                 });
 
@@ -426,63 +420,19 @@ impl DirectBlockParser {
 impl BlockConsumer for DirectBlockParser {
     async fn consume_block(
         &self,
-        block: solana_transaction_status::ConfirmedBlock,
+        block: solana_transaction_status::UiConfirmedBlock,
     ) -> Result<(), String> {
-        for tx in block.transactions.iter() {
-            let meta = if let Some(meta) = tx.get_status_meta() {
-                if let Err(_err) = meta.status {
-                    continue;
-                }
-                meta
-            } else {
-                error!("Unexpected, EncodedTransactionWithStatusMeta struct has no metadata");
-                continue;
-            };
-
-            let decoded_tx = tx.get_transaction();
-            let sig = decoded_tx.signatures[0].to_string();
-            let msg = decoded_tx.message;
-            let atl_keys = msg.address_table_lookups();
-
-            let account_keys = msg.static_account_keys();
-            let account_keys = {
-                let mut account_keys_vec = vec![];
-                for key in account_keys.iter() {
-                    account_keys_vec.push(key.to_bytes());
-                }
-                if atl_keys.is_some() {
-                    let ad = meta.loaded_addresses;
-
-                    for i in &ad.writable {
-                        account_keys_vec.push(i.to_bytes());
-                    }
-
-                    for i in &ad.readonly {
-                        account_keys_vec.push(i.to_bytes());
-                    }
-                }
-                account_keys_vec
-            };
-
-            let bubblegum = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID.to_bytes();
-            if account_keys.iter().all(|pk| *pk != bubblegum) {
+        if block.transactions.is_none() {
+            return Ok(());
+        }
+        let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
+        for tx in txs.iter() {
+            if !Self::is_bubblegum_transaction(tx) {
                 continue;
             }
 
             let builder = FlatBufferBuilder::new();
-            debug!("Serializing transaction in backfiller {}", sig);
-
-            let encoded_tx = match tx
-                .clone()
-                .encode(UiTransactionEncoding::Base58, Some(0), false)
-            {
-                Ok(tx) => tx,
-                Err(err) => {
-                    error!("Error encoding transaction: {}", err);
-                    continue;
-                }
-            };
-
+            let encoded_tx = tx.clone();
             let tx_wrap = EncodedConfirmedTransactionWithStatusMeta {
                 transaction: encoded_tx,
                 slot: block.parent_slot,
@@ -510,34 +460,131 @@ impl BlockConsumer for DirectBlockParser {
         }
         self.metrics.inc_data_processed("backfiller_slot_processed");
 
-        self.metrics
-            .set_last_processed_slot("parsed_slot", block.parent_slot as i64);
         Ok(())
     }
 }
-pub async fn get_block_from_bg(
-    big_table_client: Arc<LedgerStorage>,
-    slot: u64,
-) -> Result<solana_transaction_status::ConfirmedBlock, IngesterError> {
-    let mut counter = GET_DATA_FROM_BG_RETRIES;
 
-    loop {
-        let block = match big_table_client.get_confirmed_block(slot).await {
-            Ok(block) => block,
-            Err(err) => {
-                error!("Error getting block: {}", err);
-                counter -= 1;
-                if counter == 0 {
-                    return Err(IngesterError::BigTableError(format!(
-                        "Error getting block: {}",
-                        err
-                    )));
-                }
-                tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_GET_DATA_FROM_BG)).await;
-                continue;
+impl DirectBlockParser {
+    fn is_bubblegum_transaction(tx: &EncodedTransactionWithStatusMeta) -> bool {
+        let meta = if let Some(meta) = tx.meta.clone() {
+            if let Err(_err) = meta.status {
+                return false;
             }
+            meta
+        } else {
+            error!("Unexpected, EncodedTransactionWithStatusMeta struct has no metadata");
+            return false;
         };
+        let decoded_tx = tx.transaction.decode();
+        if decoded_tx.is_none() {
+            return false;
+        }
+        let decoded_tx = decoded_tx.unwrap();
+        let msg = decoded_tx.message;
+        let atl_keys = msg.address_table_lookups();
 
-        return Ok(block);
+        let lookup_key = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
+        if msg.static_account_keys().iter().any(|k| *k == lookup_key) {
+            return true;
+        }
+
+        if atl_keys.is_some() {
+            let lookup_key = lookup_key.to_string();
+            if let solana_transaction_status::option_serializer::OptionSerializer::Some(ad) =
+                meta.loaded_addresses
+            {
+                return ad.writable.iter().any(|k| *k == lookup_key)
+                    || ad.readonly.iter().any(|k| *k == lookup_key);
+            }
+        }
+        false
+    }
+}
+
+pub struct BigTableClient {
+    pub big_table_client: Arc<LedgerStorage>,
+    pub big_table_inner_client: Arc<BigTableConnection>,
+}
+
+impl BigTableClient {
+    pub fn new(
+        big_table_client: Arc<LedgerStorage>,
+        big_table_inner_client: Arc<BigTableConnection>,
+    ) -> BigTableClient {
+        BigTableClient {
+            big_table_client,
+            big_table_inner_client,
+        }
+    }
+
+    pub async fn connect_new_from_config(
+        config: BackfillerConfig,
+    ) -> Result<BigTableClient, IngesterError> {
+        let big_table_creds = config.big_table_config.get_big_table_creds_key()?;
+        let big_table_timeout = config.big_table_config.get_big_table_timeout_key()?;
+
+        let big_table_client = LedgerStorage::new(
+            true,
+            Some(Duration::from_secs(big_table_timeout as u64)),
+            Some(big_table_creds.to_string()),
+        )
+        .await?;
+
+        let big_table_inner_client = solana_bigtable_connection::bigtable::BigTableConnection::new(
+            DEFAULT_INSTANCE_NAME,
+            DEFAULT_APP_PROFILE_ID,
+            true,
+            None,
+            CredentialType::Filepath(Some(big_table_creds)),
+        )
+        .await
+        .unwrap();
+
+        Ok(BigTableClient::new(
+            Arc::new(big_table_client),
+            Arc::new(big_table_inner_client),
+        ))
+    }
+}
+
+#[async_trait]
+impl BlockProducer for BigTableClient {
+    async fn get_block(
+        &self,
+        slot: u64,
+    ) -> Result<solana_transaction_status::UiConfirmedBlock, StorageError> {
+        let mut counter = GET_DATA_FROM_BG_RETRIES;
+
+        loop {
+            let block = match self.big_table_client.get_confirmed_block(slot).await {
+                Ok(block) => block,
+                Err(err) => {
+                    error!("Error getting block: {}", err);
+                    counter -= 1;
+                    if counter == 0 {
+                        return Err(StorageError::Common(format!(
+                            "Error getting block: {}",
+                            err
+                        )));
+                    }
+                    tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_GET_DATA_FROM_BG))
+                        .await;
+                    continue;
+                }
+            };
+
+            let encoded: solana_transaction_status::UiConfirmedBlock = block
+                .clone()
+                .encode_with_options(
+                    solana_transaction_status::UiTransactionEncoding::Base58,
+                    BlockEncodingOptions {
+                        transaction_details: TransactionDetails::Full,
+                        show_rewards: true,
+                        max_supported_transaction_version: Some(u8::MAX),
+                    },
+                )
+                .map_err(|e| StorageError::Common(e.to_string()))?;
+            return Ok(encoded);
+        }
     }
 }
