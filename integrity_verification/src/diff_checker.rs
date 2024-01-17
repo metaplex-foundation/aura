@@ -22,7 +22,7 @@ pub const GET_ASSET_BY_AUTHORITY_METHOD: &str = "getAssetsByAuthority";
 pub const GET_ASSET_BY_GROUP_METHOD: &str = "getAssetsByGroup";
 pub const GET_ASSET_BY_CREATOR_METHOD: &str = "getAssetsByCreator";
 
-const REQUESTS_INTERVAL_MILLIS: u64 = 500;
+const REQUESTS_INTERVAL_MILLIS: u64 = 1500;
 
 pub struct DiffChecker<T>
 where
