@@ -11,11 +11,27 @@ impl PgClient {
     ) -> Result<Vec<String>, String> {
         let query = &format!(
             "
-            (SELECT * FROM assets_v3 WHERE {} IS NOT NULL ORDER BY ast_slot_updated LIMIT 50)
-            UNION
-            (SELECT * FROM assets_v3 WHERE {} IS NOT NULL ORDER BY RANDOM() LIMIT 50)
+            WITH first_selection AS (
+                SELECT {0} FROM (
+                    SELECT {0}, ROW_NUMBER() OVER (PARTITION BY ast_slot_updated ORDER BY ast_slot_updated DESC) as rn
+                    FROM assets_v3
+                    WHERE {0} IS NOT NULL
+                ) sub
+                WHERE sub.rn = 1
+                LIMIT 50
+            ),
+            additional_selection AS (
+                SELECT {0}
+                FROM assets_v3
+                WHERE {0} IS NOT NULL
+                  AND {0} NOT IN (SELECT {0} FROM first_selection)
+                ORDER BY RANDOM() LIMIT 50
+            )
+            SELECT {0} FROM first_selection
+            UNION ALL
+            SELECT {0} FROM additional_selection
         ",
-            field, field
+            field
         );
 
         let rows = sqlx::query(query)
