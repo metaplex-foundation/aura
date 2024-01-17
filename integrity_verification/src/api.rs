@@ -32,28 +32,25 @@ impl IntegrityVerificationApi {
     }
 }
 
+#[cfg(feature = "rpc_tests")]
 #[tokio::test]
 async fn test_api() {
-    use crate::params::generate_get_assets_by_owner_params;
+    use crate::params::generate_get_asset_params;
     use crate::requests::Body;
     use serde_json::{json, Value};
 
     let api = IntegrityVerificationApi::new();
     let body = json!(Body::new(
-        "getAssetsByOwner",
-        json!(generate_get_assets_by_owner_params(
-            "m7QZ3fVbBYSDfgjFhZDDSHK7VAPYa6xwUu34x3RU4mY".to_string(),
-            None,
-            None
+        "getAsset",
+        json!(generate_get_asset_params(
+            "JCoRmqZf2Q9ftb4a81aD6XswpFgQHPGXvsHAmgvZ54M1".to_string()
         )),
     ));
 
-    println!("{:#?}", &body);
-
-    assert_eq!(
+    assert_ne!(
         Value::Null,
         api.make_request(
-            "https://mainnet.helius-rpc.com/?api-key=0800bcca-7d4d-4a0a-800a-5aa9e1dc855f",
+            "http://s101.everstake.one:9090",
             &body.to_string()
         )
         .await

@@ -28,3 +28,6 @@ regex = "1.10.2"
 
 [dev-dependencies]
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
+
+[features]
+rpc_tests = []

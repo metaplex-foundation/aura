@@ -1,4 +1,4 @@
-.PHONY: build start dev stop clippy test
+.PHONY: build start build-integrity-verification start-integrity-verification dev stop clippy test
 
 SHELL := /bin/bash
 
@@ -7,6 +7,12 @@ build:
 
 start:
 	@docker compose -f docker-compose.yaml up -d ingester-first-consumer
+
+build-integrity-verification:
+	@docker compose -f docker-compose.yaml build integrity-verification
+
+start-integrity-verification:
+	@docker compose -f docker-compose.yaml up -d integrity-verification
 
 dev:
 	@docker compose -f docker-compose.yaml up -d db

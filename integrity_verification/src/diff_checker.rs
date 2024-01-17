@@ -48,6 +48,7 @@ where
     ) -> Self {
         // Regular expressions, that purposed to filter out some difference between
         // testing and reference hosts that we already know about
+        // Using unwraps is safe, because we pass correct patterns into Regex::new
         let regexes = vec![
             // token_standard field presented in new DAS-API spec, but we do not updated our implementation for now
             Regex::new(r#"json atom at path \".*?\.token_standard\" is missing from rhs\n*"#)
@@ -284,7 +285,7 @@ where
             .into_iter()
             .map(|key| {
                 Body::new(
-                    GET_ASSET_PROOF_METHOD,
+                    GET_ASSET_BY_CREATOR_METHOD,
                     json!(generate_get_assets_by_creator_params(key, None, None)),
                 )
             })

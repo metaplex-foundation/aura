@@ -24,6 +24,22 @@ services:
       options:
         max-size: "2048m"
 
+  integrity-verification:
+    container_name: integrity-verification
+    restart: always
+    entrypoint: "./integrity-verification"
+    env_file:
+      - .env
+    network_mode: host
+    depends_on:
+      - db
+    build:
+      context: .
+      dockerfile: integrity_verification.Dockerfile
+    logging:
+      options:
+        max-size: "2048m"
+
   db:
     container_name: db
     image: 'postgres:14'
