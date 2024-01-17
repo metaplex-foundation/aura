@@ -307,7 +307,6 @@ impl BubblegumTxProcessor {
                     id,
                     owner,
                     delegate,
-                    nonce,
                     ..
                 } => {
                     if let Err(e) = self.rocks_client.save_tx_data_and_asset_updated(
@@ -317,7 +316,7 @@ impl BubblegumTxProcessor {
                             pubkey: id,
                             tree_id: cl.id,
                             leaf: Some(le.leaf_hash.to_vec()),
-                            nonce: Some(nonce),
+                            nonce: Some(cl.index as u64),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
                             creator_hash: Some(Hash::from(le.schema.creator_hash())),
                             leaf_seq: Some(cl.seq),
@@ -328,12 +327,18 @@ impl BubblegumTxProcessor {
                         error!("Error while saving tx_data for cNFT: {}", e);
                     };
 
+                    let delegate = if owner == delegate || delegate.to_bytes() == [0; 32] {
+                        None
+                    } else {
+                        Some(delegate)
+                    };
+
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(
                         id,
                         &AssetOwner {
                             pubkey: id,
                             owner: Updated::new(bundle.slot, Some(cl.seq), owner),
-                            delegate: Some(Updated::new(bundle.slot, Some(cl.seq), delegate)),
+                            delegate: delegate.map(|delegate| Updated::new(bundle.slot, Some(cl.seq), delegate)),
                             owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
                             owner_delegate_seq: Some(Updated::new(
                                 bundle.slot,
