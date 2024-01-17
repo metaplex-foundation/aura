@@ -1,7 +1,7 @@
 use crate::storage_traits::IntegrityVerificationKeysFetcher;
 use crate::PgClient;
 use async_trait::async_trait;
-use base58::ToBase58;
+use solana_sdk::bs58;
 use sqlx::Row;
 use std::collections::HashSet;
 
@@ -41,7 +41,7 @@ impl PgClient {
             .into_iter()
             .map(|row| {
                 let key: Vec<u8> = row.get(field);
-                key.to_base58()
+                bs58::encode(key.as_slice()).into_string()
             })
             .collect::<Vec<_>>();
 
@@ -81,7 +81,7 @@ impl PgClient {
             .into_iter()
             .map(|row| {
                 let key: Vec<u8> = row.get("ast_pubkey");
-                key.to_base58()
+                bs58::encode(key.as_slice()).into_string()
             })
             .collect::<Vec<_>>())
     }
@@ -120,8 +120,8 @@ impl IntegrityVerificationKeysFetcher for PgClient {
         let mut result = rows
             .into_iter()
             .map(|row| {
-                let owner: Vec<u8> = row.get("asc_creator");
-                owner.to_base58()
+                let creator: Vec<u8> = row.get("asc_creator");
+                bs58::encode(creator.as_slice()).into_string()
             })
             .collect::<Vec<_>>();
 
