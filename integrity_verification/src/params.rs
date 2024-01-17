@@ -1,6 +1,6 @@
 use entities::api_req_params::{
-    AssetSortBy, AssetSortDirection, AssetSorting, GetAssetsByAuthority, GetAssetsByCreator,
-    GetAssetsByGroup, GetAssetsByOwner,
+    AssetSortBy, AssetSortDirection, AssetSorting, GetAsset, GetAssetProof, GetAssetsByAuthority,
+    GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner,
 };
 use rand::Rng;
 
@@ -110,7 +110,7 @@ pub fn generate_get_assets_by_creator_params(
     }
 }
 
-pub fn generate_get_assets_by_authority(
+pub fn generate_get_assets_by_authority_params(
     authority_address: String,
     before: Option<String>,
     after: Option<String>,
@@ -128,6 +128,14 @@ pub fn generate_get_assets_by_authority(
         before,
         after,
     }
+}
+
+pub fn generate_get_asset_params(id: String) -> GetAsset {
+    GetAsset { id }
+}
+
+pub fn generate_get_asset_proof_params(id: String) -> GetAssetProof {
+    GetAssetProof { id }
 }
 
 #[tokio::test]

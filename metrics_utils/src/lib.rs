@@ -454,6 +454,113 @@ impl MetricsTrait for MetricState {
 impl MetricsTrait for IntegrityVerificationMetrics {
     fn register_metrics(&mut self) {
         self.integrity_verification_metrics.start_time();
+
+        self.registry.register(
+            "tests_start_time",
+            "Binary start time",
+            self.integrity_verification_metrics.start_time.clone(),
+        );
+
+        self.registry.register(
+            "total_get_asset_tested",
+            "Count of total getAsset method`s tests",
+            self.integrity_verification_metrics
+                .total_get_asset_tested
+                .clone(),
+        );
+        self.registry.register(
+            "total_get_asset_proof_tested",
+            "Count of total getAssetProof method`s tests",
+            self.integrity_verification_metrics
+                .total_get_asset_proof_tested
+                .clone(),
+        );
+        self.registry.register(
+            "total_get_assets_by_authority_tested",
+            "Count of total getAssetsByAuthority method`s tests",
+            self.integrity_verification_metrics
+                .total_get_assets_by_authority_tested
+                .clone(),
+        );
+        self.registry.register(
+            "total_get_assets_by_creator_tested",
+            "Count of total getAssetsByCreator method`s tests",
+            self.integrity_verification_metrics
+                .total_get_assets_by_creator_tested
+                .clone(),
+        );
+        self.registry.register(
+            "total_get_assets_by_owner_tested",
+            "Count of total getAssetsByOwner method`s tests",
+            self.integrity_verification_metrics
+                .total_get_assets_by_owner_tested
+                .clone(),
+        );
+        self.registry.register(
+            "total_get_assets_by_group_tested",
+            "Count of total getAssetsByGroup method`s tests",
+            self.integrity_verification_metrics
+                .total_get_assets_by_group_tested
+                .clone(),
+        );
+
+        self.registry.register(
+            "failed_get_asset_tested",
+            "Fail count of getAsset method`s tests",
+            self.integrity_verification_metrics
+                .failed_get_asset_tested
+                .clone(),
+        );
+        self.registry.register(
+            "failed_get_asset_proof_tested",
+            "Fail count of getAssetProof method`s tests",
+            self.integrity_verification_metrics
+                .failed_get_asset_proof_tested
+                .clone(),
+        );
+        self.registry.register(
+            "failed_get_assets_by_authority_tested",
+            "Fail count of getAssetsByAuthority method`s tests",
+            self.integrity_verification_metrics
+                .failed_get_assets_by_authority_tested
+                .clone(),
+        );
+        self.registry.register(
+            "failed_get_assets_by_creator_tested",
+            "Fail count of getAssetsByCreator method`s tests",
+            self.integrity_verification_metrics
+                .failed_get_assets_by_creator_tested
+                .clone(),
+        );
+        self.registry.register(
+            "failed_get_assets_by_owner_tested",
+            "Fail count of getAssetsByOwner method`s tests",
+            self.integrity_verification_metrics
+                .failed_get_assets_by_owner_tested
+                .clone(),
+        );
+        self.registry.register(
+            "failed_get_assets_by_group_tested",
+            "Fail count of getAssetsByGroup method`s tests",
+            self.integrity_verification_metrics
+                .failed_get_assets_by_group_tested
+                .clone(),
+        );
+
+        self.registry.register(
+            "network_errors_testing_host",
+            "Count of network errors from testing host",
+            self.integrity_verification_metrics
+                .network_errors_testing_host
+                .clone(),
+        );
+        self.registry.register(
+            "network_errors_reference_host",
+            "Count of network errors from reference host",
+            self.integrity_verification_metrics
+                .network_errors_reference_host
+                .clone(),
+        );
     }
 }
 
@@ -618,6 +725,23 @@ impl Default for JsonDownloaderMetricsConfig {
 #[derive(Debug, Clone)]
 pub struct IntegrityVerificationMetricsConfig {
     start_time: Gauge,
+
+    total_get_asset_tested: Counter,
+    total_get_asset_proof_tested: Counter,
+    total_get_assets_by_owner_tested: Counter,
+    total_get_assets_by_creator_tested: Counter,
+    total_get_assets_by_authority_tested: Counter,
+    total_get_assets_by_group_tested: Counter,
+
+    failed_get_asset_tested: Counter,
+    failed_get_asset_proof_tested: Counter,
+    failed_get_assets_by_owner_tested: Counter,
+    failed_get_assets_by_creator_tested: Counter,
+    failed_get_assets_by_authority_tested: Counter,
+    failed_get_assets_by_group_tested: Counter,
+
+    network_errors_testing_host: Counter,
+    network_errors_reference_host: Counter,
 }
 
 impl Default for IntegrityVerificationMetricsConfig {
@@ -630,10 +754,69 @@ impl IntegrityVerificationMetricsConfig {
     pub fn new() -> Self {
         Self {
             start_time: Default::default(),
+            total_get_asset_tested: Default::default(),
+            total_get_asset_proof_tested: Default::default(),
+            total_get_assets_by_owner_tested: Default::default(),
+            total_get_assets_by_creator_tested: Default::default(),
+            total_get_assets_by_authority_tested: Default::default(),
+            total_get_assets_by_group_tested: Default::default(),
+            failed_get_asset_tested: Default::default(),
+            failed_get_asset_proof_tested: Default::default(),
+            failed_get_assets_by_owner_tested: Default::default(),
+            failed_get_assets_by_creator_tested: Default::default(),
+            failed_get_assets_by_authority_tested: Default::default(),
+            failed_get_assets_by_group_tested: Default::default(),
+            network_errors_testing_host: Default::default(),
+            network_errors_reference_host: Default::default(),
         }
     }
 
     pub fn start_time(&self) -> i64 {
         self.start_time.set(Utc::now().timestamp())
+    }
+
+    pub fn inc_total_get_asset_tested(&self) -> u64 {
+        self.total_get_asset_tested.inc()
+    }
+    pub fn inc_total_get_asset_proof_tested(&self) -> u64 {
+        self.total_get_asset_proof_tested.inc()
+    }
+    pub fn inc_total_get_assets_by_owner_tested(&self) -> u64 {
+        self.total_get_assets_by_owner_tested.inc()
+    }
+    pub fn inc_total_get_assets_by_creator_tested(&self) -> u64 {
+        self.total_get_assets_by_creator_tested.inc()
+    }
+    pub fn inc_total_get_assets_by_authority_tested(&self) -> u64 {
+        self.total_get_assets_by_authority_tested.inc()
+    }
+    pub fn inc_total_get_assets_by_group_tested(&self) -> u64 {
+        self.total_get_assets_by_group_tested.inc()
+    }
+
+    pub fn inc_failed_get_asset_tested(&self) -> u64 {
+        self.failed_get_asset_tested.inc()
+    }
+    pub fn inc_failed_get_asset_proof_tested(&self) -> u64 {
+        self.failed_get_asset_proof_tested.inc()
+    }
+    pub fn inc_failed_get_assets_by_owner_tested(&self) -> u64 {
+        self.failed_get_assets_by_owner_tested.inc()
+    }
+    pub fn inc_failed_get_assets_by_creator_tested(&self) -> u64 {
+        self.failed_get_assets_by_creator_tested.inc()
+    }
+    pub fn inc_failed_get_assets_by_authority_tested(&self) -> u64 {
+        self.failed_get_assets_by_authority_tested.inc()
+    }
+    pub fn inc_failed_failed_get_assets_by_group_tested(&self) -> u64 {
+        self.failed_get_assets_by_group_tested.inc()
+    }
+
+    pub fn inc_network_errors_testing_host(&self) -> u64 {
+        self.network_errors_testing_host.inc()
+    }
+    pub fn inc_network_errors_reference_host(&self) -> u64 {
+        self.network_errors_reference_host.inc()
     }
 }

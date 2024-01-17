@@ -8,4 +8,6 @@ pub enum IntegrityVerificationError {
     Reqwest(#[from] reqwest::Error),
     #[error("IO {0}")]
     IO(#[from] std::io::Error),
+    #[error("FetchKeys {0}")]
+    FetchKeys(String),
 }

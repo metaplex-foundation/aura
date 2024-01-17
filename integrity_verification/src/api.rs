@@ -1,8 +1,5 @@
 use crate::error::IntegrityVerificationError;
-use crate::params::generate_get_assets_by_owner_params;
-use crate::requests::Body;
 use reqwest::Client;
-use serde_json::{json, Value};
 
 #[derive(Debug)]
 pub struct IntegrityVerificationApi {
@@ -71,6 +68,10 @@ impl IntegrityVerificationApi {
 
 #[tokio::test]
 async fn test_api() {
+    use crate::params::generate_get_assets_by_owner_params;
+    use crate::requests::Body;
+    use serde_json::{json, Value};
+
     let api = IntegrityVerificationApi::new();
     let body = json!(Body::new(
         "getAssetsByOwner",

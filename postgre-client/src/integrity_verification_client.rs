@@ -43,14 +43,15 @@ impl PgClient {
                 let key: Vec<u8> = row.get(field);
                 key.to_base58()
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         // Query can return duplicates,
         // so filtering out them from final result.
         // Do not filtered out them in query stage in
         // purpose not to slow down execution time
         let mut seen = HashSet::new();
-        Ok(result.retain(|e| seen.insert(e.clone())))
+        result.retain(|e| seen.insert(e.clone()));
+        Ok(result)
     }
 
     async fn get_verification_required_keys(&self) -> Result<Vec<String>, String> {
@@ -82,7 +83,7 @@ impl PgClient {
                 let key: Vec<u8> = row.get("ast_pubkey");
                 key.to_base58()
             })
-            .collect())
+            .collect::<Vec<_>>())
     }
 }
 
@@ -122,14 +123,15 @@ impl IntegrityVerificationKeysFetcher for PgClient {
                 let owner: Vec<u8> = row.get("asc_creator");
                 owner.to_base58()
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         // Query can return duplicates,
         // so filtering out them from final result.
         // Do not filtered out them in query stage in
         // purpose not to slow down execution time
         let mut seen = HashSet::new();
-        Ok(result.retain(|e| seen.insert(e.clone())))
+        result.retain(|e| seen.insert(e.clone()));
+        Ok(result)
     }
 
     async fn get_verification_required_authorities_keys(&self) -> Result<Vec<String>, String> {
