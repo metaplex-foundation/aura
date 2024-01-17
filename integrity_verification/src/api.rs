@@ -49,11 +49,8 @@ async fn test_api() {
 
     assert_ne!(
         Value::Null,
-        api.make_request(
-            "http://s101.everstake.one:9090",
-            &body.to_string()
-        )
-        .await
-        .unwrap()
+        api.make_request("http://s101.everstake.one:9090", &body.to_string())
+            .await
+            .unwrap()
     );
 }
