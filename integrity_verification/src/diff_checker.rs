@@ -250,7 +250,7 @@ where
     pub async fn check_get_asset_by_group(&self) -> Result<(), IntegrityVerificationError> {
         let verification_required_keys = self
             .keys_fetcher
-            .get_verification_required_collections_keys()
+            .get_verification_required_groups_keys()
             .await
             .map_err(IntegrityVerificationError::FetchKeys)?;
 

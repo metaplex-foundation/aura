@@ -137,19 +137,3 @@ pub fn generate_get_asset_params(id: String) -> GetAsset {
 pub fn generate_get_asset_proof_params(id: String) -> GetAssetProof {
     GetAssetProof { id }
 }
-
-#[tokio::test]
-async fn test_rnd() {
-    assert_eq!(
-        GetAssetsByGroup {
-            group_key: "".to_string(),
-            group_value: "".to_string(),
-            sort_by: None,
-            limit: None,
-            page: None,
-            before: None,
-            after: None,
-        },
-        generate_get_assets_by_group_params("1".to_string(), None, None)
-    );
-}

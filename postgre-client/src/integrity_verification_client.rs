@@ -139,7 +139,7 @@ impl IntegrityVerificationKeysFetcher for PgClient {
             .await
     }
 
-    async fn get_verification_required_collections_keys(&self) -> Result<Vec<String>, String> {
+    async fn get_verification_required_groups_keys(&self) -> Result<Vec<String>, String> {
         self.get_verification_required_keys_by_field("ast_collection")
             .await
     }
