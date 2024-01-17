@@ -2,10 +2,9 @@ use async_trait::async_trait;
 use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
 use interface::error::StorageError;
-use interface::signature_persistence::{BlockConsumer, BlockProducer};
+use interface::signature_persistence::{BlockConsumer, BlockProducer, TransactionIngester};
 use log::{error, info, warn};
 use metrics_utils::{BackfillerMetricsConfig, MetricStatus};
-use nft_ingester::buffer::Buffer;
 use nft_ingester::config::BackfillerConfig;
 use nft_ingester::error::IngesterError;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
@@ -406,65 +405,22 @@ where
 }
 
 #[derive(Clone)]
-pub struct DirectBlockParser {
-    buffer: Arc<Buffer>,
+pub struct DirectBlockParser<T>
+where
+    T: TransactionIngester,
+{
+    ingester: Arc<T>,
     metrics: Arc<BackfillerMetricsConfig>,
 }
-impl DirectBlockParser {
-    pub fn new(buffer: Arc<Buffer>, metrics: Arc<BackfillerMetricsConfig>) -> DirectBlockParser {
-        DirectBlockParser { buffer, metrics }
+
+impl<T> DirectBlockParser<T>
+where
+    T: TransactionIngester,
+{
+    pub fn new(ingester: Arc<T>, metrics: Arc<BackfillerMetricsConfig>) -> DirectBlockParser<T> {
+        DirectBlockParser { ingester, metrics }
     }
-}
 
-#[async_trait]
-impl BlockConsumer for DirectBlockParser {
-    async fn consume_block(
-        &self,
-        block: solana_transaction_status::UiConfirmedBlock,
-    ) -> Result<(), String> {
-        if block.transactions.is_none() {
-            return Ok(());
-        }
-        let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
-        for tx in txs.iter() {
-            if !Self::is_bubblegum_transaction(tx) {
-                continue;
-            }
-
-            let builder = FlatBufferBuilder::new();
-            let encoded_tx = tx.clone();
-            let tx_wrap = EncodedConfirmedTransactionWithStatusMeta {
-                transaction: encoded_tx,
-                slot: block.parent_slot,
-                block_time: block.block_time,
-            };
-
-            let builder = match seralize_encoded_transaction_with_status(builder, tx_wrap) {
-                Ok(builder) => builder,
-                Err(err) => {
-                    error!("Error serializing transaction with plerkle: {}", err);
-                    continue;
-                }
-            };
-
-            let tx = builder.finished_data().to_vec();
-
-            let mut d = self.buffer.transactions.lock().await;
-
-            d.push_back(BufferedTransaction {
-                transaction: tx,
-                map_flatbuffer: false,
-            });
-
-            self.metrics.inc_data_processed("backfiller_tx_processed");
-        }
-        self.metrics.inc_data_processed("backfiller_slot_processed");
-
-        Ok(())
-    }
-}
-
-impl DirectBlockParser {
     fn is_bubblegum_transaction(tx: &EncodedTransactionWithStatusMeta) -> bool {
         let meta = if let Some(meta) = tx.meta.clone() {
             if let Err(_err) = meta.status {
@@ -498,6 +454,57 @@ impl DirectBlockParser {
             }
         }
         false
+    }
+}
+
+#[async_trait]
+impl<T> BlockConsumer for DirectBlockParser<T>
+where
+    T: TransactionIngester,
+{
+    async fn consume_block(
+        &self,
+        block: solana_transaction_status::UiConfirmedBlock,
+    ) -> Result<(), String> {
+        if block.transactions.is_none() {
+            return Ok(());
+        }
+        let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
+        for tx in txs.iter() {
+            if !Self::is_bubblegum_transaction(tx) {
+                continue;
+            }
+
+            let builder = FlatBufferBuilder::new();
+            let encoded_tx = tx.clone();
+            let tx_wrap = EncodedConfirmedTransactionWithStatusMeta {
+                transaction: encoded_tx,
+                slot: block.parent_slot,
+                block_time: block.block_time,
+            };
+
+            let builder = match seralize_encoded_transaction_with_status(builder, tx_wrap) {
+                Ok(builder) => builder,
+                Err(err) => {
+                    error!("Error serializing transaction with plerkle: {}", err);
+                    continue;
+                }
+            };
+
+            let tx = builder.finished_data().to_vec();
+            let tx = BufferedTransaction {
+                transaction: tx,
+                map_flatbuffer: false,
+            };
+            self.ingester
+                .ingest_transaction(tx)
+                .await
+                .map_err(|e| e.to_string())?;
+            self.metrics.inc_data_processed("backfiller_tx_processed");
+        }
+        self.metrics.inc_data_processed("backfiller_slot_processed");
+
+        Ok(())
     }
 }
 
