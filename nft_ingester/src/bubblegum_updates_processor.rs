@@ -338,7 +338,8 @@ impl BubblegumTxProcessor {
                         &AssetOwner {
                             pubkey: id,
                             owner: Updated::new(bundle.slot, Some(cl.seq), owner),
-                            delegate: delegate.map(|delegate| Updated::new(bundle.slot, Some(cl.seq), delegate)),
+                            delegate: delegate
+                                .map(|delegate| Updated::new(bundle.slot, Some(cl.seq), delegate)),
                             owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
                             owner_delegate_seq: Some(Updated::new(
                                 bundle.slot,
