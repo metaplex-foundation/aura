@@ -305,9 +305,16 @@ pub async fn main() -> Result<(), IngesterError> {
     if config.run_bubblegum_backfiller {
         let config: BackfillerConfig = setup_config();
 
-        let backfiller = backfiller::Backfiller::new(rocks_storage.clone(), config.clone())
-            .await
-            .unwrap();
+        let big_table_client = Arc::new(
+            backfiller::BigTableClient::connect_new_from_config(config.clone())
+                .await
+                .unwrap(),
+        );
+        let backfiller = backfiller::Backfiller::new(
+            rocks_storage.clone(),
+            big_table_client.clone(),
+            config.clone(),
+        );
 
         match config.backfiller_mode {
             config::BackfillerMode::IngestDirectly => {
@@ -321,6 +328,7 @@ pub async fn main() -> Result<(), IngesterError> {
                         keep_running.clone(),
                         metrics_state.backfiller_metrics.clone(),
                         consumer,
+                        big_table_client.clone(),
                     )
                     .await
                     .unwrap();
@@ -334,12 +342,31 @@ pub async fn main() -> Result<(), IngesterError> {
                         keep_running.clone(),
                         metrics_state.backfiller_metrics.clone(),
                         consumer,
+                        big_table_client.clone(),
                     )
                     .await
                     .unwrap();
                 info!("running backfiller to persist raw data");
             }
-            config::BackfillerMode::None | config::BackfillerMode::IngestPersisted => {
+            config::BackfillerMode::IngestPersisted => {
+                let consumer = Arc::new(DirectBlockParser::new(
+                    buffer.clone(),
+                    metrics_state.backfiller_metrics.clone(),
+                ));
+                let producer = rocks_storage.clone();
+                backfiller
+                    .start_backfill(
+                        mutexed_tasks.clone(),
+                        keep_running.clone(),
+                        metrics_state.backfiller_metrics.clone(),
+                        consumer,
+                        producer,
+                    )
+                    .await
+                    .unwrap();
+                info!("running backfiller on persisted raw data");
+            }
+            config::BackfillerMode::None => {
                 info!("not running backfiller");
             }
         };

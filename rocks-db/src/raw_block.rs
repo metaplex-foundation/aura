@@ -1,9 +1,8 @@
 use crate::{column::TypedColumn, key_encoders, Storage};
 use async_trait::async_trait;
-use interface::signature_persistence::BlockConsumer;
+use interface::signature_persistence::{BlockConsumer, BlockProducer};
 use log::error;
 use serde::{Deserialize, Serialize};
-use solana_transaction_status::{BlockEncodingOptions, TransactionDetails};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RawBlock {
@@ -30,23 +29,10 @@ impl TypedColumn for RawBlock {
 impl BlockConsumer for Storage {
     async fn consume_block(
         &self,
-        block: solana_transaction_status::ConfirmedBlock,
+        block: solana_transaction_status::UiConfirmedBlock,
     ) -> Result<(), String> {
         let slot = block.parent_slot;
-        let encoded = block
-            .encode_with_options(
-                solana_transaction_status::UiTransactionEncoding::Base64,
-                BlockEncodingOptions {
-                    transaction_details: TransactionDetails::Full,
-                    show_rewards: true,
-                    max_supported_transaction_version: Some(u8::MAX),
-                },
-            )
-            .map_err(|e| e.to_string())?;
-        let raw_block = RawBlock {
-            slot,
-            block: encoded,
-        };
+        let raw_block = RawBlock { slot, block };
         let res = self
             .raw_blocks
             .put_async(raw_block.slot, raw_block.clone())
@@ -60,5 +46,21 @@ impl BlockConsumer for Storage {
             return Err(e);
         }
         Ok(())
+    }
+}
+
+#[async_trait]
+impl BlockProducer for Storage {
+    async fn get_block(
+        &self,
+        slot: u64,
+    ) -> Result<solana_transaction_status::UiConfirmedBlock, interface::error::StorageError> {
+        let raw_block = self
+            .raw_blocks
+            .get(slot)
+            .map_err(|e| interface::error::StorageError::Common(e.to_string()))?;
+        raw_block
+            .map(|b| b.block)
+            .ok_or(interface::error::StorageError::NotFound)
     }
 }
