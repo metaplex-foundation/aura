@@ -26,7 +26,7 @@ pub trait SignaturePersistence {
 }
 
 #[async_trait]
-pub trait TransactionIngester {
+pub trait TransactionIngester: Sync + Send + 'static {
     /// Ingests a transaction into the storage layer.
     /// The transaction is expected to be in the format of a flatbuffer.
     /// The ingester should return only after the transaction is fully processed, not just scheduled.

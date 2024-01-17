@@ -302,6 +302,10 @@ pub async fn main() -> Result<(), IngesterError> {
         json_downloader.run(cloned_keep_running).await;
     }));
 
+    let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
+        bubblegum_updates_processor.clone(),
+    ));
+
     if config.run_bubblegum_backfiller {
         let config: BackfillerConfig = setup_config();
 
@@ -319,7 +323,7 @@ pub async fn main() -> Result<(), IngesterError> {
         match config.backfiller_mode {
             config::BackfillerMode::IngestDirectly => {
                 let consumer = Arc::new(DirectBlockParser::new(
-                    buffer.clone(),
+                    tx_ingester.clone(),
                     metrics_state.backfiller_metrics.clone(),
                 ));
                 backfiller
@@ -350,7 +354,7 @@ pub async fn main() -> Result<(), IngesterError> {
             }
             config::BackfillerMode::IngestPersisted => {
                 let consumer = Arc::new(DirectBlockParser::new(
-                    buffer.clone(),
+                    tx_ingester.clone(),
                     metrics_state.backfiller_metrics.clone(),
                 ));
                 let producer = rocks_storage.clone();
@@ -436,9 +440,6 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     let transactions_getter = Arc::new(BackfillRPC::connect(config.backfill_rpc_address));
-    let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
-        bubblegum_updates_processor.clone(),
-    ));
     let signature_fetcher = usecase::signature_fetcher::SignatureFetcher::new(
         rocks_storage,
         transactions_getter,
