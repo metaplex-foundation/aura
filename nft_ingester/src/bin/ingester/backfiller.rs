@@ -441,7 +441,7 @@ where
         }
         let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
         for tx in txs.iter() {
-            if !is_bubblegum_transaction(tx) {
+            if !is_bubblegum_transaction_encoded(tx) {
                 continue;
             }
 
@@ -537,7 +537,7 @@ impl BlockProducer for BigTableClient {
         let mut counter = GET_DATA_FROM_BG_RETRIES;
 
         loop {
-            let block = match self.big_table_client.get_confirmed_block(slot).await {
+            let mut block = match self.big_table_client.get_confirmed_block(slot).await {
                 Ok(block) => block,
                 Err(err) => {
                     error!("Error getting block: {}", err);
@@ -553,30 +553,53 @@ impl BlockProducer for BigTableClient {
                     continue;
                 }
             };
-
-            let mut encoded: solana_transaction_status::UiConfirmedBlock = block
+            block.transactions.retain(is_bubblegum_transaction);
+            
+            let encoded: solana_transaction_status::UiConfirmedBlock = block
                 .clone()
                 .encode_with_options(
                     solana_transaction_status::UiTransactionEncoding::Base58,
                     BlockEncodingOptions {
                         transaction_details: TransactionDetails::Full,
-                        show_rewards: true,
+                        show_rewards: false,
                         max_supported_transaction_version: Some(u8::MAX),
                     },
                 )
                 .map_err(|e| StorageError::Common(e.to_string()))?;
-            encoded.transactions = encoded.transactions.map(|txs| {
-                txs.iter()
-                    .filter(|tx| is_bubblegum_transaction(tx))
-                    .cloned()
-                    .collect()
-            });
             return Ok(encoded);
         }
     }
 }
 
-fn is_bubblegum_transaction(tx: &EncodedTransactionWithStatusMeta) -> bool {
+fn is_bubblegum_transaction(tx: &TransactionWithStatusMeta) -> bool {
+    let meta = if let Some(meta) = tx.get_status_meta() {
+        if let Err(_err) = meta.status {
+            return false;
+        }
+        meta
+    } else {
+        error!("Unexpected, EncodedTransactionWithStatusMeta struct has no metadata");
+        return false;
+    };
+    let decoded_tx = tx.get_transaction();
+    let msg = decoded_tx.message;
+    let atl_keys = msg.address_table_lookups();
+
+    let lookup_key = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
+    if msg.static_account_keys().iter().any(|k| *k == lookup_key) {
+        return true;
+    }
+
+    if atl_keys.is_some() {
+        let ad = meta.loaded_addresses;
+
+        return ad.writable.iter().any(|k| *k == lookup_key)
+            || ad.readonly.iter().any(|k| *k == lookup_key);
+    }
+    false
+}
+
+fn is_bubblegum_transaction_encoded(tx: &EncodedTransactionWithStatusMeta) -> bool {
     let meta = if let Some(meta) = tx.meta.clone() {
         if let Err(_err) = meta.status {
             return false;
