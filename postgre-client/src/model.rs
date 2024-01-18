@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "royalty_target_type", rename_all = "snake_case")]
 pub enum RoyaltyTargetType {
@@ -117,5 +119,40 @@ impl From<entities::api_req_params::AssetSortDirection> for AssetSortDirection {
             entities::api_req_params::AssetSortDirection::Asc => Self::Asc,
             entities::api_req_params::AssetSortDirection::Desc => Self::Desc,
         }
+    }
+}
+
+pub(crate) enum VerificationRequiredField {
+    Owner,
+    Authority,
+    Group,
+}
+
+impl Display for VerificationRequiredField {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let text = match self {
+            VerificationRequiredField::Owner => "ast_owner",
+            VerificationRequiredField::Authority => "ast_authority",
+            VerificationRequiredField::Group => "ast_collection",
+        };
+        write!(f, "{}", text)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_display_verification_required_field() {
+        assert_eq!(VerificationRequiredField::Owner.to_string(), "ast_owner");
+        assert_eq!(
+            VerificationRequiredField::Authority.to_string(),
+            "ast_authority"
+        );
+        assert_eq!(
+            VerificationRequiredField::Group.to_string(),
+            "ast_collection"
+        );
     }
 }

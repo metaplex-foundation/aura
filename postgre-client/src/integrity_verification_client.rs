@@ -1,57 +1,49 @@
+use crate::model::VerificationRequiredField;
 use crate::storage_traits::IntegrityVerificationKeysFetcher;
 use crate::PgClient;
 use async_trait::async_trait;
 use solana_sdk::bs58;
-use sqlx::Row;
-use std::collections::HashSet;
+use sqlx::{QueryBuilder, Row};
 
 impl PgClient {
     async fn get_verification_required_keys_by_field(
         &self,
-        field: &str,
+        field: VerificationRequiredField,
     ) -> Result<Vec<String>, String> {
         // Select 50 newer keys and 50 random ones
-        let query = &format!(
-            "WITH sorted AS (
-                SELECT DISTINCT ON (ast_slot_updated) {0}
-                FROM assets_v3
-                WHERE {0} IS NOT NULL
-                ORDER BY ast_slot_updated DESC
-                LIMIT 50
-            ),
-            random AS (
-                SELECT {0}
-                FROM assets_v3
-                WHERE {0} IS NOT NULL
-                  AND {0} NOT IN (SELECT {0} FROM sorted)
-                ORDER BY RANDOM() LIMIT 50
-            )
-            SELECT {0} FROM sorted
-            UNION ALL
-            SELECT {0} FROM random",
-            field
-        );
+        let mut query_builder = QueryBuilder::new("WITH sorted AS (SELECT DISTINCT ON (");
+        query_builder.push(&field);
+        query_builder.push(") ");
+        query_builder.push(&field);
+        query_builder.push(" FROM (SELECT ");
+        query_builder.push(&field);
+        query_builder.push(" FROM assets_v3 ORDER BY ast_slot_updated DESC LIMIT 1000) sub LIMIT 50), random AS (SELECT ");
+        query_builder.push(&field);
+        query_builder.push(" FROM assets_v3 WHERE ");
+        query_builder.push(&field);
+        query_builder.push(" IS NOT NULL AND ");
+        query_builder.push(&field);
+        query_builder.push(" NOT IN (SELECT ");
+        query_builder.push(&field);
+        query_builder.push(" FROM sorted) ORDER BY RANDOM() LIMIT 50) SELECT ");
+        query_builder.push(&field);
+        query_builder.push(" FROM sorted UNION ALL SELECT ");
+        query_builder.push(&field);
+        query_builder.push(" FROM random");
+        let query = query_builder.build();
 
-        let rows = sqlx::query(query)
+        let rows = query
             .fetch_all(&self.pool)
             .await
             .map_err(|e| e.to_string())?;
 
-        let mut result = rows
+        Ok(rows
             .into_iter()
             .map(|row| {
-                let key: Vec<u8> = row.get(field);
+                let key: Vec<u8> = row.get(field.to_string().as_str());
                 bs58::encode(key.as_slice()).into_string()
             })
-            .collect::<Vec<_>>();
-
-        // Query can return duplicates,
-        // so filtering out them from final result.
-        // Do not filtered out them in query stage in
-        // purpose not to slow down execution time
-        let mut seen = HashSet::new();
-        result.retain(|e| seen.insert(e.clone()));
-        Ok(result)
+            .collect::<Vec<_>>())
     }
 
     async fn get_verification_required_keys(&self) -> Result<Vec<String>, String> {
@@ -90,23 +82,29 @@ impl PgClient {
 #[async_trait]
 impl IntegrityVerificationKeysFetcher for PgClient {
     async fn get_verification_required_owners_keys(&self) -> Result<Vec<String>, String> {
-        self.get_verification_required_keys_by_field("ast_owner")
+        self.get_verification_required_keys_by_field(VerificationRequiredField::Owner)
             .await
     }
 
     async fn get_verification_required_creators_keys(&self) -> Result<Vec<String>, String> {
         // Select 50 newer keys and 50 random ones
         let query = "WITH sorted AS (
-                SELECT DISTINCT ON (asc_slot_updated) asc_creator
-                FROM asset_creators_v3
-                ORDER BY asc_slot_updated DESC
+                SELECT DISTINCT ON (asc_creator) asc_creator
+                FROM (
+                    SELECT asc_creator
+                    FROM asset_creators_v3
+                    INNER JOIN assets_v3 ON asc_pubkey = ast_pubkey
+                    ORDER BY ast_slot_updated DESC
+                    LIMIT 1000
+                ) sub
                 LIMIT 50
             ),
             random AS (
                 SELECT asc_creator
                 FROM asset_creators_v3
                 WHERE asc_creator NOT IN (SELECT asc_creator FROM sorted)
-                ORDER BY RANDOM() LIMIT 50
+                ORDER BY RANDOM()
+                LIMIT 50
             )
             SELECT asc_creator FROM sorted
             UNION ALL
@@ -117,30 +115,22 @@ impl IntegrityVerificationKeysFetcher for PgClient {
             .await
             .map_err(|e| e.to_string())?;
 
-        let mut result = rows
+        Ok(rows
             .into_iter()
             .map(|row| {
                 let creator: Vec<u8> = row.get("asc_creator");
                 bs58::encode(creator.as_slice()).into_string()
             })
-            .collect::<Vec<_>>();
-
-        // Query can return duplicates,
-        // so filtering out them from final result.
-        // Do not filtered out them in query stage in
-        // purpose not to slow down execution time
-        let mut seen = HashSet::new();
-        result.retain(|e| seen.insert(e.clone()));
-        Ok(result)
+            .collect::<Vec<_>>())
     }
 
     async fn get_verification_required_authorities_keys(&self) -> Result<Vec<String>, String> {
-        self.get_verification_required_keys_by_field("ast_authority")
+        self.get_verification_required_keys_by_field(VerificationRequiredField::Authority)
             .await
     }
 
     async fn get_verification_required_groups_keys(&self) -> Result<Vec<String>, String> {
-        self.get_verification_required_keys_by_field("ast_collection")
+        self.get_verification_required_keys_by_field(VerificationRequiredField::Group)
             .await
     }
 

@@ -61,7 +61,6 @@ where
             Regex::new(r#"json atoms at path \"(.*?\.compression\.seq)\" are not equal:\n\s*lhs:\n\s*\d+\n\s*rhs:\n\s*\d+\n*"#).unwrap(),
             Regex::new(r#"json atoms at path \"(.*?\.ownership\.delegate)\" are not equal:\n\s*lhs:\n\s*(null|\".*?\"|\d+)\n\s*rhs:\n\s*(null|\".*?\"|\d+)\n*"#).unwrap(),
             Regex::new(r#"json atoms at path \"(.*?\.ownership\.delegated)\" are not equal:\n\s*lhs:\n\s*(true|false|null|\".*?\"|\d+)\n\s*rhs:\n\s*(true|false|null|\".*?\"|\d+)\n*"#).unwrap(),
-
         ];
 
         Self {
