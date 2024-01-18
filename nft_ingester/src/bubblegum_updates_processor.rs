@@ -695,25 +695,46 @@ impl BubblegumTxProcessor {
         ) {
             self.rocks_client.save_changelog(cl, bundle.slot).await;
 
-            let (creator, verify) = match payload {
+            let updated_creators = match payload {
                 Payload::CreatorVerification {
-                    creator, verify, ..
-                } => (creator, verify),
+                    metadata,
+                    creator,
+                    verify,
+                } => {
+                    let updated_creators: Vec<Creator> = metadata
+                        .creators
+                        .iter()
+                        .map(|c| {
+                            let mut c = Creator {
+                                creator: c.address,
+                                creator_verified: c.verified,
+                                creator_share: c.share,
+                            };
+
+                            if c.creator == *creator {
+                                c.creator_verified = *verify
+                            };
+                            c
+                        })
+                        .collect();
+
+                    updated_creators
+                }
                 _ => {
-                    return Err(IngesterError::DatabaseError(
+                    return Err(IngesterError::ParsingError(
                         "Ix not parsed correctly".to_string(),
                     ));
                 }
             };
 
             match le.schema {
-                LeafSchema::V1 { id, nonce, .. } => {
-                    let creator = Creator {
-                        creator: *creator,
-                        creator_verified: *verify,
-                        creator_share: 0,
-                    };
-
+                LeafSchema::V1 {
+                    id,
+                    nonce,
+                    owner,
+                    delegate,
+                    ..
+                } => {
                     if let Err(e) = self.rocks_client.save_tx_data_and_asset_updated(
                         id,
                         bundle.slot,
@@ -732,7 +753,7 @@ impl BubblegumTxProcessor {
                             is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
                             supply: Some(Updated::new(bundle.slot, Some(cl.seq), 1)),
                             seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
-                            creators: Updated::new(bundle.slot, Some(cl.seq), vec![creator]),
+                            creators: Updated::new(bundle.slot, Some(cl.seq), updated_creators),
                             ..Default::default()
                         }),
                     ) {
@@ -741,6 +762,32 @@ impl BubblegumTxProcessor {
                             e
                         )));
                     }
+
+                    let delegate = if owner == delegate || delegate.to_bytes() == [0; 32] {
+                        None
+                    } else {
+                        Some(Updated::new(bundle.slot, Some(cl.seq), delegate))
+                    };
+
+                    if let Err(e) = self.rocks_client.asset_owner_data.merge(
+                        id,
+                        &AssetOwner {
+                            pubkey: id,
+                            owner: Updated::new(bundle.slot, Some(cl.seq), owner),
+                            delegate,
+                            owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
+                            owner_delegate_seq: Some(Updated::new(
+                                bundle.slot,
+                                Some(cl.seq),
+                                cl.seq,
+                            )),
+                        },
+                    ) {
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetOwner for cNFT: {}",
+                            e
+                        )));
+                    };
                 }
             }
 
