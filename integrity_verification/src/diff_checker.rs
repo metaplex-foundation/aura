@@ -396,7 +396,7 @@ async fn test_regex() {
     let res = re2.replace_all(&res, "").to_string();
 
     assert_eq!(
-        "json atom at path \".result.mutable\" is missing from lhs\n\n",
+        "json atom at path \".result.mutable\" is missing from lhs",
         res.trim()
     );
 }
