@@ -45,7 +45,6 @@ CREATE TABLE asset_creators_v3 (
     CONSTRAINT asset_creators_v3_pkey PRIMARY KEY (asc_pubkey, asc_creator)
 );
 CREATE INDEX asset_creators_v3_creator ON asset_creators_v3(asc_creator, asc_verified);
-CREATE INDEX asset_creators_v3_slot_updated ON asset_creators_v3(asc_slot_updated);
 
 CREATE TABLE metadata (
     mtd_id bigserial
