@@ -350,6 +350,7 @@ where
                         error!("Error consuming block: {}", err);
                         return Err(err);
                     }
+                    m.inc_data_processed("slots_parsed_total");
                     m.set_last_processed_slot("parsed_slot", s as i64);
 
                     Ok(())
