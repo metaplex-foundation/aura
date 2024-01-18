@@ -17,7 +17,7 @@ use solana_storage_bigtable::LedgerStorage;
 use solana_storage_bigtable::{DEFAULT_APP_PROFILE_ID, DEFAULT_INSTANCE_NAME};
 use solana_transaction_status::{
     BlockEncodingOptions, EncodedConfirmedTransactionWithStatusMeta,
-    EncodedTransactionWithStatusMeta, TransactionDetails,
+    EncodedTransactionWithStatusMeta, TransactionDetails, TransactionWithStatusMeta,
 };
 use std::collections::HashMap;
 use std::num::ParseIntError;
