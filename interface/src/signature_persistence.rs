@@ -43,6 +43,7 @@ pub trait BlockConsumer: Send + Sync + 'static {
         &self,
         block: solana_transaction_status::UiConfirmedBlock,
     ) -> Result<(), String>;
+    async fn already_processed_slot(&self, slot: u64) -> Result<bool, String>;
 }
 
 #[async_trait]
