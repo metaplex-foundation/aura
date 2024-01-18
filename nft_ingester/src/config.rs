@@ -58,9 +58,16 @@ pub struct BackfillerConfig {
     pub backfiller_mode: BackfillerMode,
     #[serde(default = "default_workers_count")]
     pub workers_count: usize,
+    #[serde(default = "default_chunk_size")]
+    pub chunk_size: usize,
 }
+
 fn default_workers_count() -> usize {
     100
+}
+
+fn default_chunk_size() -> usize {
+    5
 }
 
 impl BackfillerConfig {
