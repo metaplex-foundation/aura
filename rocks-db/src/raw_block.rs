@@ -47,7 +47,7 @@ impl BlockConsumer for Storage {
         }
         Ok(())
     }
-    
+
     async fn already_processed_slot(&self, slot: u64) -> Result<bool, String> {
         let res = self.raw_blocks.get(slot).map_err(|e| e.to_string());
         match res {
