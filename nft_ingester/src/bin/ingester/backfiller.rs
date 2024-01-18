@@ -348,9 +348,10 @@ where
 
                     if let Err(err) = c.consume_block(block).await {
                         error!("Error consuming block: {}", err);
+                        m.inc_data_processed("slots_parsed_failed_total");
                         return Err(err);
                     }
-                    m.inc_data_processed("slots_parsed_total");
+                    m.inc_data_processed("slots_parsed_success_total");
                     m.set_last_processed_slot("parsed_slot", s as i64);
 
                     Ok(())
