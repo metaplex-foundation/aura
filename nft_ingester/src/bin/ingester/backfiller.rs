@@ -329,7 +329,6 @@ where
             let consumer = self.consumer.clone();
             let producer = self.producer.clone();
             let metrics = self.metrics.clone();
-            let client = self.rocks_client.clone();
             workers.push(spawn(async move {
                 while let Some(slot) = rx.lock().await.recv().await {
                     // Process the slot
@@ -337,7 +336,6 @@ where
                         consumer.clone(),
                         producer.clone(),
                         metrics.clone(),
-                        client.clone(),
                         slot,
                     )
                     .await; // Implement process_slot based on your logic
@@ -356,7 +354,6 @@ where
         consumer: Arc<C>,
         producer: Arc<P>,
         metrics: Arc<BackfillerMetricsConfig>,
-        db_client: Arc<rocks_db::Storage>,
         slot: u64,
     ) {
         if consumer.already_processed_slot(slot).await.unwrap_or(false) {
@@ -372,13 +369,6 @@ where
 
         if let Err(err) = consumer.consume_block(block).await {
             error!("Error consuming block: {}", err);
-            return;
-        }
-        if let Err(err) = db_client
-            .bubblegum_slots
-            .delete(form_bubblegum_slots_key(slot))
-        {
-            error!("Error deleting slot: {}", err);
             return;
         }
         metrics.set_last_processed_slot("parsed_slot", slot as i64);
