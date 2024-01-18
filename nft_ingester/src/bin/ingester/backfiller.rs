@@ -37,6 +37,7 @@ pub const SECONDS_TO_RETRY_GET_DATA_FROM_BG: u64 = 5;
 pub const PUT_SLOT_RETRIES: u32 = 5;
 pub const SECONDS_TO_RETRY_ROCKSDB_OPERATION: u64 = 5;
 pub const DELETE_SLOT_RETRIES: u32 = 5;
+pub const CHUNK_SIZE: usize = 10;
 
 pub struct Backfiller {
     rocks_client: Arc<rocks_db::Storage>,
@@ -286,7 +287,7 @@ where
 
             let mut slots_to_parse_vec = Vec::new();
 
-            while slots_to_parse_vec.len() <= BATCH_SLOTS_TO_PARSE {
+            while slots_to_parse_vec.len() <= BATCH_SLOTS_TO_PARSE * CHUNK_SIZE {
                 match slots_to_parse_iter.next() {
                     Some(result) => {
                         match result {
@@ -329,31 +330,33 @@ where
 
             let mut tasks = Vec::new();
 
-            for slot in slots_to_parse_vec.iter() {
-                let s = *slot;
+            for chunk in slots_to_parse_vec.chunks(CHUNK_SIZE) {
+                let chunk = chunk.to_vec();
                 let c = self.consumer.clone();
-                if c.already_processed_slot(s).await.unwrap_or(false) {
-                    continue;
-                }
                 let p = self.producer.clone();
                 let m = self.metrics.clone();
-                let task = tokio::spawn(async move {
-                    let block = match p.get_block(s).await {
-                        Ok(block) => block,
-                        Err(err) => {
-                            error!("Error getting block: {}", err);
-                            return Ok(());
+                let task: tokio::task::JoinHandle<Result<(), String>> = tokio::spawn(async move {
+                    for s in chunk {
+                        if c.already_processed_slot(s).await.unwrap_or(false) {
+                            continue;
                         }
-                    };
 
-                    if let Err(err) = c.consume_block(block).await {
-                        error!("Error consuming block: {}", err);
-                        m.inc_data_processed("slots_parsed_failed_total");
-                        return Err(err);
+                        let block = match p.get_block(s).await {
+                            Ok(block) => block,
+                            Err(err) => {
+                                error!("Error getting block: {}", err);
+                                continue;
+                            }
+                        };
+
+                        if let Err(err) = c.consume_block(block).await {
+                            error!("Error consuming block: {}", err);
+                            m.inc_data_processed("slots_parsed_failed_total");
+                            continue;
+                        }
+                        m.inc_data_processed("slots_parsed_success_total");
+                        m.set_last_processed_slot("parsed_slot", s as i64);
                     }
-                    m.inc_data_processed("slots_parsed_success_total");
-                    m.set_last_processed_slot("parsed_slot", s as i64);
-
                     Ok(())
                 });
 
@@ -554,7 +557,7 @@ impl BlockProducer for BigTableClient {
                 }
             };
             block.transactions.retain(is_bubblegum_transaction);
-            
+
             let encoded: solana_transaction_status::UiConfirmedBlock = block
                 .clone()
                 .encode_with_options(
