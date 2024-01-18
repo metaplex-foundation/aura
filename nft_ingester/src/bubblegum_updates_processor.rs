@@ -327,7 +327,10 @@ impl BubblegumTxProcessor {
                         }),
                         None,
                     ) {
-                        error!("Error while saving tx_data for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetLeaf for cNFT: {}",
+                            e
+                        )));
                     };
 
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(
@@ -344,7 +347,10 @@ impl BubblegumTxProcessor {
                             )),
                         },
                     ) {
-                        error!("Error while saving owner for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetOwner for cNFT: {}",
+                            e
+                        )));
                     };
                 }
             }
@@ -384,8 +390,13 @@ impl BubblegumTxProcessor {
                     seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
                     is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
                     ..Default::default()
-                },
-            )?;
+                }),
+            ) {
+                return Err(IngesterError::DatabaseError(format!(
+                    "Error while saving AssetDynamicDetails for cNFT: {}",
+                    e
+                )));
+            }
 
             return Ok(());
         }
@@ -456,7 +467,10 @@ impl BubblegumTxProcessor {
                         .asset_static_data
                         .put(id, &asset_static_details)
                     {
-                        error!("Error while saving static data for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetStaticDetails for cNFT: {}",
+                            e
+                        )));
                     };
 
                     let creators = {
@@ -504,7 +518,10 @@ impl BubblegumTxProcessor {
                             ..Default::default()
                         }),
                     ) {
-                        error!("Error while saving tx_data for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetDynamicDetails for cNFT: {}",
+                            e
+                        )));
                     }
 
                     let asset_authority = AssetAuthority {
@@ -518,7 +535,10 @@ impl BubblegumTxProcessor {
                         .asset_authority_data
                         .put(id, &asset_authority)
                     {
-                        error!("Error while saving authority for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetAuthority for cNFT: {}",
+                            e
+                        )));
                     };
 
                     if let Err(e) = self.rocks_client.asset_owner_data.put(
@@ -535,7 +555,10 @@ impl BubblegumTxProcessor {
                             )),
                         },
                     ) {
-                        error!("Error while saving owner for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetOwner for cNFT: {}",
+                            e
+                        )));
                     };
 
                     if let Some(collection) = &args.collection {
@@ -552,7 +575,10 @@ impl BubblegumTxProcessor {
                             .asset_collection_data
                             .merge(id, &asset_collection)
                         {
-                            error!("Error while saving collection for cNFT: {}", e);
+                            return Err(IngesterError::DatabaseError(format!(
+                                "Error while saving AssetCollection for cNFT: {}",
+                                e
+                            )));
                         };
                     }
                 }
@@ -615,7 +641,10 @@ impl BubblegumTxProcessor {
                 .asset_leaf_data
                 .merge(asset_id, &leaf_info)
             {
-                error!("Error while saving leaf for cNFT: {}", e);
+                return Err(IngesterError::DatabaseError(format!(
+                    "Error while saving AssetLeaf for cNFT: {}",
+                    e
+                )));
             };
 
             return Ok(());
@@ -634,11 +663,10 @@ impl BubblegumTxProcessor {
         let asset_id = Pubkey::new_from_array(id_bytes.try_into().unwrap());
 
         if let Err(e) = self.rocks_client.asset_leaf_data.delete(asset_id) {
-            error!("Error while saving leaf for cNFT: {}", e);
-
-            return Err(IngesterError::ParsingError(
-                "Ix not parsed correctly".to_string(),
-            ));
+            return Err(IngesterError::DatabaseError(format!(
+                "Error while deleting AssetLeaf: {}",
+                e
+            )));
         };
 
         self.rocks_client.asset_dynamic_data.merge(
@@ -708,7 +736,10 @@ impl BubblegumTxProcessor {
                             ..Default::default()
                         }),
                     ) {
-                        error!("Error while saving tx_data for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving creator verification updates for cNFT: {}",
+                            e
+                        )));
                     }
                 }
             }
@@ -760,7 +791,10 @@ impl BubblegumTxProcessor {
                         }),
                         None,
                     ) {
-                        error!("Error while saving tx_data for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving collection verification update for cNFT: {}",
+                            e
+                        )));
                     }
 
                     let collection = AssetCollection {
@@ -776,7 +810,10 @@ impl BubblegumTxProcessor {
                         .asset_collection_data
                         .merge(id, &collection)
                     {
-                        error!("Error while saving collection for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetCollection for cNFT: {}",
+                            e
+                        )));
                     };
                 }
             }
