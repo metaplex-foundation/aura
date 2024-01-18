@@ -19,7 +19,7 @@ use tracing::{error, info};
 mod api;
 mod config;
 mod diff_checker;
-pub mod error;
+mod error;
 mod params;
 mod requests;
 
@@ -46,7 +46,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
         PgClient::new(&config.database_url, &config.get_sql_log_level(), 100, 500).await;
     let diff_checker = DiffChecker::new(
         config.reference_host.clone(),
-        config.tested_host.clone(),
+        config.testing_host.clone(),
         keys_fetcher,
         metrics.integrity_verification_metrics.clone(),
     );
@@ -56,6 +56,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
     run_tests(
         &mut tasks,
         config.get_run_secondary_indexes_tests(),
+        config.get_run_proofs_tests(),
         diff_checker,
         metrics.integrity_verification_metrics.clone(),
         cancel_token.clone(),
@@ -97,6 +98,7 @@ macro_rules! spawn_test {
 async fn run_tests(
     tasks: &mut JoinSet<Result<(), JoinError>>,
     run_secondary_indexes_tests: bool,
+    run_proofs_tests: bool,
     diff_checker: DiffChecker<PgClient>,
     metrics: Arc<IntegrityVerificationMetricsConfig>,
     cancel_token: CancellationToken,
@@ -110,14 +112,16 @@ async fn run_tests(
         GET_ASSET_METHOD,
         cancel_token
     );
-    spawn_test!(
-        tasks,
-        diff_checker,
-        metrics,
-        check_get_asset_proof,
-        GET_ASSET_PROOF_METHOD,
-        cancel_token
-    );
+    if run_proofs_tests {
+        spawn_test!(
+            tasks,
+            diff_checker,
+            metrics,
+            check_get_asset_proof,
+            GET_ASSET_PROOF_METHOD,
+            cancel_token
+        );
+    }
     if !run_secondary_indexes_tests {
         // All tests below test GetBySecondaryIndex methods
         return;

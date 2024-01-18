@@ -6,10 +6,11 @@ use serde_derive::Deserialize;
 pub struct IntegrityVerificationConfig {
     pub metrics_port: u16,
     pub reference_host: String,
-    pub tested_host: String,
+    pub testing_host: String,
     pub database_url: String,
     pub sql_log_level: Option<String>,
     pub run_secondary_indexes_tests: Option<bool>,
+    pub run_proofs_tests: Option<bool>,
 }
 
 impl IntegrityVerificationConfig {
@@ -18,6 +19,9 @@ impl IntegrityVerificationConfig {
     }
     pub fn get_run_secondary_indexes_tests(&self) -> bool {
         self.run_secondary_indexes_tests.unwrap_or_default()
+    }
+    pub fn get_run_proofs_tests(&self) -> bool {
+        self.run_proofs_tests.unwrap_or_default()
     }
 }
 
