@@ -56,6 +56,11 @@ pub struct BackfillerConfig {
     pub slot_start_from: u64,
     #[serde(default)]
     pub backfiller_mode: BackfillerMode,
+    #[serde(default = "default_workers_count")]
+    pub workers_count: usize,
+}
+fn default_workers_count() -> usize {
+    100
 }
 
 impl BackfillerConfig {
