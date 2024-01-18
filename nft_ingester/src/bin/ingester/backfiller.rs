@@ -332,6 +332,9 @@ where
             for slot in slots_to_parse_vec.iter() {
                 let s = *slot;
                 let c = self.consumer.clone();
+                if c.already_processed_slot(s).await.unwrap_or(false) {
+                    continue;
+                }
                 let p = self.producer.clone();
                 let m = self.metrics.clone();
                 let task = tokio::spawn(async move {
@@ -470,6 +473,10 @@ where
         self.metrics.inc_data_processed("backfiller_slot_processed");
 
         Ok(())
+    }
+
+    async fn already_processed_slot(&self, slot: u64) -> Result<bool, String> {
+        Ok(false)
     }
 }
 

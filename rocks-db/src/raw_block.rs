@@ -47,6 +47,18 @@ impl BlockConsumer for Storage {
         }
         Ok(())
     }
+    
+    async fn already_processed_slot(&self, slot: u64) -> Result<bool, String> {
+        let res = self.raw_blocks.get(slot).map_err(|e| e.to_string());
+        match res {
+            Ok(Some(_)) => Ok(true),
+            Ok(None) => Ok(false),
+            Err(e) => {
+                error!("Failed to get raw block for slot: {}, error: {}", slot, e);
+                Err(e)
+            }
+        }
+    }
 }
 
 #[async_trait]
