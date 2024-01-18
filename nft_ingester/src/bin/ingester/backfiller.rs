@@ -30,20 +30,20 @@ use tokio::time::Duration;
 const BBG_PREFIX: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY/";
 pub const GET_SIGNATURES_LIMIT: usize = 2000;
 pub const GET_SLOT_RETRIES: u32 = 3;
-pub const BATCH_SLOTS_TO_PARSE: usize = 100;
 pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 30;
 pub const GET_DATA_FROM_BG_RETRIES: u32 = 5;
 pub const SECONDS_TO_RETRY_GET_DATA_FROM_BG: u64 = 5;
 pub const PUT_SLOT_RETRIES: u32 = 5;
 pub const SECONDS_TO_RETRY_ROCKSDB_OPERATION: u64 = 5;
 pub const DELETE_SLOT_RETRIES: u32 = 5;
-pub const CHUNK_SIZE: usize = 10;
 
 pub struct Backfiller {
     rocks_client: Arc<rocks_db::Storage>,
     big_table_client: Arc<BigTableClient>,
     slot_start_from: u64,
     slot_parse_until: u64,
+    workers_count: usize,
+    chunk_size: usize,
 }
 
 impl Backfiller {
@@ -57,6 +57,8 @@ impl Backfiller {
             big_table_client,
             slot_start_from: config.slot_start_from,
             slot_parse_until: config.get_slot_until(),
+            workers_count: config.workers_count,
+            chunk_size: config.chunk_size,
         }
     }
 
@@ -96,6 +98,8 @@ impl Backfiller {
                 block_consumer,
                 block_producer,
                 metrics.clone(),
+                self.workers_count,
+                self.chunk_size,
             )
             .await,
         );
@@ -258,6 +262,8 @@ pub struct TransactionsParser<C: BlockConsumer, P: BlockProducer> {
     consumer: Arc<C>,
     producer: Arc<P>,
     metrics: Arc<BackfillerMetricsConfig>,
+    workers_count: usize,
+    chunk_size: usize,
 }
 
 impl<C, P> TransactionsParser<C, P>
@@ -270,12 +276,16 @@ where
         consumer: Arc<C>,
         producer: Arc<P>,
         metrics: Arc<BackfillerMetricsConfig>,
+        workers_count: usize,
+        chunk_size: usize,
     ) -> TransactionsParser<C, P> {
         TransactionsParser {
             rocks_client,
             consumer,
             producer,
             metrics,
+            workers_count,
+            chunk_size,
         }
     }
 
@@ -287,7 +297,7 @@ where
 
             let mut slots_to_parse_vec = Vec::new();
 
-            while slots_to_parse_vec.len() <= BATCH_SLOTS_TO_PARSE * CHUNK_SIZE {
+            while slots_to_parse_vec.len() <= self.workers_count * self.chunk_size {
                 match slots_to_parse_iter.next() {
                     Some(result) => {
                         match result {
@@ -330,7 +340,7 @@ where
 
             let mut tasks = Vec::new();
 
-            for chunk in slots_to_parse_vec.chunks(CHUNK_SIZE) {
+            for chunk in slots_to_parse_vec.chunks(self.chunk_size) {
                 let chunk = chunk.to_vec();
                 let c = self.consumer.clone();
                 let p = self.producer.clone();
