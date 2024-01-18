@@ -3064,7 +3064,6 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.10",
  "tracing",
- "tracing-test",
  "usecase",
 ]
 
