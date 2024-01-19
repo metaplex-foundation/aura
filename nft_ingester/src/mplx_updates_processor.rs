@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -18,7 +19,8 @@ use rocks_db::Storage;
 use crate::buffer::Buffer;
 use crate::db_v2::{DBClient as DBClientV2, Task};
 
-pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
+// worker idle timeout
+const WORKER_IDLE_TIMEOUT_MS: u64 = 100;
 // arbitrary number, should be enough to not overflow batch insert command at Postgre
 pub const MAX_BUFFERED_TASKS_TO_TAKE: usize = 5000;
 
@@ -67,65 +69,54 @@ impl MplxAccsProcessor {
     }
 
     pub async fn process_metadata_accs(&self, keep_running: Arc<AtomicBool>) {
-        let mut counter = BUFFER_PROCESSING_COUNTER;
-        let mut prev_buffer_size = 0;
-
         while keep_running.load(Ordering::SeqCst) {
-            let mut metadata_info_buffer = self.buffer.mplx_metadata_info.lock().await;
-
-            let buffer_size = metadata_info_buffer.len();
-
-            if prev_buffer_size == 0 {
-                prev_buffer_size = buffer_size;
-            } else if prev_buffer_size == buffer_size {
-                counter -= 1;
-            } else {
-                prev_buffer_size = buffer_size;
-            }
-
-            if buffer_size < self.batch_size && counter != 0 {
-                drop(metadata_info_buffer);
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            if self.buffer.mplx_metadata_len().await < self.batch_size {
+                tokio::time::sleep(tokio::time::Duration::from_millis(WORKER_IDLE_TIMEOUT_MS))
+                    .await;
                 continue;
             }
 
-            counter = BUFFER_PROCESSING_COUNTER;
-
-            let mut metadata_info = HashMap::new();
-
             let mut max_slot = 0;
 
-            for key in metadata_info_buffer
-                .keys()
-                .take(self.batch_size)
-                .cloned()
-                .collect::<Vec<Vec<u8>>>()
-            {
-                if let Some(value) = metadata_info_buffer.remove(&key) {
-                    if value.slot > max_slot {
-                        max_slot = value.slot;
+            let metadata_info = {
+                let mut metadata_info_buffer = self.buffer.mplx_metadata_info.lock().await;
+                let mut elems = HashMap::new();
+
+                for key in metadata_info_buffer
+                    .keys()
+                    .take(self.batch_size)
+                    .cloned()
+                    .collect::<Vec<Vec<u8>>>()
+                {
+                    if let Some(value) = metadata_info_buffer.remove(&key) {
+                        if value.slot > max_slot {
+                            max_slot = value.slot;
+                        }
+
+                        elems.insert(key, value);
                     }
-
-                    metadata_info.insert(key, value);
                 }
-            }
-            drop(metadata_info_buffer);
 
-            let mut mints_info_buffer = self.buffer.mints.lock().await;
+                elems
+            };
 
-            let mut mints_info = HashMap::new();
+            let mut mints_info = {
+                let mut mints_buffer = self.buffer.mints.lock().await;
+                let mut elems = HashMap::new();
 
-            for key in mints_info_buffer
-                .keys()
-                .take(self.batch_size)
-                .cloned()
-                .collect::<Vec<Vec<u8>>>()
-            {
-                if let Some(value) = mints_info_buffer.remove(&key) {
-                    mints_info.insert(key, value);
+                for key in mints_buffer
+                    .keys()
+                    .take(self.batch_size)
+                    .cloned()
+                    .collect::<Vec<Vec<u8>>>()
+                {
+                    if let Some(value) = mints_buffer.remove(&key) {
+                        elems.insert(key, value);
+                    }
                 }
-            }
-            drop(mints_info_buffer);
+
+                elems
+            };
 
             let metadata_models = self
                 .create_rocks_metadata_models(&metadata_info, &mut mints_info)
@@ -133,151 +124,12 @@ impl MplxAccsProcessor {
 
             let begin_processing = Instant::now();
 
-            let res = metadata_models
-                .asset_static
-                .iter()
-                .try_for_each(|asset| self.rocks_db.asset_static_data.merge(asset.pubkey, asset));
-
-            match res {
-                Err(e) => {
-                    self.metrics
-                        .inc_process("accounts_saving_static", MetricStatus::FAILURE);
-                    error!("Error while saving static assets: {}", e);
-                }
-                Ok(_) => {
-                    self.metrics
-                        .inc_process("accounts_saving_static", MetricStatus::SUCCESS);
-                }
-            }
-
-            for asset in metadata_models.asset_dynamic.iter() {
-                let existing_value = self.rocks_db.asset_dynamic_data.get(asset.pubkey);
-
-                match existing_value {
-                    Ok(existing_value) => {
-                        let insert_value = if let Some(existing_value) = existing_value {
-                            AssetDynamicDetails {
-                                pubkey: asset.pubkey,
-                                is_compressible: existing_value.is_compressible,
-                                is_compressed: existing_value.is_compressed,
-                                is_frozen: existing_value.is_frozen,
-                                supply: asset.supply.clone(),
-                                seq: asset.seq.clone(),
-                                is_burnt: existing_value.is_burnt,
-                                was_decompressed: existing_value.was_decompressed,
-                                onchain_data: asset.onchain_data.clone(),
-                                creators: asset.creators.clone(),
-                                royalty_amount: asset.royalty_amount.clone(),
-                                url: asset.url.clone(),
-                            }
-                        } else {
-                            asset.clone()
-                        };
-                        let res = self
-                            .rocks_db
-                            .asset_dynamic_data
-                            .merge(asset.pubkey, &insert_value);
-
-                        match res {
-                            Err(e) => {
-                                self.metrics
-                                    .inc_process("accounts_saving_dynamic", MetricStatus::FAILURE);
-                                error!("Error while inserting dynamic data: {}", e);
-                            }
-                            Ok(_) => {
-                                self.metrics
-                                    .inc_process("accounts_saving_dynamic", MetricStatus::SUCCESS);
-
-                                let upd_res = self
-                                    .rocks_db
-                                    .asset_updated(asset.get_slot_updated(), asset.pubkey);
-
-                                if let Err(e) = upd_res {
-                                    error!("Error while updating assets update idx: {}", e);
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        self.metrics
-                            .inc_process("accounts_saving_dynamic", MetricStatus::FAILURE);
-                        error!("Error while inserting dynamic data: {}", e);
-                    }
-                }
-            }
-
-            let res = metadata_models
-                .asset_authority
-                .iter()
-                .try_for_each(|asset| {
-                    self.rocks_db
-                        .asset_authority_data
-                        .merge(asset.pubkey, asset)
-                });
-            match res {
-                Err(e) => {
-                    self.metrics
-                        .inc_process("accounts_saving_authority", MetricStatus::FAILURE);
-                    error!("Error while saving authority: {}", e);
-                }
-                Ok(_) => {
-                    self.metrics
-                        .inc_process("accounts_saving_authority", MetricStatus::SUCCESS);
-                }
-            }
-
-            let res = metadata_models
-                .asset_collection
-                .iter()
-                .try_for_each(|asset| {
-                    self.rocks_db
-                        .asset_collection_data
-                        .merge(asset.pubkey, asset)
-                });
-            match res {
-                Err(e) => {
-                    self.metrics
-                        .inc_process("accounts_saving_collection", MetricStatus::FAILURE);
-                    error!("Error while saving collection: {}", e);
-                }
-                Ok(_) => {
-                    self.metrics
-                        .inc_process("accounts_saving_collection", MetricStatus::SUCCESS);
-                }
-            }
-
-            let mut tasks_to_insert = metadata_models.tasks.clone();
-
-            let mut tasks_buffer = self.buffer.json_tasks.lock().await;
-
-            let number_of_tasks = tasks_buffer.len();
-
-            if number_of_tasks + tasks_to_insert.len() > MAX_BUFFERED_TASKS_TO_TAKE {
-                tasks_to_insert.extend(
-                    tasks_buffer
-                        .drain(0..MAX_BUFFERED_TASKS_TO_TAKE.saturating_sub(tasks_to_insert.len()))
-                        .collect::<Vec<Task>>(),
-                );
-            } else {
-                tasks_to_insert.extend(
-                    tasks_buffer
-                        .drain(0..number_of_tasks)
-                        .collect::<Vec<Task>>(),
-                );
-            }
-
-            let res = self.db_client_v2.insert_tasks(&tasks_to_insert).await;
-            match res {
-                Err(e) => {
-                    self.metrics
-                        .inc_process("accounts_saving_tasks", MetricStatus::FAILURE);
-                    error!("Error while saving tasks: {}", e);
-                }
-                Ok(_) => {
-                    self.metrics
-                        .inc_process("accounts_saving_tasks", MetricStatus::SUCCESS);
-                }
-            }
+            // store  data
+            self.store_static(metadata_models.asset_static);
+            self.store_dynamic(metadata_models.asset_dynamic);
+            self.store_authority(metadata_models.asset_authority);
+            self.store_collection(metadata_models.asset_collection);
+            self.store_tasks(metadata_models.tasks).await;
 
             self.metrics.set_latency(
                 "accounts_saving",
@@ -421,6 +273,118 @@ impl MplxAccsProcessor {
         }
 
         models
+    }
+
+    fn store_static(&self, asset_static: Vec<AssetStaticDetails>) {
+        let res = asset_static
+            .iter()
+            .try_for_each(|asset| self.rocks_db.asset_static_data.merge(asset.pubkey, asset));
+
+        self.result_to_metrics(res, "accounts_saving_static");
+    }
+
+    fn store_dynamic(&self, asset_dynamic: Vec<AssetDynamicDetails>) {
+        for asset in asset_dynamic.iter() {
+            let existing_value = self.rocks_db.asset_dynamic_data.get(asset.pubkey);
+
+            match existing_value {
+                Ok(existing_value) => {
+                    let insert_value = if let Some(existing_value) = existing_value {
+                        AssetDynamicDetails {
+                            pubkey: asset.pubkey,
+                            is_compressible: existing_value.is_compressible,
+                            is_compressed: existing_value.is_compressed,
+                            is_frozen: existing_value.is_frozen,
+                            supply: asset.supply.clone(),
+                            seq: asset.seq.clone(),
+                            is_burnt: existing_value.is_burnt,
+                            was_decompressed: existing_value.was_decompressed,
+                            onchain_data: asset.onchain_data.clone(),
+                            creators: asset.creators.clone(),
+                            royalty_amount: asset.royalty_amount.clone(),
+                            url: asset.url.clone(),
+                        }
+                    } else {
+                        asset.clone()
+                    };
+                    let res = self
+                        .rocks_db
+                        .asset_dynamic_data
+                        .merge(asset.pubkey, &insert_value);
+
+                    if res.is_ok() {
+                        let upd_res = self
+                            .rocks_db
+                            .asset_updated(asset.get_slot_updated(), asset.pubkey);
+
+                        if let Err(e) = upd_res {
+                            error!("Error while updating assets update idx: {}", e);
+                        }
+                    }
+
+                    self.result_to_metrics(res, "accounts_saving_dynamic");
+                }
+                Err(e) => {
+                    self.metrics
+                        .inc_process("accounts_saving_dynamic", MetricStatus::FAILURE);
+                    error!("Error {}: {}", "accounts_saving_dynamic", e);
+                }
+            }
+        }
+    }
+
+    fn store_authority(&self, asset_authority: Vec<AssetAuthority>) {
+        let res = asset_authority.iter().try_for_each(|asset| {
+            self.rocks_db
+                .asset_authority_data
+                .merge(asset.pubkey, asset)
+        });
+
+        self.result_to_metrics(res, "accounts_saving_authority");
+    }
+
+    fn store_collection(&self, asset_collection: Vec<AssetCollection>) {
+        let res = asset_collection.iter().try_for_each(|asset| {
+            self.rocks_db
+                .asset_collection_data
+                .merge(asset.pubkey, asset)
+        });
+
+        self.result_to_metrics(res, "accounts_saving_collection");
+    }
+
+    async fn store_tasks(&self, tasks: Vec<Task>) {
+        let mut tasks_buffer = self.buffer.json_tasks.lock().await;
+
+        let number_of_tasks = {
+            if tasks_buffer.len() + tasks.len() > MAX_BUFFERED_TASKS_TO_TAKE {
+                MAX_BUFFERED_TASKS_TO_TAKE.saturating_sub(tasks.len())
+            } else {
+                tasks_buffer.len()
+            }
+        };
+
+        let mut tasks_to_insert = tasks.clone();
+        tasks_to_insert.extend(
+            tasks_buffer
+                .drain(0..number_of_tasks)
+                .collect::<Vec<Task>>(),
+        );
+
+        let res = self.db_client_v2.insert_tasks(&tasks_to_insert).await;
+        self.result_to_metrics(res, "accounts_saving_tasks");
+    }
+
+    fn result_to_metrics<T, E: Display>(&self, result: Result<T, E>, metric_name: &str) {
+        match result {
+            Err(e) => {
+                self.metrics.inc_process(metric_name, MetricStatus::FAILURE);
+                error!("Error {}: {}", metric_name, e);
+            }
+            Ok(_) => {
+                self.metrics.inc_process(metric_name, MetricStatus::SUCCESS);
+            }
+        }
     }
 }
 
