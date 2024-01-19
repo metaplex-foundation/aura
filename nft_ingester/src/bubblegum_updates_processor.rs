@@ -532,7 +532,6 @@ impl BubblegumTxProcessor {
                         slot_updated: bundle.slot,
                     };
 
-                    // TODO: Do we really need put, not merge?
                     if let Err(e) = self
                         .rocks_client
                         .asset_authority_data
@@ -686,9 +685,6 @@ impl BubblegumTxProcessor {
         Ok(())
     }
 
-    // TODO: our impl have many difference from original one.
-    // Starting from updated_creators and ended up with delegate field
-    // Need to rewrite or discuss why there so many diffs
     pub async fn creator_verification<'c>(
         &self,
         parsing_result: &BubblegumInstruction,
