@@ -33,6 +33,11 @@ interface = { path = "../interface" }
 tempfile = "3.8.1"
 rand = "0.8.5"
 setup = { path = "../tests/setup" }
+criterion = "0.5.1"
 
 [features]
 integration_tests = []
+
+[[bench]]
+name = "misc_benchmark"
+harness = false

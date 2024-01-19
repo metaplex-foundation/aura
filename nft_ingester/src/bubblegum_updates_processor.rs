@@ -14,7 +14,7 @@ use entities::enums::{
 };
 use entities::models::{BufferedTransaction, Updated};
 use entities::models::{ChainDataV1, Creator, Uses};
-use log::{debug, error, info};
+use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
@@ -235,7 +235,7 @@ impl BubblegumTxProcessor {
         let begin_processing = Instant::now();
 
         let ix_str = self.instruction_name_to_string(ix_type);
-        info!("BGUM instruction txn={:?}: {:?}", ix_str, bundle.txn_id);
+        debug!("BGUM instruction txn={:?}: {:?}", ix_str, bundle.txn_id);
 
         let mut processed = true;
 
@@ -257,10 +257,7 @@ impl BubblegumTxProcessor {
             InstructionName::DecompressV1 => {
                 self.decompress(bundle).await?;
             }
-            InstructionName::VerifyCreator => {
-                self.creator_verification(parsing_result, bundle).await?;
-            }
-            InstructionName::UnverifyCreator => {
+            InstructionName::VerifyCreator | InstructionName::UnverifyCreator => {
                 self.creator_verification(parsing_result, bundle).await?;
             }
             InstructionName::VerifyCollection
@@ -309,7 +306,6 @@ impl BubblegumTxProcessor {
                     id,
                     owner,
                     delegate,
-                    nonce,
                     ..
                 } => {
                     if let Err(e) = self.rocks_client.save_tx_data_and_asset_updated(
@@ -319,7 +315,7 @@ impl BubblegumTxProcessor {
                             pubkey: id,
                             tree_id: cl.id,
                             leaf: Some(le.leaf_hash.to_vec()),
-                            nonce: Some(nonce),
+                            nonce: Some(cl.index as u64),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
                             creator_hash: Some(Hash::from(le.schema.creator_hash())),
                             leaf_seq: Some(cl.seq),
@@ -338,7 +334,7 @@ impl BubblegumTxProcessor {
                         &AssetOwner {
                             pubkey: id,
                             owner: Updated::new(bundle.slot, Some(cl.seq), owner),
-                            delegate: Some(Updated::new(bundle.slot, Some(cl.seq), delegate)),
+                            delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
                             owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
                             owner_delegate_seq: Some(Updated::new(
                                 bundle.slot,
@@ -439,6 +435,11 @@ impl BubblegumTxProcessor {
                     nonce,
                     ..
                 } => {
+                    let chain_mutability = match args.is_mutable {
+                        true => ChainMutability::Mutable,
+                        false => ChainMutability::Immutable,
+                    };
+
                     let mut chain_data = ChainDataV1 {
                         name: args.name.clone(),
                         symbol: args.symbol.clone(),
@@ -450,7 +451,7 @@ impl BubblegumTxProcessor {
                             remaining: u.remaining,
                             total: u.total,
                         }),
-                        chain_mutability: None,
+                        chain_mutability: Some(chain_mutability),
                     };
                     chain_data.sanitize();
 
@@ -501,6 +502,7 @@ impl BubblegumTxProcessor {
                         Some(AssetDynamicDetails {
                             pubkey: id,
                             is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
+                            is_compressible: Updated::new(bundle.slot, Some(cl.seq), false),
                             supply: Some(Updated::new(bundle.slot, Some(cl.seq), 1)),
                             seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
                             onchain_data: Some(Updated::new(
@@ -546,7 +548,7 @@ impl BubblegumTxProcessor {
                         &AssetOwner {
                             pubkey: id,
                             owner: Updated::new(bundle.slot, Some(cl.seq), owner),
-                            delegate: Some(Updated::new(bundle.slot, Some(cl.seq), delegate)),
+                            delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
                             owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
                             owner_delegate_seq: Some(Updated::new(
                                 bundle.slot,
@@ -730,7 +732,6 @@ impl BubblegumTxProcessor {
             match le.schema {
                 LeafSchema::V1 {
                     id,
-                    nonce,
                     owner,
                     delegate,
                     ..
@@ -742,7 +743,7 @@ impl BubblegumTxProcessor {
                             pubkey: id,
                             tree_id: cl.id,
                             leaf: Some(le.leaf_hash.to_vec()),
-                            nonce: Some(nonce),
+                            nonce: Some(cl.index as u64),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
                             creator_hash: Some(Hash::from(le.schema.creator_hash())),
                             leaf_seq: Some(cl.seq),
@@ -763,18 +764,12 @@ impl BubblegumTxProcessor {
                         )));
                     }
 
-                    let delegate = if owner == delegate || delegate.to_bytes() == [0; 32] {
-                        None
-                    } else {
-                        Some(Updated::new(bundle.slot, Some(cl.seq), delegate))
-                    };
-
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(
                         id,
                         &AssetOwner {
                             pubkey: id,
                             owner: Updated::new(bundle.slot, Some(cl.seq), owner),
-                            delegate,
+                            delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
                             owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
                             owner_delegate_seq: Some(Updated::new(
                                 bundle.slot,
@@ -822,7 +817,7 @@ impl BubblegumTxProcessor {
             };
 
             match le.schema {
-                LeafSchema::V1 { id, nonce, .. } => {
+                LeafSchema::V1 { id, .. } => {
                     if let Err(e) = self.rocks_client.save_tx_data_and_asset_updated(
                         id,
                         bundle.slot,
@@ -830,7 +825,7 @@ impl BubblegumTxProcessor {
                             pubkey: id,
                             tree_id: cl.id,
                             leaf: Some(le.leaf_hash.to_vec()),
-                            nonce: Some(nonce),
+                            nonce: Some(cl.index as u64),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
                             creator_hash: Some(Hash::from(le.schema.creator_hash())),
                             leaf_seq: Some(cl.seq),
@@ -1055,4 +1050,14 @@ fn use_method_from_mpl_bubblegum_state(
         mpl_bubblegum::types::UseMethod::Multiple => entities::enums::UseMethod::Multiple,
         mpl_bubblegum::types::UseMethod::Single => entities::enums::UseMethod::Single,
     }
+}
+
+fn get_delegate(delegate: Pubkey, owner: Pubkey, slot: u64, seq: u64) -> Option<Updated<Pubkey>> {
+    let delegate = if owner == delegate || delegate.to_bytes() == [0; 32] {
+        None
+    } else {
+        Some(delegate)
+    };
+
+    delegate.map(|delegate| Updated::new(slot, Some(seq), delegate))
 }

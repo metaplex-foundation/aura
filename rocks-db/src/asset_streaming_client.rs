@@ -26,9 +26,8 @@ impl AssetDetailsStreamer for Storage {
     ) -> Result<AssetDetailsStream, AsyncError> {
         let (tx, rx) = tokio::sync::mpsc::channel(32);
         let backend = self.slot_asset_idx.backend.clone();
-        let mut join_set = self.join_set.lock().await;
 
-        join_set.spawn(tokio::spawn(async move {
+        self.join_set.lock().await.spawn(tokio::spawn(async move {
             let _ = process_asset_details_range(backend, start_slot, end_slot, tx.clone()).await;
         }));
 

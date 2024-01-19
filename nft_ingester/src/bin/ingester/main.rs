@@ -59,6 +59,16 @@ pub async fn main() -> Result<(), IngesterError> {
         .background_task_runner_config
         .unwrap_or_default();
 
+    let mut guard = None;
+    if config.get_is_run_profiling() {
+        guard = Some(
+            pprof::ProfilerGuardBuilder::default()
+                .frequency(100)
+                .build()
+                .unwrap(),
+        );
+    }
+
     let mut metrics_state = MetricState::new(
         IngesterMetricsConfig::new(),
         ApiMetricsConfig::new(),
@@ -410,7 +420,15 @@ pub async fn main() -> Result<(), IngesterError> {
     }));
 
     // --stop
-    graceful_stop(mutexed_tasks, true, keep_running.clone(), shutdown_tx).await;
+    graceful_stop(
+        mutexed_tasks,
+        true,
+        keep_running.clone(),
+        shutdown_tx,
+        guard,
+        config.profiling_file_path_container,
+    )
+    .await;
 
     Ok(())
 }
