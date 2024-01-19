@@ -5,7 +5,7 @@ use std::time::Duration;
 use clap::Parser;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
-use nft_ingester::{config, transaction_ingester};
+use nft_ingester::{backfiller, config, transaction_ingester};
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -37,9 +37,7 @@ use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::{backup_service, Storage};
 use tonic::transport::Server;
 
-use crate::backfiller::DirectBlockParser;
-
-mod backfiller;
+use nft_ingester::backfiller::DirectBlockParser;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 

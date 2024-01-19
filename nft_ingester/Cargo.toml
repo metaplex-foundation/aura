@@ -59,7 +59,7 @@ interface = { path = "../interface" }
 tonic = "0.10.2"
 tracing = "0.1.40"
 backfill-rpc = { path = "../backfill_rpc" }
-
+prometheus-client = "0.21.2"
 pprof = {version = "0.13.0", features = ["_protobuf", "protobuf-codec"]}
 
 [dev-dependencies]
@@ -83,3 +83,6 @@ name = "ingester"
 
 [[bin]]
 name = "migrator"
+
+[[bin]]
+name = "raw_backfiller"
