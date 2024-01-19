@@ -44,6 +44,7 @@ impl PgClient {
         // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
         query_builder.push(" WHERE TRUE ");
 
+        query_builder.push(" AND ast_metadata_present IS TRUE ");
         if let Some(spec_version) = &filter.specification_version {
             query_builder.push(" AND assets_v3.ast_specification_version = ");
             query_builder.push_bind(spec_version);

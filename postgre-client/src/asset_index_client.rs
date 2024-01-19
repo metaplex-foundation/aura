@@ -108,6 +108,7 @@ impl AssetIndexStorage for PgClient {
             ast_is_compressible,
             ast_is_compressed,
             ast_is_frozen,
+            ast_metadata_present,
             ast_supply,
             ast_metadata_url_id,
             ast_slot_updated) ",
@@ -138,6 +139,7 @@ impl AssetIndexStorage for PgClient {
                 .push_bind(asset_index.is_compressible)
                 .push_bind(asset_index.is_compressed)
                 .push_bind(asset_index.is_frozen)
+                .push_bind(asset_index.metadata_present)
                 .push_bind(asset_index.supply)
                 .push_bind(metadata_id)
                 .push_bind(asset_index.slot_updated);
@@ -159,6 +161,7 @@ impl AssetIndexStorage for PgClient {
             ast_is_compressible = EXCLUDED.ast_is_compressible,
             ast_is_compressed = EXCLUDED.ast_is_compressed,
             ast_is_frozen = EXCLUDED.ast_is_frozen,
+            ast_metadata_present = EXCLUDED.ast_metadata_present,
             ast_supply = EXCLUDED.ast_supply,
             ast_metadata_url_id = EXCLUDED.ast_metadata_url_id,
             ast_slot_updated = EXCLUDED.ast_slot_updated
