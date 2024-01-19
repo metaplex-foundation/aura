@@ -144,7 +144,7 @@ impl SlotsCollector {
 
     pub async fn collect_slots(&self, keep_running: Arc<AtomicBool>) {
         let mut start_at_slot = self.slot_start_from;
-        tracing::info("Collecting slots starting from {} until {}", start_at_slot, self.slot_parse_until);
+        tracing::info!("Collecting slots starting from {} until {}", start_at_slot, self.slot_parse_until);
 
         while keep_running.load(Ordering::SeqCst) {
             let slots = self
