@@ -44,7 +44,6 @@ pub struct Backfiller {
     slot_parse_until: u64,
     workers_count: usize,
     chunk_size: usize,
-    delete_slots: bool,
 }
 
 impl Backfiller {
@@ -60,7 +59,6 @@ impl Backfiller {
             slot_parse_until: config.get_slot_until(),
             workers_count: config.workers_count,
             chunk_size: config.chunk_size,
-            delete_slots: config.delete_slots,
         }
     }
 
@@ -88,11 +86,11 @@ impl Backfiller {
         .await;
 
         let cloned_keep_running = keep_running.clone();
-        tasks.lock().await.spawn(tokio::spawn(async move {
-            info!("Running slots parser...");
+        // tasks.lock().await.spawn(tokio::spawn(async move {
+        info!("Running slots parser...");
 
-            slots_collector.collect_slots(cloned_keep_running).await;
-        }));
+        slots_collector.collect_slots(cloned_keep_running).await;
+        // }));
 
         let transactions_parser = Arc::new(TransactionsParser::new(
             self.rocks_client.clone(),
@@ -101,7 +99,6 @@ impl Backfiller {
             metrics.clone(),
             self.workers_count,
             self.chunk_size,
-            self.delete_slots,
         ));
 
         let cloned_keep_running = keep_running.clone();
@@ -144,7 +141,11 @@ impl SlotsCollector {
 
     pub async fn collect_slots(&self, keep_running: Arc<AtomicBool>) {
         let mut start_at_slot = self.slot_start_from;
-        tracing::info!("Collecting slots starting from {} until {}", start_at_slot, self.slot_parse_until);
+        tracing::info!(
+            "Collecting slots starting from {} until {}",
+            start_at_slot,
+            self.slot_parse_until
+        );
 
         while keep_running.load(Ordering::SeqCst) {
             let slots = self
@@ -266,7 +267,6 @@ pub struct TransactionsParser<C: BlockConsumer, P: BlockProducer> {
     metrics: Arc<BackfillerMetricsConfig>,
     workers_count: usize,
     chunk_size: usize,
-    delete_slots: bool,
 }
 
 impl<C, P> TransactionsParser<C, P>
@@ -281,7 +281,6 @@ where
         metrics: Arc<BackfillerMetricsConfig>,
         workers_count: usize,
         chunk_size: usize,
-        delete_slots: bool,
     ) -> TransactionsParser<C, P> {
         TransactionsParser {
             rocks_client,
@@ -290,7 +289,6 @@ where
             metrics,
             workers_count,
             chunk_size,
-            delete_slots,
         }
     }
 
@@ -299,7 +297,6 @@ where
 
         'outer: while keep_running.load(Ordering::SeqCst) {
             let mut slots_to_parse_iter = self.rocks_client.bubblegum_slots.iter_end();
-
             let mut slots_to_parse_vec = Vec::new();
 
             while slots_to_parse_vec.len() <= self.workers_count * self.chunk_size {
@@ -342,15 +339,14 @@ where
             }
 
             counter = GET_SLOT_RETRIES;
-            tracing::info!("Got {} slots to parse", slots_to_parse_vec.len());
+            tracing::debug!("Got {} slots to parse", slots_to_parse_vec.len());
             let res = self.parse_slots(slots_to_parse_vec.clone()).await;
-            if let Err(err) = res {
-                error!("Error parsing slots: {}", err);
-                continue;
-            }
-
-            if self.delete_slots {
-                self.delete_slots(slots_to_parse_vec).await;
+            match res {
+                Ok(v) => self.delete_slots(v).await,
+                Err(err) => {
+                    error!("Error parsing slots: {}", err);
+                    continue;
+                }
             }
         }
         tracing::info!("Transactions parser has finished working");
@@ -381,18 +377,20 @@ where
         }
     }
 
-    pub async fn parse_slots(&self, slots: Vec<u64>) -> Result<(), String> {
+    pub async fn parse_slots(&self, slots: Vec<u64>) -> Result<Vec<u64>, String> {
         let mut tasks = Vec::new();
-
+        let mut successful = Vec::new();
         for chunk in slots.chunks(self.chunk_size) {
             let chunk = chunk.to_vec();
             let c = self.consumer.clone();
             let p = self.producer.clone();
             let m = self.metrics.clone();
-            let task: tokio::task::JoinHandle<Result<(), String>> = tokio::spawn(async move {
+            let task: tokio::task::JoinHandle<Vec<u64>> = tokio::spawn(async move {
+                let mut processed = Vec::new();
                 for s in chunk {
                     if c.already_processed_slot(s).await.unwrap_or(false) {
                         tracing::debug!("Slot {} is already processed, skipping", s);
+                        processed.push(s);
                         continue;
                     }
 
@@ -409,10 +407,11 @@ where
                         m.inc_data_processed("slots_parsed_failed_total");
                         continue;
                     }
+                    processed.push(s);
                     m.inc_data_processed("slots_parsed_success_total");
                     m.set_last_processed_slot("parsed_slot", s as i64);
                 }
-                Ok(())
+                processed
             });
 
             tasks.push(task);
@@ -421,10 +420,7 @@ where
         for task in tasks {
             match task.await {
                 Ok(r) => {
-                    if let Err(err) = r {
-                        error!("Task for parsing slots has failed: {}", err);
-                        return Err(err);
-                    }
+                    successful.extend(r);
                 }
                 Err(err) => {
                     error!(
@@ -435,7 +431,7 @@ where
                 }
             };
         }
-        Ok(())
+        Ok(successful)
     }
 }
 
