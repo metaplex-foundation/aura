@@ -82,15 +82,14 @@ impl Backfiller {
             self.slot_start_from,
             self.slot_parse_until,
             metrics.clone(),
-        )
-        .await;
+        );
 
         let cloned_keep_running = keep_running.clone();
-        // tasks.lock().await.spawn(tokio::spawn(async move {
-        info!("Running slots parser...");
+        tasks.lock().await.spawn(tokio::spawn(async move {
+            info!("Running slots parser...");
 
-        slots_collector.collect_slots(cloned_keep_running).await;
-        // }));
+            slots_collector.collect_slots(cloned_keep_running).await;
+        }));
 
         let transactions_parser = Arc::new(TransactionsParser::new(
             self.rocks_client.clone(),
@@ -123,7 +122,7 @@ pub struct SlotsCollector {
 }
 
 impl SlotsCollector {
-    pub async fn new(
+    pub fn new(
         rocks_client: Arc<rocks_db::Storage>,
         big_table_inner_client: Arc<BigTableConnection>,
         slot_start_from: u64,
@@ -158,7 +157,6 @@ impl SlotsCollector {
                     GET_SIGNATURES_LIMIT as i64,
                 )
                 .await;
-
             match slots {
                 Ok(bg_slots) => {
                     self.metrics
