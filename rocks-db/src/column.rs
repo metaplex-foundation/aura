@@ -48,15 +48,36 @@ where
             .map_err(|e| StorageError::Common(e.to_string()))?
     }
 
+    pub async fn put_cbor_encoded(&self, key: C::KeyType, value: C::ValueType) -> Result<()> {
+        let backend = self.backend.clone();
+        tokio::task::spawn_blocking(move || Self::put_cbor_encoded_sync(backend, key, value))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?
+    }
+
     pub fn put(&self, key: C::KeyType, value: C::ValueType) -> Result<()> {
         Self::put_sync(self.backend.clone(), key, value)
     }
 
+    fn put_cbor_encoded_sync(backend: Arc<DB>, key: C::KeyType, value: C::ValueType) -> Result<()> {
+        let serialized_value =
+            serde_cbor::to_vec(&value).map_err(|e| StorageError::Common(e.to_string()))?;
+        Self::put_sync_raw(backend, key, serialized_value, C::NAME)
+    }
+
     fn put_sync(backend: Arc<DB>, key: C::KeyType, value: C::ValueType) -> Result<()> {
         let serialized_value = serialize(&value)?;
+        Self::put_sync_raw(backend, key, serialized_value, C::NAME)
+    }
 
+    fn put_sync_raw(
+        backend: Arc<DB>,
+        key: C::KeyType,
+        serialized_value: Vec<u8>,
+        col_name: &str,
+    ) -> Result<()> {
         backend.put_cf(
-            &backend.cf_handle(C::NAME).unwrap(),
+            &backend.cf_handle(col_name).unwrap(),
             C::encode_key(key),
             serialized_value,
         )?;
@@ -92,6 +113,28 @@ where
         }
         backend.write(batch)?;
         Ok(())
+    }
+
+    pub async fn get_cbor_encoded(&self, key: C::KeyType) -> Result<Option<C::ValueType>> {
+        let mut result = Ok(None);
+
+        let backend = self.backend.clone();
+        let res = tokio::task::spawn_blocking(move || Self::get_raw(backend, key))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))??;
+
+        if let Some(serialized_value) = res {
+            let value = serde_cbor::from_slice(&serialized_value)
+                .map_err(|e| StorageError::Common(e.to_string()))?;
+
+            result = Ok(Some(value))
+        }
+        result
+    }
+
+    fn get_raw(backend: Arc<DB>, key: C::KeyType) -> Result<Option<Vec<u8>>> {
+        let r = backend.get_cf(&backend.cf_handle(C::NAME).unwrap(), C::encode_key(key))?;
+        Ok(r)
     }
 
     pub fn get(&self, key: C::KeyType) -> Result<Option<C::ValueType>> {

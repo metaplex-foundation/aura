@@ -41,6 +41,7 @@ pub trait ProcessingDataGetter {
 pub trait BlockConsumer: Send + Sync + 'static {
     async fn consume_block(
         &self,
+        slot: u64,
         block: solana_transaction_status::UiConfirmedBlock,
     ) -> Result<(), String>;
     async fn already_processed_slot(&self, slot: u64) -> Result<bool, String>;
