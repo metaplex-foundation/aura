@@ -85,6 +85,17 @@ pub enum BackfillerMode {
     #[default]
     IngestDirectly,
 }
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct RawBackfillConfig {
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+    pub metrics_port: Option<u16>,
+    pub rocks_db_path_container: Option<String>,
+    #[serde(default)]
+    pub run_profiling: bool,
+    pub profiling_file_path_container: Option<String>,
+}
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {
     pub database_config: DatabaseConfig,
@@ -119,6 +130,10 @@ pub struct IngesterConfig {
     pub backfill_rpc_address: String,
     pub run_profiling: Option<bool>,
     pub profiling_file_path_container: Option<String>,
+}
+
+fn default_log_level() -> String {
+    "warn".to_string()
 }
 
 impl IngesterConfig {
@@ -447,7 +462,9 @@ mod tests {
                 big_table_config: BigTableConfig(figment::value::Dict::new()),
                 slot_until: None,
                 slot_start_from: 0,
-                backfiller_mode: BackfillerMode::IngestDirectly
+                backfiller_mode: BackfillerMode::IngestDirectly,
+                workers_count: 100,
+                chunk_size: 5,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
@@ -475,6 +492,8 @@ mod tests {
                 slot_until: None,
                 slot_start_from: 0,
                 backfiller_mode: BackfillerMode::Persist,
+                workers_count: 100,
+                chunk_size: 5,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");

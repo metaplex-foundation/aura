@@ -8,6 +8,9 @@ build:
 start:
 	@docker compose -f docker-compose.yaml up -d ingester-first-consumer
 
+start-raw-backriller:
+	@docker compose -f docker-compose.yaml up -d raw-backriller
+
 dev:
 	@docker compose -f docker-compose.yaml up -d db
 
