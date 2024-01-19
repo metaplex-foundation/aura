@@ -60,6 +60,8 @@ pub struct BackfillerConfig {
     pub workers_count: usize,
     #[serde(default = "default_chunk_size")]
     pub chunk_size: usize,
+    #[serde(default)]
+    pub delete_slots: bool,
 }
 
 fn default_workers_count() -> usize {
@@ -465,6 +467,7 @@ mod tests {
                 backfiller_mode: BackfillerMode::IngestDirectly,
                 workers_count: 100,
                 chunk_size: 5,
+                delete_slots: false,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
@@ -494,6 +497,7 @@ mod tests {
                 backfiller_mode: BackfillerMode::Persist,
                 workers_count: 100,
                 chunk_size: 5,
+                delete_slots: false,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
