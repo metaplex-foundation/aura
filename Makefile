@@ -3,13 +3,13 @@
 SHELL := /bin/bash
 
 build:
-	@docker compose -f docker-compose.yaml build ingester-first-consumer
+	@docker compose -f docker-compose.yaml build ingester-first-consumer raw-backfiller
 
 start:
 	@docker compose -f docker-compose.yaml up -d ingester-first-consumer
 
 start-raw-backriller:
-	@docker compose -f docker-compose.yaml up -d raw-backriller
+	@docker compose -f docker-compose.yaml up -d raw-backfiller
 
 dev:
 	@docker compose -f docker-compose.yaml up -d db

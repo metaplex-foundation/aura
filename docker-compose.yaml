@@ -24,8 +24,8 @@ services:
       options:
         max-size: "2048m"
 
-  raw-backriller:
-    container_name: raw-backriller
+  raw-backfiller:
+    container_name: raw-backfiller
     restart: always
     entrypoint: "./raw_backfiller"
     env_file:
