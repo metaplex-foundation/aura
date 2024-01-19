@@ -736,7 +736,6 @@ impl BubblegumTxProcessor {
             match le.schema {
                 LeafSchema::V1 {
                     id,
-                    nonce,
                     owner,
                     delegate,
                     ..
@@ -748,7 +747,7 @@ impl BubblegumTxProcessor {
                             pubkey: id,
                             tree_id: cl.id,
                             leaf: Some(le.leaf_hash.to_vec()),
-                            nonce: Some(nonce),
+                            nonce: Some(cl.index as u64),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
                             creator_hash: Some(Hash::from(le.schema.creator_hash())),
                             leaf_seq: Some(cl.seq),
@@ -769,18 +768,12 @@ impl BubblegumTxProcessor {
                         )));
                     }
 
-                    let delegate = if owner == delegate || delegate.to_bytes() == [0; 32] {
-                        None
-                    } else {
-                        Some(Updated::new(bundle.slot, Some(cl.seq), delegate))
-                    };
-
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(
                         id,
                         &AssetOwner {
                             pubkey: id,
                             owner: Updated::new(bundle.slot, Some(cl.seq), owner),
-                            delegate,
+                            delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
                             owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
                             owner_delegate_seq: Some(Updated::new(
                                 bundle.slot,
