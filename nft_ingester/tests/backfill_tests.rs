@@ -27,7 +27,6 @@ mod tests {
             metrics,
             1,
             1,
-            false,
         );
         let slot = 242596740;
         let response = storage.already_processed_slot(slot).await.unwrap();
