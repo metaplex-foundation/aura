@@ -44,6 +44,7 @@ pub struct Backfiller {
     slot_parse_until: u64,
     workers_count: usize,
     chunk_size: usize,
+    delete_slots: bool,
 }
 
 impl Backfiller {
@@ -59,6 +60,7 @@ impl Backfiller {
             slot_parse_until: config.get_slot_until(),
             workers_count: config.workers_count,
             chunk_size: config.chunk_size,
+            delete_slots: config.delete_slots,
         }
     }
 
@@ -100,6 +102,7 @@ impl Backfiller {
                 metrics.clone(),
                 self.workers_count,
                 self.chunk_size,
+                self.delete_slots,
             )
             .await,
         );
@@ -264,6 +267,7 @@ pub struct TransactionsParser<C: BlockConsumer, P: BlockProducer> {
     metrics: Arc<BackfillerMetricsConfig>,
     workers_count: usize,
     chunk_size: usize,
+    delete_slots: bool,
 }
 
 impl<C, P> TransactionsParser<C, P>
@@ -278,6 +282,7 @@ where
         metrics: Arc<BackfillerMetricsConfig>,
         workers_count: usize,
         chunk_size: usize,
+        delete_slots: bool,
     ) -> TransactionsParser<C, P> {
         TransactionsParser {
             rocks_client,
@@ -286,6 +291,7 @@ where
             metrics,
             workers_count,
             chunk_size,
+            delete_slots,
         }
     }
 
@@ -391,6 +397,9 @@ where
                 };
             }
 
+            if !self.delete_slots {
+                continue;
+            }
             let mut counter = DELETE_SLOT_RETRIES;
 
             while counter > 0 {
