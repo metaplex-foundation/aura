@@ -144,6 +144,7 @@ impl SlotsCollector {
 
     pub async fn collect_slots(&self, keep_running: Arc<AtomicBool>) {
         let mut start_at_slot = self.slot_start_from;
+        tracing::info("Collecting slots starting from {} until {}", start_at_slot, self.slot_parse_until);
 
         while keep_running.load(Ordering::SeqCst) {
             let slots = self
@@ -213,6 +214,7 @@ impl SlotsCollector {
     }
 
     async fn save_slots(&self, slots: &[u64]) {
+        tracing::info!("Saving {} slots", slots.len());
         let slots_map: HashMap<String, BubblegumSlots> = slots.iter().fold(
             HashMap::new(),
             |mut acc: HashMap<String, BubblegumSlots>, slot| {
@@ -340,6 +342,7 @@ where
             }
 
             counter = GET_SLOT_RETRIES;
+            tracing::info!("Got {} slots to parse", slots_to_parse_vec.len());
             let res = self.parse_slots(slots_to_parse_vec.clone()).await;
             if let Err(err) = res {
                 error!("Error parsing slots: {}", err);
@@ -350,6 +353,7 @@ where
                 self.delete_slots(slots_to_parse_vec).await;
             }
         }
+        tracing::info!("Transactions parser has finished working");
     }
 
     async fn delete_slots(&self, slots: Vec<u64>) {
