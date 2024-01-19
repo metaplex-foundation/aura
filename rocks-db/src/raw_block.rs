@@ -11,7 +11,7 @@ pub struct RawBlock {
 }
 
 impl TypedColumn for RawBlock {
-    const NAME: &'static str = "RAW_BLOCK";
+    const NAME: &'static str = "RAW_BLOCK_CBOR_ENCODED";
 
     type KeyType = u64;
     type ValueType = Self;
@@ -29,13 +29,13 @@ impl TypedColumn for RawBlock {
 impl BlockConsumer for Storage {
     async fn consume_block(
         &self,
+        slot: u64,
         block: solana_transaction_status::UiConfirmedBlock,
     ) -> Result<(), String> {
-        let slot = block.parent_slot;
         let raw_block = RawBlock { slot, block };
         let res = self
-            .raw_blocks
-            .put_async(raw_block.slot, raw_block.clone())
+            .raw_blocks_cbor
+            .put_cbor_encoded(raw_block.slot, raw_block.clone())
             .await
             .map_err(|e| e.to_string());
         if let Err(e) = res {
@@ -49,12 +49,16 @@ impl BlockConsumer for Storage {
     }
 
     async fn already_processed_slot(&self, slot: u64) -> Result<bool, String> {
-        let res = self.raw_blocks.get(slot).map_err(|e| e.to_string());
+        let res = self
+            .raw_blocks_cbor
+            .get_cbor_encoded(slot)
+            .await
+            .map_err(|e| e.to_string());
         match res {
             Ok(Some(_)) => Ok(true),
             Ok(None) => Ok(false),
             Err(e) => {
-                error!("Failed to get raw block for slot: {}, error: {}", slot, e);
+                tracing::error!("Failed to get raw block for slot: {}, error: {}", slot, e);
                 Err(e)
             }
         }
@@ -68,8 +72,9 @@ impl BlockProducer for Storage {
         slot: u64,
     ) -> Result<solana_transaction_status::UiConfirmedBlock, interface::error::StorageError> {
         let raw_block = self
-            .raw_blocks
-            .get(slot)
+            .raw_blocks_cbor
+            .get_cbor_encoded(slot)
+            .await
             .map_err(|e| interface::error::StorageError::Common(e.to_string()))?;
         raw_block
             .map(|b| b.block)

@@ -94,18 +94,15 @@ impl Backfiller {
             slots_collector.collect_slots(cloned_keep_running).await;
         }));
 
-        let transactions_parser = Arc::new(
-            TransactionsParser::new(
-                self.rocks_client.clone(),
-                block_consumer,
-                block_producer,
-                metrics.clone(),
-                self.workers_count,
-                self.chunk_size,
-                self.delete_slots,
-            )
-            .await,
-        );
+        let transactions_parser = Arc::new(TransactionsParser::new(
+            self.rocks_client.clone(),
+            block_consumer,
+            block_producer,
+            metrics.clone(),
+            self.workers_count,
+            self.chunk_size,
+            self.delete_slots,
+        ));
 
         let cloned_keep_running = keep_running.clone();
         tasks.lock().await.spawn(tokio::spawn(async move {
@@ -275,7 +272,7 @@ where
     C: BlockConsumer,
     P: BlockProducer,
 {
-    pub async fn new(
+    pub fn new(
         rocks_client: Arc<rocks_db::Storage>,
         consumer: Arc<C>,
         producer: Arc<P>,
@@ -343,91 +340,98 @@ where
             }
 
             counter = GET_SLOT_RETRIES;
-
-            let mut tasks = Vec::new();
-
-            for chunk in slots_to_parse_vec.chunks(self.chunk_size) {
-                let chunk = chunk.to_vec();
-                let c = self.consumer.clone();
-                let p = self.producer.clone();
-                let m = self.metrics.clone();
-                let task: tokio::task::JoinHandle<Result<(), String>> = tokio::spawn(async move {
-                    for s in chunk {
-                        if c.already_processed_slot(s).await.unwrap_or(false) {
-                            continue;
-                        }
-
-                        let block = match p.get_block(s).await {
-                            Ok(block) => block,
-                            Err(err) => {
-                                error!("Error getting block: {}", err);
-                                continue;
-                            }
-                        };
-
-                        if let Err(err) = c.consume_block(block).await {
-                            error!("Error consuming block: {}", err);
-                            m.inc_data_processed("slots_parsed_failed_total");
-                            continue;
-                        }
-                        m.inc_data_processed("slots_parsed_success_total");
-                        m.set_last_processed_slot("parsed_slot", s as i64);
-                    }
-                    Ok(())
-                });
-
-                tasks.push(task);
-            }
-
-            for task in tasks {
-                match task.await {
-                    Ok(r) => {
-                        if let Err(err) = r {
-                            error!("Task for parsing slots has failed: {}", err);
-                            return;
-                        }
-                    }
-                    Err(err) => {
-                        error!(
-                            "Task for parsing slots has failed: {}. Returning immediately",
-                            err
-                        );
-                        return;
-                    }
-                };
-            }
-
-            if !self.delete_slots {
+            let res = self.parse_slots(slots_to_parse_vec.clone()).await;
+            if let Err(err) = res {
+                error!("Error parsing slots: {}", err);
                 continue;
             }
-            let mut counter = DELETE_SLOT_RETRIES;
 
-            while counter > 0 {
-                let delete_result = self
-                    .rocks_client
-                    .bubblegum_slots
-                    .delete_batch(
-                        slots_to_parse_vec
-                            .iter()
-                            .map(|k| form_bubblegum_slots_key(*k))
-                            .collect(),
-                    )
-                    .await;
+            if self.delete_slots {
+                self.delete_slots(slots_to_parse_vec).await;
+            }
+        }
+    }
 
-                match delete_result {
-                    Ok(_) => {
-                        break;
-                    }
-                    Err(err) => {
-                        error!("Error deleting slot: {}", err);
-                        counter -= 1;
-                        tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_ROCKSDB_OPERATION))
-                            .await;
-                        continue;
-                    }
+    async fn delete_slots(&self, slots: Vec<u64>) {
+        let mut counter = DELETE_SLOT_RETRIES;
+
+        while counter > 0 {
+            let delete_result = self
+                .rocks_client
+                .bubblegum_slots
+                .delete_batch(slots.iter().map(|k| form_bubblegum_slots_key(*k)).collect())
+                .await;
+
+            match delete_result {
+                Ok(_) => {
+                    break;
+                }
+                Err(err) => {
+                    error!("Error deleting slot: {}", err);
+                    counter -= 1;
+                    tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_ROCKSDB_OPERATION))
+                        .await;
+                    continue;
                 }
             }
         }
+    }
+
+    pub async fn parse_slots(&self, slots: Vec<u64>) -> Result<(), String> {
+        let mut tasks = Vec::new();
+
+        for chunk in slots.chunks(self.chunk_size) {
+            let chunk = chunk.to_vec();
+            let c = self.consumer.clone();
+            let p = self.producer.clone();
+            let m = self.metrics.clone();
+            let task: tokio::task::JoinHandle<Result<(), String>> = tokio::spawn(async move {
+                for s in chunk {
+                    if c.already_processed_slot(s).await.unwrap_or(false) {
+                        tracing::debug!("Slot {} is already processed, skipping", s);
+                        continue;
+                    }
+
+                    let block = match p.get_block(s).await {
+                        Ok(block) => block,
+                        Err(err) => {
+                            error!("Error getting block: {}", err);
+                            continue;
+                        }
+                    };
+
+                    if let Err(err) = c.consume_block(s, block).await {
+                        error!("Error consuming block: {}", err);
+                        m.inc_data_processed("slots_parsed_failed_total");
+                        continue;
+                    }
+                    m.inc_data_processed("slots_parsed_success_total");
+                    m.set_last_processed_slot("parsed_slot", s as i64);
+                }
+                Ok(())
+            });
+
+            tasks.push(task);
+        }
+
+        for task in tasks {
+            match task.await {
+                Ok(r) => {
+                    if let Err(err) = r {
+                        error!("Task for parsing slots has failed: {}", err);
+                        return Err(err);
+                    }
+                }
+                Err(err) => {
+                    error!(
+                        "Task for parsing slots has failed: {}. Returning immediately",
+                        err
+                    );
+                    return Err(err.to_string());
+                }
+            };
+        }
+        Ok(())
     }
 }
 
@@ -456,6 +460,7 @@ where
 {
     async fn consume_block(
         &self,
+        slot: u64,
         block: solana_transaction_status::UiConfirmedBlock,
     ) -> Result<(), String> {
         if block.transactions.is_none() {
@@ -471,7 +476,7 @@ where
             let encoded_tx = tx.clone();
             let tx_wrap = EncodedConfirmedTransactionWithStatusMeta {
                 transaction: encoded_tx,
-                slot: block.parent_slot,
+                slot,
                 block_time: block.block_time,
             };
 
@@ -520,12 +525,10 @@ impl BigTableClient {
         }
     }
 
-    pub async fn connect_new_from_config(
-        config: BackfillerConfig,
+    pub async fn connect_new_with(
+        big_table_creds: String,
+        big_table_timeout: u32,
     ) -> Result<BigTableClient, IngesterError> {
-        let big_table_creds = config.big_table_config.get_big_table_creds_key()?;
-        let big_table_timeout = config.big_table_config.get_big_table_timeout_key()?;
-
         let big_table_client = LedgerStorage::new(
             true,
             Some(Duration::from_secs(big_table_timeout as u64)),
@@ -547,6 +550,13 @@ impl BigTableClient {
             Arc::new(big_table_client),
             Arc::new(big_table_inner_client),
         ))
+    }
+    pub async fn connect_new_from_config(
+        config: BackfillerConfig,
+    ) -> Result<BigTableClient, IngesterError> {
+        let big_table_creds = config.big_table_config.get_big_table_creds_key()?;
+        let big_table_timeout = config.big_table_config.get_big_table_timeout_key()?;
+        Self::connect_new_with(big_table_creds, big_table_timeout).await
     }
 }
 
