@@ -77,7 +77,7 @@ impl BlockProducer for Storage {
             .await
             .map_err(|e| interface::error::StorageError::Common(e.to_string()))?;
         raw_block
-        .map(|b| b.block)
-        .ok_or(interface::error::StorageError::NotFound)
+            .map(|b| b.block)
+            .ok_or(interface::error::StorageError::NotFound)
     }
 }
