@@ -149,6 +149,54 @@ impl BackfillerMetricsConfig {
 }
 
 #[derive(Debug, Clone)]
+pub struct RocksMigrateMetricsConfig {
+    slots_migrated: Family<MetricLabelWithStatus, Counter>,
+    last_migrated_slot: Gauge,
+}
+
+impl Default for RocksMigrateMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RocksMigrateMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            slots_migrated: Default::default(),
+            last_migrated_slot: Default::default(),
+        }
+    }
+
+    pub fn inc_slots_merged(&self, label: &str, status: MetricStatus) -> u64 {
+        self.slots_migrated
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_owned(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn set_last_merged_slot(&self, slot: i64) -> i64 {
+        self.last_migrated_slot.set(slot)
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "slots_migrated",
+            "The number of migrated slots",
+            self.slots_migrated.clone(),
+        );
+
+        registry.register(
+            "slots_migrated",
+            "The last migrated slot",
+            self.last_migrated_slot.clone(),
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct RpcBackfillerMetricsConfig {
     fetch_signatures: Family<MetricLabelWithStatus, Counter>,
     fetch_transactions: Family<MetricLabelWithStatus, Counter>,

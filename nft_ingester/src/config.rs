@@ -89,6 +89,18 @@ pub enum BackfillerMode {
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct MigrateRocksConfig {
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+    pub metrics_port: Option<u16>,
+    pub rocks_db_path_container: Option<String>,
+    pub migrated_rocks_path: Option<String>,
+    #[serde(default)]
+    pub run_profiling: bool,
+    pub profiling_file_path_container: Option<String>,
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct RawBackfillConfig {
     #[serde(default = "default_log_level")]
     pub log_level: String,
