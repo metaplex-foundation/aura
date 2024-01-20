@@ -5,7 +5,7 @@ use std::time::Duration;
 use clap::Parser;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
-use nft_ingester::transaction_ingester;
+use nft_ingester::{backfiller, config, transaction_ingester};
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -37,7 +37,7 @@ use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::{backup_service, Storage};
 use tonic::transport::Server;
 
-mod backfiller;
+use nft_ingester::backfiller::DirectBlockParser;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 
@@ -300,21 +300,78 @@ pub async fn main() -> Result<(), IngesterError> {
         json_downloader.run(cloned_keep_running).await;
     }));
 
+    let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
+        bubblegum_updates_processor.clone(),
+    ));
+
     if config.run_bubblegum_backfiller {
         let config: BackfillerConfig = setup_config();
 
-        let backfiller = backfiller::Backfiller::new(rocks_storage.clone(), buffer.clone(), config)
-            .await
-            .unwrap();
+        let big_table_client = Arc::new(
+            backfiller::BigTableClient::connect_new_from_config(config.clone())
+                .await
+                .unwrap(),
+        );
+        let backfiller = backfiller::Backfiller::new(
+            rocks_storage.clone(),
+            big_table_client.clone(),
+            config.clone(),
+        );
 
-        backfiller
-            .start_backfill(
-                mutexed_tasks.clone(),
-                keep_running.clone(),
-                metrics_state.backfiller_metrics.clone(),
-            )
-            .await
-            .unwrap();
+        match config.backfiller_mode {
+            config::BackfillerMode::IngestDirectly => {
+                let consumer = Arc::new(DirectBlockParser::new(
+                    tx_ingester.clone(),
+                    metrics_state.backfiller_metrics.clone(),
+                ));
+                backfiller
+                    .start_backfill(
+                        mutexed_tasks.clone(),
+                        keep_running.clone(),
+                        metrics_state.backfiller_metrics.clone(),
+                        consumer,
+                        big_table_client.clone(),
+                    )
+                    .await
+                    .unwrap();
+                info!("running backfiller directly from bigtable to ingester");
+            }
+            config::BackfillerMode::Persist | config::BackfillerMode::PersistAndIngest => {
+                let consumer = rocks_storage.clone();
+                backfiller
+                    .start_backfill(
+                        mutexed_tasks.clone(),
+                        keep_running.clone(),
+                        metrics_state.backfiller_metrics.clone(),
+                        consumer,
+                        big_table_client.clone(),
+                    )
+                    .await
+                    .unwrap();
+                info!("running backfiller to persist raw data");
+            }
+            config::BackfillerMode::IngestPersisted => {
+                let consumer = Arc::new(DirectBlockParser::new(
+                    tx_ingester.clone(),
+                    metrics_state.backfiller_metrics.clone(),
+                ));
+                let producer = rocks_storage.clone();
+                backfiller
+                    .start_backfill(
+                        mutexed_tasks.clone(),
+                        keep_running.clone(),
+                        metrics_state.backfiller_metrics.clone(),
+                        consumer,
+                        producer,
+                    )
+                    .await
+                    .unwrap();
+                info!("running backfiller on persisted raw data");
+            }
+            config::BackfillerMode::None => {
+                info!("not running backfiller");
+            }
+        };
     }
 
     let max_postgre_connections = config
@@ -381,9 +438,6 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     let transactions_getter = Arc::new(BackfillRPC::connect(config.backfill_rpc_address));
-    let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
-        bubblegum_updates_processor.clone(),
-    ));
     let signature_fetcher = usecase::signature_fetcher::SignatureFetcher::new(
         rocks_storage,
         transactions_getter,

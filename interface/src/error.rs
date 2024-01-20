@@ -30,4 +30,6 @@ impl From<ClientError> for UsecaseError {
 pub enum StorageError {
     #[error("common error: {0}")]
     Common(String),
+    #[error("not found")]
+    NotFound,
 }

@@ -96,7 +96,7 @@ impl JsonDownloader {
                                                 .asset_offchain_data
                                                 .put(
                                                     task.metadata_url.clone(),
-                                                    &OffChainData {
+                                                    OffChainData {
                                                         url: task.metadata_url.clone(),
                                                         metadata: metadata.trim().replace('\0', ""),
                                                     },
