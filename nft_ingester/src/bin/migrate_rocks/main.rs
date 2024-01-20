@@ -4,13 +4,12 @@ use std::sync::Arc;
 use log::{error, info};
 use nft_ingester::config::{init_logger, setup_config, MigrateRocksConfig};
 use nft_ingester::error::IngesterError;
-use nft_ingester::init::graceful_stop;
 use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{MetricStatus, RocksMigrateMetricsConfig};
 use rocks_db::Storage;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
@@ -21,16 +20,6 @@ pub async fn main() -> Result<(), IngesterError> {
     init_logger(&config.log_level);
 
     info!("Starting Rocks DB`s migrate...");
-
-    let mut guard = None;
-    if config.run_profiling {
-        guard = Some(
-            pprof::ProfilerGuardBuilder::default()
-                .frequency(100)
-                .build()
-                .unwrap(),
-        );
-    }
 
     let mut registry = Registry::default();
     let metrics = Arc::new(RocksMigrateMetricsConfig::new());
@@ -75,17 +64,21 @@ pub async fn main() -> Result<(), IngesterError> {
     )
     .await;
 
-    let (shutdown_tx, _shutdown_rx) = oneshot::channel::<()>();
-    // --stop
-    graceful_stop(
-        mutexed_tasks,
-        true,
-        keep_running.clone(),
-        shutdown_tx,
-        guard,
-        config.profiling_file_path_container,
-    )
-    .await;
+    while let Some(task) = mutexed_tasks.lock().await.join_next().await {
+        match task {
+            Ok(_) => {
+                info!("One of the tasks was finished")
+            }
+            Err(err) if err.is_panic() => {
+                let err = err.into_panic();
+                error!("Task panic: {:?}", err);
+            }
+            Err(err) => {
+                let err = err.to_string();
+                error!("Task error: {}", err);
+            }
+        }
+    }
 
     Ok(())
 }
