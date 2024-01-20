@@ -1,6 +1,7 @@
 use jsonrpc_core::ErrorCode;
 use log::error;
 
+use interface::error::UsecaseError;
 use rocks_db::errors::StorageError;
 use thiserror::Error;
 
@@ -28,6 +29,8 @@ pub enum DasApiError {
     NoDataFoundError,
     #[error("Invalid Grouping Key: {0}")]
     InvalidGroupingKey(String),
+    #[error("Usecase: {0}")]
+    Usecase(String),
 }
 
 impl From<DasApiError> for jsonrpc_core::Error {
@@ -68,6 +71,16 @@ impl From<DasApiError> for jsonrpc_core::Error {
                 data: None,
             },
             _ => jsonrpc_core::Error::new(ErrorCode::InternalError),
+        }
+    }
+}
+
+impl From<UsecaseError> for DasApiError {
+    fn from(value: UsecaseError) -> Self {
+        match value {
+            UsecaseError::PubkeyValidationError(e) => Self::PubkeyValidationError(e),
+            UsecaseError::InvalidGroupingKey(e) => Self::InvalidGroupingKey(e),
+            e => Self::Usecase(e.to_string()),
         }
     }
 }

@@ -538,6 +538,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "assert-json-diff"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47e4f2b81832e72834d7518d8487a0396a28cc408186a2e8854c0f98011faf12"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "assert_matches"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1945,6 +1955,7 @@ dependencies = [
  "blockbuster",
  "bs58 0.4.0",
  "entities",
+ "interface",
  "jsonpath_lib",
  "log",
  "mime_guess",
@@ -1959,6 +1970,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "url",
+ "usecase",
 ]
 
 [[package]]
@@ -2116,6 +2128,7 @@ version = "0.1.0"
 dependencies = [
  "num-derive 0.4.1",
  "num-traits",
+ "schemars",
  "serde",
  "solana-sdk",
 ]
@@ -3027,6 +3040,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5bbe824c507c5da5956355e86a746d82e0e1464f65d862cc5e71da70e94b2c"
 dependencies = [
  "cfg-if 1.0.0",
+]
+
+[[package]]
+name = "integrity-verification"
+version = "0.1.0"
+dependencies = [
+ "assert-json-diff",
+ "clap 4.4.14",
+ "dotenvy",
+ "entities",
+ "env_logger 0.10.1",
+ "figment",
+ "metrics-utils",
+ "postgre-client",
+ "rand 0.8.5",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-util 0.7.10",
+ "tracing",
+ "usecase",
 ]
 
 [[package]]
@@ -4464,6 +4502,7 @@ dependencies = [
  "base64 0.21.6",
  "entities",
  "lazy_static",
+ "log",
  "mockall 0.11.4",
  "once_cell",
  "rand 0.8.5",

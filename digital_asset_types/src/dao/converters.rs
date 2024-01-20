@@ -1,6 +1,5 @@
+use entities::api_req_params::SearchConditionType;
 use thiserror::Error;
-
-use crate::rpc::filter::{AssetSortBy, AssetSortDirection, AssetSorting};
 
 use super::{
     sea_orm_active_enums::{
@@ -101,42 +100,11 @@ impl From<RoyaltyTargetType> for postgre_client::model::RoyaltyTargetType {
     }
 }
 
-impl From<AssetSorting> for postgre_client::model::AssetSorting {
-    fn from(sorting: AssetSorting) -> Self {
-        Self {
-            sort_by: sorting.sort_by.into(),
-            sort_direction: sorting
-                .sort_direction
-                .map_or(postgre_client::model::AssetSortDirection::Desc, |v| {
-                    v.into()
-                }),
-        }
-    }
-}
-
-impl From<AssetSortBy> for postgre_client::model::AssetSortBy {
-    fn from(sort_by: AssetSortBy) -> Self {
-        match sort_by {
-            AssetSortBy::Created => Self::SlotCreated,
-            _ => Self::SlotUpdated,
-        }
-    }
-}
-
-impl From<AssetSortDirection> for postgre_client::model::AssetSortDirection {
-    fn from(sort_direction: AssetSortDirection) -> Self {
-        match sort_direction {
-            AssetSortDirection::Asc => Self::Asc,
-            AssetSortDirection::Desc => Self::Desc,
-        }
-    }
-}
-
-impl From<crate::rpc::filter::SearchConditionType> for ConditionType {
-    fn from(search_condition_type: crate::rpc::filter::SearchConditionType) -> Self {
+impl From<SearchConditionType> for ConditionType {
+    fn from(search_condition_type: SearchConditionType) -> Self {
         match search_condition_type {
-            crate::rpc::filter::SearchConditionType::All => Self::All,
-            crate::rpc::filter::SearchConditionType::Any => Self::Any,
+            SearchConditionType::All => Self::All,
+            SearchConditionType::Any => Self::Any,
         }
     }
 }

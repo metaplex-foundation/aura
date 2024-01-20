@@ -12,7 +12,7 @@ use tokio::task::JoinSet;
 
 use backfill_rpc::rpc::BackfillRPC;
 use interface::signature_persistence::ProcessingDataGetter;
-use metrics_utils::utils::setup_metrics;
+use metrics_utils::utils::start_metrics;
 use metrics_utils::{
     ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
     MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig, SynchronizerMetricsConfig,
@@ -78,20 +78,11 @@ pub async fn main() -> Result<(), IngesterError> {
         SynchronizerMetricsConfig::new(),
     );
     metrics_state.register_metrics();
-
-    if !config.get_is_snapshot() {
-        let metrics_port = config.get_metrics_port(config.consumer_number)?;
-        tokio::spawn(async move {
-            match setup_metrics(metrics_state.registry, metrics_port).await {
-                Ok(_) => {
-                    info!("Setup metrics successfully")
-                }
-                Err(e) => {
-                    error!("Setup metrics failed: {:?}", e)
-                }
-            }
-        });
-    }
+    start_metrics(
+        metrics_state.registry,
+        config.get_metrics_port(config.consumer_number)?,
+    )
+    .await;
 
     // try to restore rocksDB first
     if args.restore_rocks_db {
@@ -476,7 +467,6 @@ pub async fn main() -> Result<(), IngesterError> {
     // --stop
     graceful_stop(
         mutexed_tasks,
-        true,
         keep_running.clone(),
         shutdown_tx,
         guard,
