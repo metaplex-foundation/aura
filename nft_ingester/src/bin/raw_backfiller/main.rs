@@ -93,7 +93,6 @@ pub async fn main() -> Result<(), IngesterError> {
     // --stop
     graceful_stop(
         mutexed_tasks,
-        true,
         keep_running.clone(),
         shutdown_tx,
         guard,
