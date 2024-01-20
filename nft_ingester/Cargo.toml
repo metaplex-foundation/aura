@@ -69,6 +69,7 @@ testcontainers = "0.14.0"
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 criterion = "0.5.1"
 "lazy_static" = "1.4.0"
+zip-extract = "0.1.2"
 
 [[bench]]
 name = "integrated_benchmark"
