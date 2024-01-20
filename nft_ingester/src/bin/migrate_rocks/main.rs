@@ -135,14 +135,16 @@ async fn migrate_rocks(
                             metrics_clone
                                 .inc_slots_merged("put_cbor_encoded", MetricStatus::SUCCESS);
                         }
-                        Err(_) => {
+                        Err(e) => {
+                            error!("put_cbor_encoded: {}", e);
                             metrics_clone
                                 .inc_slots_merged("put_cbor_encoded", MetricStatus::FAILURE);
                         }
                     }
                     metrics_clone.set_last_merged_slot(slot as i64);
                 }
-                Err(_) => {
+                Err(e) => {
+                    error!("slot: {}", e);
                     metrics_clone.inc_slots_merged("slots_iterator", MetricStatus::FAILURE);
                 }
             }
