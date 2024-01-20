@@ -168,10 +168,12 @@ pub async fn main() -> Result<(), IngesterError> {
     let mut backup_service = BackupService::new(rocks_storage.db.clone(), &backup_cfg)?;
     let cloned_metrics = metrics_state.ingester_metrics.clone();
 
-    let cloned_keep_running = keep_running.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        backup_service.perform_backup(cloned_metrics, cloned_keep_running)
-    }));
+    if config.store_db_backups() {
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            backup_service.perform_backup(cloned_metrics, cloned_keep_running)
+        }));
+    }
 
     let mplx_accs_parser = MplxAccsProcessor::new(
         config.mplx_buffer_size,
