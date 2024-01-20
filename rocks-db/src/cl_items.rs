@@ -26,7 +26,7 @@ pub struct ClItem {
 /// This column family stores node ids of the leaf nodes.
 /// The key is the leaf index(also known as nonce) and tree id.
 /// NOTE: it stores only nodes with level 0 in tree.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ClLeaf {
     pub cli_leaf_idx: u64,
     pub cli_tree_key: Pubkey,
@@ -141,7 +141,7 @@ impl Storage {
                         cli_node_idx: node_idx,
                     };
 
-                    if let Err(e) = self.cl_leafs.put((leaf_idx, tree), &cl_leaf) {
+                    if let Err(e) = self.cl_leafs.put((leaf_idx, tree), cl_leaf) {
                         error!("Error while saving change log for cNFT: {}", e);
                     };
                 }

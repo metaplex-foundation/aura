@@ -28,12 +28,16 @@ async-trait = "0.1.74"
 tokio-stream = "0.1.14"
 entities = { path = "../entities" }
 interface = { path = "../interface" }
+solana-transaction-status = "~1.16"
+tracing = "0.1.40"
+serde_cbor = "0.11.2"
 
 [dev-dependencies]
 tempfile = "3.8.1"
 rand = "0.8.5"
 setup = { path = "../tests/setup" }
 criterion = "0.5.1"
+tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 
 [features]
 integration_tests = []

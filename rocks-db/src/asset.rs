@@ -500,7 +500,7 @@ impl AssetCollection {
 // AssetsUpdateIdx is a column family that is used to query the assets that were updated in (or after) a particular slot.
 // The key is a concatenation of the slot and the asset pubkey.
 // This will be used in the batch updater to the secondary index database. The batches should be constructed based on the slot, with an overlap of 1 slot including the last processed slot.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AssetsUpdateIdx {}
 
 impl TypedColumn for AssetsUpdateIdx {
@@ -517,7 +517,7 @@ impl TypedColumn for AssetsUpdateIdx {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SlotAssetIdx {}
 
 impl TypedColumn for SlotAssetIdx {

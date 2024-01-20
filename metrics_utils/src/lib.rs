@@ -140,6 +140,26 @@ impl BackfillerMetricsConfig {
             })
             .set(slot)
     }
+
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "backfiller_slots_collected",
+            "The number of slots backfiller collected and prepared to parse",
+            self.slots_collected.clone(),
+        );
+
+        registry.register(
+            "backfiller_data_processed",
+            "The number of data processed by backfiller",
+            self.data_processed.clone(),
+        );
+
+        registry.register(
+            "backfiller_last_processed_slot",
+            "The last processed slot by backfiller",
+            self.last_processed_slot.clone(),
+        );
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -393,23 +413,7 @@ impl MetricsTrait for MetricState {
             self.json_downloader_metrics.start_time.clone(),
         );
 
-        self.registry.register(
-            "backfiller_slots_collected",
-            "The number of slots backfiller collected and prepared to parse",
-            self.backfiller_metrics.slots_collected.clone(),
-        );
-
-        self.registry.register(
-            "backfiller_data_processed",
-            "The number of data processed by backfiller",
-            self.backfiller_metrics.data_processed.clone(),
-        );
-
-        self.registry.register(
-            "backfiller_last_processed_slot",
-            "The last processed slot by backfiller",
-            self.backfiller_metrics.last_processed_slot.clone(),
-        );
+        self.backfiller_metrics.register(&mut self.registry);
 
         self.registry.register(
             "rpc_backfiller_transactions_processed",
