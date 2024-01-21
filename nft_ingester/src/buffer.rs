@@ -63,8 +63,7 @@ impl Buffer {
     }
 
     pub async fn mplx_metadata_len(&self) -> usize {
-        let metadata_info_buffer = self.mplx_metadata_info.lock().await;
-        metadata_info_buffer.len()
+        self.mplx_metadata_info.lock().await.len()
     }
 }
 

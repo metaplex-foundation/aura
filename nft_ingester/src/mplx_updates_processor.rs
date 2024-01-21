@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use blockbuster::token_metadata::state::{Metadata, TokenStandard, UseMethod};
 use log::error;
@@ -19,6 +20,8 @@ use rocks_db::Storage;
 use crate::buffer::Buffer;
 use crate::db_v2::{DBClient as DBClientV2, Task};
 
+// interval after which buffer is flushed
+const FLUSH_INTERVAL_SEC: u64 = 5;
 // worker idle timeout
 const WORKER_IDLE_TIMEOUT_MS: u64 = 100;
 // arbitrary number, should be enough to not overflow batch insert command at Postgre
@@ -41,18 +44,16 @@ pub struct MetadataInfo {
 #[derive(Clone)]
 pub struct MplxAccsProcessor {
     pub batch_size: usize,
-    pub max_task_attempts: i16,
     pub db_client_v2: Arc<DBClientV2>,
     pub rocks_db: Arc<Storage>,
-
     pub buffer: Arc<Buffer>,
     pub metrics: Arc<IngesterMetricsConfig>,
+    last_received_at: Option<SystemTime>,
 }
 
 impl MplxAccsProcessor {
     pub fn new(
         batch_size: usize,
-        max_task_attempts: i16,
         buffer: Arc<Buffer>,
         db_client_v2: Arc<DBClientV2>,
         rocks_db: Arc<Storage>,
@@ -60,20 +61,28 @@ impl MplxAccsProcessor {
     ) -> Self {
         Self {
             batch_size,
-            max_task_attempts,
             buffer,
             db_client_v2,
             rocks_db,
             metrics,
+            last_received_at: None,
         }
     }
 
-    pub async fn process_metadata_accs(&self, keep_running: Arc<AtomicBool>) {
+    pub async fn process_metadata_accs(&mut self, keep_running: Arc<AtomicBool>) {
         while keep_running.load(Ordering::SeqCst) {
-            if self.buffer.mplx_metadata_len().await < self.batch_size {
-                tokio::time::sleep(tokio::time::Duration::from_millis(WORKER_IDLE_TIMEOUT_MS))
-                    .await;
-                continue;
+            let buffer_len = self.buffer.mplx_metadata_len().await;
+            if buffer_len < self.batch_size {
+                // sleep only in case when buffer is empty or n seconds passed since last insert
+                if buffer_len == 0
+                    || self.last_received_at.is_some_and(|t| {
+                        t.elapsed().is_ok_and(|e| e.as_secs() < FLUSH_INTERVAL_SEC)
+                    })
+                {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(WORKER_IDLE_TIMEOUT_MS))
+                        .await;
+                    continue;
+                }
             }
 
             let mut max_slot = 0;
@@ -138,6 +147,8 @@ impl MplxAccsProcessor {
 
             self.metrics
                 .set_last_processed_slot("mplx_metadata", max_slot as i64);
+
+            self.last_received_at = Some(SystemTime::now());
         }
     }
 
@@ -354,22 +365,26 @@ impl MplxAccsProcessor {
     }
 
     async fn store_tasks(&self, tasks: Vec<Task>) {
-        let mut tasks_buffer = self.buffer.json_tasks.lock().await;
-
-        let number_of_tasks = {
-            if tasks_buffer.len() + tasks.len() > MAX_BUFFERED_TASKS_TO_TAKE {
-                MAX_BUFFERED_TASKS_TO_TAKE.saturating_sub(tasks.len())
-            } else {
-                tasks_buffer.len()
-            }
-        };
-
         let mut tasks_to_insert = tasks.clone();
-        tasks_to_insert.extend(
+
+        // scope crated to unlock mutex before insert_tasks func, which can be time consuming
+        let tasks = {
+            let mut tasks_buffer = self.buffer.json_tasks.lock().await;
+
+            let number_of_tasks = {
+                if tasks_buffer.len() + tasks.len() > MAX_BUFFERED_TASKS_TO_TAKE {
+                    MAX_BUFFERED_TASKS_TO_TAKE.saturating_sub(tasks.len())
+                } else {
+                    tasks_buffer.len()
+                }
+            };
+
             tasks_buffer
                 .drain(0..number_of_tasks)
-                .collect::<Vec<Task>>(),
-        );
+                .collect::<Vec<Task>>()
+        };
+
+        tasks_to_insert.extend(tasks);
 
         let res = self.db_client_v2.insert_tasks(&tasks_to_insert).await;
         self.result_to_metrics(res, "accounts_saving_tasks");
