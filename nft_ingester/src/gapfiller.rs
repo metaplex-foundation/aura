@@ -115,7 +115,7 @@ pub fn insert_gaped_data(
     if let Some(leaf) = data.cl_leaf {
         rocks_storage.cl_leafs.put(
             (leaf.cli_leaf_idx, leaf.cli_tree_key),
-            &ClLeaf {
+            ClLeaf {
                 cli_leaf_idx: leaf.cli_leaf_idx,
                 cli_tree_key: leaf.cli_tree_key,
                 cli_node_idx: leaf.cli_node_idx,

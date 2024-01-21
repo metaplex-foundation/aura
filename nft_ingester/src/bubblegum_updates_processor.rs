@@ -188,22 +188,25 @@ impl BubblegumTxProcessor {
                         self.instruction_name_to_string(&parsing_result.instruction),
                     );
 
-                    self.handle_bubblegum_instruction(parsing_result, &ix)
-                        .await
-                        .map_err(|err| {
-                            error!(
-                                "Failed to handle bubblegum instruction for txn {:?}: {:?}",
-                                sig, err
-                            );
+                        let ix_parse_res =
+                            self.handle_bubblegum_instruction(parsing_result, &ix).await;
 
-                            err
-                        })?;
-                }
-                _ => {
-                    not_impl += 1;
-                }
-            };
-        }
+                        match ix_parse_res {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!(
+                                    "Failed to handle bubblegum instruction for txn {:?}: {:?}",
+                                    sig, e
+                                );
+                            }
+                        }
+                    }
+                    _ => {
+                        not_impl += 1;
+                    }
+                };
+            }
+
 
         if not_impl == ixlen {
             return Err(IngesterError::NotImplemented);
@@ -245,12 +248,9 @@ impl BubblegumTxProcessor {
                 self.redeem(parsing_result, bundle).await?;
             }
             InstructionName::DecompressV1 => {
-                self.decompress(parsing_result, bundle).await?;
+                self.decompress(bundle).await?;
             }
-            InstructionName::VerifyCreator => {
-                self.creator_verification(parsing_result, bundle).await?;
-            }
-            InstructionName::UnverifyCreator => {
+            InstructionName::VerifyCreator | InstructionName::UnverifyCreator => {
                 self.creator_verification(parsing_result, bundle).await?;
             }
             InstructionName::VerifyCollection
@@ -299,7 +299,6 @@ impl BubblegumTxProcessor {
                     id,
                     owner,
                     delegate,
-                    nonce,
                     ..
                 } => {
                     if let Err(e) = self.rocks_client.save_tx_data_and_asset_updated(
@@ -309,7 +308,7 @@ impl BubblegumTxProcessor {
                             pubkey: id,
                             tree_id: cl.id,
                             leaf: Some(le.leaf_hash.to_vec()),
-                            nonce: Some(nonce),
+                            nonce: Some(cl.index as u64),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
                             creator_hash: Some(Hash::from(le.schema.creator_hash())),
                             leaf_seq: Some(cl.seq),
@@ -317,7 +316,10 @@ impl BubblegumTxProcessor {
                         }),
                         None,
                     ) {
-                        error!("Error while saving tx_data for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetLeaf for cNFT: {}",
+                            e
+                        )));
                     };
 
                     if let Err(e) = self.rocks_client.asset_owner_data.merge(
@@ -325,7 +327,7 @@ impl BubblegumTxProcessor {
                         &AssetOwner {
                             pubkey: id,
                             owner: Updated::new(bundle.slot, Some(cl.seq), owner),
-                            delegate: Some(Updated::new(bundle.slot, Some(cl.seq), delegate)),
+                            delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
                             owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
                             owner_delegate_seq: Some(Updated::new(
                                 bundle.slot,
@@ -334,7 +336,10 @@ impl BubblegumTxProcessor {
                             )),
                         },
                     ) {
-                        error!("Error while saving owner for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetOwner for cNFT: {}",
+                            e
+                        )));
                     };
                 }
             }
@@ -351,7 +356,7 @@ impl BubblegumTxProcessor {
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle<'c>,
     ) -> Result<(), IngesterError> {
-        if let (Some(_le), Some(cl)) = (&parsing_result.leaf_update, &parsing_result.tree_update) {
+        if let Some(cl) = &parsing_result.tree_update {
             self.rocks_client.save_changelog(cl, bundle.slot).await;
 
             let (asset_id, _) = Pubkey::find_program_address(
@@ -376,11 +381,18 @@ impl BubblegumTxProcessor {
                     ..Default::default()
                 }),
             ) {
-                error!("Error while saving tx_data for cNFT: {}", e);
-            };
+                return Err(IngesterError::DatabaseError(format!(
+                    "Error while saving AssetDynamicDetails for cNFT: {}",
+                    e
+                )));
+            }
+
+            return Ok(());
         }
 
-        Ok(())
+        Err(IngesterError::ParsingError(
+            "Ix not parsed correctly".to_string(),
+        ))
     }
 
     pub async fn mint_v1<'c>(
@@ -416,6 +428,11 @@ impl BubblegumTxProcessor {
                     nonce,
                     ..
                 } => {
+                    let chain_mutability = match args.is_mutable {
+                        true => ChainMutability::Mutable,
+                        false => ChainMutability::Immutable,
+                    };
+
                     let mut chain_data = ChainDataV1 {
                         name: args.name.clone(),
                         symbol: args.symbol.clone(),
@@ -427,7 +444,7 @@ impl BubblegumTxProcessor {
                             remaining: u.remaining,
                             total: u.total,
                         }),
-                        chain_mutability: None,
+                        chain_mutability: Some(chain_mutability),
                     };
                     chain_data.sanitize();
 
@@ -442,9 +459,12 @@ impl BubblegumTxProcessor {
                     if let Err(e) = self
                         .rocks_client
                         .asset_static_data
-                        .put(id, &asset_static_details)
+                        .merge(id, &asset_static_details)
                     {
-                        error!("Error while saving static data for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetStaticDetails for cNFT: {}",
+                            e
+                        )));
                     };
 
                     let creators = {
@@ -475,6 +495,7 @@ impl BubblegumTxProcessor {
                         Some(AssetDynamicDetails {
                             pubkey: id,
                             is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
+                            is_compressible: Updated::new(bundle.slot, Some(cl.seq), false),
                             supply: Some(Updated::new(bundle.slot, Some(cl.seq), 1)),
                             seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
                             onchain_data: Some(Updated::new(
@@ -492,7 +513,10 @@ impl BubblegumTxProcessor {
                             ..Default::default()
                         }),
                     ) {
-                        error!("Error while saving tx_data for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetDynamicDetails for cNFT: {}",
+                            e
+                        )));
                     }
 
                     let asset_authority = AssetAuthority {
@@ -504,17 +528,20 @@ impl BubblegumTxProcessor {
                     if let Err(e) = self
                         .rocks_client
                         .asset_authority_data
-                        .put(id, &asset_authority)
+                        .merge(id, &asset_authority)
                     {
-                        error!("Error while saving authority for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetAuthority for cNFT: {}",
+                            e
+                        )));
                     };
 
-                    if let Err(e) = self.rocks_client.asset_owner_data.put(
+                    if let Err(e) = self.rocks_client.asset_owner_data.merge(
                         id,
                         &AssetOwner {
                             pubkey: id,
                             owner: Updated::new(bundle.slot, Some(cl.seq), owner),
-                            delegate: Some(Updated::new(bundle.slot, Some(cl.seq), delegate)),
+                            delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
                             owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
                             owner_delegate_seq: Some(Updated::new(
                                 bundle.slot,
@@ -523,7 +550,10 @@ impl BubblegumTxProcessor {
                             )),
                         },
                     ) {
-                        error!("Error while saving owner for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetOwner for cNFT: {}",
+                            e
+                        )));
                     };
 
                     if let Some(collection) = &args.collection {
@@ -540,7 +570,10 @@ impl BubblegumTxProcessor {
                             .asset_collection_data
                             .merge(id, &asset_collection)
                         {
-                            error!("Error while saving collection for cNFT: {}", e);
+                            return Err(IngesterError::DatabaseError(format!(
+                                "Error while saving AssetCollection for cNFT: {}",
+                                e
+                            )));
                         };
                     }
                 }
@@ -570,34 +603,48 @@ impl BubblegumTxProcessor {
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle<'c>,
     ) -> Result<(), IngesterError> {
-        if let (Some(le), Some(cl)) = (&parsing_result.leaf_update, &parsing_result.tree_update) {
+        if let Some(cl) = &parsing_result.tree_update {
             self.rocks_client.save_changelog(cl, bundle.slot).await;
 
-            match le.schema {
-                LeafSchema::V1 { id, nonce, .. } => {
-                    let tree = cl.id;
-                    if let Err(e) = self.rocks_client.save_tx_data_and_asset_updated(
-                        id,
-                        bundle.slot,
-                        Some(AssetLeaf {
-                            pubkey: id,
-                            tree_id: tree,
-                            leaf: None,
-                            nonce: Some(nonce),
-                            data_hash: None,
-                            creator_hash: None,
-                            leaf_seq: Some(cl.seq),
-                            slot_updated: bundle.slot,
-                        }),
-                        None,
-                    ) {
-                        error!("Error while saving tx_data for cNFT: {}", e);
-                    };
-                }
-            }
+            let leaf_index = cl.index;
+            let (asset_id, _) = Pubkey::find_program_address(
+                &[
+                    "asset".as_bytes(),
+                    cl.id.as_ref(),
+                    self.u32_to_u8_array(leaf_index).as_ref(),
+                ],
+                &mpl_bubblegum::ID,
+            );
+
+            let nonce = cl.index as u64;
+
+            self.rocks_client.asset_updated(bundle.slot, asset_id)?;
+
+            let leaf_info = AssetLeaf {
+                pubkey: asset_id,
+                tree_id: cl.id,
+                leaf: Some(vec![0; 32]),
+                nonce: Some(nonce),
+                data_hash: Some(Hash::from([0; 32])),
+                creator_hash: Some(Hash::from([0; 32])),
+                leaf_seq: Some(cl.seq),
+                slot_updated: bundle.slot,
+            };
+
+            if let Err(e) = self
+                .rocks_client
+                .asset_leaf_data
+                .merge(asset_id, &leaf_info)
+            {
+                return Err(IngesterError::DatabaseError(format!(
+                    "Error while saving AssetLeaf for cNFT: {}",
+                    e
+                )));
+            };
 
             return Ok(());
         }
+
         Err(IngesterError::ParsingError(
             "Ix not parsed correctly".to_string(),
         ))
@@ -605,46 +652,30 @@ impl BubblegumTxProcessor {
 
     pub async fn decompress<'c>(
         &self,
-        parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle<'c>,
     ) -> Result<(), IngesterError> {
-        if let (Some(le), Some(cl)) = (&parsing_result.leaf_update, &parsing_result.tree_update) {
-            match le.schema {
-                LeafSchema::V1 { id, .. } => {
-                    let tree = cl.id;
-                    if let Err(e) = self.rocks_client.save_tx_data_and_asset_updated(
-                        id,
-                        bundle.slot,
-                        Some(AssetLeaf {
-                            pubkey: id,
-                            tree_id: tree,
-                            leaf: None,
-                            nonce: None,
-                            data_hash: None,
-                            creator_hash: None,
-                            leaf_seq: None,
-                            slot_updated: bundle.slot,
-                        }),
-                        Some(AssetDynamicDetails {
-                            pubkey: id,
-                            was_decompressed: Updated::new(bundle.slot, Some(cl.seq), true),
-                            seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
-                            is_compressible: Updated::new(bundle.slot, Some(cl.seq), true), // TODO
-                            supply: Some(Updated::new(bundle.slot, Some(cl.seq), 1)),
-                            ..Default::default()
-                        }),
-                    ) {
-                        error!("Error while saving tx_data for cNFT: {}", e);
-                    };
-                }
-            }
+        let id_bytes = bundle.keys.get(3).unwrap().0.as_slice();
+        let asset_id = Pubkey::new_from_array(id_bytes.try_into().unwrap());
 
-            return Ok(());
-        }
+        if let Err(e) = self.rocks_client.asset_leaf_data.delete(asset_id) {
+            return Err(IngesterError::DatabaseError(format!(
+                "Error while deleting AssetLeaf: {}",
+                e
+            )));
+        };
 
-        Err(IngesterError::ParsingError(
-            "Ix not parsed correctly".to_string(),
-        ))
+        self.rocks_client.asset_dynamic_data.merge(
+            asset_id,
+            &AssetDynamicDetails {
+                pubkey: asset_id,
+                was_decompressed: Updated::new(bundle.slot, None, true),
+                is_compressible: Updated::new(bundle.slot, None, true), // TODO
+                supply: Some(Updated::new(bundle.slot, None, 1)),
+                ..Default::default()
+            },
+        )?;
+
+        Ok(())
     }
 
     pub async fn creator_verification<'c>(
@@ -659,25 +690,45 @@ impl BubblegumTxProcessor {
         ) {
             self.rocks_client.save_changelog(cl, bundle.slot).await;
 
-            let (creator, verify) = match payload {
+            let updated_creators = match payload {
                 Payload::CreatorVerification {
-                    creator, verify, ..
-                } => (creator, verify),
+                    metadata,
+                    creator,
+                    verify,
+                } => {
+                    let updated_creators: Vec<Creator> = metadata
+                        .creators
+                        .iter()
+                        .map(|c| {
+                            let mut c = Creator {
+                                creator: c.address,
+                                creator_verified: c.verified,
+                                creator_share: c.share,
+                            };
+
+                            if c.creator == *creator {
+                                c.creator_verified = *verify
+                            };
+                            c
+                        })
+                        .collect();
+
+                    updated_creators
+                }
                 _ => {
-                    return Err(IngesterError::DatabaseError(
+                    return Err(IngesterError::ParsingError(
                         "Ix not parsed correctly".to_string(),
                     ));
                 }
             };
 
             match le.schema {
-                LeafSchema::V1 { id, nonce, .. } => {
-                    let creator = Creator {
-                        creator: *creator,
-                        creator_verified: *verify,
-                        creator_share: 0,
-                    };
-
+                LeafSchema::V1 {
+                    id,
+                    owner,
+                    delegate,
+                    ..
+                } => {
                     if let Err(e) = self.rocks_client.save_tx_data_and_asset_updated(
                         id,
                         bundle.slot,
@@ -685,7 +736,7 @@ impl BubblegumTxProcessor {
                             pubkey: id,
                             tree_id: cl.id,
                             leaf: Some(le.leaf_hash.to_vec()),
-                            nonce: Some(nonce),
+                            nonce: Some(cl.index as u64),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
                             creator_hash: Some(Hash::from(le.schema.creator_hash())),
                             leaf_seq: Some(cl.seq),
@@ -696,12 +747,35 @@ impl BubblegumTxProcessor {
                             is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
                             supply: Some(Updated::new(bundle.slot, Some(cl.seq), 1)),
                             seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
-                            creators: Updated::new(bundle.slot, Some(cl.seq), vec![creator]),
+                            creators: Updated::new(bundle.slot, Some(cl.seq), updated_creators),
                             ..Default::default()
                         }),
                     ) {
-                        error!("Error while saving tx_data for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving creator verification updates for cNFT: {}",
+                            e
+                        )));
                     }
+
+                    if let Err(e) = self.rocks_client.asset_owner_data.merge(
+                        id,
+                        &AssetOwner {
+                            pubkey: id,
+                            owner: Updated::new(bundle.slot, Some(cl.seq), owner),
+                            delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
+                            owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
+                            owner_delegate_seq: Some(Updated::new(
+                                bundle.slot,
+                                Some(cl.seq),
+                                cl.seq,
+                            )),
+                        },
+                    ) {
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetOwner for cNFT: {}",
+                            e
+                        )));
+                    };
                 }
             }
 
@@ -736,7 +810,7 @@ impl BubblegumTxProcessor {
             };
 
             match le.schema {
-                LeafSchema::V1 { id, nonce, .. } => {
+                LeafSchema::V1 { id, .. } => {
                     if let Err(e) = self.rocks_client.save_tx_data_and_asset_updated(
                         id,
                         bundle.slot,
@@ -744,7 +818,7 @@ impl BubblegumTxProcessor {
                             pubkey: id,
                             tree_id: cl.id,
                             leaf: Some(le.leaf_hash.to_vec()),
-                            nonce: Some(nonce),
+                            nonce: Some(cl.index as u64),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
                             creator_hash: Some(Hash::from(le.schema.creator_hash())),
                             leaf_seq: Some(cl.seq),
@@ -752,7 +826,10 @@ impl BubblegumTxProcessor {
                         }),
                         None,
                     ) {
-                        error!("Error while saving tx_data for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving collection verification update for cNFT: {}",
+                            e
+                        )));
                     }
 
                     let collection = AssetCollection {
@@ -768,7 +845,10 @@ impl BubblegumTxProcessor {
                         .asset_collection_data
                         .merge(id, &collection)
                     {
-                        error!("Error while saving collection for cNFT: {}", e);
+                        return Err(IngesterError::DatabaseError(format!(
+                            "Error while saving AssetCollection for cNFT: {}",
+                            e
+                        )));
                     };
                 }
             }
@@ -963,4 +1043,14 @@ fn use_method_from_mpl_bubblegum_state(
         mpl_bubblegum::types::UseMethod::Multiple => entities::enums::UseMethod::Multiple,
         mpl_bubblegum::types::UseMethod::Single => entities::enums::UseMethod::Single,
     }
+}
+
+fn get_delegate(delegate: Pubkey, owner: Pubkey, slot: u64, seq: u64) -> Option<Updated<Pubkey>> {
+    let delegate = if owner == delegate || delegate.to_bytes() == [0; 32] {
+        None
+    } else {
+        Some(delegate)
+    };
+
+    delegate.map(|delegate| Updated::new(slot, Some(seq), delegate))
 }

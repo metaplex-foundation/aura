@@ -1,6 +1,6 @@
 use crate::dao::{scopes, ConversionError, SearchAssetsQuery};
-use crate::rpc::filter::AssetSorting;
 use crate::rpc::response::AssetList;
+use entities::api_req_params::AssetSorting;
 use rocks_db::Storage;
 use sea_orm::DbErr;
 use solana_sdk::pubkey::Pubkey;

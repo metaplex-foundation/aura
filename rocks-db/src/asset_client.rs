@@ -31,8 +31,8 @@ impl Storage {
     pub fn asset_updated(&self, slot: u64, pubkey: Pubkey) -> Result<()> {
         let seq = self.get_next_asset_update_seq()?;
         let value = encode_u64x2_pubkey(seq, slot, pubkey);
-        self.assets_update_idx.put(value, &AssetsUpdateIdx {})?;
-        self.slot_asset_idx.put((slot, pubkey), &SlotAssetIdx {})
+        self.assets_update_idx.put(value, AssetsUpdateIdx {})?;
+        self.slot_asset_idx.put((slot, pubkey), SlotAssetIdx {})
     }
 }
 

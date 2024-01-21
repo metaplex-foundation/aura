@@ -1,12 +1,21 @@
-.PHONY: build start dev stop clippy test
+.PHONY: build start build-integrity-verification start-integrity-verification start-raw-backfiller dev stop clippy test
 
 SHELL := /bin/bash
 
 build:
-	@docker compose -f docker-compose.yaml build ingester-first-consumer
+	@docker compose -f docker-compose.yaml build ingester-first-consumer raw-backfiller
 
 start:
 	@docker compose -f docker-compose.yaml up -d ingester-first-consumer
+
+build-integrity-verification:
+	@docker compose -f docker-compose.yaml build integrity-verification
+
+start-integrity-verification:
+	@docker compose -f docker-compose.yaml up -d integrity-verification
+
+start-raw-backfiller:
+	@docker compose -f docker-compose.yaml up -d raw-backfiller
 
 dev:
 	@docker compose -f docker-compose.yaml up -d db

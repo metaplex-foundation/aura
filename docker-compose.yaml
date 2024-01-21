@@ -24,6 +24,40 @@ services:
       options:
         max-size: "2048m"
 
+  integrity-verification:
+    container_name: integrity-verification
+    restart: always
+    entrypoint: "./integrity-verification"
+    env_file:
+      - .env
+    network_mode: host
+    depends_on:
+      - db
+    build:
+      context: .
+      dockerfile: integrity_verification.Dockerfile
+    logging:
+      options:
+        max-size: "2048m"
+
+  raw-backfiller:
+    container_name: raw-backfiller
+    restart: always
+    entrypoint: "./raw_backfiller"
+    env_file:
+      - .env
+    network_mode: host
+    volumes:
+      - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
+      - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
+      - ./creds.json:/usr/src/app/creds.json
+    build:
+      context: .
+      dockerfile: ingester.Dockerfile
+    logging:
+      options:
+        max-size: "2048m"
+
   db:
     container_name: db
     image: 'postgres:14'

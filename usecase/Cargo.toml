@@ -12,8 +12,8 @@ interface = { path = "../interface" }
 tracing = "0.1.40"
 solana-sdk = { version = "~1.16" }
 metrics-utils = { path = "../metrics_utils" }
+tokio = { version = "1.26.0", features = ["full", "tracing"] }
 
 [dev-dependencies]
-tokio = { version = "1.26.0", features = ["full", "tracing"] }
 mockall = "0.12.0"
 futures = "0.3.30"
