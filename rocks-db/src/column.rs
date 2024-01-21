@@ -256,7 +256,7 @@ pub mod columns {
     use serde::{Deserialize, Serialize};
     use solana_sdk::pubkey::Pubkey;
 
-    #[derive(Debug, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct TokenAccount {
         pub pubkey: Pubkey,
         pub mint: Pubkey,

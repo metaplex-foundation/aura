@@ -186,7 +186,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 .await;
         }));
 
-        let cloned_token_parser = token_accs_parser.clone();
+        let mut cloned_token_parser = token_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
@@ -195,7 +195,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 .await;
         }));
 
-        let cloned_token_parser = token_accs_parser.clone();
+        let mut cloned_token_parser = token_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {

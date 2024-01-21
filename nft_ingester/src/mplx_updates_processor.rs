@@ -21,9 +21,9 @@ use crate::buffer::Buffer;
 use crate::db_v2::{DBClient as DBClientV2, Task};
 
 // interval after which buffer is flushed
-const FLUSH_INTERVAL_SEC: u64 = 5;
+pub const FLUSH_INTERVAL_SEC: u64 = 5;
 // worker idle timeout
-const WORKER_IDLE_TIMEOUT_MS: u64 = 100;
+pub const WORKER_IDLE_TIMEOUT_MS: u64 = 100;
 // arbitrary number, should be enough to not overflow batch insert command at Postgre
 pub const MAX_BUFFERED_TASKS_TO_TAKE: usize = 5000;
 
@@ -62,7 +62,7 @@ macro_rules! store_assets {
                 });
 
         let res = $self.rocks_db.$db_field.merge_batch(save_values).await;
-        $self.result_to_metrics(&res, $metric_name);
+        result_to_metrics($self.metrics.clone(), &res, $metric_name);
         res
     }};
 }
@@ -102,7 +102,6 @@ impl MplxAccsProcessor {
             }
 
             let mut max_slot = 0;
-
             let metadata_info = {
                 let mut metadata_info_buffer = self.buffer.mplx_metadata_info.lock().await;
                 let mut elems = HashMap::new();
@@ -355,19 +354,7 @@ impl MplxAccsProcessor {
         tasks_to_insert.extend(tasks);
 
         let res = self.db_client_v2.insert_tasks(&tasks_to_insert).await;
-        self.result_to_metrics(&res, "accounts_saving_tasks");
-    }
-
-    fn result_to_metrics<T, E: Display>(&self, result: &Result<T, E>, metric_name: &str) {
-        match result {
-            Err(e) => {
-                self.metrics.inc_process(metric_name, MetricStatus::FAILURE);
-                error!("Error {}: {}", metric_name, e);
-            }
-            Ok(_) => {
-                self.metrics.inc_process(metric_name, MetricStatus::SUCCESS);
-            }
-        }
+        result_to_metrics(self.metrics.clone(), &res, "accounts_saving_tasks");
     }
 }
 
@@ -390,6 +377,22 @@ pub fn token_standard_from_mpl_state(value: &TokenStandard) -> entities::enums::
         }
         TokenStandard::ProgrammableNonFungibleEdition => {
             entities::enums::TokenStandard::ProgrammableNonFungibleEdition
+        }
+    }
+}
+
+pub fn result_to_metrics<T, E: Display>(
+    metrics: Arc<IngesterMetricsConfig>,
+    result: &Result<T, E>,
+    metric_name: &str,
+) {
+    match result {
+        Err(e) => {
+            metrics.inc_process(metric_name, MetricStatus::FAILURE);
+            error!("Error {}: {}", metric_name, e);
+        }
+        Ok(_) => {
+            metrics.inc_process(metric_name, MetricStatus::SUCCESS);
         }
     }
 }
