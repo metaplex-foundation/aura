@@ -93,6 +93,28 @@ where
         Ok(())
     }
 
+    pub async fn merge_batch(&self, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
+        let db = self.backend.clone();
+        let values = values.clone();
+        tokio::task::spawn_blocking(move || Self::merge_batch_sync(db, values))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?
+    }
+
+    fn merge_batch_sync(backend: Arc<DB>, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        for (k, v) in values.iter() {
+            let serialized_value = serialize(v)?;
+            batch.merge_cf(
+                &backend.cf_handle(C::NAME).unwrap(),
+                C::encode_key(k.clone()),
+                serialized_value,
+            )
+        }
+        backend.write(batch)?;
+        Ok(())
+    }
+
     pub async fn put_batch(&self, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
         let db = self.backend.clone();
         let values = values.clone();

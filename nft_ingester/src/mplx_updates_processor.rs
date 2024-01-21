@@ -14,7 +14,7 @@ use entities::models::Updated;
 use entities::models::{ChainDataV1, Creator, Uses};
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
 use rocks_db::asset::{AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails};
-use rocks_db::columns::Mint;
+use rocks_db::errors::StorageError;
 use rocks_db::Storage;
 
 use crate::buffer::Buffer;
@@ -49,6 +49,22 @@ pub struct MplxAccsProcessor {
     pub buffer: Arc<Buffer>,
     pub metrics: Arc<IngesterMetricsConfig>,
     last_received_at: Option<SystemTime>,
+}
+
+macro_rules! store_assets {
+    ($self:expr, $assets:expr, $db_field:ident, $metric_name:expr) => {{
+        let save_values =
+            $assets
+                .into_iter()
+                .fold(HashMap::new(), |mut acc: HashMap<_, _>, asset| {
+                    acc.insert(asset.pubkey, asset);
+                    acc
+                });
+
+        let res = $self.rocks_db.$db_field.merge_batch(save_values).await;
+        $self.result_to_metrics(&res, $metric_name);
+        res
+    }};
 }
 
 impl MplxAccsProcessor {
@@ -108,37 +124,33 @@ impl MplxAccsProcessor {
 
                 elems
             };
+            let metadata_models = self.create_rocks_metadata_models(&metadata_info).await;
 
-            let mut mints_info = {
-                let mut mints_buffer = self.buffer.mints.lock().await;
-                let mut elems = HashMap::new();
-
-                for key in mints_buffer
-                    .keys()
-                    .take(self.batch_size)
-                    .cloned()
-                    .collect::<Vec<Vec<u8>>>()
-                {
-                    if let Some(value) = mints_buffer.remove(&key) {
-                        elems.insert(key, value);
-                    }
-                }
-
-                elems
-            };
-
-            let metadata_models = self
-                .create_rocks_metadata_models(&metadata_info, &mut mints_info)
-                .await;
-
+            // store data
             let begin_processing = Instant::now();
+            let (store_static_res, store_dynamic_res, store_authority_res, store_collection_res, _) = tokio::join!(
+                self.store_static(metadata_models.asset_static),
+                self.store_dynamic(metadata_models.asset_dynamic.clone()),
+                self.store_authority(metadata_models.asset_authority),
+                self.store_collection(metadata_models.asset_collection),
+                self.store_tasks(metadata_models.tasks)
+            );
 
-            // store  data
-            self.store_static(metadata_models.asset_static);
-            self.store_dynamic(metadata_models.asset_dynamic);
-            self.store_authority(metadata_models.asset_authority);
-            self.store_collection(metadata_models.asset_collection);
-            self.store_tasks(metadata_models.tasks).await;
+            // We need to call asset_updated only if all asset-related columns was successfully stored new data
+            if store_static_res.is_ok()
+                && store_dynamic_res.is_ok()
+                && store_authority_res.is_ok()
+                && store_collection_res.is_ok()
+            {
+                metadata_models.asset_dynamic.iter().for_each(|asset| {
+                    let upd_res = self
+                        .rocks_db
+                        .asset_updated(asset.get_slot_updated(), asset.pubkey);
+                    if let Err(e) = upd_res {
+                        error!("Error while updating assets update idx: {}", e);
+                    }
+                });
+            }
 
             self.metrics.set_latency(
                 "accounts_saving",
@@ -155,7 +167,6 @@ impl MplxAccsProcessor {
     async fn create_rocks_metadata_models(
         &self,
         metadatas: &HashMap<Vec<u8>, MetadataInfo>,
-        mints: &mut HashMap<Vec<u8>, Mint>,
     ) -> RocksMetadataModels {
         let mut models = RocksMetadataModels::default();
 
@@ -179,20 +190,6 @@ impl MplxAccsProcessor {
                 created_at: metadata_info.slot as i64,
             });
 
-            let supply;
-            let mint_bytes = mint.to_bytes().to_vec();
-            if let Some(mint_data) = mints.get_mut(&mint_bytes) {
-                if mint_data.slot_updated > metadata_info.slot as i64 {
-                    supply = Some(mint_data.supply as u64);
-                } else {
-                    supply = Some(1);
-                }
-
-                mints.remove(&mint_bytes);
-            } else {
-                supply = Some(1);
-            }
-
             let mut chain_data = ChainDataV1 {
                 name: data.name.clone(),
                 symbol: data.symbol.clone(),
@@ -212,12 +209,12 @@ impl MplxAccsProcessor {
 
             let chain_data = json!(chain_data);
 
+            // supply field saving inside process_mint_accs fn
             models.asset_dynamic.push(AssetDynamicDetails {
                 pubkey: mint,
                 is_compressible: Updated::new(metadata_info.slot, None, false),
                 is_compressed: Updated::new(metadata_info.slot, None, false),
                 is_frozen: Updated::new(metadata_info.slot, None, false),
-                supply: supply.map(|supply| Updated::new(metadata_info.slot, None, supply)),
                 seq: None,
                 is_burnt: Updated::new(metadata_info.slot, None, false),
                 was_decompressed: Updated::new(metadata_info.slot, None, false),
@@ -246,6 +243,7 @@ impl MplxAccsProcessor {
                     data.seller_fee_basis_points,
                 ),
                 url: Updated::new(metadata_info.slot, None, uri.clone()),
+                ..Default::default()
             });
 
             models.tasks.push(Task {
@@ -286,82 +284,52 @@ impl MplxAccsProcessor {
         models
     }
 
-    fn store_static(&self, asset_static: Vec<AssetStaticDetails>) {
-        let res = asset_static
-            .iter()
-            .try_for_each(|asset| self.rocks_db.asset_static_data.merge(asset.pubkey, asset));
-
-        self.result_to_metrics(res, "accounts_saving_static");
+    async fn store_static(
+        &self,
+        asset_static: Vec<AssetStaticDetails>,
+    ) -> Result<(), StorageError> {
+        store_assets!(
+            self,
+            asset_static,
+            asset_static_data,
+            "accounts_saving_static"
+        )
     }
 
-    fn store_dynamic(&self, asset_dynamic: Vec<AssetDynamicDetails>) {
-        for asset in asset_dynamic.iter() {
-            let existing_value = self.rocks_db.asset_dynamic_data.get(asset.pubkey);
-
-            match existing_value {
-                Ok(existing_value) => {
-                    let insert_value = if let Some(existing_value) = existing_value {
-                        AssetDynamicDetails {
-                            pubkey: asset.pubkey,
-                            is_compressible: existing_value.is_compressible,
-                            is_compressed: existing_value.is_compressed,
-                            is_frozen: existing_value.is_frozen,
-                            supply: asset.supply.clone(),
-                            seq: asset.seq.clone(),
-                            is_burnt: existing_value.is_burnt,
-                            was_decompressed: existing_value.was_decompressed,
-                            onchain_data: asset.onchain_data.clone(),
-                            creators: asset.creators.clone(),
-                            royalty_amount: asset.royalty_amount.clone(),
-                            url: asset.url.clone(),
-                        }
-                    } else {
-                        asset.clone()
-                    };
-                    let res = self
-                        .rocks_db
-                        .asset_dynamic_data
-                        .merge(asset.pubkey, &insert_value);
-
-                    if res.is_ok() {
-                        let upd_res = self
-                            .rocks_db
-                            .asset_updated(asset.get_slot_updated(), asset.pubkey);
-
-                        if let Err(e) = upd_res {
-                            error!("Error while updating assets update idx: {}", e);
-                        }
-                    }
-
-                    self.result_to_metrics(res, "accounts_saving_dynamic");
-                }
-                Err(e) => {
-                    self.metrics
-                        .inc_process("accounts_saving_dynamic", MetricStatus::FAILURE);
-                    error!("Error {}: {}", "accounts_saving_dynamic", e);
-                }
-            }
-        }
+    async fn store_dynamic(
+        &self,
+        asset_dynamic: Vec<AssetDynamicDetails>,
+    ) -> Result<(), StorageError> {
+        store_assets!(
+            self,
+            asset_dynamic,
+            asset_dynamic_data,
+            "accounts_saving_dynamic"
+        )
     }
 
-    fn store_authority(&self, asset_authority: Vec<AssetAuthority>) {
-        let res = asset_authority.iter().try_for_each(|asset| {
-            self.rocks_db
-                .asset_authority_data
-                .merge(asset.pubkey, asset)
-        });
-
-        self.result_to_metrics(res, "accounts_saving_authority");
+    async fn store_authority(
+        &self,
+        asset_authority: Vec<AssetAuthority>,
+    ) -> Result<(), StorageError> {
+        store_assets!(
+            self,
+            asset_authority,
+            asset_authority_data,
+            "accounts_saving_authority"
+        )
     }
 
-    fn store_collection(&self, asset_collection: Vec<AssetCollection>) {
-        let res = asset_collection.iter().try_for_each(|asset| {
-            self.rocks_db
-                .asset_collection_data
-                .merge(asset.pubkey, asset)
-        });
-
-        self.result_to_metrics(res, "accounts_saving_collection");
+    async fn store_collection(
+        &self,
+        asset_collection: Vec<AssetCollection>,
+    ) -> Result<(), StorageError> {
+        store_assets!(
+            self,
+            asset_collection,
+            asset_collection_data,
+            "accounts_saving_collection"
+        )
     }
 
     async fn store_tasks(&self, tasks: Vec<Task>) {
@@ -387,10 +355,10 @@ impl MplxAccsProcessor {
         tasks_to_insert.extend(tasks);
 
         let res = self.db_client_v2.insert_tasks(&tasks_to_insert).await;
-        self.result_to_metrics(res, "accounts_saving_tasks");
+        self.result_to_metrics(&res, "accounts_saving_tasks");
     }
 
-    fn result_to_metrics<T, E: Display>(&self, result: Result<T, E>, metric_name: &str) {
+    fn result_to_metrics<T, E: Display>(&self, result: &Result<T, E>, metric_name: &str) {
         match result {
             Err(e) => {
                 self.metrics.inc_process(metric_name, MetricStatus::FAILURE);
