@@ -188,25 +188,23 @@ impl BubblegumTxProcessor {
                         self.instruction_name_to_string(&parsing_result.instruction),
                     );
 
-                        let ix_parse_res =
-                            self.handle_bubblegum_instruction(parsing_result, &ix).await;
+                    let ix_parse_res = self.handle_bubblegum_instruction(parsing_result, &ix).await;
 
-                        match ix_parse_res {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!(
-                                    "Failed to handle bubblegum instruction for txn {:?}: {:?}",
-                                    sig, e
-                                );
-                            }
+                    match ix_parse_res {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!(
+                                "Failed to handle bubblegum instruction for txn {:?}: {:?}",
+                                sig, e
+                            );
                         }
                     }
-                    _ => {
-                        not_impl += 1;
-                    }
-                };
-            }
-
+                }
+                _ => {
+                    not_impl += 1;
+                }
+            };
+        }
 
         if not_impl == ixlen {
             return Err(IngesterError::NotImplemented);
