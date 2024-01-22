@@ -23,7 +23,7 @@ use solana_transaction_status::{
 };
 use std::collections::HashMap;
 use std::num::ParseIntError;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
@@ -294,6 +294,7 @@ where
 
     pub async fn parse_raw_transactions(&self, keep_running: Arc<AtomicBool>, permits: usize) {
         let slots_to_parse_iter = self.rocks_client.raw_blocks_cbor.iter_start();
+        let cnt = AtomicU64::new(0);
         let mut slots_to_parse_vec = Vec::new();
         let semaphore = Arc::new(tokio::sync::Semaphore::new(permits));
         let mut tasks = Vec::new();
@@ -322,14 +323,20 @@ where
                 let m = self.metrics.clone();
                 let chunk_size = self.chunk_size;
                 let keep_running_clone = keep_running.clone();
+                let task_number = cnt.fetch_add(1, Ordering::Relaxed);
                 tasks.push(tokio::task::spawn(async move {
                     let _permit = permit;
-
+                    tracing::info!(
+                        "Started a task {}, parsing {} slots",
+                        task_number,
+                        slots.len()
+                    );
                     let res =
                         Self::parse_slots(c, p, m, chunk_size, slots, keep_running_clone).await;
                     if let Err(err) = res {
                         error!("Error parsing slots: {}", err);
                     }
+                    tracing::info!("Task {} finished", task_number);
                 }));
                 slots_to_parse_vec.clear();
             }
@@ -342,14 +349,19 @@ where
             let m = self.metrics.clone();
             let chunk_size = self.chunk_size;
             let keep_running_clone = keep_running.clone();
-
+            let task_number = cnt.fetch_add(1, Ordering::Relaxed);
             tasks.push(tokio::task::spawn(async move {
                 let _permit = permit;
-
+                tracing::info!(
+                    "Started a task {}, parsing {} slots",
+                    task_number,
+                    slots.len()
+                );
                 let res = Self::parse_slots(c, p, m, chunk_size, slots, keep_running_clone).await;
                 if let Err(err) = res {
                     error!("Error parsing slots: {}", err);
                 }
+                tracing::info!("Task {} finished", task_number);
             }));
         }
         join_all(tasks).await;
@@ -517,6 +529,11 @@ where
                 }
             };
         }
+        tracing::info!(
+            "successfully parsed {} slots out of {} requested",
+            successful.len(),
+            slots.len()
+        );
         Ok(successful)
     }
 }
