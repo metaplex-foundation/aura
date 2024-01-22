@@ -55,13 +55,9 @@ impl BubblegumTxProcessor {
         json_tasks: Arc<Mutex<VecDeque<Task>>>,
         is_backfill: bool,
     ) -> Self {
-        let instruction_parser = Arc::new(BubblegumParser {});
-
-        let transaction_parser = Arc::new(FlatbufferMapper {});
-
         BubblegumTxProcessor {
-            transaction_parser,
-            instruction_parser,
+            transaction_parser: Arc::new(FlatbufferMapper {}),
+            instruction_parser: Arc::new(BubblegumParser {}),
             rocks_client,
             json_tasks,
             metrics,
@@ -140,13 +136,9 @@ impl BubblegumTxProcessor {
         tx: TransactionInfo<'a>,
     ) -> Result<(), IngesterError> {
         let sig: Option<&str> = tx.signature();
-
         let instructions = self.break_transaction(&tx);
-
         let accounts = tx.account_keys().unwrap_or_default();
-
         let slot = tx.slot();
-
         let txn_id = tx.signature().unwrap_or("");
 
         let mut keys: Vec<FBPubkey> = Vec::with_capacity(accounts.len());
@@ -160,6 +152,10 @@ impl BubblegumTxProcessor {
         let mut contain_unhandled_instructions = false;
         for (outer_ix, inner_ix) in instructions {
             let (program, instruction) = outer_ix;
+            if program.0 != mpl_bubblegum::programs::MPL_BUBBLEGUM_ID.to_bytes() {
+                continue;
+            }
+
             let ix_accounts = instruction.accounts().unwrap().iter().collect::<Vec<_>>();
             let ix_account_len = ix_accounts.len();
             let max = ix_accounts.iter().max().copied().unwrap_or(0) as usize;
@@ -189,35 +185,30 @@ impl BubblegumTxProcessor {
                 slot,
             };
 
-            if ix.program.0 == mpl_bubblegum::programs::MPL_BUBBLEGUM_ID.to_bytes() {
-                let result = self.instruction_parser.handle_instruction(&ix)?;
+            let result = self.instruction_parser.handle_instruction(&ix)?;
+            match result.result_type() {
+                ProgramParseResult::Bubblegum(parsing_result) => {
+                    self.metrics.inc_instructions(
+                        self.instruction_name_to_string(&parsing_result.instruction),
+                    );
 
-                let concrete = result.result_type();
-                match concrete {
-                    ProgramParseResult::Bubblegum(parsing_result) => {
-                        self.metrics.inc_instructions(
-                            self.instruction_name_to_string(&parsing_result.instruction),
-                        );
+                    let ix_parse_res = self.handle_bubblegum_instruction(parsing_result, &ix).await;
 
-                        let ix_parse_res =
-                            self.handle_bubblegum_instruction(parsing_result, &ix).await;
-
-                        match ix_parse_res {
-                            Ok(_) => {}
-                            Err(e) => {
-                                contain_unhandled_instructions = true;
-                                error!(
-                                    "Failed to handle bubblegum instruction for txn {:?}: {:?}",
-                                    sig, e
-                                );
-                            }
+                    match ix_parse_res {
+                        Ok(_) => {}
+                        Err(e) => {
+                            contain_unhandled_instructions = true;
+                            error!(
+                                "Failed to handle bubblegum instruction for txn {:?}: {:?}",
+                                sig, e
+                            );
                         }
                     }
-                    _ => {
-                        not_impl += 1;
-                    }
-                };
-            }
+                }
+                _ => {
+                    not_impl += 1;
+                }
+            };
         }
 
         // save signature

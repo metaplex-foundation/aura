@@ -54,10 +54,6 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let config: IngesterConfig = setup_config();
     init_logger(&config.get_log_level());
-    let bg_tasks_config = config
-        .clone()
-        .background_task_runner_config
-        .unwrap_or_default();
 
     let mut guard = None;
     if config.get_is_run_profiling() {
@@ -168,7 +164,6 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let mplx_accs_parser = MplxAccsProcessor::new(
         config.mplx_buffer_size,
-        bg_tasks_config.max_attempts.unwrap(),
         buffer.clone(),
         db_client_v2.clone(),
         rocks_storage.clone(),
@@ -184,7 +179,7 @@ pub async fn main() -> Result<(), IngesterError> {
     );
 
     for _ in 0..config.mplx_workers {
-        let cloned_mplx_parser = mplx_accs_parser.clone();
+        let mut cloned_mplx_parser = mplx_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
@@ -193,7 +188,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 .await;
         }));
 
-        let cloned_token_parser = token_accs_parser.clone();
+        let mut cloned_token_parser = token_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
@@ -202,7 +197,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 .await;
         }));
 
-        let cloned_token_parser = token_accs_parser.clone();
+        let mut cloned_token_parser = token_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {

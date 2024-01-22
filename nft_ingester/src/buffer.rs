@@ -61,6 +61,10 @@ impl Buffer {
             self.mplx_metadata_info.lock().await.len() as i64,
         );
     }
+
+    pub async fn mplx_metadata_len(&self) -> usize {
+        self.mplx_metadata_info.lock().await.len()
+    }
 }
 
 #[async_trait]
