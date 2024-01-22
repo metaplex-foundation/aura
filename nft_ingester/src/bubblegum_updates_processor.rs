@@ -45,6 +45,7 @@ pub struct BubblegumTxProcessor {
 
     pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
     pub metrics: Arc<IngesterMetricsConfig>,
+    is_backfill: bool,
 }
 
 impl BubblegumTxProcessor {
@@ -52,6 +53,7 @@ impl BubblegumTxProcessor {
         rocks_client: Arc<rocks_db::Storage>,
         metrics: Arc<IngesterMetricsConfig>,
         json_tasks: Arc<Mutex<VecDeque<Task>>>,
+        is_backfill: bool,
     ) -> Self {
         BubblegumTxProcessor {
             transaction_parser: Arc::new(FlatbufferMapper {}),
@@ -59,6 +61,7 @@ impl BubblegumTxProcessor {
             rocks_client,
             json_tasks,
             metrics,
+            is_backfill,
         }
     }
 
@@ -146,6 +149,7 @@ impl BubblegumTxProcessor {
         let mut not_impl = 0;
         let ixlen = instructions.len();
 
+        let mut contain_unhandled_instructions = false;
         for (outer_ix, inner_ix) in instructions {
             let (program, instruction) = outer_ix;
             if program.0 != mpl_bubblegum::programs::MPL_BUBBLEGUM_ID.to_bytes() {
@@ -193,6 +197,7 @@ impl BubblegumTxProcessor {
                     match ix_parse_res {
                         Ok(_) => {}
                         Err(e) => {
+                            contain_unhandled_instructions = true;
                             error!(
                                 "Failed to handle bubblegum instruction for txn {:?}: {:?}",
                                 sig, e
@@ -204,6 +209,20 @@ impl BubblegumTxProcessor {
                     not_impl += 1;
                 }
             };
+        }
+
+        // save signature
+        if !contain_unhandled_instructions && !self.is_backfill {
+            self.rocks_client
+                .persist_signature(
+                    mpl_bubblegum::programs::MPL_BUBBLEGUM_ID,
+                    entities::models::SignatureWithSlot {
+                        signature: Signature::from_str(txn_id)?,
+                        slot,
+                    },
+                )
+                .await
+                .map_err(|e| IngesterError::TransactionNotProcessedError(e.to_string()))?;
         }
 
         if not_impl == ixlen {
@@ -264,17 +283,7 @@ impl BubblegumTxProcessor {
                 processed = false;
             }
         }
-        // save signature
-        self.rocks_client
-            .persist_signature(
-                solana_sdk::pubkey::Pubkey::new_from_array(bundle.program.0),
-                entities::models::SignatureWithSlot {
-                    signature: Signature::from_str(bundle.txn_id)?,
-                    slot: bundle.slot,
-                },
-            )
-            .await
-            .map_err(|e| IngesterError::TransactionNotProcessedError(e.to_string()))?;
+
         if processed {
             self.metrics.set_latency(
                 "transactions_parser",
