@@ -137,7 +137,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 info!("Running transactions parser...");
 
                 transactions_parser
-                    .parse_transactions(cloned_keep_running)
+                    .parse_raw_transactions(cloned_keep_running, backfiller_config.permitted_tasks)
                     .await;
             }));
 

@@ -62,6 +62,8 @@ pub struct BackfillerConfig {
     pub chunk_size: usize,
     #[serde(default)]
     pub delete_slots: bool,
+    #[serde(default = "default_permitted_tasks")]
+    pub permitted_tasks: usize,
 }
 
 fn default_workers_count() -> usize {
@@ -70,6 +72,10 @@ fn default_workers_count() -> usize {
 
 fn default_chunk_size() -> usize {
     5
+}
+
+fn default_permitted_tasks() -> usize {
+    500
 }
 
 impl BackfillerConfig {
@@ -468,6 +474,7 @@ mod tests {
                 workers_count: 100,
                 chunk_size: 5,
                 delete_slots: false,
+                permitted_tasks: 500,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
@@ -498,6 +505,7 @@ mod tests {
                 workers_count: 100,
                 chunk_size: 5,
                 delete_slots: false,
+                permitted_tasks: 500,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");

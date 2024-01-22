@@ -3,6 +3,7 @@ use crate::error::IngesterError;
 use async_trait::async_trait;
 use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
+use futures::future::join_all;
 use interface::error::StorageError;
 use interface::signature_persistence::{BlockConsumer, BlockProducer, TransactionIngester};
 use log::{error, info, warn};
@@ -291,9 +292,11 @@ where
         }
     }
 
-    pub async fn parse_raw_transactions(&self, keep_running: Arc<AtomicBool>) {
+    pub async fn parse_raw_transactions(&self, keep_running: Arc<AtomicBool>, permits: usize) {
         let slots_to_parse_iter = self.rocks_client.raw_blocks_cbor.iter_start();
         let mut slots_to_parse_vec = Vec::new();
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(permits));
+        let mut tasks = Vec::new();
         for next in slots_to_parse_iter {
             if !keep_running.load(Ordering::SeqCst) {
                 tracing::info!("terminating transactions parser");
@@ -312,19 +315,41 @@ where
             let key = key.unwrap();
             slots_to_parse_vec.push(key);
             if slots_to_parse_vec.len() >= self.workers_count * self.chunk_size {
-                let res = self.parse_slots(slots_to_parse_vec.clone()).await;
-                if let Err(err) = res {
-                    error!("Error parsing slots: {}", err);
-                }
+                let permit = semaphore.clone().acquire_owned().await.unwrap();
+                let slots = slots_to_parse_vec.clone();
+                let c = self.consumer.clone();
+                let p = self.producer.clone();
+                let m = self.metrics.clone();
+                let chunk_size = self.chunk_size;
+                tasks.push(tokio::task::spawn(async move {
+                    let _permit = permit;
+
+                    let res = Self::parse_slots(c, p, m, chunk_size, slots).await;
+                    if let Err(err) = res {
+                        error!("Error parsing slots: {}", err);
+                    }
+                }));
                 slots_to_parse_vec.clear();
             }
         }
         if !slots_to_parse_vec.is_empty() {
-            let res = self.parse_slots(slots_to_parse_vec.clone()).await;
-            if let Err(err) = res {
-                error!("Error parsing slots: {}", err);
-            }
+            let permit = semaphore.clone().acquire_owned().await.unwrap();
+            let slots = slots_to_parse_vec.clone();
+            let c = self.consumer.clone();
+            let p = self.producer.clone();
+            let m = self.metrics.clone();
+            let chunk_size = self.chunk_size;
+
+            tasks.push(tokio::task::spawn(async move {
+                let _permit = permit;
+
+                let res = Self::parse_slots(c, p, m, chunk_size, slots).await;
+                if let Err(err) = res {
+                    error!("Error parsing slots: {}", err);
+                }
+            }));
         }
+        join_all(tasks).await;
         tracing::info!("Transactions parser has finished working");
     }
 
@@ -376,7 +401,14 @@ where
 
             counter = GET_SLOT_RETRIES;
             tracing::debug!("Got {} slots to parse", slots_to_parse_vec.len());
-            let res = self.parse_slots(slots_to_parse_vec.clone()).await;
+            let res = Self::parse_slots(
+                self.consumer.clone(),
+                self.producer.clone(),
+                self.metrics.clone(),
+                self.chunk_size,
+                slots_to_parse_vec.clone(),
+            )
+            .await;
             match res {
                 Ok(v) => self.delete_slots(v).await,
                 Err(err) => {
@@ -413,14 +445,20 @@ where
         }
     }
 
-    pub async fn parse_slots(&self, slots: Vec<u64>) -> Result<Vec<u64>, String> {
+    pub async fn parse_slots(
+        consumer: Arc<C>,
+        producer: Arc<P>,
+        metrics: Arc<BackfillerMetricsConfig>,
+        chunk_size: usize,
+        slots: Vec<u64>,
+    ) -> Result<Vec<u64>, String> {
         let mut tasks = Vec::new();
         let mut successful = Vec::new();
-        for chunk in slots.chunks(self.chunk_size) {
+        for chunk in slots.chunks(chunk_size) {
             let chunk = chunk.to_vec();
-            let c = self.consumer.clone();
-            let p = self.producer.clone();
-            let m = self.metrics.clone();
+            let c = consumer.clone();
+            let p = producer.clone();
+            let m = metrics.clone();
             let task: tokio::task::JoinHandle<Vec<u64>> = tokio::spawn(async move {
                 let mut processed = Vec::new();
                 for s in chunk {
