@@ -132,6 +132,7 @@ pub struct IngesterConfig {
     pub backfill_rpc_address: String,
     pub run_profiling: Option<bool>,
     pub profiling_file_path_container: Option<String>,
+    pub store_db_backups: Option<bool>,
 }
 
 fn default_log_level() -> String {
@@ -177,6 +178,9 @@ impl IngesterConfig {
 
     pub fn get_is_run_profiling(&self) -> bool {
         self.run_profiling.unwrap_or_default()
+    }
+    pub fn store_db_backups(&self) -> bool {
+        self.store_db_backups.unwrap_or_default()
     }
 }
 
