@@ -15,7 +15,8 @@ use interface::signature_persistence::ProcessingDataGetter;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
     ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
-    MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig, SynchronizerMetricsConfig,
+    JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig,
+    SynchronizerMetricsConfig,
 };
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
@@ -72,6 +73,7 @@ pub async fn main() -> Result<(), IngesterError> {
         BackfillerMetricsConfig::new(),
         RpcBackfillerMetricsConfig::new(),
         SynchronizerMetricsConfig::new(),
+        JsonMigratorMetricsConfig::new(),
     );
     metrics_state.register_metrics();
     start_metrics(
@@ -149,6 +151,31 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rocks_storage = Arc::new(storage);
     let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap_or(0);
+
+    if let Some(true) = config.launch_json_migrator {
+        let source_storage = Storage::open(
+            &config.json_source_db.as_ref().unwrap(),
+            mutexed_tasks.clone(),
+        )
+        .unwrap();
+        let source_storage = Arc::new(source_storage);
+
+        let json_migrator = nft_ingester::json_migrator::JsonMigrator::new(
+            db_client_v2.clone(),
+            source_storage.clone(),
+            rocks_storage.clone(),
+            metrics_state.json_migrator_metrics.clone(),
+        );
+        let cloned_keep_running = keep_running.clone();
+
+        let cloned_tasks = mutexed_tasks.clone();
+
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            json_migrator
+                .run(cloned_keep_running, cloned_tasks.clone())
+                .await;
+        }));
+    }
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;
