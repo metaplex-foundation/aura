@@ -146,9 +146,6 @@ impl BubblegumTxProcessor {
             keys.push(*k);
         }
 
-        let mut not_impl = 0;
-        let ixlen = instructions.len();
-
         let mut contain_unhandled_instructions = false;
         for (outer_ix, inner_ix) in instructions {
             let (program, instruction) = outer_ix;
@@ -205,9 +202,7 @@ impl BubblegumTxProcessor {
                         }
                     }
                 }
-                _ => {
-                    not_impl += 1;
-                }
+                _ => {}
             };
         }
 
@@ -223,10 +218,6 @@ impl BubblegumTxProcessor {
                 )
                 .await
                 .map_err(|e| IngesterError::TransactionNotProcessedError(e.to_string()))?;
-        }
-
-        if not_impl == ixlen {
-            return Err(IngesterError::NotImplemented);
         }
 
         self.metrics

@@ -596,11 +596,21 @@ where
                 transaction: tx,
                 map_flatbuffer: false,
             };
-            self.ingester
+            match self
+                .ingester
                 .ingest_transaction(tx)
                 .await
-                .map_err(|e| e.to_string())?;
-            self.metrics.inc_data_processed("backfiller_tx_processed");
+                .map_err(|e| e.to_string())
+            {
+                Ok(_) => {
+                    self.metrics.inc_data_processed("backfiller_tx_processed");
+                }
+                Err(e) => {
+                    error!("ingest_transaction: {}", e);
+                    self.metrics
+                        .inc_data_processed("backfiller_tx_processed_failed");
+                }
+            };
         }
         self.metrics.inc_data_processed("backfiller_slot_processed");
 
