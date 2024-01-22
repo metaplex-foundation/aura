@@ -48,9 +48,6 @@ pub struct BackgroundTaskConfig {
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct BackfillerConfig {
-    pub database_config: DatabaseConfig,
-    pub tcp_config: TcpConfig,
-    pub env: Option<String>,
     pub big_table_config: BigTableConfig,
     pub slot_until: Option<u64>,
     pub slot_start_from: u64,
@@ -60,8 +57,6 @@ pub struct BackfillerConfig {
     pub workers_count: usize,
     #[serde(default = "default_chunk_size")]
     pub chunk_size: usize,
-    #[serde(default)]
-    pub delete_slots: bool,
     #[serde(default = "default_permitted_tasks")]
     pub permitted_tasks: usize,
 }
@@ -468,16 +463,12 @@ mod tests {
         assert_eq!(
             config,
             BackfillerConfig {
-                database_config: DatabaseConfig(figment::value::Dict::new()),
-                tcp_config: TcpConfig(figment::value::Dict::new()),
-                env: None,
                 big_table_config: BigTableConfig(figment::value::Dict::new()),
                 slot_until: None,
                 slot_start_from: 0,
                 backfiller_mode: BackfillerMode::IngestDirectly,
                 workers_count: 100,
                 chunk_size: 5,
-                delete_slots: false,
                 permitted_tasks: 500,
             }
         );
@@ -499,16 +490,12 @@ mod tests {
         assert_eq!(
             config,
             BackfillerConfig {
-                database_config: DatabaseConfig(figment::value::Dict::new()),
-                tcp_config: TcpConfig(figment::value::Dict::new()),
-                env: None,
                 big_table_config: BigTableConfig(figment::value::Dict::new()),
                 slot_until: None,
                 slot_start_from: 0,
                 backfiller_mode: BackfillerMode::Persist,
                 workers_count: 100,
                 chunk_size: 5,
-                delete_slots: false,
                 permitted_tasks: 500,
             }
         );
