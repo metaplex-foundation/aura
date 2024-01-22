@@ -606,15 +606,11 @@ where
                     self.metrics.inc_data_processed("backfiller_tx_processed");
                 }
                 Err(e) => {
-                    if let Ok(parsed_tx) =
+                    let signature =
                         plerkle_serialization::root_as_transaction_info(tx.transaction.as_slice())
-                    {
-                        error!(
-                            "ingest_transaction {}: {}",
-                            parsed_tx.signature().unwrap_or_default(),
-                            e
-                        );
-                    };
+                            .map(|parsed_tx| parsed_tx.signature().unwrap_or_default())
+                            .unwrap_or_default();
+                    error!("Failed to ingest transaction {}: {}", signature, e);
                     self.metrics
                         .inc_data_processed("backfiller_tx_processed_failed");
                 }
