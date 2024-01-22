@@ -11,6 +11,7 @@ use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use rocks_db::bubblegum_slots::{
     bubblegum_slots_key_to_value, form_bubblegum_slots_key, BubblegumSlots,
 };
+use rocks_db::column::TypedColumn;
 use solana_bigtable_connection::{bigtable::BigTableConnection, CredentialType};
 use solana_sdk::clock::Slot;
 use solana_storage_bigtable::LedgerStorage;
@@ -288,6 +289,43 @@ where
             workers_count,
             chunk_size,
         }
+    }
+
+    pub async fn parse_raw_transactions(&self, keep_running: Arc<AtomicBool>) {
+        let slots_to_parse_iter = self.rocks_client.raw_blocks_cbor.iter_start();
+        let mut slots_to_parse_vec = Vec::new();
+        for next in slots_to_parse_iter {
+            if !keep_running.load(Ordering::SeqCst) {
+                tracing::info!("terminating transactions parser");
+                break;
+            }
+            if let Err(e) = next {
+                tracing::error!("Error getting next slot: {}", e);
+                continue;
+            }
+            let (key_box, _value_box) = next.unwrap();
+            let key = rocks_db::raw_block::RawBlock::decode_key(key_box.to_vec());
+            if let Err(e) = key {
+                tracing::error!("Error decoding key: {}", e);
+                continue;
+            }
+            let key = key.unwrap();
+            slots_to_parse_vec.push(key);
+            if slots_to_parse_vec.len() >= self.workers_count * self.chunk_size {
+                let res = self.parse_slots(slots_to_parse_vec.clone()).await;
+                if let Err(err) = res {
+                    error!("Error parsing slots: {}", err);
+                }
+                slots_to_parse_vec.clear();
+            }
+        }
+        if !slots_to_parse_vec.is_empty() {
+            let res = self.parse_slots(slots_to_parse_vec.clone()).await;
+            if let Err(err) = res {
+                error!("Error parsing slots: {}", err);
+            }
+        }
+        tracing::info!("Transactions parser has finished working");
     }
 
     pub async fn parse_transactions(&self, keep_running: Arc<AtomicBool>) {

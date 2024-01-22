@@ -37,7 +37,7 @@ use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::{backup_service, Storage};
 use tonic::transport::Server;
 
-use nft_ingester::backfiller::DirectBlockParser;
+use nft_ingester::backfiller::{DirectBlockParser, TransactionsParser};
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 
@@ -347,16 +347,25 @@ pub async fn main() -> Result<(), IngesterError> {
                     metrics_state.backfiller_metrics.clone(),
                 ));
                 let producer = rocks_storage.clone();
-                backfiller
-                    .start_backfill(
-                        mutexed_tasks.clone(),
-                        keep_running.clone(),
-                        metrics_state.backfiller_metrics.clone(),
-                        consumer,
-                        producer,
-                    )
-                    .await
-                    .unwrap();
+
+                let transactions_parser = Arc::new(TransactionsParser::new(
+                    rocks_storage.clone(),
+                    consumer,
+                    producer,
+                    metrics_state.backfiller_metrics.clone(),
+                    config.workers_count,
+                    config.chunk_size,
+                ));
+
+                let cloned_keep_running = keep_running.clone();
+                mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                    info!("Running transactions parser...");
+
+                    transactions_parser
+                        .parse_raw_transactions(cloned_keep_running)
+                        .await;
+                }));
+
                 info!("running backfiller on persisted raw data");
             }
             config::BackfillerMode::None => {
