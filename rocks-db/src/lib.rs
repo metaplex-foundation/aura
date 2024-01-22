@@ -42,7 +42,7 @@ pub struct Storage {
     pub cl_items: Column<cl_items::ClItem>,
     pub cl_leafs: Column<cl_items::ClLeaf>,
     pub bubblegum_slots: Column<bubblegum_slots::BubblegumSlots>,
-    raw_blocks_cbor: Column<raw_block::RawBlock>,
+    pub raw_blocks_cbor: Column<raw_block::RawBlock>,
     pub db: Arc<DB>,
     pub assets_update_idx: Column<AssetsUpdateIdx>,
     pub slot_asset_idx: Column<SlotAssetIdx>,
