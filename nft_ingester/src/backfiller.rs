@@ -321,10 +321,12 @@ where
                 let p = self.producer.clone();
                 let m = self.metrics.clone();
                 let chunk_size = self.chunk_size;
+                let keep_running_clone = keep_running.clone();
                 tasks.push(tokio::task::spawn(async move {
                     let _permit = permit;
 
-                    let res = Self::parse_slots(c, p, m, chunk_size, slots).await;
+                    let res =
+                        Self::parse_slots(c, p, m, chunk_size, slots, keep_running_clone).await;
                     if let Err(err) = res {
                         error!("Error parsing slots: {}", err);
                     }
@@ -339,11 +341,12 @@ where
             let p = self.producer.clone();
             let m = self.metrics.clone();
             let chunk_size = self.chunk_size;
+            let keep_running_clone = keep_running.clone();
 
             tasks.push(tokio::task::spawn(async move {
                 let _permit = permit;
 
-                let res = Self::parse_slots(c, p, m, chunk_size, slots).await;
+                let res = Self::parse_slots(c, p, m, chunk_size, slots, keep_running_clone).await;
                 if let Err(err) = res {
                     error!("Error parsing slots: {}", err);
                 }
@@ -407,6 +410,7 @@ where
                 self.metrics.clone(),
                 self.chunk_size,
                 slots_to_parse_vec.clone(),
+                keep_running.clone(),
             )
             .await;
             match res {
@@ -451,17 +455,25 @@ where
         metrics: Arc<BackfillerMetricsConfig>,
         chunk_size: usize,
         slots: Vec<u64>,
+        keep_running: Arc<AtomicBool>,
     ) -> Result<Vec<u64>, String> {
         let mut tasks = Vec::new();
         let mut successful = Vec::new();
         for chunk in slots.chunks(chunk_size) {
+            if !keep_running.load(Ordering::SeqCst) {
+                break;
+            }
             let chunk = chunk.to_vec();
             let c = consumer.clone();
             let p = producer.clone();
             let m = metrics.clone();
+            let keep_running_clone = keep_running.clone();
             let task: tokio::task::JoinHandle<Vec<u64>> = tokio::spawn(async move {
                 let mut processed = Vec::new();
                 for s in chunk {
+                    if !keep_running_clone.load(Ordering::SeqCst) {
+                        break;
+                    }
                     if c.already_processed_slot(s).await.unwrap_or(false) {
                         tracing::debug!("Slot {} is already processed, skipping", s);
                         processed.push(s);
