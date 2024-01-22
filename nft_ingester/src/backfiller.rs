@@ -598,7 +598,7 @@ where
             };
             match self
                 .ingester
-                .ingest_transaction(tx)
+                .ingest_transaction(tx.clone())
                 .await
                 .map_err(|e| e.to_string())
             {
@@ -606,7 +606,15 @@ where
                     self.metrics.inc_data_processed("backfiller_tx_processed");
                 }
                 Err(e) => {
-                    error!("ingest_transaction: {}", e);
+                    if let Ok(parsed_tx) =
+                        plerkle_serialization::root_as_transaction_info(tx.transaction.as_slice())
+                    {
+                        error!(
+                            "ingest_transaction {}: {}",
+                            parsed_tx.signature().unwrap_or_default(),
+                            e
+                        );
+                    };
                     self.metrics
                         .inc_data_processed("backfiller_tx_processed_failed");
                 }
