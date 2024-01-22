@@ -256,19 +256,19 @@ pub async fn main() -> Result<(), IngesterError> {
         };
     }));
 
-    let bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
+    let geyser_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
         rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
         buffer.json_tasks.clone(),
+        false,
     ));
 
     let cloned_keep_running = keep_running.clone();
     let buffer_clone = buffer.clone();
-    let bubblegum_updates_processor_clone = bubblegum_updates_processor.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
             if let Some(tx) = buffer_clone.get_processing_transaction().await {
-                if let Err(e) = bubblegum_updates_processor_clone
+                if let Err(e) = geyser_bubblegum_updates_processor
                     .process_transaction(tx)
                     .await
                 {
@@ -291,8 +291,14 @@ pub async fn main() -> Result<(), IngesterError> {
         json_downloader.run(cloned_keep_running).await;
     }));
 
+    let backfill_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
+        rocks_storage.clone(),
+        metrics_state.ingester_metrics.clone(),
+        buffer.json_tasks.clone(),
+        true,
+    ));
     let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
-        bubblegum_updates_processor.clone(),
+        backfill_bubblegum_updates_processor.clone(),
     ));
 
     if config.run_bubblegum_backfiller {
