@@ -127,7 +127,7 @@ impl MplxAccsProcessor {
 
             // store data
             let begin_processing = Instant::now();
-            let (store_static_res, store_dynamic_res, store_authority_res, store_collection_res, _) = tokio::join!(
+            let _ = tokio::join!(
                 self.store_static(metadata_models.asset_static),
                 self.store_dynamic(metadata_models.asset_dynamic.clone()),
                 self.store_authority(metadata_models.asset_authority),
@@ -135,21 +135,14 @@ impl MplxAccsProcessor {
                 self.store_tasks(metadata_models.tasks)
             );
 
-            // We need to call asset_updated only if all asset-related columns was successfully stored new data
-            if store_static_res.is_ok()
-                && store_dynamic_res.is_ok()
-                && store_authority_res.is_ok()
-                && store_collection_res.is_ok()
-            {
-                metadata_models.asset_dynamic.iter().for_each(|asset| {
-                    let upd_res = self
-                        .rocks_db
-                        .asset_updated(asset.get_slot_updated(), asset.pubkey);
-                    if let Err(e) = upd_res {
-                        error!("Error while updating assets update idx: {}", e);
-                    }
-                });
-            }
+            metadata_models.asset_dynamic.iter().for_each(|asset| {
+                let upd_res = self
+                    .rocks_db
+                    .asset_updated(asset.get_slot_updated(), asset.pubkey);
+                if let Err(e) = upd_res {
+                    error!("Error while updating assets update idx: {}", e);
+                }
+            });
 
             self.metrics.set_latency(
                 "accounts_saving",

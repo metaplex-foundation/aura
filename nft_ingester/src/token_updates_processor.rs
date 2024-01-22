@@ -120,17 +120,15 @@ impl TokenAccsProcessor {
 
             result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
 
-            if res.is_ok() {
-                accs_to_save.iter().for_each(|acc| {
-                    let upd_res = self
-                        .rocks_db
-                        .asset_updated(acc.slot_updated as u64, acc.mint);
+            accs_to_save.iter().for_each(|acc| {
+                let upd_res = self
+                    .rocks_db
+                    .asset_updated(acc.slot_updated as u64, acc.mint);
 
-                    if let Err(e) = upd_res {
-                        error!("Error while updating assets update idx: {}", e);
-                    }
-                });
-            }
+                if let Err(e) = upd_res {
+                    error!("Error while updating assets update idx: {}", e);
+                }
+            });
 
             self.metrics.set_latency(
                 "token_accounts_saving",
@@ -215,17 +213,15 @@ impl TokenAccsProcessor {
 
             result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
 
-            if res.is_ok() {
-                mint_accs_to_save.iter().for_each(|mint| {
-                    let upd_res = self
-                        .rocks_db
-                        .asset_updated(mint.slot_updated as u64, mint.pubkey);
+            mint_accs_to_save.iter().for_each(|mint| {
+                let upd_res = self
+                    .rocks_db
+                    .asset_updated(mint.slot_updated as u64, mint.pubkey);
 
-                    if let Err(e) = upd_res {
-                        error!("Error while updating assets update idx: {}", e);
-                    }
-                });
-            }
+                if let Err(e) = upd_res {
+                    error!("Error while updating assets update idx: {}", e);
+                }
+            });
 
             self.metrics.set_latency(
                 "mint_accounts_saving",
