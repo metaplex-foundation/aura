@@ -135,9 +135,13 @@ pub async fn main() -> Result<(), IngesterError> {
     let dur = tokio::time::Duration::from_secs(config.rocks_sync_interval_seconds);
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
+            info!(
+                "Start catch up ----------------------------------------------------------------"
+            );
             if let Err(e) = cloned_rocks_storage.db.try_catch_up_with_primary() {
                 error!("Sync rocksdb error: {}", e);
             }
+            info!("Caught up ----------------------------------------------------------------");
             tokio::time::sleep(dur).await;
         }
     }));
