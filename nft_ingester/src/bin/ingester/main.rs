@@ -257,7 +257,6 @@ pub async fn main() -> Result<(), IngesterError> {
         rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
         buffer.json_tasks.clone(),
-        false,
     ));
 
     let cloned_keep_running = keep_running.clone();
@@ -292,7 +291,6 @@ pub async fn main() -> Result<(), IngesterError> {
         rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
         buffer.json_tasks.clone(),
-        true,
     ));
     let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
         backfill_bubblegum_updates_processor.clone(),

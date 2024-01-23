@@ -1,7 +1,6 @@
 use crate::bubblegum_updates_processor::BubblegumTxProcessor;
 use entities::models::BufferedTransaction;
-use interface::error::StorageError;
-use interface::signature_persistence::TransactionIngester;
+use interface::{error::StorageError, signature_persistence::TransactionIngester};
 use rocks_db::transaction::{TransactionProcessor, TransactionResult};
 use std::sync::Arc;
 use tonic::async_trait;

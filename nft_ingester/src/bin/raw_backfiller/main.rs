@@ -114,7 +114,6 @@ pub async fn main() -> Result<(), IngesterError> {
                 rocks_storage.clone(),
                 ingester_metrics.clone(),
                 buffer.json_tasks.clone(),
-                true,
             ));
 
             let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
