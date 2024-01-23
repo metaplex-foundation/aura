@@ -53,12 +53,14 @@ entities = { path = "../entities" }
 usecase = { path = "../usecase" }
 grpc = { path = "../grpc" }
 mpl-token-metadata = { version = "3.2.3"}
+async-trait = "0.1.74"
 futures = "0.3.29"
 interface = { path = "../interface" }
 tonic = "0.10.2"
-tracing  ="0.1.40"
+tracing = "0.1.40"
 backfill-rpc = { path = "../backfill_rpc" }
 prometheus-client = "0.21.2"
+pprof = {version = "0.13.0", features = ["_protobuf", "protobuf-codec"]}
 
 [dev-dependencies]
 tempfile = "3.8.1"
@@ -66,6 +68,8 @@ setup = { path = "../tests/setup" }
 testcontainers = "0.14.0"
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 criterion = "0.5.1"
+"lazy_static" = "1.4.0"
+zip-extract = "0.1.2"
 
 [[bench]]
 name = "integrated_benchmark"
@@ -82,4 +86,4 @@ name = "ingester"
 name = "migrator"
 
 [[bin]]
-name = "api"
+name = "raw_backfiller"

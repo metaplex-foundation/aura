@@ -27,3 +27,5 @@ log = "0.4.17"
 rocks-db = { path = "../rocks-db" }
 postgre-client = { path = "../postgre-client" }
 entities = { path = "../entities" }
+usecase = { path = "../usecase" }
+interface = { path = "../interface" }

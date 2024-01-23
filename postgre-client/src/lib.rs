@@ -9,8 +9,10 @@ use tracing::log::LevelFilter;
 pub mod asset_filter_client;
 pub mod asset_index_client;
 pub mod converters;
+pub mod integrity_verification_client;
 pub mod model;
 pub mod storage_traits;
+
 #[derive(Clone)]
 pub struct PgClient {
     pub pool: PgPool,

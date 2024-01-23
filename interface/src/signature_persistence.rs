@@ -26,7 +26,7 @@ pub trait SignaturePersistence {
 }
 
 #[async_trait]
-pub trait TransactionIngester {
+pub trait TransactionIngester: Sync + Send + 'static {
     /// Ingests a transaction into the storage layer.
     /// The transaction is expected to be in the format of a flatbuffer.
     /// The ingester should return only after the transaction is fully processed, not just scheduled.
@@ -35,4 +35,22 @@ pub trait TransactionIngester {
 #[async_trait]
 pub trait ProcessingDataGetter {
     async fn get_processing_transaction(&self) -> Option<BufferedTransaction>;
+}
+
+#[async_trait]
+pub trait BlockConsumer: Send + Sync + 'static {
+    async fn consume_block(
+        &self,
+        slot: u64,
+        block: solana_transaction_status::UiConfirmedBlock,
+    ) -> Result<(), String>;
+    async fn already_processed_slot(&self, slot: u64) -> Result<bool, String>;
+}
+
+#[async_trait]
+pub trait BlockProducer: Send + Sync + 'static {
+    async fn get_block(
+        &self,
+        slot: u64,
+    ) -> Result<solana_transaction_status::UiConfirmedBlock, StorageError>;
 }

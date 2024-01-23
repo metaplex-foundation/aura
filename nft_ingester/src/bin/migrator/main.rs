@@ -116,7 +116,7 @@ async fn migrate_data(
                 }
                 match rocks_clone.asset_offchain_data.put(
                     m.metadata_url.clone(),
-                    &OffChainData {
+                    OffChainData {
                         url: m.metadata_url.clone(),
                         metadata: m.metadata.clone(),
                     },

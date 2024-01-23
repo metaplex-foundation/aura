@@ -84,11 +84,31 @@ impl AssetIndexReader for Storage {
     async fn get_asset_indexes(&self, keys: &[Pubkey]) -> Result<HashMap<Pubkey, AssetIndex>> {
         let mut asset_indexes = HashMap::new();
 
-        let asset_static_details = self.asset_static_data.batch_get(keys.to_vec()).await?;
-        let asset_dynamic_details = self.asset_dynamic_data.batch_get(keys.to_vec()).await?;
-        let asset_authority_details = self.asset_authority_data.batch_get(keys.to_vec()).await?;
-        let asset_owner_details = self.asset_owner_data.batch_get(keys.to_vec()).await?;
-        let asset_collection_details = self.asset_collection_data.batch_get(keys.to_vec()).await?;
+        let assets_static_fut = self.asset_static_data.batch_get(keys.to_vec());
+        let assets_dynamic_fut = self.asset_dynamic_data.batch_get(keys.to_vec());
+        let assets_authority_fut = self.asset_authority_data.batch_get(keys.to_vec());
+        let assets_owner_fut = self.asset_owner_data.batch_get(keys.to_vec());
+        let assets_collection_fut = self.asset_collection_data.batch_get(keys.to_vec());
+
+        let (
+            asset_static_details,
+            asset_dynamic_details,
+            asset_authority_details,
+            asset_owner_details,
+            asset_collection_details,
+        ) = tokio::join!(
+            assets_static_fut,
+            assets_dynamic_fut,
+            assets_authority_fut,
+            assets_owner_fut,
+            assets_collection_fut,
+        );
+
+        let asset_static_details = asset_static_details?;
+        let asset_dynamic_details = asset_dynamic_details?;
+        let asset_authority_details = asset_authority_details?;
+        let asset_owner_details = asset_owner_details?;
+        let asset_collection_details = asset_collection_details?;
 
         for static_info in asset_static_details.iter().flatten() {
             let asset_index = AssetIndex {

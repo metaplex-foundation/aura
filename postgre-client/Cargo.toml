@@ -15,6 +15,7 @@ base64 = "0.21.5"
 entities = { path = "../entities" }
 solana-sdk = "~1.16"
 tracing  ="0.1.40"
+log = "0.4.20"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

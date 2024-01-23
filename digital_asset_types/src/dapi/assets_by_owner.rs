@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use entities::api_req_params::AssetSorting;
 use sea_orm::DatabaseConnection;
 use sea_orm::DbErr;
 use solana_sdk::pubkey::Pubkey;
@@ -7,7 +8,6 @@ use solana_sdk::pubkey::Pubkey;
 use rocks_db::Storage;
 
 use crate::dao::scopes;
-use crate::rpc::filter::AssetSorting;
 use crate::rpc::response::AssetList;
 
 use super::common::{build_asset_response, create_pagination, create_sorting};

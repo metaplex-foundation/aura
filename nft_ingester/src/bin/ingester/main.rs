@@ -5,14 +5,14 @@ use std::time::Duration;
 use clap::Parser;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
-use nft_ingester::transaction_ingester;
+use nft_ingester::{backfiller, config, transaction_ingester};
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 use backfill_rpc::rpc::BackfillRPC;
 use interface::signature_persistence::ProcessingDataGetter;
-use metrics_utils::utils::setup_metrics;
+use metrics_utils::utils::start_metrics;
 use metrics_utils::{
     ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
     MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig, SynchronizerMetricsConfig,
@@ -37,7 +37,7 @@ use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::{backup_service, Storage};
 use tonic::transport::Server;
 
-mod backfiller;
+use nft_ingester::backfiller::{DirectBlockParser, TransactionsParser};
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 
@@ -54,10 +54,16 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let config: IngesterConfig = setup_config("INGESTER_");
     init_logger(&config.get_log_level());
-    let bg_tasks_config = config
-        .clone()
-        .background_task_runner_config
-        .unwrap_or_default();
+
+    let mut guard = None;
+    if config.get_is_run_profiling() {
+        guard = Some(
+            pprof::ProfilerGuardBuilder::default()
+                .frequency(100)
+                .build()
+                .unwrap(),
+        );
+    }
 
     let mut metrics_state = MetricState::new(
         IngesterMetricsConfig::new(),
@@ -68,20 +74,11 @@ pub async fn main() -> Result<(), IngesterError> {
         SynchronizerMetricsConfig::new(),
     );
     metrics_state.register_metrics();
-
-    if !config.get_is_snapshot() {
-        let metrics_port = config.get_metrics_port(config.consumer_number)?;
-        tokio::spawn(async move {
-            match setup_metrics(metrics_state.registry, metrics_port).await {
-                Ok(_) => {
-                    info!("Setup metrics successfully")
-                }
-                Err(e) => {
-                    error!("Setup metrics failed: {:?}", e)
-                }
-            }
-        });
-    }
+    start_metrics(
+        metrics_state.registry,
+        config.get_metrics_port(config.consumer_number)?,
+    )
+    .await;
 
     // try to restore rocksDB first
     if args.restore_rocks_db {
@@ -158,14 +155,15 @@ pub async fn main() -> Result<(), IngesterError> {
     let mut backup_service = BackupService::new(rocks_storage.db.clone(), &backup_cfg)?;
     let cloned_metrics = metrics_state.ingester_metrics.clone();
 
-    let cloned_keep_running = keep_running.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        backup_service.perform_backup(cloned_metrics, cloned_keep_running)
-    }));
+    if config.store_db_backups() {
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            backup_service.perform_backup(cloned_metrics, cloned_keep_running)
+        }));
+    }
 
     let mplx_accs_parser = MplxAccsProcessor::new(
         config.mplx_buffer_size,
-        bg_tasks_config.max_attempts.unwrap(),
         buffer.clone(),
         db_client_v2.clone(),
         rocks_storage.clone(),
@@ -181,7 +179,7 @@ pub async fn main() -> Result<(), IngesterError> {
     );
 
     for _ in 0..config.mplx_workers {
-        let cloned_mplx_parser = mplx_accs_parser.clone();
+        let mut cloned_mplx_parser = mplx_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
@@ -190,7 +188,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 .await;
         }));
 
-        let cloned_token_parser = token_accs_parser.clone();
+        let mut cloned_token_parser = token_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
@@ -199,7 +197,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 .await;
         }));
 
-        let cloned_token_parser = token_accs_parser.clone();
+        let mut cloned_token_parser = token_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
@@ -255,19 +253,19 @@ pub async fn main() -> Result<(), IngesterError> {
         };
     }));
 
-    let bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
+    let geyser_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
         rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
         buffer.json_tasks.clone(),
+        false,
     ));
 
     let cloned_keep_running = keep_running.clone();
     let buffer_clone = buffer.clone();
-    let bubblegum_updates_processor_clone = bubblegum_updates_processor.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
             if let Some(tx) = buffer_clone.get_processing_transaction().await {
-                if let Err(e) = bubblegum_updates_processor_clone
+                if let Err(e) = geyser_bubblegum_updates_processor
                     .process_transaction(tx)
                     .await
                 {
@@ -290,21 +288,93 @@ pub async fn main() -> Result<(), IngesterError> {
         json_downloader.run(cloned_keep_running).await;
     }));
 
+    let backfill_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
+        rocks_storage.clone(),
+        metrics_state.ingester_metrics.clone(),
+        buffer.json_tasks.clone(),
+        true,
+    ));
+    let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
+        backfill_bubblegum_updates_processor.clone(),
+    ));
+
     if config.run_bubblegum_backfiller {
         let config: BackfillerConfig = setup_config("INGESTER_");
 
-        let backfiller = backfiller::Backfiller::new(rocks_storage.clone(), buffer.clone(), config)
-            .await
-            .unwrap();
+        let big_table_client = Arc::new(
+            backfiller::BigTableClient::connect_new_from_config(config.clone())
+                .await
+                .unwrap(),
+        );
+        let backfiller = backfiller::Backfiller::new(
+            rocks_storage.clone(),
+            big_table_client.clone(),
+            config.clone(),
+        );
 
-        backfiller
-            .start_backfill(
-                mutexed_tasks.clone(),
-                keep_running.clone(),
-                metrics_state.backfiller_metrics.clone(),
-            )
-            .await
-            .unwrap();
+        match config.backfiller_mode {
+            config::BackfillerMode::IngestDirectly => {
+                let consumer = Arc::new(DirectBlockParser::new(
+                    tx_ingester.clone(),
+                    metrics_state.backfiller_metrics.clone(),
+                ));
+                backfiller
+                    .start_backfill(
+                        mutexed_tasks.clone(),
+                        keep_running.clone(),
+                        metrics_state.backfiller_metrics.clone(),
+                        consumer,
+                        big_table_client.clone(),
+                    )
+                    .await
+                    .unwrap();
+                info!("running backfiller directly from bigtable to ingester");
+            }
+            config::BackfillerMode::Persist | config::BackfillerMode::PersistAndIngest => {
+                let consumer = rocks_storage.clone();
+                backfiller
+                    .start_backfill(
+                        mutexed_tasks.clone(),
+                        keep_running.clone(),
+                        metrics_state.backfiller_metrics.clone(),
+                        consumer,
+                        big_table_client.clone(),
+                    )
+                    .await
+                    .unwrap();
+                info!("running backfiller to persist raw data");
+            }
+            config::BackfillerMode::IngestPersisted => {
+                let consumer = Arc::new(DirectBlockParser::new(
+                    tx_ingester.clone(),
+                    metrics_state.backfiller_metrics.clone(),
+                ));
+                let producer = rocks_storage.clone();
+
+                let transactions_parser = Arc::new(TransactionsParser::new(
+                    rocks_storage.clone(),
+                    consumer,
+                    producer,
+                    metrics_state.backfiller_metrics.clone(),
+                    config.workers_count,
+                    config.chunk_size,
+                ));
+
+                let cloned_keep_running = keep_running.clone();
+                mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                    info!("Running transactions parser...");
+
+                    transactions_parser
+                        .parse_raw_transactions(cloned_keep_running, config.permitted_tasks)
+                        .await;
+                }));
+
+                info!("running backfiller on persisted raw data");
+            }
+            config::BackfillerMode::None => {
+                info!("not running backfiller");
+            }
+        };
     }
 
     let max_postgre_connections = config
@@ -371,9 +441,6 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     let transactions_getter = Arc::new(BackfillRPC::connect(config.backfill_rpc_address));
-    let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
-        bubblegum_updates_processor.clone(),
-    ));
     let signature_fetcher = usecase::signature_fetcher::SignatureFetcher::new(
         rocks_storage,
         transactions_getter,
@@ -410,7 +477,14 @@ pub async fn main() -> Result<(), IngesterError> {
     }));
 
     // --stop
-    graceful_stop(mutexed_tasks, true, keep_running.clone(), shutdown_tx).await;
+    graceful_stop(
+        mutexed_tasks,
+        keep_running.clone(),
+        shutdown_tx,
+        guard,
+        config.profiling_file_path_container,
+    )
+    .await;
 
     Ok(())
 }

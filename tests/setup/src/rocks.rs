@@ -16,6 +16,7 @@ pub struct RocksTestEnvironment {
     _temp_dir: TempDir,
 }
 
+#[derive(Debug, Clone)]
 pub struct GeneratedAssets {
     pub pubkeys: Vec<Pubkey>,
     pub static_details: Vec<AssetStaticDetails>,
@@ -73,7 +74,7 @@ impl RocksTestEnvironment {
             .asset_offchain_data
             .put(
                 url.to_string(),
-                &OffChainData {
+                OffChainData {
                     url: url.to_string(),
                     metadata: "{}".to_string(),
                 },
@@ -90,21 +91,27 @@ impl RocksTestEnvironment {
         {
             self.storage
                 .asset_authority_data
-                .put(*pk, authority_data)
+                .put(*pk, authority_data.clone())
                 .unwrap();
-            self.storage.asset_owner_data.put(*pk, owner_data).unwrap();
+            self.storage
+                .asset_owner_data
+                .put(*pk, owner_data.clone())
+                .unwrap();
             self.storage
                 .asset_static_data
-                .put(*pk, static_data)
+                .put(*pk, static_data.clone())
                 .unwrap();
-            self.storage.asset_owner_data.put(*pk, owner_data).unwrap();
+            self.storage
+                .asset_owner_data
+                .put(*pk, owner_data.clone())
+                .unwrap();
             self.storage
                 .asset_dynamic_data
-                .put(*pk, dynamic_data)
+                .put(*pk, dynamic_data.clone())
                 .unwrap();
             self.storage
                 .asset_collection_data
-                .put(*pk, collection_data)
+                .put(*pk, collection_data.clone())
                 .unwrap();
         }
         GeneratedAssets {
