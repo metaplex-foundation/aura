@@ -134,7 +134,6 @@ pub struct IngesterConfig {
     pub run_profiling: Option<bool>,
     pub profiling_file_path_container: Option<String>,
     pub store_db_backups: Option<bool>,
-    pub launch_json_migrator: Option<bool>,
     pub json_source_db: Option<String>,
 }
 

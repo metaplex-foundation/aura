@@ -11,7 +11,7 @@ use metrics_utils::{
 use tokio::sync::{oneshot, Mutex};
 use tokio::task::{JoinError, JoinSet};
 
-use nft_ingester::config::{setup_config, IngesterConfig};
+use nft_ingester::config::{init_logger, setup_config, IngesterConfig};
 use nft_ingester::db_v2::{DBClient, Task};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
@@ -21,6 +21,11 @@ use rocks_db::{AssetDynamicDetails, Storage};
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
     let config: IngesterConfig = setup_config();
+
+    init_logger(&config.get_log_level());
+
+    info!("Started...");
+
     let database_pool = DBClient::new(&config.database_config.clone()).await?;
     let pg_client = Arc::new(database_pool);
 
@@ -36,7 +41,7 @@ pub async fn main() -> Result<(), IngesterError> {
     metrics_state.register_metrics();
     start_metrics(
         metrics_state.registry,
-        config.get_metrics_port(config.consumer_number)?,
+        config.metrics_port_first_consumer,
     )
     .await;
 
@@ -74,8 +79,6 @@ pub async fn main() -> Result<(), IngesterError> {
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         json_migrator.run(cloned_keep_running, cloned_tasks).await;
     }));
-
-    // info!("JSONs to migrate: {:?}", self.source_rocks_db.asset_offchain_data.iter_start().count());
 
     // useless thing in this context
     let (shutdown_tx, _shutdown_rx) = oneshot::channel::<()>();
