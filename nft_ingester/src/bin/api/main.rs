@@ -27,6 +27,16 @@ pub async fn main() -> Result<(), IngesterError> {
     let config: ApiConfig = setup_config("API_");
     init_logger(&config.get_log_level());
 
+    let mut guard = None;
+    if config.run_profiling {
+        guard = Some(
+            pprof::ProfilerGuardBuilder::default()
+                .frequency(100)
+                .build()
+                .unwrap(),
+        );
+    }
+
     let mut registry = Registry::default();
     let metrics = Arc::new(ApiMetricsConfig::new());
     metrics.register(&mut registry);
@@ -119,7 +129,7 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    // try syncronizing secondary rocksdb instance every config.rocks_sync_interval_seconds
+    // try synchronizing secondary rocksdb instance every config.rocks_sync_interval_seconds
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
     let dur = tokio::time::Duration::from_secs(config.rocks_sync_interval_seconds);
@@ -133,7 +143,14 @@ pub async fn main() -> Result<(), IngesterError> {
     }));
 
     // --stop
-    graceful_stop(mutexed_tasks, true, keep_running.clone(), shutdown_tx).await;
+    graceful_stop(
+        mutexed_tasks,
+        keep_running.clone(),
+        shutdown_tx,
+        guard,
+        config.profiling_file_path_container,
+    )
+    .await;
 
     Ok(())
 }

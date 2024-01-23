@@ -23,7 +23,7 @@ pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub async fn main() -> Result<(), IngesterError> {
     info!("Starting raw backfill server...");
 
-    let config: RawBackfillConfig = setup_config();
+    let config: RawBackfillConfig = setup_config("INGESTER_");
     init_logger(&config.log_level);
 
     let mut guard = None;
@@ -68,7 +68,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let rocks_storage = Arc::new(storage);
 
     let consumer = rocks_storage.clone();
-    let backfiller_config: BackfillerConfig = setup_config();
+    let backfiller_config: BackfillerConfig = setup_config("INGESTER_");
 
     let big_table_client = Arc::new(
         BigTableClient::connect_new_from_config(backfiller_config.clone())

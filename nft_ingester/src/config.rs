@@ -152,6 +152,9 @@ pub struct ApiConfig {
     pub sql_log_level: Option<String>,
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
+    #[serde(default)]
+    pub run_profiling: bool,
+    pub profiling_file_path_container: Option<String>,
 }
 
 impl ApiConfig {
