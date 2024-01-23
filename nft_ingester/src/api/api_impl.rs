@@ -7,12 +7,17 @@ use digital_asset_types::dapi::{
 use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
 
-use crate::api::{config::Config, validation::validate_pubkey};
+use crate::api::config::Config;
 use digital_asset_types::rpc::Asset;
+use entities::api_req_params::{
+    GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetsByAuthority,
+    GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetGrouping, SearchAssets,
+};
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
+use usecase::validation::validate_pubkey;
 use {
     crate::api::*,
     sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, SqlxPostgresConnector, Statement},
@@ -24,12 +29,27 @@ const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
 
 pub struct DasApi {
     db_connection: DatabaseConnection,
-    pg_client: PgClient,
+    pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
     metrics: Arc<ApiMetricsConfig>,
 }
 
 impl DasApi {
+    pub fn new(
+        pg_client: Arc<PgClient>,
+        rocks_db: Arc<Storage>,
+        metrics: Arc<ApiMetricsConfig>,
+    ) -> Self {
+        let db_connection = SqlxPostgresConnector::from_sqlx_postgres_pool(pg_client.pool.clone());
+
+        DasApi {
+            db_connection,
+            pg_client,
+            rocks_db,
+            metrics,
+        }
+    }
+
     pub async fn from_config(
         config: Config,
         metrics: Arc<ApiMetricsConfig>,
@@ -44,7 +64,7 @@ impl DasApi {
         let pg_client = PgClient::new_with_pool(pool);
         Ok(DasApi {
             db_connection: conn,
-            pg_client,
+            pg_client: Arc::new(pg_client),
             rocks_db,
             metrics,
         })
@@ -115,7 +135,7 @@ impl DasApi {
             .await?;
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!("ok"))
     }
@@ -132,7 +152,7 @@ impl DasApi {
         let assets = get_proof_for_assets(self.rocks_db.clone(), vec![id]).await?;
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         let res = assets
             .get(&id.to_string())
@@ -168,7 +188,7 @@ impl DasApi {
             .map_err(Into::<DasApiError>::into);
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -179,12 +199,12 @@ impl DasApi {
         let latency_timer = Instant::now();
 
         let id = validate_pubkey(payload.id.clone())?;
-        let res = get_asset(&self.db_connection, self.rocks_db.clone(), id)
+        let res = get_asset(self.rocks_db.clone(), id)
             .await
             .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         if res.is_none() {
             return Err(not_found());
@@ -214,12 +234,12 @@ impl DasApi {
             .map(validate_pubkey)
             .collect::<Result<Vec<_>, _>>()?;
 
-        let res = get_asset_batch(&self.db_connection, self.rocks_db.clone(), ids)
+        let res = get_asset_batch(self.rocks_db.clone(), ids)
             .await
             .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }
@@ -259,7 +279,7 @@ impl DasApi {
         .map_err(Into::<DasApiError>::into);
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -301,7 +321,7 @@ impl DasApi {
         .map_err(Into::<DasApiError>::into);
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -344,7 +364,7 @@ impl DasApi {
         .map_err(Into::<DasApiError>::into);
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -383,7 +403,7 @@ impl DasApi {
         .await;
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -403,8 +423,7 @@ impl DasApi {
         let query: SearchAssetsQuery = payload.clone().try_into()?;
 
         let res = search_assets(
-            &self.db_connection,
-            &self.pg_client,
+            self.pg_client.clone(),
             self.rocks_db.clone(),
             query,
             payload.sort_by.unwrap_or_default(),
@@ -416,7 +435,7 @@ impl DasApi {
         .await;
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(&label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -438,7 +457,7 @@ impl DasApi {
         };
 
         self.metrics
-            .set_latency(label, latency_timer.elapsed().as_secs_f64());
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }

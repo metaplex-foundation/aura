@@ -2,7 +2,10 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use entities::models::BufferedTransaction;
+use interface::signature_persistence::ProcessingDataGetter;
 use tokio::sync::Mutex;
+use tonic::async_trait;
 
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::columns::{Mint, TokenAccount};
@@ -19,15 +22,7 @@ pub struct Buffer {
 
     pub mints: Mutex<HashMap<Vec<u8>, Mint>>,
 
-    pub json_tasks: Mutex<VecDeque<Task>>,
-}
-
-#[derive(Clone)]
-pub struct BufferedTransaction {
-    pub transaction: Vec<u8>,
-    // this flag tells if the transaction should be mapped from extrnode flatbuffer to mplx flatbuffer structure
-    // data from geyser should be mapped and data from BG should not
-    pub map_flatbuffer: bool,
+    pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
 }
 
 impl Buffer {
@@ -41,7 +36,7 @@ impl Buffer {
 
             mints: Mutex::new(HashMap::new()),
 
-            json_tasks: Mutex::new(VecDeque::<Task>::new()),
+            json_tasks: Arc::new(Mutex::new(VecDeque::<Task>::new())),
         }
     }
 
@@ -65,5 +60,17 @@ impl Buffer {
             "buffer_mplx_accounts",
             self.mplx_metadata_info.lock().await.len() as i64,
         );
+    }
+
+    pub async fn mplx_metadata_len(&self) -> usize {
+        self.mplx_metadata_info.lock().await.len()
+    }
+}
+
+#[async_trait]
+impl ProcessingDataGetter for Buffer {
+    async fn get_processing_transaction(&self) -> Option<BufferedTransaction> {
+        let mut buffer = self.transactions.lock().await;
+        buffer.pop_front()
     }
 }

@@ -11,12 +11,28 @@ use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
 
+pub struct IntegrityVerificationMetrics {
+    pub integrity_verification_metrics: Arc<IntegrityVerificationMetricsConfig>,
+    pub registry: Registry,
+}
+
+impl IntegrityVerificationMetrics {
+    pub fn new(integrity_verification_metrics: IntegrityVerificationMetricsConfig) -> Self {
+        Self {
+            integrity_verification_metrics: Arc::new(integrity_verification_metrics),
+            registry: Registry::default(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct MetricState {
     pub ingester_metrics: Arc<IngesterMetricsConfig>,
     pub api_metrics: Arc<ApiMetricsConfig>,
     pub json_downloader_metrics: Arc<JsonDownloaderMetricsConfig>,
     pub backfiller_metrics: Arc<BackfillerMetricsConfig>,
+    pub rpc_backfiller_metrics: Arc<RpcBackfillerMetricsConfig>,
+    pub synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -26,6 +42,8 @@ impl MetricState {
         api_metrics: ApiMetricsConfig,
         json_downloader_metrics: JsonDownloaderMetricsConfig,
         backfiller_metrics: BackfillerMetricsConfig,
+        rpc_backfiller_metrics: RpcBackfillerMetricsConfig,
+        synchronizer_metrics: SynchronizerMetricsConfig,
     ) -> Self {
         Self {
             ingester_metrics: Arc::new(ingester_metrics),
@@ -33,6 +51,8 @@ impl MetricState {
             json_downloader_metrics: Arc::new(json_downloader_metrics),
             registry: Registry::default(),
             backfiller_metrics: Arc::new(backfiller_metrics),
+            rpc_backfiller_metrics: Arc::new(rpc_backfiller_metrics),
+            synchronizer_metrics: Arc::new(synchronizer_metrics),
         }
     }
 }
@@ -78,6 +98,7 @@ pub struct MetricLabelWithStatus {
 pub struct BackfillerMetricsConfig {
     slots_collected: Family<MetricLabelWithStatus, Counter>,
     data_processed: Family<MetricLabel, Counter>, // slots & transactions
+    last_processed_slot: Family<MetricLabel, Gauge>,
 }
 
 impl Default for BackfillerMetricsConfig {
@@ -91,6 +112,7 @@ impl BackfillerMetricsConfig {
         Self {
             slots_collected: Family::<MetricLabelWithStatus, Counter>::default(),
             data_processed: Family::<MetricLabel, Counter>::default(),
+            last_processed_slot: Family::<MetricLabel, Gauge>::default(),
         }
     }
 
@@ -110,6 +132,132 @@ impl BackfillerMetricsConfig {
             })
             .inc()
     }
+
+    pub fn set_last_processed_slot(&self, label: &str, slot: i64) -> i64 {
+        self.last_processed_slot
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .set(slot)
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "backfiller_slots_collected",
+            "The number of slots backfiller collected and prepared to parse",
+            self.slots_collected.clone(),
+        );
+
+        registry.register(
+            "backfiller_data_processed",
+            "The number of data processed by backfiller",
+            self.data_processed.clone(),
+        );
+
+        registry.register(
+            "backfiller_last_processed_slot",
+            "The last processed slot by backfiller",
+            self.last_processed_slot.clone(),
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RpcBackfillerMetricsConfig {
+    fetch_signatures: Family<MetricLabelWithStatus, Counter>,
+    fetch_transactions: Family<MetricLabelWithStatus, Counter>,
+    transactions_processed: Family<MetricLabelWithStatus, Counter>,
+    run_fetch_signatures: Family<MetricLabelWithStatus, Counter>,
+}
+
+impl Default for RpcBackfillerMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RpcBackfillerMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            fetch_signatures: Family::<MetricLabelWithStatus, Counter>::default(),
+            fetch_transactions: Family::<MetricLabelWithStatus, Counter>::default(),
+            transactions_processed: Family::<MetricLabelWithStatus, Counter>::default(),
+            run_fetch_signatures: Family::<MetricLabelWithStatus, Counter>::default(),
+        }
+    }
+
+    pub fn inc_transactions_processed(&self, label: &str, status: MetricStatus) -> u64 {
+        self.transactions_processed
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_string(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_fetch_transactions(&self, label: &str, status: MetricStatus) -> u64 {
+        self.fetch_transactions
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_string(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_fetch_signatures(&self, label: &str, status: MetricStatus) -> u64 {
+        self.fetch_signatures
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_string(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_run_fetch_signatures(&self, label: &str, status: MetricStatus) -> u64 {
+        self.run_fetch_signatures
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_string(),
+                status,
+            })
+            .inc()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SynchronizerMetricsConfig {
+    number_of_records_synchronized: Family<MetricLabel, Counter>,
+    last_synchronized_slot: Family<MetricLabel, Gauge>,
+}
+
+impl Default for SynchronizerMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SynchronizerMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            number_of_records_synchronized: Family::<MetricLabel, Counter>::default(),
+            last_synchronized_slot: Family::<MetricLabel, Gauge>::default(),
+        }
+    }
+
+    pub fn inc_number_of_records_synchronized(&self, label: &str, num_of_records: u64) -> u64 {
+        self.number_of_records_synchronized
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc_by(num_of_records)
+    }
+
+    pub fn set_last_synchronized_slot(&self, label: &str, slot: i64) -> i64 {
+        self.last_synchronized_slot
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .set(slot)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -127,7 +275,7 @@ impl ApiMetricsConfig {
             search_asset_requests: Family::<MethodLabel, Counter>::default(),
             start_time: Default::default(),
             latency: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 2.0, 10))
+                Histogram::new(exponential_buckets(20.0, 1.8, 10))
             }),
         }
     }
@@ -170,7 +318,6 @@ impl Default for ApiMetricsConfig {
 impl MetricsTrait for MetricState {
     fn register_metrics(&mut self) {
         self.api_metrics.start_time();
-        self.ingester_metrics.start_time();
         self.json_downloader_metrics.start_time();
 
         self.registry.register(
@@ -194,47 +341,7 @@ impl MetricsTrait for MetricState {
             self.api_metrics.start_time.clone(),
         );
 
-        self.registry.register(
-            "ingester_start_time",
-            "Binary start time",
-            self.ingester_metrics.start_time.clone(),
-        );
-
-        self.registry.register(
-            "ingester_parsed_data",
-            "Total amount of parsed data",
-            self.ingester_metrics.parsers.clone(),
-        );
-        self.registry.register(
-            "ingester_processed",
-            "Total amount of processed data",
-            self.ingester_metrics.process.clone(),
-        );
-        self.registry.register(
-            "ingester_parsed_data_latency",
-            "Histogram of data parsing duration",
-            self.ingester_metrics.latency.clone(),
-        );
-        self.registry.register(
-            "ingester_buffers",
-            "Buffer size",
-            self.ingester_metrics.buffers.clone(),
-        );
-        self.registry.register(
-            "ingester_query_retries",
-            "Total amount of query retries data",
-            self.ingester_metrics.retries.clone(),
-        );
-        self.registry.register(
-            "ingester_bublegum_instructions",
-            "Total number of bubblegum instructions processed",
-            self.ingester_metrics.instructions.clone(),
-        );
-        self.registry.register(
-            "ingester_rocksdb_backup_latency",
-            "Histogram of rocksdb backup duration",
-            self.ingester_metrics.rocksdb_backup_latency.clone(),
-        );
+        self.ingester_metrics.register(&mut self.registry);
 
         self.registry.register(
             "json_downloader_latency_task",
@@ -260,16 +367,165 @@ impl MetricsTrait for MetricState {
             self.json_downloader_metrics.start_time.clone(),
         );
 
+        self.backfiller_metrics.register(&mut self.registry);
+
         self.registry.register(
-            "backfiller_slots_collected",
-            "The number of slots backfiller collected and prepared to parse",
-            self.backfiller_metrics.slots_collected.clone(),
+            "rpc_backfiller_transactions_processed",
+            "Count of transactions, processed by RPC backfiller",
+            self.rpc_backfiller_metrics.transactions_processed.clone(),
         );
 
         self.registry.register(
-            "backfiller_data_processed",
-            "The number of data processed by backfiller",
-            self.backfiller_metrics.data_processed.clone(),
+            "rpc_backfiller_fetch_signatures",
+            "Count of RPC fetch_signatures calls",
+            self.rpc_backfiller_metrics.fetch_signatures.clone(),
+        );
+
+        self.registry.register(
+            "rpc_backfiller_fetch_transactions",
+            "Count of RPC fetch_transactions calls",
+            self.rpc_backfiller_metrics.fetch_transactions.clone(),
+        );
+
+        self.registry.register(
+            "rpc_backfiller_run_fetch_signatures",
+            "Count of fetch_signatures restarts",
+            self.rpc_backfiller_metrics.run_fetch_signatures.clone(),
+        );
+
+        self.registry.register(
+            "synchronizer_number_of_records_synchronized",
+            "Count of records, synchronized by synchronizer",
+            self.synchronizer_metrics
+                .number_of_records_synchronized
+                .clone(),
+        );
+
+        self.registry.register(
+            "synchronizer_last_synchronized_slot",
+            "The last synchronized slot by synchronizer",
+            self.synchronizer_metrics.last_synchronized_slot.clone(),
+        );
+    }
+}
+
+impl MetricsTrait for IntegrityVerificationMetrics {
+    fn register_metrics(&mut self) {
+        self.integrity_verification_metrics.start_time();
+
+        self.registry.register(
+            "tests_start_time",
+            "Binary start time",
+            self.integrity_verification_metrics.start_time.clone(),
+        );
+
+        self.registry.register(
+            "total_get_asset_tested",
+            "Count of total getAsset method`s tests",
+            self.integrity_verification_metrics
+                .total_get_asset_tested
+                .clone(),
+        );
+        self.registry.register(
+            "total_get_asset_proof_tested",
+            "Count of total getAssetProof method`s tests",
+            self.integrity_verification_metrics
+                .total_get_asset_proof_tested
+                .clone(),
+        );
+        self.registry.register(
+            "total_get_assets_by_authority_tested",
+            "Count of total getAssetsByAuthority method`s tests",
+            self.integrity_verification_metrics
+                .total_get_assets_by_authority_tested
+                .clone(),
+        );
+        self.registry.register(
+            "total_get_assets_by_creator_tested",
+            "Count of total getAssetsByCreator method`s tests",
+            self.integrity_verification_metrics
+                .total_get_assets_by_creator_tested
+                .clone(),
+        );
+        self.registry.register(
+            "total_get_assets_by_owner_tested",
+            "Count of total getAssetsByOwner method`s tests",
+            self.integrity_verification_metrics
+                .total_get_assets_by_owner_tested
+                .clone(),
+        );
+        self.registry.register(
+            "total_get_assets_by_group_tested",
+            "Count of total getAssetsByGroup method`s tests",
+            self.integrity_verification_metrics
+                .total_get_assets_by_group_tested
+                .clone(),
+        );
+
+        self.registry.register(
+            "failed_get_asset_tested",
+            "Fail count of getAsset method`s tests",
+            self.integrity_verification_metrics
+                .failed_get_asset_tested
+                .clone(),
+        );
+        self.registry.register(
+            "failed_get_asset_proof_tested",
+            "Fail count of getAssetProof method`s tests",
+            self.integrity_verification_metrics
+                .failed_get_asset_proof_tested
+                .clone(),
+        );
+        self.registry.register(
+            "failed_get_assets_by_authority_tested",
+            "Fail count of getAssetsByAuthority method`s tests",
+            self.integrity_verification_metrics
+                .failed_get_assets_by_authority_tested
+                .clone(),
+        );
+        self.registry.register(
+            "failed_get_assets_by_creator_tested",
+            "Fail count of getAssetsByCreator method`s tests",
+            self.integrity_verification_metrics
+                .failed_get_assets_by_creator_tested
+                .clone(),
+        );
+        self.registry.register(
+            "failed_get_assets_by_owner_tested",
+            "Fail count of getAssetsByOwner method`s tests",
+            self.integrity_verification_metrics
+                .failed_get_assets_by_owner_tested
+                .clone(),
+        );
+        self.registry.register(
+            "failed_get_assets_by_group_tested",
+            "Fail count of getAssetsByGroup method`s tests",
+            self.integrity_verification_metrics
+                .failed_get_assets_by_group_tested
+                .clone(),
+        );
+
+        self.registry.register(
+            "network_errors_testing_host",
+            "Count of network errors from testing host",
+            self.integrity_verification_metrics
+                .network_errors_testing_host
+                .clone(),
+        );
+        self.registry.register(
+            "network_errors_reference_host",
+            "Count of network errors from reference host",
+            self.integrity_verification_metrics
+                .network_errors_reference_host
+                .clone(),
+        );
+
+        self.registry.register(
+            "fetch_keys_errors",
+            "Count of DB errors while fetching keys for tests",
+            self.integrity_verification_metrics
+                .fetch_keys_errors
+                .clone(),
         );
     }
 }
@@ -284,6 +540,7 @@ pub struct IngesterMetricsConfig {
     retries: Family<MetricLabel, Counter>,
     rocksdb_backup_latency: Histogram,
     instructions: Family<MetricLabel, Counter>,
+    last_processed_slot: Family<MetricLabel, Gauge>,
 }
 
 impl IngesterMetricsConfig {
@@ -291,7 +548,7 @@ impl IngesterMetricsConfig {
         Self {
             start_time: Default::default(),
             latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 1.0, 10))
+                Histogram::new([1.0, 10.0, 50.0, 100.0].into_iter())
             }),
             parsers: Family::<MetricLabelWithStatus, Counter>::default(),
             process: Family::<MetricLabelWithStatus, Counter>::default(),
@@ -304,6 +561,7 @@ impl IngesterMetricsConfig {
                 .into_iter(),
             ),
             instructions: Family::<MetricLabel, Counter>::default(),
+            last_processed_slot: Family::<MetricLabel, Gauge>::default(),
         }
     }
 
@@ -363,6 +621,60 @@ impl IngesterMetricsConfig {
             })
             .inc()
     }
+
+    pub fn set_last_processed_slot(&self, label: &str, slot: i64) -> i64 {
+        self.last_processed_slot
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .set(slot)
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        self.start_time();
+        registry.register(
+            "ingester_start_time",
+            "Binary start time",
+            self.start_time.clone(),
+        );
+
+        registry.register(
+            "ingester_parsed_data",
+            "Total amount of parsed data",
+            self.parsers.clone(),
+        );
+        registry.register(
+            "ingester_processed",
+            "Total amount of processed data",
+            self.process.clone(),
+        );
+        registry.register(
+            "ingester_parsed_data_latency",
+            "Histogram of data parsing duration",
+            self.latency.clone(),
+        );
+        registry.register("ingester_buffers", "Buffer size", self.buffers.clone());
+        registry.register(
+            "ingester_query_retries",
+            "Total amount of query retries data",
+            self.retries.clone(),
+        );
+        registry.register(
+            "ingester_bublegum_instructions",
+            "Total number of bubblegum instructions processed",
+            self.instructions.clone(),
+        );
+        registry.register(
+            "ingester_rocksdb_backup_latency",
+            "Histogram of rocksdb backup duration",
+            self.rocksdb_backup_latency.clone(),
+        );
+        registry.register(
+            "ingester_last_processed_slot",
+            "The last processed slot by ingester",
+            self.last_processed_slot.clone(),
+        );
+    }
 }
 
 impl Default for IngesterMetricsConfig {
@@ -386,7 +698,7 @@ impl JsonDownloaderMetricsConfig {
             start_time: Default::default(),
             tasks_to_execute: Default::default(),
             latency_task_executed: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 2.0, 10))
+                Histogram::new([100.0, 500.0, 1000.0, 2000.0].into_iter())
             }),
         }
     }
@@ -419,5 +731,115 @@ impl JsonDownloaderMetricsConfig {
 impl Default for JsonDownloaderMetricsConfig {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct IntegrityVerificationMetricsConfig {
+    start_time: Gauge,
+
+    total_get_asset_tested: Counter,
+    total_get_asset_proof_tested: Counter,
+    total_get_assets_by_owner_tested: Counter,
+    total_get_assets_by_creator_tested: Counter,
+    total_get_assets_by_authority_tested: Counter,
+    total_get_assets_by_group_tested: Counter,
+
+    failed_get_asset_tested: Counter,
+    failed_get_asset_proof_tested: Counter,
+    failed_get_assets_by_owner_tested: Counter,
+    failed_get_assets_by_creator_tested: Counter,
+    failed_get_assets_by_authority_tested: Counter,
+    failed_get_assets_by_group_tested: Counter,
+
+    network_errors_testing_host: Counter,
+    network_errors_reference_host: Counter,
+
+    fetch_keys_errors: Family<MetricLabel, Counter>,
+}
+
+impl Default for IntegrityVerificationMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl IntegrityVerificationMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            start_time: Default::default(),
+            total_get_asset_tested: Default::default(),
+            total_get_asset_proof_tested: Default::default(),
+            total_get_assets_by_owner_tested: Default::default(),
+            total_get_assets_by_creator_tested: Default::default(),
+            total_get_assets_by_authority_tested: Default::default(),
+            total_get_assets_by_group_tested: Default::default(),
+            failed_get_asset_tested: Default::default(),
+            failed_get_asset_proof_tested: Default::default(),
+            failed_get_assets_by_owner_tested: Default::default(),
+            failed_get_assets_by_creator_tested: Default::default(),
+            failed_get_assets_by_authority_tested: Default::default(),
+            failed_get_assets_by_group_tested: Default::default(),
+            network_errors_testing_host: Default::default(),
+            network_errors_reference_host: Default::default(),
+            fetch_keys_errors: Default::default(),
+        }
+    }
+
+    pub fn start_time(&self) -> i64 {
+        self.start_time.set(Utc::now().timestamp())
+    }
+
+    pub fn inc_total_get_asset_tested(&self) -> u64 {
+        self.total_get_asset_tested.inc()
+    }
+    pub fn inc_total_get_asset_proof_tested(&self) -> u64 {
+        self.total_get_asset_proof_tested.inc()
+    }
+    pub fn inc_total_get_assets_by_owner_tested(&self) -> u64 {
+        self.total_get_assets_by_owner_tested.inc()
+    }
+    pub fn inc_total_get_assets_by_creator_tested(&self) -> u64 {
+        self.total_get_assets_by_creator_tested.inc()
+    }
+    pub fn inc_total_get_assets_by_authority_tested(&self) -> u64 {
+        self.total_get_assets_by_authority_tested.inc()
+    }
+    pub fn inc_total_get_assets_by_group_tested(&self) -> u64 {
+        self.total_get_assets_by_group_tested.inc()
+    }
+
+    pub fn inc_failed_get_asset_tested(&self) -> u64 {
+        self.failed_get_asset_tested.inc()
+    }
+    pub fn inc_failed_get_asset_proof_tested(&self) -> u64 {
+        self.failed_get_asset_proof_tested.inc()
+    }
+    pub fn inc_failed_get_assets_by_owner_tested(&self) -> u64 {
+        self.failed_get_assets_by_owner_tested.inc()
+    }
+    pub fn inc_failed_get_assets_by_creator_tested(&self) -> u64 {
+        self.failed_get_assets_by_creator_tested.inc()
+    }
+    pub fn inc_failed_get_assets_by_authority_tested(&self) -> u64 {
+        self.failed_get_assets_by_authority_tested.inc()
+    }
+    pub fn inc_failed_failed_get_assets_by_group_tested(&self) -> u64 {
+        self.failed_get_assets_by_group_tested.inc()
+    }
+
+    pub fn inc_network_errors_testing_host(&self) -> u64 {
+        self.network_errors_testing_host.inc()
+    }
+    pub fn inc_network_errors_reference_host(&self) -> u64 {
+        self.network_errors_reference_host.inc()
+    }
+
+    pub fn inc_fetch_keys_errors(&self, label: &str) -> u64 {
+        self.fetch_keys_errors
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc()
     }
 }

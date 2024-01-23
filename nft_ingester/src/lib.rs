@@ -1,4 +1,5 @@
 pub mod api;
+pub mod backfiller;
 pub mod bubblegum_updates_processor;
 pub mod buffer;
 pub mod config;
@@ -13,3 +14,4 @@ pub mod message_handler;
 pub mod mplx_updates_processor;
 pub mod tcp_receiver;
 pub mod token_updates_processor;
+pub mod transaction_ingester;

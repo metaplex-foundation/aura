@@ -1,5 +1,6 @@
 use entities::models::AssetIndex;
 use log::warn;
+use metrics_utils::SynchronizerMetricsConfig;
 use postgre_client::storage_traits::AssetIndexStorage;
 use rocks_db::{
     key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey},
@@ -19,7 +20,7 @@ where
     primary_storage: Arc<T>,
     index_storage: Arc<U>,
     batch_size: usize,
-    // Other fields as necessary...
+    metrics: Arc<SynchronizerMetricsConfig>,
 }
 
 impl<T, U> Synchronizer<T, U>
@@ -27,11 +28,17 @@ where
     T: AssetIndexSourceStorage,
     U: AssetIndexStorage,
 {
-    pub fn new(primary_storage: Arc<T>, index_storage: Arc<U>, batch_size: usize) -> Self {
+    pub fn new(
+        primary_storage: Arc<T>,
+        index_storage: Arc<U>,
+        batch_size: usize,
+        metrics: Arc<SynchronizerMetricsConfig>,
+    ) -> Self {
         Synchronizer {
             primary_storage,
             index_storage,
             batch_size,
+            metrics,
         }
     }
 
@@ -76,33 +83,29 @@ where
             let last_included_key = last_included_key.unwrap();
             // fetch the asset indexes from the primary storage
             let updated_keys_refs: Vec<Pubkey> = updated_keys.iter().copied().collect();
-            let asset_indexes = self
-                .primary_storage
-                .get_asset_indexes(updated_keys_refs.as_slice())
-                .await?;
-
-            if asset_indexes.is_empty() {
-                warn!("No asset indexes found for keys: {:?}", updated_keys_refs);
-                break;
-            }
 
             // Update the asset indexes in the index storage
             // let last_included_key = AssetsUpdateIdx::encode_key(last_included_key);
-            let last_included_key = encode_u64x2_pubkey(
+            let last_included_rocks_key = encode_u64x2_pubkey(
                 last_included_key.0,
                 last_included_key.1,
                 last_included_key.2,
             );
-            self.index_storage
-                .update_asset_indexes_batch(
-                    asset_indexes
-                        .values()
-                        .cloned()
-                        .collect::<Vec<AssetIndex>>()
-                        .as_slice(),
-                    last_included_key.as_slice(),
-                )
-                .await?;
+            Self::syncronize_batch(
+                self.primary_storage.clone(),
+                self.index_storage.clone(),
+                updated_keys_refs.as_slice(),
+                last_included_rocks_key,
+            )
+            .await?;
+
+            self.metrics
+                .set_last_synchronized_slot("last_synchronized_slot", last_included_key.1 as i64);
+
+            self.metrics.inc_number_of_records_synchronized(
+                "synchronized_records",
+                updated_keys_refs.len() as u64,
+            );
 
             if updated_keys.len() < self.batch_size {
                 break;
@@ -112,12 +115,43 @@ where
         }
         Ok(())
     }
+
+    pub async fn syncronize_batch(
+        primary_storage: Arc<T>,
+        index_storage: Arc<U>,
+        updated_keys_refs: &[Pubkey],
+        last_included_rocks_key: Vec<u8>,
+    ) -> Result<(), IngesterError> {
+        let asset_indexes = primary_storage.get_asset_indexes(updated_keys_refs).await?;
+
+        if asset_indexes.is_empty() {
+            warn!("No asset indexes found for keys: {:?}", updated_keys_refs);
+            return Ok(());
+        }
+
+        index_storage
+            .update_asset_indexes_batch(
+                asset_indexes
+                    .values()
+                    .cloned()
+                    .collect::<Vec<AssetIndex>>()
+                    .as_slice(),
+                last_included_rocks_key.as_slice(),
+            )
+            .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use entities::models::AssetIndex;
+    use metrics_utils::{
+        ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig,
+        JsonDownloaderMetricsConfig, MetricState, MetricsTrait, RpcBackfillerMetricsConfig,
+        SynchronizerMetricsConfig,
+    };
     use mockall;
     use postgre_client::storage_traits::MockAssetIndexStorage as MockIndexStorage;
     use rocks_db::storage_traits::MockAssetIndexStorage as MockPrimaryStorage;
@@ -158,6 +192,16 @@ mod tests {
     async fn test_synchronizer_over_2_empty_storages() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
+        let mut metrics_state = MetricState::new(
+            IngesterMetricsConfig::new(),
+            ApiMetricsConfig::new(),
+            JsonDownloaderMetricsConfig::new(),
+            BackfillerMetricsConfig::new(),
+            RpcBackfillerMetricsConfig::new(),
+            SynchronizerMetricsConfig::new(),
+        );
+        metrics_state.register_metrics();
+
         index_storage
             .expect_fetch_last_synced_id()
             .once()
@@ -167,8 +211,12 @@ mod tests {
             .expect_last_known_asset_updated_key()
             .once()
             .return_once(|| Ok(None));
-        let synchronizer =
-            Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 1000);
+        let synchronizer = Synchronizer::new(
+            Arc::new(primary_storage),
+            Arc::new(index_storage),
+            1000,
+            metrics_state.synchronizer_metrics.clone(),
+        );
         let keep_running = Arc::new(AtomicBool::new(true));
         synchronizer
             .synchronize_asset_indexes(keep_running)
@@ -180,6 +228,15 @@ mod tests {
     async fn test_synchronizer_with_records_in_primary_storage() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
+        let mut metrics_state = MetricState::new(
+            IngesterMetricsConfig::new(),
+            ApiMetricsConfig::new(),
+            JsonDownloaderMetricsConfig::new(),
+            BackfillerMetricsConfig::new(),
+            RpcBackfillerMetricsConfig::new(),
+            SynchronizerMetricsConfig::new(),
+        );
+        metrics_state.register_metrics();
 
         // Index storage starts empty
         index_storage
@@ -221,8 +278,12 @@ mod tests {
             )
             .once()
             .return_once(|_, _| Ok(()));
-        let synchronizer =
-            Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 1000);
+        let synchronizer = Synchronizer::new(
+            Arc::new(primary_storage),
+            Arc::new(index_storage),
+            1000,
+            metrics_state.synchronizer_metrics.clone(),
+        );
         let keep_running = Arc::new(AtomicBool::new(true));
         synchronizer
             .synchronize_asset_indexes(keep_running)
@@ -234,6 +295,15 @@ mod tests {
     async fn test_synchronizer_with_small_batch_size() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
+        let mut metrics_state = MetricState::new(
+            IngesterMetricsConfig::new(),
+            ApiMetricsConfig::new(),
+            JsonDownloaderMetricsConfig::new(),
+            BackfillerMetricsConfig::new(),
+            RpcBackfillerMetricsConfig::new(),
+            SynchronizerMetricsConfig::new(),
+        );
+        metrics_state.register_metrics();
 
         // Index storage starts empty
         index_storage
@@ -285,7 +355,12 @@ mod tests {
             .once()
             .return_once(|_, _| Ok(()));
 
-        let synchronizer = Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 1); // Small batch size
+        let synchronizer = Synchronizer::new(
+            Arc::new(primary_storage),
+            Arc::new(index_storage),
+            1,
+            metrics_state.synchronizer_metrics.clone(),
+        ); // Small batch size
         let keep_running = Arc::new(AtomicBool::new(true));
         synchronizer
             .synchronize_asset_indexes(keep_running)
@@ -297,6 +372,15 @@ mod tests {
     async fn test_synchronizer_with_existing_index_data() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
+        let mut metrics_state = MetricState::new(
+            IngesterMetricsConfig::new(),
+            ApiMetricsConfig::new(),
+            JsonDownloaderMetricsConfig::new(),
+            BackfillerMetricsConfig::new(),
+            RpcBackfillerMetricsConfig::new(),
+            SynchronizerMetricsConfig::new(),
+        );
+        metrics_state.register_metrics();
 
         let index_key = (95, 2, Pubkey::new_unique());
         let last_synced_binary_key =
@@ -387,7 +471,12 @@ mod tests {
             .once()
             .return_once(|_, _| Ok(()));
 
-        let synchronizer = Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 2);
+        let synchronizer = Synchronizer::new(
+            Arc::new(primary_storage),
+            Arc::new(index_storage),
+            2,
+            metrics_state.synchronizer_metrics.clone(),
+        );
         let keep_running = Arc::new(AtomicBool::new(true));
         synchronizer
             .synchronize_asset_indexes(keep_running)
@@ -399,6 +488,15 @@ mod tests {
     async fn test_synchronizer_with_synced_databases() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
+        let mut metrics_state = MetricState::new(
+            IngesterMetricsConfig::new(),
+            ApiMetricsConfig::new(),
+            JsonDownloaderMetricsConfig::new(),
+            BackfillerMetricsConfig::new(),
+            RpcBackfillerMetricsConfig::new(),
+            SynchronizerMetricsConfig::new(),
+        );
+        metrics_state.register_metrics();
 
         let key = Pubkey::new_unique();
         let index_key = (100, 2, key);
@@ -425,8 +523,12 @@ mod tests {
             .expect_fetch_asset_updated_keys()
             .never();
 
-        let synchronizer =
-            Synchronizer::new(Arc::new(primary_storage), Arc::new(index_storage), 1000);
+        let synchronizer = Synchronizer::new(
+            Arc::new(primary_storage),
+            Arc::new(index_storage),
+            1000,
+            metrics_state.synchronizer_metrics.clone(),
+        );
         let keep_running = Arc::new(AtomicBool::new(true));
         synchronizer
             .synchronize_asset_indexes(keep_running)

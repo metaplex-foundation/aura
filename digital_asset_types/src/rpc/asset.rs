@@ -44,6 +44,22 @@ pub enum Interface {
     ProgrammableNFT,
 }
 
+impl From<entities::enums::Interface> for Interface {
+    fn from(value: entities::enums::Interface) -> Self {
+        match value {
+            entities::enums::Interface::V1NFT => Interface::V1NFT,
+            entities::enums::Interface::V1PRINT => Interface::V1PRINT,
+            entities::enums::Interface::LegacyNft => Interface::LegacyNft,
+            entities::enums::Interface::Nft => Interface::Nft,
+            entities::enums::Interface::FungibleAsset => Interface::FungibleAsset,
+            entities::enums::Interface::Custom => Interface::Custom,
+            entities::enums::Interface::Identity => Interface::Identity,
+            entities::enums::Interface::Executable => Interface::Executable,
+            entities::enums::Interface::ProgrammableNFT => Interface::ProgrammableNFT,
+        }
+    }
+}
+
 impl From<(&SpecificationVersions, &SpecificationAssetClass)> for Interface {
     fn from(i: (&SpecificationVersions, &SpecificationAssetClass)) -> Self {
         match i {
@@ -214,6 +230,16 @@ pub enum RoyaltyModel {
     Single,
 }
 
+impl From<entities::enums::RoyaltyModel> for RoyaltyModel {
+    fn from(value: entities::enums::RoyaltyModel) -> Self {
+        match value {
+            entities::enums::RoyaltyModel::Creators => RoyaltyModel::Creators,
+            entities::enums::RoyaltyModel::Fanout => RoyaltyModel::Fanout,
+            entities::enums::RoyaltyModel::Single => RoyaltyModel::Single,
+        }
+    }
+}
+
 impl From<String> for RoyaltyModel {
     fn from(s: String) -> Self {
         match &*s {
@@ -264,6 +290,15 @@ pub enum OwnershipModel {
     Single,
     #[serde(rename = "token")]
     Token,
+}
+
+impl From<entities::enums::OwnershipModel> for OwnershipModel {
+    fn from(value: entities::enums::OwnershipModel) -> Self {
+        match value {
+            entities::enums::OwnershipModel::Single => OwnershipModel::Single,
+            entities::enums::OwnershipModel::Token => OwnershipModel::Token,
+        }
+    }
 }
 
 impl From<String> for OwnershipModel {

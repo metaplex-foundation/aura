@@ -5,9 +5,10 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
 
+use crate::asset::AssetLeaf;
 use crate::column::TypedColumn;
 use crate::key_encoders::{decode_u64_pubkey, encode_u64_pubkey};
-use crate::{Result, Storage};
+use crate::{AssetDynamicDetails, Result, Storage};
 
 /// This column family stores change log items for asset proof construction.
 /// Basically, it stores all nodes of the tree.
@@ -25,7 +26,7 @@ pub struct ClItem {
 /// This column family stores node ids of the leaf nodes.
 /// The key is the leaf index(also known as nonce) and tree id.
 /// NOTE: it stores only nodes with level 0 in tree.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ClLeaf {
     pub cli_leaf_idx: u64,
     pub cli_tree_key: Pubkey,
@@ -140,12 +141,30 @@ impl Storage {
                         cli_node_idx: node_idx,
                     };
 
-                    if let Err(e) = self.cl_leafs.put((leaf_idx, tree), &cl_leaf) {
+                    if let Err(e) = self.cl_leafs.put((leaf_idx, tree), cl_leaf) {
                         error!("Error while saving change log for cNFT: {}", e);
                     };
                 }
             }
         }
+    }
+
+    pub fn save_tx_data_and_asset_updated(
+        &self,
+        pk: Pubkey,
+        slot: u64,
+        leaf: Option<AssetLeaf>,
+        dynamic_data: Option<AssetDynamicDetails>,
+    ) -> Result<()> {
+        if let Some(leaf) = leaf {
+            self.asset_leaf_data.merge(pk, &leaf)?
+        };
+        if let Some(dynamic_data) = dynamic_data {
+            self.asset_dynamic_data.merge(pk, &dynamic_data)?;
+        }
+        self.asset_updated(slot, pk)?;
+
+        Ok(())
     }
 }
 

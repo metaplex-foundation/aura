@@ -5,7 +5,7 @@ use crate::Result;
 
 pub const BUBBLEGUM_SLOTS_PREFIX: &str = "s";
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BubblegumSlots {}
 
 impl TypedColumn for BubblegumSlots {

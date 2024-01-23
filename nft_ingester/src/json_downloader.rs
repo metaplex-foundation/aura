@@ -64,7 +64,7 @@ impl JsonDownloader {
 
                             cloned_metrics.set_latency_task_executed(
                                 "json_downloader",
-                                begin_processing.elapsed().as_secs_f64(),
+                                begin_processing.elapsed().as_millis() as f64,
                             );
 
                             match response {
@@ -96,7 +96,7 @@ impl JsonDownloader {
                                                 .asset_offchain_data
                                                 .put(
                                                     task.metadata_url.clone(),
-                                                    &OffChainData {
+                                                    OffChainData {
                                                         url: task.metadata_url.clone(),
                                                         metadata: metadata.trim().replace('\0', ""),
                                                     },

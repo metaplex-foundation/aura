@@ -9,7 +9,8 @@ use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult, Orde
 use solana_sdk::pubkey::Pubkey;
 
 use rocks_db::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetStaticDetails,
+    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetSelectedMaps,
+    AssetStaticDetails,
 };
 use rocks_db::offchain_data::OffChainData;
 use rocks_db::Storage;
@@ -74,7 +75,7 @@ pub async fn get_by_creator(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    let mut condition = "SELECT asc_pubkey FROM assets_v3 LEFT JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey WHERE asc_creator = $1".to_string();
+    let mut condition = "SELECT ast_pubkey FROM assets_v3 LEFT JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey WHERE asc_creator = $1".to_string();
     if only_verified {
         condition = format!("{} AND asc_verified = true", condition);
     }
@@ -284,8 +285,10 @@ pub async fn get_related_for_assets(
         .map(|asset| Pubkey::try_from(asset.ast_pubkey.clone()).unwrap_or_default())
         .collect::<Vec<_>>();
 
-    let asset_selected_maps =
-        get_asset_selected_maps(conn, rocks_db, converted_pubkeys.clone()).await?;
+    let asset_selected_maps = rocks_db
+        .get_asset_selected_maps_async(converted_pubkeys.clone())
+        .await
+        .map_err(|e| DbErr::Custom(e.to_string()))?;
 
     let assets = converted_pubkeys
         .into_iter()
@@ -317,7 +320,7 @@ fn convert_rocks_offchain_data(
             .unwrap_or_default()
             .as_ref(),
     )
-    .unwrap();
+    .unwrap_or(serde_json::Value::Null);
 
     Ok(asset_data::Model {
         id: dynamic_data.pubkey.to_bytes().to_vec(),
@@ -542,90 +545,6 @@ macro_rules! fetch_asset_data {
     }};
 }
 
-struct AssetSelectedMaps {
-    assets_static: HashMap<Pubkey, AssetStaticDetails>,
-    assets_dynamic: HashMap<Pubkey, AssetDynamicDetails>,
-    assets_authority: HashMap<Pubkey, AssetAuthority>,
-    assets_collection: HashMap<Pubkey, AssetCollection>,
-    assets_owner: HashMap<Pubkey, AssetOwner>,
-    assets_leaf: HashMap<Pubkey, AssetLeaf>,
-    offchain_data: HashMap<String, OffChainData>,
-    urls: HashMap<String, String>,
-}
-
-async fn get_asset_selected_maps(
-    conn: &impl ConnectionTrait,
-    rocks_db: Arc<Storage>,
-    asset_ids: Vec<Pubkey>,
-) -> Result<AssetSelectedMaps, DbErr> {
-    let assets_static = fetch_asset_data!(rocks_db, asset_static_data, asset_ids);
-    let assets_dynamic = fetch_asset_data!(rocks_db, asset_dynamic_data, asset_ids);
-    let assets_authority = fetch_asset_data!(rocks_db, asset_authority_data, asset_ids);
-    let assets_collection = fetch_asset_data!(rocks_db, asset_collection_data, asset_ids);
-    let assets_owner = fetch_asset_data!(rocks_db, asset_owner_data, asset_ids);
-    let assets_leaf = fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids);
-
-    let query = format!("SELECT
-                    ast_pubkey,
-                    (SELECT mtd_url from metadata WHERE ast_metadata_url_id = mtd_id) AS ast_metadata_url
-                    FROM assets_v3
-                WHERE ast_pubkey IN ({});", asset_ids
-        .iter()
-        .enumerate()
-        .map(|(index, _)| format!("${}", index + 1))
-        .collect::<Vec<_>>()
-        .join(", "));
-    let query_values = asset_ids
-        .iter()
-        .map(|asset_pk| {
-            Set(asset_pk.to_bytes().as_slice())
-                .into_value()
-                .ok_or(DbErr::Custom(format!(
-                    "cannot get value from asset_id: {:?}",
-                    asset_pk
-                )))
-        })
-        .collect::<Result<Vec<_>, DbErr>>()?;
-    let urls: HashMap<_, _> = conn
-        .query_all(Statement::from_sql_and_values(
-            sea_orm::DatabaseBackend::Postgres,
-            &query,
-            query_values.clone(),
-        ))
-        .await?
-        .iter()
-        .map(|q| AssetWithURL::from_query_result(q, "").unwrap())
-        .collect::<Vec<_>>()
-        .into_iter()
-        .map(|asset| {
-            (
-                bs58::encode(asset.ast_pubkey.as_slice()).into_string(),
-                asset.ast_metadata_url.unwrap_or_default(),
-            )
-        })
-        .collect();
-
-    let offchain_data = rocks_db
-        .asset_offchain_data
-        .batch_get(urls.clone().into_values().collect::<Vec<_>>())
-        .await
-        .map_err(|e| DbErr::Custom(e.to_string()))?
-        .into_iter()
-        .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
-        .collect::<HashMap<_, _>>();
-
-    Ok(AssetSelectedMaps {
-        assets_static,
-        assets_dynamic,
-        assets_authority,
-        assets_collection,
-        assets_owner,
-        assets_leaf,
-        offchain_data,
-        urls,
-    })
-}
-
 fn asset_selected_maps_into_full_asset(
     id: &Pubkey,
     asset_selected_maps: &AssetSelectedMaps,
@@ -676,10 +595,12 @@ fn asset_selected_maps_into_full_asset(
 }
 
 pub async fn get_by_ids(
-    conn: &impl ConnectionTrait,
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
 ) -> Result<Vec<Option<FullAsset>>, DbErr> {
+    if asset_ids.is_empty() {
+        return Ok(vec![]);
+    }
     // need to pass only unique asset_ids to select query
     // index need to save order of IDs in response
     let mut unique_asset_ids_map = HashMap::new();
@@ -691,8 +612,10 @@ pub async fn get_by_ids(
     }
 
     let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
-    let asset_selected_maps =
-        get_asset_selected_maps(conn, rocks_db, unique_asset_ids.clone()).await?;
+    let asset_selected_maps = rocks_db
+        .get_asset_selected_maps_async(unique_asset_ids.clone())
+        .await
+        .map_err(|e| DbErr::Custom(e.to_string()))?;
 
     let mut results = vec![None; asset_ids.len()];
     for id in unique_asset_ids {

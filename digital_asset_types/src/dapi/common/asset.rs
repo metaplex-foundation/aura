@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 
+use entities::api_req_params::{AssetSortBy, AssetSortDirection, AssetSorting};
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
@@ -15,7 +16,6 @@ use crate::dao::sea_orm_active_enums::SpecificationVersions;
 use crate::dao::FullAsset;
 use crate::dao::Pagination;
 use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_grouping};
-use crate::rpc::filter::{AssetSortBy, AssetSortDirection, AssetSorting};
 use crate::rpc::response::{AssetError, AssetList};
 use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,

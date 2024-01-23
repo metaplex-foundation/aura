@@ -6,12 +6,37 @@ components are responsible for the aggregation of Solana Validator Data into an 
 api provides a nice interface on top of the Metaplex programs. It abstracts the byte layout on chain, allows for 
 super-fast querying and searching, as well as serves the merkle proofs needed to operate over compressed nfts. 
 
+## DAS API architecture
+
+The project is based on the [Clean Architecture Principles](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
+
+The project's structure is a reflection of the following clean architecture principles:
+
+- Framework Independence: The architecture is built to be independent of any specific framework or library.
+- Testability: Business rules can be independently tested without UI, Database, or external interfaces.
+- UI Independence: Changes in the UI do not impact the core application logic.
+- Database Independence: Business logic is not tightly coupled with the database technology.
+- External Agency Independence: Business rules are unaware of anything outside their scope.
+
+### Project structure
+
+- entities. Contains business models that represent the domain and are used across various layers of the application.
+- interface. Stores traits that define public-facing interfaces, segregating the layers and ensuring loose coupling.
+- usecase. The domain-centric heart of the application, containing use cases that encapsulate business rules.
+- grpc. Houses gRPC service definitions and their implementation.
+- digital_asset_types. A *legacy* workspace with models and API definitions from the project's previous versions.
+- nft_injester. meant for API implementation; it currently includes additional logic that should be refactored in line with clean architecture.
+- data layer spread across
+  - rocks-db. Primary data source for the application. It contains the implementation of the database client and should be used for all persistent data storage, retrieval, and data manipulations.
+  - postgre-client. Secondary data source used exclusively for search indexes. The implementation here should focus on indexing and search-related operations to optimize query performance. Potentially this may be replaced with the SQLite to allow a self-contained and easy to deploy solution.
+
 ### Components
 1. Ingester -> A background processing system that gets messages from a [Messenger](https://github.com/metaplex-foundation/digital-asset-validator-plugin), and uses [BlockBuster](https://github.com/metaplex-foundation/blockbuster) Parsers to store the canonical representation of Metaplex types in a storage system. This system also holds the re-articulated Merkle tree that supports the compressed NFTs system.
-2. Api -> A JSON Rpc api that serves Metaplex objects. This api allows filtering, pagination and searching over Metaplex data. This data includes serving the merkle proofs for the compressed NFTs system. It is intended to be run right alongside the Solana RPC and works in much the same way. Just like the solana RPC takes data from the validator and serves it in a new format, so this api takes data off the validator and serves it.
+2. Ingester -> Api -> A JSON Rpc api that serves Metaplex objects. This api allows filtering, pagination and searching over Metaplex data. This data includes serving the merkle proofs for the compressed NFTs system. It is intended to be run right alongside the Solana RPC and works in much the same way. Just like the solana RPC takes data from the validator and serves it in a new format, so this api takes data off the validator and serves it.
 
 The API specification is located here https://github.com/metaplex-foundation/api-specifications
 This spec is what providers of this api must implement against.
+
 
 ### Infrastructure and Deployment Examples
 Along with the above rust binaries, this repo also maintains examples and best practice settings for running the entire infrastructure. 

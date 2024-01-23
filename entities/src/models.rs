@@ -1,9 +1,9 @@
 use crate::enums::{
-    OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TokenStandard,
-    UseMethod,
+    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
+    TokenStandard, UseMethod,
 };
 use serde::{Deserialize, Serialize};
-use solana_sdk::{hash::Hash, pubkey::Pubkey};
+use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
 
 // AssetIndex is the struct that is stored in the postgres database and is used to query the asset pubkeys.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -111,6 +111,8 @@ pub struct ChainDataV1 {
     pub token_standard: Option<TokenStandard>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uses: Option<Uses>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain_mutability: Option<ChainMutability>, // TODO: move this feild to AssetDynamicDetails struct
 }
 
 impl ChainDataV1 {
@@ -160,4 +162,18 @@ impl<T> Updated<T> {
             value,
         }
     }
+}
+
+#[derive(Clone)]
+pub struct BufferedTransaction {
+    pub transaction: Vec<u8>,
+    // this flag tells if the transaction should be mapped from extrnode flatbuffer to mplx flatbuffer structure
+    // data from geyser should be mapped and data from BG should not
+    pub map_flatbuffer: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SignatureWithSlot {
+    pub signature: Signature,
+    pub slot: u64,
 }

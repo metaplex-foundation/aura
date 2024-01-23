@@ -10,15 +10,16 @@ use blockbuster::{
     },
 };
 use chrono::Utc;
+use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
-use log::{error, warn};
+use log::{debug, error, warn};
 use plerkle_serialization::AccountInfo;
 use solana_sdk::pubkey::Pubkey;
 use utils::flatbuffer::account_data_generated::account_data::root_as_account_data;
 
 use rocks_db::columns::{Mint, TokenAccount};
 
-use crate::buffer::{Buffer, BufferedTransaction};
+use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
 use crate::mplx_updates_processor::MetadataInfo;
@@ -92,8 +93,6 @@ impl MessageHandler {
             == blockbuster::programs::token_metadata::token_metadata_id().to_bytes()
         {
             self.handle_token_metadata_account(&account_info).await?;
-        } else {
-            warn!("Received account with unknown owner: {:?}", account_owner);
         }
 
         Ok(())
@@ -114,7 +113,7 @@ impl MessageHandler {
                         self.write_spl_accounts_models_to_buffer(account_info, parsing_result)
                             .await
                     }
-                    _ => warn!("\nUnexpected message\n"),
+                    _ => debug!("\nUnexpected message\n"),
                 };
             }
             Err(e) => {
@@ -181,7 +180,7 @@ impl MessageHandler {
                     mints.insert(key_bytes, mint_acc_model);
                 }
             }
-            _ => warn!("Not implemented"),
+            _ => debug!("Not implemented"),
         };
     }
 
@@ -225,10 +224,10 @@ impl MessageHandler {
                                     );
                                 }
                             }
-                            _ => warn!("Not implemented"),
+                            _ => debug!("Not implemented"),
                         };
                     }
-                    _ => warn!("\nUnexpected message\n"),
+                    _ => debug!("\nUnexpected message\n"),
                 };
             }
             Err(e) => {

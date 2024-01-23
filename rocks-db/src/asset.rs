@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bincode::{deserialize, serialize};
 use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::Updated;
@@ -9,6 +11,18 @@ use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
 use crate::Result;
 use crate::TypedColumn;
+
+#[derive(Debug)]
+pub struct AssetSelectedMaps {
+    pub assets_static: HashMap<Pubkey, AssetStaticDetails>,
+    pub assets_dynamic: HashMap<Pubkey, AssetDynamicDetails>,
+    pub assets_authority: HashMap<Pubkey, AssetAuthority>,
+    pub assets_collection: HashMap<Pubkey, AssetCollection>,
+    pub assets_owner: HashMap<Pubkey, AssetOwner>,
+    pub assets_leaf: HashMap<Pubkey, AssetLeaf>,
+    pub offchain_data: HashMap<String, crate::offchain_data::OffChainData>,
+    pub urls: HashMap<String, String>,
+}
 
 // The following structures are used to store the asset data in the rocksdb database. The data is spread across multiple columns based on the update pattern.
 // The final representation of the asset should be reconstructed by querying the database for the asset and its associated columns.
@@ -486,7 +500,7 @@ impl AssetCollection {
 // AssetsUpdateIdx is a column family that is used to query the assets that were updated in (or after) a particular slot.
 // The key is a concatenation of the slot and the asset pubkey.
 // This will be used in the batch updater to the secondary index database. The batches should be constructed based on the slot, with an overlap of 1 slot including the last processed slot.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AssetsUpdateIdx {}
 
 impl TypedColumn for AssetsUpdateIdx {
@@ -503,7 +517,7 @@ impl TypedColumn for AssetsUpdateIdx {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SlotAssetIdx {}
 
 impl TypedColumn for SlotAssetIdx {
