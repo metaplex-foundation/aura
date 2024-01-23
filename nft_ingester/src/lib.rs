@@ -10,7 +10,6 @@ pub mod gapfiller;
 pub mod index_syncronizer;
 pub mod init;
 pub mod json_downloader;
-pub mod json_migrator;
 pub mod message_handler;
 pub mod mplx_updates_processor;
 pub mod tcp_receiver;

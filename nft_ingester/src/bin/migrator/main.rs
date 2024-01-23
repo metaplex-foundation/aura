@@ -1,148 +1,289 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use log::error;
-use sqlx::{QueryBuilder, Row};
-use tokio::sync::{Mutex, Semaphore};
-use tokio::task::JoinSet;
-use tokio::time::Instant;
+use log::{error, info};
+use metrics_utils::utils::start_metrics;
+use metrics_utils::{
+    ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
+    JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig,
+    SynchronizerMetricsConfig,
+};
+use tokio::sync::{oneshot, Mutex};
+use tokio::task::{JoinError, JoinSet};
 
 use nft_ingester::config::{setup_config, IngesterConfig};
-use nft_ingester::db_v2::DBClient;
+use nft_ingester::db_v2::{DBClient, Task};
 use nft_ingester::error::IngesterError;
+use nft_ingester::init::graceful_stop;
 use rocks_db::offchain_data::OffChainData;
-use rocks_db::Storage;
+use rocks_db::{AssetDynamicDetails, Storage};
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
     let config: IngesterConfig = setup_config();
     let database_pool = DBClient::new(&config.database_config.clone()).await?;
+    let pg_client = Arc::new(database_pool);
+
+    let mut metrics_state = MetricState::new(
+        IngesterMetricsConfig::new(),
+        ApiMetricsConfig::new(),
+        JsonDownloaderMetricsConfig::new(),
+        BackfillerMetricsConfig::new(),
+        RpcBackfillerMetricsConfig::new(),
+        SynchronizerMetricsConfig::new(),
+        JsonMigratorMetricsConfig::new(),
+    );
+    metrics_state.register_metrics();
+    start_metrics(
+        metrics_state.registry,
+        config.get_metrics_port(config.consumer_number)?,
+    )
+    .await;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+    let keep_running = Arc::new(AtomicBool::new(true));
 
     let storage = Storage::open(
         &config
             .rocks_db_path_container
             .clone()
             .unwrap_or("./my_rocksdb".to_string()),
-        Arc::new(Mutex::new(JoinSet::new())),
+        mutexed_tasks.clone(),
     )
     .unwrap();
 
-    let rocks_db = Arc::new(storage);
+    let target_storage = Arc::new(storage);
 
-    migrate_data(
-        database_pool.clone(),
-        rocks_db.clone(),
-        config.migration_batch_size.unwrap_or(50_000),
-        config.migrator_workers.unwrap_or(10),
+    let source_storage = Storage::open(
+        &config.json_source_db.as_ref().unwrap(),
+        mutexed_tasks.clone(),
     )
-    .await?;
+    .unwrap();
+    let source_storage = Arc::new(source_storage);
+
+    let json_migrator = JsonMigrator::new(
+        pg_client.clone(),
+        source_storage.clone(),
+        target_storage.clone(),
+        metrics_state.json_migrator_metrics.clone(),
+    );
+
+    let cloned_keep_running = keep_running.clone();
+    let cloned_tasks = mutexed_tasks.clone();
+
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        json_migrator.run(cloned_keep_running, cloned_tasks).await;
+    }));
+
+    // info!("JSONs to migrate: {:?}", self.source_rocks_db.asset_offchain_data.iter_start().count());
+
+    // useless thing in this context
+    let (shutdown_tx, _shutdown_rx) = oneshot::channel::<()>();
+
+    graceful_stop(mutexed_tasks, keep_running.clone(), shutdown_tx, None, None).await;
 
     Ok(())
 }
 
-#[derive(Clone)]
-pub struct MigrateJson {
-    pub pubkey: i64,
-    pub metadata_url: String,
-    pub metadata: String,
+pub struct JsonMigrator {
+    pub database_pool: Arc<DBClient>,
+    pub source_rocks_db: Arc<Storage>,
+    pub target_rocks_db: Arc<Storage>,
+    pub metrics: Arc<JsonMigratorMetricsConfig>,
 }
 
-async fn migrate_data(
-    pg_pool: DBClient,
-    rocks_db: Arc<Storage>,
-    limit: u32,
-    max_concurrent_tasks: u32,
-) -> Result<(), IngesterError> {
-    let mut last_id = 0;
-    let semaphore = Arc::new(Semaphore::new(max_concurrent_tasks as usize));
-
-    loop {
-        let mut query = QueryBuilder::new(
-            "SELECT
-                ofd_pubkey,
-                ofd_metadata_url,
-                ofd_metadata
-             FROM offchain_data
-             WHERE ofd_pubkey > ",
-        );
-
-        query.push_bind(last_id);
-        query.push(" ORDER BY ofd_pubkey LIMIT ");
-        query.push_bind(limit as i64);
-
-        let query = query.build();
-        let select_tine = Instant::now();
-
-        let rows = query
-            .fetch_all(&pg_pool.pool)
-            .await
-            .map_err(|err| IngesterError::DatabaseError(format!("Get old db batch: {}", err)))?;
-
-        let metadata: Vec<MigrateJson> = rows
-            .iter()
-            .map(|q| MigrateJson {
-                pubkey: q.get("ofd_pubkey"),
-                metadata_url: q.get("ofd_metadata_url"),
-                metadata: q.get("ofd_metadata"),
-            })
-            .collect();
-
-        println!(
-            "select items: {}, time elapsed ms: {}, limit: {}, last_id: {:?}",
-            metadata.len(),
-            select_tine.elapsed().as_millis(),
-            limit,
-            last_id.clone(),
-        );
-
-        if metadata.is_empty() {
-            println!("FINAL");
-            break;
+impl JsonMigrator {
+    pub fn new(
+        database_pool: Arc<DBClient>,
+        source_rocks_db: Arc<Storage>,
+        target_rocks_db: Arc<Storage>,
+        metrics: Arc<JsonMigratorMetricsConfig>,
+    ) -> Self {
+        Self {
+            database_pool,
+            source_rocks_db,
+            target_rocks_db,
+            metrics,
         }
-
-        let mut tasks = Vec::new();
-
-        let insert_tine = Instant::now();
-
-        for m in &metadata.clone() {
-            let permit = semaphore.clone().acquire_owned().await.unwrap();
-
-            let m = m.to_owned();
-            let rocks_clone = rocks_db.clone();
-            tasks.push(tokio::spawn(async move {
-                let _permit = permit;
-
-                if &m.metadata == "processing" {
-                    return;
-                }
-                match rocks_clone.asset_offchain_data.put(
-                    m.metadata_url.clone(),
-                    OffChainData {
-                        url: m.metadata_url.clone(),
-                        metadata: m.metadata.clone(),
-                    },
-                ) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!("offchain_data.put: {}", e)
-                    }
-                };
-            }));
-        }
-
-        for task in tasks {
-            task.await.unwrap_or_else(|e| error!("{}", e));
-        }
-
-        println!(
-            "insert time elapsed ms: {}",
-            insert_tine.elapsed().as_millis()
-        );
-
-        last_id = match metadata.last() {
-            None => 0,
-            Some(asset) => asset.clone().pubkey,
-        };
     }
 
-    Ok(())
+    pub async fn run(
+        &self,
+        keep_running: Arc<AtomicBool>,
+        tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
+    ) {
+        info!("Start migrate JSONs...");
+        self.migrate_jsons(keep_running.clone()).await;
+
+        info!("JSONs are migrated. Start setting tasks...");
+
+        self.set_tasks(keep_running, tasks).await;
+
+        info!("Tasks are set!");
+    }
+
+    pub async fn migrate_jsons(&self, keep_running: Arc<AtomicBool>) {
+        let all_available_jsons = self.source_rocks_db.asset_offchain_data.iter_end();
+
+        for json in all_available_jsons {
+            if !keep_running.load(Ordering::SeqCst) {
+                info!("JSON migrator is stopped");
+                break;
+            }
+
+            match json {
+                Ok((_key, value)) => {
+                    let metadata = bincode::deserialize::<OffChainData>(&value);
+
+                    match metadata {
+                        Ok(metadata) => {
+                            match self
+                                .target_rocks_db
+                                .asset_offchain_data
+                                .put(metadata.url.clone(), metadata)
+                            {
+                                Ok(_) => {
+                                    self.metrics
+                                        .inc_jsons_migrated("json_migrated", MetricStatus::SUCCESS);
+                                }
+                                Err(e) => {
+                                    self.metrics
+                                        .inc_jsons_migrated("json_migrated", MetricStatus::FAILURE);
+                                    error!("offchain_data.put: {}", e)
+                                }
+                            };
+                        }
+                        Err(e) => {
+                            self.metrics
+                                .inc_jsons_migrated("json_migrated", MetricStatus::FAILURE);
+                            error!("bincode::deserialize: {}", e)
+                        }
+                    }
+                }
+                Err(e) => {
+                    self.metrics
+                        .inc_jsons_migrated("json_migrated", MetricStatus::FAILURE);
+                    error!("offchain_data.iter_end: {}", e)
+                }
+            }
+        }
+    }
+
+    pub async fn set_tasks(
+        &self,
+        keep_running: Arc<AtomicBool>,
+        tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
+    ) {
+        let dynamic_asset_details = self.target_rocks_db.asset_dynamic_data.iter_end();
+
+        let mut tasks_buffer = Arc::new(Mutex::new(Vec::new()));
+
+        let cloned_keep_running = keep_running.clone();
+        let cloned_tasks_buffer = tasks_buffer.clone();
+        let cloned_pg_client = self.database_pool.clone();
+        let cloned_metrics = self.metrics.clone();
+
+        let tasks_batch_to_insert = 1000;
+
+        tasks.lock().await.spawn(tokio::spawn(async move {
+            loop {
+                if !cloned_keep_running.load(Ordering::SeqCst) {
+                    info!("Worker to clean tasks buffer is stopped");
+                    return;
+                }
+
+                let mut tasks_buffer = cloned_tasks_buffer.lock().await;
+
+                if tasks_buffer.is_empty() {
+                    drop(tasks_buffer);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                    continue;
+                }
+
+                let end_point = {
+                    if tasks_buffer.len() < tasks_batch_to_insert {
+                        tasks_buffer.len()
+                    } else {
+                        tasks_batch_to_insert
+                    }
+                };
+
+                let tasks_to_insert = tasks_buffer.drain(0..end_point).collect::<Vec<Task>>();
+
+                drop(tasks_buffer);
+
+                let res = cloned_pg_client.insert_tasks(&tasks_to_insert).await;
+                match res {
+                    Ok(_) => {
+                        cloned_metrics.inc_tasks_set(
+                            "tasks_set",
+                            MetricStatus::SUCCESS,
+                            tasks_to_insert.len() as u64,
+                        );
+                    }
+                    Err(e) => {
+                        cloned_metrics.inc_tasks_set(
+                            "tasks_set",
+                            MetricStatus::FAILURE,
+                            tasks_to_insert.len() as u64,
+                        );
+                        error!("insert_tasks: {}", e)
+                    }
+                }
+            }
+        }));
+
+        for dynamic_details in dynamic_asset_details {
+            if !keep_running.load(Ordering::SeqCst) {
+                info!("Setting tasks for JSONs is stopped");
+                break;
+            }
+
+            match dynamic_details {
+                Ok((_key, value)) => {
+                    let dynamic_details = bincode::deserialize::<AssetDynamicDetails>(&value);
+
+                    match dynamic_details {
+                        Ok(data) => {
+                            let downloaded_json = self
+                                .target_rocks_db
+                                .asset_offchain_data
+                                .get(data.url.value.clone());
+
+                            if let Err(e) = downloaded_json {
+                                error!("asset_offchain_data.get: {}", e);
+                                continue;
+                            }
+
+                            match downloaded_json.unwrap() {
+                                Some(_data) => {}
+                                None => {
+                                    let task = Task {
+                                        ofd_metadata_url: data.url.value.clone(),
+                                        ofd_locked_until: None,
+                                        ofd_attempts: 0,
+                                        ofd_max_attempts: 10,
+                                        ofd_error: None,
+                                    };
+
+                                    let mut buff = tasks_buffer.lock().await;
+
+                                    buff.push(task);
+
+                                    self.metrics
+                                        .set_tasks_buffer("tasks_buffer", buff.len() as i64);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("bincode::deserialize: {}", e)
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("asset_dynamic_data.iter_end: {}", e)
+                }
+            }
+        }
+    }
 }
