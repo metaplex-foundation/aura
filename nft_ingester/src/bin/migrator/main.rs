@@ -16,7 +16,7 @@ use nft_ingester::db_v2::{DBClient, Task};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use rocks_db::offchain_data::OffChainData;
-use rocks_db::{AssetDynamicDetails, Storage};
+use rocks_db::{AssetDynamicDetails, Storage, StorageLegacy};
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
@@ -59,7 +59,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let target_storage = Arc::new(storage);
 
-    let source_storage = Storage::open(
+    let source_storage = StorageLegacy::open(
         &config.json_source_db.as_ref().unwrap(),
         mutexed_tasks.clone(),
     )
@@ -90,7 +90,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
 pub struct JsonMigrator {
     pub database_pool: Arc<DBClient>,
-    pub source_rocks_db: Arc<Storage>,
+    pub source_rocks_db: Arc<StorageLegacy>,
     pub target_rocks_db: Arc<Storage>,
     pub metrics: Arc<JsonMigratorMetricsConfig>,
 }
@@ -98,7 +98,7 @@ pub struct JsonMigrator {
 impl JsonMigrator {
     pub fn new(
         database_pool: Arc<DBClient>,
-        source_rocks_db: Arc<Storage>,
+        source_rocks_db: Arc<StorageLegacy>,
         target_rocks_db: Arc<Storage>,
         metrics: Arc<JsonMigratorMetricsConfig>,
     ) -> Self {
