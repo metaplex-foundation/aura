@@ -28,6 +28,7 @@ mod tests {
             metrics,
             1,
             [slot].to_vec(),
+            Arc::new(AtomicBool::new(true)),
         )
         .await
         .unwrap();

@@ -330,15 +330,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_multiple_slot_updates() {
+    #[tokio::test]
+    async fn test_multiple_slot_updates() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let pk = Pubkey::new_unique();
         let dynamic_data = create_test_dynamic_data(pk, 0, "http://example.com".to_string());
 
         storage
             .asset_dynamic_data
-            .merge(dynamic_data.pubkey, &dynamic_data)
+            .merge(dynamic_data.pubkey, dynamic_data.clone())
+            .await
             .unwrap();
 
         let new_data = AssetDynamicDetails {
@@ -350,7 +351,8 @@ mod tests {
         };
         storage
             .asset_dynamic_data
-            .merge(dynamic_data.pubkey, &new_data)
+            .merge(dynamic_data.pubkey, new_data)
+            .await
             .unwrap();
 
         let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
@@ -367,7 +369,8 @@ mod tests {
         };
         storage
             .asset_dynamic_data
-            .merge(dynamic_data.pubkey, &new_data)
+            .merge(dynamic_data.pubkey, new_data)
+            .await
             .unwrap();
 
         let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
@@ -382,7 +385,8 @@ mod tests {
         };
         storage
             .asset_dynamic_data
-            .merge(dynamic_data.pubkey, &new_data)
+            .merge(dynamic_data.pubkey, new_data)
+            .await
             .unwrap();
 
         let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();

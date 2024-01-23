@@ -5,7 +5,7 @@ use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
 use futures::future::join_all;
 use interface::error::StorageError;
-use interface::signature_persistence::{BlockConsumer, BlockProducer, TransactionIngester};
+use interface::signature_persistence::{BlockConsumer, BlockProducer};
 use log::{error, info, warn};
 use metrics_utils::{BackfillerMetricsConfig, MetricStatus};
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
@@ -13,6 +13,7 @@ use rocks_db::bubblegum_slots::{
     bubblegum_slots_key_to_value, form_bubblegum_slots_key, BubblegumSlots,
 };
 use rocks_db::column::TypedColumn;
+use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
 use solana_bigtable_connection::{bigtable::BigTableConnection, CredentialType};
 use solana_sdk::clock::Slot;
 use solana_storage_bigtable::LedgerStorage;
@@ -539,27 +540,39 @@ where
 }
 
 #[derive(Clone)]
-pub struct DirectBlockParser<T>
+pub struct DirectBlockParser<T, P>
 where
-    T: TransactionIngester,
+    T: TransactionProcessor,
+    P: TransactionResultPersister,
 {
     ingester: Arc<T>,
+    persister: Arc<P>,
     metrics: Arc<BackfillerMetricsConfig>,
 }
 
-impl<T> DirectBlockParser<T>
+impl<T, P> DirectBlockParser<T, P>
 where
-    T: TransactionIngester,
+    T: TransactionProcessor,
+    P: TransactionResultPersister,
 {
-    pub fn new(ingester: Arc<T>, metrics: Arc<BackfillerMetricsConfig>) -> DirectBlockParser<T> {
-        DirectBlockParser { ingester, metrics }
+    pub fn new(
+        ingester: Arc<T>,
+        persister: Arc<P>,
+        metrics: Arc<BackfillerMetricsConfig>,
+    ) -> DirectBlockParser<T, P> {
+        DirectBlockParser {
+            ingester,
+            persister,
+            metrics,
+        }
     }
 }
 
 #[async_trait]
-impl<T> BlockConsumer for DirectBlockParser<T>
+impl<T, P> BlockConsumer for DirectBlockParser<T, P>
 where
-    T: TransactionIngester,
+    T: TransactionProcessor,
+    P: TransactionResultPersister,
 {
     async fn consume_block(
         &self,
@@ -570,6 +583,7 @@ where
             return Ok(());
         }
         let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
+        let mut results = Vec::new();
         for tx in txs.iter() {
             if !is_bubblegum_transaction_encoded(tx) {
                 continue;
@@ -598,11 +612,11 @@ where
             };
             match self
                 .ingester
-                .ingest_transaction(tx.clone())
-                .await
+                .get_ingest_transaction_results(tx.clone())
                 .map_err(|e| e.to_string())
             {
-                Ok(_) => {
+                Ok(r) => {
+                    results.push(r);
                     self.metrics.inc_data_processed("backfiller_tx_processed");
                 }
                 Err(e) => {
@@ -616,7 +630,21 @@ where
                 }
             };
         }
-        self.metrics.inc_data_processed("backfiller_slot_processed");
+        match self
+            .persister
+            .store_block(results)
+            .await
+            .map_err(|e| e.to_string())
+        {
+            Ok(_) => {
+                self.metrics.inc_data_processed("backfiller_slot_processed");
+            }
+            Err(e) => {
+                error!("Failed to persist block {}: {}", slot, e);
+                self.metrics
+                    .inc_data_processed("backfiller_slot_processed_failed");
+            }
+        };
 
         Ok(())
     }

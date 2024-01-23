@@ -121,7 +121,11 @@ pub async fn main() -> Result<(), IngesterError> {
                 bubblegum_updates_processor.clone(),
             ));
 
-            let consumer = Arc::new(DirectBlockParser::new(tx_ingester.clone(), metrics.clone()));
+            let consumer = Arc::new(DirectBlockParser::new(
+                tx_ingester.clone(),
+                rocks_storage.clone(),
+                metrics.clone(),
+            ));
             let producer = rocks_storage.clone();
 
             let transactions_parser = Arc::new(TransactionsParser::new(
