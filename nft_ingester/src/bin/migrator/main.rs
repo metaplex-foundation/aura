@@ -39,11 +39,7 @@ pub async fn main() -> Result<(), IngesterError> {
         JsonMigratorMetricsConfig::new(),
     );
     metrics_state.register_metrics();
-    start_metrics(
-        metrics_state.registry,
-        config.metrics_port_first_consumer,
-    )
-    .await;
+    start_metrics(metrics_state.registry, config.metrics_port_first_consumer).await;
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
     let keep_running = Arc::new(AtomicBool::new(true));
