@@ -292,8 +292,16 @@ where
         }
     }
 
-    pub async fn parse_raw_transactions(&self, keep_running: Arc<AtomicBool>, permits: usize) {
-        let slots_to_parse_iter = self.rocks_client.raw_blocks_cbor.iter_start();
+    pub async fn parse_raw_transactions(
+        &self,
+        keep_running: Arc<AtomicBool>,
+        permits: usize,
+        start_slot: Option<u64>,
+    ) {
+        let slots_to_parse_iter = match start_slot {
+            Some(slot) => self.rocks_client.raw_blocks_cbor.iter(slot),
+            None => self.rocks_client.raw_blocks_cbor.iter_start(),
+        };
         let cnt = AtomicU64::new(0);
         let mut slots_to_parse_vec = Vec::new();
         let semaphore = Arc::new(tokio::sync::Semaphore::new(permits));
@@ -596,11 +604,25 @@ where
                 transaction: tx,
                 map_flatbuffer: false,
             };
-            self.ingester
-                .ingest_transaction(tx)
+            match self
+                .ingester
+                .ingest_transaction(tx.clone())
                 .await
-                .map_err(|e| e.to_string())?;
-            self.metrics.inc_data_processed("backfiller_tx_processed");
+                .map_err(|e| e.to_string())
+            {
+                Ok(_) => {
+                    self.metrics.inc_data_processed("backfiller_tx_processed");
+                }
+                Err(e) => {
+                    let signature =
+                        plerkle_serialization::root_as_transaction_info(tx.transaction.as_slice())
+                            .map(|parsed_tx| parsed_tx.signature().unwrap_or_default())
+                            .unwrap_or_default();
+                    error!("Failed to ingest transaction {}: {}", signature, e);
+                    self.metrics
+                        .inc_data_processed("backfiller_tx_processed_failed");
+                }
+            };
         }
         self.metrics.inc_data_processed("backfiller_slot_processed");
 

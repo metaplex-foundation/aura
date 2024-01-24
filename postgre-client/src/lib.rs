@@ -1,3 +1,4 @@
+use entities::enums::TaskStatus;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     ConnectOptions, PgPool, Postgres, QueryBuilder, Row, Transaction,
@@ -42,17 +43,18 @@ impl PgClient {
         Self { pool }
     }
 
-    pub async fn insert_metadata(
+    pub async fn insert_tasks(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         metadata_urls: Vec<String>,
     ) -> Result<(), String> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("INSERT INTO metadata (mtd_url) ");
+            QueryBuilder::new("INSERT INTO tasks (tsk_metadata_url, tsk_status) ");
         query_builder.push_values(metadata_urls.iter(), |mut builder, metadata_url| {
             builder.push_bind(metadata_url);
+            builder.push_bind(TaskStatus::Pending);
         });
-        query_builder.push(" ON CONFLICT (mtd_url) DO NOTHING;");
+        query_builder.push(" ON CONFLICT (tsk_metadata_url) DO NOTHING;");
 
         let query = query_builder.build();
         query
@@ -63,13 +65,14 @@ impl PgClient {
         Ok(())
     }
 
-    pub async fn get_metadata_ids(
+    pub async fn get_tasks_ids(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         metadata_urls: Vec<String>,
     ) -> Result<HashMap<String, i64>, String> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("SELECT mtd_id, mtd_url FROM metadata WHERE mtd_url in (");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "SELECT tsk_id, tsk_metadata_url FROM tasks WHERE tsk_metadata_url in (",
+        );
 
         let urls_len = metadata_urls.len();
 
@@ -91,8 +94,8 @@ impl PgClient {
         let mut metadata_ids_map = HashMap::new();
 
         for row in rows_result {
-            let metadata_id: i64 = row.get("mtd_id");
-            let metadata_url: String = row.get("mtd_url");
+            let metadata_id: i64 = row.get("tsk_id");
+            let metadata_url: String = row.get("tsk_metadata_url");
 
             metadata_ids_map.insert(metadata_url, metadata_id);
         }

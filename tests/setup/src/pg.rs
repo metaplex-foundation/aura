@@ -64,7 +64,7 @@ impl<'a> TestEnvironment<'a> {
     }
 
     pub async fn count_rows_in_metadata(&self) -> Result<i64, sqlx::Error> {
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM metadata")
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tasks")
             .fetch_one(&self.pool)
             .await?;
 
