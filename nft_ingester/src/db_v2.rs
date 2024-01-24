@@ -48,7 +48,7 @@ impl DBClient {
                 .map_err(|err| IngesterError::ConfigurationError {
                     msg: format!("URL parse: {}", err),
                 })?;
-        options.log_statements(log::LevelFilter::Trace);
+        options.log_statements(log::LevelFilter::Off);
 
         options.log_slow_statements(
             log::LevelFilter::Debug,
