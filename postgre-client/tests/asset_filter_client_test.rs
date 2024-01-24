@@ -87,7 +87,10 @@ mod tests {
             royalty_target: Some(ref_value.creators[0].creator.to_bytes().to_vec()),
             royalty_amount: Some(ref_value.royalty_amount as u32),
             burnt: Some(ref_value.is_burnt),
-            json_uri: ref_value.metadata_url.clone(),
+            json_uri: ref_value
+                .metadata_url
+                .clone()
+                .map(|url_with_status| url_with_status.metadata_url),
         };
         let order: AssetSorting = AssetSorting {
             sort_by: AssetSortBy::SlotUpdated,
@@ -169,7 +172,10 @@ mod tests {
         let res = asset_filter_storage
             .get_asset_pubkeys_filtered(
                 &SearchAssetsFilter {
-                    json_uri: ref_value.metadata_url.clone(),
+                    json_uri: ref_value
+                        .metadata_url
+                        .clone()
+                        .map(|url_with_status| url_with_status.metadata_url),
                     ..Default::default()
                 },
                 &order,
@@ -217,7 +223,10 @@ mod tests {
         let res = asset_filter_storage
             .get_asset_pubkeys_filtered(
                 &SearchAssetsFilter {
-                    json_uri: ref_value.metadata_url.clone(),
+                    json_uri: ref_value
+                        .metadata_url
+                        .clone()
+                        .map(|url_with_status| url_with_status.metadata_url),
                     ..Default::default()
                 },
                 &order,

@@ -14,6 +14,9 @@ use crate::error::IngesterError;
 const INGESTER_CONSUMERS_COUNT: usize = 2;
 pub const INGESTER_BACKUP_NAME: &str = "snapshot.tar.lz4";
 
+pub const INGESTER_CONFIG_PREFIX: &str = "INGESTER_";
+pub const JSON_MIGRATOR_CONFIG_PREFIX: &str = "JSON_MIGRATOR_";
+
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct BackgroundTaskRunnerConfig {
     pub delete_interval: Option<u64>,
@@ -129,11 +132,34 @@ pub struct IngesterConfig {
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
     pub rust_log: Option<String>,
-    pub sql_log_level: Option<String>,
     pub backfill_rpc_address: String,
     pub run_profiling: Option<bool>,
     pub profiling_file_path_container: Option<String>,
     pub store_db_backups: Option<bool>,
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct JsonMigratorConfig {
+    pub rust_log: Option<String>,
+    pub json_source_db: String,
+    pub json_target_db: String,
+    pub database_config: DatabaseConfig,
+    pub metrics_port: u16,
+    pub work_mode: JsonMigratorMode,
+}
+
+#[derive(Deserialize, Default, PartialEq, Debug, Clone)]
+pub enum JsonMigratorMode {
+    #[default]
+    Full,
+    JsonsOnly,
+    TasksOnly,
+}
+
+impl JsonMigratorConfig {
+    pub fn get_log_level(&self) -> String {
+        self.rust_log.clone().unwrap_or("warn".to_string())
+    }
 }
 
 fn default_log_level() -> String {
@@ -172,9 +198,6 @@ impl IngesterConfig {
 
     pub fn get_log_level(&self) -> String {
         self.rust_log.clone().unwrap_or("warn".to_string())
-    }
-    pub fn get_sql_log_level(&self) -> String {
-        self.sql_log_level.clone().unwrap_or("error".to_string())
     }
 
     pub fn get_is_run_profiling(&self) -> bool {
@@ -424,9 +447,9 @@ impl PeerDiscovery for IngesterConfig {
     }
 }
 
-pub fn setup_config<'a, T: Deserialize<'a>>() -> T {
+pub fn setup_config<'a, T: Deserialize<'a>>(config_prefix: &str) -> T {
     let figment = Figment::new()
-        .join(Env::prefixed("INGESTER_"))
+        .join(Env::prefixed(config_prefix))
         .join(Env::raw());
 
     figment
@@ -459,7 +482,7 @@ mod tests {
         std::env::set_var("INGESTER_TCP_CONFIG", "{}");
         std::env::set_var("INGESTER_BIG_TABLE_CONFIG", "{}");
         std::env::set_var("INGESTER_SLOT_START_FROM", "0");
-        let config: BackfillerConfig = setup_config();
+        let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
         assert_eq!(
             config,
             BackfillerConfig {
@@ -486,7 +509,7 @@ mod tests {
         std::env::set_var("INGESTER_BIG_TABLE_CONFIG", "{}");
         std::env::set_var("INGESTER_SLOT_START_FROM", "0");
         std::env::set_var("INGESTER_BACKFILLER_MODE", "Persist");
-        let config: BackfillerConfig = setup_config();
+        let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
         assert_eq!(
             config,
             BackfillerConfig {

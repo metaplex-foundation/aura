@@ -87,6 +87,7 @@ where
                 .data_layer
                 .missing_signatures(program_id, batch.to_vec())
                 .await?;
+            batch_start = batch_end;
             if missing_signatures.is_empty() {
                 continue;
             }
@@ -147,8 +148,6 @@ where
             self.data_layer
                 .drop_signatures_before(program_id, fake_key)
                 .await?;
-
-            batch_start = batch_end;
         }
         let fake_key = SignatureWithSlot {
             signature: Default::default(),

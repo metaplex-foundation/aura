@@ -9,7 +9,7 @@ use crate::column::TypedColumn;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
 use crate::storage_traits::{AssetIndexReader, AssetSlotStorage, AssetUpdateIndexStorage};
 use crate::{Result, Storage};
-use entities::models::AssetIndex;
+use entities::models::{AssetIndex, UrlWithStatus};
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<(u64, u64, Pubkey)>> {
@@ -133,7 +133,15 @@ impl AssetIndexReader for Storage {
                 existed_index.creators = dynamic_info.creators.clone().value;
                 existed_index.royalty_amount = dynamic_info.royalty_amount.value as i64;
                 existed_index.slot_updated = dynamic_info.get_slot_updated() as i64;
-                existed_index.metadata_url = Some(dynamic_info.url.value.clone());
+                existed_index.metadata_url = Some(UrlWithStatus {
+                    metadata_url: dynamic_info.url.value.clone(),
+                    is_downloaded: self
+                        .asset_offchain_data
+                        .get(dynamic_info.url.value.clone())
+                        .ok()
+                        .flatten()
+                        .is_some(),
+                });
             } else {
                 let asset_index = AssetIndex {
                     pubkey: dynamic_info.pubkey,
@@ -145,7 +153,15 @@ impl AssetIndexReader for Storage {
                     creators: dynamic_info.creators.clone().value,
                     royalty_amount: dynamic_info.royalty_amount.value as i64,
                     slot_updated: dynamic_info.get_slot_updated() as i64,
-                    metadata_url: Some(dynamic_info.url.value.clone()),
+                    metadata_url: Some(UrlWithStatus {
+                        metadata_url: dynamic_info.url.value.clone(),
+                        is_downloaded: self
+                            .asset_offchain_data
+                            .get(dynamic_info.url.value.clone())
+                            .ok()
+                            .flatten()
+                            .is_some(),
+                    }),
                     ..Default::default()
                 };
 

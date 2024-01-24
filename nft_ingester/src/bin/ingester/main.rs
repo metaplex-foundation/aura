@@ -15,12 +15,15 @@ use interface::signature_persistence::ProcessingDataGetter;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
     ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
-    MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig, SynchronizerMetricsConfig,
+    JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig,
+    SynchronizerMetricsConfig,
 };
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
-use nft_ingester::config::{setup_config, BackfillerConfig, IngesterConfig, INGESTER_BACKUP_NAME};
+use nft_ingester::config::{
+    setup_config, BackfillerConfig, IngesterConfig, INGESTER_BACKUP_NAME, INGESTER_CONFIG_PREFIX,
+};
 use nft_ingester::db_v2::DBClient as DBClientV2;
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::graceful_stop;
@@ -52,7 +55,7 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Starting Ingester");
     let args = Args::parse();
 
-    let config: IngesterConfig = setup_config();
+    let config: IngesterConfig = setup_config(INGESTER_CONFIG_PREFIX);
     init_logger(&config.get_log_level());
 
     let mut guard = None;
@@ -72,6 +75,7 @@ pub async fn main() -> Result<(), IngesterError> {
         BackfillerMetricsConfig::new(),
         RpcBackfillerMetricsConfig::new(),
         SynchronizerMetricsConfig::new(),
+        JsonMigratorMetricsConfig::new(),
     );
     metrics_state.register_metrics();
     start_metrics(
@@ -299,7 +303,7 @@ pub async fn main() -> Result<(), IngesterError> {
     ));
 
     if config.run_bubblegum_backfiller {
-        let config: BackfillerConfig = setup_config();
+        let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
 
         let big_table_client = Arc::new(
             backfiller::BigTableClient::connect_new_from_config(config.clone())
@@ -365,7 +369,11 @@ pub async fn main() -> Result<(), IngesterError> {
                     info!("Running transactions parser...");
 
                     transactions_parser
-                        .parse_raw_transactions(cloned_keep_running, config.permitted_tasks)
+                        .parse_raw_transactions(
+                            cloned_keep_running,
+                            config.permitted_tasks,
+                            config.slot_until,
+                        )
                         .await;
                 }));
 
@@ -385,7 +393,6 @@ pub async fn main() -> Result<(), IngesterError> {
     let index_storage = Arc::new(
         PgClient::new(
             &config.database_config.get_database_url().unwrap(),
-            &config.get_sql_log_level(),
             100,
             max_postgre_connections,
         )

@@ -1,5 +1,5 @@
 use entities::enums::*;
-use entities::models::{AssetIndex, Creator};
+use entities::models::{AssetIndex, Creator, UrlWithStatus};
 use postgre_client::storage_traits::AssetIndexStorage;
 use postgre_client::PgClient;
 use rand::Rng;
@@ -64,7 +64,7 @@ impl<'a> TestEnvironment<'a> {
     }
 
     pub async fn count_rows_in_metadata(&self) -> Result<i64, sqlx::Error> {
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM metadata")
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tasks")
             .fetch_one(&self.pool)
             .await?;
 
@@ -162,7 +162,10 @@ pub fn generate_asset_index_records(n: usize) -> Vec<AssetIndex> {
             is_compressed: false,
             is_frozen: false,
             supply: Some(1),
-            metadata_url: Some("https://www.google.com".to_string()),
+            metadata_url: Some(UrlWithStatus {
+                metadata_url: "https://www.google.com".to_string(),
+                is_downloaded: true,
+            }),
             slot_updated: (n + 10 + i) as i64,
             creators: vec![Creator {
                 creator: generate_random_pubkey(),

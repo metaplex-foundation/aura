@@ -5,6 +5,12 @@ use crate::enums::{
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Eq, Hash)]
+pub struct UrlWithStatus {
+    pub metadata_url: String,
+    pub is_downloaded: bool,
+}
+
 // AssetIndex is the struct that is stored in the postgres database and is used to query the asset pubkeys.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct AssetIndex {
@@ -28,7 +34,7 @@ pub struct AssetIndex {
     pub is_compressed: bool,
     pub is_frozen: bool,
     pub supply: Option<i64>,
-    pub metadata_url: Option<String>,
+    pub metadata_url: Option<UrlWithStatus>,
     pub slot_updated: i64,
 }
 

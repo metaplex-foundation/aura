@@ -74,7 +74,6 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                 config.testing_host.clone(),
                 PgClient::new(
                     &config.database_url.clone().unwrap(),
-                    &config.get_sql_log_level(),
                     100,
                     500,
                 )
