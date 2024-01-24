@@ -543,6 +543,12 @@ pub struct JsonMigratorMetricsConfig {
     tasks_set: Family<MetricLabelWithStatus, Counter>,
 }
 
+impl Default for JsonMigratorMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JsonMigratorMetricsConfig {
     pub fn new() -> Self {
         Self {
