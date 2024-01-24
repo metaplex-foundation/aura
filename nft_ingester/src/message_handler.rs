@@ -104,21 +104,16 @@ impl MessageHandler {
     ) -> Result<(), IngesterError> {
         let acc_parse_result = self.token_acc_parser.handle_account(account_info);
 
-        match acc_parse_result {
-            Ok(acc_parsed) => {
-                let concrete = acc_parsed.result_type();
+        if let Ok(acc_parsed) = acc_parse_result {
+            let concrete = acc_parsed.result_type();
 
-                match concrete {
-                    ProgramParseResult::TokenProgramAccount(parsing_result) => {
-                        self.write_spl_accounts_models_to_buffer(account_info, parsing_result)
-                            .await
-                    }
-                    _ => debug!("\nUnexpected message\n"),
-                };
-            }
-            Err(e) => {
-                warn!("Error while parsing account: {:?}", e);
-            }
+            match concrete {
+                ProgramParseResult::TokenProgramAccount(parsing_result) => {
+                    self.write_spl_accounts_models_to_buffer(account_info, parsing_result)
+                        .await
+                }
+                _ => debug!("\nUnexpected message\n"),
+            };
         }
 
         Ok(())
