@@ -123,9 +123,11 @@ pub enum RoyaltyModel {
     sqlx::Type,
     Copy,
     Clone,
+    Default,
 )]
 #[sqlx(type_name = "task_status", rename_all = "lowercase")]
 pub enum TaskStatus {
+    #[default]
     Pending,
     Running,
     Success,

@@ -244,6 +244,7 @@ impl MplxAccsProcessor {
                 ofd_attempts: 0,
                 ofd_max_attempts: 10,
                 ofd_error: None,
+                ..Default::default()
             });
 
             if let Some(c) = &metadata.collection {

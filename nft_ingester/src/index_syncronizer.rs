@@ -149,8 +149,8 @@ mod tests {
     use entities::models::AssetIndex;
     use metrics_utils::{
         ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig,
-        JsonDownloaderMetricsConfig, MetricState, MetricsTrait, RpcBackfillerMetricsConfig,
-        SynchronizerMetricsConfig,
+        JsonDownloaderMetricsConfig, JsonMigratorMetricsConfig, MetricState, MetricsTrait,
+        RpcBackfillerMetricsConfig, SynchronizerMetricsConfig,
     };
     use mockall;
     use postgre_client::storage_traits::MockAssetIndexStorage as MockIndexStorage;
@@ -198,6 +198,7 @@ mod tests {
             BackfillerMetricsConfig::new(),
             RpcBackfillerMetricsConfig::new(),
             SynchronizerMetricsConfig::new(),
+            JsonMigratorMetricsConfig::new(),
         );
         metrics_state.register_metrics();
 
@@ -234,6 +235,7 @@ mod tests {
             BackfillerMetricsConfig::new(),
             RpcBackfillerMetricsConfig::new(),
             SynchronizerMetricsConfig::new(),
+            JsonMigratorMetricsConfig::new(),
         );
         metrics_state.register_metrics();
 
@@ -301,6 +303,7 @@ mod tests {
             BackfillerMetricsConfig::new(),
             RpcBackfillerMetricsConfig::new(),
             SynchronizerMetricsConfig::new(),
+            JsonMigratorMetricsConfig::new(),
         );
         metrics_state.register_metrics();
 
@@ -378,6 +381,7 @@ mod tests {
             BackfillerMetricsConfig::new(),
             RpcBackfillerMetricsConfig::new(),
             SynchronizerMetricsConfig::new(),
+            JsonMigratorMetricsConfig::new(),
         );
         metrics_state.register_metrics();
 
@@ -494,6 +498,7 @@ mod tests {
             BackfillerMetricsConfig::new(),
             RpcBackfillerMetricsConfig::new(),
             SynchronizerMetricsConfig::new(),
+            JsonMigratorMetricsConfig::new(),
         );
         metrics_state.register_metrics();
 
