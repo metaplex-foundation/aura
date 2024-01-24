@@ -112,3 +112,22 @@ pub enum RoyaltyModel {
     #[serde(rename = "single")]
     Single,
 }
+
+#[derive(
+    serde_derive::Deserialize,
+    serde_derive::Serialize,
+    PartialEq,
+    Debug,
+    Eq,
+    Hash,
+    sqlx::Type,
+    Copy,
+    Clone,
+)]
+#[sqlx(type_name = "task_status", rename_all = "lowercase")]
+pub enum TaskStatus {
+    Pending,
+    Running,
+    Success,
+    Failed,
+}

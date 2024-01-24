@@ -46,11 +46,9 @@ impl AssetIndexStorage for PgClient {
 
         if !metadata_urls.is_empty() {
             metadata_urls.sort();
-            self.insert_metadata(&mut transaction, metadata_urls.clone())
+            self.insert_tasks(&mut transaction, metadata_urls.clone())
                 .await?;
-            metadata_url_map = self
-                .get_metadata_ids(&mut transaction, metadata_urls)
-                .await?;
+            metadata_url_map = self.get_tasks_ids(&mut transaction, metadata_urls).await?;
         }
 
         let mut asset_indexes = asset_indexes.to_vec();
