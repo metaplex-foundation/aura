@@ -56,7 +56,7 @@ where
         info!("Start fetching signatures...");
         let mut all_signatures = match self
             .rpc
-            .get_signatures_by_address(signature, program_id)
+            .get_signatures_by_address(signature.clone(), program_id)
             .await
             .map_err(|e| StorageError::Common(e.to_string()))
         {
@@ -76,8 +76,9 @@ where
             return Ok(());
         }
         info!(
-            "Fetched {} signatures since first persisted signature",
-            &all_signatures.len()
+            "Fetched {} signatures since first persisted signature {}",
+            &all_signatures.len(),
+            signature.signature
         );
 
         // we've got a list of signatures, potentially a huge one (10s of millions)
