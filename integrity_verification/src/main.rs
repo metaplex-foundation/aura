@@ -61,6 +61,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                 &mut tasks,
                 config.get_run_secondary_indexes_tests(),
                 config.get_run_proofs_tests(),
+                config.get_run_assets_tests(),
                 diff_checker,
                 metrics.integrity_verification_metrics.clone(),
                 cancel_token.clone(),
@@ -84,6 +85,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                 &mut tasks,
                 config.get_run_secondary_indexes_tests(),
                 config.get_run_proofs_tests(),
+                config.get_run_assets_tests(),
                 diff_checker,
                 metrics.integrity_verification_metrics.clone(),
                 cancel_token.clone(),
@@ -128,6 +130,7 @@ async fn run_tests<T>(
     tasks: &mut JoinSet<Result<(), JoinError>>,
     run_secondary_indexes_tests: bool,
     run_proofs_tests: bool,
+    run_assets_tests: bool,
     diff_checker: DiffChecker<T>,
     metrics: Arc<IntegrityVerificationMetricsConfig>,
     cancel_token: CancellationToken,
@@ -135,14 +138,16 @@ async fn run_tests<T>(
     T: IntegrityVerificationKeysFetcher + Send + Sync + 'static,
 {
     let diff_checker = Arc::new(diff_checker);
-    spawn_test!(
-        tasks,
-        diff_checker,
-        metrics,
-        check_get_asset,
-        GET_ASSET_METHOD,
-        cancel_token
-    );
+    if run_assets_tests {
+        spawn_test!(
+            tasks,
+            diff_checker,
+            metrics,
+            check_get_asset,
+            GET_ASSET_METHOD,
+            cancel_token
+        );
+    }
     if run_proofs_tests {
         spawn_test!(
             tasks,

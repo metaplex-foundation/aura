@@ -18,6 +18,7 @@ pub struct IntegrityVerificationConfig {
     pub sql_log_level: Option<String>,
     pub run_secondary_indexes_tests: Option<bool>,
     pub run_proofs_tests: Option<bool>,
+    pub run_assets_tests: Option<bool>,
     pub test_source_mode: TestSourceMode,
     pub test_file_path: Option<String>,
 }
@@ -31,6 +32,9 @@ impl IntegrityVerificationConfig {
     }
     pub fn get_run_proofs_tests(&self) -> bool {
         self.run_proofs_tests.unwrap_or_default()
+    }
+    pub fn get_run_assets_tests(&self) -> bool {
+        self.run_assets_tests.unwrap_or_default()
     }
 }
 
