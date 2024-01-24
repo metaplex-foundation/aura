@@ -31,7 +31,7 @@ pub struct JsonDownloadTask {
 
 pub struct UpdatedTask {
     pub status: TaskStatus,
-    pub metadata_url_key: String,
+    pub metadata_url: String,
     pub attempts: i16,
     pub error: String,
 }
@@ -69,7 +69,7 @@ impl DBClient {
             QueryBuilder::new("UPDATE tasks SET tsk_status = tmp.tsk_status, tsk_attempts = tmp.tsk_attempts, tsk_error = tmp.tsk_error FROM (");
 
         query_builder.push_values(data, |mut b, key| {
-            b.push_bind(key.metadata_url_key);
+            b.push_bind(key.metadata_url);
             b.push_bind(key.status);
             b.push_bind(key.attempts);
             b.push_bind(key.error);

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
-use sqlx::{Execute, Postgres, QueryBuilder};
+use sqlx::{Postgres, QueryBuilder};
 
 use crate::{
     model::{AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, SearchAssetsFilter},
