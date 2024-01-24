@@ -347,8 +347,10 @@ impl MplxAccsProcessor {
 
         tasks_to_insert.extend(tasks);
 
-        let res = self.db_client_v2.insert_tasks(&mut tasks_to_insert).await;
-        result_to_metrics(self.metrics.clone(), &res, "accounts_saving_tasks");
+        if !tasks_to_insert.is_empty() {
+            let res = self.db_client_v2.insert_tasks(&mut tasks_to_insert).await;
+            result_to_metrics(self.metrics.clone(), &res, "accounts_saving_tasks");
+        }
     }
 }
 
