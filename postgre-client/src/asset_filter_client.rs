@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
-use sqlx::{Postgres, QueryBuilder};
+use sqlx::{Execute, Postgres, QueryBuilder};
 
 use crate::{
     model::{AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, SearchAssetsFilter},
@@ -25,8 +25,7 @@ impl PgClient {
         after: Option<String>,
     ) -> (QueryBuilder<'a, Postgres>, bool) {
         let mut query_builder = QueryBuilder::new(
-            "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3
-            LEFT JOIN tasks ON ast_metadata_url_id = tsk_id ",
+            "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3",
         );
         let mut group_clause_required = false;
 
@@ -38,13 +37,14 @@ impl PgClient {
             group_clause_required = true;
         }
         if filter.json_uri.is_some() {
-            query_builder.push(" INNER JOIN metadata ON ast_metadata_url_id = mtd_id ");
+            query_builder.push(" INNER JOIN tasks ON ast_metadata_url_id = tsk_id ");
             group_clause_required = true;
         }
 
         // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
         query_builder.push(" WHERE TRUE ");
 
+        // todo: this breaks some tests, so neew to fix them if future
         query_builder.push(" AND tsk_status = 'success' ");
         if let Some(spec_version) = &filter.specification_version {
             query_builder.push(" AND assets_v3.ast_specification_version = ");
