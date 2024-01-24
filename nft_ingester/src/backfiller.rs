@@ -292,8 +292,16 @@ where
         }
     }
 
-    pub async fn parse_raw_transactions(&self, keep_running: Arc<AtomicBool>, permits: usize) {
-        let slots_to_parse_iter = self.rocks_client.raw_blocks_cbor.iter_start();
+    pub async fn parse_raw_transactions(
+        &self,
+        keep_running: Arc<AtomicBool>,
+        permits: usize,
+        start_slot: Option<u64>,
+    ) {
+        let slots_to_parse_iter = match start_slot {
+            Some(slot) => self.rocks_client.raw_blocks_cbor.iter(slot),
+            None => self.rocks_client.raw_blocks_cbor.iter_start(),
+        };
         let cnt = AtomicU64::new(0);
         let mut slots_to_parse_vec = Vec::new();
         let semaphore = Arc::new(tokio::sync::Semaphore::new(permits));
