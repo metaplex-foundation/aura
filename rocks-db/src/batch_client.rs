@@ -110,39 +110,46 @@ impl AssetIndexReader for Storage {
         let asset_owner_details = asset_owner_details?;
         let asset_collection_details = asset_collection_details?;
 
-        for dynamic_info in asset_dynamic_details.iter().flatten() {
-            if dynamic_info.onchain_data.is_none() {
-                continue;
-            }
-
+        for static_info in asset_static_details.iter().flatten() {
             let asset_index = AssetIndex {
-                is_compressible: dynamic_info.is_compressible.value,
-                is_compressed: dynamic_info.is_compressed.value,
-                is_frozen: dynamic_info.is_frozen.value,
-                supply: dynamic_info.supply.clone().map(|s| s.value as i64),
-                is_burnt: dynamic_info.is_burnt.value,
-                creators: dynamic_info.creators.clone().value,
-                royalty_amount: dynamic_info.royalty_amount.value as i64,
-                metadata_url: Some(dynamic_info.url.value.clone()),
-                slot_updated: dynamic_info.get_slot_updated() as i64,
-                metadata_present: self
-                    .asset_offchain_data
-                    .get(dynamic_info.url.value.clone())
-                    .ok()
-                    .flatten()
-                    .is_some(),
+                pubkey: static_info.pubkey,
+                specification_version: SpecificationVersions::V1,
+                specification_asset_class: static_info.specification_asset_class,
+                royalty_target_type: static_info.royalty_target_type,
+                slot_created: static_info.created_at,
                 ..Default::default()
             };
 
             asset_indexes.insert(asset_index.pubkey, asset_index);
         }
 
-        for static_info in asset_static_details.iter().flatten() {
-            if let Some(existed_index) = asset_indexes.get_mut(&static_info.pubkey) {
-                existed_index.specification_version = SpecificationVersions::V1;
-                existed_index.specification_asset_class = static_info.specification_asset_class;
-                existed_index.royalty_target_type = static_info.royalty_target_type;
-                existed_index.slot_created = static_info.created_at;
+        for dynamic_info in asset_dynamic_details.iter().flatten() {
+            if let Some(existed_index) = asset_indexes.get_mut(&dynamic_info.pubkey) {
+                existed_index.is_compressible = dynamic_info.is_compressible.value;
+                existed_index.is_compressed = dynamic_info.is_compressed.value;
+                existed_index.is_frozen = dynamic_info.is_frozen.value;
+                existed_index.supply = dynamic_info.supply.clone().map(|s| s.value as i64);
+                existed_index.is_burnt = dynamic_info.is_burnt.value;
+                existed_index.creators = dynamic_info.creators.clone().value;
+                existed_index.royalty_amount = dynamic_info.royalty_amount.value as i64;
+                existed_index.slot_updated = dynamic_info.get_slot_updated() as i64;
+                existed_index.metadata_url = Some(dynamic_info.url.value.clone());
+            } else {
+                let asset_index = AssetIndex {
+                    pubkey: dynamic_info.pubkey,
+                    is_compressible: dynamic_info.is_compressible.value,
+                    is_compressed: dynamic_info.is_compressed.value,
+                    is_frozen: dynamic_info.is_frozen.value,
+                    supply: dynamic_info.supply.clone().map(|s| s.value as i64),
+                    is_burnt: dynamic_info.is_burnt.value,
+                    creators: dynamic_info.creators.clone().value,
+                    royalty_amount: dynamic_info.royalty_amount.value as i64,
+                    slot_updated: dynamic_info.get_slot_updated() as i64,
+                    metadata_url: Some(dynamic_info.url.value.clone()),
+                    ..Default::default()
+                };
+
+                asset_indexes.insert(asset_index.pubkey, asset_index);
             }
         }
 
@@ -152,6 +159,15 @@ impl AssetIndexReader for Storage {
                 if data.slot_updated as i64 > existed_index.slot_updated {
                     existed_index.slot_updated = data.slot_updated as i64;
                 }
+            } else {
+                let asset_index = AssetIndex {
+                    pubkey: data.pubkey,
+                    authority: Some(data.authority),
+                    slot_updated: data.slot_updated as i64,
+                    ..Default::default()
+                };
+
+                asset_indexes.insert(asset_index.pubkey, asset_index);
             }
         }
 
@@ -163,6 +179,17 @@ impl AssetIndexReader for Storage {
                 if data.get_slot_updated() as i64 > existed_index.slot_updated {
                     existed_index.slot_updated = data.get_slot_updated() as i64;
                 }
+            } else {
+                let asset_index = AssetIndex {
+                    pubkey: data.pubkey,
+                    owner: Some(data.owner.value),
+                    delegate: data.delegate.clone().map(|delegate| delegate.value),
+                    owner_type: Some(data.owner_type.value),
+                    slot_updated: data.get_slot_updated() as i64,
+                    ..Default::default()
+                };
+
+                asset_indexes.insert(asset_index.pubkey, asset_index);
             }
         }
 
@@ -173,6 +200,16 @@ impl AssetIndexReader for Storage {
                 if data.slot_updated as i64 > existed_index.slot_updated {
                     existed_index.slot_updated = data.slot_updated as i64;
                 }
+            } else {
+                let asset_index = AssetIndex {
+                    pubkey: data.pubkey,
+                    collection: Some(data.collection),
+                    is_collection_verified: Some(data.is_collection_verified),
+                    slot_updated: data.slot_updated as i64,
+                    ..Default::default()
+                };
+
+                asset_indexes.insert(asset_index.pubkey, asset_index);
             }
         }
 

@@ -25,7 +25,8 @@ impl PgClient {
         after: Option<String>,
     ) -> (QueryBuilder<'a, Postgres>, bool) {
         let mut query_builder = QueryBuilder::new(
-            "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 ",
+            "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3
+            LEFT JOIN tasks ON ast_metadata_url_id = tsk_id ",
         );
         let mut group_clause_required = false;
 
@@ -44,7 +45,7 @@ impl PgClient {
         // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
         query_builder.push(" WHERE TRUE ");
 
-        query_builder.push(" AND ast_metadata_present IS TRUE ");
+        query_builder.push(" AND tsk_status = 'success' ");
         if let Some(spec_version) = &filter.specification_version {
             query_builder.push(" AND assets_v3.ast_specification_version = ");
             query_builder.push_bind(spec_version);
@@ -137,7 +138,7 @@ impl PgClient {
         }
 
         if let Some(json_uri) = &filter.json_uri {
-            query_builder.push(" AND metadata.mtd_url = ");
+            query_builder.push(" AND tsk_metadata_url = ");
             query_builder.push_bind(json_uri);
         }
 

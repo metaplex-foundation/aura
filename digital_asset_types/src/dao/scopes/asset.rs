@@ -75,7 +75,10 @@ pub async fn get_by_creator(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    let mut condition = "SELECT ast_pubkey FROM assets_v3 LEFT JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey WHERE asc_creator = $1".to_string();
+    let mut condition =
+        "SELECT ast_pubkey FROM assets_v3 LEFT JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey
+     LEFT JOIN tasks ON ast_metadata_url_id = tsk_id WHERE asc_creator = $1"
+            .to_string();
     if only_verified {
         condition = format!("{} AND asc_verified = true", condition);
     }
@@ -143,7 +146,7 @@ pub async fn get_by_grouping(
         return Ok(vec![]);
     }
 
-    let condition = "SELECT ast_pubkey FROM assets_v3 WHERE ast_collection = $1 AND ast_is_collection_verified = true";
+    let condition = "SELECT ast_pubkey FROM assets_v3 LEFT JOIN tasks ON ast_metadata_url_id = tsk_id WHERE ast_collection = $1 AND ast_is_collection_verified = true";
     let values = vec![Set(group_value.clone())
         .into_value()
         .ok_or(DbErr::Custom(format!(
@@ -178,7 +181,7 @@ pub async fn get_assets_by_owner(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    let condition = "SELECT ast_pubkey FROM assets_v3 WHERE ast_owner = $1";
+    let condition = "SELECT ast_pubkey FROM assets_v3 LEFT JOIN tasks ON ast_metadata_url_id = tsk_id WHERE ast_owner = $1";
     let values = vec![Set(owner.to_bytes().to_vec().as_slice())
         .into_value()
         .ok_or(DbErr::Custom(format!(
@@ -208,7 +211,7 @@ pub async fn get_by_authority(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    let condition = "SELECT ast_pubkey FROM assets_v3 WHERE ast_authority = $1";
+    let condition = "SELECT ast_pubkey FROM assets_v3 LEFT JOIN tasks ON ast_metadata_url_id = tsk_id WHERE ast_authority = $1";
     let values = vec![Set(authority.as_slice())
         .into_value()
         .ok_or(DbErr::Custom(format!(
@@ -241,7 +244,7 @@ async fn get_by_related_condition(
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
     let condition = &format!(
-        "{} AND ast_supply > 0 AND ast_metadata_present IS TRUE",
+        "{} AND ast_supply > 0 AND tsk_status = 'success' ",
         condition
     );
     let (mut condition, values, offset) = paginate(pagination, limit, condition, values)?;

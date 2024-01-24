@@ -181,7 +181,6 @@ mod tests {
             is_compressible: false,
             is_compressed: false,
             is_frozen: false,
-            metadata_present: false,
             supply: Some(1),
             metadata_url: Some("https://www.google.com".to_string()),
             slot_updated: 123456,
