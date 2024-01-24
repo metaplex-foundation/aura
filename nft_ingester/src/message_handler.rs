@@ -107,7 +107,6 @@ impl MessageHandler {
         match acc_parse_result {
             Ok(acc_parsed) => {
                 let concrete = acc_parsed.result_type();
-
                 match concrete {
                     ProgramParseResult::TokenProgramAccount(parsing_result) => {
                         self.write_spl_accounts_models_to_buffer(account_info, parsing_result)

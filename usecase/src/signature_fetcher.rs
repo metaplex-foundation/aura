@@ -8,6 +8,7 @@ use interface::{
 };
 use metrics_utils::{MetricStatus, RpcBackfillerMetricsConfig};
 use solana_sdk::pubkey::Pubkey;
+use tracing::info;
 
 pub struct SignatureFetcher<T, SP, TI>
 where
@@ -52,9 +53,10 @@ where
             return Ok(());
         }
         let signature = signature.unwrap();
+        info!("Start fetching signatures...");
         let mut all_signatures = match self
             .rpc
-            .get_signatures_by_address(signature, program_id)
+            .get_signatures_by_address(signature.clone(), program_id)
             .await
             .map_err(|e| StorageError::Common(e.to_string()))
         {
@@ -73,6 +75,12 @@ where
         if all_signatures.is_empty() {
             return Ok(());
         }
+        info!(
+            "Fetched {} signatures since first persisted signature {}",
+            &all_signatures.len(),
+            signature.signature
+        );
+
         // we've got a list of signatures, potentially a huge one (10s of millions)
         // we need to filter out the ones we already have and ingest the rest, if any
         // we need to sort them and process in batches, sorting is ascending by the slot
@@ -91,7 +99,7 @@ where
             if missing_signatures.is_empty() {
                 continue;
             }
-            tracing::debug!(
+            info!(
                 "Found {} missing signatures for program {}. Fetching details...",
                 missing_signatures.len(),
                 program_id
@@ -139,11 +147,9 @@ where
                 signature: Default::default(),
                 slot: all_signatures[batch_end - 1].slot,
             };
-            tracing::info!(
+            info!(
                 "Ingested {} transactions. Dropping signatures for program {} before slot {}.",
-                tx_cnt,
-                program_id,
-                fake_key.slot
+                tx_cnt, program_id, fake_key.slot
             );
             self.data_layer
                 .drop_signatures_before(program_id, fake_key)
@@ -154,10 +160,9 @@ where
             slot: all_signatures[all_signatures.len() - 1].slot,
         };
 
-        tracing::info!(
+        info!(
             "Finished fetching signatures for program {}. Dropping signatures before slot {}.",
-            program_id,
-            fake_key.slot
+            program_id, fake_key.slot
         );
         self.data_layer
             .drop_signatures_before(program_id, fake_key)
