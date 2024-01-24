@@ -2,15 +2,24 @@ use figment::providers::Env;
 use figment::Figment;
 use serde_derive::Deserialize;
 
+#[derive(Deserialize, Default, PartialEq, Debug, Clone)]
+pub enum TestSourceMode {
+    File,
+    #[default]
+    Database,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct IntegrityVerificationConfig {
     pub metrics_port: u16,
     pub reference_host: String,
     pub testing_host: String,
-    pub database_url: String,
+    pub database_url: Option<String>,
     pub sql_log_level: Option<String>,
     pub run_secondary_indexes_tests: Option<bool>,
     pub run_proofs_tests: Option<bool>,
+    pub test_source_mode: TestSourceMode,
+    pub test_file_path: Option<String>,
 }
 
 impl IntegrityVerificationConfig {
