@@ -1,4 +1,5 @@
 use entities::enums::TaskStatus;
+use entities::models::UrlWithStatus;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     ConnectOptions, PgPool, Postgres, QueryBuilder, Row, Transaction,
@@ -46,13 +47,16 @@ impl PgClient {
     pub async fn insert_tasks(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
-        metadata_urls: Vec<String>,
+        metadata_urls: Vec<UrlWithStatus>,
     ) -> Result<(), String> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("INSERT INTO tasks (tsk_metadata_url, tsk_status) ");
         query_builder.push_values(metadata_urls.iter(), |mut builder, metadata_url| {
-            builder.push_bind(metadata_url);
-            builder.push_bind(TaskStatus::Pending);
+            builder.push_bind(metadata_url.metadata_url.clone());
+            builder.push_bind(match metadata_url.is_downloaded {
+                true => TaskStatus::Success,
+                false => TaskStatus::Pending,
+            });
         });
         query_builder.push(" ON CONFLICT (tsk_metadata_url) DO NOTHING;");
 
