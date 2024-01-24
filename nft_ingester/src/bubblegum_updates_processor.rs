@@ -594,6 +594,7 @@ impl BubblegumTxProcessor {
                 ofd_attempts: 0,
                 ofd_max_attempts: 10,
                 ofd_error: None,
+                ..Default::default()
             };
 
             tasks_buffer.push_back(task);
@@ -1030,6 +1031,7 @@ impl BubblegumTxProcessor {
                         ofd_attempts: 0,
                         ofd_max_attempts: 10,
                         ofd_error: None,
+                        ..Default::default()
                     });
 
                     Ok(())

@@ -11,7 +11,9 @@ use metrics_utils::{
 use tokio::sync::{oneshot, Mutex};
 use tokio::task::{JoinError, JoinSet};
 
-use nft_ingester::config::{init_logger, setup_config, IngesterConfig};
+use nft_ingester::config::{
+    init_logger, setup_config, JsonMigratorConfig, JsonMigratorMode, JSON_MIGRATOR_CONFIG_PREFIX,
+};
 use nft_ingester::db_v2::{DBClient, Task};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
@@ -20,7 +22,7 @@ use rocks_db::{AssetDynamicDetails, Storage};
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
-    let config: IngesterConfig = setup_config();
+    let config: JsonMigratorConfig = setup_config(JSON_MIGRATOR_CONFIG_PREFIX);
 
     init_logger(&config.get_log_level());
 
@@ -39,27 +41,16 @@ pub async fn main() -> Result<(), IngesterError> {
         JsonMigratorMetricsConfig::new(),
     );
     metrics_state.register_metrics();
-    start_metrics(metrics_state.registry, config.metrics_port_first_consumer).await;
+    start_metrics(metrics_state.registry, Some(config.metrics_port)).await;
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
     let keep_running = Arc::new(AtomicBool::new(true));
 
-    let storage = Storage::open(
-        &config
-            .rocks_db_path_container
-            .clone()
-            .unwrap_or("./my_rocksdb".to_string()),
-        mutexed_tasks.clone(),
-    )
-    .unwrap();
+    let storage = Storage::open(&config.json_target_db.clone(), mutexed_tasks.clone()).unwrap();
 
     let target_storage = Arc::new(storage);
 
-    let source_storage = Storage::open(
-        &config.json_source_db.as_ref().unwrap(),
-        mutexed_tasks.clone(),
-    )
-    .unwrap();
+    let source_storage = Storage::open(&config.json_source_db, mutexed_tasks.clone()).unwrap();
     let source_storage = Arc::new(source_storage);
 
     let json_migrator = JsonMigrator::new(
@@ -67,6 +58,7 @@ pub async fn main() -> Result<(), IngesterError> {
         source_storage.clone(),
         target_storage.clone(),
         metrics_state.json_migrator_metrics.clone(),
+        config,
     );
 
     let cloned_keep_running = keep_running.clone();
@@ -89,6 +81,7 @@ pub struct JsonMigrator {
     pub source_rocks_db: Arc<Storage>,
     pub target_rocks_db: Arc<Storage>,
     pub metrics: Arc<JsonMigratorMetricsConfig>,
+    pub config: JsonMigratorConfig,
 }
 
 impl JsonMigrator {
@@ -97,12 +90,14 @@ impl JsonMigrator {
         source_rocks_db: Arc<Storage>,
         target_rocks_db: Arc<Storage>,
         metrics: Arc<JsonMigratorMetricsConfig>,
+        config: JsonMigratorConfig,
     ) -> Self {
         Self {
             database_pool,
             source_rocks_db,
             target_rocks_db,
             metrics,
+            config,
         }
     }
 
@@ -111,14 +106,32 @@ impl JsonMigrator {
         keep_running: Arc<AtomicBool>,
         tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
     ) {
-        info!("Start migrate JSONs...");
-        self.migrate_jsons(keep_running.clone()).await;
+        match self.config.work_mode {
+            JsonMigratorMode::Full => {
+                info!("Launch JSON migrator in full mode");
 
-        info!("JSONs are migrated. Start setting tasks...");
+                info!("Start migrate JSONs...");
+                self.migrate_jsons(keep_running.clone()).await;
 
-        self.set_tasks(keep_running, tasks).await;
+                info!("JSONs are migrated. Start setting tasks...");
+                self.set_tasks(keep_running, tasks).await;
+                info!("Tasks are set!");
+            }
+            JsonMigratorMode::JsonsOnly => {
+                info!("Launch JSON migrator in jsons only mode");
 
-        info!("Tasks are set!");
+                info!("Start migrate JSONs...");
+                self.migrate_jsons(keep_running.clone()).await;
+                info!("JSONs are migrated!");
+            }
+            JsonMigratorMode::TasksOnly => {
+                info!("Launch JSON migrator in tasks only mode");
+
+                info!("Start set tasks...");
+                self.set_tasks(keep_running, tasks).await;
+                info!("Tasks are set!");
+            }
+        }
     }
 
     pub async fn migrate_jsons(&self, keep_running: Arc<AtomicBool>) {
@@ -254,25 +267,30 @@ impl JsonMigrator {
                                 continue;
                             }
 
-                            match downloaded_json.unwrap() {
-                                Some(_data) => {}
-                                None => {
-                                    let task = Task {
-                                        ofd_metadata_url: data.url.value.clone(),
-                                        ofd_locked_until: None,
-                                        ofd_attempts: 0,
-                                        ofd_max_attempts: 10,
-                                        ofd_error: None,
-                                    };
+                            let mut task = Task {
+                                ofd_metadata_url: data.url.value.clone(),
+                                ofd_locked_until: None,
+                                ofd_attempts: 0,
+                                ofd_max_attempts: 10,
+                                ofd_error: None,
+                                ..Default::default()
+                            };
 
-                                    let mut buff = tasks_buffer.lock().await;
+                            let mut buff = tasks_buffer.lock().await;
+
+                            match downloaded_json.unwrap() {
+                                Some(_) => {
+                                    task.ofd_status = nft_ingester::db_v2::TaskStatus::Success;
 
                                     buff.push(task);
-
-                                    self.metrics
-                                        .set_tasks_buffer("tasks_buffer", buff.len() as i64);
+                                }
+                                None => {
+                                    buff.push(task);
                                 }
                             }
+
+                            self.metrics
+                                .set_tasks_buffer("tasks_buffer", buff.len() as i64);
                         }
                         Err(e) => {
                             error!("bincode::deserialize: {}", e)

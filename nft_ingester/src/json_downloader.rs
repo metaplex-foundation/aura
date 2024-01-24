@@ -1,4 +1,6 @@
-use crate::config::{setup_config, BackgroundTaskConfig, BackgroundTaskRunnerConfig};
+use crate::config::{
+    setup_config, BackgroundTaskConfig, BackgroundTaskRunnerConfig, INGESTER_CONFIG_PREFIX,
+};
 use crate::db_v2::{DBClient, TaskStatus, UpdatedTask};
 use log::{debug, error, info};
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
@@ -18,7 +20,7 @@ pub struct JsonDownloader {
 
 impl JsonDownloader {
     pub async fn new(rocks_db: Arc<Storage>, metrics: Arc<JsonDownloaderMetricsConfig>) -> Self {
-        let config: BackgroundTaskConfig = setup_config();
+        let config: BackgroundTaskConfig = setup_config(INGESTER_CONFIG_PREFIX);
         let database_pool = DBClient::new(&config.database_config).await.unwrap();
 
         Self {

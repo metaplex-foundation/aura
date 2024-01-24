@@ -22,22 +22,25 @@ pub struct DBClient {
     sqlx::Type,
     Copy,
     Clone,
+    Default,
 )]
 #[sqlx(type_name = "task_status", rename_all = "lowercase")]
 pub enum TaskStatus {
+    #[default]
     Pending,
     Running,
     Success,
     Failed,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Task {
     pub ofd_metadata_url: String,
     pub ofd_locked_until: Option<chrono::DateTime<chrono::Utc>>,
     pub ofd_attempts: i32,
     pub ofd_max_attempts: i32,
     pub ofd_error: Option<String>,
+    pub ofd_status: TaskStatus,
 }
 
 pub struct TaskForInsert {
@@ -46,6 +49,7 @@ pub struct TaskForInsert {
     pub ofd_attempts: i32,
     pub ofd_max_attempts: i32,
     pub ofd_error: Option<String>,
+    pub ofd_status: TaskStatus,
 }
 
 #[derive(Debug, Clone)]
@@ -206,6 +210,7 @@ impl DBClient {
                     ofd_attempts: offchain_d.ofd_attempts,
                     ofd_max_attempts: offchain_d.ofd_max_attempts,
                     ofd_error: offchain_d.ofd_error.clone(),
+                    ofd_status: offchain_d.ofd_status,
                 });
             }
         }
@@ -229,7 +234,7 @@ impl DBClient {
             b.push_bind(off_d.ofd_attempts);
             b.push_bind(off_d.ofd_max_attempts);
             b.push_bind(off_d.ofd_error);
-            b.push_bind(TaskStatus::Pending);
+            b.push_bind(off_d.ofd_status);
         });
 
         query_builder.push("ON CONFLICT (tsk_metadata_url) DO NOTHING;");

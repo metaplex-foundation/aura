@@ -21,7 +21,9 @@ use metrics_utils::{
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
-use nft_ingester::config::{setup_config, BackfillerConfig, IngesterConfig, INGESTER_BACKUP_NAME};
+use nft_ingester::config::{
+    setup_config, BackfillerConfig, IngesterConfig, INGESTER_BACKUP_NAME, INGESTER_CONFIG_PREFIX,
+};
 use nft_ingester::db_v2::DBClient as DBClientV2;
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::graceful_stop;
@@ -53,7 +55,7 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Starting Ingester");
     let args = Args::parse();
 
-    let config: IngesterConfig = setup_config();
+    let config: IngesterConfig = setup_config(INGESTER_CONFIG_PREFIX);
     init_logger(&config.get_log_level());
 
     let mut guard = None;
@@ -301,7 +303,7 @@ pub async fn main() -> Result<(), IngesterError> {
     ));
 
     if config.run_bubblegum_backfiller {
-        let config: BackfillerConfig = setup_config();
+        let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
 
         let big_table_client = Arc::new(
             backfiller::BigTableClient::connect_new_from_config(config.clone())
