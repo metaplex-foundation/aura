@@ -200,15 +200,6 @@ pub async fn main() -> Result<(), IngesterError> {
                 .process_token_accs(cloned_keep_running)
                 .await;
         }));
-
-        let mut cloned_token_parser = token_accs_parser.clone();
-
-        let cloned_keep_running = keep_running.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-            cloned_token_parser
-                .process_mint_accs(cloned_keep_running)
-                .await;
-        }));
     }
 
     let first_processed_slot = Arc::new(AtomicU64::new(0));
