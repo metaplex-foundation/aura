@@ -11,6 +11,7 @@ mod tests {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_consume_a_block_and_check_if_processed() {
+        let keep_running = Arc::new(AtomicBool::new(true));
         let storage = RocksTestEnvironment::new(&[]).storage;
         let big_table_client = Arc::new(
             BigTableClient::connect_new_with("../../creds.json".to_string(), 1000)
@@ -28,6 +29,7 @@ mod tests {
             metrics,
             1,
             [slot].to_vec(),
+            keep_running,
         )
         .await
         .unwrap();

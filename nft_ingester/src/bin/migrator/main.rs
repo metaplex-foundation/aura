@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use entities::enums::TaskStatus;
 use log::{error, info};
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
@@ -220,11 +221,11 @@ impl JsonMigrator {
                     }
                 };
 
-                let tasks_to_insert = tasks_buffer.drain(0..end_point).collect::<Vec<Task>>();
+                let mut tasks_to_insert = tasks_buffer.drain(0..end_point).collect::<Vec<Task>>();
 
                 drop(tasks_buffer);
 
-                let res = cloned_pg_client.insert_tasks(&tasks_to_insert).await;
+                let res = cloned_pg_client.insert_tasks(&mut tasks_to_insert).await;
                 match res {
                     Ok(_) => {
                         cloned_metrics.inc_tasks_set(
@@ -280,7 +281,7 @@ impl JsonMigrator {
 
                             match downloaded_json.unwrap() {
                                 Some(_) => {
-                                    task.ofd_status = nft_ingester::db_v2::TaskStatus::Success;
+                                    task.ofd_status = TaskStatus::Success;
 
                                     buff.push(task);
                                 }

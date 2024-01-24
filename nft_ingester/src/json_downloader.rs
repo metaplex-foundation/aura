@@ -1,4 +1,6 @@
-use crate::config::{setup_config, BackgroundTaskConfig, BackgroundTaskRunnerConfig, INGESTER_CONFIG_PREFIX};
+use crate::config::{
+    setup_config, BackgroundTaskConfig, BackgroundTaskRunnerConfig, INGESTER_CONFIG_PREFIX,
+};
 use crate::db_v2::{DBClient, UpdatedTask};
 use entities::enums::TaskStatus;
 use log::{debug, error, info};

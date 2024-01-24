@@ -12,7 +12,7 @@ pub struct DBClient {
     pub pool: PgPool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Task {
     pub ofd_metadata_url: String,
     pub ofd_locked_until: Option<chrono::DateTime<chrono::Utc>>,
@@ -148,7 +148,7 @@ impl DBClient {
             b.push_bind(off_d.ofd_attempts);
             b.push_bind(off_d.ofd_max_attempts);
             b.push_bind(off_d.ofd_error.clone());
-            b.push_bind(TaskStatus::Pending);
+            b.push_bind(off_d.ofd_status);
         });
 
         query_builder.push("ON CONFLICT (tsk_metadata_url) DO NOTHING;");
