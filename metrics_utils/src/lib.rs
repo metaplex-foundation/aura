@@ -33,6 +33,7 @@ pub struct MetricState {
     pub backfiller_metrics: Arc<BackfillerMetricsConfig>,
     pub rpc_backfiller_metrics: Arc<RpcBackfillerMetricsConfig>,
     pub synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
+    pub json_migrator_metrics: Arc<JsonMigratorMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -44,6 +45,7 @@ impl MetricState {
         backfiller_metrics: BackfillerMetricsConfig,
         rpc_backfiller_metrics: RpcBackfillerMetricsConfig,
         synchronizer_metrics: SynchronizerMetricsConfig,
+        json_migrator_metrics: JsonMigratorMetricsConfig,
     ) -> Self {
         Self {
             ingester_metrics: Arc::new(ingester_metrics),
@@ -53,6 +55,7 @@ impl MetricState {
             backfiller_metrics: Arc::new(backfiller_metrics),
             rpc_backfiller_metrics: Arc::new(rpc_backfiller_metrics),
             synchronizer_metrics: Arc::new(synchronizer_metrics),
+            json_migrator_metrics: Arc::new(json_migrator_metrics),
         }
     }
 }
@@ -406,6 +409,8 @@ impl MetricsTrait for MetricState {
             "The last synchronized slot by synchronizer",
             self.synchronizer_metrics.last_synchronized_slot.clone(),
         );
+
+        self.json_migrator_metrics.register(&mut self.registry);
     }
 }
 
@@ -526,6 +531,89 @@ impl MetricsTrait for IntegrityVerificationMetrics {
             self.integrity_verification_metrics
                 .fetch_keys_errors
                 .clone(),
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct JsonMigratorMetricsConfig {
+    start_time: Gauge,
+    tasks_buffer: Family<MetricLabel, Gauge>,
+    jsons_migrated: Family<MetricLabelWithStatus, Counter>,
+    tasks_set: Family<MetricLabelWithStatus, Counter>,
+}
+
+impl Default for JsonMigratorMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl JsonMigratorMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            start_time: Default::default(),
+            tasks_buffer: Family::<MetricLabel, Gauge>::default(),
+            jsons_migrated: Family::<MetricLabelWithStatus, Counter>::default(),
+            tasks_set: Family::<MetricLabelWithStatus, Counter>::default(),
+        }
+    }
+
+    pub fn start_time(&self) -> i64 {
+        self.start_time.set(Utc::now().timestamp())
+    }
+
+    pub fn set_tasks_buffer(&self, label: &str, buffer_size: i64) {
+        self.tasks_buffer
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .set(buffer_size);
+    }
+
+    pub fn inc_jsons_migrated(&self, label: &str, status: MetricStatus) -> u64 {
+        self.jsons_migrated
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_owned(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_tasks_set(&self, label: &str, status: MetricStatus, inc_by: u64) -> u64 {
+        self.tasks_set
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_owned(),
+                status,
+            })
+            .inc_by(inc_by)
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        self.start_time();
+
+        registry.register(
+            "json_migrator_start_time",
+            "Binary start time",
+            self.start_time.clone(),
+        );
+
+        registry.register(
+            "json_migrator_tasks_buffer",
+            "Buffer size",
+            self.tasks_buffer.clone(),
+        );
+
+        registry.register(
+            "json_migrator_jsons_migrated",
+            "Total amount of migrated jsons",
+            self.jsons_migrated.clone(),
+        );
+
+        registry.register(
+            "json_migrator_tasks_set",
+            "Total amount of tasks set",
+            self.tasks_set.clone(),
         );
     }
 }

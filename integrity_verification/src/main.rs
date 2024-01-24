@@ -42,8 +42,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
     metrics.register_metrics();
     start_metrics(metrics.registry, Some(config.metrics_port)).await;
 
-    let keys_fetcher =
-        PgClient::new(&config.database_url, &config.get_sql_log_level(), 100, 500).await;
+    let keys_fetcher = PgClient::new(&config.database_url, 100, 500).await;
     let diff_checker = DiffChecker::new(
         config.reference_host.clone(),
         config.testing_host.clone(),

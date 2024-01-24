@@ -25,6 +25,7 @@ pub trait SignaturePersistence {
     ) -> Result<Vec<SignatureWithSlot>, StorageError>;
 }
 
+#[automock]
 #[async_trait]
 pub trait TransactionIngester: Sync + Send + 'static {
     /// Ingests a transaction into the storage layer.

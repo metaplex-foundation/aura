@@ -5,7 +5,9 @@ use log::{error, info};
 use nft_ingester::backfiller::{Backfiller, BigTableClient, DirectBlockParser, TransactionsParser};
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
-use nft_ingester::config::{self, init_logger, setup_config, BackfillerConfig, RawBackfillConfig};
+use nft_ingester::config::{
+    self, init_logger, setup_config, BackfillerConfig, RawBackfillConfig, INGESTER_CONFIG_PREFIX,
+};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::transaction_ingester;
@@ -23,7 +25,7 @@ pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub async fn main() -> Result<(), IngesterError> {
     info!("Starting raw backfill server...");
 
-    let config: RawBackfillConfig = setup_config();
+    let config: RawBackfillConfig = setup_config(INGESTER_CONFIG_PREFIX);
     init_logger(&config.log_level);
 
     let mut guard = None;
@@ -68,7 +70,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let rocks_storage = Arc::new(storage);
 
     let consumer = rocks_storage.clone();
-    let backfiller_config: BackfillerConfig = setup_config();
+    let backfiller_config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
 
     let big_table_client = Arc::new(
         BigTableClient::connect_new_from_config(backfiller_config.clone())
@@ -141,7 +143,11 @@ pub async fn main() -> Result<(), IngesterError> {
                 info!("Running transactions parser...");
 
                 transactions_parser
-                    .parse_raw_transactions(cloned_keep_running, backfiller_config.permitted_tasks)
+                    .parse_raw_transactions(
+                        cloned_keep_running,
+                        backfiller_config.permitted_tasks,
+                        backfiller_config.slot_until,
+                    )
                     .await;
             }));
 

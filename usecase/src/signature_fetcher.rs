@@ -87,6 +87,7 @@ where
                 .data_layer
                 .missing_signatures(program_id, batch.to_vec())
                 .await?;
+            batch_start = batch_end;
             if missing_signatures.is_empty() {
                 continue;
             }
@@ -147,8 +148,6 @@ where
             self.data_layer
                 .drop_signatures_before(program_id, fake_key)
                 .await?;
-
-            batch_start = batch_end;
         }
         let fake_key = SignatureWithSlot {
             signature: Default::default(),
@@ -164,5 +163,60 @@ where
             .drop_signatures_before(program_id, fake_key)
             .await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{sync::Arc, vec};
+
+    use interface::{
+        signature_persistence::{MockSignaturePersistence, MockTransactionIngester},
+        solana_rpc::MockTransactionsGetter,
+    };
+    use metrics_utils::RpcBackfillerMetricsConfig;
+    use mockall::predicate::{self, eq};
+
+    #[tokio::test]
+    async fn test_fetch_signatures_with_over_batch_limit_elements_should_complete_without_infinite_loop(
+    ) {
+        let mut data_layer = MockSignaturePersistence::new();
+        let mut rpc = MockTransactionsGetter::new();
+        let ingester = MockTransactionIngester::new();
+        let metrics = Arc::new(RpcBackfillerMetricsConfig::new());
+
+        let program_id = solana_sdk::pubkey::new_rand();
+        let signature = solana_sdk::signature::Signature::from([1u8; 64]);
+        let slot = 1;
+        let signature_with_slot = super::SignatureWithSlot { signature, slot };
+        let signatures = vec![signature_with_slot.clone(); 2000];
+        let sig_clone = signature_with_slot.clone();
+
+        data_layer
+            .expect_first_persisted_signature_for()
+            .with(eq(program_id))
+            .times(1)
+            .return_once(move |_| Ok(Some(sig_clone)));
+        rpc.expect_get_signatures_by_address()
+            .with(eq(signature_with_slot), eq(program_id))
+            .times(1)
+            .return_once(move |_, _| Ok(signatures));
+        data_layer
+            .expect_missing_signatures()
+            .with(eq(program_id), predicate::always())
+            .times(2)
+            .returning(move |_, _| Ok(vec![]));
+        data_layer
+            .expect_drop_signatures_before()
+            .with(eq(program_id), predicate::always())
+            .times(1)
+            .returning(move |_, _| Ok(()));
+        let fetcher = super::SignatureFetcher::new(
+            Arc::new(data_layer),
+            Arc::new(rpc),
+            Arc::new(ingester),
+            metrics,
+        );
+        fetcher.fetch_signatures(program_id).await.unwrap();
     }
 }

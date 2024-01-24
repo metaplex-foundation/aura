@@ -2157,7 +2157,9 @@ dependencies = [
  "num-traits",
  "schemars",
  "serde",
+ "serde_derive",
  "solana-sdk",
+ "sqlx",
 ]
 
 [[package]]

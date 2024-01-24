@@ -541,6 +541,7 @@ impl BubblegumTxProcessor {
                 ofd_attempts: 0,
                 ofd_max_attempts: 10,
                 ofd_error: None,
+                ..Default::default()
             };
 
             return Ok((asset_update, task));
@@ -939,6 +940,7 @@ impl BubblegumTxProcessor {
                         ofd_attempts: 0,
                         ofd_max_attempts: 10,
                         ofd_error: None,
+                        ..Default::default()
                     };
 
                     Ok((asset_update, task))

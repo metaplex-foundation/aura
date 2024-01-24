@@ -46,13 +46,20 @@ CREATE TABLE asset_creators_v3 (
 );
 CREATE INDEX asset_creators_v3_creator ON asset_creators_v3(asc_creator, asc_verified);
 
-CREATE TABLE metadata (
-    mtd_id bigserial
-        CONSTRAINT metadata_pk
+CREATE TABLE tasks (
+    tsk_id bigserial
+        CONSTRAINT tasks_pk
             PRIMARY KEY,
-    mtd_url text NOT NULL
+    tsk_metadata_url text NOT NULL,
+    tsk_status task_status NOT NULL,
+    tsk_locked_until timestamptz NULL DEFAULT (now() AT TIME ZONE 'utc'::text),
+    tsk_attempts int2 NOT NULL DEFAULT 0,
+    tsk_max_attempts int2 NOT NULL DEFAULT 10,
+    tsk_error text
 );
-CREATE UNIQUE INDEX metadata_url ON metadata (mtd_url);
+CREATE UNIQUE INDEX tasks_metadata_url ON tasks (tsk_metadata_url);
+CREATE INDEX tasks_status ON tasks (tsk_status);
+CREATE INDEX tasks_locked_until ON tasks (tsk_locked_until);
 
 CREATE TABLE assets_v3 (
 	ast_pubkey bytea NOT NULL,
@@ -75,7 +82,7 @@ CREATE TABLE assets_v3 (
 	ast_metadata_url_id bigint NULL,
 	ast_slot_updated bigint NOT NULL,
 	CONSTRAINT assets_pkey PRIMARY KEY (ast_pubkey),
-    FOREIGN KEY (ast_metadata_url_id) REFERENCES metadata(mtd_id) ON DELETE RESTRICT ON UPDATE CASCADE
+    FOREIGN KEY (ast_metadata_url_id) REFERENCES tasks(tsk_id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 -- indexes on the fields that will not get updated:
 -- so far we only know of V1 specification versions, so we only index on others
@@ -105,22 +112,6 @@ CREATE INDEX assets_v3_is_frozen ON assets_v3(ast_is_frozen) WHERE ast_is_frozen
 
 CREATE INDEX assets_v3_supply ON assets_v3(ast_supply) WHERE ast_supply IS NOT NULL;
 CREATE INDEX assets_v3_slot_updated ON assets_v3(ast_slot_updated);
-
-CREATE TABLE tasks (
-    tsk_id bigserial
-        CONSTRAINT tasks_pk
-            PRIMARY KEY,
-    tsk_metadata_url bigint NOT NULL,
-    tsk_status task_status NOT NULL,
-    tsk_locked_until timestamptz NULL DEFAULT (now() AT TIME ZONE 'utc'::text),
-    tsk_attempts int2 NOT NULL DEFAULT 0,
-    tsk_max_attempts int2 NOT NULL DEFAULT 10,
-    tsk_error text,
-    FOREIGN KEY (tsk_metadata_url) REFERENCES metadata(mtd_id) ON DELETE RESTRICT ON UPDATE CASCADE
-);
-CREATE UNIQUE INDEX tasks_metadata_url ON tasks (tsk_metadata_url);
-CREATE INDEX tasks_status ON tasks (tsk_status);
-CREATE INDEX tasks_locked_until ON tasks (tsk_locked_until);
 
 CREATE TABLE last_synced_key (
     id integer NOT NULL PRIMARY KEY DEFAULT 1,

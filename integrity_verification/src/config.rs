@@ -8,15 +8,11 @@ pub struct IntegrityVerificationConfig {
     pub reference_host: String,
     pub testing_host: String,
     pub database_url: String,
-    pub sql_log_level: Option<String>,
     pub run_secondary_indexes_tests: Option<bool>,
     pub run_proofs_tests: Option<bool>,
 }
 
 impl IntegrityVerificationConfig {
-    pub fn get_sql_log_level(&self) -> String {
-        self.sql_log_level.clone().unwrap_or("error".to_string())
-    }
     pub fn get_run_secondary_indexes_tests(&self) -> bool {
         self.run_secondary_indexes_tests.unwrap_or_default()
     }

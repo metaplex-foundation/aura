@@ -35,7 +35,7 @@ impl AssetIndexStorage for PgClient {
         let mut transaction = self.pool.begin().await.map_err(|e| e.to_string())?;
 
         // First we need to bulk upsert metadata_url into metadata and get back ids for each metadata_url to upsert into assets_v3
-        let mut metadata_urls: Vec<String> = asset_indexes
+        let mut metadata_urls: Vec<_> = asset_indexes
             .iter()
             .filter_map(|asset_index| asset_index.metadata_url.clone())
             .collect::<HashSet<_>>()
@@ -45,11 +45,17 @@ impl AssetIndexStorage for PgClient {
         let mut metadata_url_map: HashMap<String, i64> = HashMap::new();
 
         if !metadata_urls.is_empty() {
-            metadata_urls.sort();
-            self.insert_metadata(&mut transaction, metadata_urls.clone())
+            metadata_urls.sort_by(|a, b| a.metadata_url.cmp(&b.metadata_url));
+            self.insert_tasks(&mut transaction, metadata_urls.clone())
                 .await?;
             metadata_url_map = self
-                .get_metadata_ids(&mut transaction, metadata_urls)
+                .get_tasks_ids(
+                    &mut transaction,
+                    metadata_urls
+                        .into_iter()
+                        .map(|url_with_status| url_with_status.metadata_url)
+                        .collect(),
+                )
                 .await?;
         }
 
@@ -105,7 +111,7 @@ impl AssetIndexStorage for PgClient {
         );
         query_builder.push_values(asset_indexes, |mut builder, asset_index| {
             let metadata_id = match asset_index.metadata_url {
-                Some(ref url) => metadata_url_map.get(url),
+                Some(ref url) => metadata_url_map.get(&url.metadata_url),
                 None => None,
             };
             builder
