@@ -1,14 +1,16 @@
-use crate::config::setup_config;
+use crate::config::{setup_config, TestSourceMode};
 use crate::diff_checker::{
     DiffChecker, GET_ASSET_BY_AUTHORITY_METHOD, GET_ASSET_BY_CREATOR_METHOD,
     GET_ASSET_BY_GROUP_METHOD, GET_ASSET_BY_OWNER_METHOD, GET_ASSET_METHOD, GET_ASSET_PROOF_METHOD,
 };
 use crate::error::IntegrityVerificationError;
+use crate::file_keys_fetcher::FileKeysFetcher;
 use clap::Parser;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
     IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig, MetricsTrait,
 };
+use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
 use postgre_client::PgClient;
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,6 +22,7 @@ mod api;
 mod config;
 mod diff_checker;
 mod error;
+mod file_keys_fetcher;
 mod params;
 mod requests;
 
@@ -42,25 +45,48 @@ async fn main() -> Result<(), IntegrityVerificationError> {
     metrics.register_metrics();
     start_metrics(metrics.registry, Some(config.metrics_port)).await;
 
-    let keys_fetcher = PgClient::new(&config.database_url, 100, 500).await;
-    let diff_checker = DiffChecker::new(
-        config.reference_host.clone(),
-        config.testing_host.clone(),
-        keys_fetcher,
-        metrics.integrity_verification_metrics.clone(),
-    );
-
     let mut tasks = JoinSet::new();
     let cancel_token = CancellationToken::new();
-    run_tests(
-        &mut tasks,
-        config.get_run_secondary_indexes_tests(),
-        config.get_run_proofs_tests(),
-        diff_checker,
-        metrics.integrity_verification_metrics.clone(),
-        cancel_token.clone(),
-    )
-    .await;
+    match config.test_source_mode {
+        TestSourceMode::File => {
+            let diff_checker = DiffChecker::new(
+                config.reference_host.clone(),
+                config.testing_host.clone(),
+                FileKeysFetcher::new(&config.test_file_path.clone().unwrap())
+                    .await
+                    .unwrap(),
+                metrics.integrity_verification_metrics.clone(),
+            );
+            run_tests(
+                &mut tasks,
+                config.get_run_secondary_indexes_tests(),
+                config.get_run_proofs_tests(),
+                config.get_run_assets_tests(),
+                diff_checker,
+                metrics.integrity_verification_metrics.clone(),
+                cancel_token.clone(),
+            )
+            .await;
+        }
+        TestSourceMode::Database => {
+            let diff_checker = DiffChecker::new(
+                config.reference_host.clone(),
+                config.testing_host.clone(),
+                PgClient::new(&config.database_url.clone().unwrap(), 100, 500).await,
+                metrics.integrity_verification_metrics.clone(),
+            );
+            run_tests(
+                &mut tasks,
+                config.get_run_secondary_indexes_tests(),
+                config.get_run_proofs_tests(),
+                config.get_run_assets_tests(),
+                diff_checker,
+                metrics.integrity_verification_metrics.clone(),
+                cancel_token.clone(),
+            )
+            .await;
+        }
+    };
 
     usecase::graceful_stop::listen_shutdown().await;
     cancel_token.cancel();
@@ -94,23 +120,28 @@ macro_rules! spawn_test {
     }};
 }
 
-async fn run_tests(
+async fn run_tests<T>(
     tasks: &mut JoinSet<Result<(), JoinError>>,
     run_secondary_indexes_tests: bool,
     run_proofs_tests: bool,
-    diff_checker: DiffChecker<PgClient>,
+    run_assets_tests: bool,
+    diff_checker: DiffChecker<T>,
     metrics: Arc<IntegrityVerificationMetricsConfig>,
     cancel_token: CancellationToken,
-) {
+) where
+    T: IntegrityVerificationKeysFetcher + Send + Sync + 'static,
+{
     let diff_checker = Arc::new(diff_checker);
-    spawn_test!(
-        tasks,
-        diff_checker,
-        metrics,
-        check_get_asset,
-        GET_ASSET_METHOD,
-        cancel_token
-    );
+    if run_assets_tests {
+        spawn_test!(
+            tasks,
+            diff_checker,
+            metrics,
+            check_get_asset,
+            GET_ASSET_METHOD,
+            cancel_token
+        );
+    }
     if run_proofs_tests {
         spawn_test!(
             tasks,

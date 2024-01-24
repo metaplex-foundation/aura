@@ -3085,6 +3085,7 @@ name = "integrity-verification"
 version = "0.1.0"
 dependencies = [
  "assert-json-diff",
+ "async-trait",
  "clap 4.4.14",
  "dotenvy",
  "entities",
