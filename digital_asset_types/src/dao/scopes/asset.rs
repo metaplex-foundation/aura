@@ -373,12 +373,16 @@ fn convert_rocks_asset_model(
     // and there is burn instruction where we update only assetDynamic seq value
     // that's why we need to take max value from both of them
     let seq = {
-        let dynamic_seq = dynamic_data
+        if dynamic_data.is_compressed.value {
+            let dynamic_seq = dynamic_data
             .seq
             .clone()
             .and_then(|u| u.value.try_into().ok());
-        let leaf_seq = leaf.leaf_seq.map(|seq| seq as i64);
-        std::cmp::max(dynamic_seq, leaf_seq)
+            let leaf_seq = leaf.leaf_seq.map(|seq| seq as i64);
+            std::cmp::max(dynamic_seq, leaf_seq)
+        } else {
+            Some(0)
+        }
     };
 
     Ok(asset::Model {
