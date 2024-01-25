@@ -378,7 +378,7 @@ fn convert_rocks_asset_model(
             .clone()
             .and_then(|u| u.value.try_into().ok());
         let leaf_seq = leaf.leaf_seq.map(|seq| seq as i64);
-        vec![dynamic_seq, leaf_seq].into_iter().max().unwrap() // unwrap here is safe, because vec is not empty
+        std::cmp::max(dynamic_seq, leaf_seq)
     };
 
     Ok(asset::Model {
