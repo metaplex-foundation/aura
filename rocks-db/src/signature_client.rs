@@ -225,6 +225,26 @@ impl Storage {
 
         Ok(())
     }
+
+    pub(crate) fn put_with_batch<T>(
+        backend: Arc<DB>,
+        batch: &mut rocksdb::WriteBatch,
+        key: T::KeyType,
+        value: &T::ValueType,
+    ) -> crate::Result<()>
+    where
+        T: TypedColumn,
+    {
+        let serialized_value = serialize(value)?;
+
+        batch.put_cf(
+            &backend.cf_handle(T::NAME).unwrap(),
+            T::encode_key(key),
+            serialized_value,
+        );
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

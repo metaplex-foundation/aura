@@ -75,6 +75,10 @@ zip-extract = "0.1.2"
 name = "integrated_benchmark"
 harness = false
 
+[[bench]]
+name = "ingester_benchmark"
+harness = false
+
 [dependencies.utils]
 version = "0.1.8"
 git = "https://github.com/extrnode/solana-geyser-zmq"
