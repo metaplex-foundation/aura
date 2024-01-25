@@ -240,9 +240,9 @@ impl AssetIndexStorage for PgClient {
 
 #[derive(sqlx::FromRow, Debug)]
 struct CreatorRawResponse {
-    pub asc_pubkey: Vec<u8>,
-    pub asc_creator: Vec<u8>,
-    pub asc_verified: bool,
+    pub(crate) asc_pubkey: Vec<u8>,
+    pub(crate) asc_creator: Vec<u8>,
+    pub(crate) asc_verified: bool,
 }
 pub struct CreatorsUpdates {
     pub new_or_updated: Vec<(Pubkey, Creator, i64)>,
