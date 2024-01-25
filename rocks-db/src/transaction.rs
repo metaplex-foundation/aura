@@ -1,5 +1,8 @@
 use async_trait::async_trait;
-use entities::{models::{BufferedTransaction, SignatureWithSlot}, enums::TaskStatus};
+use entities::{
+    enums::TaskStatus,
+    models::{BufferedTransaction, SignatureWithSlot},
+};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
