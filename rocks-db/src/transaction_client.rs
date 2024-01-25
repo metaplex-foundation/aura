@@ -16,10 +16,8 @@ impl TransactionResultPersister for Storage {
         for tx in txs {
             self.store_transaction_result_with_batch(&mut batch, tx, false)?;
         }
-        let backend = self.db.clone();
-        tokio::task::spawn_blocking(move || backend.write(batch))
+        self.write_batch(batch)
             .await
-            .map_err(|e| StorageError::Common(e.to_string()))?
             .map_err(|e| StorageError::Common(e.to_string()))?;
         Ok(())
     }
@@ -33,10 +31,8 @@ impl Storage {
     ) -> Result<(), StorageError> {
         let mut batch = rocksdb::WriteBatch::default();
         self.store_transaction_result_with_batch(&mut batch, tx, with_signatures)?;
-        let backend = self.db.clone();
-        tokio::task::spawn_blocking(move || backend.write(batch))
+        self.write_batch(batch)
             .await
-            .map_err(|e| StorageError::Common(e.to_string()))?
             .map_err(|e| StorageError::Common(e.to_string()))?;
         Ok(())
     }

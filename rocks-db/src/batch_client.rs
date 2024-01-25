@@ -2,14 +2,17 @@ use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
 use entities::enums::SpecificationVersions;
+use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::asset::{AssetsUpdateIdx, SlotAssetIdx};
+use crate::asset::{AssetCollection, AssetLeaf, AssetsUpdateIdx, SlotAssetIdx};
+use crate::cl_items::{ClItem, ClLeaf};
 use crate::column::TypedColumn;
+use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
 use crate::storage_traits::{AssetIndexReader, AssetSlotStorage, AssetUpdateIndexStorage};
-use crate::{Result, Storage};
-use entities::models::{AssetIndex, UrlWithStatus};
+use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage};
+use entities::models::{AssetIndex, CompleteAssetDetails, Updated, UrlWithStatus};
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<(u64, u64, Pubkey)>> {
@@ -243,5 +246,137 @@ impl AssetSlotStorage for Storage {
         }
 
         Ok(None)
+    }
+}
+
+impl Storage {
+    pub async fn insert_gaped_data(&self, data: CompleteAssetDetails) -> Result<()> {
+        let mut batch = rocksdb::WriteBatch::default();
+        self.asset_static_data.merge_with_batch(
+            &mut batch,
+            data.pubkey,
+            &AssetStaticDetails {
+                pubkey: data.pubkey,
+                specification_asset_class: data.specification_asset_class,
+                royalty_target_type: data.royalty_target_type,
+                created_at: data.slot_created as i64,
+            },
+        )?;
+
+        self.asset_dynamic_data.merge_with_batch(
+            &mut batch,
+            data.pubkey,
+            &AssetDynamicDetails {
+                pubkey: data.pubkey,
+                is_compressible: data.is_compressible,
+                is_compressed: data.is_compressed,
+                is_frozen: data.is_frozen,
+                supply: data.supply,
+                seq: data.seq,
+                is_burnt: data.is_burnt,
+                was_decompressed: data.was_decompressed,
+                onchain_data: data.onchain_data.map(|chain_data| {
+                    Updated::new(
+                        chain_data.slot_updated,
+                        chain_data.seq,
+                        json!(chain_data.value).to_string(),
+                    )
+                }),
+                creators: data.creators,
+                royalty_amount: data.royalty_amount,
+                url: data.url,
+            },
+        )?;
+
+        self.asset_authority_data.merge_with_batch(
+            &mut batch,
+            data.pubkey,
+            &AssetAuthority {
+                pubkey: data.pubkey,
+                authority: data.authority.value,
+                slot_updated: data.authority.slot_updated,
+            },
+        )?;
+
+        if let Some(collection) = data.collection {
+            self.asset_collection_data.merge_with_batch(
+                &mut batch,
+                data.pubkey,
+                &AssetCollection {
+                    pubkey: data.pubkey,
+                    collection: collection.value.collection,
+                    is_collection_verified: collection.value.is_collection_verified,
+                    collection_seq: collection.value.collection_seq,
+                    slot_updated: collection.slot_updated,
+                },
+            )?;
+        }
+
+        if let Some(leaf) = data.asset_leaf {
+            self.asset_leaf_data.merge_with_batch(
+                &mut batch,
+                data.pubkey,
+                &AssetLeaf {
+                    pubkey: data.pubkey,
+                    tree_id: leaf.value.tree_id,
+                    leaf: leaf.value.leaf.clone(),
+                    nonce: leaf.value.nonce,
+                    data_hash: leaf.value.data_hash,
+                    creator_hash: leaf.value.creator_hash,
+                    leaf_seq: leaf.value.leaf_seq,
+                    slot_updated: leaf.slot_updated,
+                },
+            )?
+        }
+
+        self.asset_owner_data.merge_with_batch(
+            &mut batch,
+            data.pubkey,
+            &AssetOwner {
+                pubkey: data.pubkey,
+                owner: data.owner,
+                delegate: data.delegate,
+                owner_type: data.owner_type,
+                owner_delegate_seq: data.owner_delegate_seq,
+            },
+        )?;
+
+        if let Some(leaf) = data.cl_leaf {
+            self.cl_leafs.put_with_batch(
+                &mut batch,
+                (leaf.cli_leaf_idx, leaf.cli_tree_key),
+                &ClLeaf {
+                    cli_leaf_idx: leaf.cli_leaf_idx,
+                    cli_tree_key: leaf.cli_tree_key,
+                    cli_node_idx: leaf.cli_node_idx,
+                },
+            )?
+        }
+        for item in data.cl_items {
+            self.cl_items.merge_with_batch(
+                &mut batch,
+                (item.cli_node_idx, item.cli_tree_key),
+                &ClItem {
+                    cli_node_idx: item.cli_node_idx,
+                    cli_tree_key: item.cli_tree_key,
+                    cli_leaf_idx: item.cli_leaf_idx,
+                    cli_seq: item.cli_seq,
+                    cli_level: item.cli_level,
+                    cli_hash: item.cli_hash.clone(),
+                    slot_updated: item.slot_updated,
+                },
+            )?;
+        }
+        self.write_batch(batch).await?;
+        Ok(())
+    }
+
+    pub(crate) async fn write_batch(&self, batch: rocksdb::WriteBatch) -> Result<()> {
+        let backend = self.db.clone();
+        tokio::task::spawn_blocking(move || backend.write(batch))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?
+            .map_err(|e| StorageError::Common(e.to_string()))?;
+        Ok(())
     }
 }
