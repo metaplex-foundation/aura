@@ -40,12 +40,6 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: ${{ runner.os }}-cargo-
 
-    - name: Debug Cache Contents
-      run: |
-        echo ${{ steps.cache-cargo.outputs.cache-hit }}
-        ls -R ~/.cargo
-        ls -R target
-
     - name: Append to Cargo.toml
       run: |
         echo "[profile.dev]" >> Cargo.toml
