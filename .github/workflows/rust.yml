@@ -13,25 +13,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-
-    - name: Cache cargo registry
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/
-          ~/.cargo/git/
-          target/
-        key: ${{ runner.os }}-cargo-uchain
+    - name: Check out
+      uses: actions/checkout@v3
 
     - name: Install dependencies
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-
-    - name: Append to Cargo.toml
-      run: |
-        echo "[profile.dev]" >> Cargo.toml
-        echo "debug = 0" >> Cargo.toml
 
     - name: Install Rust specific version
       uses: actions-rs/toolchain@v1
@@ -41,14 +27,50 @@ jobs:
         components: clippy, rustfmt
         override: true
 
+    - name: Restore cargo cache
+      id: cache-cargo
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-
+
+    - name: Debug Cache Contents
+      run: |
+        echo ${{ steps.cache-cargo.outputs.cache-hit }}
+        ls -R ~/.cargo
+        ls -R target
+
+    - name: Append to Cargo.toml
+      run: |
+        echo "[profile.dev]" >> Cargo.toml
+        echo "debug = 0" >> Cargo.toml
+
     - name: Check formatting
       run: cargo fmt --all -- --check
 
     - name: Lint with Clippy
       run: cargo clippy --all -- -D warnings
-      
+
     - name: Compile tests
       run: cargo test --no-run --locked --features integration_tests
+
+    - name: Save cargo cache
+      id: cache-cargo-save
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ steps.cache-cargo.outputs.cache-primary-key }}
 
     - name: Run tests
       run: cargo test --features integration_tests -- --nocapture --quiet

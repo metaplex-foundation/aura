@@ -1,17 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-  "digital_asset_types",
-  "nft_ingester",
-  "metrics_utils",
-  "rocks-db",
-  "postgre-client",
-  "entities",
-  "grpc",
-  "interface",
-  "usecase",
-  "tests/setup",
-  "backfill_rpc",
   "integrity_verification",
 ]
 
