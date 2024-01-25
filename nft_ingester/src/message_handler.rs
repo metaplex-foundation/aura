@@ -1,5 +1,6 @@
 use std::{str::FromStr, sync::Arc};
 
+use blockbuster::error::BlockbusterError;
 use blockbuster::programs::token_account::TokenProgramAccount;
 use blockbuster::{
     program_handler::ProgramParser,
@@ -14,6 +15,7 @@ use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
 use log::{debug, error, warn};
 use plerkle_serialization::AccountInfo;
+use solana_program::program_pack::Pack;
 use solana_sdk::pubkey::Pubkey;
 use utils::flatbuffer::account_data_generated::account_data::root_as_account_data;
 
@@ -102,6 +104,15 @@ impl MessageHandler {
         &self,
         account_info: &'a AccountInfo<'a>,
     ) -> Result<(), IngesterError> {
+        // skip processing of empty mints and multi-sig accounts
+        if let Some(account_info) = account_info.data() {
+            let account_data = account_info.iter().collect::<Vec<_>>();
+            if account_data.as_slice() == [0; 82]
+                || account_data.len() == spl_token::state::Multisig::LEN
+            {
+                return Ok(());
+            }
+        }
         let acc_parse_result = self.token_acc_parser.handle_account(account_info);
 
         match acc_parse_result {
@@ -116,7 +127,7 @@ impl MessageHandler {
                 };
             }
             Err(e) => {
-                warn!("Error while parsing account: {:?}", e);
+                account_parsing_error(e, account_info);
             }
         }
 
@@ -229,9 +240,10 @@ impl MessageHandler {
                     _ => debug!("\nUnexpected message\n"),
                 };
             }
-            Err(e) => {
-                warn!("Error while parsing account: {:?}", e);
-            }
+            Err(e) => match e {
+                BlockbusterError::AccountTypeNotImplemented => {}
+                _ => account_parsing_error(e, account_info),
+            },
         }
 
         Ok(())
@@ -291,4 +303,30 @@ fn map_account_info_fb_bytes(
     builder.finish(account_info_wip, None);
 
     Ok(builder.finished_data().to_owned())
+}
+
+fn account_parsing_error(err: BlockbusterError, account_info: &AccountInfo) {
+    warn!(
+        "Error while parsing account: {:?} {}",
+        err,
+        bs58::encode(
+            account_info
+                .pubkey()
+                .unwrap_or(&plerkle_serialization::Pubkey::new(&[0u8; 32]))
+                .key()
+                .iter()
+                .collect::<Vec<_>>()
+                .as_slice()
+        )
+        .into_string()
+    );
+}
+
+#[test]
+fn test_mint_uninitialized() {
+    let unpac_res = spl_token::state::Mint::unpack(&[0; 82]);
+    assert_eq!(
+        Err(solana_program::program_error::ProgramError::UninitializedAccount),
+        unpac_res
+    )
 }
