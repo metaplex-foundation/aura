@@ -1,7 +1,9 @@
+use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::Ordering;
 
 use crate::asset::{AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx};
+use crate::column::Column;
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
@@ -29,10 +31,33 @@ impl Storage {
     // TODO: Add a backfiller to fill the slot_asset_idx based on the assets_update_idx
 
     pub fn asset_updated(&self, slot: u64, pubkey: Pubkey) -> Result<()> {
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        self.asset_updated_with_batch(&mut batch, slot, pubkey)?;
+        self.db.write(batch)?;
+        Ok(())
+    }
+
+    pub(crate) fn asset_updated_with_batch(
+        &self,
+        batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        slot: u64,
+        pubkey: Pubkey,
+    ) -> Result<()> {
         let seq = self.get_next_asset_update_seq()?;
         let value = encode_u64x2_pubkey(seq, slot, pubkey);
-        self.assets_update_idx.put(value, AssetsUpdateIdx {})?;
-        self.slot_asset_idx.put((slot, pubkey), SlotAssetIdx {})
+        let serialized_value = serialize(&AssetsUpdateIdx {})?;
+        batch.put_cf(
+            &self.assets_update_idx.handle(),
+            Column::<AssetsUpdateIdx>::encode_key(value),
+            serialized_value,
+        );
+        let serialized_value = serialize(&SlotAssetIdx {})?;
+        batch.put_cf(
+            &self.slot_asset_idx.handle(),
+            Column::<SlotAssetIdx>::encode_key((slot, pubkey)),
+            serialized_value,
+        );
+        Ok(())
     }
 }
 

@@ -8,8 +8,8 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::{Result, StorageError};
 pub trait TypedColumn {
-    type KeyType: Clone + Send;
-    type ValueType: Serialize + DeserializeOwned + Send;
+    type KeyType: Sync + Clone + Send;
+    type ValueType: Sync + Serialize + DeserializeOwned + Send;
 
     const NAME: &'static str;
 
@@ -84,11 +84,47 @@ where
         Ok(())
     }
 
-    pub fn merge(&self, key: C::KeyType, value: &C::ValueType) -> Result<()> {
+    pub async fn merge(&self, key: C::KeyType, value: C::ValueType) -> Result<()> {
+        let backend = self.backend.clone();
+        tokio::task::spawn_blocking(move || Self::merge_sync(backend, key, value))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?
+    }
+
+    pub fn merge_sync(backend: Arc<DB>, key: C::KeyType, value: C::ValueType) -> Result<()> {
+        let serialized_value = serialize(&value)?;
+
+        backend.merge_cf(
+            &backend.cf_handle(C::NAME).unwrap(),
+            C::encode_key(key),
+            serialized_value,
+        )?;
+
+        Ok(())
+    }
+
+    pub(crate) fn merge_with_batch(
+        &self,
+        batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        key: C::KeyType,
+        value: &C::ValueType,
+    ) -> Result<()> {
         let serialized_value = serialize(value)?;
 
-        self.backend
-            .merge_cf(&self.handle(), C::encode_key(key), serialized_value)?;
+        batch.merge_cf(&self.handle(), C::encode_key(key), serialized_value);
+
+        Ok(())
+    }
+
+    pub(crate) fn put_with_batch(
+        &self,
+        batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        key: C::KeyType,
+        value: &C::ValueType,
+    ) -> Result<()> {
+        let serialized_value = serialize(value)?;
+
+        batch.put_cf(&self.handle(), C::encode_key(key), serialized_value);
 
         Ok(())
     }
@@ -204,6 +240,10 @@ where
         C::decode_key(bytes)
     }
 
+    pub fn encode_key(index: C::KeyType) -> Vec<u8> {
+        C::encode_key(index)
+    }
+
     pub fn iter(&self, key: C::KeyType) -> DBIteratorWithThreadMode<'_, DB> {
         let index_iterator = self.backend.iterator_cf(
             &self.handle(),
@@ -225,13 +265,16 @@ where
     }
 
     #[inline]
-    fn handle(&self) -> Arc<BoundColumnFamily> {
+    pub(crate) fn handle(&self) -> Arc<BoundColumnFamily> {
         self.backend.cf_handle(C::NAME).unwrap()
     }
 
     pub fn delete(&self, key: C::KeyType) -> Result<()> {
         self.backend.delete_cf(&self.handle(), C::encode_key(key))?;
         Ok(())
+    }
+    pub(crate) fn delete_with_batch(&self, batch: &mut rocksdb::WriteBatch, key: C::KeyType) {
+        batch.delete_cf(&self.handle(), C::encode_key(key));
     }
 
     fn delete_batch_sync(backend: Arc<DB>, keys: Vec<C::KeyType>) -> Result<()> {

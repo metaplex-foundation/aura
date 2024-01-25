@@ -261,7 +261,6 @@ pub async fn main() -> Result<(), IngesterError> {
         rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
         buffer.json_tasks.clone(),
-        false,
     ));
 
     let cloned_keep_running = keep_running.clone();
@@ -296,7 +295,6 @@ pub async fn main() -> Result<(), IngesterError> {
         rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
         buffer.json_tasks.clone(),
-        true,
     ));
     let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
         backfill_bubblegum_updates_processor.clone(),
@@ -320,6 +318,7 @@ pub async fn main() -> Result<(), IngesterError> {
             config::BackfillerMode::IngestDirectly => {
                 let consumer = Arc::new(DirectBlockParser::new(
                     tx_ingester.clone(),
+                    rocks_storage.clone(),
                     metrics_state.backfiller_metrics.clone(),
                 ));
                 backfiller
@@ -351,6 +350,7 @@ pub async fn main() -> Result<(), IngesterError> {
             config::BackfillerMode::IngestPersisted => {
                 let consumer = Arc::new(DirectBlockParser::new(
                     tx_ingester.clone(),
+                    rocks_storage.clone(),
                     metrics_state.backfiller_metrics.clone(),
                 ));
                 let producer = rocks_storage.clone();
