@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use interface::slots_dumper::SlotsDumper;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
+use tracing::error;
 
 pub struct FileSlotsDumper {
     path: String,
@@ -13,21 +14,30 @@ impl FileSlotsDumper {
     }
 }
 
-// TODO: rm unwraps
 #[async_trait]
 impl SlotsDumper for FileSlotsDumper {
     async fn dump_slots(&self, slots: &[u64]) {
-        let mut file = OpenOptions::new()
+        let mut file = match OpenOptions::new()
             .write(true)
             .append(true)
             .create(true)
             .open(&self.path)
             .await
-            .unwrap();
+        {
+            Ok(file) => file,
+            Err(e) => {
+                error!("Cannot open or create file: {}, error: {}", &self.path, e);
+                return;
+            }
+        };
 
         for &slot in slots.iter() {
-            file.write_all(slot.to_string().as_bytes()).await.unwrap();
-            file.write_all(b", ").await.unwrap()
+            if let Err(e) = file.write_all(slot.to_string().as_bytes()).await {
+                error!("Cannot write to file: {}, error: {}", &self.path, e);
+            };
+            if let Err(e) = file.write_all(b", ").await {
+                error!("Cannot write to file: {}, error: {}", &self.path, e);
+            };
         }
     }
 }

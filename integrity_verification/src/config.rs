@@ -26,7 +26,7 @@ pub struct IntegrityVerificationConfig {
     #[serde(default = "default_bool")]
     pub run_assets_tests: bool,
     pub test_source_mode: TestSourceMode,
-    pub test_file_path: Option<String>,
+    pub test_file_path_container: Option<String>,
     pub big_table_creds_path: Option<String>,
     pub slots_collect_path_container: Option<String>,
     #[serde(default = "default_bool")]

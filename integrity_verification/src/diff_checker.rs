@@ -401,7 +401,7 @@ where
 impl CollectSlotsTools {
     async fn collect_slots(&self, asset: &str, tree_key: &str, slot: u64) {
         let slots_collector = SlotsCollector::new(
-            Arc::new(FileSlotsDumper::new(self.format_filename(asset))),
+            Arc::new(FileSlotsDumper::new(self.format_filename(tree_key, asset))),
             self.bigtable_client.big_table_inner_client.clone(),
             slot,
             0,
@@ -415,8 +415,8 @@ impl CollectSlotsTools {
         info!("Collected slots for {}", tree_key);
     }
 
-    fn format_filename(&self, tree_key: &str) -> String {
-        format!("{}/{}.txt", self.slots_collect_path, tree_key)
+    fn format_filename(&self, tree_key: &str, asset: &str) -> String {
+        format!("{}/{}-{}.txt", self.slots_collect_path, tree_key, asset)
     }
 }
 
@@ -433,7 +433,7 @@ mod tests {
     use regex::Regex;
     use serde_json::json;
 
-    async fn create_diff_checker() -> DiffChecker<FileKeysFetcher> {
+    async fn create_test_diff_checker() -> DiffChecker<FileKeysFetcher> {
         let mut metrics = IntegrityVerificationMetrics::new(
             IntegrityVerificationMetricsConfig::new(),
             BackfillerMetricsConfig::new(),
@@ -457,7 +457,7 @@ mod tests {
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn test_get_slot() {
-        let slot = create_diff_checker().await.get_slot().await.unwrap();
+        let slot = create_test_diff_checker().await.get_slot().await.unwrap();
 
         assert_ne!(slot, 0)
     }
@@ -465,7 +465,7 @@ mod tests {
     #[cfg(feature = "bigtable_tests")]
     #[tokio::test]
     async fn test_save_slots_to_file() {
-        create_diff_checker()
+        create_test_diff_checker()
             .await
             .collect_slots_tools
             .unwrap()

@@ -57,7 +57,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
             let diff_checker = DiffChecker::new(
                 config.reference_host.clone(),
                 config.testing_host.clone(),
-                FileKeysFetcher::new(&config.test_file_path.clone().unwrap())
+                FileKeysFetcher::new(&config.test_file_path_container.clone().unwrap())
                     .await
                     .unwrap(),
                 metrics.integrity_verification_metrics.clone(),
