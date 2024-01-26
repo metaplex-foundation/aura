@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::error;
+use usecase::bigtable::BigTableClient;
 
 pub const GET_ASSET_METHOD: &str = "getAsset";
 pub const GET_ASSET_PROOF_METHOD: &str = "getAssetProof";
@@ -23,6 +24,7 @@ pub const GET_ASSET_BY_GROUP_METHOD: &str = "getAssetsByGroup";
 pub const GET_ASSET_BY_CREATOR_METHOD: &str = "getAssetsByCreator";
 
 const REQUESTS_INTERVAL_MILLIS: u64 = 1500;
+const GET_SIGNATURES_LIMIT: i64 = 2000;
 
 pub struct DiffChecker<T>
 where
@@ -33,6 +35,7 @@ where
     api: IntegrityVerificationApi,
     keys_fetcher: T,
     metrics: Arc<IntegrityVerificationMetricsConfig>,
+    bigtable_client: Arc<BigTableClient>,
     regexes: Vec<Regex>,
 }
 
@@ -45,6 +48,7 @@ where
         testing_host: String,
         keys_fetcher: T,
         metrics: Arc<IntegrityVerificationMetricsConfig>,
+        bigtable_client: Arc<BigTableClient>,
     ) -> Self {
         // Regular expressions, that purposed to filter out some difference between
         // testing and reference hosts that we already know about
@@ -69,6 +73,7 @@ where
             api: IntegrityVerificationApi::new(),
             keys_fetcher,
             metrics,
+            bigtable_client,
             regexes,
         }
     }
@@ -306,6 +311,13 @@ where
 
         Ok(())
     }
+}
+
+impl<T> DiffChecker<T>
+where
+    T: IntegrityVerificationKeysFetcher + Send + Sync,
+{
+    pub async fn get_slots(&self, tree_key: &str) {}
 }
 
 #[tokio::test]

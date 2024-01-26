@@ -20,6 +20,7 @@ pub struct IntegrityVerificationConfig {
     pub run_assets_tests: Option<bool>,
     pub test_source_mode: TestSourceMode,
     pub test_file_path: Option<String>,
+    pub big_table_creds_path: String,
 }
 
 impl IntegrityVerificationConfig {

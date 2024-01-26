@@ -17,6 +17,7 @@ use std::time::Duration;
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
+use usecase::bigtable::BigTableClient;
 
 mod api;
 mod config;
@@ -25,6 +26,8 @@ mod error;
 mod file_keys_fetcher;
 mod params;
 mod requests;
+
+const BIGTABLE_TIMEOUT: u32 = 1000;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -47,6 +50,11 @@ async fn main() -> Result<(), IntegrityVerificationError> {
 
     let mut tasks = JoinSet::new();
     let cancel_token = CancellationToken::new();
+    let big_table_client = Arc::new(
+        BigTableClient::connect_new_with(config.big_table_creds_path.clone(), BIGTABLE_TIMEOUT)
+            .await
+            .unwrap(),
+    );
     match config.test_source_mode {
         TestSourceMode::File => {
             let diff_checker = DiffChecker::new(
@@ -56,6 +64,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                     .await
                     .unwrap(),
                 metrics.integrity_verification_metrics.clone(),
+                big_table_client.clone(),
             );
             run_tests(
                 &mut tasks,
@@ -74,6 +83,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                 config.testing_host.clone(),
                 PgClient::new(&config.database_url.clone().unwrap(), 100, 500).await,
                 metrics.integrity_verification_metrics.clone(),
+                big_table_client.clone(),
             );
             run_tests(
                 &mut tasks,
