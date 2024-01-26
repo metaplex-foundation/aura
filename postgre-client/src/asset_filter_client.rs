@@ -10,9 +10,9 @@ use crate::{
 
 #[derive(sqlx::FromRow, Debug)]
 struct AssetRawResponse {
-    pub pubkey: Vec<u8>,
-    pub slot_created: i64,
-    pub slot_updated: i64,
+    pub(crate) pubkey: Vec<u8>,
+    pub(crate) slot_created: i64,
+    pub(crate) slot_updated: i64,
 }
 
 impl PgClient {
@@ -244,7 +244,7 @@ impl AssetPubkeyFilteredFetcher for PgClient {
 }
 
 impl AssetRawResponse {
-    pub fn encode_sorting_key(&self, sort_by: &AssetSortBy) -> String {
+    fn encode_sorting_key(&self, sort_by: &AssetSortBy) -> String {
         let mut key = match sort_by {
             AssetSortBy::SlotCreated => self.slot_created.to_be_bytes().to_vec(),
             AssetSortBy::SlotUpdated => self.slot_updated.to_be_bytes().to_vec(),
@@ -253,7 +253,7 @@ impl AssetRawResponse {
         general_purpose::STANDARD_NO_PAD.encode(key)
     }
 
-    pub fn decode_sorting_key(encoded_key: &str) -> Result<(i64, Vec<u8>), String> {
+    fn decode_sorting_key(encoded_key: &str) -> Result<(i64, Vec<u8>), String> {
         let key = match general_purpose::STANDARD_NO_PAD.decode(encoded_key) {
             Ok(k) => k,
             Err(_) => return Err("Failed to decode Base64".to_string()),
