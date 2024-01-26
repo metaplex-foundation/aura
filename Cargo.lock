@@ -3091,6 +3091,7 @@ dependencies = [
  "entities",
  "env_logger 0.10.1",
  "figment",
+ "interface",
  "metrics-utils",
  "postgre-client",
  "rand 0.8.5",

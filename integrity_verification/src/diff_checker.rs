@@ -6,15 +6,17 @@ use crate::params::{
     generate_get_assets_by_group_params, generate_get_assets_by_owner_params,
 };
 use crate::requests::Body;
+use crate::slots_dumper::FileSlotsDumper;
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
-use metrics_utils::IntegrityVerificationMetricsConfig;
+use metrics_utils::{BackfillerMetricsConfig, IntegrityVerificationMetricsConfig};
 use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
 use regex::Regex;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::error;
+use tracing::{error, info};
 use usecase::bigtable::BigTableClient;
+use usecase::slots_collector::SlotsCollector;
 
 pub const GET_ASSET_METHOD: &str = "getAsset";
 pub const GET_ASSET_PROOF_METHOD: &str = "getAssetProof";
@@ -24,7 +26,13 @@ pub const GET_ASSET_BY_GROUP_METHOD: &str = "getAssetsByGroup";
 pub const GET_ASSET_BY_CREATOR_METHOD: &str = "getAssetsByCreator";
 
 const REQUESTS_INTERVAL_MILLIS: u64 = 1500;
-const GET_SIGNATURES_LIMIT: i64 = 2000;
+const BIGTABLE_TIMEOUT: u32 = 1000;
+
+struct CollectSlotsTools {
+    bigtable_client: Arc<BigTableClient>,
+    slots_collect_path: String,
+    metrics: Arc<BackfillerMetricsConfig>,
+}
 
 pub struct DiffChecker<T>
 where
@@ -35,7 +43,7 @@ where
     api: IntegrityVerificationApi,
     keys_fetcher: T,
     metrics: Arc<IntegrityVerificationMetricsConfig>,
-    bigtable_client: Arc<BigTableClient>,
+    collect_slots_tools: Option<CollectSlotsTools>,
     regexes: Vec<Regex>,
 }
 
@@ -43,12 +51,15 @@ impl<T> DiffChecker<T>
 where
     T: IntegrityVerificationKeysFetcher + Send + Sync,
 {
-    pub fn new(
+    pub async fn new(
         reference_host: String,
         testing_host: String,
         keys_fetcher: T,
-        metrics: Arc<IntegrityVerificationMetricsConfig>,
-        bigtable_client: Arc<BigTableClient>,
+        test_metrics: Arc<IntegrityVerificationMetricsConfig>,
+        slot_collect_metrics: Arc<BackfillerMetricsConfig>,
+        bigtable_creds: Option<String>,
+        slots_collect_path: Option<String>,
+        collect_slots_for_proofs: bool,
     ) -> Self {
         // Regular expressions, that purposed to filter out some difference between
         // testing and reference hosts that we already know about
@@ -67,13 +78,30 @@ where
             Regex::new(r#"json atoms at path \"(.*?\.ownership\.delegated)\" are not equal:\n\s*lhs:\n\s*(true|false|null|\".*?\"|\d+)\n\s*rhs:\n\s*(true|false|null|\".*?\"|\d+)\n*"#).unwrap(),
         ];
 
+        if collect_slots_for_proofs && (bigtable_creds.is_none() || slots_collect_path.is_none()) {
+            panic!("Invalid config: trying collect slots for proofs, but do not pass bigtable creds ({:?}) or slots collect path ({:?})", &bigtable_creds, &slots_collect_path);
+        }
+        let mut collect_slots_tools = None;
+        if collect_slots_for_proofs {
+            // Unwraps, is safe, because we check it above
+            collect_slots_tools = Some(CollectSlotsTools {
+                bigtable_client: Arc::new(
+                    BigTableClient::connect_new_with(bigtable_creds.unwrap(), BIGTABLE_TIMEOUT)
+                        .await
+                        .unwrap(),
+                ),
+                slots_collect_path: slots_collect_path.unwrap(),
+                metrics: slot_collect_metrics,
+            })
+        }
+
         Self {
             reference_host,
             testing_host,
             api: IntegrityVerificationApi::new(),
             keys_fetcher,
-            metrics,
-            bigtable_client,
+            metrics: test_metrics,
+            collect_slots_tools,
             regexes,
         }
     }
@@ -317,18 +345,136 @@ impl<T> DiffChecker<T>
 where
     T: IntegrityVerificationKeysFetcher + Send + Sync,
 {
-    pub async fn get_slots(&self, tree_key: &str) {}
+    async fn get_tree_key_and_start_slot_for_asset(
+        &self,
+        asset: &str,
+    ) -> Result<(String, u64), IntegrityVerificationError> {
+        let resp = self
+            .api
+            .make_request(
+                &self.reference_host,
+                &json!(Body::new(
+                    GET_ASSET_METHOD,
+                    json!(generate_get_asset_params(asset.to_string())),
+                ))
+                .to_string(),
+            )
+            .await?;
+        let tree = match resp["result"]["compression"]["tree"].as_str() {
+            None => {
+                return Err(IntegrityVerificationError::CannotFindAssetTree(
+                    asset.to_string(),
+                ))
+            }
+            Some(tree) => tree,
+        };
+
+        Ok((tree.to_string(), 0))
+    }
 }
 
-#[tokio::test]
-async fn test_regex() {
-    let reference_response = json!({
+impl CollectSlotsTools {
+    async fn collect_slots(&self, tree_key: &str, slot_start_from: u64) {
+        let slots_collector = SlotsCollector::new(
+            Arc::new(FileSlotsDumper::new(self.format_filename(tree_key))),
+            self.bigtable_client.big_table_inner_client.clone(),
+            slot_start_from,
+            0,
+            self.metrics.clone(),
+        );
+
+        info!("Start collecting slots for {}", tree_key);
+        slots_collector
+            .collect_slots(&format!("{}/", tree_key))
+            .await;
+        info!("Collected slots for {}", tree_key);
+    }
+
+    fn format_filename(&self, tree_key: &str) -> String {
+        format!("{}/{}.txt", self.slots_collect_path, tree_key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::diff_checker::DiffChecker;
+    use crate::file_keys_fetcher::FileKeysFetcher;
+    use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
+    use metrics_utils::utils::start_metrics;
+    use metrics_utils::{
+        BackfillerMetricsConfig, IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig,
+        MetricsTrait,
+    };
+    use regex::Regex;
+    use serde_json::json;
+
+    async fn create_diff_checker() -> DiffChecker<FileKeysFetcher> {
+        let mut metrics = IntegrityVerificationMetrics::new(
+            IntegrityVerificationMetricsConfig::new(),
+            BackfillerMetricsConfig::new(),
+        );
+        metrics.register_metrics();
+        start_metrics(metrics.registry, Some(6001)).await;
+
+        DiffChecker::new(
+            "".to_string(),
+            "".to_string(),
+            FileKeysFetcher::new("./test_keys.txt").await.unwrap(),
+            metrics.integrity_verification_metrics.clone(),
+            metrics.slot_collector_metrics.clone(),
+            Some(String::from("../../creds.json")),
+            Some("./".to_string()),
+            true,
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn test_get_tree_key_and_start_slot_for_asset() {
+        let (tree, _) = create_diff_checker()
+            .get_tree_key_and_start_slot_for_asset("BAtEs7TuGm2hP2owc9cTit2TNfVzpPFyQAAvkDWs6tDm")
+            .await
+            .unwrap();
+
+        assert_eq!(tree, "4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE")
+    }
+
+    #[cfg(feature = "bigtable_tests")]
+    #[tokio::test]
+    async fn test_save_slots_to_file() {
+        create_diff_checker()
+            .collect_slots("4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE", 244240112)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn test_regex() {
+        let reference_response = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                    "files": [
+                        {
+                            "uri": "https://assets.pinit.io/3Qru1Gjz9SFd4nESynRQytL65nXNcQGwc1eVbZz24ijG/ZyFU9Lt94Rb57y2hZpAssPCRQU6qXoWzkPhd6bEHKep/731.jpeg",
+                            "cdn_uri": "https://cdn.helius-rpc.com/cdn-cgi/image//https://assets.pinit.io/3Qru1Gjz9SFd4nESynRQytL65nXNcQGwc1eVbZz24ijG/ZyFU9Lt94Rb57y2hZpAssPCRQU6qXoWzkPhd6bEHKep/731.jpeg",
+                            "mime": "image/jpeg"
+                        }
+                    ],
+                    "metadata": {
+                        "description": "GK #731 - Generated and deployed on LaunchMyNFT.",
+                        "name": "NFT #731",
+                        "symbol": "SYM",
+                        "token_standard": "NonFungible"
+                    },
+                },
+            "id": 0
+        });
+
+        let testing_response1 = json!({
         "jsonrpc": "2.0",
         "result": {
                 "files": [
                     {
                         "uri": "https://assets.pinit.io/3Qru1Gjz9SFd4nESynRQytL65nXNcQGwc1eVbZz24ijG/ZyFU9Lt94Rb57y2hZpAssPCRQU6qXoWzkPhd6bEHKep/731.jpeg",
-                        "cdn_uri": "https://cdn.helius-rpc.com/cdn-cgi/image//https://assets.pinit.io/3Qru1Gjz9SFd4nESynRQytL65nXNcQGwc1eVbZz24ijG/ZyFU9Lt94Rb57y2hZpAssPCRQU6qXoWzkPhd6bEHKep/731.jpeg",
                         "mime": "image/jpeg"
                     }
                 ],
@@ -336,78 +482,61 @@ async fn test_regex() {
                     "description": "GK #731 - Generated and deployed on LaunchMyNFT.",
                     "name": "NFT #731",
                     "symbol": "SYM",
-                    "token_standard": "NonFungible"
                 },
             },
-        "id": 0
-    });
+            "id": 0
+        });
 
-    let testing_response1 = json!({
-    "jsonrpc": "2.0",
-    "result": {
-            "files": [
-                {
-                    "uri": "https://assets.pinit.io/3Qru1Gjz9SFd4nESynRQytL65nXNcQGwc1eVbZz24ijG/ZyFU9Lt94Rb57y2hZpAssPCRQU6qXoWzkPhd6bEHKep/731.jpeg",
-                    "mime": "image/jpeg"
-                }
-            ],
-            "metadata": {
-                "description": "GK #731 - Generated and deployed on LaunchMyNFT.",
-                "name": "NFT #731",
-                "symbol": "SYM",
+        let res = assert_json_matches_no_panic(
+            &reference_response,
+            &testing_response1,
+            Config::new(CompareMode::Strict),
+        )
+        .err()
+        .unwrap();
+
+        let re1 = Regex::new(r#"json atom at path \".*?\.token_standard\" is missing from rhs\n*"#)
+            .unwrap();
+        let re2 =
+            Regex::new(r#"json atom at path \".*?\.cdn_uri\" is missing from rhs\n*"#).unwrap();
+        let res = re1.replace_all(&res, "").to_string();
+        let res = re2.replace_all(&res, "").to_string();
+
+        assert_eq!(0, res.len());
+
+        let testing_response2 = json!({
+        "jsonrpc": "2.0",
+        "result": {
+                "files": [
+                    {
+                        "uri": "https://assets.pinit.io/3Qru1Gjz9SFd4nESynRQytL65nXNcQGwc1eVbZz24ijG/ZyFU9Lt94Rb57y2hZpAssPCRQU6qXoWzkPhd6bEHKep/731.jpeg",
+                        "mime": "image/jpeg"
+                    }
+                ],
+                "mutable": false,
+                "metadata": {
+                    "description": "GK #731 - Generated and deployed on LaunchMyNFT.",
+                    "name": "NFT #731",
+                    "symbol": "SYM",
+                },
             },
-        },
-        "id": 0
-    });
+            "id": 0
+        });
 
-    let res = assert_json_matches_no_panic(
-        &reference_response,
-        &testing_response1,
-        Config::new(CompareMode::Strict),
-    )
-    .err()
-    .unwrap();
+        let res = assert_json_matches_no_panic(
+            &reference_response,
+            &testing_response2,
+            Config::new(CompareMode::Strict),
+        )
+        .err()
+        .unwrap();
 
-    let re1 =
-        Regex::new(r#"json atom at path \".*?\.token_standard\" is missing from rhs\n*"#).unwrap();
-    let re2 = Regex::new(r#"json atom at path \".*?\.cdn_uri\" is missing from rhs\n*"#).unwrap();
-    let res = re1.replace_all(&res, "").to_string();
-    let res = re2.replace_all(&res, "").to_string();
+        let res = re1.replace_all(&res, "").to_string();
+        let res = re2.replace_all(&res, "").to_string();
 
-    assert_eq!(0, res.len());
-
-    let testing_response2 = json!({
-    "jsonrpc": "2.0",
-    "result": {
-            "files": [
-                {
-                    "uri": "https://assets.pinit.io/3Qru1Gjz9SFd4nESynRQytL65nXNcQGwc1eVbZz24ijG/ZyFU9Lt94Rb57y2hZpAssPCRQU6qXoWzkPhd6bEHKep/731.jpeg",
-                    "mime": "image/jpeg"
-                }
-            ],
-            "mutable": false,
-            "metadata": {
-                "description": "GK #731 - Generated and deployed on LaunchMyNFT.",
-                "name": "NFT #731",
-                "symbol": "SYM",
-            },
-        },
-        "id": 0
-    });
-
-    let res = assert_json_matches_no_panic(
-        &reference_response,
-        &testing_response2,
-        Config::new(CompareMode::Strict),
-    )
-    .err()
-    .unwrap();
-
-    let res = re1.replace_all(&res, "").to_string();
-    let res = re2.replace_all(&res, "").to_string();
-
-    assert_eq!(
-        "json atom at path \".result.mutable\" is missing from lhs",
-        res.trim()
-    );
+        assert_eq!(
+            "json atom at path \".result.mutable\" is missing from lhs",
+            res.trim()
+        );
+    }
 }

@@ -13,13 +13,18 @@ use prometheus_client::registry::Registry;
 
 pub struct IntegrityVerificationMetrics {
     pub integrity_verification_metrics: Arc<IntegrityVerificationMetricsConfig>,
+    pub slot_collector_metrics: Arc<BackfillerMetricsConfig>,
     pub registry: Registry,
 }
 
 impl IntegrityVerificationMetrics {
-    pub fn new(integrity_verification_metrics: IntegrityVerificationMetricsConfig) -> Self {
+    pub fn new(
+        integrity_verification_metrics: IntegrityVerificationMetricsConfig,
+        slot_collector_metrics: BackfillerMetricsConfig,
+    ) -> Self {
         Self {
             integrity_verification_metrics: Arc::new(integrity_verification_metrics),
+            slot_collector_metrics: Arc::new(slot_collector_metrics),
             registry: Registry::default(),
         }
     }
@@ -417,6 +422,7 @@ impl MetricsTrait for MetricState {
 impl MetricsTrait for IntegrityVerificationMetrics {
     fn register_metrics(&mut self) {
         self.integrity_verification_metrics.start_time();
+        self.slot_collector_metrics.register(&mut self.registry);
 
         self.registry.register(
             "tests_start_time",
