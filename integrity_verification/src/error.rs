@@ -10,8 +10,6 @@ pub enum IntegrityVerificationError {
     IO(#[from] std::io::Error),
     #[error("FetchKeys {0}")]
     FetchKeys(String),
-    #[error("CannotFindAssetTree {0}")]
-    CannotFindAssetTree(String),
     #[error("CannotGetSlot {0}")]
     CannotGetSlot(String),
 }

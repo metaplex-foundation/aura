@@ -179,18 +179,7 @@ where
                     req.method, req, diff
                 );
 
-                if req.method == GET_ASSET_PROOF_METHOD {
-                    let asset_id = match req.params["id"].as_str() {
-                        None => {
-                            error!("cannot get asset id: {:?}", &req.params);
-                            continue;
-                        }
-                        Some(asset_id) => asset_id,
-                    };
-                    if let Err(e) = self.try_collect_slots(asset_id).await {
-                        error!("try_collect_slots: {}", e);
-                    };
-                }
+                self.try_collect_slots(req, &reference_response).await;
             }
 
             // Prevent rate-limit errors
@@ -360,46 +349,36 @@ impl<T> DiffChecker<T>
 where
     T: IntegrityVerificationKeysFetcher + Send + Sync,
 {
-    async fn try_collect_slots(&self, asset: &str) -> Result<(), IntegrityVerificationError> {
+    async fn try_collect_slots(&self, req: &Body, reference_response: &Value) {
         let collect_tools = match &self.collect_slots_tools {
-            None => return Ok(()),
+            None => return,
             Some(collect_tools) => collect_tools,
         };
 
-        let asset_tree_fut = self.get_tree_key_for_asset(asset);
-        let slot_fut = self.get_slot();
-
-        let (tree, slot) = tokio::join!(asset_tree_fut, slot_fut);
-        collect_tools.collect_slots(&tree?, slot?).await;
-
-        Ok(())
-    }
-
-    async fn get_tree_key_for_asset(
-        &self,
-        asset: &str,
-    ) -> Result<String, IntegrityVerificationError> {
-        let resp = self
-            .api
-            .make_request(
-                &self.reference_host,
-                &json!(Body::new(
-                    GET_ASSET_METHOD,
-                    json!(generate_get_asset_params(asset.to_string())),
-                ))
-                .to_string(),
-            )
-            .await?;
-        let tree = match resp["result"]["compression"]["tree"].as_str() {
-            None => {
-                return Err(IntegrityVerificationError::CannotFindAssetTree(
-                    asset.to_string(),
-                ))
-            }
-            Some(tree) => tree,
-        };
-
-        Ok(tree.to_string())
+        if req.method == GET_ASSET_PROOF_METHOD {
+            let asset_id = match req.params["id"].as_str() {
+                None => {
+                    error!("cannot get asset id: {:?}", &req.params);
+                    return;
+                }
+                Some(asset_id) => asset_id,
+            };
+            let tree_id = match reference_response["result"]["tree_id"].as_str() {
+                None => {
+                    error!("cannot get tree id: {:?}", &reference_response);
+                    return;
+                }
+                Some(tree_id) => tree_id,
+            };
+            let slot = match self.get_slot().await {
+                Ok(slot) => slot,
+                Err(e) => {
+                    error!("get_slot: {}", e);
+                    return;
+                }
+            };
+            collect_tools.collect_slots(asset_id, tree_id, slot).await;
+        }
     }
 
     async fn get_slot(&self) -> Result<u64, IntegrityVerificationError> {
@@ -420,9 +399,9 @@ where
 }
 
 impl CollectSlotsTools {
-    async fn collect_slots(&self, tree_key: &str, slot: u64) {
+    async fn collect_slots(&self, asset: &str, tree_key: &str, slot: u64) {
         let slots_collector = SlotsCollector::new(
-            Arc::new(FileSlotsDumper::new(self.format_filename(tree_key))),
+            Arc::new(FileSlotsDumper::new(self.format_filename(asset))),
             self.bigtable_client.big_table_inner_client.clone(),
             slot,
             0,
@@ -483,18 +462,6 @@ mod tests {
         assert_ne!(slot, 0)
     }
 
-    #[cfg(feature = "rpc_tests")]
-    #[tokio::test]
-    async fn test_get_tree_key_for_asset() {
-        let tree = create_diff_checker()
-            .await
-            .get_tree_key_for_asset("BAtEs7TuGm2hP2owc9cTit2TNfVzpPFyQAAvkDWs6tDm")
-            .await
-            .unwrap();
-
-        assert_eq!(tree, "4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE")
-    }
-
     #[cfg(feature = "bigtable_tests")]
     #[tokio::test]
     async fn test_save_slots_to_file() {
@@ -502,7 +469,11 @@ mod tests {
             .await
             .collect_slots_tools
             .unwrap()
-            .collect_slots("4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE", 244259062)
+            .collect_slots(
+                "BAtEs7TuGm2hP2owc9cTit2TNfVzpPFyQAAvkDWs6tDm",
+                "4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE",
+                244259062,
+            )
             .await;
     }
 
