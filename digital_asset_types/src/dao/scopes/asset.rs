@@ -375,9 +375,9 @@ fn convert_rocks_asset_model(
     let seq = {
         if dynamic_data.is_compressed.value {
             let dynamic_seq = dynamic_data
-            .seq
-            .clone()
-            .and_then(|u| u.value.try_into().ok());
+                .seq
+                .clone()
+                .and_then(|u| u.value.try_into().ok());
             let leaf_seq = leaf.leaf_seq.map(|seq| seq as i64);
             std::cmp::max(dynamic_seq, leaf_seq)
         } else {

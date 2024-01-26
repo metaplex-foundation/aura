@@ -1,26 +1,43 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
+    use blockbuster::token_metadata::state::{Collection, Creator, Data, Key, Metadata};
     use entities::api_req_params::GetAsset;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
-    use blockbuster::token_metadata::state::{Collection, Creator, Data, Key, Metadata};
     use nft_ingester::{
-        backfiller::{DirectBlockParser, TransactionsParser}, bubblegum_updates_processor::BubblegumTxProcessor, buffer::Buffer, db_v2::DBClient, mplx_updates_processor::{MetadataInfo, MplxAccsProcessor}, token_updates_processor::TokenAccsProcessor, transaction_ingester
+        backfiller::{DirectBlockParser, TransactionsParser},
+        bubblegum_updates_processor::BubblegumTxProcessor,
+        buffer::Buffer,
+        db_v2::DBClient,
+        mplx_updates_processor::{MetadataInfo, MplxAccsProcessor},
+        token_updates_processor::TokenAccsProcessor,
+        transaction_ingester,
     };
-    use rocks_db::{columns::{Mint, TokenAccount}, offchain_data::OffChainData, Storage};
+    use rocks_db::{
+        columns::{Mint, TokenAccount},
+        offchain_data::OffChainData,
+        Storage,
+    };
     use solana_sdk::pubkey::Pubkey;
     use sqlx::{Pool, Postgres};
-    use std::{collections::HashMap, io::{self, Read}};
+    use std::str::FromStr;
     use std::sync::Arc;
+    use std::{
+        collections::HashMap,
+        io::{self, Read},
+    };
     use std::{fs::File, sync::atomic::AtomicBool};
     use testcontainers::clients::Cli;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
-    use std::str::FromStr;
 
     // 242856151 slot when decompress happened
 
-    async fn process_bubblegum_transactions(mutexed_tasks: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>, env_rocks: Arc<rocks_db::Storage>, buffer: Arc<Buffer>) {
+    async fn process_bubblegum_transactions(
+        mutexed_tasks: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        env_rocks: Arc<rocks_db::Storage>,
+        buffer: Arc<Buffer>,
+    ) {
         // write slots we need to parse because backfiller dropped it during raw transactions saving
         let slots_to_parse: Vec<u64> = vec![
             242049108, 242049247, 242049255, 242050728, 242050746, 242143893, 242143906, 242239091,
@@ -75,11 +92,16 @@ mod tests {
         )
         .await
         .unwrap();
-
     }
 
-    async fn process_accounts(pg_pool: Pool<Postgres>, buffer: Arc<Buffer>, env_rocks: Arc<rocks_db::Storage>, nft_created_slot: i64, mint: &Pubkey) {
-        let db_client = Arc::new(DBClient{pool: pg_pool});
+    async fn process_accounts(
+        pg_pool: Pool<Postgres>,
+        buffer: Arc<Buffer>,
+        env_rocks: Arc<rocks_db::Storage>,
+        nft_created_slot: i64,
+        mint: &Pubkey,
+    ) {
+        let db_client = Arc::new(DBClient { pool: pg_pool });
 
         let mplx_accs_parser = MplxAccsProcessor::new(
             1,
@@ -110,48 +132,65 @@ mod tests {
             amount: 1,
         };
 
-        let mint_acc = Mint{
+        let mint_acc = Mint {
             pubkey: *mint,
             slot_updated: nft_created_slot,
             supply: 1,
             decimals: 0,
-            mint_authority: Some(Pubkey::from_str("ywx1vh2bG1brfX8SqWMxGiivNTZjMHf9vuKrXKt4pNT").unwrap()),
+            mint_authority: Some(
+                Pubkey::from_str("ywx1vh2bG1brfX8SqWMxGiivNTZjMHf9vuKrXKt4pNT").unwrap(),
+            ),
             freeze_authority: None,
         };
 
-        spl_token_accs_parser.transform_and_save_token_accs(&vec![token_acc]).await;
+        spl_token_accs_parser
+            .transform_and_save_token_accs(&vec![token_acc])
+            .await;
 
-        spl_token_accs_parser.transform_and_save_mint_accs(&vec![mint_acc]).await;
+        spl_token_accs_parser
+            .transform_and_save_mint_accs(&vec![mint_acc])
+            .await;
 
         let decompressed_token_data = MetadataInfo {
             metadata: Metadata {
                 key: Key::MetadataV1,
-                update_authority: Pubkey::from_str("ywx1vh2bG1brfX8SqWMxGiivNTZjMHf9vuKrXKt4pNT").unwrap(),
+                update_authority: Pubkey::from_str("ywx1vh2bG1brfX8SqWMxGiivNTZjMHf9vuKrXKt4pNT")
+                    .unwrap(),
                 mint: *mint,
                 data: Data {
                     name: "Mufacka name".to_string(),
                     symbol: "SSNC".to_string(),
-                    uri: "https://arweave.net/nbCWy-OEu7MG5ORuJMurP5A-65qO811R-vL_8l_JHQM".to_string(),
+                    uri: "https://arweave.net/nbCWy-OEu7MG5ORuJMurP5A-65qO811R-vL_8l_JHQM"
+                        .to_string(),
                     seller_fee_basis_points: 100,
                     creators: Some(vec![
-                        Creator{
-                            address: Pubkey::from_str("3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM").unwrap(),
+                        Creator {
+                            address: Pubkey::from_str(
+                                "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+                            )
+                            .unwrap(),
                             verified: true,
                             share: 99,
                         },
-                        Creator{
-                            address: Pubkey::from_str("5zgWmEx4ppdh6LfaPUmfJG2gBAK8bC2gBv7zshD6N1hG").unwrap(),
+                        Creator {
+                            address: Pubkey::from_str(
+                                "5zgWmEx4ppdh6LfaPUmfJG2gBAK8bC2gBv7zshD6N1hG",
+                            )
+                            .unwrap(),
                             verified: false,
                             share: 1,
-                        },]),
+                        },
+                    ]),
                 },
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: Some(255),
-                token_standard: Some(blockbuster::token_metadata::state::TokenStandard::NonFungible),
-                collection: Some(Collection{
+                token_standard: Some(
+                    blockbuster::token_metadata::state::TokenStandard::NonFungible,
+                ),
+                collection: Some(Collection {
                     verified: false,
-                    key: Pubkey::from_str("3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG").unwrap()
+                    key: Pubkey::from_str("3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG").unwrap(),
                 }),
                 uses: None,
                 collection_details: None,
@@ -165,7 +204,9 @@ mod tests {
 
         let metadata_models = mplx_accs_parser.create_rocks_metadata_models(&map).await;
 
-        mplx_accs_parser.store_metadata_models(&metadata_models).await;
+        mplx_accs_parser
+            .store_metadata_models(&metadata_models)
+            .await;
     }
 
     #[tokio::test]
@@ -198,9 +239,21 @@ mod tests {
 
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
-        process_bubblegum_transactions(mutexed_tasks.clone(), env.rocks_env.storage.clone(), buffer.clone()).await;
+        process_bubblegum_transactions(
+            mutexed_tasks.clone(),
+            env.rocks_env.storage.clone(),
+            buffer.clone(),
+        )
+        .await;
 
-        process_accounts(env.pg_env.pool.clone(), buffer.clone(), env.rocks_env.storage.clone(), 242856151, &mint).await;
+        process_accounts(
+            env.pg_env.pool.clone(),
+            buffer.clone(),
+            env.rocks_env.storage.clone(),
+            242856151,
+            &mint,
+        )
+        .await;
 
         let file = File::open("./tests/artifacts/expected_decompress_result.json").unwrap();
         let mut reader = io::BufReader::new(file);
@@ -257,9 +310,21 @@ mod tests {
 
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
-        process_accounts(env.pg_env.pool.clone(), buffer.clone(), env.rocks_env.storage.clone(), 242856151, &mint).await;
+        process_accounts(
+            env.pg_env.pool.clone(),
+            buffer.clone(),
+            env.rocks_env.storage.clone(),
+            242856151,
+            &mint,
+        )
+        .await;
 
-        process_bubblegum_transactions(mutexed_tasks.clone(), env.rocks_env.storage.clone(), buffer.clone()).await;
+        process_bubblegum_transactions(
+            mutexed_tasks.clone(),
+            env.rocks_env.storage.clone(),
+            buffer.clone(),
+        )
+        .await;
 
         let file = File::open("./tests/artifacts/expected_decompress_result.json").unwrap();
         let mut reader = io::BufReader::new(file);
@@ -316,9 +381,21 @@ mod tests {
 
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
-        process_accounts(env.pg_env.pool.clone(), buffer.clone(), env.rocks_env.storage.clone(), 252856151, &mint).await;
+        process_accounts(
+            env.pg_env.pool.clone(),
+            buffer.clone(),
+            env.rocks_env.storage.clone(),
+            252856151,
+            &mint,
+        )
+        .await;
 
-        process_bubblegum_transactions(mutexed_tasks.clone(), env.rocks_env.storage.clone(), buffer.clone()).await;
+        process_bubblegum_transactions(
+            mutexed_tasks.clone(),
+            env.rocks_env.storage.clone(),
+            buffer.clone(),
+        )
+        .await;
 
         let file = File::open("./tests/artifacts/expected_decompress_result.json").unwrap();
         let mut reader = io::BufReader::new(file);
@@ -375,9 +452,21 @@ mod tests {
 
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
-        process_bubblegum_transactions(mutexed_tasks.clone(), env.rocks_env.storage.clone(), buffer.clone()).await;
+        process_bubblegum_transactions(
+            mutexed_tasks.clone(),
+            env.rocks_env.storage.clone(),
+            buffer.clone(),
+        )
+        .await;
 
-        process_accounts(env.pg_env.pool.clone(), buffer.clone(), env.rocks_env.storage.clone(), 252856151, &mint).await;
+        process_accounts(
+            env.pg_env.pool.clone(),
+            buffer.clone(),
+            env.rocks_env.storage.clone(),
+            252856151,
+            &mint,
+        )
+        .await;
 
         let file = File::open("./tests/artifacts/expected_decompress_result.json").unwrap();
         let mut reader = io::BufReader::new(file);
