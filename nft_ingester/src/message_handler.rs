@@ -156,10 +156,6 @@ impl MessageHandler {
                 }
             }
             TokenProgramAccount::Mint(m) => {
-                if m.decimals > 0 || m.supply == 0 {
-                    return;
-                }
-
                 let mint_acc_model = Mint {
                     pubkey: Pubkey::try_from(key_bytes.clone()).unwrap_or_default(),
                     slot_updated: account_update.slot() as i64,
