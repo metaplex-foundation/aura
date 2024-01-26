@@ -156,7 +156,7 @@ impl MessageHandler {
                 }
             }
             TokenProgramAccount::Mint(m) => {
-                if m.decimals > 0 || m.supply > 0 {
+                if m.decimals > 0 || m.supply == 0 {
                     return;
                 }
 
