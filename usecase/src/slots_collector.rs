@@ -44,8 +44,8 @@ where
     pub async fn collect_slots(&self, collected_pubkey: &str) {
         let mut start_at_slot = self.slot_start_from;
         info!(
-            "Collecting slots starting from {} until {}",
-            start_at_slot, self.slot_parse_until
+            "Collecting slots for {} starting from {} until {}",
+            collected_pubkey, start_at_slot, self.slot_parse_until
         );
 
         loop {
