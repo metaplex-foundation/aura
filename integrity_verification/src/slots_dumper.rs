@@ -17,7 +17,6 @@ impl FileSlotsDumper {
 #[async_trait]
 impl SlotsDumper for FileSlotsDumper {
     async fn dump_slots(&self, slots: &[u64]) {
-        println!("{}", &self.path);
         let mut file = OpenOptions::new()
             .write(true)
             .append(true)

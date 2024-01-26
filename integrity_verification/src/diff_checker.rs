@@ -27,6 +27,7 @@ pub const GET_ASSET_BY_CREATOR_METHOD: &str = "getAssetsByCreator";
 
 const REQUESTS_INTERVAL_MILLIS: u64 = 1500;
 const BIGTABLE_TIMEOUT: u32 = 1000;
+const GET_SLOT_METHOD: &str = "getSlot";
 
 struct CollectSlotsTools {
     bigtable_client: Arc<BigTableClient>,
@@ -51,6 +52,7 @@ impl<T> DiffChecker<T>
 where
     T: IntegrityVerificationKeysFetcher + Send + Sync,
 {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         reference_host: String,
         testing_host: String,
@@ -176,6 +178,19 @@ where
                     "{}: mismatch responses: req: {:#?}, diff: {}",
                     req.method, req, diff
                 );
+
+                if req.method == GET_ASSET_PROOF_METHOD {
+                    let asset_id = match req.params["id"].as_str() {
+                        None => {
+                            error!("cannot get asset id: {:?}", &req.params);
+                            continue;
+                        }
+                        Some(asset_id) => asset_id,
+                    };
+                    if let Err(e) = self.try_collect_slots(asset_id).await {
+                        error!("try_collect_slots: {}", e);
+                    };
+                }
             }
 
             // Prevent rate-limit errors
@@ -345,10 +360,25 @@ impl<T> DiffChecker<T>
 where
     T: IntegrityVerificationKeysFetcher + Send + Sync,
 {
-    async fn get_tree_key_and_start_slot_for_asset(
+    async fn try_collect_slots(&self, asset: &str) -> Result<(), IntegrityVerificationError> {
+        let collect_tools = match &self.collect_slots_tools {
+            None => return Ok(()),
+            Some(collect_tools) => collect_tools,
+        };
+
+        let asset_tree_fut = self.get_tree_key_for_asset(asset);
+        let slot_fut = self.get_slot();
+
+        let (tree, slot) = tokio::join!(asset_tree_fut, slot_fut);
+        collect_tools.collect_slots(&tree?, slot?).await;
+
+        Ok(())
+    }
+
+    async fn get_tree_key_for_asset(
         &self,
         asset: &str,
-    ) -> Result<(String, u64), IntegrityVerificationError> {
+    ) -> Result<String, IntegrityVerificationError> {
         let resp = self
             .api
             .make_request(
@@ -369,16 +399,32 @@ where
             Some(tree) => tree,
         };
 
-        Ok((tree.to_string(), 0))
+        Ok(tree.to_string())
+    }
+
+    async fn get_slot(&self) -> Result<u64, IntegrityVerificationError> {
+        let resp = self
+            .api
+            .make_request(
+                &self.reference_host,
+                &json!(Body::new(GET_SLOT_METHOD, json!([]),)).to_string(),
+            )
+            .await?;
+        let slot = match resp["result"].as_u64() {
+            None => return Err(IntegrityVerificationError::CannotGetSlot(resp.to_string())),
+            Some(slot) => slot,
+        };
+
+        Ok(slot)
     }
 }
 
 impl CollectSlotsTools {
-    async fn collect_slots(&self, tree_key: &str, slot_start_from: u64) {
+    async fn collect_slots(&self, tree_key: &str, slot: u64) {
         let slots_collector = SlotsCollector::new(
             Arc::new(FileSlotsDumper::new(self.format_filename(tree_key))),
             self.bigtable_client.big_table_inner_client.clone(),
-            slot_start_from,
+            slot,
             0,
             self.metrics.clone(),
         );
@@ -417,7 +463,7 @@ mod tests {
         start_metrics(metrics.registry, Some(6001)).await;
 
         DiffChecker::new(
-            "".to_string(),
+            "https://test".to_string(),
             "".to_string(),
             FileKeysFetcher::new("./test_keys.txt").await.unwrap(),
             metrics.integrity_verification_metrics.clone(),
@@ -429,10 +475,20 @@ mod tests {
         .await
     }
 
+    #[cfg(feature = "rpc_tests")]
     #[tokio::test]
-    async fn test_get_tree_key_and_start_slot_for_asset() {
-        let (tree, _) = create_diff_checker()
-            .get_tree_key_and_start_slot_for_asset("BAtEs7TuGm2hP2owc9cTit2TNfVzpPFyQAAvkDWs6tDm")
+    async fn test_get_slot() {
+        let slot = create_diff_checker().await.get_slot().await.unwrap();
+
+        assert_ne!(slot, 0)
+    }
+
+    #[cfg(feature = "rpc_tests")]
+    #[tokio::test]
+    async fn test_get_tree_key_for_asset() {
+        let tree = create_diff_checker()
+            .await
+            .get_tree_key_for_asset("BAtEs7TuGm2hP2owc9cTit2TNfVzpPFyQAAvkDWs6tDm")
             .await
             .unwrap();
 
@@ -443,7 +499,10 @@ mod tests {
     #[tokio::test]
     async fn test_save_slots_to_file() {
         create_diff_checker()
-            .collect_slots("4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE", 244240112)
+            .await
+            .collect_slots_tools
+            .unwrap()
+            .collect_slots("4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE", 244259062)
             .await;
     }
 

@@ -55,7 +55,7 @@ mod tests {
         let slots_collector = SlotsCollector::new(
             storage.clone(),
             big_table_client.big_table_inner_client.clone(),
-            160_000_000,
+            Some(160_000_000),
             130_000_000,
             metrics.clone(),
         );

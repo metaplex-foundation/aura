@@ -12,4 +12,6 @@ pub enum IntegrityVerificationError {
     FetchKeys(String),
     #[error("CannotFindAssetTree {0}")]
     CannotFindAssetTree(String),
+    #[error("CannotGetSlot {0}")]
+    CannotGetSlot(String),
 }
