@@ -385,13 +385,21 @@ where
         start_slot: Option<u64>,
         blocks_path: &str,
     ) {
-        let blocks_file = std::fs::File::open(blocks_path).unwrap();
+        let mut blocks_file = std::fs::File::open(blocks_path).unwrap();
 
         let reader = std::io::BufReader::new(blocks_file);
 
-        let blocks_res: Result<Vec<u64>, _> = reader.lines().map(|line| line.and_then(|s| s.parse::<u64>().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)))).collect();
+        let mut blocks: Vec<u64> = Vec::new();
 
-        let mut blocks = blocks_res.unwrap();
+        let d = reader.split(b',');
+        for el in d {
+            let st_n = String::from_utf8(el.unwrap()).unwrap();
+            let trimed = st_n.trim();
+            if trimed == "" {
+                continue;
+            }
+            blocks.push(trimed.parse().unwrap());
+        }
 
         blocks.sort_by(|a, b| b.cmp(a));
 
