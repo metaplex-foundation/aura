@@ -354,31 +354,32 @@ where
             None => return,
             Some(collect_tools) => collect_tools,
         };
-
-        if req.method == GET_ASSET_PROOF_METHOD {
-            let asset_id = match req.params["id"].as_str() {
-                None => {
-                    error!("cannot get asset id: {:?}", &req.params);
-                    return;
-                }
-                Some(asset_id) => asset_id,
-            };
-            let tree_id = match reference_response["result"]["tree_id"].as_str() {
-                None => {
-                    error!("cannot get tree id: {:?}", &reference_response);
-                    return;
-                }
-                Some(tree_id) => tree_id,
-            };
-            let slot = match self.get_slot().await {
-                Ok(slot) => slot,
-                Err(e) => {
-                    error!("get_slot: {}", e);
-                    return;
-                }
-            };
-            collect_tools.collect_slots(asset_id, tree_id, slot).await;
+        if req.method != GET_ASSET_PROOF_METHOD {
+            return;
         }
+
+        let asset_id = match req.params["id"].as_str() {
+            None => {
+                error!("cannot get asset id: {:?}", &req.params);
+                return;
+            }
+            Some(asset_id) => asset_id,
+        };
+        let tree_id = match reference_response["result"]["tree_id"].as_str() {
+            None => {
+                error!("cannot get tree id: {:?}", &reference_response);
+                return;
+            }
+            Some(tree_id) => tree_id,
+        };
+        let slot = match self.get_slot().await {
+            Ok(slot) => slot,
+            Err(e) => {
+                error!("get_slot: {}", e);
+                return;
+            }
+        };
+        collect_tools.collect_slots(asset_id, tree_id, slot).await;
     }
 
     async fn get_slot(&self) -> Result<u64, IntegrityVerificationError> {
