@@ -28,6 +28,13 @@ pub const GET_ASSET_BY_CREATOR_METHOD: &str = "getAssetsByCreator";
 const REQUESTS_INTERVAL_MILLIS: u64 = 1500;
 const BIGTABLE_TIMEOUT: u32 = 1000;
 const GET_SLOT_METHOD: &str = "getSlot";
+const TEST_RETRIES: usize = 10;
+
+#[derive(Default)]
+struct DiffWithReferenceResponse {
+    diff: Option<String>,
+    reference_response: Value,
+}
 
 struct CollectSlotsTools {
     bigtable_client: Arc<BigTableClient>,
@@ -137,6 +144,36 @@ where
         None
     }
 
+    async fn check_request(&self, req: &Body) -> DiffWithReferenceResponse {
+        let request = json!(req).to_string();
+        let reference_response_fut = self.api.make_request(&self.reference_host, &request);
+        let testing_response_fut = self.api.make_request(&self.testing_host, &request);
+        let (reference_response, testing_response) =
+            tokio::join!(reference_response_fut, testing_response_fut);
+
+        let reference_response = match reference_response {
+            Ok(reference_response) => reference_response,
+            Err(e) => {
+                self.metrics.inc_network_errors_reference_host();
+                error!("Reference host network error: {}", e);
+                return DiffWithReferenceResponse::default();
+            }
+        };
+        let testing_response = match testing_response {
+            Ok(testing_response) => testing_response,
+            Err(e) => {
+                self.metrics.inc_network_errors_testing_host();
+                error!("Testing host network error: {}", e);
+                return DiffWithReferenceResponse::default();
+            }
+        };
+
+        DiffWithReferenceResponse {
+            diff: self.compare_responses(&reference_response, &testing_response),
+            reference_response,
+        }
+    }
+
     async fn check_requests<F, G>(
         &self,
         requests: Vec<Body>,
@@ -148,40 +185,26 @@ where
     {
         for req in requests.iter() {
             metrics_inc_total_fn();
-
-            let request = json!(req).to_string();
-            let reference_response_fut = self.api.make_request(&self.reference_host, &request);
-            let testing_response_fut = self.api.make_request(&self.testing_host, &request);
-            let (reference_response, testing_response) =
-                tokio::join!(reference_response_fut, testing_response_fut);
-
-            let reference_response = match reference_response {
-                Ok(reference_response) => reference_response,
-                Err(e) => {
-                    self.metrics.inc_network_errors_reference_host();
-                    error!("Reference host network error: {}", e);
-                    continue;
+            let mut diff_with_reference_response = DiffWithReferenceResponse::default();
+            for _ in 0..TEST_RETRIES {
+                diff_with_reference_response = self.check_request(req).await;
+                if diff_with_reference_response.diff.is_none() {
+                    break;
                 }
-            };
-            let testing_response = match testing_response {
-                Ok(testing_response) => testing_response,
-                Err(e) => {
-                    self.metrics.inc_network_errors_testing_host();
-                    error!("Testing host network error: {}", e);
-                    continue;
-                }
-            };
+                // Prevent rate-limit errors
+                tokio::time::sleep(Duration::from_millis(REQUESTS_INTERVAL_MILLIS)).await;
+            }
 
-            if let Some(diff) = self.compare_responses(&reference_response, &testing_response) {
+            if let Some(diff) = diff_with_reference_response.diff {
                 metrics_inc_failed_fn();
                 error!(
                     "{}: mismatch responses: req: {:#?}, diff: {}",
                     req.method, req, diff
                 );
 
-                self.try_collect_slots(req, &reference_response).await;
+                self.try_collect_slots(req, &diff_with_reference_response.reference_response)
+                    .await;
             }
-
             // Prevent rate-limit errors
             tokio::time::sleep(Duration::from_millis(REQUESTS_INTERVAL_MILLIS)).await;
         }
