@@ -107,8 +107,8 @@ impl MessageHandler {
         // skip processing of empty mints and multi-sig accounts
         if let Some(account_info) = account_info.data() {
             let account_data = account_info.iter().collect::<Vec<_>>();
-            if account_data.as_slice() == [0; 82] // empty mint
-                || account_data.as_slice() == [0; 165] // empty token account
+            if account_data.as_slice() == [0; spl_token::state::Mint::LEN] // empty mint
+                || account_data.as_slice() == [0; spl_token::state::Account::LEN] // empty token account
                 || account_data.len() == spl_token::state::Multisig::LEN
             {
                 return Ok(());
