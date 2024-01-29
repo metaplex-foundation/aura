@@ -2,7 +2,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use log::{error, info};
-use nft_ingester::backfiller::{Backfiller, BigTableClient, DirectBlockParser, TransactionsParser};
+use nft_ingester::backfiller::{
+    connect_new_bigtable_from_config, Backfiller, DirectBlockParser, TransactionsParser,
+};
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
@@ -73,7 +75,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let backfiller_config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
 
     let big_table_client = Arc::new(
-        BigTableClient::connect_new_from_config(backfiller_config.clone())
+        connect_new_bigtable_from_config(backfiller_config.clone())
             .await
             .unwrap(),
     );

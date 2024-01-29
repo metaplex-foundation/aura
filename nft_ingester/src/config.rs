@@ -78,7 +78,7 @@ fn default_permitted_tasks() -> usize {
 
 impl BackfillerConfig {
     pub fn get_slot_until(&self) -> u64 {
-        self.slot_until.unwrap_or(0)
+        self.slot_until.unwrap_or_default()
     }
 }
 
