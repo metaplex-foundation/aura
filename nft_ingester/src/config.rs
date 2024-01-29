@@ -90,6 +90,7 @@ pub enum BackfillerMode {
     IngestPersisted,
     #[default]
     IngestDirectly,
+    PartiallyIngest,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
@@ -123,9 +124,11 @@ pub struct IngesterConfig {
     pub migration_batch_size: Option<u32>,
     pub migrator_workers: Option<u32>,
     pub rocks_db_path_container: Option<String>,
+    pub rocks_source_path: Option<String>,
     pub rocks_backup_url: String,
     pub rocks_backup_archives_dir: String,
     pub rocks_backup_dir: String,
+    pub blocks_file_path: Option<String>,
     pub run_bubblegum_backfiller: bool,
     pub synchronizer_batch_size: usize,
     pub gapfiller_peer_addr: String,

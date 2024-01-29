@@ -115,6 +115,70 @@ impl Storage {
         })
     }
 
+    pub fn open_as_secondary(
+        primary_path: &str,
+        secondary_path: &str,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+    ) -> Result<Self> {
+        let db = Arc::new(DB::open_cf_descriptors_as_secondary(
+            &Self::get_db_options(),
+            primary_path,
+            secondary_path,
+            vec![
+                Self::new_cf_descriptor::<offchain_data::OffChainData>(),
+                Self::new_cf_descriptor::<AssetStaticDetails>(),
+                Self::new_cf_descriptor::<AssetDynamicDetails>(),
+                Self::new_cf_descriptor::<AssetAuthority>(),
+                Self::new_cf_descriptor::<AssetOwner>(),
+                Self::new_cf_descriptor::<asset::AssetLeaf>(),
+                Self::new_cf_descriptor::<asset::AssetCollection>(),
+                Self::new_cf_descriptor::<cl_items::ClItem>(),
+                Self::new_cf_descriptor::<cl_items::ClLeaf>(),
+                Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(),
+                Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(),
+                Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
+                Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
+                Self::new_cf_descriptor::<raw_block::RawBlock>(),
+            ],
+        )?);
+        let asset_offchain_data = Self::column(db.clone());
+
+        let asset_static_data = Self::column(db.clone());
+        let asset_dynamic_data = Self::column(db.clone());
+        let asset_authority_data = Self::column(db.clone());
+        let asset_owner_data = Self::column(db.clone());
+        let asset_leaf_data = Self::column(db.clone());
+        let asset_collection_data = Self::column(db.clone());
+
+        let cl_items = Self::column(db.clone());
+        let cl_leafs = Self::column(db.clone());
+
+        let bubblegum_slots = Self::column(db.clone());
+        let raw_blocks = Self::column(db.clone());
+
+        let assets_update_idx = Self::column(db.clone());
+        let slot_asset_idx = Self::column(db.clone());
+
+        Ok(Self {
+            asset_static_data,
+            asset_dynamic_data,
+            asset_authority_data,
+            asset_owner_data,
+            asset_leaf_data,
+            asset_collection_data,
+            asset_offchain_data,
+            cl_items,
+            cl_leafs,
+            bubblegum_slots,
+            raw_blocks_cbor: raw_blocks,
+            db,
+            assets_update_idx,
+            slot_asset_idx,
+            assets_update_last_seq: AtomicU64::new(0),
+            join_set,
+        })
+    }
+
     fn new_cf_descriptor<C: TypedColumn>() -> ColumnFamilyDescriptor {
         ColumnFamilyDescriptor::new(C::NAME, Self::get_cf_options::<C>())
     }

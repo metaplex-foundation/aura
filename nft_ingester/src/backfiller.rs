@@ -23,6 +23,7 @@ use solana_transaction_status::{
     EncodedTransactionWithStatusMeta, TransactionDetails, TransactionWithStatusMeta,
 };
 use std::collections::HashMap;
+use std::io::BufRead;
 use std::num::ParseIntError;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -377,6 +378,31 @@ where
         tracing::info!("Transactions parser has finished working");
     }
 
+    pub async fn parse_concrete_blocks(
+        &self,
+        keep_running: Arc<AtomicBool>,
+        permits: usize,
+        start_slot: Option<u64>,
+        blocks_path: &str,
+    ) {
+        let blocks_file = std::fs::File::open(blocks_path).unwrap();
+
+        let reader = std::io::BufReader::new(blocks_file);
+
+        let blocks_res: Result<Vec<u64>, _> = reader.lines().map(|line| line.and_then(|s| s.parse::<u64>().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)))).collect();
+
+        let mut blocks = blocks_res.unwrap();
+
+        blocks.sort_by(|a, b| b.cmp(a));
+
+        let res = Self::parse_slots(self.consumer.clone(), self.producer.clone(), self.metrics.clone(), 500, blocks, keep_running.clone()).await;
+        if let Err(err) = res {
+            error!("Error parsing slots: {}", err);
+        }
+
+        tracing::info!("Transactions parser has finished working");
+    }
+
     pub async fn parse_transactions(&self, keep_running: Arc<AtomicBool>) {
         let mut counter = GET_SLOT_RETRIES;
 
@@ -518,6 +544,7 @@ where
                     m.inc_data_processed("slots_parsed_success_total");
                     m.set_last_processed_slot("parsed_slot", s as i64);
                 }
+                info!("Chunk processed");
                 processed
             });
 
