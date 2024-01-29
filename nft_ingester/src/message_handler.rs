@@ -107,7 +107,8 @@ impl MessageHandler {
         // skip processing of empty mints and multi-sig accounts
         if let Some(account_info) = account_info.data() {
             let account_data = account_info.iter().collect::<Vec<_>>();
-            if account_data.as_slice() == [0; 82]
+            if account_data.as_slice() == [0; 82] // empty mint
+                || account_data.as_slice() == [0; 165] // empty token account
                 || account_data.len() == spl_token::state::Multisig::LEN
             {
                 return Ok(());
@@ -324,9 +325,18 @@ fn account_parsing_error(err: BlockbusterError, account_info: &AccountInfo) {
 
 #[test]
 fn test_mint_uninitialized() {
-    let unpac_res = spl_token::state::Mint::unpack(&[0; 82]);
+    let unpack_res = spl_token::state::Mint::unpack(&[0; 82]);
     assert_eq!(
         Err(solana_program::program_error::ProgramError::UninitializedAccount),
-        unpac_res
+        unpack_res
+    )
+}
+
+#[test]
+fn test_token_account_uninitialized() {
+    let unpack_res = spl_token::state::Account::unpack(&[0; 165]);
+    assert_eq!(
+        Err(solana_program::program_error::ProgramError::UninitializedAccount),
+        unpack_res
     )
 }
