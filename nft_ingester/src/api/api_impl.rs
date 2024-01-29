@@ -156,7 +156,7 @@ impl DasApi {
 
         let res = assets
             .get(&id.to_string())
-            .ok_or(not_found())?
+            .ok_or(DasApiError::ProofNotFound)?
             .as_ref()
             .ok_or::<DasApiError>(not_found())
             .cloned()

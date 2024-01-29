@@ -31,6 +31,8 @@ pub enum DasApiError {
     InvalidGroupingKey(String),
     #[error("Usecase: {0}")]
     Usecase(String),
+    #[error("ProofNotFound")]
+    ProofNotFound,
 }
 
 impl From<DasApiError> for jsonrpc_core::Error {
@@ -68,6 +70,11 @@ impl From<DasApiError> for jsonrpc_core::Error {
                     "Batch Size Error. Batch size should not be greater than {}.",
                     size
                 ),
+                data: None,
+            },
+            DasApiError::ProofNotFound => jsonrpc_core::Error {
+                code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
+                message: "Database Error: RecordNotFound Error: Asset Proof Not Found".to_string(),
                 data: None,
             },
             _ => jsonrpc_core::Error::new(ErrorCode::InternalError),

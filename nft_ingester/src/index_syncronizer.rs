@@ -146,7 +146,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entities::models::AssetIndex;
+    use entities::models::{AssetIndex, UrlWithStatus};
     use metrics_utils::{
         ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig,
         JsonDownloaderMetricsConfig, JsonMigratorMetricsConfig, MetricState, MetricsTrait,
@@ -182,7 +182,10 @@ mod tests {
             is_compressed: false,
             is_frozen: false,
             supply: Some(1),
-            metadata_url: Some("https://www.google.com".to_string()),
+            metadata_url: Some(UrlWithStatus {
+                metadata_url: "https://www.google.com".to_string(),
+                is_downloaded: true,
+            }),
             slot_updated: 123456,
         }
     }

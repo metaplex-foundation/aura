@@ -369,6 +369,18 @@ fn convert_rocks_asset_model(
         .max()
         .unwrap(); // unwrap here is safe, because vec is not empty
 
+    // there are instructions where we update only assetLeaf seq value
+    // and there is burn instruction where we update only assetDynamic seq value
+    // that's why we need to take max value from both of them
+    let seq = {
+        let dynamic_seq = dynamic_data
+            .seq
+            .clone()
+            .and_then(|u| u.value.try_into().ok());
+        let leaf_seq = leaf.leaf_seq.map(|seq| seq as i64);
+        std::cmp::max(dynamic_seq, leaf_seq)
+    };
+
     Ok(asset::Model {
         id: static_data.pubkey.to_bytes().to_vec(),
         alt_id: None,
@@ -389,10 +401,7 @@ fn convert_rocks_asset_model(
         supply_mint: Some(static_data.pubkey.to_bytes().to_vec()),
         compressed: dynamic_data.is_compressed.value,
         compressible: dynamic_data.is_compressible.value,
-        seq: dynamic_data
-            .seq
-            .clone()
-            .and_then(|u| u.value.try_into().ok()),
+        seq,
         tree_id,
         leaf: leaf.leaf.clone(),
         nonce: leaf.nonce.map(|nonce| nonce as i64),
