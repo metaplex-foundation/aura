@@ -158,7 +158,7 @@ impl Storage {
         }
     }
 
-    pub(crate) fn save_tree_with_seq(
+    pub(crate) fn save_tree_with_batch(
         &self,
         batch: &mut rocksdb::WriteBatch,
         tree: TreeWithSeqAndSlot,

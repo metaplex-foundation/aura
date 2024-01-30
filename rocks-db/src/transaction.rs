@@ -96,37 +96,32 @@ pub struct InstructionResult {
     pub update: Option<AssetUpdateEvent>,
     pub task: Option<Task>,
     pub decompressed: Option<AssetUpdate<AssetDynamicDetails>>,
-    pub tree_update: TreeWithSeqAndSlot,
+    pub tree_update: Option<TreeWithSeqAndSlot>,
 }
 
-impl From<(AssetUpdateEvent, TreeWithSeqAndSlot)> for InstructionResult {
-    fn from((update, tree_with_seq): (AssetUpdateEvent, TreeWithSeqAndSlot)) -> Self {
+impl From<AssetUpdateEvent> for InstructionResult {
+    fn from(update: AssetUpdateEvent) -> Self {
         Self {
             update: Some(update),
-            tree_update: tree_with_seq,
             ..Default::default()
         }
     }
 }
 
-impl From<(AssetUpdateEvent, Task, TreeWithSeqAndSlot)> for InstructionResult {
-    fn from((update, task, tree_with_seq): (AssetUpdateEvent, Task, TreeWithSeqAndSlot)) -> Self {
+impl From<(AssetUpdateEvent, Task)> for InstructionResult {
+    fn from((update, task): (AssetUpdateEvent, Task)) -> Self {
         Self {
             update: Some(update),
             task: Some(task),
-            tree_update: tree_with_seq,
             ..Default::default()
         }
     }
 }
 
-impl From<(AssetUpdate<AssetDynamicDetails>, TreeWithSeqAndSlot)> for InstructionResult {
-    fn from(
-        (details, tree_with_seq): (AssetUpdate<AssetDynamicDetails>, TreeWithSeqAndSlot),
-    ) -> Self {
+impl From<AssetUpdate<AssetDynamicDetails>> for InstructionResult {
+    fn from(details: AssetUpdate<AssetDynamicDetails>) -> Self {
         Self {
             decompressed: Some(details),
-            tree_update: tree_with_seq,
             ..Default::default()
         }
     }
