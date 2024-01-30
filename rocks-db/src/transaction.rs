@@ -119,9 +119,9 @@ impl From<(AssetUpdateEvent, Task)> for InstructionResult {
 }
 
 impl From<AssetUpdate<AssetDynamicDetails>> for InstructionResult {
-    fn from(details: AssetUpdate<AssetDynamicDetails>) -> Self {
+    fn from(decompressed: AssetUpdate<AssetDynamicDetails>) -> Self {
         Self {
-            decompressed: Some(details),
+            decompressed: Some(decompressed),
             ..Default::default()
         }
     }
