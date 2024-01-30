@@ -64,7 +64,6 @@ impl Storage {
     ) -> Result<(), StorageError> {
         if let Some(update) = ix.update {
             self.save_changelog_with_batch(batch, &update.event, update.slot);
-            self.save_tree_with_seq(batch, update.tree_update, update.slot);
             if let Some(dyn_data) = update.update {
                 if let Err(e) = self.save_tx_data_and_asset_updated_with_batch(
                     batch,
@@ -125,6 +124,8 @@ impl Storage {
                 tracing::error!("Failed to save tx data and asset updated: {}", e);
             }
         }
+        self.save_tree_with_seq(batch, ix.tree_update);
+
         Ok(())
     }
 

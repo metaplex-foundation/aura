@@ -25,7 +25,7 @@ use rocks_db::asset::{
 };
 use rocks_db::transaction::{
     AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, Task, TransactionResult,
-    TreeWithSeq,
+    TreeWithSeqAndSlot,
 };
 use serde_json::json;
 use solana_sdk::hash::Hash;
@@ -292,15 +292,11 @@ impl BubblegumTxProcessor {
     pub fn get_update_owner_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
-    ) -> Result<AssetUpdateEvent, IngesterError> {
+    ) -> Result<(AssetUpdateEvent, TreeWithSeqAndSlot), IngesterError> {
         if let (Some(le), Some(cl)) = (&parsing_result.leaf_update, &parsing_result.tree_update) {
             let mut asset_update = AssetUpdateEvent {
                 event: cl.into(),
                 slot: bundle.slot,
-                tree_update: TreeWithSeq {
-                    tree: cl.id,
-                    seq: cl.seq,
-                },
                 ..Default::default()
             };
             match le.schema {
@@ -339,7 +335,14 @@ impl BubblegumTxProcessor {
                     });
                 }
             }
-            return Ok(asset_update);
+            return Ok((
+                asset_update,
+                TreeWithSeqAndSlot {
+                    tree: cl.id,
+                    seq: cl.seq,
+                    slot: bundle.slot,
+                },
+            ));
         }
         Err(IngesterError::ParsingError(
             "Ix not parsed correctly".to_string(),
@@ -349,7 +352,7 @@ impl BubblegumTxProcessor {
     pub fn get_burn_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
-    ) -> Result<AssetUpdateEvent, IngesterError> {
+    ) -> Result<(AssetUpdateEvent, TreeWithSeqAndSlot), IngesterError> {
         if let Some(cl) = &parsing_result.tree_update {
             let (asset_id, _) = Pubkey::find_program_address(
                 &[
@@ -376,14 +379,17 @@ impl BubblegumTxProcessor {
                         ..Default::default()
                     }),
                 }),
-                tree_update: TreeWithSeq {
-                    tree: cl.id,
-                    seq: cl.seq,
-                },
                 ..Default::default()
             };
 
-            return Ok(asset_update);
+            return Ok((
+                asset_update,
+                TreeWithSeqAndSlot {
+                    tree: cl.id,
+                    seq: cl.seq,
+                    slot: bundle.slot,
+                },
+            ));
         }
 
         Err(IngesterError::ParsingError(
@@ -394,7 +400,7 @@ impl BubblegumTxProcessor {
     pub fn get_mint_v1_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
-    ) -> Result<(AssetUpdateEvent, Task), IngesterError> {
+    ) -> Result<(AssetUpdateEvent, Task, TreeWithSeqAndSlot), IngesterError> {
         if let (
             Some(le),
             Some(cl),
@@ -411,10 +417,6 @@ impl BubblegumTxProcessor {
             let mut asset_update = AssetUpdateEvent {
                 event: cl.into(),
                 slot: bundle.slot,
-                tree_update: TreeWithSeq {
-                    tree: cl.id,
-                    seq: cl.seq,
-                },
                 ..Default::default()
             };
 
@@ -555,7 +557,15 @@ impl BubblegumTxProcessor {
                 ..Default::default()
             };
 
-            return Ok((asset_update, task));
+            return Ok((
+                asset_update,
+                task,
+                TreeWithSeqAndSlot {
+                    tree: cl.id,
+                    seq: cl.seq,
+                    slot: bundle.slot,
+                },
+            ));
         }
         Err(IngesterError::ParsingError(
             "Ix not parsed correctly".to_string(),
@@ -565,15 +575,11 @@ impl BubblegumTxProcessor {
     pub fn get_redeem_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
-    ) -> Result<AssetUpdateEvent, IngesterError> {
+    ) -> Result<(AssetUpdateEvent, TreeWithSeqAndSlot), IngesterError> {
         if let Some(cl) = &parsing_result.tree_update {
             let mut asset_update = AssetUpdateEvent {
                 event: cl.into(),
                 slot: bundle.slot,
-                tree_update: TreeWithSeq {
-                    tree: cl.id,
-                    seq: cl.seq,
-                },
                 ..Default::default()
             };
 
@@ -604,7 +610,14 @@ impl BubblegumTxProcessor {
                 }),
                 dynamic_data: None,
             });
-            return Ok(asset_update);
+            return Ok((
+                asset_update,
+                TreeWithSeqAndSlot {
+                    tree: cl.id,
+                    seq: cl.seq,
+                    slot: bundle.slot,
+                },
+            ));
         }
 
         Err(IngesterError::ParsingError(
@@ -615,7 +628,7 @@ impl BubblegumTxProcessor {
     pub fn get_decompress_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
-    ) -> Result<(TreeWithSeq, AssetUpdate<AssetDynamicDetails>), IngesterError> {
+    ) -> Result<(AssetUpdate<AssetDynamicDetails>, TreeWithSeqAndSlot), IngesterError> {
         // This instruction decompress only single asset form tree, so
         // we need to update TreeWithSeq here
         let cl = match &parsing_result.tree_update {
@@ -629,10 +642,6 @@ impl BubblegumTxProcessor {
         let id_bytes = bundle.keys.get(3).unwrap().0.as_slice();
         let asset_id = Pubkey::new_from_array(id_bytes.try_into().unwrap());
         Ok((
-            TreeWithSeq {
-                tree: cl.id,
-                seq: cl.seq,
-            },
             AssetUpdate {
                 pk: asset_id,
                 details: AssetDynamicDetails {
@@ -643,13 +652,18 @@ impl BubblegumTxProcessor {
                     ..Default::default()
                 },
             },
+            TreeWithSeqAndSlot {
+                tree: cl.id,
+                seq: cl.seq,
+                slot: bundle.slot,
+            },
         ))
     }
 
     pub fn get_creator_verification_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
-    ) -> Result<AssetUpdateEvent, IngesterError> {
+    ) -> Result<(AssetUpdateEvent, TreeWithSeqAndSlot), IngesterError> {
         if let (Some(le), Some(cl), Some(payload)) = (
             &parsing_result.leaf_update,
             &parsing_result.tree_update,
@@ -658,10 +672,6 @@ impl BubblegumTxProcessor {
             let mut asset_update = AssetUpdateEvent {
                 event: cl.into(),
                 slot: bundle.slot,
-                tree_update: TreeWithSeq {
-                    tree: cl.id,
-                    seq: cl.seq,
-                },
                 ..Default::default()
             };
 
@@ -741,7 +751,14 @@ impl BubblegumTxProcessor {
                 }
             }
 
-            return Ok(asset_update);
+            return Ok((
+                asset_update,
+                TreeWithSeqAndSlot {
+                    tree: cl.id,
+                    seq: cl.seq,
+                    slot: bundle.slot,
+                },
+            ));
         }
         Err(IngesterError::ParsingError(
             "Ix not parsed correctly".to_string(),
@@ -751,7 +768,7 @@ impl BubblegumTxProcessor {
     pub fn get_collection_verification_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
-    ) -> Result<AssetUpdateEvent, IngesterError> {
+    ) -> Result<(AssetUpdateEvent, TreeWithSeqAndSlot), IngesterError> {
         if let (Some(le), Some(cl), Some(payload)) = (
             &parsing_result.leaf_update,
             &parsing_result.tree_update,
@@ -760,10 +777,6 @@ impl BubblegumTxProcessor {
             let mut asset_update = AssetUpdateEvent {
                 event: cl.into(),
                 slot: bundle.slot,
-                tree_update: TreeWithSeq {
-                    tree: cl.id,
-                    seq: cl.seq,
-                },
                 ..Default::default()
             };
 
@@ -811,7 +824,14 @@ impl BubblegumTxProcessor {
                 }
             }
 
-            return Ok(asset_update);
+            return Ok((
+                asset_update,
+                TreeWithSeqAndSlot {
+                    tree: cl.id,
+                    seq: cl.seq,
+                    slot: bundle.slot,
+                },
+            ));
         };
         Err(IngesterError::ParsingError(
             "Ix not parsed correctly".to_string(),
@@ -821,7 +841,7 @@ impl BubblegumTxProcessor {
     pub fn get_update_metadata_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
-    ) -> Result<(AssetUpdateEvent, Task), IngesterError> {
+    ) -> Result<(AssetUpdateEvent, Task, TreeWithSeqAndSlot), IngesterError> {
         if let (
             Some(le),
             Some(cl),
@@ -838,10 +858,6 @@ impl BubblegumTxProcessor {
             let mut asset_update = AssetUpdateEvent {
                 event: cl.into(),
                 slot: bundle.slot,
-                tree_update: TreeWithSeq {
-                    tree: cl.id,
-                    seq: cl.seq,
-                },
                 ..Default::default()
             };
 
@@ -989,7 +1005,15 @@ impl BubblegumTxProcessor {
                         ..Default::default()
                     };
 
-                    Ok((asset_update, task))
+                    Ok((
+                        asset_update,
+                        task,
+                        TreeWithSeqAndSlot {
+                            tree: cl.id,
+                            seq: cl.seq,
+                            slot: bundle.slot,
+                        },
+                    ))
                 }
             };
         }

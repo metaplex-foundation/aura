@@ -44,15 +44,13 @@ pub struct AssetUpdateEvent {
     pub owner_update: Option<AssetUpdate<AssetOwner>>,
     pub authority_update: Option<AssetUpdate<AssetAuthority>>,
     pub collection_update: Option<AssetUpdate<AssetCollection>>,
-    // As far as all update fields, that can contain tree and seq,
-    // are optional, we need to add a separate field with that data
-    pub tree_update: TreeWithSeq,
 }
 
 #[derive(Clone, Default)]
-pub struct TreeWithSeq {
+pub struct TreeWithSeqAndSlot {
     pub tree: Pubkey,
     pub seq: u64,
+    pub slot: u64,
 }
 
 #[derive(Clone, Default)]
@@ -98,37 +96,37 @@ pub struct InstructionResult {
     pub update: Option<AssetUpdateEvent>,
     pub task: Option<Task>,
     pub decompressed: Option<AssetUpdate<AssetDynamicDetails>>,
+    pub tree_update: TreeWithSeqAndSlot,
 }
 
-impl From<AssetUpdateEvent> for InstructionResult {
-    fn from(update: AssetUpdateEvent) -> Self {
+impl From<(AssetUpdateEvent, TreeWithSeqAndSlot)> for InstructionResult {
+    fn from((update, tree_with_seq): (AssetUpdateEvent, TreeWithSeqAndSlot)) -> Self {
         Self {
             update: Some(update),
+            tree_update: tree_with_seq,
             ..Default::default()
         }
     }
 }
 
-impl From<(AssetUpdateEvent, Task)> for InstructionResult {
-    fn from((update, task): (AssetUpdateEvent, Task)) -> Self {
+impl From<(AssetUpdateEvent, Task, TreeWithSeqAndSlot)> for InstructionResult {
+    fn from((update, task, tree_with_seq): (AssetUpdateEvent, Task, TreeWithSeqAndSlot)) -> Self {
         Self {
             update: Some(update),
             task: Some(task),
+            tree_update: tree_with_seq,
             ..Default::default()
         }
     }
 }
 
-impl From<(TreeWithSeq, AssetUpdate<AssetDynamicDetails>)> for InstructionResult {
+impl From<(AssetUpdate<AssetDynamicDetails>, TreeWithSeqAndSlot)> for InstructionResult {
     fn from(
-        decompressed_with_tree_update: (TreeWithSeq, AssetUpdate<AssetDynamicDetails>),
+        (details, tree_with_seq): (AssetUpdate<AssetDynamicDetails>, TreeWithSeqAndSlot),
     ) -> Self {
         Self {
-            decompressed: Some(decompressed_with_tree_update.1),
-            update: Some(AssetUpdateEvent {
-                tree_update: decompressed_with_tree_update.0,
-                ..Default::default()
-            }),
+            decompressed: Some(details),
+            tree_update: tree_with_seq,
             ..Default::default()
         }
     }
