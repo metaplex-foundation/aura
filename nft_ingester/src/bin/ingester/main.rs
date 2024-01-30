@@ -385,6 +385,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_fetcher_");
                 let backfiller_clone = backfiller.clone();
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                    info!("Running slot fetcher...");
                     if let Err(e) = backfiller_clone
                         .run_perpetual_slot_parsing(
                             metrics,
@@ -393,8 +394,9 @@ pub async fn main() -> Result<(), IngesterError> {
                         )
                         .await
                     {
-                        error!("Error while running perpetual slot backfiller: {}", e);
+                        error!("Error while running perpetual slot fetcher: {}", e);
                     }
+                    info!("Slot fetcher finished working");
                 }));
 
                 // run perpetual slot persister
@@ -406,6 +408,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 let slot_getter = Arc::new(BubblegumSlotGetter::new(rocks_storage.clone()));
                 let backfiller_clone = backfiller.clone();
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                    info!("Running slot persister...");
                     if let Err(e) = backfiller_clone
                         .run_perpetual_slot_fetching(
                             metrics,
@@ -419,6 +422,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     {
                         error!("Error while running perpetual slot persister: {}", e);
                     }
+                    info!("Slot persister finished working");
                 }));
                 // run perpetual ingester
                 let rx = shutdown_rx.resubscribe();
@@ -432,6 +436,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_ingester_");
                 let slot_getter = Arc::new(IngestableSlotGetter::new(rocks_storage.clone()));
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                    info!("Running slot ingester...");
                     if let Err(e) = backfiller
                         .run_perpetual_slot_fetching(
                             metrics,
@@ -445,6 +450,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     {
                         error!("Error while running perpetual tx ingester: {}", e);
                     }
+                    info!("Slot ingester finished working");
                 }));
             }
             config::BackfillerMode::None => {

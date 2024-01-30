@@ -82,7 +82,7 @@ impl Backfiller {
         if let Some(slot) = top_collected_slot {
             parse_until = slot;
         }
-        let rx1 = rx.resubscribe();
+        let mut rx1 = rx.resubscribe();
         loop {
             let top_collected_slot = slots_collector
                 .collect_slots(BBG_PREFIX, u64::MAX, parse_until, &mut rx)
@@ -99,10 +99,10 @@ impl Backfiller {
             }
 
             let sleep = tokio::time::sleep(wait_period);
-            let mut rx2 = rx1.resubscribe();
             tokio::select! {
             _ = sleep => {},
-            _ = rx2.recv() => {
+            _ = rx1.recv() => {
+                info!("Received stop signal, stopping perpetual slot parser");
                 return Ok(());
             },
             }
@@ -133,17 +133,17 @@ impl Backfiller {
             self.chunk_size,
         ));
 
+        let mut rx = rx.resubscribe();
         while rx.is_empty() {
             transactions_parser
                 .process_all_slots(rx.resubscribe())
                 .await;
-            let mut rx = rx.resubscribe();
             tokio::select! {
             _ = tokio::time::sleep(wait_period) => {},
             _ = rx.recv() => {
-                info!("Received stop signal, returning");
+                info!("Received stop signal, returning from run_perpetual_slot_fetching");
                 return Ok(());
-            },
+            }
             }
         }
         Ok(())
@@ -337,11 +337,11 @@ where
 
         for slot in slots_iter {
             if !rx.is_empty() {
-                info!("Received stop signal, returning");
-                break;
+                info!("Received stop signal, returning from process_all_slots");
+                return;
             }
             slots_batch.push(slot);
-            if slots_batch.len() == chunk_size {
+            if slots_batch.len() >= chunk_size {
                 info!("Got {} slots to parse", slots_batch.len());
                 let res = self
                     .process_slots(slots_batch.clone(), rx.resubscribe())
@@ -354,6 +354,7 @@ where
                         error!("Error processing slots: {}", err);
                     }
                 }
+                slots_batch.clear();
             }
         }
         if !rx.is_empty() {
