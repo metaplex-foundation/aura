@@ -29,7 +29,6 @@ use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use usecase::url_parsing::is_media_file;
 use std::collections::{HashSet, VecDeque};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -535,7 +534,7 @@ impl BubblegumTxProcessor {
                 }
             }
 
-            let mut task = Task {
+            let task = Task {
                 ofd_metadata_url: args.uri.clone(),
                 ofd_locked_until: Some(chrono::Utc::now()),
                 ofd_attempts: 0,
@@ -543,11 +542,6 @@ impl BubblegumTxProcessor {
                 ofd_error: None,
                 ..Default::default()
             };
-
-            // for now indexer should not download media files
-            if is_media_file(&task.ofd_metadata_url) {
-                task.ofd_status = TaskStatus::Success;
-            }
 
             return Ok((asset_update, task));
         }
@@ -940,7 +934,7 @@ impl BubblegumTxProcessor {
                         }),
                     });
 
-                    let mut task = Task {
+                    let task = Task {
                         ofd_metadata_url: uri.clone(),
                         ofd_locked_until: Some(chrono::Utc::now()),
                         ofd_attempts: 0,
@@ -948,11 +942,6 @@ impl BubblegumTxProcessor {
                         ofd_error: None,
                         ..Default::default()
                     };
-        
-                    // for now indexer should not download media files
-                    if is_media_file(&task.ofd_metadata_url) {
-                        task.ofd_status = TaskStatus::Success;
-                    }
 
                     Ok((asset_update, task))
                 }

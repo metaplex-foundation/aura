@@ -7,7 +7,6 @@ use log::{debug, error, info};
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use reqwest::{Client, ClientBuilder};
 use rocks_db::{offchain_data::OffChainData, Storage};
-use usecase::url_parsing::is_media_file;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::task::JoinSet;
@@ -19,6 +18,8 @@ pub struct JsonDownloader {
     pub config: BackgroundTaskRunnerConfig,
     pub metrics: Arc<JsonDownloaderMetricsConfig>,
 }
+
+pub const MEDIA_FILES_EXTENSIONS: &'static [&str] = &["png", "jpeg", "gif", "mp3", "mov", "avi"];
 
 impl JsonDownloader {
     pub async fn new(rocks_db: Arc<Storage>, metrics: Arc<JsonDownloaderMetricsConfig>) -> Self {
@@ -59,13 +60,24 @@ impl JsonDownloader {
                             if is_media_file(&task.metadata_url) {
                                 let data_to_insert = UpdatedTask {
                                     status: TaskStatus::Success,
-                                    metadata_url: task.metadata_url,
+                                    metadata_url: task.metadata_url.clone(),
                                     attempts: task.attempts + 1,
                                     error: "".to_string(),
                                 };
                                 cloned_db_client
                                     .update_tasks(vec![data_to_insert])
                                     .await
+                                    .unwrap();
+
+                                cloned_rocks
+                                    .asset_offchain_data
+                                    .put(
+                                        task.metadata_url.clone(),
+                                        OffChainData {
+                                            url: task.metadata_url,
+                                            metadata: "".to_string(),
+                                        },
+                                    )
                                     .unwrap();
 
                                 info!("Got media file, marked task as success...");
@@ -167,4 +179,16 @@ impl JsonDownloader {
             }
         }
     }
+}
+
+pub fn is_media_file(url: &str) -> bool {
+    let lowercased_url = url.to_lowercase();
+
+    for extension in MEDIA_FILES_EXTENSIONS.iter() {
+        if lowercased_url.ends_with(extension) {
+            return true;
+        }
+    }
+
+    return false;
 }

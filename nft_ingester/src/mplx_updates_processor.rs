@@ -16,7 +16,6 @@ use metrics_utils::{IngesterMetricsConfig, MetricStatus};
 use rocks_db::asset::{AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails};
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
-use usecase::url_parsing::is_media_file;
 
 use crate::buffer::Buffer;
 use crate::db_v2::{DBClient as DBClientV2, Task};
@@ -239,21 +238,14 @@ impl MplxAccsProcessor {
                 ..Default::default()
             });
 
-            let mut task = Task {
+            models.tasks.push(Task {
                 ofd_metadata_url: uri.clone(),
                 ofd_locked_until: Some(chrono::Utc::now()),
                 ofd_attempts: 0,
                 ofd_max_attempts: 10,
                 ofd_error: None,
                 ..Default::default()
-            };
-
-            // for now indexer should not download media files
-            if is_media_file(&task.ofd_metadata_url) {
-                task.ofd_status = TaskStatus::Success;
-            }
-
-            models.tasks.push(task);
+            });
 
             if let Some(c) = &metadata.collection {
                 models.asset_collection.push(AssetCollection {
