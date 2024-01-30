@@ -44,6 +44,15 @@ pub struct AssetUpdateEvent {
     pub owner_update: Option<AssetUpdate<AssetOwner>>,
     pub authority_update: Option<AssetUpdate<AssetAuthority>>,
     pub collection_update: Option<AssetUpdate<AssetCollection>>,
+    // As far as all update fields, that can contain tree and seq,
+    // are optional, we need to add a separate field with that data
+    pub tree_update: TreeWithSeq,
+}
+
+#[derive(Clone, Default)]
+pub struct TreeWithSeq {
+    pub tree: Pubkey,
+    pub seq: u64,
 }
 
 #[derive(Clone, Default)]
@@ -110,10 +119,16 @@ impl From<(AssetUpdateEvent, Task)> for InstructionResult {
     }
 }
 
-impl From<AssetUpdate<AssetDynamicDetails>> for InstructionResult {
-    fn from(decompressed: AssetUpdate<AssetDynamicDetails>) -> Self {
+impl From<(TreeWithSeq, AssetUpdate<AssetDynamicDetails>)> for InstructionResult {
+    fn from(
+        decompressed_with_tree_update: (TreeWithSeq, AssetUpdate<AssetDynamicDetails>),
+    ) -> Self {
         Self {
-            decompressed: Some(decompressed),
+            decompressed: Some(decompressed_with_tree_update.1),
+            update: Some(AssetUpdateEvent {
+                tree_update: decompressed_with_tree_update.0,
+                ..Default::default()
+            }),
             ..Default::default()
         }
     }

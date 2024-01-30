@@ -25,6 +25,7 @@ use rocks_db::asset::{
 };
 use rocks_db::transaction::{
     AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, Task, TransactionResult,
+    TreeWithSeq,
 };
 use serde_json::json;
 use solana_sdk::hash::Hash;
@@ -258,17 +259,17 @@ impl BubblegumTxProcessor {
                     .map(From::from)
                     .map(Ok)?
             }
-
             InstructionName::Redeem => Self::get_redeem_update(parsing_result, bundle)
                 .map(From::from)
                 .map(Ok)?,
-            InstructionName::DecompressV1 => Ok(Self::get_decompress_update(bundle).into()),
+            InstructionName::DecompressV1 => Self::get_decompress_update(parsing_result, bundle)
+                .map(From::from)
+                .map(Ok)?,
             InstructionName::VerifyCreator | InstructionName::UnverifyCreator => {
                 Self::get_creator_verification_update(parsing_result, bundle)
                     .map(From::from)
                     .map(Ok)?
             }
-
             InstructionName::VerifyCollection
             | InstructionName::UnverifyCollection
             | InstructionName::SetAndVerifyCollection => {
@@ -276,13 +277,11 @@ impl BubblegumTxProcessor {
                     .map(From::from)
                     .map(Ok)?
             }
-
             InstructionName::UpdateMetadata => {
                 Self::get_update_metadata_update(parsing_result, bundle)
                     .map(From::from)
                     .map(Ok)?
             }
-
             _ => {
                 debug!("Bubblegum: Not Implemented Instruction");
                 Ok(InstructionResult::default())
@@ -298,6 +297,10 @@ impl BubblegumTxProcessor {
             let mut asset_update = AssetUpdateEvent {
                 event: cl.into(),
                 slot: bundle.slot,
+                tree_update: TreeWithSeq {
+                    tree: cl.id,
+                    seq: cl.seq,
+                },
                 ..Default::default()
             };
             match le.schema {
@@ -373,6 +376,10 @@ impl BubblegumTxProcessor {
                         ..Default::default()
                     }),
                 }),
+                tree_update: TreeWithSeq {
+                    tree: cl.id,
+                    seq: cl.seq,
+                },
                 ..Default::default()
             };
 
@@ -404,6 +411,10 @@ impl BubblegumTxProcessor {
             let mut asset_update = AssetUpdateEvent {
                 event: cl.into(),
                 slot: bundle.slot,
+                tree_update: TreeWithSeq {
+                    tree: cl.id,
+                    seq: cl.seq,
+                },
                 ..Default::default()
             };
 
@@ -559,6 +570,10 @@ impl BubblegumTxProcessor {
             let mut asset_update = AssetUpdateEvent {
                 event: cl.into(),
                 slot: bundle.slot,
+                tree_update: TreeWithSeq {
+                    tree: cl.id,
+                    seq: cl.seq,
+                },
                 ..Default::default()
             };
 
@@ -597,19 +612,38 @@ impl BubblegumTxProcessor {
         ))
     }
 
-    pub fn get_decompress_update(bundle: &InstructionBundle) -> AssetUpdate<AssetDynamicDetails> {
+    pub fn get_decompress_update(
+        parsing_result: &BubblegumInstruction,
+        bundle: &InstructionBundle,
+    ) -> Result<(TreeWithSeq, AssetUpdate<AssetDynamicDetails>), IngesterError> {
+        // This instruction decompress only single asset form tree, so
+        // we need to update TreeWithSeq here
+        let cl = match &parsing_result.tree_update {
+            None => {
+                return Err(IngesterError::ParsingError(
+                    "Ix not parsed correctly".to_string(),
+                ));
+            }
+            Some(cl) => cl,
+        };
         let id_bytes = bundle.keys.get(3).unwrap().0.as_slice();
         let asset_id = Pubkey::new_from_array(id_bytes.try_into().unwrap());
-        AssetUpdate {
-            pk: asset_id,
-            details: AssetDynamicDetails {
-                pubkey: asset_id,
-                was_decompressed: Updated::new(bundle.slot, None, true),
-                is_compressible: Updated::new(bundle.slot, None, true), // TODO
-                supply: Some(Updated::new(bundle.slot, None, 1)),
-                ..Default::default()
+        Ok((
+            TreeWithSeq {
+                tree: cl.id,
+                seq: cl.seq,
             },
-        }
+            AssetUpdate {
+                pk: asset_id,
+                details: AssetDynamicDetails {
+                    pubkey: asset_id,
+                    was_decompressed: Updated::new(bundle.slot, None, true),
+                    is_compressible: Updated::new(bundle.slot, None, true), // TODO
+                    supply: Some(Updated::new(bundle.slot, None, 1)),
+                    ..Default::default()
+                },
+            },
+        ))
     }
 
     pub fn get_creator_verification_update(
@@ -624,6 +658,10 @@ impl BubblegumTxProcessor {
             let mut asset_update = AssetUpdateEvent {
                 event: cl.into(),
                 slot: bundle.slot,
+                tree_update: TreeWithSeq {
+                    tree: cl.id,
+                    seq: cl.seq,
+                },
                 ..Default::default()
             };
 
@@ -722,6 +760,10 @@ impl BubblegumTxProcessor {
             let mut asset_update = AssetUpdateEvent {
                 event: cl.into(),
                 slot: bundle.slot,
+                tree_update: TreeWithSeq {
+                    tree: cl.id,
+                    seq: cl.seq,
+                },
                 ..Default::default()
             };
 
@@ -796,6 +838,10 @@ impl BubblegumTxProcessor {
             let mut asset_update = AssetUpdateEvent {
                 event: cl.into(),
                 slot: bundle.slot,
+                tree_update: TreeWithSeq {
+                    tree: cl.id,
+                    seq: cl.seq,
+                },
                 ..Default::default()
             };
 

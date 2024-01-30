@@ -13,6 +13,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 use crate::errors::StorageError;
+use crate::tree_seq::TreeSeqIdx;
 
 pub mod asset;
 mod asset_client;
@@ -31,6 +32,7 @@ pub mod slots_dumper;
 pub mod storage_traits;
 pub mod transaction;
 pub mod transaction_client;
+pub mod tree_seq;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
@@ -49,6 +51,7 @@ pub struct Storage {
     pub db: Arc<DB>,
     pub assets_update_idx: Column<AssetsUpdateIdx>,
     pub slot_asset_idx: Column<SlotAssetIdx>,
+    pub tree_seq_idx: Column<TreeSeqIdx>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
 }
@@ -76,6 +79,7 @@ impl Storage {
                 Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
                 Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
                 Self::new_cf_descriptor::<raw_block::RawBlock>(),
+                Self::new_cf_descriptor::<TreeSeqIdx>(),
             ],
         )?);
         let asset_offchain_data = Self::column(db.clone());
@@ -95,6 +99,7 @@ impl Storage {
 
         let assets_update_idx = Self::column(db.clone());
         let slot_asset_idx = Self::column(db.clone());
+        let tree_seq_idx = Self::column(db.clone());
 
         Ok(Self {
             asset_static_data,
@@ -113,6 +118,7 @@ impl Storage {
             slot_asset_idx,
             assets_update_last_seq: AtomicU64::new(0),
             join_set,
+            tree_seq_idx,
         })
     }
 
