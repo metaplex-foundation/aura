@@ -390,10 +390,8 @@ mod tests {
             .unwrap();
 
         let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
-        assert_eq!(
-            selected_data.is_compressible,
-            Updated::new(10, None, true)
-        ); // data will not be updated because slot is lower
+        assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
+        // data will not be updated because slot is lower
         // and to update data based of seq both new and old records have to have that value
     }
 }
