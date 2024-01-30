@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bincode::deserialize;
 use log::error;
 use rocksdb::MergeOperands;
@@ -7,7 +9,9 @@ use spl_account_compression::events::ChangeLogEventV1;
 
 use crate::asset::AssetLeaf;
 use crate::column::TypedColumn;
+use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64_pubkey, encode_u64_pubkey};
+use crate::transaction::CopyableChangeLogEventV1;
 use crate::{AssetDynamicDetails, Result, Storage};
 
 /// This column family stores change log items for asset proof construction.
@@ -107,6 +111,8 @@ impl Storage {
 
         let mut i: u64 = 0;
         let depth = change_log_event.path.len() - 1;
+        let mut items_map = HashMap::new();
+        let mut leaf_map = HashMap::new();
         for p in change_log_event.path.iter() {
             let node_idx = p.index as u64;
 
@@ -128,7 +134,65 @@ impl Storage {
                 slot_updated: slot,
             };
 
-            if let Err(e) = self.cl_items.merge((node_idx, tree), &cl_item) {
+            items_map.insert((node_idx, tree), cl_item);
+            // save leaf's node id
+            if i == 1 {
+                if let Some(leaf_idx) = leaf_idx {
+                    let cl_leaf = ClLeaf {
+                        cli_leaf_idx: leaf_idx,
+                        cli_tree_key: tree,
+                        cli_node_idx: node_idx,
+                    };
+                    leaf_map.insert((leaf_idx, tree), cl_leaf);
+                }
+            }
+        }
+        let merge_res = self.cl_items.merge_batch(items_map);
+        let put_res = self.cl_leafs.put_batch(leaf_map);
+        if let Err(e) = merge_res.await {
+            error!("Error while saving change log for cNFT: {}", e);
+        };
+        if let Err(e) = put_res.await {
+            error!("Error while saving change log for cNFT: {}", e);
+        }
+    }
+
+    pub(crate) fn save_changelog_with_batch(
+        &self,
+        batch: &mut rocksdb::WriteBatch,
+        change_log_event: &CopyableChangeLogEventV1,
+        slot: u64,
+    ) {
+        let tree = change_log_event.id;
+
+        let mut i: u64 = 0;
+        let depth = change_log_event.path.len() - 1;
+        let mut leaf_map = HashMap::new();
+        for p in change_log_event.path.iter() {
+            let node_idx = p.index as u64;
+
+            let leaf_idx = if i == 0 {
+                Some(node_idx_to_leaf_idx(node_idx, depth as u32))
+            } else {
+                None
+            };
+
+            i += 1;
+
+            let cl_item = ClItem {
+                cli_node_idx: node_idx,
+                cli_tree_key: tree,
+                cli_leaf_idx: leaf_idx,
+                cli_seq: change_log_event.seq,
+                cli_level: i,
+                cli_hash: p.node.to_vec(),
+                slot_updated: slot,
+            };
+
+            if let Err(e) = self
+                .cl_items
+                .merge_with_batch(batch, (node_idx, tree), &cl_item)
+            {
                 error!("Error while saving change log for cNFT: {}", e);
             };
 
@@ -140,8 +204,11 @@ impl Storage {
                         cli_tree_key: tree,
                         cli_node_idx: node_idx,
                     };
-
-                    if let Err(e) = self.cl_leafs.put((leaf_idx, tree), cl_leaf) {
+                    leaf_map.insert((leaf_idx, tree), cl_leaf.clone());
+                    if let Err(e) = self
+                        .cl_leafs
+                        .put_with_batch(batch, (leaf_idx, tree), &cl_leaf)
+                    {
                         error!("Error while saving change log for cNFT: {}", e);
                     };
                 }
@@ -149,22 +216,42 @@ impl Storage {
         }
     }
 
-    pub fn save_tx_data_and_asset_updated(
+    pub(crate) fn save_tx_data_and_asset_updated_with_batch(
         &self,
+        batch: &mut rocksdb::WriteBatch,
         pk: Pubkey,
         slot: u64,
         leaf: Option<AssetLeaf>,
         dynamic_data: Option<AssetDynamicDetails>,
     ) -> Result<()> {
         if let Some(leaf) = leaf {
-            self.asset_leaf_data.merge(pk, &leaf)?
+            self.asset_leaf_data.merge_with_batch(batch, pk, &leaf)?
         };
         if let Some(dynamic_data) = dynamic_data {
-            self.asset_dynamic_data.merge(pk, &dynamic_data)?;
+            self.asset_dynamic_data
+                .merge_with_batch(batch, pk, &dynamic_data)?;
         }
-        self.asset_updated(slot, pk)?;
-
+        self.asset_updated_with_batch(batch, slot, pk)?;
         Ok(())
+    }
+
+    pub async fn save_tx_data_and_asset_updated(
+        &self,
+        pk: Pubkey,
+        slot: u64,
+        leaf: Option<AssetLeaf>,
+        dynamic_data: Option<AssetDynamicDetails>,
+    ) -> Result<()> {
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        self.save_tx_data_and_asset_updated_with_batch(&mut batch, pk, slot, leaf, dynamic_data)?;
+        let backend = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            backend
+                .write(batch)
+                .map_err(|e| StorageError::Common(e.to_string()))
+        })
+        .await
+        .map_err(|e| StorageError::Common(e.to_string()))?
     }
 }
 

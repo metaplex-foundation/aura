@@ -10,6 +10,7 @@ metrics-utils = { path = "../metrics_utils" }
 usecase = { path = "../usecase" }
 postgre-client = { path = "../postgre-client" }
 entities = { path = "../entities" }
+interface = { path = "../interface" }
 tokio = { version = "1.26.0", features = ["full", "tracing"] }
 thiserror = "1.0.56"
 clap = { version = "4.4.14", features = ["derive"] }
@@ -29,3 +30,4 @@ async-trait = "0.1.77"
 
 [features]
 rpc_tests = []
+bigtable_tests = []

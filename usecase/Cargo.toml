@@ -13,6 +13,10 @@ tracing = "0.1.40"
 solana-sdk = { version = "~1.16" }
 metrics-utils = { path = "../metrics_utils" }
 tokio = { version = "1.26.0", features = ["full", "tracing"] }
+solana-storage-bigtable = "~1.16"
+solana-bigtable-connection = "1.10.31"
+solana-transaction-status = "~1.16"
+mpl-bubblegum = "1.0.1-beta.4"
 
 [dev-dependencies]
 mockall = "0.12.0"

@@ -1,5 +1,6 @@
 // this test requires credentials for bigtable to be present in the root of the project
 #[cfg(test)]
+#[cfg(feature = "big_table_tests")]
 mod tests {
     use std::sync::{atomic::AtomicBool, Arc};
 

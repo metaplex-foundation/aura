@@ -40,7 +40,9 @@ use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::{backup_service, Storage};
 use tonic::transport::Server;
 
-use nft_ingester::backfiller::{DirectBlockParser, TransactionsParser};
+use nft_ingester::backfiller::{
+    connect_new_bigtable_from_config, DirectBlockParser, TransactionsParser,
+};
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 
@@ -261,7 +263,6 @@ pub async fn main() -> Result<(), IngesterError> {
         rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
         buffer.json_tasks.clone(),
-        false,
     ));
 
     let cloned_keep_running = keep_running.clone();
@@ -296,7 +297,6 @@ pub async fn main() -> Result<(), IngesterError> {
         rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
         buffer.json_tasks.clone(),
-        true,
     ));
     let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
         backfill_bubblegum_updates_processor.clone(),
@@ -306,7 +306,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
 
         let big_table_client = Arc::new(
-            backfiller::BigTableClient::connect_new_from_config(config.clone())
+            connect_new_bigtable_from_config(config.clone())
                 .await
                 .unwrap(),
         );
@@ -320,6 +320,7 @@ pub async fn main() -> Result<(), IngesterError> {
             config::BackfillerMode::IngestDirectly => {
                 let consumer = Arc::new(DirectBlockParser::new(
                     tx_ingester.clone(),
+                    rocks_storage.clone(),
                     metrics_state.backfiller_metrics.clone(),
                 ));
                 backfiller
@@ -351,6 +352,7 @@ pub async fn main() -> Result<(), IngesterError> {
             config::BackfillerMode::IngestPersisted => {
                 let consumer = Arc::new(DirectBlockParser::new(
                     tx_ingester.clone(),
+                    rocks_storage.clone(),
                     metrics_state.backfiller_metrics.clone(),
                 ));
                 let producer = rocks_storage.clone();

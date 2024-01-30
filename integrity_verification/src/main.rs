@@ -8,7 +8,8 @@ use crate::file_keys_fetcher::FileKeysFetcher;
 use clap::Parser;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
-    IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig, MetricsTrait,
+    BackfillerMetricsConfig, IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig,
+    MetricsTrait,
 };
 use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
 use postgre_client::PgClient;
@@ -25,6 +26,7 @@ mod error;
 mod file_keys_fetcher;
 mod params;
 mod requests;
+mod slots_dumper;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -41,7 +43,10 @@ async fn main() -> Result<(), IntegrityVerificationError> {
     env_logger::init();
     info!("IntegrityVerification start");
 
-    let mut metrics = IntegrityVerificationMetrics::new(IntegrityVerificationMetricsConfig::new());
+    let mut metrics = IntegrityVerificationMetrics::new(
+        IntegrityVerificationMetricsConfig::new(),
+        BackfillerMetricsConfig::new(),
+    );
     metrics.register_metrics();
     start_metrics(metrics.registry, Some(config.metrics_port)).await;
 
@@ -52,16 +57,21 @@ async fn main() -> Result<(), IntegrityVerificationError> {
             let diff_checker = DiffChecker::new(
                 config.reference_host.clone(),
                 config.testing_host.clone(),
-                FileKeysFetcher::new(&config.test_file_path.clone().unwrap())
+                FileKeysFetcher::new(&config.test_file_path_container.clone().unwrap())
                     .await
                     .unwrap(),
                 metrics.integrity_verification_metrics.clone(),
-            );
+                metrics.slot_collector_metrics.clone(),
+                config.big_table_creds_path.clone(),
+                config.slots_collect_path_container.clone(),
+                config.collect_slots,
+            )
+            .await;
             run_tests(
                 &mut tasks,
-                config.get_run_secondary_indexes_tests(),
-                config.get_run_proofs_tests(),
-                config.get_run_assets_tests(),
+                config.run_secondary_indexes_tests,
+                config.run_proofs_tests,
+                config.run_assets_tests,
                 diff_checker,
                 metrics.integrity_verification_metrics.clone(),
                 cancel_token.clone(),
@@ -74,12 +84,17 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                 config.testing_host.clone(),
                 PgClient::new(&config.database_url.clone().unwrap(), 100, 500).await,
                 metrics.integrity_verification_metrics.clone(),
-            );
+                metrics.slot_collector_metrics.clone(),
+                config.big_table_creds_path.clone(),
+                config.slots_collect_path_container.clone(),
+                config.collect_slots,
+            )
+            .await;
             run_tests(
                 &mut tasks,
-                config.get_run_secondary_indexes_tests(),
-                config.get_run_proofs_tests(),
-                config.get_run_assets_tests(),
+                config.run_secondary_indexes_tests,
+                config.run_proofs_tests,
+                config.run_assets_tests,
                 diff_checker,
                 metrics.integrity_verification_metrics.clone(),
                 cancel_token.clone(),

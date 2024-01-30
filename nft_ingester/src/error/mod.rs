@@ -2,6 +2,7 @@ use std::net::AddrParseError;
 
 use blockbuster::error::BlockbusterError;
 use flatbuffers::InvalidFlatbuffer;
+use interface::error::UsecaseError;
 use plerkle_messenger::MessengerError;
 use plerkle_serialization::error::PlerkleSerializationError;
 use sea_orm::{DbErr, TransactionError};
@@ -100,6 +101,8 @@ pub enum IngesterError {
     ConfigurationParsingError(String),
     #[error("Error on GRPC {0}")]
     GrpcError(String),
+    #[error("Usecase: {0}")]
+    Usecase(String),
 }
 
 impl From<reqwest::Error> for IngesterError {
@@ -226,5 +229,11 @@ impl From<AddrParseError> for IngesterError {
 impl From<tonic::transport::Error> for IngesterError {
     fn from(e: tonic::transport::Error) -> Self {
         IngesterError::GrpcError(e.to_string())
+    }
+}
+
+impl From<UsecaseError> for IngesterError {
+    fn from(e: UsecaseError) -> Self {
+        IngesterError::Usecase(e.to_string())
     }
 }

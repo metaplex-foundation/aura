@@ -10,4 +10,6 @@ pub enum IntegrityVerificationError {
     IO(#[from] std::io::Error),
     #[error("FetchKeys {0}")]
     FetchKeys(String),
+    #[error("CannotGetSlot {0}")]
+    CannotGetSlot(String),
 }

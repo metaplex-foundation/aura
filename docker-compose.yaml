@@ -31,6 +31,10 @@ services:
     env_file:
       - .env
     network_mode: host
+    volumes:
+      - ./creds.json:/usr/src/app/creds.json
+      - ${INTEGRITY_VERIFICATION_TEST_FILE_PATH}:${INTEGRITY_VERIFICATION_TEST_FILE_PATH_CONTAINER}:rw
+      - ${INTEGRITY_VERIFICATION_SLOTS_COLLECT_PATH}:${INTEGRITY_VERIFICATION_SLOTS_COLLECT_PATH_CONTAINER}:rw
     depends_on:
       - db
     build:

@@ -2,7 +2,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use log::{error, info};
-use nft_ingester::backfiller::{Backfiller, BigTableClient, DirectBlockParser, TransactionsParser};
+use nft_ingester::backfiller::{
+    connect_new_bigtable_from_config, Backfiller, DirectBlockParser, TransactionsParser,
+};
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
@@ -73,7 +75,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let backfiller_config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
 
     let big_table_client = Arc::new(
-        BigTableClient::connect_new_from_config(backfiller_config.clone())
+        connect_new_bigtable_from_config(backfiller_config.clone())
             .await
             .unwrap(),
     );
@@ -116,14 +118,17 @@ pub async fn main() -> Result<(), IngesterError> {
                 rocks_storage.clone(),
                 ingester_metrics.clone(),
                 buffer.json_tasks.clone(),
-                true,
             ));
 
             let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
                 bubblegum_updates_processor.clone(),
             ));
 
-            let consumer = Arc::new(DirectBlockParser::new(tx_ingester.clone(), metrics.clone()));
+            let consumer = Arc::new(DirectBlockParser::new(
+                tx_ingester.clone(),
+                rocks_storage.clone(),
+                metrics.clone(),
+            ));
             let producer = rocks_storage.clone();
 
             let transactions_parser = Arc::new(TransactionsParser::new(
