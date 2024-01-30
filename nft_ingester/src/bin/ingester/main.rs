@@ -3,11 +3,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Parser;
+use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
 use nft_ingester::{backfiller, config, transaction_ingester};
-use tokio::sync::oneshot;
-use tokio::sync::Mutex;
+use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 
 use backfill_rpc::rpc::BackfillRPC;
@@ -301,6 +301,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
         backfill_bubblegum_updates_processor.clone(),
     ));
+    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
     if config.run_bubblegum_backfiller {
         let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
@@ -330,6 +331,7 @@ pub async fn main() -> Result<(), IngesterError> {
                         metrics_state.backfiller_metrics.clone(),
                         consumer,
                         big_table_client.clone(),
+                        shutdown_rx.resubscribe(),
                     )
                     .await
                     .unwrap();
@@ -344,6 +346,7 @@ pub async fn main() -> Result<(), IngesterError> {
                         metrics_state.backfiller_metrics.clone(),
                         consumer,
                         big_table_client.clone(),
+                        shutdown_rx.resubscribe(),
                     )
                     .await
                     .unwrap();
@@ -426,8 +429,6 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     }));
 
-    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-
     // setup dependencies for grpc server
     let uc = usecase::asset_streamer::AssetStreamer::new(
         config.peer_grpc_max_gap_slots,
@@ -439,9 +440,7 @@ pub async fn main() -> Result<(), IngesterError> {
     mutexed_tasks.lock().await.spawn(async move {
         if let Err(e) = Server::builder()
             .add_service(GapFillerServiceServer::new(serv))
-            .serve_with_shutdown(addr, async {
-                shutdown_rx.await.ok();
-            })
+            .serve_with_shutdown(addr, shutdown_rx.resubscribe().recv().map(|_| ()))
             .await
         {
             eprintln!("Server error: {}", e);

@@ -5,7 +5,7 @@ use std::io::Write;
 use std::ops::DerefMut;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::oneshot::Sender;
+use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 

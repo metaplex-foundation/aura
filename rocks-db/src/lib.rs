@@ -25,13 +25,13 @@ pub mod column;
 pub mod errors;
 pub mod key_encoders;
 pub mod offchain_data;
+pub mod parameters;
 pub mod raw_block;
 pub mod signature_client;
 pub mod slots_dumper;
 pub mod storage_traits;
 pub mod transaction;
 pub mod transaction_client;
-
 pub type Result<T> = std::result::Result<T, StorageError>;
 
 pub struct Storage {
@@ -76,6 +76,7 @@ impl Storage {
                 Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
                 Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
                 Self::new_cf_descriptor::<raw_block::RawBlock>(),
+                Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(),
             ],
         )?);
         let asset_offchain_data = Self::column(db.clone());
@@ -92,7 +93,6 @@ impl Storage {
 
         let bubblegum_slots = Self::column(db.clone());
         let raw_blocks = Self::column(db.clone());
-
         let assets_update_idx = Self::column(db.clone());
         let slot_asset_idx = Self::column(db.clone());
 
