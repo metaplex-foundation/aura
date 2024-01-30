@@ -498,6 +498,7 @@ mod tests {
                 workers_count: 100,
                 chunk_size: 5,
                 permitted_tasks: 500,
+                wait_period_sec: 60,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
@@ -525,6 +526,7 @@ mod tests {
                 workers_count: 100,
                 chunk_size: 5,
                 permitted_tasks: 500,
+                wait_period_sec: 60,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
