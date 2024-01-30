@@ -7,6 +7,7 @@ use log::{debug, error, info};
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use reqwest::{Client, ClientBuilder};
 use rocks_db::{offchain_data::OffChainData, Storage};
+use usecase::url_parsing::is_media_file;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::task::JoinSet;
@@ -54,6 +55,23 @@ impl JsonDownloader {
                         let cloned_rocks = self.rocks_db.clone();
                         tasks_set.spawn(async move {
                             let begin_processing = Instant::now();
+
+                            if is_media_file(&task.metadata_url) {
+                                let data_to_insert = UpdatedTask {
+                                    status: TaskStatus::Success,
+                                    metadata_url: task.metadata_url,
+                                    attempts: task.attempts + 1,
+                                    error: "".to_string(),
+                                };
+                                cloned_db_client
+                                    .update_tasks(vec![data_to_insert])
+                                    .await
+                                    .unwrap();
+
+                                info!("Got media file, marked task as success...");
+                                cloned_metrics.inc_tasks(MetricStatus::SUCCESS);
+                                return;
+                            }
 
                             let client = ClientBuilder::new()
                                 .timeout(time::Duration::from_secs(5))
