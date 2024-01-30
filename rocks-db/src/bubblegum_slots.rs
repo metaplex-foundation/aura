@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::column::TypedColumn;
+use crate::key_encoders::{decode_u64, encode_u64};
 use crate::Result;
 
 pub const BUBBLEGUM_SLOTS_PREFIX: &str = "s";
@@ -28,4 +29,21 @@ pub fn form_bubblegum_slots_key(slot: u64) -> String {
 
 pub fn bubblegum_slots_key_to_value(key: String) -> u64 {
     key[BUBBLEGUM_SLOTS_PREFIX.len()..].parse::<u64>().unwrap()
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct IngestableSlots {}
+
+impl TypedColumn for IngestableSlots {
+    type KeyType = u64;
+    type ValueType = Self;
+    const NAME: &'static str = "INGESTABLE_SLOTS";
+
+    fn encode_key(slot: u64) -> Vec<u8> {
+        encode_u64(slot)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_u64(bytes)
+    }
 }
