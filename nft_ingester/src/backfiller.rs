@@ -29,7 +29,6 @@ pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 30;
 pub const GET_DATA_FROM_BG_RETRIES: u32 = 5;
 pub const SECONDS_TO_RETRY_ROCKSDB_OPERATION: u64 = 5;
 pub const DELETE_SLOT_RETRIES: u32 = 5;
-pub const INCREADIBLE_SLOT: u64 = 10000000000000000000;
 
 pub struct Backfiller {
     rocks_client: Arc<rocks_db::Storage>,
@@ -81,7 +80,7 @@ impl Backfiller {
         let rx1 = rx.resubscribe();
         loop {
             let top_collected_slot = slots_collector
-                .collect_slots(BBG_PREFIX, INCREADIBLE_SLOT, parse_until, &mut rx)
+                .collect_slots(BBG_PREFIX, u64::MAX, parse_until, &mut rx)
                 .await;
             if let Some(slot) = top_collected_slot {
                 parse_until = slot;
