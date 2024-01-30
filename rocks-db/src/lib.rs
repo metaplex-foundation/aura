@@ -26,6 +26,7 @@ pub mod column;
 pub mod errors;
 pub mod key_encoders;
 pub mod offchain_data;
+pub mod parameters;
 pub mod raw_block;
 pub mod signature_client;
 pub mod slots_dumper;
@@ -79,6 +80,7 @@ impl Storage {
                 Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
                 Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
                 Self::new_cf_descriptor::<raw_block::RawBlock>(),
+                Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(),
                 Self::new_cf_descriptor::<TreeSeqIdx>(),
             ],
         )?);
@@ -96,7 +98,6 @@ impl Storage {
 
         let bubblegum_slots = Self::column(db.clone());
         let raw_blocks = Self::column(db.clone());
-
         let assets_update_idx = Self::column(db.clone());
         let slot_asset_idx = Self::column(db.clone());
         let tree_seq_idx = Self::column(db.clone());

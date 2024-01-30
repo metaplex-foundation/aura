@@ -55,6 +55,55 @@ impl Backfiller {
         }
     }
 
+    pub async fn run_perpetual_slot_parsing(
+        &self,
+        metrics: Arc<BackfillerMetricsConfig>,
+        wait_period: Duration,
+        mut rx: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<(), IngesterError> {
+        info!("Starting perpetual slot parser");
+
+        let slots_collector = SlotsCollector::new(
+            self.rocks_client.clone(),
+            self.big_table_client.big_table_inner_client.clone(),
+            metrics.clone(),
+        );
+
+        let top_collected_slot = self
+            .rocks_client
+            .get_parameter::<u64>(rocks_db::parameters::Parameter::LastFetchedSlot)
+            .await?;
+        let mut parse_until = self.slot_parse_until;
+        if let Some(slot) = top_collected_slot {
+            parse_until = slot;
+        }
+        let rx1 = rx.resubscribe();
+        loop {
+            let top_collected_slot = slots_collector
+                .collect_slots(BBG_PREFIX, u64::MAX, parse_until, &mut rx)
+                .await;
+            if let Some(slot) = top_collected_slot {
+                parse_until = slot;
+                if let Err(e) = self
+                    .rocks_client
+                    .put_parameter(rocks_db::parameters::Parameter::LastFetchedSlot, slot)
+                    .await
+                {
+                    error!("Error while updating last fetched slot: {}", e);
+                }
+            }
+
+            let sleep = tokio::time::sleep(wait_period);
+            let mut rx2 = rx1.resubscribe();
+            tokio::select! {
+            _ = sleep => {},
+            _ = rx2.recv() => {
+                return Ok(());
+            },
+            }
+        }
+    }
+
     pub async fn start_backfill<C, P>(
         &self,
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
@@ -62,6 +111,7 @@ impl Backfiller {
         metrics: Arc<BackfillerMetricsConfig>,
         block_consumer: Arc<C>,
         block_producer: Arc<P>,
+        mut rx: tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), IngesterError>
     where
         C: BlockConsumer,
@@ -72,23 +122,15 @@ impl Backfiller {
         let slots_collector = SlotsCollector::new(
             self.rocks_client.clone(),
             self.big_table_client.big_table_inner_client.clone(),
-            self.slot_start_from,
-            self.slot_parse_until,
             metrics.clone(),
         );
-
-        let cloned_keep_running = keep_running.clone();
+        let start_from = self.slot_start_from;
+        let parse_until = self.slot_parse_until;
         tasks.lock().await.spawn(tokio::spawn(async move {
             info!("Running slots parser...");
-
-            tokio::select! {
-                _ = slots_collector.collect_slots(BBG_PREFIX) => {},
-                _ = async {
-                    while cloned_keep_running.load(Ordering::SeqCst) {
-                        tokio::time::sleep(Duration::from_secs(1)).await
-                    }
-                } => {}
-            }
+            slots_collector
+                .collect_slots(BBG_PREFIX, start_from, parse_until, &mut rx)
+                .await;
         }));
 
         let transactions_parser = Arc::new(TransactionsParser::new(

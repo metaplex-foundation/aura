@@ -9,7 +9,7 @@ use metrics_utils::{
     JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig,
     SynchronizerMetricsConfig,
 };
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{broadcast, Mutex};
 use tokio::task::{JoinError, JoinSet};
 
 use nft_ingester::config::{
@@ -70,7 +70,7 @@ pub async fn main() -> Result<(), IngesterError> {
     }));
 
     // useless thing in this context
-    let (shutdown_tx, _shutdown_rx) = oneshot::channel::<()>();
+    let (shutdown_tx, _shutdown_rx) = broadcast::channel::<()>(1);
 
     graceful_stop(mutexed_tasks, keep_running.clone(), shutdown_tx, None, None).await;
 
