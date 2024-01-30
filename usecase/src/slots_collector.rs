@@ -6,6 +6,7 @@ use solana_sdk::clock::Slot;
 use std::num::ParseIntError;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
 
 pub const GET_SIGNATURES_LIMIT: i64 = 2000;
@@ -16,8 +17,6 @@ where
 {
     slots_dumper: Arc<T>,
     big_table_inner_client: Arc<BigTableConnection>,
-    slot_start_from: u64,
-    slot_parse_until: u64,
     metrics: Arc<BackfillerMetricsConfig>,
 }
 
@@ -28,27 +27,42 @@ where
     pub fn new(
         slots_dumper: Arc<T>,
         big_table_inner_client: Arc<BigTableConnection>,
-        slot_start_from: u64,
-        slot_parse_until: u64,
         metrics: Arc<BackfillerMetricsConfig>,
     ) -> Self {
         SlotsCollector {
             slots_dumper,
             big_table_inner_client,
-            slot_start_from,
-            slot_parse_until,
             metrics,
         }
     }
 
-    pub async fn collect_slots(&self, collected_pubkey: &str) {
-        let mut start_at_slot = self.slot_start_from;
+    pub async fn collect_slots(
+        &self,
+        collected_pubkey: &str,
+        slot_start_from: u64,
+        slot_parse_until: u64,
+        rx: &mut Receiver<()>,
+    ) -> Option<u64> {
+        let mut start_at_slot = slot_start_from;
         info!(
             "Collecting slots for {} starting from {} until {}",
-            collected_pubkey, start_at_slot, self.slot_parse_until
+            collected_pubkey, start_at_slot, slot_parse_until
         );
-
+        let mut top_slot_collected = None;
         loop {
+            let should_stop_recv = rx.try_recv();
+            match should_stop_recv {
+                Ok(_) => {
+                    info!("Received stop signal, returning");
+                    return None;
+                }
+                Err(e) => {
+                    if tokio::sync::broadcast::error::TryRecvError::Empty != e {
+                        error!("Error while receiving stop signal: {}, returning", e);
+                        return None;
+                    }
+                }
+            }
             let slots = self
                 .big_table_inner_client
                 .client()
@@ -70,6 +84,9 @@ where
                         match slot_value {
                             Ok(slot) => {
                                 slots.push(!slot);
+                                if top_slot_collected.is_none() {
+                                    top_slot_collected = Some(!slot);
+                                }
                             }
                             Err(err) => {
                                 error!(
@@ -89,7 +106,7 @@ where
                             .set_last_processed_slot("collected_slot", last_slot as i64);
 
                         if (slots.len() == 1 && slots[0] == start_at_slot)
-                            || (last_slot < self.slot_parse_until)
+                            || (last_slot < slot_parse_until)
                         {
                             info!("All the slots are collected");
                             break;
@@ -110,6 +127,7 @@ where
                 }
             }
         }
+        top_slot_collected
     }
 
     fn slot_to_row(&self, prefix: &str, slot: Slot) -> String {

@@ -18,7 +18,7 @@ use prometheus_client::registry::Registry;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
 use rocks_db::Storage;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
@@ -84,6 +84,7 @@ pub async fn main() -> Result<(), IngesterError> {
         big_table_client.clone(),
         backfiller_config.clone(),
     );
+    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
     match backfiller_config.backfiller_mode {
         config::BackfillerMode::IngestDirectly => {
@@ -97,6 +98,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     metrics.clone(),
                     consumer,
                     big_table_client.clone(),
+                    shutdown_rx.resubscribe(),
                 )
                 .await
                 .unwrap();
@@ -159,8 +161,6 @@ pub async fn main() -> Result<(), IngesterError> {
             info!("not running backfiller");
         }
     };
-
-    let (shutdown_tx, _shutdown_rx) = oneshot::channel::<()>();
 
     // --stop
     graceful_stop(
