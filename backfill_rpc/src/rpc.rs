@@ -16,6 +16,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 const MAX_SIGNATURES_LIMIT: usize = 50_000_000;
+const GET_TX_RETRIES: usize = 7;
 pub struct BackfillRPC {
     client: Arc<RpcClient>,
 }
@@ -66,30 +67,37 @@ impl TransactionsGetter for BackfillRPC {
             .map(|signature| {
                 let client = self.client.clone();
                 async move {
-                    client
-                        .get_transaction_with_config(
-                            &signature,
-                            RpcTransactionConfig {
-                                encoding: Some(UiTransactionEncoding::Base64),
-                                commitment: Some(CommitmentConfig {
-                                    commitment: CommitmentLevel::Finalized,
-                                }),
-                                max_supported_transaction_version: Some(0),
-                            },
-                        )
-                        .await
-                        .map_err(Into::<UsecaseError>::into)
-                        .and_then(|transaction| {
-                            seralize_encoded_transaction_with_status(
-                                FlatBufferBuilder::new(),
-                                transaction,
+                    let mut response = Ok(BufferedTransaction::default());
+                    for _ in 0..GET_TX_RETRIES {
+                        response = client
+                            .get_transaction_with_config(
+                                &signature,
+                                RpcTransactionConfig {
+                                    encoding: Some(UiTransactionEncoding::Base64),
+                                    commitment: Some(CommitmentConfig {
+                                        commitment: CommitmentLevel::Finalized,
+                                    }),
+                                    max_supported_transaction_version: Some(0),
+                                },
                             )
-                            .map(|fb| BufferedTransaction {
-                                transaction: fb.finished_data().to_vec(),
-                                map_flatbuffer: false,
-                            })
+                            .await
                             .map_err(Into::<UsecaseError>::into)
-                        })
+                            .and_then(|transaction| {
+                                seralize_encoded_transaction_with_status(
+                                    FlatBufferBuilder::new(),
+                                    transaction,
+                                )
+                                .map(|fb| BufferedTransaction {
+                                    transaction: fb.finished_data().to_vec(),
+                                    map_flatbuffer: false,
+                                })
+                                .map_err(Into::<UsecaseError>::into)
+                            });
+                        if response.is_ok() {
+                            break;
+                        }
+                    }
+                    response
                 }
             })
             .buffered(500) // max count of simultaneous requests
