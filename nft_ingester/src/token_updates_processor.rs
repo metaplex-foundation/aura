@@ -94,8 +94,8 @@ impl TokenAccsProcessor {
         self.last_received_token_acc_at = Some(SystemTime::now());
     }
 
-    pub async fn transform_and_save_token_accs(&self, accs_to_save: &Vec<TokenAccount>) {
-        let save_values = accs_to_save.clone().into_iter().fold(
+    pub async fn transform_and_save_token_accs(&self, accs_to_save: &[TokenAccount]) {
+        let save_values = accs_to_save.to_owned().clone().into_iter().fold(
             HashMap::new(),
             |mut acc: HashMap<_, _>, token_account| {
                 acc.insert(
@@ -193,8 +193,8 @@ impl TokenAccsProcessor {
         }
     }
 
-    pub async fn transform_and_save_mint_accs(&self, mint_accs_to_save: &Vec<Mint>) {
-        let save_values = mint_accs_to_save.clone().into_iter().fold(
+    pub async fn transform_and_save_mint_accs(&self, mint_accs_to_save: &[Mint]) {
+        let save_values = mint_accs_to_save.to_owned().clone().into_iter().fold(
             HashMap::new(),
             |mut acc: HashMap<_, _>, mint| {
                 acc.insert(
