@@ -56,15 +56,12 @@ impl Backfiller {
         }
     }
 
-    pub async fn run_perpetual_slot_parsing<C, P>(
+    pub async fn run_perpetual_slot_parsing(
         &self,
         metrics: Arc<BackfillerMetricsConfig>,
+        wait_period: Duration,
         mut rx: tokio::sync::broadcast::Receiver<()>,
-    ) -> Result<(), IngesterError>
-    where
-        C: BlockConsumer,
-        P: BlockProducer,
-    {
+    ) -> Result<(), IngesterError> {
         info!("Starting perpetual slot parser");
 
         let slots_collector = SlotsCollector::new(
@@ -97,7 +94,7 @@ impl Backfiller {
                 }
             }
 
-            let sleep = tokio::time::sleep(tokio::time::Duration::from_secs(30));
+            let sleep = tokio::time::sleep(wait_period);
             let mut rx2 = rx1.resubscribe();
             tokio::select! {
             _ = sleep => {},

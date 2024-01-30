@@ -337,7 +337,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     .unwrap();
                 info!("running backfiller directly from bigtable to ingester");
             }
-            config::BackfillerMode::Persist | config::BackfillerMode::PersistAndIngest => {
+            config::BackfillerMode::Persist => {
                 let consumer = rocks_storage.clone();
                 backfiller
                     .start_backfill(
@@ -383,6 +383,23 @@ pub async fn main() -> Result<(), IngesterError> {
                 }));
 
                 info!("running backfiller on persisted raw data");
+            }
+            config::BackfillerMode::PersistAndIngest => {
+                let rx = shutdown_rx.resubscribe();
+                mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                    if let Err(e) = backfiller
+                        .run_perpetual_slot_parsing(
+                            metrics_state.backfiller_metrics.clone(),
+                            Duration::from_secs(config.wait_period_sec),
+                            rx,
+                        )
+                        .await
+                    {
+                        error!("Error while running perpetual slot backfiller: {}", e);
+                    }
+                }));
+                // todo: run perpetual slot fetcher
+                // todo: run perpetual backfiller
             }
             config::BackfillerMode::None => {
                 info!("not running backfiller");
@@ -437,10 +454,11 @@ pub async fn main() -> Result<(), IngesterError> {
     let serv = grpc::service::PeerGapFillerServiceImpl::new(Arc::new(uc));
     let addr = format!("0.0.0.0:{}", config.peer_grpc_port).parse()?;
     // Spawn the gRPC server task and add to JoinSet
+    let mut rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
         if let Err(e) = Server::builder()
             .add_service(GapFillerServiceServer::new(serv))
-            .serve_with_shutdown(addr, shutdown_rx.resubscribe().recv().map(|_| ()))
+            .serve_with_shutdown(addr, rx.recv().map(|_| ()))
             .await
         {
             eprintln!("Server error: {}", e);
