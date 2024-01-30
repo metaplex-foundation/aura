@@ -19,7 +19,7 @@ pub struct JsonDownloader {
     pub metrics: Arc<JsonDownloaderMetricsConfig>,
 }
 
-pub const MEDIA_FILES_EXTENSIONS: &'static [&str] = &["png", "jpeg", "gif", "mp3", "mov", "avi"];
+pub const MEDIA_FILES_EXTENSIONS: &[&str] = &["png", "jpeg", "gif", "mp3", "mov", "avi"];
 
 impl JsonDownloader {
     pub async fn new(rocks_db: Arc<Storage>, metrics: Arc<JsonDownloaderMetricsConfig>) -> Self {
@@ -190,5 +190,5 @@ pub fn is_media_file(url: &str) -> bool {
         }
     }
 
-    return false;
+    false
 }

@@ -9,7 +9,7 @@ use log::error;
 use serde_json::json;
 use tokio::time::Instant;
 
-use entities::enums::{RoyaltyTargetType, SpecificationAssetClass, TaskStatus};
+use entities::enums::{RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::Updated;
 use entities::models::{ChainDataV1, Creator, Uses};
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};

@@ -8,7 +8,8 @@ use blockbuster::{
 };
 use chrono::Utc;
 use entities::enums::{
-    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TaskStatus, TokenStandard, UseMethod
+    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard,
+    UseMethod,
 };
 use entities::models::{BufferedTransaction, SignatureWithSlot, Updated};
 use entities::models::{ChainDataV1, Creator, Uses};
