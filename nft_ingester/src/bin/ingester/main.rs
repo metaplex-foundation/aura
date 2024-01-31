@@ -501,7 +501,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     );
                 }
             }
-            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+            tokio::time::sleep(Duration::from_secs(60)).await;
         }
     }));
 
@@ -512,18 +512,18 @@ pub async fn main() -> Result<(), IngesterError> {
     );
     let sequence_consistent_gapfiller =
         SequenceConsistentGapfiller::new(rocks_storage.clone(), slots_collector);
-    let mut rx = shutdown_rx.resubscribe();
+    let rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        let mut rx_clone = rx.resubscribe();
+        info!("Start sequence gapfill...");
         loop {
-            tokio::select! {
-              _ = sequence_consistent_gapfiller.start_sequence_gapfill(&mut rx) => {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                }
-              _ = rx_clone.recv() => {
-                    break;
-                }
+            if !rx.is_empty() {
+                info!("Stop sequence gapfill...");
+                return;
             }
+            sequence_consistent_gapfiller
+                .start_sequence_gapfill(&mut rx.resubscribe())
+                .await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }));
 

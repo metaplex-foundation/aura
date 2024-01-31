@@ -4,10 +4,8 @@ use rocks_db::tree_seq::TreeSeqIdx;
 use rocks_db::Storage;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
-use tracing::error;
+use tracing::{error, info};
 use usecase::slots_collector::SlotsCollector;
-
-const MAX_KEYS_TO_DELETE_LEN: usize = 5000;
 
 pub struct SequenceConsistentGapfiller<T>
 where
@@ -34,7 +32,12 @@ where
         let mut tree = solana_program::pubkey::Pubkey::default();
         let mut seq = 0;
         let mut slot = 0;
+        let mut keys_already_deleted_for_tree = false;
         for pair in tree_iterator {
+            if !rx.is_empty() {
+                info!("Stop iteration over tree iterator...");
+                return;
+            }
             let (key, value) = match pair {
                 Ok(pair) => pair,
                 Err(e) => {
@@ -58,39 +61,38 @@ where
             };
             if tree == current_tree && current_seq != seq + 1 {
                 // Delete all previous slots
-                if !keys_to_delete.is_empty() {
+                if keys_to_delete.len() > 1 {
                     match self
                         .data_layer
                         .tree_seq_idx
-                        .delete_batch(keys_to_delete.clone())
+                        // do not delete last element, otherwise we cannot indicate gap in future
+                        .delete_range(keys_to_delete[0], keys_to_delete[keys_to_delete.len() - 2])
                         .await
                     {
-                        Err(e) => error!("delete batch 1: {}", e),
-                        Ok(_) => keys_to_delete.clear(),
-                    };
+                        Err(e) => error!("delete range: {}", e),
+                        Ok(_) => {
+                            keys_already_deleted_for_tree = true;
+                            keys_to_delete.clear()
+                        }
+                    }
                 }
-                // Collect slots into RocksDB
-                // They will be processed together with other slots inside
-                // run_perpetual_slot_fetching (we can do such a thing
-                // because all txs with any asset tree is also a tx with BBG program)
                 self.slots_collector
-                    .collect_slots(&format!("{}/", tree), current_slot, slot, rx)
+                    .collect_slots(
+                        &format!("{}/", tree),
+                        current_slot,
+                        slot,
+                        &mut rx.resubscribe(),
+                    )
                     .await;
             };
-
-            keys_to_delete.push((current_tree, current_seq));
-            if keys_to_delete.len() >= MAX_KEYS_TO_DELETE_LEN {
-                match self
-                    .data_layer
-                    .tree_seq_idx
-                    .delete_batch(keys_to_delete.clone())
-                    .await
-                {
-                    Err(e) => error!("delete batch 2: {}", e),
-                    Ok(_) => keys_to_delete.clear(),
-                };
+            if tree != current_tree {
+                keys_already_deleted_for_tree = false
             }
-
+            // If keys already deleted for some tree, we must not to delete other keys in this tree
+            // in order to save gap and in future check, if we fix it
+            if !keys_already_deleted_for_tree {
+                keys_to_delete.push((current_tree, current_seq));
+            }
             tree = current_tree;
             seq = current_seq;
             slot = current_slot;
