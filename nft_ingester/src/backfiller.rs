@@ -82,10 +82,9 @@ impl Backfiller {
         if let Some(slot) = top_collected_slot {
             parse_until = slot;
         }
-        let mut rx1 = rx.resubscribe();
         loop {
             let top_collected_slot = slots_collector
-                .collect_slots(BBG_PREFIX, u64::MAX, parse_until, &mut rx)
+                .collect_slots(BBG_PREFIX, u64::MAX, parse_until, &rx)
                 .await;
             if let Some(slot) = top_collected_slot {
                 parse_until = slot;
@@ -101,7 +100,7 @@ impl Backfiller {
             let sleep = tokio::time::sleep(wait_period);
             tokio::select! {
             _ = sleep => {},
-            _ = rx1.recv() => {
+            _ = rx.recv() => {
                 info!("Received stop signal, stopping perpetual slot parser");
                 return Ok(());
             },
@@ -170,11 +169,12 @@ impl Backfiller {
         );
         let start_from = self.slot_start_from;
         let parse_until = self.slot_parse_until;
-        let mut rx1 = rx.resubscribe();
+        let rx1 = rx.resubscribe();
+        let rx2 = rx.resubscribe();
         tasks.lock().await.spawn(tokio::spawn(async move {
             info!("Running slots parser...");
             slots_collector
-                .collect_slots(BBG_PREFIX, start_from, parse_until, &mut rx1)
+                .collect_slots(BBG_PREFIX, start_from, parse_until, &rx1)
                 .await;
         }));
 
@@ -187,11 +187,10 @@ impl Backfiller {
             self.workers_count,
             self.chunk_size,
         ));
-        let rx1 = rx.resubscribe();
         tasks.lock().await.spawn(tokio::spawn(async move {
             info!("Running transactions parser...");
 
-            transactions_parser.parse_transactions(rx1).await;
+            transactions_parser.parse_transactions(rx2).await;
         }));
 
         Ok(())
@@ -483,7 +482,8 @@ where
                         break;
                     }
                     if c.already_processed_slot(s).await.unwrap_or(false) {
-                        tracing::debug!("Slot {} is already processed, skipping", s);
+                        tracing::trace!("Slot {} is already processed, skipping", s);
+                        m.inc_data_processed("slots_skipped_total");
                         processed.push(s);
                         continue;
                     }

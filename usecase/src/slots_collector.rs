@@ -41,7 +41,7 @@ where
         collected_pubkey: &str,
         slot_start_from: u64,
         slot_parse_until: u64,
-        rx: &mut Receiver<()>,
+        rx: &Receiver<()>,
     ) -> Option<u64> {
         let mut start_at_slot = slot_start_from;
         info!(
@@ -50,18 +50,9 @@ where
         );
         let mut top_slot_collected = None;
         loop {
-            let should_stop_recv = rx.try_recv();
-            match should_stop_recv {
-                Ok(_) => {
-                    info!("Received stop signal, returning");
-                    return None;
-                }
-                Err(e) => {
-                    if tokio::sync::broadcast::error::TryRecvError::Empty != e {
-                        error!("Error while receiving stop signal: {}, returning", e);
-                        return None;
-                    }
-                }
+            if !rx.is_empty() {
+                info!("Received stop signal, returning");
+                return None;
             }
             let slots = self
                 .big_table_inner_client
@@ -140,6 +131,6 @@ where
     }
 
     fn row_to_slot(&self, prefix: &str, key: &str) -> Result<Slot, ParseIntError> {
-        Slot::from_str_radix(&key[prefix.len()..], 16).map(|s|!s)
+        Slot::from_str_radix(&key[prefix.len()..], 16).map(|s| !s)
     }
 }
