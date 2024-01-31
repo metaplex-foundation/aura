@@ -16,7 +16,7 @@ use metrics_utils::utils::start_metrics;
 use metrics_utils::{
     ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
     JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig,
-    SynchronizerMetricsConfig,
+    SequenceConsistentGapfillMetricsConfig, SynchronizerMetricsConfig,
 };
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
@@ -80,6 +80,7 @@ pub async fn main() -> Result<(), IngesterError> {
         RpcBackfillerMetricsConfig::new(),
         SynchronizerMetricsConfig::new(),
         JsonMigratorMetricsConfig::new(),
+        SequenceConsistentGapfillMetricsConfig::new(),
     );
     metrics_state.register_metrics();
     start_metrics(
@@ -510,8 +511,11 @@ pub async fn main() -> Result<(), IngesterError> {
         big_table_client.big_table_inner_client.clone(),
         metrics_state.backfiller_metrics.clone(),
     );
-    let sequence_consistent_gapfiller =
-        SequenceConsistentGapfiller::new(rocks_storage.clone(), slots_collector);
+    let sequence_consistent_gapfiller = SequenceConsistentGapfiller::new(
+        rocks_storage.clone(),
+        slots_collector,
+        metrics_state.sequence_consistent_gapfill_metrics.clone(),
+    );
     let rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         info!("Start sequence gapfill...");
@@ -521,7 +525,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 return;
             }
             sequence_consistent_gapfiller
-                .start_sequence_gapfill(&mut rx.resubscribe())
+                .collect_sequences_gaps(&mut rx.resubscribe())
                 .await;
             tokio::time::sleep(Duration::from_secs(1)).await;
         }

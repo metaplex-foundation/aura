@@ -22,3 +22,21 @@ impl TypedColumn for TreeSeqIdx {
         key_encoders::decode_pubkey_u64(bytes)
     }
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TreesGaps {}
+
+impl TypedColumn for TreesGaps {
+    const NAME: &'static str = "TREES_GAPS";
+
+    type KeyType = Pubkey;
+    type ValueType = Self;
+
+    fn encode_key(key: Pubkey) -> Vec<u8> {
+        key_encoders::encode_pubkey(key)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> crate::Result<Self::KeyType> {
+        key_encoders::decode_pubkey(bytes)
+    }
+}

@@ -39,6 +39,7 @@ pub struct MetricState {
     pub rpc_backfiller_metrics: Arc<RpcBackfillerMetricsConfig>,
     pub synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     pub json_migrator_metrics: Arc<JsonMigratorMetricsConfig>,
+    pub sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -51,6 +52,7 @@ impl MetricState {
         rpc_backfiller_metrics: RpcBackfillerMetricsConfig,
         synchronizer_metrics: SynchronizerMetricsConfig,
         json_migrator_metrics: JsonMigratorMetricsConfig,
+        sequence_consistent_gapfill_metrics: SequenceConsistentGapfillMetricsConfig,
     ) -> Self {
         Self {
             ingester_metrics: Arc::new(ingester_metrics),
@@ -61,6 +63,7 @@ impl MetricState {
             rpc_backfiller_metrics: Arc::new(rpc_backfiller_metrics),
             synchronizer_metrics: Arc::new(synchronizer_metrics),
             json_migrator_metrics: Arc::new(json_migrator_metrics),
+            sequence_consistent_gapfill_metrics: Arc::new(sequence_consistent_gapfill_metrics),
         }
     }
 }
@@ -327,6 +330,7 @@ impl MetricsTrait for MetricState {
     fn register_metrics(&mut self) {
         self.api_metrics.start_time();
         self.json_downloader_metrics.start_time();
+        self.sequence_consistent_gapfill_metrics.start_time();
 
         self.registry.register(
             "api_http_requests",
@@ -416,6 +420,14 @@ impl MetricsTrait for MetricState {
         );
 
         self.json_migrator_metrics.register(&mut self.registry);
+
+        self.registry.register(
+            "total_tree_with_gaps",
+            "Total count of trees with gaps",
+            self.sequence_consistent_gapfill_metrics
+                .total_tree_with_gaps
+                .clone(),
+        );
     }
 }
 
@@ -935,5 +947,27 @@ impl IntegrityVerificationMetricsConfig {
                 name: label.to_owned(),
             })
             .inc()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SequenceConsistentGapfillMetricsConfig {
+    start_time: Gauge,
+    total_tree_with_gaps: Gauge,
+}
+
+impl SequenceConsistentGapfillMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            start_time: Default::default(),
+            total_tree_with_gaps: Default::default(),
+        }
+    }
+
+    pub fn start_time(&self) -> i64 {
+        self.start_time.set(Utc::now().timestamp())
+    }
+    pub fn set_total_tree_with_gaps(&self, count: i64) -> i64 {
+        self.total_tree_with_gaps.set(count)
     }
 }
