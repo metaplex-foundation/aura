@@ -211,28 +211,41 @@ pub async fn main() -> Result<(), IngesterError> {
                     metrics_state.backfiller_metrics.clone(),
                 ));
 
-                let transactions_parser = Arc::new(TransactionsParser::new(
-                    rocks_storage.clone(),
-                    consumer,
-                    producer,
-                    metrics_state.backfiller_metrics.clone(),
-                    config.workers_count,
-                    config.chunk_size,
-                ));
-
-                let cloned_keep_running = keep_running.clone();
-                mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-                    info!("Running transactions parser...");
-
-                    transactions_parser
-                        .parse_concrete_blocks(
-                            cloned_keep_running,
-                            config.permitted_tasks,
-                            config.slot_until,
-                            &ing_config.blocks_file_path.clone().unwrap(),
+                if ing_config.read_blocks_from_file.unwrap() {
+                    let transactions_parser = Arc::new(TransactionsParser::new(
+                        target_rocks.clone(),
+                        consumer,
+                        producer,
+                        metrics_state.backfiller_metrics.clone(),
+                        config.workers_count,
+                        config.chunk_size,
+                    ));
+    
+                    let cloned_keep_running = keep_running.clone();
+                    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                        info!("Running transactions parser...");
+    
+                        transactions_parser
+                            .parse_concrete_blocks(
+                                cloned_keep_running,
+                                config.permitted_tasks,
+                                config.slot_until,
+                                &ing_config.blocks_file_path.clone().unwrap(),
+                            )
+                            .await;
+                    }));
+                } else {
+                    backfiller
+                        .start_backfill(
+                            mutexed_tasks.clone(),
+                            keep_running.clone(),
+                            metrics_state.backfiller_metrics.clone(),
+                            consumer,
+                            producer.clone(),
                         )
-                        .await;
-                }));
+                        .await
+                        .unwrap();
+                }
             }
             config::BackfillerMode::None => {
                 info!("not running backfiller");

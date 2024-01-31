@@ -139,6 +139,7 @@ pub struct IngesterConfig {
     pub run_profiling: Option<bool>,
     pub profiling_file_path_container: Option<String>,
     pub store_db_backups: Option<bool>,
+    pub read_blocks_from_file: Option<bool>,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
