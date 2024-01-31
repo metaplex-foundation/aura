@@ -44,6 +44,7 @@ pub struct MetricState {
 }
 
 impl MetricState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ingester_metrics: IngesterMetricsConfig,
         api_metrics: ApiMetricsConfig,
@@ -954,6 +955,12 @@ impl IntegrityVerificationMetricsConfig {
 pub struct SequenceConsistentGapfillMetricsConfig {
     start_time: Gauge,
     total_tree_with_gaps: Gauge,
+}
+
+impl Default for SequenceConsistentGapfillMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SequenceConsistentGapfillMetricsConfig {

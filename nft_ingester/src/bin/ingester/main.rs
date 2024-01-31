@@ -518,10 +518,10 @@ pub async fn main() -> Result<(), IngesterError> {
     );
     let rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        info!("Start sequence gapfill...");
+        info!("Start collecting sequences gaps...");
         loop {
             if !rx.is_empty() {
-                info!("Stop sequence gapfill...");
+                info!("Stop collecting sequences gaps...");
                 return;
             }
             sequence_consistent_gapfiller

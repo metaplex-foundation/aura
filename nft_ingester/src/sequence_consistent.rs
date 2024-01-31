@@ -6,30 +6,32 @@ use rocks_db::Storage;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
-use usecase::slots_collector::SlotsCollector;
+use usecase::slots_collector::{RowKeysGetter, SlotsCollector};
 
-pub struct SequenceConsistentGapfiller<T>
+pub struct SequenceConsistentGapfiller<T, R>
 where
     T: SlotsDumper,
+    R: RowKeysGetter,
 {
     data_layer: Arc<Storage>,
-    slots_collector: SlotsCollector<T>,
-    _metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
+    slots_collector: SlotsCollector<T, R>,
+    metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
 }
 
-impl<T> SequenceConsistentGapfiller<T>
+impl<T, R> SequenceConsistentGapfiller<T, R>
 where
     T: SlotsDumper,
+    R: RowKeysGetter,
 {
     pub fn new(
         data_layer: Arc<Storage>,
-        slots_collector: SlotsCollector<T>,
+        slots_collector: SlotsCollector<T, R>,
         metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
     ) -> Self {
         Self {
             data_layer,
             slots_collector,
-            _metrics: metrics,
+            metrics,
         }
     }
 
@@ -71,7 +73,6 @@ where
                     "Find GAP for {} tree: sequences: [{}, {}], slots: [{}, {}]",
                     tree, seq, current_seq, slot, current_slot
                 );
-                // self.metrics.set_total_tree_with_gaps(self.data_layer.trees_gaps.iter_start().len() as i64);
                 if let Err(e) = self
                     .data_layer
                     .trees_gaps
@@ -88,8 +89,10 @@ where
                         &mut rx.resubscribe(),
                     )
                     .await;
+                self.metrics.set_total_tree_with_gaps(
+                    self.data_layer.trees_gaps.iter_start().count() as i64,
+                );
                 find_gap_for_tree = true;
-                last_key_before_gap = (current_tree, current_seq); // TODO ?????
             };
             if tree != current_tree {
                 self.save_tree_gap_analyze(tree, last_key_before_gap, find_gap_for_tree)
@@ -130,6 +133,7 @@ where
                 error!("Delete tree gap: {}", e);
             };
         }
-        // self.metrics.set_total_tree_with_gaps(self.data_layer.trees_gaps.iter_start().len() as i64);
+        self.metrics
+            .set_total_tree_with_gaps(self.data_layer.trees_gaps.iter_start().count() as i64);
     }
 }
