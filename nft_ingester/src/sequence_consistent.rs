@@ -93,9 +93,6 @@ where
                         .collect_slots(&format!("{}/", tree), current_slot, slot, &mut rx_clone)
                         .await;
                 }));
-                self.metrics.set_total_tree_with_gaps(
-                    self.data_layer.trees_gaps.iter_start().count() as i64,
-                );
                 find_gap_for_tree = true;
             };
             if tree != current_tree {
