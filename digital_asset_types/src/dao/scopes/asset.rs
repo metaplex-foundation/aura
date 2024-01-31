@@ -6,6 +6,7 @@ use std::sync::Arc;
 use log::error;
 use sea_orm::prelude::Json;
 use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult, Order};
+use serde::Deserialize;
 use solana_sdk::pubkey::Pubkey;
 
 use rocks_db::asset::{
@@ -325,9 +326,14 @@ fn convert_rocks_offchain_data(
     )
     .unwrap_or(serde_json::Value::Null);
 
+    let chain_data_mutability = ch_data
+        .get("chain_mutability")
+        .map(|m| ChainMutability::deserialize(m).unwrap_or(ChainMutability::Unknown))
+        .unwrap_or(ChainMutability::Unknown);
+
     Ok(asset_data::Model {
         id: dynamic_data.pubkey.to_bytes().to_vec(),
-        chain_data_mutability: ChainMutability::Mutable,
+        chain_data_mutability,
         chain_data: ch_data,
         metadata_url: offchain_data.url.clone(),
         metadata_mutability: Mutability::Immutable,
@@ -628,6 +634,8 @@ pub async fn get_by_ids(
         .get_asset_selected_maps_async(unique_asset_ids.clone())
         .await
         .map_err(|e| DbErr::Custom(e.to_string()))?;
+
+    println!("Asset data:\n{:?}", asset_selected_maps);
 
     let mut results = vec![None; asset_ids.len()];
     for id in unique_asset_ids {
