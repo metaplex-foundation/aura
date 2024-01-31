@@ -84,11 +84,7 @@ where
             if !is_find_gap {
                 last_consistent_key = (current_state.tree, current_state.seq);
             }
-            prev_state = TreeState {
-                tree: current_state.tree,
-                seq: current_state.seq,
-                slot: current_state.slot,
-            };
+            prev_state = current_state;
         }
         // Handle last tree keys
         self.save_tree_gap_analyze(prev_state.tree, last_consistent_key, is_find_gap)
