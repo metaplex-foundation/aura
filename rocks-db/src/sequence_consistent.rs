@@ -11,7 +11,7 @@ impl SequenceConsistentManager for Storage {
     fn tree_sequence_iter(&self) -> impl Iterator<Item = TreeState> {
         self.tree_seq_idx
             .iter_start()
-            .filter_map(Result::ok) // Спрощує перевірку на помилку
+            .filter_map(Result::ok)
             .flat_map(|(key, value)| {
                 let (tree, seq) = key_encoders::decode_pubkey_u64(key.to_vec()).ok()?;
                 let tree_seq_idx = bincode::deserialize::<TreeSeqIdx>(value.as_ref()).ok()?;
