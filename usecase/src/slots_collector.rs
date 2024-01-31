@@ -83,9 +83,10 @@ where
                         let slot_value = self.row_to_slot(collected_pubkey, slot);
                         match slot_value {
                             Ok(slot) => {
-                                slots.push(!slot);
+                                slots.push(slot);
+
                                 if top_slot_collected.is_none() {
-                                    top_slot_collected = Some(!slot);
+                                    top_slot_collected = Some(slot);
                                 }
                                 if slot <= slot_parse_until {
                                     break;
@@ -139,6 +140,6 @@ where
     }
 
     fn row_to_slot(&self, prefix: &str, key: &str) -> Result<Slot, ParseIntError> {
-        Slot::from_str_radix(&key[prefix.len()..], 16)
+        Slot::from_str_radix(&key[prefix.len()..], 16).map(|s|!s)
     }
 }
