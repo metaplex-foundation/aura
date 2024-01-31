@@ -985,13 +985,7 @@ impl SequenceConsistentGapfillMetricsConfig {
             start_time: Default::default(),
             total_tree_with_gaps: Default::default(),
             total_scans: Default::default(),
-            scans_latency: Histogram::new(
-                [
-                    1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 20000.0,
-                    50000.0, 100000.0, 500000.0, 1000000.0,
-                ]
-                .into_iter(),
-            ),
+            scans_latency: Histogram::new(exponential_buckets(1.0, 2.0, 12)),
         }
     }
 
