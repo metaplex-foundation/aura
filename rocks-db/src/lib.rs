@@ -28,6 +28,7 @@ pub mod key_encoders;
 pub mod offchain_data;
 pub mod parameters;
 pub mod raw_block;
+pub mod sequence_consistent;
 pub mod signature_client;
 pub mod slots_dumper;
 pub mod storage_traits;
