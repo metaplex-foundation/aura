@@ -60,7 +60,7 @@ impl Backfiller {
         }
     }
 
-    pub async fn run_perpetual_slot_parsing(
+    pub async fn run_perpetual_slot_collection(
         &self,
         metrics: Arc<BackfillerMetricsConfig>,
         wait_period: Duration,
@@ -109,7 +109,7 @@ impl Backfiller {
         }
     }
 
-    pub async fn run_perpetual_slot_fetching<C, P, S>(
+    pub async fn run_perpetual_slot_processing<C, P, S>(
         &self,
         metrics: Arc<BackfillerMetricsConfig>,
         slot_getter: Arc<S>,

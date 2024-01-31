@@ -387,7 +387,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                     info!("Running slot fetcher...");
                     if let Err(e) = backfiller_clone
-                        .run_perpetual_slot_parsing(
+                        .run_perpetual_slot_collection(
                             metrics,
                             Duration::from_secs(config.wait_period_sec),
                             rx,
@@ -410,7 +410,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                     info!("Running slot persister...");
                     if let Err(e) = backfiller_clone
-                        .run_perpetual_slot_fetching(
+                        .run_perpetual_slot_processing(
                             metrics,
                             slot_getter,
                             consumer,
@@ -438,7 +438,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                     info!("Running slot ingester...");
                     if let Err(e) = backfiller
-                        .run_perpetual_slot_fetching(
+                        .run_perpetual_slot_processing(
                             metrics,
                             slot_getter,
                             consumer,
@@ -448,7 +448,7 @@ pub async fn main() -> Result<(), IngesterError> {
                         )
                         .await
                     {
-                        error!("Error while running perpetual tx ingester: {}", e);
+                        error!("Error while running perpetual slot ingester: {}", e);
                     }
                     info!("Slot ingester finished working");
                 }));

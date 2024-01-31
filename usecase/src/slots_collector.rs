@@ -87,6 +87,9 @@ where
                                 if top_slot_collected.is_none() {
                                     top_slot_collected = Some(!slot);
                                 }
+                                if slot <= slot_parse_until {
+                                    break;
+                                }
                             }
                             Err(err) => {
                                 error!(
@@ -106,7 +109,7 @@ where
                             .set_last_processed_slot("collected_slot", last_slot as i64);
 
                         if (slots.len() == 1 && slots[0] == start_at_slot)
-                            || (last_slot < slot_parse_until)
+                            || (last_slot <= slot_parse_until)
                         {
                             info!("All the slots are collected");
                             break;
