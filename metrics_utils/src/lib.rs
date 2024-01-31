@@ -423,10 +423,24 @@ impl MetricsTrait for MetricState {
         self.json_migrator_metrics.register(&mut self.registry);
 
         self.registry.register(
-            "total_tree_with_gaps",
-            "Total count of trees with gaps",
+            "total_inconsistent_trees",
+            "Total count of inconsistent trees",
             self.sequence_consistent_gapfill_metrics
                 .total_tree_with_gaps
+                .clone(),
+        );
+
+        self.registry.register(
+            "total_scans",
+            "Total count of inconsistent trees scans",
+            self.sequence_consistent_gapfill_metrics.total_scans.clone(),
+        );
+
+        self.registry.register(
+            "scans_latency",
+            "A histogram of inconsistent trees scans latency",
+            self.sequence_consistent_gapfill_metrics
+                .scans_latency
                 .clone(),
         );
     }
@@ -955,6 +969,8 @@ impl IntegrityVerificationMetricsConfig {
 pub struct SequenceConsistentGapfillMetricsConfig {
     start_time: Gauge,
     total_tree_with_gaps: Gauge,
+    total_scans: Counter,
+    scans_latency: Histogram,
 }
 
 impl Default for SequenceConsistentGapfillMetricsConfig {
@@ -968,6 +984,14 @@ impl SequenceConsistentGapfillMetricsConfig {
         Self {
             start_time: Default::default(),
             total_tree_with_gaps: Default::default(),
+            total_scans: Default::default(),
+            scans_latency: Histogram::new(
+                [
+                    100.0, 500.0, 1000.0, 5000.0, 10000.0, 20000.0, 50000.0, 100000.0, 500000.0,
+                    1000000.0,
+                ]
+                .into_iter(),
+            ),
         }
     }
 
@@ -976,5 +1000,11 @@ impl SequenceConsistentGapfillMetricsConfig {
     }
     pub fn set_total_tree_with_gaps(&self, count: i64) -> i64 {
         self.total_tree_with_gaps.set(count)
+    }
+    pub fn inc_total_scans(&self) -> u64 {
+        self.total_scans.inc()
+    }
+    pub fn set_scans_latency(&self, duration: f64) {
+        self.scans_latency.observe(duration);
     }
 }

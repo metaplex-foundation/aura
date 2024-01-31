@@ -44,8 +44,8 @@ impl RowKeysGetter for BigTableConnection {
 
 pub struct SlotsCollector<T, R>
 where
-    T: SlotsDumper,
-    R: RowKeysGetter,
+    T: SlotsDumper + Sync + Send,
+    R: RowKeysGetter + Sync + Send,
 {
     slots_dumper: Arc<T>,
     row_keys_getter: Arc<R>,
@@ -54,8 +54,8 @@ where
 
 impl<T, R> SlotsCollector<T, R>
 where
-    T: SlotsDumper,
-    R: RowKeysGetter,
+    T: SlotsDumper + Sync + Send,
+    R: RowKeysGetter + Sync + Send,
 {
     pub fn new(
         slots_dumper: Arc<T>,
@@ -168,6 +168,6 @@ where
     }
 
     fn row_to_slot(&self, prefix: &str, key: &str) -> Result<Slot, ParseIntError> {
-        Slot::from_str_radix(&key[prefix.len()..], 16).map(|s|!s)
+        Slot::from_str_radix(&key[prefix.len()..], 16).map(|s| !s)
     }
 }

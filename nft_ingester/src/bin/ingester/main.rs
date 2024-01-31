@@ -9,6 +9,7 @@ use log::{error, info};
 use nft_ingester::{backfiller, config, transaction_ingester};
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
+use tokio::time::Instant;
 
 use backfill_rpc::rpc::BackfillRPC;
 use interface::signature_persistence::ProcessingDataGetter;
@@ -515,19 +516,26 @@ pub async fn main() -> Result<(), IngesterError> {
         rocks_storage.clone(),
         slots_collector,
         metrics_state.sequence_consistent_gapfill_metrics.clone(),
+        mutexed_tasks.clone(),
     );
-    let rx = shutdown_rx.resubscribe();
+    let mut rx = shutdown_rx.resubscribe();
+    let metrics = metrics_state.sequence_consistent_gapfill_metrics.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         info!("Start collecting sequences gaps...");
         loop {
-            if !rx.is_empty() {
-                info!("Stop collecting sequences gaps...");
-                return;
-            }
+            let start = Instant::now();
             sequence_consistent_gapfiller
                 .collect_sequences_gaps(&mut rx.resubscribe())
                 .await;
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            metrics.set_scans_latency(start.elapsed().as_secs_f64());
+            metrics.inc_total_scans();
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(1)) => {},
+                _ = rx.recv() => {
+                    info!("Received stop signal, stopping collecting sequences gaps");
+                    return;
+                }
+            };
         }
     }));
 

@@ -15,7 +15,8 @@ mod tests {
     use setup::rocks::RocksTestEnvironment;
     use std::str::FromStr;
     use std::sync::Arc;
-    use tokio::sync::broadcast;
+    use tokio::sync::{broadcast, Mutex};
+    use tokio::task::JoinSet;
     use usecase::slots_collector::{MockRowKeysGetter, SlotsCollector};
 
     #[tracing_test::traced_test]
@@ -171,15 +172,18 @@ mod tests {
             row_keys_getter_arc.clone(),
             metrics_state.backfiller_metrics.clone(),
         );
+        let tasks = Arc::new(Mutex::new(JoinSet::new()));
         let sequence_consistent_gapfiller = SequenceConsistentGapfiller::new(
             storage.clone(),
             slots_collector,
             metrics_state.sequence_consistent_gapfill_metrics.clone(),
+            tasks.clone(),
         );
         let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
         sequence_consistent_gapfiller
             .collect_sequences_gaps(&mut shutdown_rx.resubscribe())
             .await;
+        while let Some(_) = tasks.lock().await.join_next().await {}
 
         let mut gaps_iter = storage.trees_gaps.iter_start();
         let (key, _) = gaps_iter.next().unwrap().unwrap();

@@ -5,33 +5,38 @@ use rocks_db::tree_seq::{TreeSeqIdx, TreesGaps};
 use rocks_db::Storage;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
-use tracing::{error, info};
+use tokio::sync::Mutex;
+use tokio::task::{JoinError, JoinSet};
+use tracing::{error, info, warn};
 use usecase::slots_collector::{RowKeysGetter, SlotsCollector};
 
 pub struct SequenceConsistentGapfiller<T, R>
 where
-    T: SlotsDumper,
-    R: RowKeysGetter,
+    T: SlotsDumper + Sync + Send + 'static,
+    R: RowKeysGetter + Sync + Send + 'static,
 {
     data_layer: Arc<Storage>,
-    slots_collector: SlotsCollector<T, R>,
+    slots_collector: Arc<SlotsCollector<T, R>>,
     metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
+    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 }
 
 impl<T, R> SequenceConsistentGapfiller<T, R>
 where
-    T: SlotsDumper,
-    R: RowKeysGetter,
+    T: SlotsDumper + Sync + Send + 'static,
+    R: RowKeysGetter + Sync + Send + 'static,
 {
     pub fn new(
         data_layer: Arc<Storage>,
         slots_collector: SlotsCollector<T, R>,
         metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
+        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     ) -> Self {
         Self {
             data_layer,
-            slots_collector,
+            slots_collector: Arc::new(slots_collector),
             metrics,
+            tasks,
         }
     }
 
@@ -69,7 +74,7 @@ where
                 }
             };
             if tree == current_tree && current_seq != seq + 1 {
-                error!(
+                warn!(
                     "Find GAP for {} tree: sequences: [{}, {}], slots: [{}, {}]",
                     tree, seq, current_seq, slot, current_slot
                 );
@@ -81,14 +86,13 @@ where
                 {
                     error!("Put tree gap: {}", e);
                 };
-                self.slots_collector
-                    .collect_slots(
-                        &format!("{}/", tree),
-                        current_slot,
-                        slot,
-                        &mut rx.resubscribe(),
-                    )
-                    .await;
+                let slots_collector = self.slots_collector.clone();
+                let mut rx_clone = rx.resubscribe();
+                self.tasks.lock().await.spawn(tokio::spawn(async move {
+                    slots_collector
+                        .collect_slots(&format!("{}/", tree), current_slot, slot, &mut rx_clone)
+                        .await;
+                }));
                 self.metrics.set_total_tree_with_gaps(
                     self.data_layer.trees_gaps.iter_start().count() as i64,
                 );
