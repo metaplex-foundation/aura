@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[cfg(feature = "integration_tests")]
 mod tests {
     use metrics_utils::utils::start_metrics;
     use metrics_utils::{
@@ -137,9 +138,9 @@ mod tests {
             .times(1)
             .return_once(move |_, _, _, _| {
                 Ok(vec![
-                    format!("{}/{:x}", first_tree_key, 206),
-                    format!("{}/{:x}", first_tree_key, 204),
-                    format!("{}/{:x}", first_tree_key, 203),
+                    format!("{}/{:016x}", first_tree_key, !206u64),
+                    format!("{}/{:016x}", first_tree_key, !204u64),
+                    format!("{}/{:016x}", first_tree_key, !203u64),
                 ])
             });
         row_keys_getter
@@ -147,8 +148,8 @@ mod tests {
             .times(1)
             .return_once(move |_, _, _, _| {
                 Ok(vec![
-                    format!("{}/{:x}", first_tree_key, 209),
-                    format!("{}/{:x}", first_tree_key, 208),
+                    format!("{}/{:016x}", first_tree_key, !209u64),
+                    format!("{}/{:016x}", first_tree_key, !208u64),
                 ])
             });
         let row_keys_getter_arc = Arc::new(row_keys_getter);

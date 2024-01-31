@@ -168,6 +168,6 @@ where
     }
 
     fn row_to_slot(&self, prefix: &str, key: &str) -> Result<Slot, ParseIntError> {
-        Slot::from_str_radix(&key[prefix.len()..], 16)
+        Slot::from_str_radix(&key[prefix.len()..], 16).map(|s|!s)
     }
 }
