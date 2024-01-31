@@ -43,6 +43,8 @@ use tonic::transport::Server;
 use nft_ingester::backfiller::{
     connect_new_bigtable_from_config, DirectBlockParser, TransactionsParser,
 };
+use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
+use usecase::slots_collector::SlotsCollector;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 
@@ -303,21 +305,20 @@ pub async fn main() -> Result<(), IngesterError> {
     ));
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
+    let backfiller_config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
+    let big_table_client = Arc::new(
+        connect_new_bigtable_from_config(backfiller_config.clone())
+            .await
+            .unwrap(),
+    );
     if config.run_bubblegum_backfiller {
-        let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
-
-        let big_table_client = Arc::new(
-            connect_new_bigtable_from_config(config.clone())
-                .await
-                .unwrap(),
-        );
         let backfiller = backfiller::Backfiller::new(
             rocks_storage.clone(),
             big_table_client.clone(),
-            config.clone(),
+            backfiller_config.clone(),
         );
 
-        match config.backfiller_mode {
+        match backfiller_config.backfiller_mode {
             config::BackfillerMode::IngestDirectly => {
                 let consumer = Arc::new(DirectBlockParser::new(
                     tx_ingester.clone(),
@@ -365,8 +366,8 @@ pub async fn main() -> Result<(), IngesterError> {
                     consumer,
                     producer,
                     metrics_state.backfiller_metrics.clone(),
-                    config.workers_count,
-                    config.chunk_size,
+                    backfiller_config.workers_count,
+                    backfiller_config.chunk_size,
                 ));
 
                 let cloned_keep_running = keep_running.clone();
@@ -376,8 +377,8 @@ pub async fn main() -> Result<(), IngesterError> {
                     transactions_parser
                         .parse_raw_transactions(
                             cloned_keep_running,
-                            config.permitted_tasks,
-                            config.slot_until,
+                            backfiller_config.permitted_tasks,
+                            backfiller_config.slot_until,
                         )
                         .await;
                 }));
@@ -386,11 +387,12 @@ pub async fn main() -> Result<(), IngesterError> {
             }
             config::BackfillerMode::PersistAndIngest => {
                 let rx = shutdown_rx.resubscribe();
+                let metrics_clone = metrics_state.backfiller_metrics.clone();
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                     if let Err(e) = backfiller
                         .run_perpetual_slot_parsing(
-                            metrics_state.backfiller_metrics.clone(),
-                            Duration::from_secs(config.wait_period_sec),
+                            metrics_clone,
+                            Duration::from_secs(backfiller_config.wait_period_sec),
                             rx,
                         )
                         .await
@@ -467,8 +469,9 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     let transactions_getter = Arc::new(BackfillRPC::connect(config.backfill_rpc_address));
+    let rocks_clone = rocks_storage.clone();
     let signature_fetcher = usecase::signature_fetcher::SignatureFetcher::new(
-        rocks_storage,
+        rocks_clone,
         transactions_getter,
         tx_ingester,
         metrics_state.rpc_backfiller_metrics.clone(),
@@ -499,6 +502,28 @@ pub async fn main() -> Result<(), IngesterError> {
                 }
             }
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+        }
+    }));
+
+    let slots_collector = SlotsCollector::new(
+        rocks_storage.clone(),
+        big_table_client.big_table_inner_client.clone(),
+        metrics_state.backfiller_metrics.clone(),
+    );
+    let sequence_consistent_gapfiller =
+        SequenceConsistentGapfiller::new(rocks_storage.clone(), slots_collector);
+    let mut rx = shutdown_rx.resubscribe();
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        let mut rx_clone = rx.resubscribe();
+        loop {
+            tokio::select! {
+              _ = sequence_consistent_gapfiller.start_sequence_gapfill(&mut rx) => {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+              _ = rx_clone.recv() => {
+                    break;
+                }
+            }
         }
     }));
 
