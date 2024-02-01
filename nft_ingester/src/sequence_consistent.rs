@@ -42,9 +42,9 @@ where
     }
 
     pub async fn collect_sequences_gaps(&self, rx: &mut Receiver<()>) {
-        let mut last_consistent_key = (solana_program::pubkey::Pubkey::default(), 0);
+        let mut last_consistent_seq = 0;
         let mut prev_state = TreeState::default();
-        let mut is_find_gap = false;
+        let mut gap_found = false;
         for current_state in self.sequence_consistent_manager.tree_sequence_iter() {
             if !rx.is_empty() {
                 info!("Stop iteration over tree iterator...");
@@ -52,14 +52,14 @@ where
             }
             if current_state.tree == prev_state.tree && current_state.seq != prev_state.seq + 1 {
                 warn!(
-                    "Find GAP for {} tree: sequences: [{}, {}], slots: [{}, {}]",
+                    "Gap found for {} tree. Sequences: [{}, {}], slots: [{}, {}]",
                     prev_state.tree,
                     prev_state.seq,
                     current_state.seq,
                     prev_state.slot,
                     current_state.slot
                 );
-                is_find_gap = true;
+                gap_found = true;
 
                 let slots_collector = self.slots_collector.clone();
                 let mut rx_clone = rx.resubscribe();
@@ -75,30 +75,30 @@ where
                 }));
             };
             if prev_state.tree != current_state.tree {
-                self.save_tree_gap_analyze(prev_state.tree, last_consistent_key, is_find_gap)
+                self.save_tree_gap_analyze(prev_state.tree, last_consistent_seq, gap_found)
                     .await;
-                is_find_gap = false
+                gap_found = false
             }
             // If keys already deleted for some tree, we must not to delete other keys in this tree
             // in order to save gap and in future check, if we fix it
-            if !is_find_gap {
-                last_consistent_key = (current_state.tree, current_state.seq);
+            if !gap_found {
+                last_consistent_seq = current_state.seq;
             }
             prev_state = current_state;
         }
         // Handle last tree keys
-        self.save_tree_gap_analyze(prev_state.tree, last_consistent_key, is_find_gap)
+        self.save_tree_gap_analyze(prev_state.tree, last_consistent_seq, gap_found)
             .await
     }
 
     async fn save_tree_gap_analyze(
         &self,
         tree: solana_program::pubkey::Pubkey,
-        last_consistent_key: (solana_program::pubkey::Pubkey, u64),
-        is_find_gap: bool,
+        last_consistent_seq: u64,
+        gap_found: bool,
     ) {
         self.sequence_consistent_manager
-            .process_tree_gap(tree, is_find_gap, last_consistent_key)
+            .process_tree_gap(tree, gap_found, last_consistent_seq)
             .await;
         self.metrics
             .set_total_tree_with_gaps(self.sequence_consistent_manager.gaps_count());
