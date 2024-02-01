@@ -3819,6 +3819,7 @@ dependencies = [
 name = "nft_ingester"
 version = "0.7.2"
 dependencies = [
+ "assert-json-diff",
  "async-trait",
  "backfill-rpc",
  "bincode",

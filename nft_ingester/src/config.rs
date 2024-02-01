@@ -145,6 +145,7 @@ pub struct IngesterConfig {
     pub rpc_retry_interval_millis: u64,
     #[serde(default)]
     pub run_sequence_consistent_checker: bool,
+    pub rocks_db_secondary_path_container: Option<String>,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]

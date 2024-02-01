@@ -63,6 +63,7 @@ prometheus-client = "0.21.2"
 pprof = {version = "0.13.0", features = ["_protobuf", "protobuf-codec"]}
 solana-program = "~1.16"
 itertools = "0.12.1"
+assert-json-diff = "2.0.2"
 
 [dev-dependencies]
 tempfile = "3.8.1"
@@ -93,3 +94,6 @@ name = "migrator"
 
 [[bin]]
 name = "raw_backfiller"
+
+[[bin]]
+name = "compare_blocks"

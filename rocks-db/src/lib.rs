@@ -61,34 +61,10 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub fn open(
-        db_path: &str,
+    pub fn new(
+        db: Arc<DB>,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
-    ) -> Result<Self> {
-        let db = Arc::new(DB::open_cf_descriptors(
-            &Self::get_db_options(),
-            db_path,
-            vec![
-                Self::new_cf_descriptor::<offchain_data::OffChainData>(),
-                Self::new_cf_descriptor::<AssetStaticDetails>(),
-                Self::new_cf_descriptor::<AssetDynamicDetails>(),
-                Self::new_cf_descriptor::<AssetAuthority>(),
-                Self::new_cf_descriptor::<AssetOwner>(),
-                Self::new_cf_descriptor::<asset::AssetLeaf>(),
-                Self::new_cf_descriptor::<asset::AssetCollection>(),
-                Self::new_cf_descriptor::<cl_items::ClItem>(),
-                Self::new_cf_descriptor::<cl_items::ClLeaf>(),
-                Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(),
-                Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(),
-                Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
-                Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
-                Self::new_cf_descriptor::<raw_block::RawBlock>(),
-                Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(),
-                Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(),
-                Self::new_cf_descriptor::<TreeSeqIdx>(),
-                Self::new_cf_descriptor::<TreesGaps>(),
-            ],
-        )?);
+    ) -> Self {
         let asset_offchain_data = Self::column(db.clone());
 
         let asset_static_data = Self::column(db.clone());
@@ -109,7 +85,7 @@ impl Storage {
         let tree_seq_idx = Self::column(db.clone());
         let trees_gaps = Self::column(db.clone());
 
-        Ok(Self {
+        Self {
             asset_static_data,
             asset_dynamic_data,
             asset_authority_data,
@@ -129,7 +105,58 @@ impl Storage {
             join_set,
             tree_seq_idx,
             trees_gaps,
-        })
+        }
+    }
+
+    pub fn open(
+        db_path: &str,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+    ) -> Result<Self> {
+        let cf_descriptors = Self::create_cf_descriptors();
+        let db = Arc::new(DB::open_cf_descriptors(
+            &Self::get_db_options(),
+            db_path,
+            cf_descriptors,
+        )?);
+        Ok(Self::new(db, join_set))
+    }
+
+    pub fn open_secondary(
+        primary_path: &str,
+        secondary_path: &str,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+    ) -> Result<Self> {
+        let cf_descriptors = Self::create_cf_descriptors();
+        let db = Arc::new(DB::open_cf_descriptors_as_secondary(
+            &Self::get_db_options(),
+            primary_path,
+            secondary_path,
+            cf_descriptors,
+        )?);
+        Ok(Self::new(db, join_set))
+    }
+
+    fn create_cf_descriptors() -> Vec<ColumnFamilyDescriptor> {
+        vec![
+            Self::new_cf_descriptor::<offchain_data::OffChainData>(),
+            Self::new_cf_descriptor::<AssetStaticDetails>(),
+            Self::new_cf_descriptor::<AssetDynamicDetails>(),
+            Self::new_cf_descriptor::<AssetAuthority>(),
+            Self::new_cf_descriptor::<AssetOwner>(),
+            Self::new_cf_descriptor::<asset::AssetLeaf>(),
+            Self::new_cf_descriptor::<asset::AssetCollection>(),
+            Self::new_cf_descriptor::<cl_items::ClItem>(),
+            Self::new_cf_descriptor::<cl_items::ClLeaf>(),
+            Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(),
+            Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(),
+            Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
+            Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
+            Self::new_cf_descriptor::<raw_block::RawBlock>(),
+            Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(),
+            Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(),
+            Self::new_cf_descriptor::<TreeSeqIdx>(),
+            Self::new_cf_descriptor::<TreesGaps>(),
+        ]
     }
 
     fn new_cf_descriptor<C: TypedColumn>() -> ColumnFamilyDescriptor {
