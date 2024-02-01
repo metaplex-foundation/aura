@@ -636,8 +636,6 @@ pub async fn get_by_ids(
         .await
         .map_err(|e| DbErr::Custom(e.to_string()))?;
 
-    println!("Asset data:\n{:?}", asset_selected_maps);
-
     let mut results = vec![None; asset_ids.len()];
     for id in unique_asset_ids {
         let res = asset_selected_maps_into_full_asset(&id, &asset_selected_maps);
