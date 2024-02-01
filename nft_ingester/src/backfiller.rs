@@ -15,6 +15,7 @@ use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
 use solana_transaction_status::{
     EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta,
 };
+use std::cmp::max;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
@@ -146,6 +147,38 @@ impl Backfiller {
         Ok(())
     }
 
+    pub fn calculate_ranges(low_number: u64, high_number: u64, workers: u64) -> Vec<(u64, u64)> {
+        let total_numbers = high_number - low_number + 1; // +1 to include both ends
+        let base_range_size = max(total_numbers / workers, 10);
+        let mut ranges = Vec::new();
+        let expected_number_of_workers = max(total_numbers / base_range_size, 1);
+        let mut start = low_number;
+        for i in 0..expected_number_of_workers {
+            // Calculate extra elements to distribute the remainder
+            let extra = if i < (total_numbers % expected_number_of_workers) {
+                1
+            } else {
+                0
+            };
+            let end = if i < expected_number_of_workers - 1 {
+                start + base_range_size + extra - 1 // -1 to adjust for inclusive ranges
+            } else {
+                // The last worker should always end with high_number, no adjustment needed
+                high_number
+            };
+            ranges.push((start, end));
+
+            // For overlapping, the next start is the same as the current end for all but the last worker
+            start = if i < expected_number_of_workers - 1 {
+                end
+            } else {
+                end + 1
+            }; // No overlap for the last element
+        }
+
+        ranges
+    }
+
     pub async fn start_backfill<C, P>(
         &self,
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
@@ -160,21 +193,55 @@ impl Backfiller {
     {
         info!("Backfiller is started");
 
-        let slots_collector = SlotsCollector::new(
-            self.rocks_client.clone(),
-            self.big_table_client.big_table_inner_client.clone(),
-            metrics.clone(),
-        );
         let start_from = self.slot_start_from;
-        let parse_until = self.slot_parse_until;
+        let parse_until = max(self.slot_parse_until, 130_000_000);
         let rx1 = rx.resubscribe();
         let rx2 = rx.resubscribe();
-        tasks.lock().await.spawn(tokio::spawn(async move {
-            info!("Running slots parser...");
-            slots_collector
-                .collect_slots(BBG_PREFIX, start_from, parse_until, &rx1)
-                .await;
-        }));
+        let low_density_slot_cutoff = 200_000_000;
+        let cloned_rocks = self.rocks_client.clone();
+        let cloned_big_table = self.big_table_client.big_table_inner_client.clone();
+        let cloned_metrics = metrics.clone();
+        if parse_until < low_density_slot_cutoff {
+            tasks.lock().await.spawn(tokio::spawn(async move {
+                info!(
+                    "Running slots parser for range {} - {}...",
+                    low_density_slot_cutoff, parse_until,
+                );
+                let slots_collector = SlotsCollector::new(
+                    cloned_rocks.clone(),
+                    cloned_big_table.clone(),
+                    cloned_metrics.clone(),
+                );
+
+                slots_collector
+                    .collect_slots(BBG_PREFIX, start_from, parse_until, &rx1.resubscribe())
+                    .await;
+                info!(
+                    "Slots parser for range {} - {} finished",
+                    low_density_slot_cutoff, parse_until
+                );
+            }));
+        }
+        let parse_until = max(self.slot_parse_until, low_density_slot_cutoff);
+        let ranges = Self::calculate_ranges(parse_until, start_from, self.workers_count as u64);
+        for (low, high) in ranges {
+            let cloned_rocks = self.rocks_client.clone();
+            let cloned_big_table = self.big_table_client.big_table_inner_client.clone();
+            let cloned_metrics = metrics.clone();
+            let rx1 = rx.resubscribe();
+            tasks.lock().await.spawn(tokio::spawn(async move {
+                info!("Running slots parser...");
+                let slots_collector = SlotsCollector::new(
+                    cloned_rocks.clone(),
+                    cloned_big_table.clone(),
+                    cloned_metrics.clone(),
+                );
+
+                slots_collector
+                    .collect_slots(BBG_PREFIX, high, low, &rx1.resubscribe())
+                    .await;
+            }));
+        }
 
         let transactions_parser = Arc::new(TransactionsParser::new(
             self.rocks_client.clone(),
@@ -678,4 +745,32 @@ fn is_bubblegum_transaction_encoded(tx: &EncodedTransactionWithStatusMeta) -> bo
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_ranges() {
+        let ranges = Backfiller::calculate_ranges(200_000_000, 245_867_321, 10);
+        assert_eq!(ranges.len(), 10);
+        assert_eq!(ranges[0], (200_000_000, 204_586_732));
+        assert_eq!(ranges[1], (204_586_732, 209_173_464));
+        assert_eq!(ranges[2], (209_173_464, 213_760_195));
+        assert_eq!(ranges[3], (213_760_195, 218_346_926));
+        assert_eq!(ranges[4], (218_346_926, 222_933_657));
+        assert_eq!(ranges[5], (222_933_657, 227_520_388));
+        assert_eq!(ranges[6], (227_520_388, 232_107_119));
+        assert_eq!(ranges[7], (232_107_119, 236_693_850));
+        assert_eq!(ranges[8], (236_693_850, 241_280_581));
+        assert_eq!(ranges[9], (241_280_581, 245_867_321));
+    }
+
+    #[test]
+    fn test_calculate_ranges_small_range() {
+        let ranges = Backfiller::calculate_ranges(200_000_000, 200_000_002, 10);
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0], (200_000_000, 200_000_002));
+    }
 }
