@@ -64,6 +64,8 @@ pub struct BackfillerConfig {
     pub permitted_tasks: usize,
     #[serde(default = "default_wait_period_sec")]
     pub wait_period_sec: u64,
+    #[serde(default)]
+    pub should_reingest: bool,
 }
 fn default_wait_period_sec() -> u64 {
     60
@@ -503,6 +505,7 @@ mod tests {
                 chunk_size: 5,
                 permitted_tasks: 500,
                 wait_period_sec: 60,
+                should_reingest: false,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
@@ -531,6 +534,7 @@ mod tests {
                 chunk_size: 5,
                 permitted_tasks: 500,
                 wait_period_sec: 60,
+                should_reingest: false,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
