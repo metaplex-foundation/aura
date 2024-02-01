@@ -107,15 +107,21 @@ impl TokenAccsProcessor {
                             None,
                             token_account.owner,
                         ),
-                        delegate: token_account.delegate.map(|delegate| {
-                            Updated::new(token_account.slot_updated as u64, None, delegate)
-                        }),
+                        delegate: Updated::new(
+                            token_account.slot_updated as u64,
+                            None,
+                            token_account.delegate,
+                        ),
                         owner_type: Updated::new(
                             token_account.slot_updated as u64,
                             None,
                             OwnerType::Single,
                         ),
-                        owner_delegate_seq: None,
+                        owner_delegate_seq: Updated::new(
+                            token_account.slot_updated as u64,
+                            None,
+                            None,
+                        ),
                     },
                 );
                 acc

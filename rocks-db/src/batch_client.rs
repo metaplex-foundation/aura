@@ -193,7 +193,7 @@ impl AssetIndexReader for Storage {
         for data in asset_owner_details.iter().flatten() {
             if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
                 existed_index.owner = Some(data.owner.value);
-                existed_index.delegate = data.delegate.clone().map(|delegate| delegate.value);
+                existed_index.delegate = data.delegate.value;
                 existed_index.owner_type = Some(data.owner_type.value);
                 if data.get_slot_updated() as i64 > existed_index.slot_updated {
                     existed_index.slot_updated = data.get_slot_updated() as i64;
@@ -202,7 +202,7 @@ impl AssetIndexReader for Storage {
                 let asset_index = AssetIndex {
                     pubkey: data.pubkey,
                     owner: Some(data.owner.value),
-                    delegate: data.delegate.clone().map(|delegate| delegate.value),
+                    delegate: data.delegate.value,
                     owner_type: Some(data.owner_type.value),
                     slot_updated: data.get_slot_updated() as i64,
                     ..Default::default()
