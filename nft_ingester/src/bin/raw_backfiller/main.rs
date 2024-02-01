@@ -17,8 +17,9 @@ use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
+use rocks_db::bubblegum_slots::BubblegumSlotGetter;
 use rocks_db::Storage;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
@@ -84,6 +85,7 @@ pub async fn main() -> Result<(), IngesterError> {
         big_table_client.clone(),
         backfiller_config.clone(),
     );
+    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
     match backfiller_config.backfiller_mode {
         config::BackfillerMode::IngestDirectly => {
@@ -93,7 +95,7 @@ pub async fn main() -> Result<(), IngesterError> {
             backfiller
                 .start_backfill(
                     mutexed_tasks.clone(),
-                    keep_running.clone(),
+                    shutdown_rx.resubscribe(),
                     metrics.clone(),
                     consumer,
                     big_table_client.clone(),
@@ -133,6 +135,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
             let transactions_parser = Arc::new(TransactionsParser::new(
                 rocks_storage.clone(),
+                Arc::new(BubblegumSlotGetter::new(rocks_storage.clone())),
                 consumer,
                 producer,
                 metrics.clone(),
@@ -140,13 +143,12 @@ pub async fn main() -> Result<(), IngesterError> {
                 backfiller_config.chunk_size,
             ));
 
-            let cloned_keep_running = keep_running.clone();
             mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                 info!("Running transactions parser...");
 
                 transactions_parser
                     .parse_raw_transactions(
-                        cloned_keep_running,
+                        shutdown_rx.resubscribe(),
                         backfiller_config.permitted_tasks,
                         backfiller_config.slot_until,
                     )
@@ -159,8 +161,6 @@ pub async fn main() -> Result<(), IngesterError> {
             info!("not running backfiller");
         }
     };
-
-    let (shutdown_tx, _shutdown_rx) = oneshot::channel::<()>();
 
     // --stop
     graceful_stop(

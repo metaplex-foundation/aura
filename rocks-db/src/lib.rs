@@ -25,13 +25,13 @@ pub mod column;
 pub mod errors;
 pub mod key_encoders;
 pub mod offchain_data;
+pub mod parameters;
 pub mod raw_block;
 pub mod signature_client;
 pub mod slots_dumper;
 pub mod storage_traits;
 pub mod transaction;
 pub mod transaction_client;
-
 pub type Result<T> = std::result::Result<T, StorageError>;
 
 pub struct Storage {
@@ -45,6 +45,7 @@ pub struct Storage {
     pub cl_items: Column<cl_items::ClItem>,
     pub cl_leafs: Column<cl_items::ClLeaf>,
     pub bubblegum_slots: Column<bubblegum_slots::BubblegumSlots>,
+    pub ingestable_slots: Column<bubblegum_slots::IngestableSlots>,
     pub raw_blocks_cbor: Column<raw_block::RawBlock>,
     pub db: Arc<DB>,
     pub assets_update_idx: Column<AssetsUpdateIdx>,
@@ -76,6 +77,8 @@ impl Storage {
                 Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
                 Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
                 Self::new_cf_descriptor::<raw_block::RawBlock>(),
+                Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(),
+                Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(),
             ],
         )?);
         let asset_offchain_data = Self::column(db.clone());
@@ -91,8 +94,8 @@ impl Storage {
         let cl_leafs = Self::column(db.clone());
 
         let bubblegum_slots = Self::column(db.clone());
+        let ingestable_slots = Self::column(db.clone());
         let raw_blocks = Self::column(db.clone());
-
         let assets_update_idx = Self::column(db.clone());
         let slot_asset_idx = Self::column(db.clone());
 
@@ -107,6 +110,7 @@ impl Storage {
             cl_items,
             cl_leafs,
             bubblegum_slots,
+            ingestable_slots,
             raw_blocks_cbor: raw_blocks,
             db,
             assets_update_idx,

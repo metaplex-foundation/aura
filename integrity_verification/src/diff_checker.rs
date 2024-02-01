@@ -14,6 +14,7 @@ use regex::Regex;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
 use usecase::bigtable::BigTableClient;
 use usecase::slots_collector::SlotsCollector;
@@ -201,8 +202,8 @@ where
                     "{}: mismatch responses: req: {:#?}, diff: {}",
                     req.method, req, diff
                 );
-
-                self.try_collect_slots(req, &diff_with_reference_response.reference_response)
+                let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
+                self.try_collect_slots(req, &diff_with_reference_response.reference_response, &rx)
                     .await;
             }
             // Prevent rate-limit errors
@@ -372,7 +373,7 @@ impl<T> DiffChecker<T>
 where
     T: IntegrityVerificationKeysFetcher + Send + Sync,
 {
-    async fn try_collect_slots(&self, req: &Body, reference_response: &Value) {
+    async fn try_collect_slots(&self, req: &Body, reference_response: &Value, rx: &Receiver<()>) {
         let collect_tools = match &self.collect_slots_tools {
             None => return,
             Some(collect_tools) => collect_tools,
@@ -402,7 +403,9 @@ where
                 return;
             }
         };
-        collect_tools.collect_slots(asset_id, tree_id, slot).await;
+        collect_tools
+            .collect_slots(asset_id, tree_id, slot, rx)
+            .await;
     }
 
     async fn get_slot(&self) -> Result<u64, IntegrityVerificationError> {
@@ -423,18 +426,16 @@ where
 }
 
 impl CollectSlotsTools {
-    async fn collect_slots(&self, asset: &str, tree_key: &str, slot: u64) {
+    async fn collect_slots(&self, asset: &str, tree_key: &str, slot: u64, rx: &Receiver<()>) {
         let slots_collector = SlotsCollector::new(
             Arc::new(FileSlotsDumper::new(self.format_filename(tree_key, asset))),
             self.bigtable_client.big_table_inner_client.clone(),
-            slot,
-            0,
             self.metrics.clone(),
         );
 
         info!("Start collecting slots for {}", tree_key);
         slots_collector
-            .collect_slots(&format!("{}/", tree_key))
+            .collect_slots(&format!("{}/", tree_key), slot, 0, rx)
             .await;
         info!("Collected slots for {}", tree_key);
     }

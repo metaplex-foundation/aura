@@ -44,7 +44,11 @@ where
         }
     }
 
-    pub async fn fetch_signatures(&self, program_id: Pubkey) -> Result<(), StorageError> {
+    pub async fn fetch_signatures(
+        &self,
+        program_id: Pubkey,
+        rpc_retry_interval_millis: u64,
+    ) -> Result<(), StorageError> {
         let signature = self
             .data_layer
             .first_persisted_signature_for(program_id)
@@ -106,7 +110,10 @@ where
             );
             let transactions: Vec<BufferedTransaction> = match self
                 .rpc
-                .get_txs_by_signatures(missing_signatures.iter().map(|s| s.signature).collect())
+                .get_txs_by_signatures(
+                    missing_signatures.iter().map(|s| s.signature).collect(),
+                    rpc_retry_interval_millis,
+                )
                 .await
                 .map_err(|e| StorageError::Common(e.to_string()))
             {
@@ -222,6 +229,6 @@ mod tests {
             Arc::new(ingester),
             metrics,
         );
-        fetcher.fetch_signatures(program_id).await.unwrap();
+        fetcher.fetch_signatures(program_id, 0).await.unwrap();
     }
 }
