@@ -7,7 +7,10 @@ use nft_ingester::config::{
 use nft_ingester::error::IngesterError;
 use rocks_db::Storage;
 use serde_json::json;
+use std::ops::DerefMut;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use tracing::{error, info};
@@ -42,6 +45,18 @@ pub async fn main() -> Result<(), IngesterError> {
             .unwrap(),
     );
 
+    let keep_running = Arc::new(AtomicBool::new(true));
+    let cloned_keep_running = keep_running.clone();
+    let cloned_rocks = rocks_storage.clone();
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        while cloned_keep_running.load(Ordering::SeqCst) {
+            if let Err(e) = cloned_rocks.db.try_catch_up_with_primary() {
+                error!("Sync rocksdb error: {}", e);
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    }));
+
     for block in get_blocks_to_compare() {
         let bigtable_block = big_table_client.get_block(block).await.unwrap();
         let storage_block = rocks_storage
@@ -62,6 +77,10 @@ pub async fn main() -> Result<(), IngesterError> {
             error!("block: {}, diff: {}", block, diff)
         }
     }
+
+    usecase::graceful_stop::listen_shutdown().await;
+    keep_running.store(false, Ordering::SeqCst);
+    usecase::graceful_stop::graceful_stop(mutexed_tasks.lock().await.deref_mut()).await;
 
     Ok(())
 }
