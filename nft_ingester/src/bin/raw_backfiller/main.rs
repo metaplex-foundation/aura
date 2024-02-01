@@ -3,8 +3,7 @@ use std::sync::Arc;
 
 use log::{error, info};
 use nft_ingester::backfiller::{
-    connect_new_bigtable_from_config, Backfiller, BubblegumSlotGetter, DirectBlockParser,
-    TransactionsParser,
+    connect_new_bigtable_from_config, Backfiller, DirectBlockParser, TransactionsParser,
 };
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
@@ -18,6 +17,7 @@ use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
+use rocks_db::bubblegum_slots::BubblegumSlotGetter;
 use rocks_db::Storage;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;

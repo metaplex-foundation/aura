@@ -5,18 +5,16 @@ use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
 use futures::future::join_all;
 use interface::signature_persistence::{BlockConsumer, BlockProducer};
+use interface::slots_dumper::SlotGetter;
 use log::{error, info, warn};
 use metrics_utils::BackfillerMetricsConfig;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
-use rocks_db::bubblegum_slots::{
-    bubblegum_slots_key_to_value, form_bubblegum_slots_key, IngestableSlots,
-};
+use rocks_db::bubblegum_slots::BubblegumSlotGetter;
 use rocks_db::column::TypedColumn;
 use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
 use solana_transaction_status::{
     EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta,
 };
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
@@ -316,18 +314,6 @@ where
         tracing::info!("Transactions parser has finished working");
     }
 
-    pub fn get_slots_iter(&self) -> impl Iterator<Item = u64> + '_ {
-        let i = self
-            .rocks_client
-            .bubblegum_slots
-            .iter_start()
-            .filter_map(|k| k.ok())
-            .map(|(k, _)| String::from_utf8(k.to_vec()))
-            .filter_map(|k| k.ok())
-            .map(bubblegum_slots_key_to_value);
-        i
-    }
-
     pub async fn process_all_slots(&self, rx: Receiver<()>) {
         let slots_iter = self.slot_getter.get_unprocessed_slots_iter();
         let chunk_size = self.workers_count * self.chunk_size;
@@ -376,31 +362,14 @@ where
 
     pub async fn parse_transactions(&self, rx: Receiver<()>) {
         let mut counter = GET_SLOT_RETRIES;
-
         'outer: while rx.is_empty() {
-            let mut slots_to_parse_iter = self.rocks_client.bubblegum_slots.iter_end();
+            let mut slots_to_parse_iter = self.slot_getter.get_unprocessed_slots_iter();
             let mut slots_to_parse_vec = Vec::new();
 
             while slots_to_parse_vec.len() <= self.workers_count * self.chunk_size {
                 match slots_to_parse_iter.next() {
-                    Some(result) => {
-                        match result {
-                            Ok((key, _)) => {
-                                let blgm_slot_key = String::from_utf8(key.to_vec());
-
-                                if blgm_slot_key.is_err() {
-                                    error!("Error while converting key received from RocksDB to string");
-                                    continue;
-                                }
-
-                                let slot = bubblegum_slots_key_to_value(blgm_slot_key.unwrap());
-                                slots_to_parse_vec.push(slot);
-                            }
-                            Err(e) => {
-                                error!("Error while iterating over bubblegum slots: {:?}", e);
-                                break;
-                            }
-                        }
+                    Some(slot) => {
+                        slots_to_parse_vec.push(slot);
                     }
                     None => {
                         if slots_to_parse_vec.is_empty() {
@@ -452,7 +421,24 @@ where
         )
         .await?;
         let len = res.len() as u64;
-        self.slot_getter.mark_slots_processed(res).await?;
+        let mut counter = DELETE_SLOT_RETRIES;
+        while counter > 0 {
+            let result = self.slot_getter.mark_slots_processed(res.clone()).await;
+            match result {
+                Ok(_) => {
+                    break;
+                }
+                Err(err) => {
+                    error!("Error putting processed slots: {}", err);
+                    counter -= 1;
+                    tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_ROCKSDB_OPERATION))
+                        .await;
+                    if counter == 0 {
+                        return Err(err.to_string());
+                    }
+                }
+            }
+        }
         Ok(len)
     }
 
@@ -692,136 +678,4 @@ fn is_bubblegum_transaction_encoded(tx: &EncodedTransactionWithStatusMeta) -> bo
         }
     }
     false
-}
-
-#[async_trait]
-pub trait SlotGetter {
-    fn get_unprocessed_slots_iter(&self) -> impl Iterator<Item = u64>;
-    async fn mark_slots_processed(&self, slots: Vec<u64>) -> Result<(), String>;
-}
-
-pub struct BubblegumSlotGetter {
-    rocks_client: Arc<rocks_db::Storage>,
-}
-
-impl BubblegumSlotGetter {
-    pub fn new(rocks_client: Arc<rocks_db::Storage>) -> BubblegumSlotGetter {
-        BubblegumSlotGetter { rocks_client }
-    }
-}
-
-#[async_trait]
-impl SlotGetter for BubblegumSlotGetter {
-    fn get_unprocessed_slots_iter(&self) -> impl Iterator<Item = u64> {
-        self.rocks_client
-            .bubblegum_slots
-            .iter_start()
-            .filter_map(|k| k.ok())
-            .map(|(k, _)| String::from_utf8(k.to_vec()))
-            .filter_map(|k| k.ok())
-            .map(bubblegum_slots_key_to_value)
-    }
-
-    async fn mark_slots_processed(&self, slots: Vec<u64>) -> Result<(), String> {
-        let mut counter = DELETE_SLOT_RETRIES;
-        while counter > 0 {
-            let put_result = self
-                .rocks_client
-                .ingestable_slots
-                .put_batch(slots.iter().fold(HashMap::new(), |mut acc, slot| {
-                    acc.insert(*slot, IngestableSlots {});
-                    acc
-                }))
-                .await;
-
-            match put_result {
-                Ok(_) => {
-                    break;
-                }
-                Err(err) => {
-                    error!("Error putting processed slots: {}", err);
-                    counter -= 1;
-                    tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_ROCKSDB_OPERATION))
-                        .await;
-                    if counter == 0 {
-                        return Err(err.to_string());
-                    }
-                }
-            }
-        }
-
-        counter = DELETE_SLOT_RETRIES;
-        while counter > 0 {
-            let delete_result = self
-                .rocks_client
-                .bubblegum_slots
-                .delete_batch(slots.iter().map(|k| form_bubblegum_slots_key(*k)).collect())
-                .await;
-
-            match delete_result {
-                Ok(_) => {
-                    break;
-                }
-                Err(err) => {
-                    error!("Error deleting slot: {}", err);
-                    counter -= 1;
-                    tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_ROCKSDB_OPERATION))
-                        .await;
-                    if counter == 0 {
-                        return Err(err.to_string());
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-pub struct IngestableSlotGetter {
-    rocks_client: Arc<rocks_db::Storage>,
-}
-
-impl IngestableSlotGetter {
-    pub fn new(rocks_client: Arc<rocks_db::Storage>) -> IngestableSlotGetter {
-        IngestableSlotGetter { rocks_client }
-    }
-}
-
-#[async_trait]
-impl SlotGetter for IngestableSlotGetter {
-    fn get_unprocessed_slots_iter(&self) -> impl Iterator<Item = u64> {
-        self.rocks_client
-            .ingestable_slots
-            .iter_start()
-            .filter_map(|k| k.ok())
-            .map(|(k, _)| IngestableSlots::decode_key(k.to_vec()))
-            .filter_map(|k| k.ok())
-    }
-
-    async fn mark_slots_processed(&self, slots: Vec<u64>) -> Result<(), String> {
-        let mut counter = DELETE_SLOT_RETRIES;
-        while counter > 0 {
-            let delete_result = self
-                .rocks_client
-                .ingestable_slots
-                .delete_batch(slots.clone())
-                .await;
-
-            match delete_result {
-                Ok(_) => {
-                    break;
-                }
-                Err(err) => {
-                    error!("Error deleting slot: {}", err);
-                    counter -= 1;
-                    tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_ROCKSDB_OPERATION))
-                        .await;
-                    if counter == 0 {
-                        return Err(err.to_string());
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
 }

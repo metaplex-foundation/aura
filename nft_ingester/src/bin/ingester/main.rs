@@ -7,6 +7,7 @@ use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
 use nft_ingester::{backfiller, config, transaction_ingester};
+use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 
@@ -41,8 +42,7 @@ use rocks_db::{backup_service, Storage};
 use tonic::transport::Server;
 
 use nft_ingester::backfiller::{
-    connect_new_bigtable_from_config, BubblegumSlotGetter, DirectBlockParser, IngestableSlotGetter,
-    TransactionsParser,
+    connect_new_bigtable_from_config, DirectBlockParser, TransactionsParser,
 };
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";

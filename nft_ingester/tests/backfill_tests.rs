@@ -4,9 +4,13 @@
 mod tests {
     use std::sync::Arc;
 
-    use interface::signature_persistence::{BlockConsumer, BlockProducer};
+    use interface::{
+        signature_persistence::{BlockConsumer, BlockProducer},
+        slots_dumper::SlotGetter,
+    };
     use metrics_utils::BackfillerMetricsConfig;
-    use nft_ingester::backfiller::{BubblegumSlotGetter, TransactionsParser};
+    use nft_ingester::backfiller::TransactionsParser;
+    use rocks_db::bubblegum_slots::BubblegumSlotGetter;
     use setup::rocks::RocksTestEnvironment;
     use usecase::{bigtable::BigTableClient, slots_collector::SlotsCollector};
 
@@ -84,9 +88,16 @@ mod tests {
         );
 
         const BBG_PREFIX: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY/";
+        let some_unreached_slot = 300_000_000_000;
         slots_collector
-            .collect_slots(BBG_PREFIX, u64::MAX, 300_000_000_000, &mut rx)
+            .collect_slots(BBG_PREFIX, u64::MAX, some_unreached_slot, &mut rx)
             .await;
-        assert!(storage.bubblegum_slots.iter_end().next().is_some());
+        let slot_getter = BubblegumSlotGetter::new(storage.clone());
+        let mut iter = slot_getter.get_unprocessed_slots_iter();
+        let one_and_only_slot = iter.next();
+        assert!(one_and_only_slot.is_some());
+        let one_and_only_slot = one_and_only_slot.unwrap();
+        assert!(one_and_only_slot < some_unreached_slot);
+        assert!(iter.next().is_none());
     }
 }
