@@ -41,7 +41,7 @@ where
         }
     }
 
-    pub async fn collect_sequences_gaps(&self, rx: &mut Receiver<()>) {
+    pub async fn collect_sequences_gaps(&self, rx: Receiver<()>) {
         let mut last_consistent_seq = 0;
         let mut prev_state = TreeState::default();
         let mut gap_found = false;
@@ -62,14 +62,14 @@ where
                 gap_found = true;
 
                 let slots_collector = self.slots_collector.clone();
-                let mut rx_clone = rx.resubscribe();
+                let rx_clone = rx.resubscribe();
                 self.tasks.lock().await.spawn(tokio::spawn(async move {
                     slots_collector
                         .collect_slots(
                             &format!("{}/", current_state.tree),
                             current_state.slot,
                             prev_state.slot,
-                            &mut rx_clone,
+                            &rx_clone,
                         )
                         .await;
                 }));

@@ -302,22 +302,21 @@ pub async fn main() -> Result<(), IngesterError> {
         backfill_bubblegum_updates_processor.clone(),
     ));
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
+    let backfiller_config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
+    let big_table_client = Arc::new(
+        connect_new_bigtable_from_config(backfiller_config.clone())
+            .await
+            .unwrap(),
+    );
 
     if config.run_bubblegum_backfiller {
-        let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
-
-        let big_table_client = Arc::new(
-            connect_new_bigtable_from_config(config.clone())
-                .await
-                .unwrap(),
-        );
         let backfiller = backfiller::Backfiller::new(
             rocks_storage.clone(),
             big_table_client.clone(),
-            config.clone(),
+            backfiller_config.clone(),
         );
 
-        match config.backfiller_mode {
+        match backfiller_config.backfiller_mode {
             config::BackfillerMode::IngestDirectly => {
                 let consumer = Arc::new(DirectBlockParser::new(
                     tx_ingester.clone(),
@@ -364,8 +363,8 @@ pub async fn main() -> Result<(), IngesterError> {
                     consumer,
                     producer,
                     metrics_state.backfiller_metrics.clone(),
-                    config.workers_count,
-                    config.chunk_size,
+                    backfiller_config.workers_count,
+                    backfiller_config.chunk_size,
                 ));
 
                 let cloned_rx = shutdown_rx.resubscribe();
@@ -375,8 +374,8 @@ pub async fn main() -> Result<(), IngesterError> {
                     transactions_parser
                         .parse_raw_transactions(
                             cloned_rx,
-                            config.permitted_tasks,
-                            config.slot_until,
+                            backfiller_config.permitted_tasks,
+                            backfiller_config.slot_until,
                         )
                         .await;
                 }));
@@ -393,7 +392,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     if let Err(e) = backfiller_clone
                         .run_perpetual_slot_collection(
                             metrics,
-                            Duration::from_secs(config.wait_period_sec),
+                            Duration::from_secs(backfiller_config.wait_period_sec),
                             rx,
                         )
                         .await
@@ -419,7 +418,7 @@ pub async fn main() -> Result<(), IngesterError> {
                             slot_getter,
                             consumer,
                             producer,
-                            Duration::from_secs(config.wait_period_sec),
+                            Duration::from_secs(backfiller_config.wait_period_sec),
                             rx,
                         )
                         .await
@@ -447,7 +446,7 @@ pub async fn main() -> Result<(), IngesterError> {
                             slot_getter,
                             consumer,
                             producer,
-                            Duration::from_secs(config.wait_period_sec),
+                            Duration::from_secs(backfiller_config.wait_period_sec),
                             rx,
                         )
                         .await
@@ -522,7 +521,7 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    let transactions_getter = Arc::new(BackfillRPC::connect(config.backfill_rpc_address));
+    let transactions_getter = Arc::new(BackfillRPC::connect(config.backfill_rpc_address.clone()));
     let rocks_clone = rocks_storage.clone();
     let signature_fetcher = usecase::signature_fetcher::SignatureFetcher::new(
         rocks_clone,
@@ -564,7 +563,7 @@ pub async fn main() -> Result<(), IngesterError> {
         metrics_state.registry,
         config.get_metrics_port(config.consumer_number)?,
     )
-        .await;
+    .await;
 
     if config.run_sequence_consistent_checker {
         let slots_collector = SlotsCollector::new(
@@ -585,7 +584,7 @@ pub async fn main() -> Result<(), IngesterError> {
             loop {
                 let start = Instant::now();
                 sequence_consistent_gapfiller
-                    .collect_sequences_gaps(&mut rx.resubscribe())
+                    .collect_sequences_gaps(rx.resubscribe())
                     .await;
                 metrics.set_scans_latency(start.elapsed().as_secs_f64());
                 metrics.inc_total_scans();

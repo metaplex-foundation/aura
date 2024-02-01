@@ -181,7 +181,7 @@ mod tests {
         );
         let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
         sequence_consistent_gapfiller
-            .collect_sequences_gaps(&mut shutdown_rx.resubscribe())
+            .collect_sequences_gaps(shutdown_rx.resubscribe())
             .await;
         while let Some(_) = tasks.lock().await.join_next().await {}
 
