@@ -502,19 +502,19 @@ fn convert_rocks_authority_model(
 fn convert_rocks_grouping_model(
     asset_pubkey: &Pubkey,
     assets_collection: &HashMap<Pubkey, AssetCollection>,
-) -> asset_grouping::Model {
-    let collection = assets_collection.get(asset_pubkey);
-
-    asset_grouping::Model {
-        id: 0,
-        asset_id: asset_pubkey.to_bytes().to_vec(),
-        group_key: COLLECTION_GROUP_KEY.to_string(),
-        group_value: collection.map(|asset| asset.collection.to_string()),
-        seq: collection.map(|asset| asset.slot_updated as i64),
-        slot_updated: collection.map(|asset| asset.slot_updated as i64),
-        verified: collection.map(|asset| asset.is_collection_verified),
-        group_info_seq: collection.and_then(|asset| asset.collection_seq.map(|s| s as i64)),
-    }
+) -> Option<asset_grouping::Model> {
+    assets_collection
+        .get(asset_pubkey)
+        .map(|ast| asset_grouping::Model {
+            id: 0,
+            asset_id: asset_pubkey.to_bytes().to_vec(),
+            group_key: COLLECTION_GROUP_KEY.to_string(),
+            group_value: Some(ast.collection.to_string()),
+            seq: ast.collection_seq.map(|s| s as i64),
+            slot_updated: Some(ast.slot_updated as i64),
+            verified: Some(ast.is_collection_verified),
+            group_info_seq: ast.collection_seq.map(|s| s as i64),
+        })
 }
 
 fn convert_rocks_creators_model(
@@ -595,10 +595,11 @@ fn asset_selected_maps_into_full_asset(
                         &asset_selected_maps.assets_authority,
                     )],
                     creators: convert_rocks_creators_model(id, &asset_selected_maps.assets_dynamic),
-                    groups: vec![convert_rocks_grouping_model(
+                    groups: convert_rocks_grouping_model(
                         id,
                         &asset_selected_maps.assets_collection,
-                    )],
+                    )
+                    .map_or(vec![], |v| vec![v]),
                 }),
                 Err(e) => {
                     error!(
