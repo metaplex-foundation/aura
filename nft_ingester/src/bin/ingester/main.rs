@@ -462,7 +462,9 @@ pub async fn main() -> Result<(), IngesterError> {
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         let program_id = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
         while cloned_keep_running.load(Ordering::SeqCst) {
-            let res = signature_fetcher.fetch_signatures(program_id).await;
+            let res = signature_fetcher
+                .fetch_signatures(program_id, config.rpc_retry_interval_millis)
+                .await;
             match res {
                 Ok(_) => {
                     metrics_clone

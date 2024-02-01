@@ -136,6 +136,8 @@ pub struct IngesterConfig {
     pub run_profiling: Option<bool>,
     pub profiling_file_path_container: Option<String>,
     pub store_db_backups: Option<bool>,
+    #[serde(default)]
+    pub rpc_retry_interval_millis: u64,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]

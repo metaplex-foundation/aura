@@ -14,6 +14,7 @@ use solana_sdk::signature::Signature;
 use solana_transaction_status::UiTransactionEncoding;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 const MAX_SIGNATURES_LIMIT: usize = 50_000_000;
 const GET_TX_RETRIES: usize = 7;
@@ -62,6 +63,7 @@ impl TransactionsGetter for BackfillRPC {
     async fn get_txs_by_signatures(
         &self,
         signatures: Vec<Signature>,
+        retry_interval_millis: u64,
     ) -> Result<Vec<BufferedTransaction>, UsecaseError> {
         stream::iter(signatures)
             .map(|signature| {
@@ -96,6 +98,7 @@ impl TransactionsGetter for BackfillRPC {
                         if response.is_ok() {
                             break;
                         }
+                        tokio::time::sleep(Duration::from_millis(retry_interval_millis)).await;
                     }
                     response
                 }
@@ -163,7 +166,7 @@ async fn test_rpc_get_txs_by_signatures() {
             Signature::from_str("265JP2HS6DwJPS4Htk2msUbxbrdeHLFVXUTFVSZ7CyMrHM8xXTxZJpLpt67kKHPAUVtEj7i3fWb5Z9vqMHREHmVm").unwrap(),
         ];
 
-    let txs = client.get_txs_by_signatures(signatures).await.unwrap();
+    let txs = client.get_txs_by_signatures(signatures, 0).await.unwrap();
 
     let parsed_txs = txs
         .iter()
@@ -186,5 +189,5 @@ async fn test_rpc_get_txs_by_signatures_error() {
         Signature::from_str("2H4c1LcgWG2VuxE4rb318spyiMe1Aet5AysQHAB3Pm3z9nadxJH4C1GZD8yMeAgjdzojmLZGQppuiZqG2oKrtwF3").unwrap(), // transaction that does not exists
     ];
 
-    client.get_txs_by_signatures(signatures).await.unwrap();
+    client.get_txs_by_signatures(signatures, 0).await.unwrap();
 }
