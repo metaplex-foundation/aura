@@ -148,7 +148,11 @@ impl Backfiller {
     }
 
     pub fn calculate_ranges(low_number: u64, high_number: u64, workers: u64) -> Vec<(u64, u64)> {
-        let total_numbers = high_number - low_number + 1; // +1 to include both ends
+        let total_numbers = high_number as i64 - low_number as i64 + 1; // +1 to include both ends
+        if total_numbers <= 0 {
+            return Vec::new();
+        }
+        let total_numbers = total_numbers as u64;
         let base_range_size = max(total_numbers / workers, 10);
         let mut ranges = Vec::new();
         let expected_number_of_workers = max(total_numbers / base_range_size, 1);
@@ -205,7 +209,7 @@ impl Backfiller {
             tasks.lock().await.spawn(tokio::spawn(async move {
                 info!(
                     "Running slots parser for range {} - {}...",
-                    low_density_slot_cutoff, parse_until,
+                    parse_until, low_density_slot_cutoff,
                 );
                 let slots_collector = SlotsCollector::new(
                     cloned_rocks.clone(),
@@ -214,11 +218,16 @@ impl Backfiller {
                 );
 
                 slots_collector
-                    .collect_slots(BBG_PREFIX, start_from, parse_until, &rx1.resubscribe())
+                    .collect_slots(
+                        BBG_PREFIX,
+                        low_density_slot_cutoff,
+                        parse_until,
+                        &rx1.resubscribe(),
+                    )
                     .await;
                 info!(
                     "Slots parser for range {} - {} finished",
-                    low_density_slot_cutoff, parse_until
+                    parse_until, low_density_slot_cutoff,
                 );
             }));
         }
@@ -230,7 +239,7 @@ impl Backfiller {
             let cloned_metrics = metrics.clone();
             let rx1 = rx.resubscribe();
             tasks.lock().await.spawn(tokio::spawn(async move {
-                info!("Running slots parser...");
+                info!("Running slots parser for range {} - {}...", low, high);
                 let slots_collector = SlotsCollector::new(
                     cloned_rocks.clone(),
                     cloned_big_table.clone(),
@@ -240,6 +249,7 @@ impl Backfiller {
                 slots_collector
                     .collect_slots(BBG_PREFIX, high, low, &rx1.resubscribe())
                     .await;
+                info!("Slots parser for range {} - {} finished", low, high);
             }));
         }
 
@@ -772,5 +782,11 @@ mod tests {
         let ranges = Backfiller::calculate_ranges(200_000_000, 200_000_002, 10);
         assert_eq!(ranges.len(), 1);
         assert_eq!(ranges[0], (200_000_000, 200_000_002));
+    }
+
+    #[test]
+    fn test_calculate_ranges_negative_range() {
+        let ranges = Backfiller::calculate_ranges(200_000_000, 200_000, 10);
+        assert_eq!(ranges.len(), 0);
     }
 }
