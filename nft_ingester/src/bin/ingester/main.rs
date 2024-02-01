@@ -5,7 +5,7 @@ use std::time::Duration;
 use clap::Parser;
 use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
-use log::{error, info};
+use log::{error, info, warn};
 use nft_ingester::{backfiller, config, transaction_ingester};
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use tokio::sync::{broadcast, Mutex};
@@ -311,6 +311,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     if config.run_bubblegum_backfiller {
         if backfiller_config.should_reingest {
+            warn!("reingest flag is set, deleting last fetched slot");
             rocks_storage
                 .delete_parameter::<u64>(rocks_db::parameters::Parameter::LastFetchedSlot)
                 .await?;
