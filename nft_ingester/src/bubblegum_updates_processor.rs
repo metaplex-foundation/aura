@@ -25,6 +25,7 @@ use rocks_db::asset::{
 };
 use rocks_db::transaction::{
     AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, Task, TransactionResult,
+    TreeWithSeqAndSlot,
 };
 use serde_json::json;
 use solana_sdk::hash::Hash;
@@ -244,7 +245,15 @@ impl BubblegumTxProcessor {
         let ix_str = Self::instruction_name_to_string(ix_type);
         debug!("BGUM instruction txn={:?}: {:?}", ix_str, bundle.txn_id);
 
-        match ix_type {
+        let mut tree_update = None;
+        if let Some(cl) = &parsing_result.tree_update {
+            tree_update = Some(TreeWithSeqAndSlot {
+                tree: cl.id,
+                seq: cl.seq,
+                slot: bundle.slot,
+            })
+        };
+        let instruction: Result<InstructionResult, IngesterError> = match ix_type {
             InstructionName::Transfer
             | InstructionName::CancelRedeem
             | InstructionName::Delegate => Self::get_update_owner_update(parsing_result, bundle)
@@ -258,7 +267,6 @@ impl BubblegumTxProcessor {
                     .map(From::from)
                     .map(Ok)?
             }
-
             InstructionName::Redeem => Self::get_redeem_update(parsing_result, bundle)
                 .map(From::from)
                 .map(Ok)?,
@@ -268,7 +276,6 @@ impl BubblegumTxProcessor {
                     .map(From::from)
                     .map(Ok)?
             }
-
             InstructionName::VerifyCollection
             | InstructionName::UnverifyCollection
             | InstructionName::SetAndVerifyCollection => {
@@ -276,18 +283,19 @@ impl BubblegumTxProcessor {
                     .map(From::from)
                     .map(Ok)?
             }
-
             InstructionName::UpdateMetadata => {
                 Self::get_update_metadata_update(parsing_result, bundle)
                     .map(From::from)
                     .map(Ok)?
             }
-
             _ => {
                 debug!("Bubblegum: Not Implemented Instruction");
                 Ok(InstructionResult::default())
             }
-        }
+        };
+        let mut instruction = instruction?;
+        instruction.tree_update = tree_update;
+        Ok(instruction)
     }
 
     pub fn get_update_owner_update(

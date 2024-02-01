@@ -2158,6 +2158,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_derive",
+ "solana-program",
  "solana-sdk",
  "sqlx",
 ]
@@ -3117,6 +3118,7 @@ dependencies = [
  "mockall 0.12.1",
  "plerkle_serialization",
  "solana-client",
+ "solana-program",
  "solana-sdk",
  "solana-storage-bigtable",
  "solana-transaction-status",

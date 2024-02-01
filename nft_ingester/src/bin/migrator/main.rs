@@ -7,7 +7,7 @@ use metrics_utils::utils::start_metrics;
 use metrics_utils::{
     ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
     JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig,
-    SynchronizerMetricsConfig,
+    SequenceConsistentGapfillMetricsConfig, SynchronizerMetricsConfig,
 };
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::{JoinError, JoinSet};
@@ -40,6 +40,7 @@ pub async fn main() -> Result<(), IngesterError> {
         RpcBackfillerMetricsConfig::new(),
         SynchronizerMetricsConfig::new(),
         JsonMigratorMetricsConfig::new(),
+        SequenceConsistentGapfillMetricsConfig::new(),
     );
     metrics_state.register_metrics();
     start_metrics(metrics_state.registry, Some(config.metrics_port)).await;

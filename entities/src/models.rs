@@ -182,3 +182,10 @@ pub struct SignatureWithSlot {
     pub signature: Signature,
     pub slot: u64,
 }
+
+#[derive(Default)]
+pub struct TreeState {
+    pub tree: Pubkey,
+    pub seq: u64,
+    pub slot: u64,
+}

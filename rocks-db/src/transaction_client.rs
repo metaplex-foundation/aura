@@ -124,6 +124,10 @@ impl Storage {
                 tracing::error!("Failed to save tx data and asset updated: {}", e);
             }
         }
+        if let Some(tree_update) = ix.tree_update {
+            self.save_tree_with_batch(batch, tree_update);
+        }
+
         Ok(())
     }
 

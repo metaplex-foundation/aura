@@ -47,6 +47,13 @@ pub struct AssetUpdateEvent {
 }
 
 #[derive(Clone, Default)]
+pub struct TreeWithSeqAndSlot {
+    pub tree: Pubkey,
+    pub seq: u64,
+    pub slot: u64,
+}
+
+#[derive(Clone, Default)]
 pub struct CopyableChangeLogEventV1 {
     /// Public key of the ConcurrentMerkleTree
     pub id: Pubkey,
@@ -89,6 +96,7 @@ pub struct InstructionResult {
     pub update: Option<AssetUpdateEvent>,
     pub task: Option<Task>,
     pub decompressed: Option<AssetUpdate<AssetDynamicDetails>>,
+    pub tree_update: Option<TreeWithSeqAndSlot>,
 }
 
 impl From<AssetUpdateEvent> for InstructionResult {
