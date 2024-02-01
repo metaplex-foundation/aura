@@ -7,6 +7,7 @@ use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
 use nft_ingester::{backfiller, config, transaction_ingester};
+use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 
@@ -80,11 +81,6 @@ pub async fn main() -> Result<(), IngesterError> {
         JsonMigratorMetricsConfig::new(),
     );
     metrics_state.register_metrics();
-    start_metrics(
-        metrics_state.registry,
-        config.get_metrics_port(config.consumer_number)?,
-    )
-    .await;
 
     // try to restore rocksDB first
     if args.restore_rocks_db {
@@ -327,11 +323,10 @@ pub async fn main() -> Result<(), IngesterError> {
                 backfiller
                     .start_backfill(
                         mutexed_tasks.clone(),
-                        keep_running.clone(),
+                        shutdown_rx.resubscribe(),
                         metrics_state.backfiller_metrics.clone(),
                         consumer,
                         big_table_client.clone(),
-                        shutdown_rx.resubscribe(),
                     )
                     .await
                     .unwrap();
@@ -342,11 +337,10 @@ pub async fn main() -> Result<(), IngesterError> {
                 backfiller
                     .start_backfill(
                         mutexed_tasks.clone(),
-                        keep_running.clone(),
+                        shutdown_rx.resubscribe(),
                         metrics_state.backfiller_metrics.clone(),
                         consumer,
                         big_table_client.clone(),
-                        shutdown_rx.resubscribe(),
                     )
                     .await
                     .unwrap();
@@ -362,6 +356,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
                 let transactions_parser = Arc::new(TransactionsParser::new(
                     rocks_storage.clone(),
+                    Arc::new(BubblegumSlotGetter::new(rocks_storage.clone())),
                     consumer,
                     producer,
                     metrics_state.backfiller_metrics.clone(),
@@ -369,13 +364,13 @@ pub async fn main() -> Result<(), IngesterError> {
                     config.chunk_size,
                 ));
 
-                let cloned_keep_running = keep_running.clone();
+                let cloned_rx = shutdown_rx.resubscribe();
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                     info!("Running transactions parser...");
 
                     transactions_parser
                         .parse_raw_transactions(
-                            cloned_keep_running,
+                            cloned_rx,
                             config.permitted_tasks,
                             config.slot_until,
                         )
@@ -386,20 +381,77 @@ pub async fn main() -> Result<(), IngesterError> {
             }
             config::BackfillerMode::PersistAndIngest => {
                 let rx = shutdown_rx.resubscribe();
+                let metrics = Arc::new(BackfillerMetricsConfig::new());
+                metrics.register_with_prefix(&mut metrics_state.registry, "slot_fetcher_");
+                let backfiller_clone = backfiller.clone();
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-                    if let Err(e) = backfiller
-                        .run_perpetual_slot_parsing(
-                            metrics_state.backfiller_metrics.clone(),
+                    info!("Running slot fetcher...");
+                    if let Err(e) = backfiller_clone
+                        .run_perpetual_slot_collection(
+                            metrics,
                             Duration::from_secs(config.wait_period_sec),
                             rx,
                         )
                         .await
                     {
-                        error!("Error while running perpetual slot backfiller: {}", e);
+                        error!("Error while running perpetual slot fetcher: {}", e);
                     }
+                    info!("Slot fetcher finished working");
                 }));
-                // todo: run perpetual slot fetcher
-                // todo: run perpetual backfiller
+
+                // run perpetual slot persister
+                let rx = shutdown_rx.resubscribe();
+                let consumer = rocks_storage.clone();
+                let producer = big_table_client.clone();
+                let metrics = Arc::new(BackfillerMetricsConfig::new());
+                metrics.register_with_prefix(&mut metrics_state.registry, "slot_persister_");
+                let slot_getter = Arc::new(BubblegumSlotGetter::new(rocks_storage.clone()));
+                let backfiller_clone = backfiller.clone();
+                mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                    info!("Running slot persister...");
+                    if let Err(e) = backfiller_clone
+                        .run_perpetual_slot_processing(
+                            metrics,
+                            slot_getter,
+                            consumer,
+                            producer,
+                            Duration::from_secs(config.wait_period_sec),
+                            rx,
+                        )
+                        .await
+                    {
+                        error!("Error while running perpetual slot persister: {}", e);
+                    }
+                    info!("Slot persister finished working");
+                }));
+                // run perpetual ingester
+                let rx = shutdown_rx.resubscribe();
+                let consumer = Arc::new(DirectBlockParser::new(
+                    tx_ingester.clone(),
+                    rocks_storage.clone(),
+                    metrics_state.backfiller_metrics.clone(),
+                ));
+                let producer = rocks_storage.clone();
+                let metrics = Arc::new(BackfillerMetricsConfig::new());
+                metrics.register_with_prefix(&mut metrics_state.registry, "slot_ingester_");
+                let slot_getter = Arc::new(IngestableSlotGetter::new(rocks_storage.clone()));
+                mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                    info!("Running slot ingester...");
+                    if let Err(e) = backfiller
+                        .run_perpetual_slot_processing(
+                            metrics,
+                            slot_getter,
+                            consumer,
+                            producer,
+                            Duration::from_secs(config.wait_period_sec),
+                            rx,
+                        )
+                        .await
+                    {
+                        error!("Error while running perpetual slot ingester: {}", e);
+                    }
+                    info!("Slot ingester finished working");
+                }));
             }
             config::BackfillerMode::None => {
                 info!("not running backfiller");
@@ -466,7 +518,8 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    let transactions_getter = Arc::new(BackfillRPC::connect(config.backfill_rpc_address));
+    let transactions_getter =
+        Arc::new(BackfillRPC::connect(config.backfill_rpc_address.to_owned()));
     let signature_fetcher = usecase::signature_fetcher::SignatureFetcher::new(
         rocks_storage,
         transactions_getter,
@@ -502,6 +555,11 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     }));
 
+    start_metrics(
+        metrics_state.registry,
+        config.get_metrics_port(config.consumer_number)?,
+    )
+    .await;
     // --stop
     graceful_stop(
         mutexed_tasks,

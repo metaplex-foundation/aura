@@ -149,24 +149,28 @@ impl BackfillerMetricsConfig {
             .set(slot)
     }
 
-    pub fn register(&self, registry: &mut Registry) {
+    pub fn register_with_prefix(&self, registry: &mut Registry, prefix: &str) {
         registry.register(
-            "backfiller_slots_collected",
+            format!("{}slots_collected", prefix),
             "The number of slots backfiller collected and prepared to parse",
             self.slots_collected.clone(),
         );
 
         registry.register(
-            "backfiller_data_processed",
+            format!("{}data_processed", prefix),
             "The number of data processed by backfiller",
             self.data_processed.clone(),
         );
 
         registry.register(
-            "backfiller_last_processed_slot",
+            format!("{}last_processed_slot", prefix),
             "The last processed slot by backfiller",
             self.last_processed_slot.clone(),
         );
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        self.register_with_prefix(registry, "backfiller_")
     }
 }
 

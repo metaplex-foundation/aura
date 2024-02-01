@@ -41,7 +41,7 @@ where
         collected_pubkey: &str,
         slot_start_from: u64,
         slot_parse_until: u64,
-        rx: &mut Receiver<()>,
+        rx: &Receiver<()>,
     ) -> Option<u64> {
         let mut start_at_slot = slot_start_from;
         info!(
@@ -50,18 +50,9 @@ where
         );
         let mut top_slot_collected = None;
         loop {
-            let should_stop_recv = rx.try_recv();
-            match should_stop_recv {
-                Ok(_) => {
-                    info!("Received stop signal, returning");
-                    return None;
-                }
-                Err(e) => {
-                    if tokio::sync::broadcast::error::TryRecvError::Empty != e {
-                        error!("Error while receiving stop signal: {}, returning", e);
-                        return None;
-                    }
-                }
+            if !rx.is_empty() {
+                info!("Received stop signal, returning");
+                return None;
             }
             let slots = self
                 .big_table_inner_client
@@ -83,9 +74,13 @@ where
                         let slot_value = self.row_to_slot(collected_pubkey, slot);
                         match slot_value {
                             Ok(slot) => {
-                                slots.push(!slot);
+                                slots.push(slot);
+
                                 if top_slot_collected.is_none() {
-                                    top_slot_collected = Some(!slot);
+                                    top_slot_collected = Some(slot);
+                                }
+                                if slot <= slot_parse_until {
+                                    break;
                                 }
                             }
                             Err(err) => {
@@ -106,7 +101,7 @@ where
                             .set_last_processed_slot("collected_slot", last_slot as i64);
 
                         if (slots.len() == 1 && slots[0] == start_at_slot)
-                            || (last_slot < slot_parse_until)
+                            || (last_slot <= slot_parse_until)
                         {
                             info!("All the slots are collected");
                             break;
@@ -136,6 +131,6 @@ where
     }
 
     fn row_to_slot(&self, prefix: &str, key: &str) -> Result<Slot, ParseIntError> {
-        Slot::from_str_radix(&key[prefix.len()..], 16)
+        Slot::from_str_radix(&key[prefix.len()..], 16).map(|s| !s)
     }
 }
