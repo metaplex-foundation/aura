@@ -310,6 +310,13 @@ pub async fn main() -> Result<(), IngesterError> {
     );
 
     if config.run_bubblegum_backfiller {
+        let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
+
+        if config.should_reingest {
+            rocks_storage
+                .delete_parameter::<u64>(rocks_db::parameters::Parameter::LastFetchedSlot)
+                .await?;
+        }
         let backfiller = backfiller::Backfiller::new(
             rocks_storage.clone(),
             big_table_client.clone(),

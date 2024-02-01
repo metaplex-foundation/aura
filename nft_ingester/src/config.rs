@@ -64,6 +64,8 @@ pub struct BackfillerConfig {
     pub permitted_tasks: usize,
     #[serde(default = "default_wait_period_sec")]
     pub wait_period_sec: u64,
+    #[serde(default)]
+    pub should_reingest: bool,
 }
 fn default_wait_period_sec() -> u64 {
     60

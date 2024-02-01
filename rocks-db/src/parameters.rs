@@ -80,4 +80,19 @@ impl Storage {
         .map_err(|e| StorageError::Common(format!("Failed to put parameter: {}", e)))??;
         Ok(())
     }
+
+    pub async fn delete_parameter<T>(&self, parameter: Parameter) -> Result<()>
+    where
+        T: Serialize + for<'de> Deserialize<'de> + Clone + Send + Sync,
+    {
+        let key = ParameterColumn::<T>::encode_key(parameter);
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            db.delete_cf(&db.cf_handle(ParameterColumn::<T>::NAME).unwrap(), key)
+                .map_err(|e| StorageError::Common(format!("Failed to delete parameter: {}", e)))
+        })
+        .await
+        .map_err(|e| StorageError::Common(format!("Failed to delete parameter: {}", e)))??;
+        Ok(())
+    }
 }
