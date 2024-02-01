@@ -11,7 +11,8 @@ use crate::asset::AssetLeaf;
 use crate::column::TypedColumn;
 use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64_pubkey, encode_u64_pubkey};
-use crate::transaction::CopyableChangeLogEventV1;
+use crate::transaction::{CopyableChangeLogEventV1, TreeWithSeqAndSlot};
+use crate::tree_seq::TreeSeqIdx;
 use crate::{AssetDynamicDetails, Result, Storage};
 
 /// This column family stores change log items for asset proof construction.
@@ -155,6 +156,20 @@ impl Storage {
         if let Err(e) = put_res.await {
             error!("Error while saving change log for cNFT: {}", e);
         }
+    }
+
+    pub(crate) fn save_tree_with_batch(
+        &self,
+        batch: &mut rocksdb::WriteBatch,
+        tree: TreeWithSeqAndSlot,
+    ) {
+        if let Err(e) = self.tree_seq_idx.put_with_batch(
+            batch,
+            (tree.tree, tree.seq),
+            &TreeSeqIdx { slot: tree.slot },
+        ) {
+            error!("Error while saving tree update: {}", e);
+        };
     }
 
     pub(crate) fn save_changelog_with_batch(

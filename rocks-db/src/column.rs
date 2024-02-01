@@ -293,6 +293,22 @@ where
             .await
             .map_err(|e| StorageError::Common(e.to_string()))?
     }
+
+    fn delete_range_sync(backend: Arc<DB>, from: C::KeyType, to: C::KeyType) -> Result<()> {
+        backend.delete_range_cf(
+            &backend.cf_handle(C::NAME).unwrap(),
+            C::encode_key(from),
+            C::encode_key(to),
+        )?;
+        Ok(())
+    }
+
+    pub async fn delete_range(&self, from: C::KeyType, to: C::KeyType) -> Result<()> {
+        let db = self.backend.clone();
+        tokio::task::spawn_blocking(move || Self::delete_range_sync(db, from, to))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?
+    }
 }
 
 pub mod columns {
