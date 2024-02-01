@@ -73,7 +73,7 @@ pub struct AssetOwnerDeprecated {
     pub owner: Updated<Pubkey>,
     pub delegate: Option<Updated<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
-    pub owner_delegate_seq: Updated<Option<u64>>,
+    pub owner_delegate_seq: Option<Updated<u64>>,
 }
 
 /// Leaf information about compressed asset
