@@ -505,6 +505,7 @@ mod tests {
                 chunk_size: 5,
                 permitted_tasks: 500,
                 wait_period_sec: 60,
+                should_reingest: false,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
@@ -533,6 +534,7 @@ mod tests {
                 chunk_size: 5,
                 permitted_tasks: 500,
                 wait_period_sec: 60,
+                should_reingest: false,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
