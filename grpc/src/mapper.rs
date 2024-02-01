@@ -8,6 +8,30 @@ use entities::models::{CompleteAssetDetails, Updated};
 use solana_sdk::pubkey::Pubkey;
 impl From<CompleteAssetDetails> for AssetDetails {
     fn from(value: CompleteAssetDetails) -> Self {
+        let delegate = {
+            if let Some(delegate) = value.delegate.value {
+                Some(DynamicBytesField {
+                    value: delegate.to_bytes().to_vec(),
+                    slot_updated: value.delegate.slot_updated,
+                    seq_updated: value.delegate.seq,
+                })
+            } else {
+                None
+            }
+        };
+
+        let owner_delegate_seq = {
+            if let Some(deleg_seq) = value.owner_delegate_seq.value {
+                Some(DynamicUint64Field {
+                    value: deleg_seq,
+                    slot_updated: value.owner_delegate_seq.slot_updated,
+                    seq_updated: value.owner_delegate_seq.seq,
+                })
+            } else {
+                None
+            }
+        };
+
         Self {
             pubkey: value.pubkey.to_bytes().to_vec(),
             specification_asset_class: SpecificationAssetClass::from(
@@ -27,9 +51,9 @@ impl From<CompleteAssetDetails> for AssetDetails {
             royalty_amount: Some(value.royalty_amount.into()),
             authority: Some(value.authority.into()),
             owner: Some(value.owner.into()),
-            delegate: value.delegate.map(|v| v.into()),
+            delegate,
             owner_type: Some(value.owner_type.into()),
-            owner_delegate_seq: value.owner_delegate_seq.map(|v| v.into()),
+            owner_delegate_seq,
             asset_leaf: value.asset_leaf.map(|v| v.into()),
             collection: value.collection.map(|v| v.into()),
             chain_data: value.onchain_data.map(|v| v.into()),

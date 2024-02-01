@@ -87,6 +87,14 @@ impl TokenAccsProcessor {
             let save_values = accs_to_save.clone().into_iter().fold(
                 HashMap::new(),
                 |mut acc: HashMap<_, _>, token_account| {
+                    let delegate = {
+                        if let Some(delegate) = token_account.delegate {
+                            Updated::new(token_account.slot_updated as u64, None, Some(delegate))
+                        } else {
+                            Updated::new(token_account.slot_updated as u64, None, None)
+                        }
+                    };
+
                     acc.insert(
                         token_account.mint,
                         AssetOwner {
@@ -96,15 +104,17 @@ impl TokenAccsProcessor {
                                 None,
                                 token_account.owner,
                             ),
-                            delegate: token_account.delegate.map(|delegate| {
-                                Updated::new(token_account.slot_updated as u64, None, delegate)
-                            }),
+                            delegate,
                             owner_type: Updated::new(
                                 token_account.slot_updated as u64,
                                 None,
                                 OwnerType::Token,
                             ),
-                            owner_delegate_seq: None,
+                            owner_delegate_seq: Updated::new(
+                                token_account.slot_updated as u64,
+                                None,
+                                None,
+                            ),
                         },
                     );
                     acc

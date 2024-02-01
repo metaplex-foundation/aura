@@ -322,7 +322,7 @@ impl BubblegumTxProcessor {
                         owner: Updated::new(bundle.slot, Some(cl.seq), owner),
                         delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
                         owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
-                        owner_delegate_seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
+                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
                     };
                     asset_update.update = Some(AssetDynamicUpdate {
                         pk: id,
@@ -512,7 +512,7 @@ impl BubblegumTxProcessor {
                         owner: Updated::new(bundle.slot, Some(cl.seq), owner),
                         delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
                         owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
-                        owner_delegate_seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
+                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
                     };
                     asset_update.owner_update = Some(AssetUpdate {
                         pk: id,
@@ -694,7 +694,7 @@ impl BubblegumTxProcessor {
                         owner: Updated::new(bundle.slot, Some(cl.seq), owner),
                         delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
                         owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
-                        owner_delegate_seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
+                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
                     };
                     asset_update.owner_update = Some(AssetUpdate {
                         pk: id,
@@ -963,12 +963,12 @@ fn use_method_from_mpl_bubblegum_state(
     }
 }
 
-fn get_delegate(delegate: Pubkey, owner: Pubkey, slot: u64, seq: u64) -> Option<Updated<Pubkey>> {
+fn get_delegate(delegate: Pubkey, owner: Pubkey, slot: u64, seq: u64) -> Updated<Option<Pubkey>> {
     let delegate = if owner == delegate || delegate.to_bytes() == [0; 32] {
         None
     } else {
         Some(delegate)
     };
 
-    delegate.map(|delegate| Updated::new(slot, Some(seq), delegate))
+    Updated::new(slot, Some(seq), delegate)
 }

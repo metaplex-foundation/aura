@@ -62,9 +62,9 @@ pub struct AssetAuthority {
 pub struct AssetOwner {
     pub pubkey: Pubkey,
     pub owner: Updated<Pubkey>,
-    pub delegate: Option<Updated<Pubkey>>,
+    pub delegate: Updated<Option<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
-    pub owner_delegate_seq: Option<Updated<u64>>,
+    pub owner_delegate_seq: Updated<Option<u64>>,
 }
 
 /// Leaf information about compressed asset
@@ -334,11 +334,11 @@ impl AssetOwner {
                     result = Some(if let Some(mut current_val) = result {
                         update_field(&mut current_val.owner_type, &new_val.owner_type);
                         update_field(&mut current_val.owner, &new_val.owner);
-                        update_optional_field(
+                        update_field(
                             &mut current_val.owner_delegate_seq,
                             &new_val.owner_delegate_seq,
                         );
-                        update_optional_field(&mut current_val.delegate, &new_val.delegate);
+                        update_field(&mut current_val.delegate, &new_val.delegate);
 
                         current_val
                     } else {
@@ -357,13 +357,9 @@ impl AssetOwner {
     pub fn get_slot_updated(&self) -> u64 {
         [
             self.owner.slot_updated,
-            self.delegate
-                .clone()
-                .map_or(0, |delegate| delegate.slot_updated),
+            self.delegate.slot_updated,
             self.owner_type.slot_updated,
-            self.owner_delegate_seq
-                .clone()
-                .map_or(0, |owner_delegate_seq| owner_delegate_seq.slot_updated),
+            self.owner_delegate_seq.slot_updated,
         ]
         .into_iter()
         .max()

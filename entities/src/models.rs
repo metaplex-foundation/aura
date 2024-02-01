@@ -72,9 +72,9 @@ pub struct CompleteAssetDetails {
 
     // From AssetOwner as Tuples
     pub owner: Updated<Pubkey>,
-    pub delegate: Option<Updated<Pubkey>>,
+    pub delegate: Updated<Option<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
-    pub owner_delegate_seq: Option<Updated<u64>>,
+    pub owner_delegate_seq: Updated<Option<u64>>,
 
     // Separate fields
     pub asset_leaf: Option<Updated<AssetLeaf>>,
