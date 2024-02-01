@@ -207,50 +207,112 @@ impl Storage {
         cf_options.set_target_file_size_base(file_size_base);
 
         // Optional merges
-        if C::NAME == asset::AssetStaticDetails::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_merge_static_details",
-                asset::AssetStaticDetails::merge_static_details,
-            );
-        }
+        match C::NAME {
+            AssetStaticDetails::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_static_details",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            asset::AssetDynamicDetails::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_dynamic_details",
+                    asset::AssetDynamicDetails::merge_dynamic_details,
+                );
+            }
+            asset::AssetAuthority::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_asset_authorities",
+                    asset::AssetAuthority::merge_asset_authorities,
+                );
+            }
+            asset::AssetOwner::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_asset_owner",
+                    asset::AssetOwner::merge_asset_owner,
+                );
+            }
+            asset::AssetLeaf::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_asset_leaf",
+                    asset::AssetLeaf::merge_asset_leaf,
+                );
+            }
+            asset::AssetCollection::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_asset_collection",
+                    asset::AssetCollection::merge_asset_collection,
+                );
+            }
+            cl_items::ClItem::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_cl_item",
+                    cl_items::ClItem::merge_cl_items,
+                );
+            }
 
-        if C::NAME == asset::AssetDynamicDetails::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_merge_dynamic_details",
-                asset::AssetDynamicDetails::merge_dynamic_details,
-            );
+            AssetOwnerDeprecated::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_AssetOwnerDeprecated_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            offchain_data::OffChainData::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_OffChainData_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            cl_items::ClLeaf::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_ClLeaf_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            bubblegum_slots::BubblegumSlots::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_BubblegumSlots_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            bubblegum_slots::IngestableSlots::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_IngestableSlots_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            raw_block::RawBlock::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_RawBlock_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            AssetsUpdateIdx::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_AssetsUpdateIdx_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            SlotAssetIdx::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_SlotAssetIdx_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            TreeSeqIdx::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_TreeSeqIdx_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            TreesGaps::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_TreesGaps_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            _ => {}
         }
-        if C::NAME == asset::AssetAuthority::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_merge_asset_authorities",
-                asset::AssetAuthority::merge_asset_authorities,
-            );
-        }
-        if C::NAME == asset::AssetOwner::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_merge_asset_owner",
-                asset::AssetOwner::merge_asset_owner,
-            );
-        }
-        if C::NAME == asset::AssetLeaf::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_merge_asset_leaf",
-                asset::AssetLeaf::merge_asset_leaf,
-            );
-        }
-        if C::NAME == asset::AssetCollection::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_asset_collection",
-                asset::AssetCollection::merge_asset_collection,
-            );
-        }
-        if C::NAME == cl_items::ClItem::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_cl_item",
-                cl_items::ClItem::merge_cl_items,
-            );
-        }
-
         cf_options
     }
 }
