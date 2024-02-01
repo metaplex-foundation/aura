@@ -66,31 +66,37 @@ impl Storage {
         db_path: &str,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     ) -> Result<Self> {
-        let db = Arc::new(DB::open_cf_descriptors(
-            &Self::get_db_options(),
-            db_path,
-            vec![
-                Self::new_cf_descriptor::<offchain_data::OffChainData>(),
-                Self::new_cf_descriptor::<AssetStaticDetails>(),
-                Self::new_cf_descriptor::<AssetDynamicDetails>(),
-                Self::new_cf_descriptor::<AssetAuthority>(),
-                Self::new_cf_descriptor::<AssetOwnerDeprecated>(),
-                Self::new_cf_descriptor::<asset::AssetLeaf>(),
-                Self::new_cf_descriptor::<asset::AssetCollection>(),
-                Self::new_cf_descriptor::<cl_items::ClItem>(),
-                Self::new_cf_descriptor::<cl_items::ClLeaf>(),
-                Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(),
-                Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(),
-                Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
-                Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
-                Self::new_cf_descriptor::<raw_block::RawBlock>(),
-                Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(),
-                Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(),
-                Self::new_cf_descriptor::<AssetOwner>(),
-                Self::new_cf_descriptor::<TreeSeqIdx>(),
-                Self::new_cf_descriptor::<TreesGaps>(),
-            ],
-        )?);
+        let db = Arc::new(
+            DB::open_cf_descriptors(
+                &Self::get_db_options(),
+                db_path,
+                vec![
+                    Self::new_cf_descriptor::<offchain_data::OffChainData>(),
+                    Self::new_cf_descriptor::<AssetStaticDetails>(),
+                    Self::new_cf_descriptor::<AssetDynamicDetails>(),
+                    Self::new_cf_descriptor::<AssetAuthority>(),
+                    Self::new_cf_descriptor::<AssetOwnerDeprecated>(),
+                    Self::new_cf_descriptor::<asset::AssetLeaf>(),
+                    Self::new_cf_descriptor::<asset::AssetCollection>(),
+                    Self::new_cf_descriptor::<cl_items::ClItem>(),
+                    Self::new_cf_descriptor::<cl_items::ClLeaf>(),
+                    Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(),
+                    Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(),
+                    Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
+                    Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
+                    Self::new_cf_descriptor::<raw_block::RawBlock>(),
+                    Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(),
+                    Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(),
+                    Self::new_cf_descriptor::<AssetOwner>(),
+                    Self::new_cf_descriptor::<TreeSeqIdx>(),
+                    Self::new_cf_descriptor::<TreesGaps>(),
+                ],
+            )
+            .map_err(|e| {
+                tracing::error!("failed to open rocksdb: {:?}", e);
+                e
+            })?,
+        );
         let asset_offchain_data = Self::column(db.clone());
 
         let asset_static_data = Self::column(db.clone());
@@ -178,6 +184,7 @@ impl Storage {
         // however, this is also explicitly required for a secondary instance.
         // See https://github.com/facebook/rocksdb/wiki/Secondary-instance
         options.set_max_open_files(-1);
+        options.set_wal_recovery_mode(rocksdb::DBRecoveryMode::TolerateCorruptedTailRecords);
 
         options
     }
@@ -200,50 +207,112 @@ impl Storage {
         cf_options.set_target_file_size_base(file_size_base);
 
         // Optional merges
-        if C::NAME == asset::AssetStaticDetails::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_merge_static_details",
-                asset::AssetStaticDetails::merge_static_details,
-            );
-        }
+        match C::NAME {
+            AssetStaticDetails::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_static_details",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            asset::AssetDynamicDetails::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_dynamic_details",
+                    asset::AssetDynamicDetails::merge_dynamic_details,
+                );
+            }
+            asset::AssetAuthority::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_asset_authorities",
+                    asset::AssetAuthority::merge_asset_authorities,
+                );
+            }
+            asset::AssetOwner::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_asset_owner",
+                    asset::AssetOwner::merge_asset_owner,
+                );
+            }
+            asset::AssetLeaf::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_asset_leaf",
+                    asset::AssetLeaf::merge_asset_leaf,
+                );
+            }
+            asset::AssetCollection::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_asset_collection",
+                    asset::AssetCollection::merge_asset_collection,
+                );
+            }
+            cl_items::ClItem::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_cl_item",
+                    cl_items::ClItem::merge_cl_items,
+                );
+            }
 
-        if C::NAME == asset::AssetDynamicDetails::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_merge_dynamic_details",
-                asset::AssetDynamicDetails::merge_dynamic_details,
-            );
+            AssetOwnerDeprecated::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_asset_owner_deprecated_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            offchain_data::OffChainData::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_off_chain_data_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            cl_items::ClLeaf::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_cl_leaf_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            bubblegum_slots::BubblegumSlots::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_bubblegum_slots_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            bubblegum_slots::IngestableSlots::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_ingestable_slots_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            raw_block::RawBlock::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_raw_block_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            AssetsUpdateIdx::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_assets_update_idx_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            SlotAssetIdx::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_slot_asset_idx_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            TreeSeqIdx::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_tree_seq_idx_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            TreesGaps::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_trees_gaps_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            _ => {}
         }
-        if C::NAME == asset::AssetAuthority::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_merge_asset_authorities",
-                asset::AssetAuthority::merge_asset_authorities,
-            );
-        }
-        if C::NAME == asset::AssetOwner::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_merge_asset_owner",
-                asset::AssetOwner::merge_asset_owner,
-            );
-        }
-        if C::NAME == asset::AssetLeaf::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_merge_asset_leaf",
-                asset::AssetLeaf::merge_asset_leaf,
-            );
-        }
-        if C::NAME == asset::AssetCollection::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_asset_collection",
-                asset::AssetCollection::merge_asset_collection,
-            );
-        }
-        if C::NAME == cl_items::ClItem::NAME {
-            cf_options.set_merge_operator_associative(
-                "merge_fn_cl_item",
-                cl_items::ClItem::merge_cl_items,
-            );
-        }
-
         cf_options
     }
 }

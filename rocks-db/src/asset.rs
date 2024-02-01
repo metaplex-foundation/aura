@@ -181,7 +181,7 @@ impl TypedColumn for AssetAuthority {
 /// Not a real merge operation. We just check if static info
 /// already exist and if so we don't overwrite it.
 impl AssetStaticDetails {
-    pub fn merge_static_details(
+    pub fn merge_keep_existing(
         _new_key: &[u8],
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
