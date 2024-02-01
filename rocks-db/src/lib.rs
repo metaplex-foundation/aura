@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
-use asset::SlotAssetIdx;
+use asset::{AssetOwnerDeprecated, SlotAssetIdx};
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 pub use asset::{
@@ -42,6 +42,7 @@ pub struct Storage {
     pub asset_static_data: Column<AssetStaticDetails>,
     pub asset_dynamic_data: Column<AssetDynamicDetails>,
     pub asset_authority_data: Column<AssetAuthority>,
+    pub asset_owner_data_deprecated: Column<AssetOwnerDeprecated>,
     pub asset_owner_data: Column<AssetOwner>,
     pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_collection_data: Column<asset::AssetCollection>,
@@ -73,7 +74,7 @@ impl Storage {
                 Self::new_cf_descriptor::<AssetStaticDetails>(),
                 Self::new_cf_descriptor::<AssetDynamicDetails>(),
                 Self::new_cf_descriptor::<AssetAuthority>(),
-                Self::new_cf_descriptor::<AssetOwner>(),
+                Self::new_cf_descriptor::<AssetOwnerDeprecated>(),
                 Self::new_cf_descriptor::<asset::AssetLeaf>(),
                 Self::new_cf_descriptor::<asset::AssetCollection>(),
                 Self::new_cf_descriptor::<cl_items::ClItem>(),
@@ -85,6 +86,7 @@ impl Storage {
                 Self::new_cf_descriptor::<raw_block::RawBlock>(),
                 Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(),
                 Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(),
+                Self::new_cf_descriptor::<AssetOwner>(),
                 Self::new_cf_descriptor::<TreeSeqIdx>(),
                 Self::new_cf_descriptor::<TreesGaps>(),
             ],
@@ -95,6 +97,7 @@ impl Storage {
         let asset_dynamic_data = Self::column(db.clone());
         let asset_authority_data = Self::column(db.clone());
         let asset_owner_data = Self::column(db.clone());
+        let asset_owner_data_deprecated = Self::column(db.clone());
         let asset_leaf_data = Self::column(db.clone());
         let asset_collection_data = Self::column(db.clone());
 
@@ -114,6 +117,7 @@ impl Storage {
             asset_dynamic_data,
             asset_authority_data,
             asset_owner_data,
+            asset_owner_data_deprecated,
             asset_leaf_data,
             asset_collection_data,
             asset_offchain_data,

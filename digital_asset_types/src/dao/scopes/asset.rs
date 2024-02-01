@@ -6,6 +6,7 @@ use std::sync::Arc;
 use log::error;
 use sea_orm::prelude::Json;
 use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult, Order};
+use serde::Deserialize;
 use solana_sdk::pubkey::Pubkey;
 
 use rocks_db::asset::{
@@ -325,9 +326,14 @@ fn convert_rocks_offchain_data(
     )
     .unwrap_or(serde_json::Value::Null);
 
+    let chain_data_mutability = ch_data
+        .get("chain_mutability")
+        .map(|m| ChainMutability::deserialize(m).unwrap_or(ChainMutability::Unknown))
+        .unwrap_or(ChainMutability::Unknown);
+
     Ok(asset_data::Model {
         id: dynamic_data.pubkey.to_bytes().to_vec(),
-        chain_data_mutability: ChainMutability::Mutable,
+        chain_data_mutability,
         chain_data: ch_data,
         metadata_url: offchain_data.url.clone(),
         metadata_mutability: Mutability::Immutable,
@@ -392,10 +398,7 @@ fn convert_rocks_asset_model(
         specification_asset_class: Some(static_data.specification_asset_class.into()),
         owner: Some(owner.owner.value.to_bytes().to_vec()),
         owner_type: owner.owner_type.value.into(),
-        delegate: owner
-            .delegate
-            .clone()
-            .map(|pk| pk.value.to_bytes().to_vec()),
+        delegate: owner.delegate.value.map(|k| k.to_bytes().to_vec()),
         frozen: dynamic_data.is_frozen.value,
         supply: dynamic_data
             .supply
@@ -418,7 +421,7 @@ fn convert_rocks_asset_model(
         slot_updated: Some(slot_updated as i64),
         data_hash: leaf.data_hash.map(|h| h.to_string()),
         creator_hash: leaf.creator_hash.map(|h| h.to_string()),
-        owner_delegate_seq: owner.owner_delegate_seq.clone().map(|seq| seq.value as i64),
+        owner_delegate_seq: owner.owner_delegate_seq.value.map(|s| s as i64),
         was_decompressed: dynamic_data.was_decompressed.value,
         leaf_seq: leaf.leaf_seq.map(|seq| seq as i64),
     })
