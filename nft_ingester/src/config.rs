@@ -141,6 +141,8 @@ pub struct IngesterConfig {
     pub run_profiling: Option<bool>,
     pub profiling_file_path_container: Option<String>,
     pub store_db_backups: Option<bool>,
+    #[serde(default)]
+    pub run_sequence_consistent_checker: bool,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]

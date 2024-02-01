@@ -507,37 +507,39 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     }));
 
-    let slots_collector = SlotsCollector::new(
-        rocks_storage.clone(),
-        big_table_client.big_table_inner_client.clone(),
-        metrics_state.backfiller_metrics.clone(),
-    );
-    let sequence_consistent_gapfiller = SequenceConsistentGapfiller::new(
-        rocks_storage.clone(),
-        slots_collector,
-        metrics_state.sequence_consistent_gapfill_metrics.clone(),
-        mutexed_tasks.clone(),
-    );
-    let mut rx = shutdown_rx.resubscribe();
-    let metrics = metrics_state.sequence_consistent_gapfill_metrics.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        info!("Start collecting sequences gaps...");
-        loop {
-            let start = Instant::now();
-            sequence_consistent_gapfiller
-                .collect_sequences_gaps(&mut rx.resubscribe())
-                .await;
-            metrics.set_scans_latency(start.elapsed().as_secs_f64());
-            metrics.inc_total_scans();
-            tokio::select! {
-                _ = tokio::time::sleep(Duration::from_secs(1)) => {},
-                _ = rx.recv() => {
-                    info!("Received stop signal, stopping collecting sequences gaps");
-                    return;
-                }
-            };
-        }
-    }));
+    if config.run_sequence_consistent_checker {
+        let slots_collector = SlotsCollector::new(
+            rocks_storage.clone(),
+            big_table_client.big_table_inner_client.clone(),
+            metrics_state.backfiller_metrics.clone(),
+        );
+        let sequence_consistent_gapfiller = SequenceConsistentGapfiller::new(
+            rocks_storage.clone(),
+            slots_collector,
+            metrics_state.sequence_consistent_gapfill_metrics.clone(),
+            mutexed_tasks.clone(),
+        );
+        let mut rx = shutdown_rx.resubscribe();
+        let metrics = metrics_state.sequence_consistent_gapfill_metrics.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            info!("Start collecting sequences gaps...");
+            loop {
+                let start = Instant::now();
+                sequence_consistent_gapfiller
+                    .collect_sequences_gaps(&mut rx.resubscribe())
+                    .await;
+                metrics.set_scans_latency(start.elapsed().as_secs_f64());
+                metrics.inc_total_scans();
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {},
+                    _ = rx.recv() => {
+                        info!("Received stop signal, stopping collecting sequences gaps");
+                        return;
+                    }
+                };
+            }
+        }));
+    }
 
     // --stop
     graceful_stop(
