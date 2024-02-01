@@ -8,29 +8,20 @@ use entities::models::{CompleteAssetDetails, Updated};
 use solana_sdk::pubkey::Pubkey;
 impl From<CompleteAssetDetails> for AssetDetails {
     fn from(value: CompleteAssetDetails) -> Self {
-        let delegate = {
-            if let Some(delegate) = value.delegate.value {
-                Some(DynamicBytesField {
-                    value: delegate.to_bytes().to_vec(),
-                    slot_updated: value.delegate.slot_updated,
-                    seq_updated: value.delegate.seq,
-                })
-            } else {
-                None
-            }
-        };
+        let delegate = value.delegate.value.map(|key| DynamicBytesField {
+            value: key.to_bytes().to_vec(),
+            slot_updated: value.delegate.slot_updated,
+            seq_updated: value.delegate.seq,
+        });
 
-        let owner_delegate_seq = {
-            if let Some(deleg_seq) = value.owner_delegate_seq.value {
-                Some(DynamicUint64Field {
-                    value: deleg_seq,
-                    slot_updated: value.owner_delegate_seq.slot_updated,
-                    seq_updated: value.owner_delegate_seq.seq,
-                })
-            } else {
-                None
-            }
-        };
+        let owner_delegate_seq = value
+            .owner_delegate_seq
+            .value
+            .map(|seq| DynamicUint64Field {
+                value: seq,
+                slot_updated: value.owner_delegate_seq.slot_updated,
+                seq_updated: value.owner_delegate_seq.seq,
+            });
 
         Self {
             pubkey: value.pubkey.to_bytes().to_vec(),

@@ -67,6 +67,15 @@ pub struct AssetOwner {
     pub owner_delegate_seq: Updated<Option<u64>>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AssetOwnerDeprecated {
+    pub pubkey: Pubkey,
+    pub owner: Updated<Pubkey>,
+    pub delegate: Option<Updated<Pubkey>>,
+    pub owner_type: Updated<OwnerType>,
+    pub owner_delegate_seq: Updated<Option<u64>>,
+}
+
 /// Leaf information about compressed asset
 /// Nonce - is basically the leaf index. It takes from tree supply.
 /// NOTE: leaf index is not the same as node index. Leaf index is specifically the index of the leaf in the tree.
@@ -304,10 +313,24 @@ impl AssetAuthority {
     }
 }
 
-impl TypedColumn for AssetOwner {
+impl TypedColumn for AssetOwnerDeprecated {
     type KeyType = Pubkey;
     type ValueType = Self;
     const NAME: &'static str = "ASSET_OWNER";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetOwner {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_OWNER_v2";
 
     fn encode_key(pubkey: Pubkey) -> Vec<u8> {
         encode_pubkey(pubkey)
