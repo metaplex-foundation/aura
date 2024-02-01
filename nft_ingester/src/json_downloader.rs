@@ -3,7 +3,7 @@ use crate::config::{
 };
 use crate::db_v2::{DBClient, UpdatedTask};
 use entities::enums::TaskStatus;
-use log::{debug, error, info};
+use log::{debug, error};
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use reqwest::{Client, ClientBuilder};
 use rocks_db::{offchain_data::OffChainData, Storage};
@@ -116,7 +116,7 @@ impl JsonDownloader {
                                                 .await
                                                 .unwrap();
 
-                                            info!("Saved metadata successfully...");
+                                            debug!("Saved metadata successfully...");
                                             cloned_metrics.inc_tasks(MetricStatus::SUCCESS);
                                         } else {
                                             let data_to_insert = UpdatedTask {

@@ -39,10 +39,12 @@ pub struct MetricState {
     pub rpc_backfiller_metrics: Arc<RpcBackfillerMetricsConfig>,
     pub synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     pub json_migrator_metrics: Arc<JsonMigratorMetricsConfig>,
+    pub sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
     pub registry: Registry,
 }
 
 impl MetricState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ingester_metrics: IngesterMetricsConfig,
         api_metrics: ApiMetricsConfig,
@@ -51,6 +53,7 @@ impl MetricState {
         rpc_backfiller_metrics: RpcBackfillerMetricsConfig,
         synchronizer_metrics: SynchronizerMetricsConfig,
         json_migrator_metrics: JsonMigratorMetricsConfig,
+        sequence_consistent_gapfill_metrics: SequenceConsistentGapfillMetricsConfig,
     ) -> Self {
         Self {
             ingester_metrics: Arc::new(ingester_metrics),
@@ -61,6 +64,7 @@ impl MetricState {
             rpc_backfiller_metrics: Arc::new(rpc_backfiller_metrics),
             synchronizer_metrics: Arc::new(synchronizer_metrics),
             json_migrator_metrics: Arc::new(json_migrator_metrics),
+            sequence_consistent_gapfill_metrics: Arc::new(sequence_consistent_gapfill_metrics),
         }
     }
 }
@@ -327,6 +331,7 @@ impl MetricsTrait for MetricState {
     fn register_metrics(&mut self) {
         self.api_metrics.start_time();
         self.json_downloader_metrics.start_time();
+        self.sequence_consistent_gapfill_metrics.start_time();
 
         self.registry.register(
             "api_http_requests",
@@ -416,6 +421,28 @@ impl MetricsTrait for MetricState {
         );
 
         self.json_migrator_metrics.register(&mut self.registry);
+
+        self.registry.register(
+            "total_inconsistent_trees",
+            "Total count of inconsistent trees",
+            self.sequence_consistent_gapfill_metrics
+                .total_tree_with_gaps
+                .clone(),
+        );
+
+        self.registry.register(
+            "total_scans",
+            "Total count of inconsistent trees scans",
+            self.sequence_consistent_gapfill_metrics.total_scans.clone(),
+        );
+
+        self.registry.register(
+            "scans_latency",
+            "A histogram of inconsistent trees scans latency",
+            self.sequence_consistent_gapfill_metrics
+                .scans_latency
+                .clone(),
+        );
     }
 }
 
@@ -935,5 +962,43 @@ impl IntegrityVerificationMetricsConfig {
                 name: label.to_owned(),
             })
             .inc()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SequenceConsistentGapfillMetricsConfig {
+    start_time: Gauge,
+    total_tree_with_gaps: Gauge,
+    total_scans: Counter,
+    scans_latency: Histogram,
+}
+
+impl Default for SequenceConsistentGapfillMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SequenceConsistentGapfillMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            start_time: Default::default(),
+            total_tree_with_gaps: Default::default(),
+            total_scans: Default::default(),
+            scans_latency: Histogram::new(exponential_buckets(1.0, 2.0, 12)),
+        }
+    }
+
+    pub fn start_time(&self) -> i64 {
+        self.start_time.set(Utc::now().timestamp())
+    }
+    pub fn set_total_tree_with_gaps(&self, count: i64) -> i64 {
+        self.total_tree_with_gaps.set(count)
+    }
+    pub fn inc_total_scans(&self) -> u64 {
+        self.total_scans.inc()
+    }
+    pub fn set_scans_latency(&self, duration: f64) {
+        self.scans_latency.observe(duration);
     }
 }
