@@ -7,7 +7,9 @@ use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info, warn};
 use nft_ingester::{backfiller, config, transaction_ingester};
-use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
+use rocks_db::bubblegum_slots::{
+    BubblegumSlotGetter, ForceReingestableSlotGetter, IngestableSlotGetter,
+};
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -308,6 +310,11 @@ pub async fn main() -> Result<(), IngesterError> {
             .await
             .unwrap(),
     );
+    let backfiller = backfiller::Backfiller::new(
+        rocks_storage.clone(),
+        big_table_client.clone(),
+        backfiller_config.clone(),
+    );
 
     if config.run_bubblegum_backfiller {
         if backfiller_config.should_reingest {
@@ -316,11 +323,6 @@ pub async fn main() -> Result<(), IngesterError> {
                 .delete_parameter::<u64>(rocks_db::parameters::Parameter::LastFetchedSlot)
                 .await?;
         }
-        let backfiller = backfiller::Backfiller::new(
-            rocks_storage.clone(),
-            big_table_client.clone(),
-            backfiller_config.clone(),
-        );
 
         match backfiller_config.backfiller_mode {
             config::BackfillerMode::IngestDirectly => {
@@ -444,9 +446,10 @@ pub async fn main() -> Result<(), IngesterError> {
                 let metrics = Arc::new(BackfillerMetricsConfig::new());
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_ingester_");
                 let slot_getter = Arc::new(IngestableSlotGetter::new(rocks_storage.clone()));
+                let backfiller_clone = backfiller.clone();
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                     info!("Running slot ingester...");
-                    if let Err(e) = backfiller
+                    if let Err(e) = backfiller_clone
                         .run_perpetual_slot_processing(
                             metrics,
                             slot_getter,
@@ -565,15 +568,12 @@ pub async fn main() -> Result<(), IngesterError> {
             tokio::time::sleep(Duration::from_secs(60)).await;
         }
     }));
-    start_metrics(
-        metrics_state.registry,
-        config.get_metrics_port(config.consumer_number)?,
-    )
-    .await;
 
     if config.run_sequence_consistent_checker {
+        let force_reingestable_slot_processor =
+            Arc::new(ForceReingestableSlotGetter::new(rocks_storage.clone()));
         let slots_collector = SlotsCollector::new(
-            rocks_storage.clone(),
+            force_reingestable_slot_processor.clone(),
             big_table_client.big_table_inner_client.clone(),
             metrics_state.backfiller_metrics.clone(),
         );
@@ -603,7 +603,37 @@ pub async fn main() -> Result<(), IngesterError> {
                 };
             }
         }));
+
+        // run an additional slot persister
+        let rx = shutdown_rx.resubscribe();
+        let consumer = force_reingestable_slot_processor.clone();
+        let producer = big_table_client.clone();
+        let metrics = Arc::new(BackfillerMetricsConfig::new());
+        metrics.register_with_prefix(&mut metrics_state.registry, "force_slot_persister_");
+        let backfiller_clone = backfiller.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            info!("Running slot force persister...");
+            if let Err(e) = backfiller_clone
+                .run_perpetual_slot_processing(
+                    metrics,
+                    force_reingestable_slot_processor.clone(),
+                    consumer,
+                    producer,
+                    Duration::from_secs(backfiller_config.wait_period_sec),
+                    rx,
+                )
+                .await
+            {
+                error!("Error while running perpetual force slot persister: {}", e);
+            }
+            info!("Force slot persister finished working");
+        }));
     }
+    start_metrics(
+        metrics_state.registry,
+        config.get_metrics_port(config.consumer_number)?,
+    )
+    .await;
 
     // --stop
     graceful_stop(
