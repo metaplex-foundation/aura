@@ -202,13 +202,9 @@ where
                     "{}: mismatch responses: req: {:#?}, diff: {}",
                     req.method, req, diff
                 );
-                let (_tx, mut rx) = tokio::sync::broadcast::channel::<()>(1);
-                self.try_collect_slots(
-                    req,
-                    &diff_with_reference_response.reference_response,
-                    &mut rx,
-                )
-                .await;
+                let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
+                self.try_collect_slots(req, &diff_with_reference_response.reference_response, &rx)
+                    .await;
             }
             // Prevent rate-limit errors
             tokio::time::sleep(Duration::from_millis(REQUESTS_INTERVAL_MILLIS)).await;
@@ -377,12 +373,7 @@ impl<T> DiffChecker<T>
 where
     T: IntegrityVerificationKeysFetcher + Send + Sync,
 {
-    async fn try_collect_slots(
-        &self,
-        req: &Body,
-        reference_response: &Value,
-        rx: &mut Receiver<()>,
-    ) {
+    async fn try_collect_slots(&self, req: &Body, reference_response: &Value, rx: &Receiver<()>) {
         let collect_tools = match &self.collect_slots_tools {
             None => return,
             Some(collect_tools) => collect_tools,
@@ -435,7 +426,7 @@ where
 }
 
 impl CollectSlotsTools {
-    async fn collect_slots(&self, asset: &str, tree_key: &str, slot: u64, rx: &mut Receiver<()>) {
+    async fn collect_slots(&self, asset: &str, tree_key: &str, slot: u64, rx: &Receiver<()>) {
         let slots_collector = SlotsCollector::new(
             Arc::new(FileSlotsDumper::new(self.format_filename(tree_key, asset))),
             self.bigtable_client.big_table_inner_client.clone(),

@@ -142,6 +142,8 @@ pub struct IngesterConfig {
     pub profiling_file_path_container: Option<String>,
     pub store_db_backups: Option<bool>,
     #[serde(default)]
+    pub rpc_retry_interval_millis: u64,
+    #[serde(default)]
     pub run_sequence_consistent_checker: bool,
 }
 

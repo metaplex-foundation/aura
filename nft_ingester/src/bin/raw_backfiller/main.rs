@@ -17,6 +17,7 @@ use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
+use rocks_db::bubblegum_slots::BubblegumSlotGetter;
 use rocks_db::Storage;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
@@ -94,11 +95,10 @@ pub async fn main() -> Result<(), IngesterError> {
             backfiller
                 .start_backfill(
                     mutexed_tasks.clone(),
-                    keep_running.clone(),
+                    shutdown_rx.resubscribe(),
                     metrics.clone(),
                     consumer,
                     big_table_client.clone(),
-                    shutdown_rx.resubscribe(),
                 )
                 .await
                 .unwrap();
@@ -135,6 +135,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
             let transactions_parser = Arc::new(TransactionsParser::new(
                 rocks_storage.clone(),
+                Arc::new(BubblegumSlotGetter::new(rocks_storage.clone())),
                 consumer,
                 producer,
                 metrics.clone(),
@@ -142,13 +143,12 @@ pub async fn main() -> Result<(), IngesterError> {
                 backfiller_config.chunk_size,
             ));
 
-            let cloned_keep_running = keep_running.clone();
             mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                 info!("Running transactions parser...");
 
                 transactions_parser
                     .parse_raw_transactions(
-                        cloned_keep_running,
+                        shutdown_rx.resubscribe(),
                         backfiller_config.permitted_tasks,
                         backfiller_config.slot_until,
                     )
