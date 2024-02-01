@@ -198,6 +198,7 @@ impl Storage {
         cf_options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
         cf_options.set_max_bytes_for_level_base(total_size_base);
         cf_options.set_target_file_size_base(file_size_base);
+        cf_options.set_wal_recovery_mode(rocksdb::DBRecoveryMode::TolerateCorruptedTailRecords);
 
         // Optional merges
         if C::NAME == asset::AssetStaticDetails::NAME {
