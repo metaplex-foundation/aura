@@ -1,9 +1,11 @@
 use std::collections::HashMap;
+use std::panic;
 use std::sync::Arc;
 
 use log::debug;
 use solana_sdk::pubkey::Pubkey;
 
+use interface::processing_possibility::ProcessingPossibilityChecker;
 use rocks_db::asset_streaming_client::get_required_nodes_for_proof;
 use rocks_db::Storage;
 use {
@@ -28,6 +30,9 @@ pub async fn get_proof_for_assets(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
 ) -> Result<HashMap<String, Option<AssetProof>>, DbErr> {
+    if !rocks_db.can_process_assets(asset_ids.clone()).await {
+        panic!()
+    }
     let mut results: HashMap<String, Option<AssetProof>> =
         asset_ids.iter().map(|id| (id.to_string(), None)).collect();
 
