@@ -92,11 +92,14 @@ pub struct AssetCollection {
 }
 
 fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
-    if new.slot_updated > current.slot_updated {
-        *current = new.clone();
+    if current.seq.is_some() && new.seq.is_some() {
+        if new.seq.unwrap() > current.seq.unwrap() {
+            *current = new.clone();
+        }
         return;
     }
-    if new.seq.unwrap_or_default() > current.seq.unwrap_or_default() {
+
+    if new.slot_updated > current.slot_updated {
         *current = new.clone();
     }
 }
@@ -105,14 +108,19 @@ fn update_optional_field<T: Clone + Default>(
     current: &mut Option<Updated<T>>,
     new: &Option<Updated<T>>,
 ) {
-    if new.clone().unwrap_or_default().slot_updated
-        > current.clone().unwrap_or_default().slot_updated
+    if new.clone().unwrap_or_default().seq.is_some()
+        && current.clone().unwrap_or_default().seq.is_some()
     {
-        *current = new.clone();
+        if new.clone().unwrap_or_default().seq.unwrap()
+            > current.clone().unwrap_or_default().seq.unwrap()
+        {
+            *current = new.clone();
+        }
         return;
     }
-    if new.clone().unwrap_or_default().seq.unwrap_or_default()
-        > current.clone().unwrap_or_default().seq.unwrap_or_default()
+
+    if new.clone().unwrap_or_default().slot_updated
+        > current.clone().unwrap_or_default().slot_updated
     {
         *current = new.clone();
     }

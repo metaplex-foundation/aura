@@ -127,22 +127,8 @@ impl MplxAccsProcessor {
 
             // store data
             let begin_processing = Instant::now();
-            let _ = tokio::join!(
-                self.store_static(metadata_models.asset_static),
-                self.store_dynamic(metadata_models.asset_dynamic.clone()),
-                self.store_authority(metadata_models.asset_authority),
-                self.store_collection(metadata_models.asset_collection),
-                self.store_tasks(metadata_models.tasks)
-            );
 
-            metadata_models.asset_dynamic.iter().for_each(|asset| {
-                let upd_res = self
-                    .rocks_db
-                    .asset_updated(asset.get_slot_updated(), asset.pubkey);
-                if let Err(e) = upd_res {
-                    error!("Error while updating assets update idx: {}", e);
-                }
-            });
+            self.store_metadata_models(&metadata_models).await;
 
             self.metrics.set_latency(
                 "accounts_saving",
@@ -156,7 +142,26 @@ impl MplxAccsProcessor {
         }
     }
 
-    async fn create_rocks_metadata_models(
+    pub async fn store_metadata_models(&self, metadata_models: &RocksMetadataModels) {
+        let _ = tokio::join!(
+            self.store_static(metadata_models.asset_static.clone()),
+            self.store_dynamic(metadata_models.asset_dynamic.clone()),
+            self.store_authority(metadata_models.asset_authority.clone()),
+            self.store_collection(metadata_models.asset_collection.clone()),
+            self.store_tasks(metadata_models.tasks.clone())
+        );
+
+        metadata_models.asset_dynamic.iter().for_each(|asset| {
+            let upd_res = self
+                .rocks_db
+                .asset_updated(asset.get_slot_updated(), asset.pubkey);
+            if let Err(e) = upd_res {
+                error!("Error while updating assets update idx: {}", e);
+            }
+        });
+    }
+
+    pub async fn create_rocks_metadata_models(
         &self,
         metadatas: &HashMap<Vec<u8>, MetadataInfo>,
     ) -> RocksMetadataModels {

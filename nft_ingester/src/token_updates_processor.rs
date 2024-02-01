@@ -8,6 +8,7 @@ use entities::models::Updated;
 use log::error;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
+use rocks_db::columns::{Mint, TokenAccount};
 use rocks_db::Storage;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -84,62 +85,66 @@ impl TokenAccsProcessor {
                 elems
             };
 
-            let save_values = accs_to_save.clone().into_iter().fold(
-                HashMap::new(),
-                |mut acc: HashMap<_, _>, token_account| {
-                    acc.insert(
-                        token_account.mint,
-                        AssetOwner {
-                            pubkey: token_account.mint,
-                            owner: Updated::new(
-                                token_account.slot_updated as u64,
-                                None,
-                                token_account.owner,
-                            ),
-                            delegate: token_account.delegate.map(|delegate| {
-                                Updated::new(token_account.slot_updated as u64, None, delegate)
-                            }),
-                            owner_type: Updated::new(
-                                token_account.slot_updated as u64,
-                                None,
-                                OwnerType::Token,
-                            ),
-                            owner_delegate_seq: None,
-                        },
-                    );
-                    acc
-                },
-            );
-
-            let begin_processing = Instant::now();
-            let res = self
-                .rocks_db
-                .asset_owner_data
-                .merge_batch(save_values)
-                .await;
-
-            result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
-
-            accs_to_save.iter().for_each(|acc| {
-                let upd_res = self
-                    .rocks_db
-                    .asset_updated(acc.slot_updated as u64, acc.mint);
-
-                if let Err(e) = upd_res {
-                    error!("Error while updating assets update idx: {}", e);
-                }
-            });
-
-            self.metrics.set_latency(
-                "token_accounts_saving",
-                begin_processing.elapsed().as_millis() as f64,
-            );
+            self.transform_and_save_token_accs(&accs_to_save).await;
 
             self.metrics
                 .set_last_processed_slot("spl_token_acc", max_slot);
         }
 
         self.last_received_token_acc_at = Some(SystemTime::now());
+    }
+
+    pub async fn transform_and_save_token_accs(&self, accs_to_save: &[TokenAccount]) {
+        let save_values = accs_to_save.to_owned().clone().into_iter().fold(
+            HashMap::new(),
+            |mut acc: HashMap<_, _>, token_account| {
+                acc.insert(
+                    token_account.mint,
+                    AssetOwner {
+                        pubkey: token_account.mint,
+                        owner: Updated::new(
+                            token_account.slot_updated as u64,
+                            None,
+                            token_account.owner,
+                        ),
+                        delegate: token_account.delegate.map(|delegate| {
+                            Updated::new(token_account.slot_updated as u64, None, delegate)
+                        }),
+                        owner_type: Updated::new(
+                            token_account.slot_updated as u64,
+                            None,
+                            OwnerType::Single,
+                        ),
+                        owner_delegate_seq: None,
+                    },
+                );
+                acc
+            },
+        );
+
+        let begin_processing = Instant::now();
+        let res = self
+            .rocks_db
+            .asset_owner_data
+            .merge_batch(save_values)
+            .await;
+
+        result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
+
+        accs_to_save.iter().for_each(|acc| {
+            let upd_res = self
+                .rocks_db
+                .asset_updated(acc.slot_updated as u64, acc.mint);
+
+            if let Err(e) = upd_res {
+                error!("Error while updating assets update idx: {}", e);
+            }
+        });
+
+        self.metrics.set_latency(
+            "token_accounts_saving",
+            begin_processing.elapsed().as_millis() as f64,
+        );
     }
 
     pub async fn process_mint_accs(&mut self, keep_running: Arc<AtomicBool>) {
@@ -180,57 +185,61 @@ impl TokenAccsProcessor {
                 elems
             };
 
-            let save_values = mint_accs_to_save.clone().into_iter().fold(
-                HashMap::new(),
-                |mut acc: HashMap<_, _>, mint| {
-                    acc.insert(
-                        mint.pubkey,
-                        AssetDynamicDetails {
-                            pubkey: mint.pubkey,
-                            supply: Some(Updated::new(
-                                mint.slot_updated as u64,
-                                None,
-                                mint.supply as u64,
-                            )),
-                            seq: Some(Updated::new(
-                                mint.slot_updated as u64,
-                                None,
-                                mint.slot_updated as u64,
-                            )),
-                            ..Default::default()
-                        },
-                    );
-                    acc
-                },
-            );
-
-            let begin_processing = Instant::now();
-            let res = self
-                .rocks_db
-                .asset_dynamic_data
-                .merge_batch(save_values)
-                .await;
-
-            result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
-
-            mint_accs_to_save.iter().for_each(|mint| {
-                let upd_res = self
-                    .rocks_db
-                    .asset_updated(mint.slot_updated as u64, mint.pubkey);
-
-                if let Err(e) = upd_res {
-                    error!("Error while updating assets update idx: {}", e);
-                }
-            });
-
-            self.metrics.set_latency(
-                "mint_accounts_saving",
-                begin_processing.elapsed().as_millis() as f64,
-            );
+            self.transform_and_save_mint_accs(&mint_accs_to_save).await;
 
             self.metrics.set_last_processed_slot("spl_mint", max_slot);
 
             self.last_received_mint_at = Some(SystemTime::now());
         }
+    }
+
+    pub async fn transform_and_save_mint_accs(&self, mint_accs_to_save: &[Mint]) {
+        let save_values = mint_accs_to_save.to_owned().clone().into_iter().fold(
+            HashMap::new(),
+            |mut acc: HashMap<_, _>, mint| {
+                acc.insert(
+                    mint.pubkey,
+                    AssetDynamicDetails {
+                        pubkey: mint.pubkey,
+                        supply: Some(Updated::new(
+                            mint.slot_updated as u64,
+                            None,
+                            mint.supply as u64,
+                        )),
+                        seq: Some(Updated::new(
+                            mint.slot_updated as u64,
+                            None,
+                            mint.slot_updated as u64,
+                        )),
+                        ..Default::default()
+                    },
+                );
+                acc
+            },
+        );
+
+        let begin_processing = Instant::now();
+        let res = self
+            .rocks_db
+            .asset_dynamic_data
+            .merge_batch(save_values)
+            .await;
+
+        result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
+
+        mint_accs_to_save.iter().for_each(|mint| {
+            let upd_res = self
+                .rocks_db
+                .asset_updated(mint.slot_updated as u64, mint.pubkey);
+
+            if let Err(e) = upd_res {
+                error!("Error while updating assets update idx: {}", e);
+            }
+        });
+
+        self.metrics.set_latency(
+            "mint_accounts_saving",
+            begin_processing.elapsed().as_millis() as f64,
+        );
     }
 }
