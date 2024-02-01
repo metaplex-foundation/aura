@@ -253,61 +253,61 @@ impl Storage {
 
             AssetOwnerDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_AssetOwnerDeprecated_keep_existing",
+                    "merge_fn_asset_owner_deprecated_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             offchain_data::OffChainData::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_OffChainData_keep_existing",
+                    "merge_fn_off_chain_data_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             cl_items::ClLeaf::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_ClLeaf_keep_existing",
+                    "merge_fn_cl_leaf_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             bubblegum_slots::BubblegumSlots::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_BubblegumSlots_keep_existing",
+                    "merge_fn_bubblegum_slots_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             bubblegum_slots::IngestableSlots::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_IngestableSlots_keep_existing",
+                    "merge_fn_ingestable_slots_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             raw_block::RawBlock::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_RawBlock_keep_existing",
+                    "merge_fn_raw_block_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             AssetsUpdateIdx::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_AssetsUpdateIdx_keep_existing",
+                    "merge_fn_assets_update_idx_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             SlotAssetIdx::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_SlotAssetIdx_keep_existing",
+                    "merge_fn_slot_asset_idx_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             TreeSeqIdx::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_TreeSeqIdx_keep_existing",
+                    "merge_fn_tree_seq_idx_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             TreesGaps::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_TreesGaps_keep_existing",
+                    "merge_fn_trees_gaps_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
