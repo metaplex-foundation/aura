@@ -12,15 +12,15 @@ use std::sync::Arc;
 use tokio::task::JoinSet;
 use tokio::time::{self, Instant};
 
+pub const JSON_CONTENT_TYPE_WITH_CHARSET: &str = "application/json; charset=utf-8";
+pub const JSON_CONTENT_TYPE: &str = "application/json";
+
 pub struct JsonDownloader {
     pub db_client: Arc<DBClient>,
     pub rocks_db: Arc<Storage>,
     pub config: BackgroundTaskRunnerConfig,
     pub metrics: Arc<JsonDownloaderMetricsConfig>,
 }
-
-pub const JSON_CONTENT_TYPE_WITH_CHARSET: &str = "application/json; charset=utf-8";
-pub const JSON_CONTENT_TYPE: &str = "application/json";
 
 impl JsonDownloader {
     pub async fn new(rocks_db: Arc<Storage>, metrics: Arc<JsonDownloaderMetricsConfig>) -> Self {
