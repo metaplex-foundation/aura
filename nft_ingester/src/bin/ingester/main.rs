@@ -535,7 +535,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let signature_fetcher = usecase::signature_fetcher::SignatureFetcher::new(
         rocks_clone,
         transactions_getter,
-        tx_ingester,
+        tx_ingester.clone(),
         metrics_state.rpc_backfiller_metrics.clone(),
     );
     let cloned_keep_running = keep_running.clone();
@@ -572,6 +572,7 @@ pub async fn main() -> Result<(), IngesterError> {
     if config.run_sequence_consistent_checker {
         let force_reingestable_slot_processor =
             Arc::new(ForceReingestableSlotGetter::new(rocks_storage.clone()));
+
         let slots_collector = SlotsCollector::new(
             force_reingestable_slot_processor.clone(),
             big_table_client.big_table_inner_client.clone(),
@@ -604,28 +605,31 @@ pub async fn main() -> Result<(), IngesterError> {
             }
         }));
 
-        // run an additional slot persister
+        // run an additional direct slot persister
         let rx = shutdown_rx.resubscribe();
-        let consumer = force_reingestable_slot_processor.clone();
         let producer = big_table_client.clone();
         let metrics = Arc::new(BackfillerMetricsConfig::new());
         metrics.register_with_prefix(&mut metrics_state.registry, "force_slot_persister_");
-        let backfiller_clone = backfiller.clone();
+
+        let consumer = Arc::new(DirectBlockParser::new(
+            tx_ingester.clone(),
+            rocks_storage.clone(),
+            metrics_state.backfiller_metrics.clone(),
+        ));
+
+        let transactions_parser = Arc::new(TransactionsParser::new(
+            rocks_storage.clone(),
+            force_reingestable_slot_processor.clone(),
+            consumer,
+            producer,
+            metrics.clone(),
+            backfiller_config.workers_count,
+            backfiller_config.chunk_size,
+        ));
+
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
             info!("Running slot force persister...");
-            if let Err(e) = backfiller_clone
-                .run_perpetual_slot_processing(
-                    metrics,
-                    force_reingestable_slot_processor.clone(),
-                    consumer,
-                    producer,
-                    Duration::from_secs(backfiller_config.wait_period_sec),
-                    rx,
-                )
-                .await
-            {
-                error!("Error while running perpetual force slot persister: {}", e);
-            }
+            transactions_parser.parse_transactions(rx).await;
             info!("Force slot persister finished working");
         }));
     }
