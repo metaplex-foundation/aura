@@ -2,6 +2,7 @@ use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
 use asset::{AssetOwnerDeprecated, SlotAssetIdx};
+use bubblegum_slots::RecentlyIngestedSlots;
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 pub use asset::{
@@ -50,6 +51,7 @@ pub struct Storage {
     pub cl_items: Column<cl_items::ClItem>,
     pub cl_leafs: Column<cl_items::ClLeaf>,
     pub bubblegum_slots: Column<bubblegum_slots::BubblegumSlots>,
+    pub recently_ingested_slots: Column<bubblegum_slots::RecentlyIngestedSlots>,
     pub ingestable_slots: Column<bubblegum_slots::IngestableSlots>,
     pub force_reingestable_slots: Column<bubblegum_slots::ForceReingestableSlots>,
     pub raw_blocks_cbor: Column<raw_block::RawBlock>,
@@ -87,6 +89,7 @@ impl Storage {
                     Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
                     Self::new_cf_descriptor::<raw_block::RawBlock>(),
                     Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(),
+                    Self::new_cf_descriptor::<RecentlyIngestedSlots>(),
                     Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(),
                     Self::new_cf_descriptor::<bubblegum_slots::ForceReingestableSlots>(),
                     Self::new_cf_descriptor::<AssetOwner>(),
@@ -113,6 +116,7 @@ impl Storage {
         let cl_leafs = Self::column(db.clone());
 
         let bubblegum_slots = Self::column(db.clone());
+        let recently_ingested_slots = Self::column(db.clone());
         let ingestable_slots = Self::column(db.clone());
         let force_reingestable_slots = Self::column(db.clone());
         let raw_blocks = Self::column(db.clone());
@@ -133,6 +137,7 @@ impl Storage {
             cl_items,
             cl_leafs,
             bubblegum_slots,
+            recently_ingested_slots,
             ingestable_slots,
             force_reingestable_slots,
             raw_blocks_cbor: raw_blocks,
@@ -276,6 +281,12 @@ impl Storage {
             bubblegum_slots::BubblegumSlots::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_bubblegum_slots_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            bubblegum_slots::RecentlyIngestedSlots::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_recently_ingested_slots_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
