@@ -19,7 +19,8 @@ pub struct JsonDownloader {
     pub metrics: Arc<JsonDownloaderMetricsConfig>,
 }
 
-pub const MEDIA_FILES_EXTENSIONS: &[&str] = &["png", "jpeg", "gif", "mp3", "mov", "avi"];
+pub const JSON_CONTENT_TYPE_WITH_CHARSET: &str = "application/json; charset=utf-8";
+pub const JSON_CONTENT_TYPE: &str = "application/json";
 
 impl JsonDownloader {
     pub async fn new(rocks_db: Arc<Storage>, metrics: Arc<JsonDownloaderMetricsConfig>) -> Self {
@@ -57,34 +58,6 @@ impl JsonDownloader {
                         tasks_set.spawn(async move {
                             let begin_processing = Instant::now();
 
-                            if is_media_file(&task.metadata_url) {
-                                let data_to_insert = UpdatedTask {
-                                    status: TaskStatus::Success,
-                                    metadata_url: task.metadata_url.clone(),
-                                    attempts: task.attempts + 1,
-                                    error: "".to_string(),
-                                };
-                                cloned_db_client
-                                    .update_tasks(vec![data_to_insert])
-                                    .await
-                                    .unwrap();
-
-                                cloned_rocks
-                                    .asset_offchain_data
-                                    .put(
-                                        task.metadata_url.clone(),
-                                        OffChainData {
-                                            url: task.metadata_url,
-                                            metadata: "".to_string(),
-                                        },
-                                    )
-                                    .unwrap();
-
-                                info!("Got media file, marked task as success...");
-                                cloned_metrics.inc_tasks(MetricStatus::SUCCESS);
-                                return;
-                            }
-
                             let client = ClientBuilder::new()
                                 .timeout(time::Duration::from_secs(5))
                                 .build()
@@ -102,6 +75,36 @@ impl JsonDownloader {
 
                             match response {
                                 Ok(response) => {
+                                    if let Some(content_header) = response.headers().get("Content-Type") {
+                                        if content_header != JSON_CONTENT_TYPE_WITH_CHARSET && content_header != JSON_CONTENT_TYPE {
+                                            let data_to_insert = UpdatedTask {
+                                                status: TaskStatus::Success,
+                                                metadata_url: task.metadata_url.clone(),
+                                                attempts: task.attempts + 1,
+                                                error: "".to_string(),
+                                            };
+                                            cloned_db_client
+                                                .update_tasks(vec![data_to_insert])
+                                                .await
+                                                .unwrap();
+            
+                                            cloned_rocks
+                                                .asset_offchain_data
+                                                .put(
+                                                    task.metadata_url.clone(),
+                                                    OffChainData {
+                                                        url: task.metadata_url,
+                                                        metadata: "".to_string(),
+                                                    },
+                                                )
+                                                .unwrap();
+            
+                                            info!("Got not a JSON data from link, marked task as success...");
+                                            cloned_metrics.inc_tasks(MetricStatus::SUCCESS);
+                                            return;
+                                        }
+                                    }
+
                                     if response.status() != reqwest::StatusCode::OK {
                                         let status = {
                                             if task.attempts >= task.max_attempts {
@@ -179,16 +182,4 @@ impl JsonDownloader {
             }
         }
     }
-}
-
-pub fn is_media_file(url: &str) -> bool {
-    let lowercased_url = url.to_lowercase();
-
-    for extension in MEDIA_FILES_EXTENSIONS.iter() {
-        if lowercased_url.ends_with(extension) {
-            return true;
-        }
-    }
-
-    false
 }
