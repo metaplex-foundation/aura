@@ -87,7 +87,7 @@ impl JsonDownloader {
                                                 .update_tasks(vec![data_to_insert])
                                                 .await
                                                 .unwrap();
-            
+
                                             cloned_rocks
                                                 .asset_offchain_data
                                                 .put(
@@ -98,7 +98,7 @@ impl JsonDownloader {
                                                     },
                                                 )
                                                 .unwrap();
-            
+
                                             info!("Got not a JSON data from link, marked task as success...");
                                             cloned_metrics.inc_tasks(MetricStatus::SUCCESS);
                                             return;
