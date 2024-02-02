@@ -7,6 +7,7 @@ use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info, warn};
 use nft_ingester::{backfiller, config, transaction_ingester};
+use plerkle_serialization::Pubkey;
 use rocks_db::bubblegum_slots::{
     BubblegumSlotGetter, ForceReingestableSlotGetter, IngestableSlotGetter,
 };
@@ -66,6 +67,10 @@ pub async fn main() -> Result<(), IngesterError> {
     let config: IngesterConfig = setup_config(INGESTER_CONFIG_PREFIX);
     init_logger(&config.get_log_level());
 
+    if let Some(target) = config.debug_target_tree {
+        let mut data = entities::TARGET_PUBKEY.lock();
+        *data = Pubkey::from_str(target.as_str()).unwrap();
+    }
     let mut guard = None;
     if config.get_is_run_profiling() {
         guard = Some(

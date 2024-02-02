@@ -2153,6 +2153,7 @@ dependencies = [
 name = "entities"
 version = "0.1.0"
 dependencies = [
+ "lazy_static",
  "num-derive 0.4.1",
  "num-traits",
  "schemars",

@@ -35,7 +35,7 @@ pub trait TransactionResultPersister: Sync + Send + 'static {
     async fn store_block(&self, txs: Vec<TransactionResult>) -> Result<(), StorageError>;
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct AssetUpdateEvent {
     pub event: CopyableChangeLogEventV1,
     pub slot: u64,
@@ -46,14 +46,14 @@ pub struct AssetUpdateEvent {
     pub collection_update: Option<AssetUpdate<AssetCollection>>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct TreeWithSeqAndSlot {
     pub tree: Pubkey,
     pub seq: u64,
     pub slot: u64,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct CopyableChangeLogEventV1 {
     /// Public key of the ConcurrentMerkleTree
     pub id: Pubkey,
@@ -79,19 +79,19 @@ impl From<&ChangeLogEventV1> for CopyableChangeLogEventV1 {
         }
     }
 }
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct AssetDynamicUpdate {
     pub pk: Pubkey,
     pub slot: u64,
     pub leaf: Option<AssetLeaf>,
     pub dynamic_data: Option<AssetDynamicDetails>,
 }
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct AssetUpdate<T> {
     pub pk: Pubkey,
     pub details: T,
 }
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct InstructionResult {
     pub update: Option<AssetUpdateEvent>,
     pub task: Option<Task>,
@@ -127,6 +127,7 @@ impl From<AssetUpdate<AssetDynamicDetails>> for InstructionResult {
     }
 }
 
+#[derive(Clone, Default, Debug)]
 pub struct TransactionResult {
     pub instruction_results: Vec<InstructionResult>,
     pub transaction_signature: Option<(Pubkey, SignatureWithSlot)>,

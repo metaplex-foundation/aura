@@ -14,3 +14,4 @@ schemars = "0.8.6"
 serde_derive = "1.0.195"
 sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json"] }
 solana-program = "~1.16"
+lazy_static = "1.4.0"

@@ -209,7 +209,16 @@ impl BubblegumTxProcessor {
             };
 
             let result = instruction_parser.handle_instruction(&ix)?;
+            let target_tree = entities::TARGET_PUBKEY.lock().map(|t| t.clone()).ok();
+                
             if let ProgramParseResult::Bubblegum(parsing_result) = result.result_type() {
+                if let Some(t) = &parsing_result.tree_update {
+                    if !t.id.eq(&target_tree) {
+                        continue;
+                    }
+                    let target_tree_found = true;
+                    tracing::info!("Found a Bubblegum TX for target tree {} with seq {}: Processing txn={:?} slot={:?}", target_tree, t.seq, txn_id, slot);
+                }
                 metrics.inc_instructions(Self::instruction_name_to_string(
                     &parsing_result.instruction,
                 ));
@@ -219,6 +228,9 @@ impl BubblegumTxProcessor {
                 match ix_parse_res {
                     Ok(ix_result) => {
                         transaction_result.instruction_results.push(ix_result);
+                        if target_tree_found {
+                            tracing::info!("Processed Bubblegum TX for target tree {}: txn={:?} slot={:?}, result: {:?}", target_tree, txn_id, slot, ix_result);
+                        }
                     }
                     Err(e) => {
                         // we should not persist the signature if we have unhandled instructions

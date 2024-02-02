@@ -645,7 +645,7 @@ pub async fn connect_new_bigtable_from_config(
         .map_err(Into::into)
 }
 
-fn is_bubblegum_transaction_encoded(tx: &EncodedTransactionWithStatusMeta) -> bool {
+pub fn is_bubblegum_transaction_encoded(tx: &EncodedTransactionWithStatusMeta) -> bool {
     let meta = if let Some(meta) = tx.meta.clone() {
         if let Err(_err) = meta.status {
             return false;
