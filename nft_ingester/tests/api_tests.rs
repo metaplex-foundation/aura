@@ -321,7 +321,7 @@ mod tests {
 
     #[tokio::test]
     #[tracing_test::traced_test]
-    async fn test_asset_none_grouping() {
+    async fn test_asset_none_grouping_with_token_standard() {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
@@ -415,6 +415,10 @@ mod tests {
         let response = api.get_asset(payload).await.unwrap();
 
         assert_eq!(response["grouping"], Value::Array(vec![]));
+        assert_eq!(
+            response["content"]["metadata"]["token_standard"],
+            "NonFungible"
+        );
 
         env.teardown().await;
     }
