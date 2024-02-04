@@ -27,15 +27,7 @@ impl SequenceConsistentManager for Storage {
         self.trees_gaps.iter_start().count() as i64
     }
 
-    async fn process_tree_gap(&self, tree: Pubkey, gap_found: bool, last_consistent_seq: u64) {
-        if let Err(e) = self
-            .tree_seq_idx
-            .delete_range((tree, 0), (tree, last_consistent_seq))
-            .await
-        {
-            error!("Delete range: {}", e);
-        }
-
+    async fn process_tree_gap(&self, tree: Pubkey, gap_found: bool, _last_consistent_seq: u64) {
         let result = if gap_found {
             self.trees_gaps.put_async(tree, TreesGaps {}).await
         } else {
