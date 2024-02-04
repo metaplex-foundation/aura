@@ -40,7 +40,10 @@ impl AssetIndexStorage for PgClient {
             .filter_map(|asset_index| asset_index.metadata_url.clone())
             .collect::<HashSet<_>>()
             .iter()
-            .map(|url| UrlWithStatus{metadata_url: url.metadata_url.trim().replace('\0', ""), is_downloaded: url.is_downloaded})
+            .map(|url| UrlWithStatus {
+                metadata_url: url.metadata_url.trim().replace('\0', ""),
+                is_downloaded: url.is_downloaded,
+            })
             .collect();
 
         let mut metadata_url_map: HashMap<String, i64> = HashMap::new();
