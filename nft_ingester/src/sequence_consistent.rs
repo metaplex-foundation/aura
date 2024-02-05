@@ -18,7 +18,6 @@ where
     sequence_consistent_manager: Arc<S>,
     slots_collector: Arc<SlotsCollector<T, R>>,
     metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
-    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 }
 
 impl<T, R, S> SequenceConsistentGapfiller<T, R, S>
@@ -31,13 +30,12 @@ where
         sequence_consistent_manager: Arc<S>,
         slots_collector: SlotsCollector<T, R>,
         metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
-        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+        _tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     ) -> Self {
         Self {
             sequence_consistent_manager,
             slots_collector: Arc::new(slots_collector),
             metrics,
-            tasks,
         }
     }
 
@@ -62,17 +60,14 @@ where
                 gap_found = true;
 
                 let slots_collector = self.slots_collector.clone();
-                let rx_clone = rx.resubscribe();
-                self.tasks.lock().await.spawn(tokio::spawn(async move {
-                    slots_collector
-                        .collect_slots(
-                            &format!("{}/", current_state.tree),
-                            current_state.slot,
-                            prev_state.slot,
-                            &rx_clone,
-                        )
-                        .await;
-                }));
+                slots_collector
+                    .collect_slots(
+                        &format!("{}/", current_state.tree),
+                        current_state.slot,
+                        prev_state.slot,
+                        &rx,
+                    )
+                    .await;
             };
             if prev_state.tree != current_state.tree {
                 self.save_tree_gap_analyze(prev_state.tree, last_consistent_seq, gap_found)
