@@ -1,3 +1,5 @@
+use crate::bubblegum_slots::IngestedSlots;
+use crate::column::TypedColumn;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 use crate::{key_encoders, Storage};
 use async_trait::async_trait;
@@ -40,5 +42,16 @@ impl SequenceConsistentManager for Storage {
                 e
             );
         }
+    }
+
+    fn get_last_ingested_slot(&self) -> core::result::Result<Option<u64>, String> {
+        let mut iter = self.ingested_slots.iter_end();
+        let last = iter.next();
+        if let Some(last) = last {
+            let (k, _) = last?;
+            let slot = IngestedSlots::decode_key(k.to_vec()).map_err(|e| e.to_string())?;
+            return Ok(Some(slot));
+        }
+        Ok(None)
     }
 }

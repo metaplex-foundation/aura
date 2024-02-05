@@ -583,6 +583,7 @@ pub async fn main() -> Result<(), IngesterError> {
             slots_collector,
             metrics_state.sequence_consistent_gapfill_metrics.clone(),
             mutexed_tasks.clone(),
+            config.sequence_consister_skip_check_slots_offset,
         );
         let mut rx = shutdown_rx.resubscribe();
         let metrics = metrics_state.sequence_consistent_gapfill_metrics.clone();

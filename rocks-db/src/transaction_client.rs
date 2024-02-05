@@ -4,7 +4,7 @@ use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
-    bubblegum_slots::RecentlyIngestedSlots,
+    bubblegum_slots::IngestedSlots,
     signature_client::SignatureIdx,
     transaction::{InstructionResult, TransactionResult, TransactionResultPersister},
     Storage,
@@ -52,12 +52,11 @@ impl Storage {
             }
         }
         if let Some((pk, signature)) = tx.transaction_signature {
-            if let Err(e) = self.recently_ingested_slots.put_with_batch(
-                batch,
-                signature.slot,
-                &RecentlyIngestedSlots {},
-            ) {
-                tracing::error!("Failed to store recently ingested slot: {}", e);
+            if let Err(e) =
+                self.ingested_slots
+                    .put_with_batch(batch, signature.slot, &IngestedSlots {})
+            {
+                tracing::error!("Failed to store the ingested slot: {}", e);
             }
             if !skip_signatures {
                 self.persist_signature_with_batch(batch, pk, signature)?;
