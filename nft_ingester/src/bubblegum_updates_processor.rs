@@ -395,7 +395,7 @@ impl BubblegumTxProcessor {
     pub fn get_mint_v1_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
-    ) -> Result<(AssetUpdateEvent, Task), IngesterError> {
+    ) -> Result<(AssetUpdateEvent, Option<Task>), IngesterError> {
         if let (
             Some(le),
             Some(cl),
@@ -543,15 +543,18 @@ impl BubblegumTxProcessor {
                 }
             }
 
-            let task = Task {
-                ofd_metadata_url: args.uri.clone(),
-                ofd_locked_until: Some(chrono::Utc::now()),
-                ofd_attempts: 0,
-                ofd_max_attempts: 10,
-                ofd_error: None,
-                ..Default::default()
+            let task = if !args.uri.is_empty() {
+                Some(Task {
+                    ofd_metadata_url: args.uri.clone(),
+                    ofd_locked_until: Some(chrono::Utc::now()),
+                    ofd_attempts: 0,
+                    ofd_max_attempts: 10,
+                    ofd_error: None,
+                    ..Default::default()
+                })
+            } else {
+                None
             };
-
             return Ok((asset_update, task));
         }
         Err(IngesterError::ParsingError(
@@ -787,7 +790,7 @@ impl BubblegumTxProcessor {
     pub fn get_update_metadata_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
-    ) -> Result<(AssetUpdateEvent, Task), IngesterError> {
+    ) -> Result<(AssetUpdateEvent, Option<Task>), IngesterError> {
         if let (
             Some(le),
             Some(cl),
@@ -814,11 +817,6 @@ impl BubblegumTxProcessor {
                     } else {
                         current_metadata.uri.replace('\0', "")
                     };
-                    if uri.is_empty() {
-                        return Err(IngesterError::DeserializationError(
-                            "URI is empty".to_string(),
-                        ));
-                    }
 
                     let name = if let Some(name) = update_args.name.clone() {
                         name
@@ -942,13 +940,17 @@ impl BubblegumTxProcessor {
                             ..Default::default()
                         }),
                     });
-                    let task = Task {
-                        ofd_metadata_url: uri.clone(),
-                        ofd_locked_until: Some(chrono::Utc::now()),
-                        ofd_attempts: 0,
-                        ofd_max_attempts: 10,
-                        ofd_error: None,
-                        ..Default::default()
+                    let task = if !uri.is_empty() {
+                        Some(Task {
+                            ofd_metadata_url: uri.clone(),
+                            ofd_locked_until: Some(chrono::Utc::now()),
+                            ofd_attempts: 0,
+                            ofd_max_attempts: 10,
+                            ofd_error: None,
+                            ..Default::default()
+                        })
+                    } else {
+                        None
                     };
 
                     Ok((asset_update, task))
