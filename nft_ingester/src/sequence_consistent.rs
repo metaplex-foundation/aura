@@ -4,8 +4,6 @@ use interface::slots_dumper::SlotsDumper;
 use metrics_utils::SequenceConsistentGapfillMetricsConfig;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
 use tracing::{info, warn};
 use usecase::slots_collector::{RowKeysGetter, SlotsCollector};
 
