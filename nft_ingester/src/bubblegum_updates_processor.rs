@@ -209,35 +209,46 @@ impl BubblegumTxProcessor {
             };
 
             let result = instruction_parser.handle_instruction(&ix)?;
-            let target_tree = entities::TARGET_PUBKEY.lock().map(|t| t.clone()).ok();
-                
+            let target_tree = entities::TARGET_PUBKEY.lock().map(|t| *t).ok().flatten();
+
             if let ProgramParseResult::Bubblegum(parsing_result) = result.result_type() {
+                let mut target_tree_found = false;
                 if let Some(t) = &parsing_result.tree_update {
-                    if !t.id.eq(&target_tree) {
+                    if target_tree.is_some() && t.id.eq(&target_tree.unwrap()) {
+                        target_tree_found = true;
+                        tracing::info!("Found a Bubblegum TX for target tree {} with seq {}: Processing txn={:?} slot={:?}", target_tree.unwrap(), t.seq, txn_id, slot);
+                    } else {
                         continue;
                     }
-                    let target_tree_found = true;
-                    tracing::info!("Found a Bubblegum TX for target tree {} with seq {}: Processing txn={:?} slot={:?}", target_tree, t.seq, txn_id, slot);
                 }
                 metrics.inc_instructions(Self::instruction_name_to_string(
                     &parsing_result.instruction,
                 ));
 
                 let ix_parse_res = Self::get_bubblegum_instruction_update(parsing_result, &ix);
-
+                tracing::info!(
+                    "Processing Bubblegum TX for target tree {}: txn={:?} slot={:?}, result: {:?}",
+                    target_tree.unwrap_or_default(),
+                    txn_id,
+                    slot,
+                    ix_parse_res
+                );
                 match ix_parse_res {
                     Ok(ix_result) => {
-                        transaction_result.instruction_results.push(ix_result);
+                        transaction_result
+                            .instruction_results
+                            .push(ix_result.clone());
                         if target_tree_found {
-                            tracing::info!("Processed Bubblegum TX for target tree {}: txn={:?} slot={:?}, result: {:?}", target_tree, txn_id, slot, ix_result);
+                            tracing::info!("Processed Bubblegum TX for target tree {}: txn={:?} slot={:?}, result: {:?}", target_tree.unwrap_or_default(), txn_id, slot, ix_result);
                         }
                     }
                     Err(e) => {
                         // we should not persist the signature if we have unhandled instructions
                         transaction_result.transaction_signature = None;
-                        error!(
+                        tracing::error!(
                             "Failed to handle bubblegum instruction for txn {:?}: {:?}",
-                            sig, e
+                            sig,
+                            e
                         );
                     }
                 };

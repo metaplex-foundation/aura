@@ -163,8 +163,14 @@ impl Storage {
         batch: &mut rocksdb::WriteBatch,
         tree: TreeWithSeqAndSlot,
     ) {
-        if tree.tree.eq(&entities::TARGET_PUBKEY.lock().unwrap().to_owned()){
-            tracing::info!("Saving Bubblegum TX tree update for target tree: {:?}", tree.tree);
+        if tree
+            .tree
+            .eq(&entities::TARGET_PUBKEY.lock().unwrap().unwrap_or_default())
+        {
+            tracing::info!(
+                "Saving Bubblegum TX tree update for target tree: {:?}",
+                tree.tree
+            );
         }
         if let Err(e) = self.tree_seq_idx.put_with_batch(
             batch,

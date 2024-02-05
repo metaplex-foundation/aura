@@ -134,7 +134,7 @@ mod tests {
             bubblegum_updates_processor.clone(),
         ));
 
-        let slot = 245464459;
+        let slot = 245333166;
         let block = big_table_client.get_block(slot).await.unwrap();
         let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
         let mut results = Vec::new();
@@ -185,10 +185,10 @@ mod tests {
             big_table_client.big_table_inner_client.clone(),
             metrics.clone(),
         );
-        let tree = Pubkey::from_str("7RD2TjLhgTLTftqjUK3irotGbemYvaMrjSLffj73fX1U").unwrap();
+        let tree = Pubkey::from_str("BhaxAEHxhCgwt2vUyF1aNQsPTwH7rStVqhcfePWdUz9A").unwrap();
         let prefix = &format!("{}/", tree);
         slots_collector
-            .collect_slots(prefix, 245553329, 245296450, &rx)
+            .collect_slots(prefix, 245342978, 245290076, &rx)
             .await;
     }
 

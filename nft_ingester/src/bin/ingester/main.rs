@@ -7,10 +7,10 @@ use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info, warn};
 use nft_ingester::{backfiller, config, transaction_ingester};
-use plerkle_serialization::Pubkey;
 use rocks_db::bubblegum_slots::{
     BubblegumSlotGetter, ForceReingestableSlotGetter, IngestableSlotGetter,
 };
+use solana_program::pubkey::Pubkey;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -67,9 +67,11 @@ pub async fn main() -> Result<(), IngesterError> {
     let config: IngesterConfig = setup_config(INGESTER_CONFIG_PREFIX);
     init_logger(&config.get_log_level());
 
-    if let Some(target) = config.debug_target_tree {
-        let mut data = entities::TARGET_PUBKEY.lock();
-        *data = Pubkey::from_str(target.as_str()).unwrap();
+    if let Some(target) = config.debug_target_tree.clone() {
+        let data = entities::TARGET_PUBKEY.lock();
+        if let Ok(mut res) = data {
+            *res = Some(Pubkey::try_from(target.as_str()).unwrap());
+        }
     }
     let mut guard = None;
     if config.get_is_run_profiling() {
