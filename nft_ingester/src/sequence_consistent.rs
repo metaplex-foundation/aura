@@ -105,11 +105,11 @@ where
     async fn save_tree_gap_analyze(
         &self,
         tree: solana_program::pubkey::Pubkey,
-        last_consistent_seq: u64,
+        _last_consistent_seq: u64, // TODO: use this parameter if we need to optimize the runtime of the iterator to skip the already consistent sequences. For example, store it with a tree in a separate column family.
         gap_found: bool,
     ) {
         self.sequence_consistent_manager
-            .process_tree_gap(tree, gap_found, last_consistent_seq)
+            .process_tree_gap(tree, gap_found)
             .await;
         self.metrics
             .set_total_tree_with_gaps(self.sequence_consistent_manager.gaps_count());
