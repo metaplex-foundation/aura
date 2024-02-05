@@ -12,7 +12,6 @@ use std::sync::Arc;
 use tokio::task::JoinSet;
 use tokio::time::{self, Instant};
 
-pub const JSON_CONTENT_TYPE_WITH_CHARSET: &str = "application/json; charset=utf-8";
 pub const JSON_CONTENT_TYPE: &str = "application/json";
 
 pub struct JsonDownloader {
@@ -76,32 +75,42 @@ impl JsonDownloader {
                             match response {
                                 Ok(response) => {
                                     if let Some(content_header) = response.headers().get("Content-Type") {
-                                        if content_header != JSON_CONTENT_TYPE_WITH_CHARSET && content_header != JSON_CONTENT_TYPE {
-                                            let data_to_insert = UpdatedTask {
-                                                status: TaskStatus::Success,
-                                                metadata_url: task.metadata_url.clone(),
-                                                attempts: task.attempts + 1,
-                                                error: "".to_string(),
-                                            };
-                                            cloned_db_client
-                                                .update_tasks(vec![data_to_insert])
-                                                .await
-                                                .unwrap();
+                                        match content_header.to_str() {
+                                            Ok(header) => {
+                                                if !header.contains(JSON_CONTENT_TYPE) {
+                                                    println!("Header: {:?}", header);
+                                                    let data_to_insert = UpdatedTask {
+                                                        status: TaskStatus::Success,
+                                                        metadata_url: task.metadata_url.clone(),
+                                                        attempts: task.attempts + 1,
+                                                        error: "".to_string(),
+                                                    };
+                                                    cloned_db_client
+                                                        .update_tasks(vec![data_to_insert])
+                                                        .await
+                                                        .unwrap();
 
-                                            cloned_rocks
-                                                .asset_offchain_data
-                                                .put(
-                                                    task.metadata_url.clone(),
-                                                    OffChainData {
-                                                        url: task.metadata_url,
-                                                        metadata: "".to_string(),
-                                                    },
-                                                )
-                                                .unwrap();
+                                                    cloned_rocks
+                                                        .asset_offchain_data
+                                                        .put(
+                                                            task.metadata_url.clone(),
+                                                            OffChainData {
+                                                                url: task.metadata_url,
+                                                                metadata: "".to_string(),
+                                                            },
+                                                        )
+                                                        .unwrap();
 
-                                            info!("Got not a JSON data from link, marked task as success...");
-                                            cloned_metrics.inc_tasks(MetricStatus::SUCCESS);
-                                            return;
+                                                    info!("Got not a JSON data from link, marked task as success...");
+                                                    cloned_metrics.inc_tasks(MetricStatus::SUCCESS);
+                                                    return;
+                                                }
+                                            }
+                                            Err(_) => {
+                                                error!("Could not convert header into str");
+                                                cloned_metrics.inc_tasks(MetricStatus::FAILURE);
+                                                return;
+                                            }
                                         }
                                     }
 
