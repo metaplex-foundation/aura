@@ -4,7 +4,7 @@ use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
-    bubblegum_slots::IngestedSlots,
+    parameters,
     signature_client::SignatureIdx,
     transaction::{InstructionResult, TransactionResult, TransactionResultPersister},
     Storage,
@@ -15,7 +15,8 @@ impl TransactionResultPersister for Storage {
     async fn store_block(&self, txs: Vec<TransactionResult>) -> Result<(), StorageError> {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for tx in txs {
-            self.store_transaction_result_with_batch(&mut batch, tx, false)?;
+            self.store_transaction_result_with_batch(&mut batch, tx, false)
+                .await?;
         }
         self.write_batch(batch)
             .await
@@ -31,14 +32,15 @@ impl Storage {
         with_signatures: bool,
     ) -> Result<(), StorageError> {
         let mut batch = rocksdb::WriteBatch::default();
-        self.store_transaction_result_with_batch(&mut batch, tx, with_signatures)?;
+        self.store_transaction_result_with_batch(&mut batch, tx, with_signatures)
+            .await?;
         self.write_batch(batch)
             .await
             .map_err(|e| StorageError::Common(e.to_string()))?;
         Ok(())
     }
 
-    fn store_transaction_result_with_batch(
+    async fn store_transaction_result_with_batch(
         &self,
         batch: &mut rocksdb::WriteBatch,
         tx: TransactionResult,
@@ -52,9 +54,9 @@ impl Storage {
             }
         }
         if let Some((pk, signature)) = tx.transaction_signature {
-            if let Err(e) =
-                self.ingested_slots
-                    .put_with_batch(batch, signature.slot, &IngestedSlots {})
+            if let Err(e) = self
+                .merge_top_parameter(parameters::Parameter::TopSeenSlot, signature.slot)
+                .await
             {
                 tracing::error!("Failed to store the ingested slot: {}", e);
             }

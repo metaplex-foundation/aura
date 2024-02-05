@@ -42,7 +42,10 @@ where
     }
 
     pub async fn collect_sequences_gaps(&self, rx: Receiver<()>) {
-        let last_ingested_slot = self.sequence_consistent_manager.get_last_ingested_slot();
+        let last_ingested_slot = self
+            .sequence_consistent_manager
+            .get_last_ingested_slot()
+            .await;
         let last_ingested_slot = match last_ingested_slot {
             Err(e) => {
                 tracing::error!("Failed to get last ingested slot: {}", e);
