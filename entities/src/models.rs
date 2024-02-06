@@ -118,6 +118,8 @@ pub struct ChainDataV1 {
     pub uses: Option<Uses>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chain_mutability: Option<ChainMutability>, // TODO: move this feild to AssetDynamicDetails struct
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lamports: Option<u64>,
 }
 
 impl ChainDataV1 {

@@ -15,13 +15,9 @@ use crate::{db_v2::Task, mplx_updates_processor::MetadataInfo};
 #[derive(Default)]
 pub struct Buffer {
     pub transactions: Mutex<VecDeque<BufferedTransaction>>,
-
     pub mplx_metadata_info: Mutex<HashMap<Vec<u8>, MetadataInfo>>,
-
     pub token_accs: Mutex<HashMap<Vec<u8>, TokenAccount>>,
-
     pub mints: Mutex<HashMap<Vec<u8>, Mint>>,
-
     pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
 }
 
@@ -29,13 +25,9 @@ impl Buffer {
     pub fn new() -> Self {
         Self {
             transactions: Mutex::new(VecDeque::<BufferedTransaction>::new()),
-
             mplx_metadata_info: Mutex::new(HashMap::new()),
-
             token_accs: Mutex::new(HashMap::new()),
-
             mints: Mutex::new(HashMap::new()),
-
             json_tasks: Arc::new(Mutex::new(VecDeque::<Task>::new())),
         }
     }

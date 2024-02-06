@@ -299,8 +299,8 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
     let rpc_creators = to_creators(creators);
     let rpc_groups = to_grouping(groups)?;
     let interface = get_interface(&asset)?;
-    let content = get_content(&asset, &data)?;
-    let mut chain_data_selector_fn = jsonpath_lib::selector(&data.chain_data);
+    let content = get_content(&asset, &data.asset)?;
+    let mut chain_data_selector_fn = jsonpath_lib::selector(&data.asset.chain_data);
     let chain_data_selector = &mut chain_data_selector_fn;
     let basis_points = safe_select(chain_data_selector, "$.primary_sale_happened")
         .and_then(|v| v.as_bool())
@@ -312,7 +312,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         id: bs58::encode(asset.id).into_string(),
         content: Some(content),
         authorities: Some(rpc_authorities),
-        mutable: data.chain_data_mutability.into(),
+        mutable: data.asset.chain_data_mutability.into(),
         compression: Some(Compression {
             eligible: asset.compressible,
             compressed: asset.compressed,
@@ -363,7 +363,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
             }),
             _ => None,
         },
-        uses: data.chain_data.get("uses").map(|u| Uses {
+        uses: data.asset.chain_data.get("uses").map(|u| Uses {
             use_method: u
                 .get("use_method")
                 .and_then(|s| s.as_str())
@@ -374,6 +374,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
             remaining: u.get("remaining").and_then(|t| t.as_u64()).unwrap_or(0),
         }),
         burnt: asset.burnt,
+        lamports: data.lamports,
     }))
 }
 

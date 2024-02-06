@@ -218,6 +218,7 @@ impl MessageHandler {
                                             MetadataInfo {
                                                 metadata: m.clone(),
                                                 slot: account_info.slot(),
+                                                lamports: account_info.lamports(),
                                             },
                                         );
                                     }
@@ -227,6 +228,7 @@ impl MessageHandler {
                                         MetadataInfo {
                                             metadata: m.clone(),
                                             slot: account_info.slot(),
+                                            lamports: account_info.lamports(),
                                         },
                                     );
                                 }

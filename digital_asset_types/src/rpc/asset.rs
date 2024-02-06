@@ -397,4 +397,5 @@ pub struct Asset {
     pub supply: Option<Supply>,
     pub mutable: bool,
     pub burnt: bool,
+    pub lamports: u64,
 }

@@ -22,8 +22,8 @@ use crate::dao::sea_orm_active_enums::{
     SpecificationVersions,
 };
 use crate::dao::{
-    asset, asset_authority, asset_creators, asset_data, asset_grouping, FullAsset, GroupingSize,
-    Pagination,
+    asset, asset_authority, asset_creators, asset_data, asset_grouping, AssetDataModelWithLamports,
+    FullAsset, GroupingSize, Pagination,
 };
 
 pub const PROCESSING_METADATA_STATE: &str = "processing";
@@ -306,7 +306,7 @@ fn convert_rocks_offchain_data(
     asset_pubkey: &Pubkey,
     offchain_data: &OffChainData,
     asset_dynamic_data: &HashMap<Pubkey, AssetDynamicDetails>,
-) -> Result<asset_data::Model, DbErr> {
+) -> Result<AssetDataModelWithLamports, DbErr> {
     let mut metadata = offchain_data.metadata.clone();
 
     if metadata == PROCESSING_METADATA_STATE || metadata.is_empty() {
@@ -331,15 +331,24 @@ fn convert_rocks_offchain_data(
         .map(|m| ChainMutability::deserialize(m).unwrap_or(ChainMutability::Unknown))
         .unwrap_or(ChainMutability::Unknown);
 
-    Ok(asset_data::Model {
-        id: dynamic_data.pubkey.to_bytes().to_vec(),
-        chain_data_mutability,
-        chain_data: ch_data,
-        metadata_url: offchain_data.url.clone(),
-        metadata_mutability: Mutability::Immutable,
-        metadata: Json::from_str(metadata.as_str()).map_err(|e| DbErr::Custom(e.to_string()))?,
-        slot_updated: dynamic_data.get_slot_updated() as i64,
-        reindex: None,
+    let lamports = ch_data
+        .get("lamports")
+        .and_then(|m| m.as_u64())
+        .unwrap_or_default();
+
+    Ok(AssetDataModelWithLamports {
+        asset: asset_data::Model {
+            id: dynamic_data.pubkey.to_bytes().to_vec(),
+            chain_data_mutability,
+            chain_data: ch_data,
+            metadata_url: offchain_data.url.clone(),
+            metadata_mutability: Mutability::Immutable,
+            metadata: Json::from_str(metadata.as_str())
+                .map_err(|e| DbErr::Custom(e.to_string()))?,
+            slot_updated: dynamic_data.get_slot_updated() as i64,
+            reindex: None,
+        },
+        lamports,
     })
 }
 
