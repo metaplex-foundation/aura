@@ -24,6 +24,7 @@ mod config;
 mod diff_checker;
 mod error;
 mod file_keys_fetcher;
+mod merkle_tree;
 mod params;
 mod requests;
 mod slots_dumper;
