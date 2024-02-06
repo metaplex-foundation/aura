@@ -24,7 +24,7 @@ use tokio::time::Duration;
 use usecase::bigtable::BigTableClient;
 use usecase::slots_collector::SlotsCollector;
 
-const BBG_PREFIX: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY/";
+pub const BBG_PREFIX: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY/";
 pub const GET_SIGNATURES_LIMIT: usize = 2000;
 pub const GET_SLOT_RETRIES: u32 = 3;
 pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 30;
@@ -40,6 +40,7 @@ pub struct Backfiller {
     slot_parse_until: u64,
     workers_count: usize,
     chunk_size: usize,
+    key_prefix: String,
 }
 
 impl Backfiller {
@@ -55,6 +56,7 @@ impl Backfiller {
             slot_parse_until: config.get_slot_until(),
             workers_count: config.workers_count,
             chunk_size: config.chunk_size,
+            key_prefix: config.key_prefix,
         }
     }
 
@@ -82,7 +84,7 @@ impl Backfiller {
         }
         loop {
             let top_collected_slot = slots_collector
-                .collect_slots(BBG_PREFIX, u64::MAX, parse_until, &rx)
+                .collect_slots(&self.key_prefix, u64::MAX, parse_until, &rx)
                 .await;
             if let Some(slot) = top_collected_slot {
                 parse_until = slot;
@@ -169,10 +171,12 @@ impl Backfiller {
         let parse_until = self.slot_parse_until;
         let rx1 = rx.resubscribe();
         let rx2 = rx.resubscribe();
+
+        let cloned_key_prefix = self.key_prefix.clone();
         tasks.lock().await.spawn(tokio::spawn(async move {
             info!("Running slots parser...");
             slots_collector
-                .collect_slots(BBG_PREFIX, start_from, parse_until, &rx1)
+                .collect_slots(cloned_key_prefix.as_str(), start_from, parse_until, &rx1)
                 .await;
         }));
 

@@ -9,13 +9,14 @@ use interface::asset_streaming_and_discovery::PeerDiscovery;
 use serde::Deserialize;
 use tracing_subscriber::fmt;
 
-use crate::error::IngesterError;
+use crate::{backfiller::BBG_PREFIX, error::IngesterError};
 
 const INGESTER_CONSUMERS_COUNT: usize = 2;
 pub const INGESTER_BACKUP_NAME: &str = "snapshot.tar.lz4";
 
 pub const INGESTER_CONFIG_PREFIX: &str = "INGESTER_";
 pub const JSON_MIGRATOR_CONFIG_PREFIX: &str = "JSON_MIGRATOR_";
+pub const TREE_BACKFILLER_CONFIG_PREFIX: &str = "TREE_BACKFILLER_";
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct BackgroundTaskRunnerConfig {
@@ -26,6 +27,20 @@ pub struct BackgroundTaskRunnerConfig {
     pub lock_duration: Option<i64>,
     pub max_attempts: Option<i16>,
     pub timeout: Option<u64>,
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct TreeBackfillerConfig {
+    pub rust_log: Option<String>,
+    pub source_rocks: String,
+    pub target_rocks: String,
+    pub metrics_port: u16,
+}
+
+impl TreeBackfillerConfig {
+    pub fn get_log_level(&self) -> String {
+        self.rust_log.clone().unwrap_or("warn".to_string())
+    }
 }
 
 impl Default for BackgroundTaskRunnerConfig {
@@ -66,6 +81,8 @@ pub struct BackfillerConfig {
     pub wait_period_sec: u64,
     #[serde(default)]
     pub should_reingest: bool,
+    #[serde(default = "default_key_prefix")]
+    pub key_prefix: String,
 }
 fn default_wait_period_sec() -> u64 {
     60
@@ -81,6 +98,11 @@ fn default_chunk_size() -> usize {
 
 fn default_permitted_tasks() -> usize {
     500
+}
+
+// by default backfiller will collect and parse transactions which are related to Bubblegum program
+fn default_key_prefix() -> String {
+    BBG_PREFIX.to_string()
 }
 
 impl BackfillerConfig {
@@ -512,6 +534,7 @@ mod tests {
                 permitted_tasks: 500,
                 wait_period_sec: 60,
                 should_reingest: false,
+                key_prefix: BBG_PREFIX.to_string(),
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
@@ -541,6 +564,7 @@ mod tests {
                 permitted_tasks: 500,
                 wait_period_sec: 60,
                 should_reingest: false,
+                key_prefix: BBG_PREFIX.to_string(),
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
