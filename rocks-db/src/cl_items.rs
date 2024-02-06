@@ -11,7 +11,7 @@ use crate::asset::AssetLeaf;
 use crate::column::TypedColumn;
 use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64_pubkey, encode_u64_pubkey};
-use crate::transaction::{CopyableChangeLogEventV1, TreeWithSeqAndSlot};
+use crate::transaction::{CopyableChangeLogEventV1, TreeUpdate};
 use crate::tree_seq::TreeSeqIdx;
 use crate::{AssetDynamicDetails, Result, Storage};
 
@@ -158,11 +158,7 @@ impl Storage {
         }
     }
 
-    pub(crate) fn save_tree_with_batch(
-        &self,
-        batch: &mut rocksdb::WriteBatch,
-        tree: TreeWithSeqAndSlot,
-    ) {
+    pub(crate) fn save_tree_with_batch(&self, batch: &mut rocksdb::WriteBatch, tree: TreeUpdate) {
         if let Err(e) = self.tree_seq_idx.put_with_batch(
             batch,
             (tree.tree, tree.seq),

@@ -37,8 +37,6 @@ pub trait TransactionResultPersister: Sync + Send + 'static {
 
 #[derive(Clone, Default)]
 pub struct AssetUpdateEvent {
-    pub event: CopyableChangeLogEventV1,
-    pub slot: u64,
     pub update: Option<AssetDynamicUpdate>,
     pub static_update: Option<AssetUpdate<AssetStaticDetails>>,
     pub owner_update: Option<AssetUpdate<AssetOwner>>,
@@ -47,10 +45,11 @@ pub struct AssetUpdateEvent {
 }
 
 #[derive(Clone, Default)]
-pub struct TreeWithSeqAndSlot {
+pub struct TreeUpdate {
     pub tree: Pubkey,
     pub seq: u64,
     pub slot: u64,
+    pub event: CopyableChangeLogEventV1,
 }
 
 #[derive(Clone, Default)]
@@ -96,7 +95,7 @@ pub struct InstructionResult {
     pub update: Option<AssetUpdateEvent>,
     pub task: Option<Task>,
     pub decompressed: Option<AssetUpdate<AssetDynamicDetails>>,
-    pub tree_update: Option<TreeWithSeqAndSlot>,
+    pub tree_update: Option<TreeUpdate>,
 }
 
 impl From<AssetUpdateEvent> for InstructionResult {

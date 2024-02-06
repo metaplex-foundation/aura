@@ -63,7 +63,6 @@ impl Storage {
         ix: InstructionResult,
     ) -> Result<(), StorageError> {
         if let Some(update) = ix.update {
-            self.save_changelog_with_batch(batch, &update.event, update.slot);
             if let Some(dyn_data) = update.update {
                 if let Err(e) = self.save_tx_data_and_asset_updated_with_batch(
                     batch,
@@ -125,6 +124,7 @@ impl Storage {
             }
         }
         if let Some(tree_update) = ix.tree_update {
+            self.save_changelog_with_batch(batch, &tree_update.event, tree_update.slot);
             self.save_tree_with_batch(batch, tree_update);
         }
 
