@@ -222,14 +222,17 @@ where
             }
 
             if req.method == GET_ASSET_PROOF_METHOD {
+                let asset_id = req.params["id"].as_str().unwrap_or_default();
                 test_failed = match self
-                    .check_proof_valid(
-                        req.params["id"].as_str().unwrap_or_default(),
-                        diff_with_responses.testing_response,
-                    )
+                    .check_proof_valid(asset_id, diff_with_responses.testing_response)
                     .await
                 {
-                    Ok(proof_valid) => !proof_valid,
+                    Ok(proof_valid) => {
+                        if !proof_valid {
+                            error!("Invalid proof for {} asset", asset_id)
+                        };
+                        !proof_valid
+                    }
                     Err(e) => {
                         error!("Check proof valid: {}", e);
                         test_failed
