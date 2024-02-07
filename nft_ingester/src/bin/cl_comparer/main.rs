@@ -44,7 +44,7 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let target_tree_key = Pubkey::from_str(&config.target_tree_key).unwrap();
-    compare_cl_items(first_rocks, second_rocks, target_tree_key);
+    compare_cl_items(first_rocks, second_rocks, target_tree_key).await;
     Ok(())
 }
 
@@ -115,33 +115,58 @@ fn compare_leaves(first_rocks: Storage, second_rocks: Storage, target_tree_key: 
     info!("Finished comparing the leaves");
 }
 
-fn compare_cl_items(first_rocks: Storage, second_rocks: Storage, target_tree_key: Pubkey) {
-    let first_map = first_rocks
-        .cl_items
-        .iter_deserialized()
-        .filter_map(|v| v.ok())
-        .filter(|((_, tree_id), _)| *tree_id == target_tree_key)
-        .map(|((node_id, _), value)| (node_id, value))
-        .collect::<HashMap<_, _>>();
+async fn compare_cl_items(first_rocks: Storage, second_rocks: Storage, target_tree_key: Pubkey) {
+    let target_key_bytes: [u8; 32] = target_tree_key.to_bytes();
 
-    tracing::info!(
-        "Collected the items for the source. Total items for the first map: {}",
-        first_map.len(),
-    );
+    let first_map_fut = tokio::task::spawn_blocking(move || {
+        let first_map = first_rocks
+            .cl_items
+            .iter_start()
+            .filter_map(|k| k.ok())
+            .filter_map(|(key, value)| {
+                if key[8..] == target_key_bytes {
+                    if let Ok((node_id, _)) = ClItem::decode_key(key.to_vec()) {
+                        if let Ok(value) = deserialize::<ClItem>(&value) {
+                            return Some((node_id, value));
+                        }
+                    }
+                }
+                None
+            })
+            .collect::<HashMap<_, _>>();
 
-    let second_map = second_rocks
-        .cl_items
-        .iter_deserialized()
-        .filter_map(|v| v.ok())
-        .filter(|((_, tree_id), _)| *tree_id == target_tree_key)
-        .map(|((node_id, _), value)| (node_id, value))
-        .collect::<HashMap<_, _>>();
-    tracing::info!(
-        "Collected all the items. Total items for the first map: {}, for the second map: {}",
-        first_map.len(),
-        second_map.len()
-    );
+        tracing::info!(
+            "Collected the items for the source. Total items for the first map: {}",
+            first_map.len(),
+        );
+        first_map
+    });
 
+    let second_map_fut = tokio::task::spawn_blocking(move || {
+        let second_map = second_rocks
+            .cl_items
+            .iter_start()
+            .filter_map(|k| k.ok())
+            .filter_map(|(key, value)| {
+                if key[8..] == target_key_bytes {
+                    if let Ok((node_id, _)) = ClItem::decode_key(key.to_vec()) {
+                        if let Ok(value) = deserialize::<ClItem>(&value) {
+                            return Some((node_id, value));
+                        }
+                    }
+                }
+                None
+            })
+            .collect::<HashMap<_, _>>();
+        tracing::info!(
+            "Collected all the items for the second source. Total items for the for the second map: {}",
+            second_map.len()
+        );
+        second_map
+    });
+
+    let first_map = first_map_fut.await.unwrap();
+    let second_map = second_map_fut.await.unwrap();
     for (node_id, first_item) in first_map.iter() {
         if let Some(second_item) = second_map.get(node_id) {
             if first_item != second_item {
