@@ -6,7 +6,7 @@ use bincode::deserialize;
 use clap::Parser;
 use log::info;
 use rocks_db::cl_items::{ClItem, ClLeaf};
-use rocks_db::column::{Column, TypedColumn};
+use rocks_db::column::TypedColumn;
 use solana_program::pubkey::Pubkey;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -27,7 +27,10 @@ struct Args {
 pub async fn main() -> Result<(), IngesterError> {
     let config: TreeBackfillerConfig = setup_config(COMPARER_CONFIG_PREFIX);
     init_logger(&config.get_log_level());
-    tracing::info!("Starting comparer for target tree key: {}", config.target_tree_key);
+    tracing::info!(
+        "Starting comparer for target tree key: {}",
+        config.target_tree_key
+    );
 
     let tasks = JoinSet::new();
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -39,43 +42,68 @@ pub async fn main() -> Result<(), IngesterError> {
     )
     .unwrap();
 
+    let first_rocks = Arc::new(first_rocks);
     let second_rocks = Storage::open_as_secondary(
-        &config.source_rocks.clone(),
+        &config.target_rocks.clone(),
         "./secondary2",
         mutexed_tasks.clone(),
     )
     .unwrap();
 
+    let second_rocks = Arc::new(second_rocks);
+
     let target_tree_key = Pubkey::from_str(&config.target_tree_key).unwrap();
-    compare_cl_items(first_rocks, second_rocks, target_tree_key).await;
+    let f1 = compare_leaves(first_rocks.clone(), second_rocks.clone(), target_tree_key);
+    let f2 = compare_cl_items(first_rocks, second_rocks, target_tree_key);
+    f1.await;
+    f2.await;
     Ok(())
 }
 
-fn compare_leaves(first_rocks: Storage, second_rocks: Storage, target_tree_key: Pubkey) {
-    let first_map = first_rocks
-        .cl_leafs
-        .iter_deserialized()
-        .filter_map(|v| v.ok())
-        .filter(|((_, tree_id), _)| *tree_id == target_tree_key)
-        .map(|((node_id, _), value)| (node_id, value))
-        .collect::<HashMap<_, _>>();
-    tracing::info!(
-        "Collected the leaves for the source. Total leaves for the first map: {}",
-        first_map.len(),
-    );
-
-    let second_map = second_rocks
-        .cl_leafs
-        .iter_deserialized()
-        .filter_map(|v| v.ok())
-        .filter(|((_, tree_id), _)| *tree_id == target_tree_key)
-        .map(|((node_id, _), value)| (node_id, value))
-        .collect::<HashMap<_, _>>();
-    tracing::info!(
-        "Collected all the leaves. Total leaves for the first map: {}, for the second map: {}",
-        first_map.len(),
-        second_map.len()
-    );
+async fn compare_leaves(
+    first_rocks: Arc<Storage>,
+    second_rocks: Arc<Storage>,
+    target_tree_key: Pubkey,
+) {
+    let target_key_bytes: [u8; 32] = target_tree_key.to_bytes();
+    let first_map_fut = tokio::task::spawn_blocking(move || {
+        let first_map = first_rocks
+            .cl_leafs
+            .iter_start()
+            .filter_map(|k| k.ok())
+            .filter_map(|(key, value)| {
+                if key[8..] == target_key_bytes {
+                    if let Ok((node_id, _)) = ClLeaf::decode_key(key.to_vec()) {
+                        if let Ok(value) = deserialize::<ClLeaf>(&value) {
+                            return Some((node_id, value));
+                        }
+                    }
+                }
+                None
+            })
+            .collect::<HashMap<_, _>>();
+        tracing::info!(
+            "Collected the leaves for the source. Total leaves for the first map: {}",
+            first_map.len(),
+        );
+        first_map
+    });
+    let second_map_fut = tokio::task::spawn_blocking(move || {
+        let second_map = second_rocks
+            .cl_leafs
+            .iter_deserialized()
+            .filter_map(|v| v.ok())
+            .filter(|((_, tree_id), _)| *tree_id == target_tree_key)
+            .map(|((node_id, _), value)| (node_id, value))
+            .collect::<HashMap<_, _>>();
+        tracing::info!(
+            "Collected all the leaves for the second source. Total leaves for the second map: {}",
+            second_map.len()
+        );
+        second_map
+    });
+    let first_map = first_map_fut.await.unwrap();
+    let second_map = second_map_fut.await.unwrap();
 
     for (node_id, first_leaf) in first_map.iter() {
         if let Some(second_leaf) = second_map.get(node_id) {
@@ -118,7 +146,11 @@ fn compare_leaves(first_rocks: Storage, second_rocks: Storage, target_tree_key: 
     info!("Finished comparing the leaves");
 }
 
-async fn compare_cl_items(first_rocks: Storage, second_rocks: Storage, target_tree_key: Pubkey) {
+async fn compare_cl_items(
+    first_rocks: Arc<Storage>,
+    second_rocks: Arc<Storage>,
+    target_tree_key: Pubkey,
+) {
     let target_key_bytes: [u8; 32] = target_tree_key.to_bytes();
 
     let first_map_fut = tokio::task::spawn_blocking(move || {
