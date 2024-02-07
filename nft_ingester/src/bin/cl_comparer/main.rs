@@ -24,7 +24,7 @@ struct Args {
 pub async fn main() -> Result<(), IngesterError> {
     let config: TreeBackfillerConfig = setup_config(COMPARER_CONFIG_PREFIX);
     init_logger(&config.get_log_level());
-    tracing::info!("Starting comparer");
+    tracing::info!("Starting comparer for target tree key: {}", config.target_tree_key);
 
     let tasks = JoinSet::new();
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
