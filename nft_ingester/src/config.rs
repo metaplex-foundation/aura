@@ -192,7 +192,6 @@ pub struct ApiConfig {
     pub metrics_port: Option<u16>,
     pub server_port: u16,
     pub rust_log: Option<String>,
-    pub sql_log_level: Option<String>,
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
     #[serde(default)]
@@ -203,9 +202,6 @@ pub struct ApiConfig {
 impl ApiConfig {
     pub fn get_log_level(&self) -> String {
         self.rust_log.clone().unwrap_or("warn".to_string())
-    }
-    pub fn get_sql_log_level(&self) -> String {
-        self.sql_log_level.clone().unwrap_or("error".to_string())
     }
 }
 
