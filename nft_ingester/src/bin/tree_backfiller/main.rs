@@ -56,7 +56,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let keep_running = Arc::new(AtomicBool::new(true));
 
-    let mut tasks = JoinSet::new();
+    let ctasks = JoinSet::new();
 
     // setup buffer
     let buffer = Arc::new(Buffer::new());

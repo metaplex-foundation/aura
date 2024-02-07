@@ -17,6 +17,7 @@ pub const INGESTER_BACKUP_NAME: &str = "snapshot.tar.lz4";
 pub const INGESTER_CONFIG_PREFIX: &str = "INGESTER_";
 pub const JSON_MIGRATOR_CONFIG_PREFIX: &str = "JSON_MIGRATOR_";
 pub const TREE_BACKFILLER_CONFIG_PREFIX: &str = "TREE_BACKFILLER_";
+pub const COMPARER_CONFIG_PREFIX: &str = "COMPARER_";
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct BackgroundTaskRunnerConfig {
@@ -34,6 +35,7 @@ pub struct TreeBackfillerConfig {
     pub rust_log: Option<String>,
     pub source_rocks: String,
     pub target_rocks: String,
+    pub target_tree_key: String,
     pub metrics_port: u16,
 }
 

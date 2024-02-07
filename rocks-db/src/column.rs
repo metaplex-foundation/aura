@@ -264,6 +264,18 @@ where
             .iterator_cf(&self.handle(), rocksdb::IteratorMode::End)
     }
 
+    pub fn iter_deserialized(
+        &self,
+    ) -> impl Iterator<Item = core::result::Result<(C::KeyType, C::ValueType), String>> + '_ {
+        self.iter_start()
+            .filter_map(|k| k.ok())
+            .map(move |(key, value)| {
+                let key = C::decode_key(key.to_vec()).map_err(|e| e.to_string())?;
+                let value = deserialize(&value).map_err(|e| e.to_string())?;
+                Ok((key, value))
+            })
+    }
+
     #[inline]
     pub(crate) fn handle(&self) -> Arc<BoundColumnFamily> {
         self.backend.cf_handle(C::NAME).unwrap()

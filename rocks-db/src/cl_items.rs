@@ -31,7 +31,7 @@ pub struct ClItem {
 /// This column family stores node ids of the leaf nodes.
 /// The key is the leaf index(also known as nonce) and tree id.
 /// NOTE: it stores only nodes with level 0 in tree.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ClLeaf {
     pub cli_leaf_idx: u64,
     pub cli_tree_key: Pubkey,
