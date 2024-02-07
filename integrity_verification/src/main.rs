@@ -83,7 +83,9 @@ async fn main() -> Result<(), IntegrityVerificationError> {
             let diff_checker = DiffChecker::new(
                 config.reference_host.clone(),
                 config.testing_host.clone(),
-                PgClient::new(&config.database_url.clone().unwrap(), 100, 500).await,
+                PgClient::new(&config.database_url.clone().unwrap(), 100, 500)
+                    .await
+                    .unwrap(),
                 metrics.integrity_verification_metrics.clone(),
                 metrics.slot_collector_metrics.clone(),
                 config.big_table_creds_path.clone(),

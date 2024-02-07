@@ -13,7 +13,7 @@ use prometheus_client::registry::Registry;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tonic::transport::Server;
 
@@ -59,7 +59,6 @@ pub async fn main() -> Result<(), IngesterError> {
     let min_connections = min(10, max_connections / 2);
     let pg_client = postgre_client::PgClient::new(
         config.database_config.get_database_url()?.as_str(),
-        config.get_sql_log_level().as_str(),
         min_connections,
         max_connections,
     )
@@ -106,8 +105,7 @@ pub async fn main() -> Result<(), IngesterError> {
         };
     }));
 
-    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-
+    let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
     // setup dependencies for grpc server
     let uc = usecase::asset_streamer::AssetStreamer::new(
         config.peer_grpc_max_gap_slots,
@@ -120,7 +118,7 @@ pub async fn main() -> Result<(), IngesterError> {
         if let Err(e) = Server::builder()
             .add_service(GapFillerServiceServer::new(serv))
             .serve_with_shutdown(addr, async {
-                shutdown_rx.await.ok();
+                shutdown_rx.recv().await.unwrap();
             })
             .await
         {
@@ -135,13 +133,9 @@ pub async fn main() -> Result<(), IngesterError> {
     let dur = tokio::time::Duration::from_secs(config.rocks_sync_interval_seconds);
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
-            info!(
-                "Start catch up ----------------------------------------------------------------"
-            );
             if let Err(e) = cloned_rocks_storage.db.try_catch_up_with_primary() {
                 error!("Sync rocksdb error: {}", e);
             }
-            info!("Caught up ----------------------------------------------------------------");
             tokio::time::sleep(dur).await;
         }
     }));

@@ -113,7 +113,6 @@ impl Storage {
         }
     }
 
-
     pub fn open(
         db_path: &str,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
