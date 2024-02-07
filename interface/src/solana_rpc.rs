@@ -18,5 +18,6 @@ pub trait TransactionsGetter: Send + Sync {
     async fn get_txs_by_signatures(
         &self,
         signatures: Vec<Signature>,
+        retry_interval_millis: u64,
     ) -> Result<Vec<BufferedTransaction>, UsecaseError>;
 }

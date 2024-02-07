@@ -6,6 +6,7 @@ use std::sync::Arc;
 use log::error;
 use sea_orm::prelude::Json;
 use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult, Order};
+use serde::Deserialize;
 use solana_sdk::pubkey::Pubkey;
 
 use rocks_db::asset::{
@@ -75,7 +76,10 @@ pub async fn get_by_creator(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    let mut condition = "SELECT ast_pubkey FROM assets_v3 LEFT JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey WHERE asc_creator = $1".to_string();
+    let mut condition =
+        "SELECT ast_pubkey FROM assets_v3 LEFT JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey
+     LEFT JOIN tasks ON ast_metadata_url_id = tsk_id WHERE asc_creator = $1"
+            .to_string();
     if only_verified {
         condition = format!("{} AND asc_verified = true", condition);
     }
@@ -143,7 +147,7 @@ pub async fn get_by_grouping(
         return Ok(vec![]);
     }
 
-    let condition = "SELECT ast_pubkey FROM assets_v3 WHERE ast_collection = $1 AND ast_is_collection_verified = true";
+    let condition = "SELECT ast_pubkey FROM assets_v3 LEFT JOIN tasks ON ast_metadata_url_id = tsk_id WHERE ast_collection = $1 AND ast_is_collection_verified = true";
     let values = vec![Set(group_value.clone())
         .into_value()
         .ok_or(DbErr::Custom(format!(
@@ -178,7 +182,7 @@ pub async fn get_assets_by_owner(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    let condition = "SELECT ast_pubkey FROM assets_v3 WHERE ast_owner = $1";
+    let condition = "SELECT ast_pubkey FROM assets_v3 LEFT JOIN tasks ON ast_metadata_url_id = tsk_id WHERE ast_owner = $1";
     let values = vec![Set(owner.to_bytes().to_vec().as_slice())
         .into_value()
         .ok_or(DbErr::Custom(format!(
@@ -208,7 +212,7 @@ pub async fn get_by_authority(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    let condition = "SELECT ast_pubkey FROM assets_v3 WHERE ast_authority = $1";
+    let condition = "SELECT ast_pubkey FROM assets_v3 LEFT JOIN tasks ON ast_metadata_url_id = tsk_id WHERE ast_authority = $1";
     let values = vec![Set(authority.as_slice())
         .into_value()
         .ok_or(DbErr::Custom(format!(
@@ -240,7 +244,10 @@ async fn get_by_related_condition(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    let condition = &format!("{} AND ast_supply > 0", condition);
+    let condition = &format!(
+        "{} AND ast_supply > 0 AND tsk_status = 'success' ",
+        condition
+    );
     let (mut condition, values, offset) = paginate(pagination, limit, condition, values)?;
 
     condition = format!("{} LIMIT {}", condition, limit);
@@ -319,9 +326,14 @@ fn convert_rocks_offchain_data(
     )
     .unwrap_or(serde_json::Value::Null);
 
+    let chain_data_mutability = ch_data
+        .get("chain_mutability")
+        .map(|m| ChainMutability::deserialize(m).unwrap_or(ChainMutability::Unknown))
+        .unwrap_or(ChainMutability::Unknown);
+
     Ok(asset_data::Model {
         id: dynamic_data.pubkey.to_bytes().to_vec(),
-        chain_data_mutability: ChainMutability::Mutable,
+        chain_data_mutability,
         chain_data: ch_data,
         metadata_url: offchain_data.url.clone(),
         metadata_mutability: Mutability::Immutable,
@@ -363,6 +375,22 @@ fn convert_rocks_asset_model(
         .max()
         .unwrap(); // unwrap here is safe, because vec is not empty
 
+    // there are instructions where we update only assetLeaf seq value
+    // and there is burn instruction where we update only assetDynamic seq value
+    // that's why we need to take max value from both of them
+    let seq = {
+        if dynamic_data.is_compressed.value {
+            let dynamic_seq = dynamic_data
+                .seq
+                .clone()
+                .and_then(|u| u.value.try_into().ok());
+            let leaf_seq = leaf.leaf_seq.map(|seq| seq as i64);
+            std::cmp::max(dynamic_seq, leaf_seq)
+        } else {
+            Some(0)
+        }
+    };
+
     Ok(asset::Model {
         id: static_data.pubkey.to_bytes().to_vec(),
         alt_id: None,
@@ -370,10 +398,7 @@ fn convert_rocks_asset_model(
         specification_asset_class: Some(static_data.specification_asset_class.into()),
         owner: Some(owner.owner.value.to_bytes().to_vec()),
         owner_type: owner.owner_type.value.into(),
-        delegate: owner
-            .delegate
-            .clone()
-            .map(|pk| pk.value.to_bytes().to_vec()),
+        delegate: owner.delegate.value.map(|k| k.to_bytes().to_vec()),
         frozen: dynamic_data.is_frozen.value,
         supply: dynamic_data
             .supply
@@ -383,10 +408,7 @@ fn convert_rocks_asset_model(
         supply_mint: Some(static_data.pubkey.to_bytes().to_vec()),
         compressed: dynamic_data.is_compressed.value,
         compressible: dynamic_data.is_compressible.value,
-        seq: dynamic_data
-            .seq
-            .clone()
-            .and_then(|u| u.value.try_into().ok()),
+        seq,
         tree_id,
         leaf: leaf.leaf.clone(),
         nonce: leaf.nonce.map(|nonce| nonce as i64),
@@ -399,7 +421,7 @@ fn convert_rocks_asset_model(
         slot_updated: Some(slot_updated as i64),
         data_hash: leaf.data_hash.map(|h| h.to_string()),
         creator_hash: leaf.creator_hash.map(|h| h.to_string()),
-        owner_delegate_seq: owner.owner_delegate_seq.clone().map(|seq| seq.value as i64),
+        owner_delegate_seq: owner.owner_delegate_seq.value.map(|s| s as i64),
         was_decompressed: dynamic_data.was_decompressed.value,
         leaf_seq: leaf.leaf_seq.map(|seq| seq as i64),
     })

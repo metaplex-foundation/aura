@@ -1,6 +1,7 @@
 use plerkle_serialization::error::PlerkleSerializationError;
 use solana_client::client_error::ClientError;
 use solana_sdk::signature::ParseSignatureError;
+use solana_storage_bigtable::Error;
 use thiserror::Error;
 
 // TODO: rename the error enum as soon as it gets at least 3 errors
@@ -22,6 +23,8 @@ pub enum UsecaseError {
     PubkeyValidationError(String),
     #[error("Invalid Grouping Key: {0}")]
     InvalidGroupingKey(String),
+    #[error("Bigtable: {0}")]
+    Bigtable(String),
 }
 
 impl From<ClientError> for UsecaseError {
@@ -36,4 +39,10 @@ pub enum StorageError {
     Common(String),
     #[error("not found")]
     NotFound,
+}
+
+impl From<Error> for UsecaseError {
+    fn from(value: Error) -> Self {
+        Self::Bigtable(value.to_string())
+    }
 }

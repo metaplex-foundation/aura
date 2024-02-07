@@ -1,9 +1,10 @@
+use entities::enums::TaskStatus;
+use entities::models::UrlWithStatus;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Row, Transaction,
 };
 use std::collections::HashMap;
-use std::str::FromStr;
 use tracing::log::LevelFilter;
 
 pub mod asset_filter_client;
@@ -19,14 +20,9 @@ pub struct PgClient {
 }
 
 impl PgClient {
-    pub async fn new(
-        url: &str,
-        log_level: &str,
-        min_connections: u32,
-        max_connections: u32,
-    ) -> Result<Self, Error> {
+    pub async fn new(url: &str, min_connections: u32, max_connections: u32) -> Result<Self, Error> {
         let mut options: PgConnectOptions = url.parse().unwrap();
-        options.log_statements(LevelFilter::from_str(log_level).unwrap_or(LevelFilter::Warn));
+        options.log_statements(LevelFilter::Off);
 
         let pool = PgPoolOptions::new()
             .min_connections(min_connections)
@@ -41,17 +37,21 @@ impl PgClient {
         Self { pool }
     }
 
-    pub async fn insert_metadata(
+    pub async fn insert_tasks(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
-        metadata_urls: Vec<String>,
+        metadata_urls: Vec<UrlWithStatus>,
     ) -> Result<(), String> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("INSERT INTO metadata (mtd_url) ");
+            QueryBuilder::new("INSERT INTO tasks (tsk_metadata_url, tsk_status) ");
         query_builder.push_values(metadata_urls.iter(), |mut builder, metadata_url| {
-            builder.push_bind(metadata_url);
+            builder.push_bind(metadata_url.metadata_url.clone());
+            builder.push_bind(match metadata_url.is_downloaded {
+                true => TaskStatus::Success,
+                false => TaskStatus::Pending,
+            });
         });
-        query_builder.push(" ON CONFLICT (mtd_url) DO NOTHING;");
+        query_builder.push(" ON CONFLICT (tsk_metadata_url) DO NOTHING;");
 
         let query = query_builder.build();
         query
@@ -62,13 +62,14 @@ impl PgClient {
         Ok(())
     }
 
-    pub async fn get_metadata_ids(
+    pub async fn get_tasks_ids(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         metadata_urls: Vec<String>,
     ) -> Result<HashMap<String, i64>, String> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("SELECT mtd_id, mtd_url FROM metadata WHERE mtd_url in (");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "SELECT tsk_id, tsk_metadata_url FROM tasks WHERE tsk_metadata_url in (",
+        );
 
         let urls_len = metadata_urls.len();
 
@@ -90,8 +91,8 @@ impl PgClient {
         let mut metadata_ids_map = HashMap::new();
 
         for row in rows_result {
-            let metadata_id: i64 = row.get("mtd_id");
-            let metadata_url: String = row.get("mtd_url");
+            let metadata_id: i64 = row.get("tsk_id");
+            let metadata_url: String = row.get("tsk_metadata_url");
 
             metadata_ids_map.insert(metadata_url, metadata_id);
         }

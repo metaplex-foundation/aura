@@ -61,6 +61,8 @@ tracing = "0.1.40"
 backfill-rpc = { path = "../backfill_rpc" }
 prometheus-client = "0.21.2"
 pprof = {version = "0.13.0", features = ["_protobuf", "protobuf-codec"]}
+solana-program = "~1.16"
+itertools = "0.12.1"
 
 [dev-dependencies]
 tempfile = "3.8.1"
@@ -73,6 +75,10 @@ zip-extract = "0.1.2"
 
 [[bench]]
 name = "integrated_benchmark"
+harness = false
+
+[[bench]]
+name = "ingester_benchmark"
 harness = false
 
 [dependencies.utils]

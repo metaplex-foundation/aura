@@ -3,13 +3,14 @@ mod tests {
     use std::collections::HashSet;
     use std::sync::Arc;
 
+    use entities::enums::OwnerType;
     use entities::models::Updated;
     use solana_sdk::pubkey::Pubkey;
     use tempfile::TempDir;
 
     use rocks_db::key_encoders::encode_u64x2_pubkey;
     use rocks_db::storage_traits::AssetUpdateIndexStorage;
-    use rocks_db::{AssetDynamicDetails, Storage};
+    use rocks_db::{AssetDynamicDetails, AssetOwner, Storage};
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
 
@@ -330,15 +331,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_multiple_slot_updates() {
+    #[tokio::test]
+    async fn test_multiple_slot_updates() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let pk = Pubkey::new_unique();
         let dynamic_data = create_test_dynamic_data(pk, 0, "http://example.com".to_string());
 
         storage
             .asset_dynamic_data
-            .merge(dynamic_data.pubkey, &dynamic_data)
+            .merge(dynamic_data.pubkey, dynamic_data.clone())
+            .await
             .unwrap();
 
         let new_data = AssetDynamicDetails {
@@ -350,7 +352,8 @@ mod tests {
         };
         storage
             .asset_dynamic_data
-            .merge(dynamic_data.pubkey, &new_data)
+            .merge(dynamic_data.pubkey, new_data)
+            .await
             .unwrap();
 
         let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
@@ -367,7 +370,8 @@ mod tests {
         };
         storage
             .asset_dynamic_data
-            .merge(dynamic_data.pubkey, &new_data)
+            .merge(dynamic_data.pubkey, new_data)
+            .await
             .unwrap();
 
         let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
@@ -382,13 +386,58 @@ mod tests {
         };
         storage
             .asset_dynamic_data
-            .merge(dynamic_data.pubkey, &new_data)
+            .merge(dynamic_data.pubkey, new_data)
+            .await
             .unwrap();
 
         let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
-        assert_eq!(
-            selected_data.is_compressible,
-            Updated::new(5, Some(1), false)
-        );
+        assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
+        // data will not be updated because slot is lower
+        // and to update data based of seq both new and old records have to have that value
+    }
+
+    #[tokio::test]
+    async fn test_asset_delegate_update() {
+        let storage = RocksTestEnvironment::new(&[]).storage;
+        let pk = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+
+        let asset_owner_data = AssetOwner {
+            pubkey: pk,
+            owner: Updated::new(1, Some(1), owner),
+            delegate: Updated::new(1, Some(1), Some(owner)),
+            owner_type: Updated::new(1, Some(1), OwnerType::Single),
+            owner_delegate_seq: Updated::new(1, Some(1), Some(1)),
+        };
+
+        storage
+            .asset_owner_data
+            .merge(pk, asset_owner_data.clone())
+            .await
+            .unwrap();
+
+        let selected_data = storage.asset_owner_data.get(pk).unwrap().unwrap();
+
+        assert_eq!(selected_data.delegate, asset_owner_data.delegate);
+
+        let new_owner = Pubkey::new_unique();
+
+        let updated_owner_data = AssetOwner {
+            pubkey: pk,
+            owner: Updated::new(2, Some(2), new_owner),
+            delegate: Updated::new(2, Some(2), None),
+            owner_type: Updated::new(2, Some(2), OwnerType::Single),
+            owner_delegate_seq: Updated::new(2, Some(2), Some(2)),
+        };
+
+        storage
+            .asset_owner_data
+            .merge(pk, updated_owner_data.clone())
+            .await
+            .unwrap();
+
+        let selected_data = storage.asset_owner_data.get(pk).unwrap().unwrap();
+
+        assert_eq!(selected_data.delegate.value, None);
     }
 }

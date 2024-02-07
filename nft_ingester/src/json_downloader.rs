@@ -1,6 +1,9 @@
-use crate::config::{setup_config, BackgroundTaskConfig, BackgroundTaskRunnerConfig};
-use crate::db_v2::{DBClient, TaskStatus, UpdatedTask};
-use log::{debug, error, info};
+use crate::config::{
+    setup_config, BackgroundTaskConfig, BackgroundTaskRunnerConfig, INGESTER_CONFIG_PREFIX,
+};
+use crate::db_v2::{DBClient, UpdatedTask};
+use entities::enums::TaskStatus;
+use log::{debug, error};
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use reqwest::{Client, ClientBuilder};
 use rocks_db::{offchain_data::OffChainData, Storage};
@@ -18,7 +21,7 @@ pub struct JsonDownloader {
 
 impl JsonDownloader {
     pub async fn new(rocks_db: Arc<Storage>, metrics: Arc<JsonDownloaderMetricsConfig>) -> Self {
-        let config: BackgroundTaskConfig = setup_config("INGESTER_");
+        let config: BackgroundTaskConfig = setup_config(INGESTER_CONFIG_PREFIX);
         let database_pool = DBClient::new(&config.database_config).await.unwrap();
 
         Self {
@@ -79,7 +82,7 @@ impl JsonDownloader {
                                         };
                                         let data_to_insert = UpdatedTask {
                                             status,
-                                            metadata_url_key: task.metadata_url_key,
+                                            metadata_url: task.metadata_url,
                                             attempts: task.attempts + 1,
                                             error: response.status().as_str().to_string(),
                                         };
@@ -104,7 +107,7 @@ impl JsonDownloader {
                                                 .unwrap();
                                             let data_to_insert = UpdatedTask {
                                                 status: TaskStatus::Success,
-                                                metadata_url_key: task.metadata_url_key,
+                                                metadata_url: task.metadata_url,
                                                 attempts: task.attempts + 1,
                                                 error: "".to_string(),
                                             };
@@ -113,12 +116,12 @@ impl JsonDownloader {
                                                 .await
                                                 .unwrap();
 
-                                            info!("Saved metadata successfully...");
+                                            debug!("Saved metadata successfully...");
                                             cloned_metrics.inc_tasks(MetricStatus::SUCCESS);
                                         } else {
                                             let data_to_insert = UpdatedTask {
                                                 status: TaskStatus::Failed,
-                                                metadata_url_key: task.metadata_url_key,
+                                                metadata_url: task.metadata_url,
                                                 attempts: task.attempts + 1,
                                                 error: "Failed to deserialize metadata body"
                                                     .to_string(),

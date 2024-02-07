@@ -14,6 +14,9 @@ use crate::error::IngesterError;
 const INGESTER_CONSUMERS_COUNT: usize = 2;
 pub const INGESTER_BACKUP_NAME: &str = "snapshot.tar.lz4";
 
+pub const INGESTER_CONFIG_PREFIX: &str = "INGESTER_";
+pub const JSON_MIGRATOR_CONFIG_PREFIX: &str = "JSON_MIGRATOR_";
+
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct BackgroundTaskRunnerConfig {
     pub delete_interval: Option<u64>,
@@ -59,6 +62,13 @@ pub struct BackfillerConfig {
     pub chunk_size: usize,
     #[serde(default = "default_permitted_tasks")]
     pub permitted_tasks: usize,
+    #[serde(default = "default_wait_period_sec")]
+    pub wait_period_sec: u64,
+    #[serde(default)]
+    pub should_reingest: bool,
+}
+fn default_wait_period_sec() -> u64 {
+    60
 }
 
 fn default_workers_count() -> usize {
@@ -75,7 +85,7 @@ fn default_permitted_tasks() -> usize {
 
 impl BackfillerConfig {
     pub fn get_slot_until(&self) -> u64 {
-        self.slot_until.unwrap_or(0)
+        self.slot_until.unwrap_or_default()
     }
 }
 
@@ -129,11 +139,44 @@ pub struct IngesterConfig {
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
     pub rust_log: Option<String>,
-    pub sql_log_level: Option<String>,
     pub backfill_rpc_address: String,
     pub run_profiling: Option<bool>,
     pub profiling_file_path_container: Option<String>,
     pub store_db_backups: Option<bool>,
+    #[serde(default)]
+    pub rpc_retry_interval_millis: u64,
+    #[serde(default)]
+    pub run_sequence_consistent_checker: bool,
+    #[serde(default = "default_sequence_consistent_checker_wait_period_sec")]
+    pub sequence_consistent_checker_wait_period_sec: u64,
+}
+
+fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
+    60
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct JsonMigratorConfig {
+    pub rust_log: Option<String>,
+    pub json_source_db: String,
+    pub json_target_db: String,
+    pub database_config: DatabaseConfig,
+    pub metrics_port: u16,
+    pub work_mode: JsonMigratorMode,
+}
+
+#[derive(Deserialize, Default, PartialEq, Debug, Clone)]
+pub enum JsonMigratorMode {
+    #[default]
+    Full,
+    JsonsOnly,
+    TasksOnly,
+}
+
+impl JsonMigratorConfig {
+    pub fn get_log_level(&self) -> String {
+        self.rust_log.clone().unwrap_or("warn".to_string())
+    }
 }
 
 fn default_log_level() -> String {
@@ -198,9 +241,6 @@ impl IngesterConfig {
 
     pub fn get_log_level(&self) -> String {
         self.rust_log.clone().unwrap_or("warn".to_string())
-    }
-    pub fn get_sql_log_level(&self) -> String {
-        self.sql_log_level.clone().unwrap_or("error".to_string())
     }
 
     pub fn get_is_run_profiling(&self) -> bool {
@@ -450,8 +490,10 @@ impl PeerDiscovery for IngesterConfig {
     }
 }
 
-pub fn setup_config<'a, T: Deserialize<'a>>(prefix: &str) -> T {
-    let figment = Figment::new().join(Env::prefixed(prefix)).join(Env::raw());
+pub fn setup_config<'a, T: Deserialize<'a>>(config_prefix: &str) -> T {
+    let figment = Figment::new()
+        .join(Env::prefixed(config_prefix))
+        .join(Env::raw());
 
     figment
         .extract()
@@ -483,7 +525,7 @@ mod tests {
         std::env::set_var("INGESTER_TCP_CONFIG", "{}");
         std::env::set_var("INGESTER_BIG_TABLE_CONFIG", "{}");
         std::env::set_var("INGESTER_SLOT_START_FROM", "0");
-        let config: BackfillerConfig = setup_config();
+        let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
         assert_eq!(
             config,
             BackfillerConfig {
@@ -494,6 +536,8 @@ mod tests {
                 workers_count: 100,
                 chunk_size: 5,
                 permitted_tasks: 500,
+                wait_period_sec: 60,
+                should_reingest: false,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
@@ -510,7 +554,7 @@ mod tests {
         std::env::set_var("INGESTER_BIG_TABLE_CONFIG", "{}");
         std::env::set_var("INGESTER_SLOT_START_FROM", "0");
         std::env::set_var("INGESTER_BACKFILLER_MODE", "Persist");
-        let config: BackfillerConfig = setup_config();
+        let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
         assert_eq!(
             config,
             BackfillerConfig {
@@ -521,6 +565,8 @@ mod tests {
                 workers_count: 100,
                 chunk_size: 5,
                 permitted_tasks: 500,
+                wait_period_sec: 60,
+                should_reingest: false,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");

@@ -5,6 +5,12 @@ use crate::enums::{
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Eq, Hash)]
+pub struct UrlWithStatus {
+    pub metadata_url: String,
+    pub is_downloaded: bool,
+}
+
 // AssetIndex is the struct that is stored in the postgres database and is used to query the asset pubkeys.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct AssetIndex {
@@ -28,7 +34,7 @@ pub struct AssetIndex {
     pub is_compressed: bool,
     pub is_frozen: bool,
     pub supply: Option<i64>,
-    pub metadata_url: Option<String>,
+    pub metadata_url: Option<UrlWithStatus>,
     pub slot_updated: i64,
 }
 
@@ -66,9 +72,9 @@ pub struct CompleteAssetDetails {
 
     // From AssetOwner as Tuples
     pub owner: Updated<Pubkey>,
-    pub delegate: Option<Updated<Pubkey>>,
+    pub delegate: Updated<Option<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
-    pub owner_delegate_seq: Option<Updated<u64>>,
+    pub owner_delegate_seq: Updated<Option<u64>>,
 
     // Separate fields
     pub asset_leaf: Option<Updated<AssetLeaf>>,
@@ -163,7 +169,7 @@ impl<T> Updated<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct BufferedTransaction {
     pub transaction: Vec<u8>,
     // this flag tells if the transaction should be mapped from extrnode flatbuffer to mplx flatbuffer structure
@@ -174,5 +180,12 @@ pub struct BufferedTransaction {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SignatureWithSlot {
     pub signature: Signature,
+    pub slot: u64,
+}
+
+#[derive(Default)]
+pub struct TreeState {
+    pub tree: Pubkey,
+    pub seq: u64,
     pub slot: u64,
 }

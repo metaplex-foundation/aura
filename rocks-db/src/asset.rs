@@ -62,6 +62,15 @@ pub struct AssetAuthority {
 pub struct AssetOwner {
     pub pubkey: Pubkey,
     pub owner: Updated<Pubkey>,
+    pub delegate: Updated<Option<Pubkey>>,
+    pub owner_type: Updated<OwnerType>,
+    pub owner_delegate_seq: Updated<Option<u64>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AssetOwnerDeprecated {
+    pub pubkey: Pubkey,
+    pub owner: Updated<Pubkey>,
     pub delegate: Option<Updated<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
     pub owner_delegate_seq: Option<Updated<u64>>,
@@ -92,11 +101,14 @@ pub struct AssetCollection {
 }
 
 fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
-    if new.slot_updated > current.slot_updated {
-        *current = new.clone();
+    if current.seq.is_some() && new.seq.is_some() {
+        if new.seq.unwrap() > current.seq.unwrap() {
+            *current = new.clone();
+        }
         return;
     }
-    if new.seq.unwrap_or_default() > current.seq.unwrap_or_default() {
+
+    if new.slot_updated > current.slot_updated {
         *current = new.clone();
     }
 }
@@ -105,14 +117,19 @@ fn update_optional_field<T: Clone + Default>(
     current: &mut Option<Updated<T>>,
     new: &Option<Updated<T>>,
 ) {
-    if new.clone().unwrap_or_default().slot_updated
-        > current.clone().unwrap_or_default().slot_updated
+    if new.clone().unwrap_or_default().seq.is_some()
+        && current.clone().unwrap_or_default().seq.is_some()
     {
-        *current = new.clone();
+        if new.clone().unwrap_or_default().seq.unwrap()
+            > current.clone().unwrap_or_default().seq.unwrap()
+        {
+            *current = new.clone();
+        }
         return;
     }
-    if new.clone().unwrap_or_default().seq.unwrap_or_default()
-        > current.clone().unwrap_or_default().seq.unwrap_or_default()
+
+    if new.clone().unwrap_or_default().slot_updated
+        > current.clone().unwrap_or_default().slot_updated
     {
         *current = new.clone();
     }
@@ -164,7 +181,7 @@ impl TypedColumn for AssetAuthority {
 /// Not a real merge operation. We just check if static info
 /// already exist and if so we don't overwrite it.
 impl AssetStaticDetails {
-    pub fn merge_static_details(
+    pub fn merge_keep_existing(
         _new_key: &[u8],
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
@@ -296,10 +313,24 @@ impl AssetAuthority {
     }
 }
 
-impl TypedColumn for AssetOwner {
+impl TypedColumn for AssetOwnerDeprecated {
     type KeyType = Pubkey;
     type ValueType = Self;
     const NAME: &'static str = "ASSET_OWNER";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetOwner {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_OWNER_v2";
 
     fn encode_key(pubkey: Pubkey) -> Vec<u8> {
         encode_pubkey(pubkey)
@@ -334,11 +365,11 @@ impl AssetOwner {
                     result = Some(if let Some(mut current_val) = result {
                         update_field(&mut current_val.owner_type, &new_val.owner_type);
                         update_field(&mut current_val.owner, &new_val.owner);
-                        update_optional_field(
+                        update_field(
                             &mut current_val.owner_delegate_seq,
                             &new_val.owner_delegate_seq,
                         );
-                        update_optional_field(&mut current_val.delegate, &new_val.delegate);
+                        update_field(&mut current_val.delegate, &new_val.delegate);
 
                         current_val
                     } else {
@@ -357,13 +388,9 @@ impl AssetOwner {
     pub fn get_slot_updated(&self) -> u64 {
         [
             self.owner.slot_updated,
-            self.delegate
-                .clone()
-                .map_or(0, |delegate| delegate.slot_updated),
+            self.delegate.slot_updated,
             self.owner_type.slot_updated,
-            self.owner_delegate_seq
-                .clone()
-                .map_or(0, |owner_delegate_seq| owner_delegate_seq.slot_updated),
+            self.owner_delegate_seq.slot_updated,
         ]
         .into_iter()
         .max()

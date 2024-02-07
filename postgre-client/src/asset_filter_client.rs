@@ -10,9 +10,9 @@ use crate::{
 
 #[derive(sqlx::FromRow, Debug)]
 struct AssetRawResponse {
-    pub pubkey: Vec<u8>,
-    pub slot_created: i64,
-    pub slot_updated: i64,
+    pub(crate) pubkey: Vec<u8>,
+    pub(crate) slot_created: i64,
+    pub(crate) slot_updated: i64,
 }
 
 impl PgClient {
@@ -25,25 +25,20 @@ impl PgClient {
         after: Option<String>,
     ) -> (QueryBuilder<'a, Postgres>, bool) {
         let mut query_builder = QueryBuilder::new(
-            "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 ",
+            "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 INNER JOIN tasks ON ast_metadata_url_id = tsk_id",
         );
-        let mut group_clause_required = false;
 
         if filter.creator_address.is_some()
             || filter.creator_verified.is_some()
             || filter.royalty_target.is_some()
         {
             query_builder.push(" INNER JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey ");
-            group_clause_required = true;
-        }
-        if filter.json_uri.is_some() {
-            query_builder.push(" INNER JOIN metadata ON ast_metadata_url_id = mtd_id ");
-            group_clause_required = true;
         }
 
         // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
         query_builder.push(" WHERE TRUE ");
 
+        query_builder.push(" AND tsk_status = 'success' ");
         if let Some(spec_version) = &filter.specification_version {
             query_builder.push(" AND assets_v3.ast_specification_version = ");
             query_builder.push_bind(spec_version);
@@ -136,7 +131,7 @@ impl PgClient {
         }
 
         if let Some(json_uri) = &filter.json_uri {
-            query_builder.push(" AND metadata.mtd_url = ");
+            query_builder.push(" AND tsk_metadata_url = ");
             query_builder.push_bind(json_uri);
         }
 
@@ -190,10 +185,7 @@ impl PgClient {
             }
         }
 
-        // Add GROUP BY clause if necessary
-        if group_clause_required {
-            query_builder.push(" GROUP BY assets_v3.ast_pubkey, assets_v3.ast_slot_created, assets_v3.ast_slot_updated ");
-        }
+        query_builder.push(" GROUP BY assets_v3.ast_pubkey, assets_v3.ast_slot_created, assets_v3.ast_slot_updated ");
 
         // Add ORDER BY clause
         let direction = match (&order.sort_direction, order_reversed) {
@@ -252,7 +244,7 @@ impl AssetPubkeyFilteredFetcher for PgClient {
 }
 
 impl AssetRawResponse {
-    pub fn encode_sorting_key(&self, sort_by: &AssetSortBy) -> String {
+    fn encode_sorting_key(&self, sort_by: &AssetSortBy) -> String {
         let mut key = match sort_by {
             AssetSortBy::SlotCreated => self.slot_created.to_be_bytes().to_vec(),
             AssetSortBy::SlotUpdated => self.slot_updated.to_be_bytes().to_vec(),
@@ -261,7 +253,7 @@ impl AssetRawResponse {
         general_purpose::STANDARD_NO_PAD.encode(key)
     }
 
-    pub fn decode_sorting_key(encoded_key: &str) -> Result<(i64, Vec<u8>), String> {
+    fn decode_sorting_key(encoded_key: &str) -> Result<(i64, Vec<u8>), String> {
         let key = match general_purpose::STANDARD_NO_PAD.decode(encoded_key) {
             Ok(k) => k,
             Err(_) => return Err("Failed to decode Base64".to_string()),

@@ -1,5 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use nft_ingester::{api::SearchAssets, index_syncronizer::Synchronizer};
+use entities::api_req_params::SearchAssets;
+use nft_ingester::index_syncronizer::Synchronizer;
 use rocks_db::storage_traits::AssetIndexReader;
 use setup::TestEnvironment;
 use std::sync::Arc;

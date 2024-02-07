@@ -13,13 +13,18 @@ use prometheus_client::registry::Registry;
 
 pub struct IntegrityVerificationMetrics {
     pub integrity_verification_metrics: Arc<IntegrityVerificationMetricsConfig>,
+    pub slot_collector_metrics: Arc<BackfillerMetricsConfig>,
     pub registry: Registry,
 }
 
 impl IntegrityVerificationMetrics {
-    pub fn new(integrity_verification_metrics: IntegrityVerificationMetricsConfig) -> Self {
+    pub fn new(
+        integrity_verification_metrics: IntegrityVerificationMetricsConfig,
+        slot_collector_metrics: BackfillerMetricsConfig,
+    ) -> Self {
         Self {
             integrity_verification_metrics: Arc::new(integrity_verification_metrics),
+            slot_collector_metrics: Arc::new(slot_collector_metrics),
             registry: Registry::default(),
         }
     }
@@ -33,10 +38,13 @@ pub struct MetricState {
     pub backfiller_metrics: Arc<BackfillerMetricsConfig>,
     pub rpc_backfiller_metrics: Arc<RpcBackfillerMetricsConfig>,
     pub synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
+    pub json_migrator_metrics: Arc<JsonMigratorMetricsConfig>,
+    pub sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
     pub registry: Registry,
 }
 
 impl MetricState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ingester_metrics: IngesterMetricsConfig,
         api_metrics: ApiMetricsConfig,
@@ -44,6 +52,8 @@ impl MetricState {
         backfiller_metrics: BackfillerMetricsConfig,
         rpc_backfiller_metrics: RpcBackfillerMetricsConfig,
         synchronizer_metrics: SynchronizerMetricsConfig,
+        json_migrator_metrics: JsonMigratorMetricsConfig,
+        sequence_consistent_gapfill_metrics: SequenceConsistentGapfillMetricsConfig,
     ) -> Self {
         Self {
             ingester_metrics: Arc::new(ingester_metrics),
@@ -53,6 +63,8 @@ impl MetricState {
             backfiller_metrics: Arc::new(backfiller_metrics),
             rpc_backfiller_metrics: Arc::new(rpc_backfiller_metrics),
             synchronizer_metrics: Arc::new(synchronizer_metrics),
+            json_migrator_metrics: Arc::new(json_migrator_metrics),
+            sequence_consistent_gapfill_metrics: Arc::new(sequence_consistent_gapfill_metrics),
         }
     }
 }
@@ -141,24 +153,28 @@ impl BackfillerMetricsConfig {
             .set(slot)
     }
 
-    pub fn register(&self, registry: &mut Registry) {
+    pub fn register_with_prefix(&self, registry: &mut Registry, prefix: &str) {
         registry.register(
-            "backfiller_slots_collected",
+            format!("{}slots_collected", prefix),
             "The number of slots backfiller collected and prepared to parse",
             self.slots_collected.clone(),
         );
 
         registry.register(
-            "backfiller_data_processed",
+            format!("{}data_processed", prefix),
             "The number of data processed by backfiller",
             self.data_processed.clone(),
         );
 
         registry.register(
-            "backfiller_last_processed_slot",
+            format!("{}last_processed_slot", prefix),
             "The last processed slot by backfiller",
             self.last_processed_slot.clone(),
         );
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        self.register_with_prefix(registry, "backfiller_")
     }
 }
 
@@ -343,6 +359,7 @@ impl MetricsTrait for MetricState {
         self.api_metrics.start_time();
         self.ingester_metrics.start_time();
         self.json_downloader_metrics.start_time();
+        self.sequence_consistent_gapfill_metrics.start_time();
 
         self.api_metrics.register(&mut self.registry);
         self.registry.register(
@@ -455,12 +472,37 @@ impl MetricsTrait for MetricState {
             "The last synchronized slot by synchronizer",
             self.synchronizer_metrics.last_synchronized_slot.clone(),
         );
+
+        self.json_migrator_metrics.register(&mut self.registry);
+
+        self.registry.register(
+            "total_inconsistent_trees",
+            "Total count of inconsistent trees",
+            self.sequence_consistent_gapfill_metrics
+                .total_tree_with_gaps
+                .clone(),
+        );
+
+        self.registry.register(
+            "total_scans",
+            "Total count of inconsistent trees scans",
+            self.sequence_consistent_gapfill_metrics.total_scans.clone(),
+        );
+
+        self.registry.register(
+            "scans_latency",
+            "A histogram of inconsistent trees scans latency",
+            self.sequence_consistent_gapfill_metrics
+                .scans_latency
+                .clone(),
+        );
     }
 }
 
 impl MetricsTrait for IntegrityVerificationMetrics {
     fn register_metrics(&mut self) {
         self.integrity_verification_metrics.start_time();
+        self.slot_collector_metrics.register(&mut self.registry);
 
         self.registry.register(
             "tests_start_time",
@@ -575,6 +617,89 @@ impl MetricsTrait for IntegrityVerificationMetrics {
             self.integrity_verification_metrics
                 .fetch_keys_errors
                 .clone(),
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct JsonMigratorMetricsConfig {
+    start_time: Gauge,
+    tasks_buffer: Family<MetricLabel, Gauge>,
+    jsons_migrated: Family<MetricLabelWithStatus, Counter>,
+    tasks_set: Family<MetricLabelWithStatus, Counter>,
+}
+
+impl Default for JsonMigratorMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl JsonMigratorMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            start_time: Default::default(),
+            tasks_buffer: Family::<MetricLabel, Gauge>::default(),
+            jsons_migrated: Family::<MetricLabelWithStatus, Counter>::default(),
+            tasks_set: Family::<MetricLabelWithStatus, Counter>::default(),
+        }
+    }
+
+    pub fn start_time(&self) -> i64 {
+        self.start_time.set(Utc::now().timestamp())
+    }
+
+    pub fn set_tasks_buffer(&self, label: &str, buffer_size: i64) {
+        self.tasks_buffer
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .set(buffer_size);
+    }
+
+    pub fn inc_jsons_migrated(&self, label: &str, status: MetricStatus) -> u64 {
+        self.jsons_migrated
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_owned(),
+                status,
+            })
+            .inc()
+    }
+
+    pub fn inc_tasks_set(&self, label: &str, status: MetricStatus, inc_by: u64) -> u64 {
+        self.tasks_set
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_owned(),
+                status,
+            })
+            .inc_by(inc_by)
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        self.start_time();
+
+        registry.register(
+            "json_migrator_start_time",
+            "Binary start time",
+            self.start_time.clone(),
+        );
+
+        registry.register(
+            "json_migrator_tasks_buffer",
+            "Buffer size",
+            self.tasks_buffer.clone(),
+        );
+
+        registry.register(
+            "json_migrator_jsons_migrated",
+            "Total amount of migrated jsons",
+            self.jsons_migrated.clone(),
+        );
+
+        registry.register(
+            "json_migrator_tasks_set",
+            "Total amount of tasks set",
+            self.tasks_set.clone(),
         );
     }
 }
@@ -890,5 +1015,43 @@ impl IntegrityVerificationMetricsConfig {
                 name: label.to_owned(),
             })
             .inc()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SequenceConsistentGapfillMetricsConfig {
+    start_time: Gauge,
+    total_tree_with_gaps: Gauge,
+    total_scans: Counter,
+    scans_latency: Histogram,
+}
+
+impl Default for SequenceConsistentGapfillMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SequenceConsistentGapfillMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            start_time: Default::default(),
+            total_tree_with_gaps: Default::default(),
+            total_scans: Default::default(),
+            scans_latency: Histogram::new(exponential_buckets(1.0, 2.0, 12)),
+        }
+    }
+
+    pub fn start_time(&self) -> i64 {
+        self.start_time.set(Utc::now().timestamp())
+    }
+    pub fn set_total_tree_with_gaps(&self, count: i64) -> i64 {
+        self.total_tree_with_gaps.set(count)
+    }
+    pub fn inc_total_scans(&self) -> u64 {
+        self.total_scans.inc()
+    }
+    pub fn set_scans_latency(&self, duration: f64) {
+        self.scans_latency.observe(duration);
     }
 }

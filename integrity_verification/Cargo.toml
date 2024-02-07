@@ -10,6 +10,7 @@ metrics-utils = { path = "../metrics_utils" }
 usecase = { path = "../usecase" }
 postgre-client = { path = "../postgre-client" }
 entities = { path = "../entities" }
+interface = { path = "../interface" }
 tokio = { version = "1.26.0", features = ["full", "tracing"] }
 thiserror = "1.0.56"
 clap = { version = "4.4.14", features = ["derive"] }
@@ -25,6 +26,13 @@ rand = "0.8.5"
 tokio-util = "0.7.10"
 assert-json-diff = "2.0.2"
 regex = "1.10.2"
+async-trait = "0.1.77"
+spl-account-compression = "0.3.0"
+solana-client = "~1.16"
+solana-program = "~1.16"
+spl-concurrent-merkle-tree = "0.2.0"
+anchor-lang = "0.29.0"
 
 [features]
 rpc_tests = []
+bigtable_tests = []
