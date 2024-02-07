@@ -12,6 +12,7 @@ use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use rocks_db::bubblegum_slots::BubblegumSlotGetter;
 use rocks_db::column::TypedColumn;
 use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
+use solana_program::pubkey::Pubkey;
 use solana_transaction_status::{
     EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta,
 };
@@ -24,7 +25,7 @@ use tokio::time::Duration;
 use usecase::bigtable::BigTableClient;
 use usecase::slots_collector::SlotsCollector;
 
-pub const BBG_PREFIX: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY/";
+pub const BBG_KEY: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY";
 pub const GET_SIGNATURES_LIMIT: usize = 2000;
 pub const GET_SLOT_RETRIES: u32 = 3;
 pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 30;
@@ -56,7 +57,7 @@ impl Backfiller {
             slot_parse_until: config.get_slot_until(),
             workers_count: config.workers_count,
             chunk_size: config.chunk_size,
-            key_prefix: config.key_prefix,
+            key_prefix: format!("{}/", config.lookup_key),
         }
     }
 
@@ -533,6 +534,7 @@ where
     ingester: Arc<T>,
     persister: Arc<P>,
     metrics: Arc<BackfillerMetricsConfig>,
+    lookup_key: Pubkey,
 }
 
 impl<T, P> DirectBlockParser<T, P>
@@ -544,11 +546,13 @@ where
         ingester: Arc<T>,
         persister: Arc<P>,
         metrics: Arc<BackfillerMetricsConfig>,
+        lookup_key: Option<Pubkey>,
     ) -> DirectBlockParser<T, P> {
         DirectBlockParser {
             ingester,
             persister,
             metrics,
+            lookup_key: lookup_key.unwrap_or(mpl_bubblegum::programs::MPL_BUBBLEGUM_ID),
         }
     }
 }
@@ -570,7 +574,7 @@ where
         let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
         let mut results = Vec::new();
         for tx in txs.iter() {
-            if !is_bubblegum_transaction_encoded(tx) {
+            if !is_bubblegum_transaction_encoded(tx, &self.lookup_key) {
                 continue;
             }
 
@@ -649,7 +653,10 @@ pub async fn connect_new_bigtable_from_config(
         .map_err(Into::into)
 }
 
-fn is_bubblegum_transaction_encoded(tx: &EncodedTransactionWithStatusMeta) -> bool {
+fn is_bubblegum_transaction_encoded(
+    tx: &EncodedTransactionWithStatusMeta,
+    lookup_key: &Pubkey,
+) -> bool {
     let meta = if let Some(meta) = tx.meta.clone() {
         if let Err(_err) = meta.status {
             return false;
@@ -667,8 +674,7 @@ fn is_bubblegum_transaction_encoded(tx: &EncodedTransactionWithStatusMeta) -> bo
     let msg = decoded_tx.message;
     let atl_keys = msg.address_table_lookups();
 
-    let lookup_key = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
-    if msg.static_account_keys().iter().any(|k| *k == lookup_key) {
+    if msg.static_account_keys().iter().any(|k| k == lookup_key) {
         return true;
     }
 

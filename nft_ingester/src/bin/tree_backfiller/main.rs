@@ -1,9 +1,11 @@
+use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use clap::Parser;
 use log::info;
 use nft_ingester::{backfiller, transaction_ingester};
+use solana_program::pubkey::Pubkey;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 
@@ -16,16 +18,14 @@ use metrics_utils::{
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
-    setup_config, BackfillerConfig, TreeBackfillerConfig,
-    INGESTER_CONFIG_PREFIX, TREE_BACKFILLER_CONFIG_PREFIX,
+    setup_config, BackfillerConfig, TreeBackfillerConfig, INGESTER_CONFIG_PREFIX,
+    TREE_BACKFILLER_CONFIG_PREFIX,
 };
 use nft_ingester::init::graceful_stop;
 use nft_ingester::{config::init_logger, error::IngesterError};
 use rocks_db::Storage;
 
-use nft_ingester::backfiller::{
-    connect_new_bigtable_from_config, DirectBlockParser,
-};
+use nft_ingester::backfiller::{connect_new_bigtable_from_config, DirectBlockParser};
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 
@@ -79,7 +79,6 @@ pub async fn main() -> Result<(), IngesterError> {
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     let backfiller_config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
 
-    // SOURCE rocks
     let source_rocks = Storage::open_as_secondary(
         &config.source_rocks.clone(),
         "./secondary",
@@ -88,10 +87,13 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
     let producer = Arc::new(source_rocks);
 
+    let lookup_key = Pubkey::from_str(&backfiller_config.lookup_key).unwrap();
+
     let consumer = Arc::new(DirectBlockParser::new(
         tx_ingester.clone(),
         target_rocks.clone(),
         metrics_state.backfiller_metrics.clone(),
+        Some(lookup_key),
     ));
 
     let big_table_client = Arc::new(

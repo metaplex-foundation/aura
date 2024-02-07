@@ -9,7 +9,7 @@ use interface::asset_streaming_and_discovery::PeerDiscovery;
 use serde::Deserialize;
 use tracing_subscriber::fmt;
 
-use crate::{backfiller::BBG_PREFIX, error::IngesterError};
+use crate::{backfiller::BBG_KEY, error::IngesterError};
 
 const INGESTER_CONSUMERS_COUNT: usize = 2;
 pub const INGESTER_BACKUP_NAME: &str = "snapshot.tar.lz4";
@@ -81,8 +81,8 @@ pub struct BackfillerConfig {
     pub wait_period_sec: u64,
     #[serde(default)]
     pub should_reingest: bool,
-    #[serde(default = "default_key_prefix")]
-    pub key_prefix: String,
+    #[serde(default = "default_lookup_key")]
+    pub lookup_key: String,
 }
 fn default_wait_period_sec() -> u64 {
     60
@@ -101,8 +101,8 @@ fn default_permitted_tasks() -> usize {
 }
 
 // by default backfiller will collect and parse transactions which are related to Bubblegum program
-fn default_key_prefix() -> String {
-    BBG_PREFIX.to_string()
+fn default_lookup_key() -> String {
+    BBG_KEY.to_string()
 }
 
 impl BackfillerConfig {
@@ -534,7 +534,7 @@ mod tests {
                 permitted_tasks: 500,
                 wait_period_sec: 60,
                 should_reingest: false,
-                key_prefix: BBG_PREFIX.to_string(),
+                lookup_key: BBG_KEY.to_string(),
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
@@ -564,7 +564,7 @@ mod tests {
                 permitted_tasks: 500,
                 wait_period_sec: 60,
                 should_reingest: false,
-                key_prefix: BBG_PREFIX.to_string(),
+                lookup_key: BBG_KEY.to_string(),
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
