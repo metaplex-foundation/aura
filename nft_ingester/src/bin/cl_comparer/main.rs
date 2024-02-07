@@ -22,11 +22,11 @@ struct Args {
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
-    info!("Starting comparer");
-
+    
     let config: TreeBackfillerConfig = setup_config(COMPARER_CONFIG_PREFIX);
     init_logger(&config.get_log_level());
-
+    tracing::info!("Starting comparer");
+    
     let tasks = JoinSet::new();
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -36,6 +36,7 @@ pub async fn main() -> Result<(), IngesterError> {
         mutexed_tasks.clone(),
     )
     .unwrap();
+
 
     let second_rocks = Storage::open_as_secondary(
         &config.source_rocks.clone(),
@@ -52,6 +53,10 @@ pub async fn main() -> Result<(), IngesterError> {
         .filter(|((_, tree_id), _)| *tree_id == target_tree_key)
         .map(|((node_id, _), value)| (node_id, value))
         .collect::<HashMap<_, _>>();
+    tracing::info!(
+        "Collected the leaves for the source. Total leaves for the first map: {}",
+        first_map.len(),
+    );
 
     let second_map = second_rocks
         .cl_leafs
