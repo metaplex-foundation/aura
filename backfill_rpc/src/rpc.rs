@@ -40,6 +40,7 @@ impl TransactionsGetter for BackfillRPC {
     ) -> Result<Vec<SignatureWithSlot>, UsecaseError> {
         let mut before = None;
         let mut txs = Vec::new();
+        let last_finalized_slot = self.get_finalized_slot().await?;
         loop {
             let signatures = self
                 .get_signatures_by_address(until.signature, before, address)
@@ -48,7 +49,11 @@ impl TransactionsGetter for BackfillRPC {
                 break;
             }
             let last = signatures.last().unwrap();
-            txs.extend(signatures.clone());
+            for sig in signatures.iter() {
+                if sig.slot <= last_finalized_slot {
+                    txs.push(sig.clone());
+                }
+            }
             before = Some(last.signature);
             if last.slot < until.slot || last.signature == until.signature {
                 break;
@@ -86,6 +91,15 @@ impl TransactionsGetter for BackfillRPC {
                             .await
                             .map_err(Into::<UsecaseError>::into)
                             .and_then(|transaction| {
+                                if transaction
+                                    .transaction
+                                    .meta
+                                    .clone()
+                                    .map(|tx| tx.err.is_some())
+                                    .unwrap_or_default()
+                                {
+                                    return Ok(BufferedTransaction::default());
+                                }
                                 seralize_encoded_transaction_with_status(
                                     FlatBufferBuilder::new(),
                                     transaction,
