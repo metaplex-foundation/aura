@@ -530,11 +530,11 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    let transactions_getter = Arc::new(BackfillRPC::connect(config.backfill_rpc_address.clone()));
+    let rpc_backfiller = Arc::new(BackfillRPC::connect(config.backfill_rpc_address.clone()));
     let rocks_clone = rocks_storage.clone();
     let signature_fetcher = usecase::signature_fetcher::SignatureFetcher::new(
         rocks_clone,
-        transactions_getter,
+        rpc_backfiller.clone(),
         tx_ingester.clone(),
         metrics_state.rpc_backfiller_metrics.clone(),
     );
@@ -582,7 +582,7 @@ pub async fn main() -> Result<(), IngesterError> {
             rocks_storage.clone(),
             slots_collector,
             metrics_state.sequence_consistent_gapfill_metrics.clone(),
-            config.sequence_consister_skip_check_slots_offset,
+            rpc_backfiller.clone(),
         );
         let mut rx = shutdown_rx.resubscribe();
         let metrics = metrics_state.sequence_consistent_gapfill_metrics.clone();

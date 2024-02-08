@@ -41,10 +41,4 @@ impl SequenceConsistentManager for Storage {
             );
         }
     }
-
-    async fn get_last_ingested_slot(&self) -> core::result::Result<Option<u64>, String> {
-        self.get_parameter::<u64>(crate::parameters::Parameter::TopSeenSlot)
-            .await
-            .map_err(|e| e.to_string())
-    }
 }

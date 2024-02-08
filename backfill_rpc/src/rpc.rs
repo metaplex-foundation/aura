@@ -3,6 +3,7 @@ use entities::models::{BufferedTransaction, SignatureWithSlot};
 use flatbuffers::FlatBufferBuilder;
 use futures::{stream, StreamExt, TryStreamExt};
 use interface::error::UsecaseError;
+use interface::finalized_slot_getter::FinalizedSlotGetter;
 use interface::solana_rpc::TransactionsGetter;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -138,6 +139,18 @@ impl BackfillRPC {
                 })
             })
             .collect::<Result<Vec<_>, UsecaseError>>()
+    }
+}
+
+#[async_trait]
+impl FinalizedSlotGetter for BackfillRPC {
+    async fn get_finalized_slot(&self) -> Result<u64, UsecaseError> {
+        Ok(self
+            .client
+            .get_slot_with_commitment(CommitmentConfig {
+                commitment: CommitmentLevel::Finalized,
+            })
+            .await?)
     }
 }
 
