@@ -147,6 +147,18 @@ pub struct IngesterConfig {
     pub rpc_retry_interval_millis: u64,
     #[serde(default)]
     pub run_sequence_consistent_checker: bool,
+    #[serde(default = "default_sequence_consistent_checker_wait_period_sec")]
+    pub sequence_consistent_checker_wait_period_sec: u64,
+    #[serde(default = "default_sequence_consister_skip_check_slots_offset")]
+    pub sequence_consister_skip_check_slots_offset: u64,
+}
+
+fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
+    60
+}
+
+fn default_sequence_consister_skip_check_slots_offset() -> u64 {
+    20
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]

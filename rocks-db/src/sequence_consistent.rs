@@ -27,7 +27,7 @@ impl SequenceConsistentManager for Storage {
         self.trees_gaps.iter_start().count() as i64
     }
 
-    async fn process_tree_gap(&self, tree: Pubkey, gap_found: bool, _last_consistent_seq: u64) {
+    async fn process_tree_gap(&self, tree: Pubkey, gap_found: bool) {
         let result = if gap_found {
             self.trees_gaps.put_async(tree, TreesGaps {}).await
         } else {
@@ -40,5 +40,11 @@ impl SequenceConsistentManager for Storage {
                 e
             );
         }
+    }
+
+    async fn get_last_ingested_slot(&self) -> core::result::Result<Option<u64>, String> {
+        self.get_parameter::<u64>(crate::parameters::Parameter::TopSeenSlot)
+            .await
+            .map_err(|e| e.to_string())
     }
 }

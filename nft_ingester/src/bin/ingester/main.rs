@@ -582,7 +582,7 @@ pub async fn main() -> Result<(), IngesterError> {
             rocks_storage.clone(),
             slots_collector,
             metrics_state.sequence_consistent_gapfill_metrics.clone(),
-            mutexed_tasks.clone(),
+            config.sequence_consister_skip_check_slots_offset,
         );
         let mut rx = shutdown_rx.resubscribe();
         let metrics = metrics_state.sequence_consistent_gapfill_metrics.clone();
@@ -596,7 +596,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 metrics.set_scans_latency(start.elapsed().as_secs_f64());
                 metrics.inc_total_scans();
                 tokio::select! {
-                    _ = tokio::time::sleep(Duration::from_secs(backfiller_config.wait_period_sec*2)) => {},
+                    _ = tokio::time::sleep(Duration::from_secs(config.sequence_consistent_checker_wait_period_sec)) => {},
                     _ = rx.recv() => {
                         info!("Received stop signal, stopping collecting sequences gaps");
                         return;
