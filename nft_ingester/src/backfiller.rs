@@ -653,7 +653,7 @@ pub async fn connect_new_bigtable_from_config(
         .map_err(Into::into)
 }
 
-fn is_bubblegum_transaction_encoded(
+pub fn is_bubblegum_transaction_encoded(
     tx: &EncodedTransactionWithStatusMeta,
     lookup_key: &Pubkey,
 ) -> bool {

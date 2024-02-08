@@ -12,19 +12,18 @@ mod tests {
     };
     use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::{
-        backfiller::{is_bubblegum_transaction_encoded, TransactionsParser},
-        bubblegum_updates_processor::BubblegumTxProcessor,
-        db_v2::Task,
-        transaction_ingester,
+        backfiller::{is_bubblegum_transaction_encoded, TransactionsParser}, bubblegum_updates_processor::BubblegumTxProcessor, config::TreeBackfillerConfig, db_v2::Task, transaction_ingester
     };
     use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
-    use rocks_db::{bubblegum_slots::BubblegumSlotGetter, transaction::TransactionProcessor, Storage};
+    use rocks_db::{
+        bubblegum_slots::BubblegumSlotGetter, transaction::TransactionProcessor, Storage,
+    };
     use setup::rocks::RocksTestEnvironment;
     use solana_program::pubkey::Pubkey;
     use solana_transaction_status::{
         EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta,
     };
-    use tokio::sync::Mutex;
+    use tokio::{sync::Mutex, task::JoinSet};
     use usecase::{bigtable::BigTableClient, slots_collector::SlotsCollector};
 
     #[tokio::test]
@@ -143,7 +142,7 @@ mod tests {
         let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
         let mut results = Vec::new();
         for tx in txs.iter() {
-            if !is_bubblegum_transaction_encoded(tx) {
+            if !is_bubblegum_transaction_encoded(tx, &mpl_bubblegum::programs::MPL_BUBBLEGUM_ID) {
                 continue;
             }
             let builder = FlatBufferBuilder::new();
@@ -179,8 +178,18 @@ mod tests {
         if let Ok(mut res) = data {
             *res = Some(Pubkey::try_from("4dVaNGqsEZet56kEFnGPYbWoYv5HKGp5FpSdZZNfcm4c").unwrap());
         }
+        let config: TreeBackfillerConfig = nft_ingester::config::setup_config(nft_ingester::config::COMPARER_CONFIG_PREFIX);
         
-        // let block_source = Storage::open(db_path, join_set)
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+    
+        let block_source = Storage::open_as_secondary(
+            &config.source_rocks.clone(),
+            "./secondary-test",
+            mutexed_tasks.clone(),
+        )
+        .unwrap();
+
         let storage = RocksTestEnvironment::new(&[]).storage;
 
         let bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
@@ -194,11 +203,11 @@ mod tests {
         ));
 
         let slot = 245599713;
-        let block = storage.get_block(slot).await.unwrap();
+        let block = block_source.get_block(slot).await.unwrap();
         let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
         let mut results = Vec::new();
         for tx in txs.iter() {
-            if !is_bubblegum_transaction_encoded(tx) {
+            if !is_bubblegum_transaction_encoded(tx, &mpl_bubblegum::programs::MPL_BUBBLEGUM_ID) {
                 continue;
             }
             let builder = FlatBufferBuilder::new();
