@@ -417,6 +417,8 @@ impl BubblegumTxProcessor {
             let authority = Pubkey::new_from_array(authority.to_owned());
             //     Pubkey::new_from_array(bundle.keys.get(0).unwrap().0.to_vec().try_into().unwrap());
 
+            let uri = args.uri.trim().replace('\0', "");
+
             match le.schema {
                 LeafSchema::V1 {
                     id,
@@ -498,7 +500,7 @@ impl BubblegumTxProcessor {
                                 Some(cl.seq),
                                 args.seller_fee_basis_points,
                             ),
-                            url: Updated::new(bundle.slot, Some(cl.seq), args.uri.clone()),
+                            url: Updated::new(bundle.slot, Some(cl.seq), uri.clone()),
                             ..Default::default()
                         }),
                     });
