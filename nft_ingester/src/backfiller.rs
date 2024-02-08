@@ -12,6 +12,7 @@ use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use rocks_db::bubblegum_slots::BubblegumSlotGetter;
 use rocks_db::column::TypedColumn;
 use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
+use solana_program::pubkey::Pubkey;
 use solana_transaction_status::{
     EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta,
 };
@@ -24,7 +25,7 @@ use tokio::time::Duration;
 use usecase::bigtable::BigTableClient;
 use usecase::slots_collector::SlotsCollector;
 
-const BBG_PREFIX: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY/";
+pub const BBG_KEY: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY";
 pub const GET_SIGNATURES_LIMIT: usize = 2000;
 pub const GET_SLOT_RETRIES: u32 = 3;
 pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 30;
@@ -40,6 +41,7 @@ pub struct Backfiller {
     slot_parse_until: u64,
     workers_count: usize,
     chunk_size: usize,
+    key_prefix: String,
 }
 
 impl Backfiller {
@@ -55,6 +57,7 @@ impl Backfiller {
             slot_parse_until: config.get_slot_until(),
             workers_count: config.workers_count,
             chunk_size: config.chunk_size,
+            key_prefix: format!("{}/", config.lookup_key),
         }
     }
 
@@ -82,7 +85,7 @@ impl Backfiller {
         }
         loop {
             let top_collected_slot = slots_collector
-                .collect_slots(BBG_PREFIX, u64::MAX, parse_until, &rx)
+                .collect_slots(&self.key_prefix, u64::MAX, parse_until, &rx)
                 .await;
             if let Some(slot) = top_collected_slot {
                 parse_until = slot;
@@ -169,10 +172,12 @@ impl Backfiller {
         let parse_until = self.slot_parse_until;
         let rx1 = rx.resubscribe();
         let rx2 = rx.resubscribe();
+
+        let cloned_key_prefix = self.key_prefix.clone();
         tasks.lock().await.spawn(tokio::spawn(async move {
             info!("Running slots parser...");
             slots_collector
-                .collect_slots(BBG_PREFIX, start_from, parse_until, &rx1)
+                .collect_slots(cloned_key_prefix.as_str(), start_from, parse_until, &rx1)
                 .await;
         }));
 
@@ -529,6 +534,7 @@ where
     ingester: Arc<T>,
     persister: Arc<P>,
     metrics: Arc<BackfillerMetricsConfig>,
+    lookup_key: Pubkey,
 }
 
 impl<T, P> DirectBlockParser<T, P>
@@ -540,11 +546,13 @@ where
         ingester: Arc<T>,
         persister: Arc<P>,
         metrics: Arc<BackfillerMetricsConfig>,
+        lookup_key: Option<Pubkey>,
     ) -> DirectBlockParser<T, P> {
         DirectBlockParser {
             ingester,
             persister,
             metrics,
+            lookup_key: lookup_key.unwrap_or(mpl_bubblegum::programs::MPL_BUBBLEGUM_ID),
         }
     }
 }
@@ -566,7 +574,7 @@ where
         let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
         let mut results = Vec::new();
         for tx in txs.iter() {
-            if !is_bubblegum_transaction_encoded(tx) {
+            if !is_bubblegum_transaction_encoded(tx, &self.lookup_key) {
                 continue;
             }
 
@@ -645,7 +653,10 @@ pub async fn connect_new_bigtable_from_config(
         .map_err(Into::into)
 }
 
-pub fn is_bubblegum_transaction_encoded(tx: &EncodedTransactionWithStatusMeta) -> bool {
+fn is_bubblegum_transaction_encoded(
+    tx: &EncodedTransactionWithStatusMeta,
+    lookup_key: &Pubkey,
+) -> bool {
     let meta = if let Some(meta) = tx.meta.clone() {
         if let Err(_err) = meta.status {
             return false;
@@ -663,8 +674,7 @@ pub fn is_bubblegum_transaction_encoded(tx: &EncodedTransactionWithStatusMeta) -
     let msg = decoded_tx.message;
     let atl_keys = msg.address_table_lookups();
 
-    let lookup_key = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
-    if msg.static_account_keys().iter().any(|k| *k == lookup_key) {
+    if msg.static_account_keys().iter().any(|k| k == lookup_key) {
         return true;
     }
 

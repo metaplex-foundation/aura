@@ -108,11 +108,11 @@ impl From<AssetUpdateEvent> for InstructionResult {
     }
 }
 
-impl From<(AssetUpdateEvent, Task)> for InstructionResult {
-    fn from((update, task): (AssetUpdateEvent, Task)) -> Self {
+impl From<(AssetUpdateEvent, Option<Task>)> for InstructionResult {
+    fn from((update, task): (AssetUpdateEvent, Option<Task>)) -> Self {
         Self {
             update: Some(update),
-            task: Some(task),
+            task,
             ..Default::default()
         }
     }

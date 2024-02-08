@@ -130,6 +130,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 tx_ingester.clone(),
                 rocks_storage.clone(),
                 metrics.clone(),
+                None,
             ));
             let producer = rocks_storage.clone();
 

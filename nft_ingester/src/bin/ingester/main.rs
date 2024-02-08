@@ -337,6 +337,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     tx_ingester.clone(),
                     rocks_storage.clone(),
                     metrics_state.backfiller_metrics.clone(),
+                    None,
                 ));
                 backfiller
                     .start_backfill(
@@ -369,6 +370,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     tx_ingester.clone(),
                     rocks_storage.clone(),
                     metrics_state.backfiller_metrics.clone(),
+                    None,
                 ));
                 let producer = rocks_storage.clone();
 
@@ -448,6 +450,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     tx_ingester.clone(),
                     rocks_storage.clone(),
                     metrics_state.backfiller_metrics.clone(),
+                    None,
                 ));
                 let producer = rocks_storage.clone();
                 let metrics = Arc::new(BackfillerMetricsConfig::new());
@@ -603,7 +606,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 metrics.set_scans_latency(start.elapsed().as_secs_f64());
                 metrics.inc_total_scans();
                 tokio::select! {
-                    _ = tokio::time::sleep(Duration::from_secs(backfiller_config.wait_period_sec*2)) => {},
+                    _ = tokio::time::sleep(Duration::from_secs(config.sequence_consistent_checker_wait_period_sec)) => {},
                     _ = rx.recv() => {
                         info!("Received stop signal, stopping collecting sequences gaps");
                         return;
@@ -622,6 +625,7 @@ pub async fn main() -> Result<(), IngesterError> {
             tx_ingester.clone(),
             rocks_storage.clone(),
             metrics_state.backfiller_metrics.clone(),
+            None,
         ));
 
         let transactions_parser = Arc::new(TransactionsParser::new(

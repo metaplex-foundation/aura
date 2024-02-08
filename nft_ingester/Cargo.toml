@@ -93,3 +93,9 @@ name = "migrator"
 
 [[bin]]
 name = "raw_backfiller"
+
+[[bin]]
+name = "tree_backfiller"
+
+[[bin]]
+name = "cl_comparer"

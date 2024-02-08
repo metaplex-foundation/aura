@@ -18,7 +18,6 @@ where
     sequence_consistent_manager: Arc<S>,
     slots_collector: Arc<SlotsCollector<T, R>>,
     metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
-    // _tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 }
 
 impl<T, R, S> SequenceConsistentGapfiller<T, R, S>
@@ -37,7 +36,6 @@ where
             sequence_consistent_manager,
             slots_collector: Arc::new(slots_collector),
             metrics,
-            // tasks,
         }
     }
 

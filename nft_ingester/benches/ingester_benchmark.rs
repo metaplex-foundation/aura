@@ -46,6 +46,7 @@ async fn bench_ingest(
         tx_ingester.clone(),
         rocks_dest.clone(),
         Arc::new(BackfillerMetricsConfig::new()),
+        None,
     ));
 
     let transactions_parser = Arc::new(TransactionsParser::new(
