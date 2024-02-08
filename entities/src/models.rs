@@ -169,7 +169,7 @@ impl<T> Updated<T> {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq, Debug)]
 pub struct BufferedTransaction {
     pub transaction: Vec<u8>,
     // this flag tells if the transaction should be mapped from extrnode flatbuffer to mplx flatbuffer structure

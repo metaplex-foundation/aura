@@ -150,7 +150,7 @@ pub struct IngesterConfig {
     #[serde(default = "default_sequence_consistent_checker_wait_period_sec")]
     pub sequence_consistent_checker_wait_period_sec: u64,
     #[serde(default = "default_sequence_consister_skip_check_slots_offset")]
-    pub sequence_consister_skip_check_slots_offset: u64,
+    pub sequence_consister_skip_check_slots_offset: u64, // TODO: remove in future if there no need in that env
 }
 
 fn default_sequence_consistent_checker_wait_period_sec() -> u64 {

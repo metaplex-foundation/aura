@@ -140,7 +140,7 @@ pub async fn main() -> Result<(), IngesterError> {
         while cloned_keep_running.load(Ordering::SeqCst) {
             cloned_buffer.debug().await;
             cloned_buffer.capture_metrics(&cloned_metrics).await;
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            tokio::time::sleep(Duration::from_secs(5)).await;
         }
     }));
 
@@ -316,6 +316,7 @@ pub async fn main() -> Result<(), IngesterError> {
         backfiller_config.clone(),
     );
 
+    let rpc_backfiller = Arc::new(BackfillRPC::connect(config.backfill_rpc_address.clone()));
     if config.run_bubblegum_backfiller {
         if backfiller_config.should_reingest {
             warn!("reingest flag is set, deleting last fetched slot");
@@ -395,12 +396,14 @@ pub async fn main() -> Result<(), IngesterError> {
                 let metrics = Arc::new(BackfillerMetricsConfig::new());
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_fetcher_");
                 let backfiller_clone = backfiller.clone();
+                let rpc_backfiller_clone = rpc_backfiller.clone();
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                     info!("Running slot fetcher...");
                     if let Err(e) = backfiller_clone
                         .run_perpetual_slot_collection(
                             metrics,
                             Duration::from_secs(backfiller_config.wait_period_sec),
+                            rpc_backfiller_clone,
                             rx,
                         )
                         .await
@@ -530,11 +533,10 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    let transactions_getter = Arc::new(BackfillRPC::connect(config.backfill_rpc_address.clone()));
     let rocks_clone = rocks_storage.clone();
     let signature_fetcher = usecase::signature_fetcher::SignatureFetcher::new(
         rocks_clone,
-        transactions_getter,
+        rpc_backfiller.clone(),
         tx_ingester.clone(),
         metrics_state.rpc_backfiller_metrics.clone(),
     );
@@ -582,7 +584,7 @@ pub async fn main() -> Result<(), IngesterError> {
             rocks_storage.clone(),
             slots_collector,
             metrics_state.sequence_consistent_gapfill_metrics.clone(),
-            config.sequence_consister_skip_check_slots_offset,
+            rpc_backfiller.clone(),
         );
         let mut rx = shutdown_rx.resubscribe();
         let metrics = metrics_state.sequence_consistent_gapfill_metrics.clone();

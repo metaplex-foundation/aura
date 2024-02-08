@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use interface::sequence_consistent::SequenceConsistentManager;
+    use interface::slot_getter::LastProcessedSlotGetter;
     use rocks_db::parameters::Parameter;
     use setup::rocks::*;
 

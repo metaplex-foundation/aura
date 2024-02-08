@@ -77,6 +77,9 @@ impl BubblegumTxProcessor {
         &self,
         data: BufferedTransaction,
     ) -> Result<(), IngesterError> {
+        if data == BufferedTransaction::default() {
+            return Ok(());
+        }
         let result = Self::get_process_transaction_results(
             data,
             self.instruction_parser.clone(),

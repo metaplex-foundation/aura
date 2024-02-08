@@ -5,6 +5,7 @@ use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
 use futures::future::join_all;
 use interface::signature_persistence::{BlockConsumer, BlockProducer};
+use interface::slot_getter::FinalizedSlotGetter;
 use interface::slots_dumper::SlotGetter;
 use log::{error, info, warn};
 use metrics_utils::BackfillerMetricsConfig;
@@ -62,7 +63,8 @@ impl Backfiller {
         &self,
         metrics: Arc<BackfillerMetricsConfig>,
         wait_period: Duration,
-        mut rx: tokio::sync::broadcast::Receiver<()>,
+        finalized_slot_getter: Arc<impl FinalizedSlotGetter>,
+        mut rx: Receiver<()>,
     ) -> Result<(), IngesterError> {
         info!("Starting perpetual slot parser");
 
@@ -81,8 +83,9 @@ impl Backfiller {
             parse_until = slot;
         }
         loop {
+            let finalized_slot = finalized_slot_getter.get_finalized_slot().await?;
             let top_collected_slot = slots_collector
-                .collect_slots(BBG_PREFIX, u64::MAX, parse_until, &rx)
+                .collect_slots(BBG_PREFIX, finalized_slot, parse_until, &rx)
                 .await;
             if let Some(slot) = top_collected_slot {
                 parse_until = slot;
@@ -113,7 +116,7 @@ impl Backfiller {
         block_consumer: Arc<C>,
         block_producer: Arc<P>,
         wait_period: Duration,
-        rx: tokio::sync::broadcast::Receiver<()>,
+        rx: Receiver<()>,
     ) -> Result<(), IngesterError>
     where
         C: BlockConsumer,

@@ -1,5 +1,6 @@
 use entities::models::TreeState;
 use interface::sequence_consistent::SequenceConsistentManager;
+use interface::slot_getter::FinalizedSlotGetter;
 use interface::slots_dumper::SlotsDumper;
 use metrics_utils::SequenceConsistentGapfillMetricsConfig;
 use std::sync::Arc;
@@ -7,52 +8,50 @@ use tokio::sync::broadcast::Receiver;
 use tracing::{info, warn};
 use usecase::slots_collector::{RowKeysGetter, SlotsCollector};
 
-pub struct SequenceConsistentGapfiller<T, R, S>
+pub struct SequenceConsistentGapfiller<T, R, S, F>
 where
     T: SlotsDumper + Sync + Send + 'static,
     R: RowKeysGetter + Sync + Send + 'static,
     S: SequenceConsistentManager,
+    F: FinalizedSlotGetter,
 {
     sequence_consistent_manager: Arc<S>,
     slots_collector: Arc<SlotsCollector<T, R>>,
     metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
-    skip_check_slots_offset: u64,
+    finalized_slot_getter: Arc<F>,
 }
 
-impl<T, R, S> SequenceConsistentGapfiller<T, R, S>
+impl<T, R, S, F> SequenceConsistentGapfiller<T, R, S, F>
 where
     T: SlotsDumper + Sync + Send + 'static,
     R: RowKeysGetter + Sync + Send + 'static,
     S: SequenceConsistentManager,
+    F: FinalizedSlotGetter,
 {
     pub fn new(
         sequence_consistent_manager: Arc<S>,
         slots_collector: SlotsCollector<T, R>,
         metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
-        skip_check_slots_offset: u64,
+        finalized_slot_getter: Arc<F>,
     ) -> Self {
         Self {
             sequence_consistent_manager,
             slots_collector: Arc::new(slots_collector),
             metrics,
-            skip_check_slots_offset,
+            finalized_slot_getter,
         }
     }
 
     pub async fn collect_sequences_gaps(&self, rx: Receiver<()>) {
-        let last_ingested_slot = self
-            .sequence_consistent_manager
-            .get_last_ingested_slot()
-            .await;
-        let last_ingested_slot = match last_ingested_slot {
-            Err(e) => {
-                tracing::error!("Failed to get last ingested slot: {}", e);
-                None
+        let last_slot_to_look_for_gaps =
+            match self.finalized_slot_getter.get_finalized_slot().await {
+                Err(e) => {
+                    tracing::error!("Failed to get finalized slot: {}", e);
+                    None
+                }
+                Ok(last_ingested_slot) => Some(last_ingested_slot),
             }
-            Ok(last_ingested_slot) => last_ingested_slot,
-        };
-        let last_ingested_slot = last_ingested_slot.unwrap_or(u64::MAX);
-        let last_slot_to_look_for_gaps = last_ingested_slot - self.skip_check_slots_offset;
+            .unwrap_or(u64::MAX);
         let mut last_consistent_seq = 0;
         let mut prev_state = TreeState::default();
         let mut gap_found = false;
