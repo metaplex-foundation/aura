@@ -74,11 +74,12 @@ impl JsonDownloader {
 
                             match response {
                                 Ok(response) => {
-                                    if let Some(content_header) = response.headers().get("Content-Type") {
+                                    if let Some(content_header) =
+                                        response.headers().get("Content-Type")
+                                    {
                                         match content_header.to_str() {
                                             Ok(header) => {
                                                 if !header.contains(JSON_CONTENT_TYPE) {
-                                                    println!("Header: {:?}", header);
                                                     let data_to_insert = UpdatedTask {
                                                         status: TaskStatus::Success,
                                                         metadata_url: task.metadata_url.clone(),
@@ -101,14 +102,15 @@ impl JsonDownloader {
                                                         )
                                                         .unwrap();
 
-                                                    info!("Got not a JSON data from link, marked task as success...");
-                                                    cloned_metrics.inc_tasks(MetricStatus::SUCCESS);
+                                                    cloned_metrics
+                                                        .inc_tasks("media", MetricStatus::SUCCESS);
                                                     return;
                                                 }
                                             }
                                             Err(_) => {
                                                 error!("Could not convert header into str");
-                                                cloned_metrics.inc_tasks(MetricStatus::FAILURE);
+                                                cloned_metrics
+                                                    .inc_tasks("unknown", MetricStatus::FAILURE);
                                                 return;
                                             }
                                         }
@@ -133,7 +135,7 @@ impl JsonDownloader {
                                             .await
                                             .unwrap();
 
-                                        cloned_metrics.inc_tasks(MetricStatus::FAILURE);
+                                        cloned_metrics.inc_tasks("json", MetricStatus::FAILURE);
                                     } else {
                                         let metadata_body = response.text().await;
                                         if let Ok(metadata) = metadata_body {
@@ -159,7 +161,7 @@ impl JsonDownloader {
                                                 .unwrap();
 
                                             info!("Saved metadata successfully...");
-                                            cloned_metrics.inc_tasks(MetricStatus::SUCCESS);
+                                            cloned_metrics.inc_tasks("json", MetricStatus::SUCCESS);
                                         } else {
                                             let data_to_insert = UpdatedTask {
                                                 status: TaskStatus::Failed,
@@ -172,13 +174,13 @@ impl JsonDownloader {
                                                 .update_tasks(vec![data_to_insert])
                                                 .await
                                                 .unwrap();
-                                            cloned_metrics.inc_tasks(MetricStatus::FAILURE);
+                                            cloned_metrics.inc_tasks("json", MetricStatus::FAILURE);
                                         }
                                     }
                                 }
                                 Err(e) => {
                                     error!("Error downloading metadata: {}", e);
-                                    cloned_metrics.inc_tasks(MetricStatus::FAILURE);
+                                    cloned_metrics.inc_tasks("unknown", MetricStatus::FAILURE);
                                 }
                             }
                         });

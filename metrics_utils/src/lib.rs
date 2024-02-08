@@ -351,29 +351,7 @@ impl MetricsTrait for MetricState {
 
         self.ingester_metrics.register(&mut self.registry);
 
-        self.registry.register(
-            "json_downloader_latency_task",
-            "A histogram of task execution time",
-            self.json_downloader_metrics.latency_task_executed.clone(),
-        );
-
-        self.registry.register(
-            "json_downloader_tasks_count",
-            "The total number of tasks made",
-            self.json_downloader_metrics.tasks.clone(),
-        );
-
-        self.registry.register(
-            "json_downloader_tasks_to_execute",
-            "The number of tasks that need to be executed",
-            self.json_downloader_metrics.tasks_to_execute.clone(),
-        );
-
-        self.registry.register(
-            "json_downloader_start_time",
-            "Binary start time",
-            self.json_downloader_metrics.start_time.clone(),
-        );
+        self.json_downloader_metrics.register(&mut self.registry);
 
         self.backfiller_metrics.register(&mut self.registry);
 
@@ -781,14 +759,14 @@ impl Default for IngesterMetricsConfig {
 pub struct JsonDownloaderMetricsConfig {
     start_time: Gauge,
     latency_task_executed: Family<MetricLabel, Histogram>,
-    tasks: Family<MetricLabel, Counter>,
+    tasks: Family<MetricLabelWithStatus, Counter>,
     tasks_to_execute: Gauge,
 }
 
 impl JsonDownloaderMetricsConfig {
     pub fn new() -> Self {
         Self {
-            tasks: Family::<MetricLabel, Counter>::default(),
+            tasks: Family::<MetricLabelWithStatus, Counter>::default(),
             start_time: Default::default(),
             tasks_to_execute: Default::default(),
             latency_task_executed: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
@@ -797,10 +775,11 @@ impl JsonDownloaderMetricsConfig {
         }
     }
 
-    pub fn inc_tasks(&self, label: MetricStatus) -> u64 {
+    pub fn inc_tasks(&self, label: &str, status: MetricStatus) -> u64 {
         self.tasks
-            .get_or_create(&MetricLabel {
+            .get_or_create(&MetricLabelWithStatus {
                 name: label.to_string(),
+                status,
             })
             .inc()
     }
@@ -819,6 +798,34 @@ impl JsonDownloaderMetricsConfig {
                 name: label.to_owned(),
             })
             .observe(duration);
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        self.start_time();
+
+        registry.register(
+            "json_downloader_latency_task",
+            "A histogram of task execution time",
+            self.latency_task_executed.clone(),
+        );
+
+        registry.register(
+            "json_downloader_tasks_count",
+            "The total number of tasks made",
+            self.tasks.clone(),
+        );
+
+        registry.register(
+            "json_downloader_tasks_to_execute",
+            "The number of tasks that need to be executed",
+            self.tasks_to_execute.clone(),
+        );
+
+        registry.register(
+            "json_downloader_start_time",
+            "Binary start time",
+            self.start_time.clone(),
+        );
     }
 }
 
