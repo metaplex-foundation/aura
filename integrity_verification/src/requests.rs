@@ -3,8 +3,8 @@ use serde_json::Value;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone)]
 pub struct Body {
-    pub jsonrpc: String,
-    pub id: usize,
+    jsonrpc: String,
+    id: usize,
     pub method: String,
     pub params: Value,
 }

@@ -5,17 +5,19 @@ use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
 use futures::future::join_all;
 use interface::signature_persistence::{BlockConsumer, BlockProducer};
+use interface::slots_dumper::SlotGetter;
 use log::{error, info, warn};
 use metrics_utils::BackfillerMetricsConfig;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
-use rocks_db::bubblegum_slots::{bubblegum_slots_key_to_value, form_bubblegum_slots_key};
+use rocks_db::bubblegum_slots::BubblegumSlotGetter;
 use rocks_db::column::TypedColumn;
 use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
 use solana_transaction_status::{
     EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta,
 };
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use tokio::sync::broadcast::Receiver;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tokio::time::Duration;
@@ -30,6 +32,7 @@ pub const GET_DATA_FROM_BG_RETRIES: u32 = 5;
 pub const SECONDS_TO_RETRY_ROCKSDB_OPERATION: u64 = 5;
 pub const DELETE_SLOT_RETRIES: u32 = 5;
 
+#[derive(Clone)]
 pub struct Backfiller {
     rocks_client: Arc<rocks_db::Storage>,
     big_table_client: Arc<BigTableClient>,
@@ -55,10 +58,98 @@ impl Backfiller {
         }
     }
 
+    pub async fn run_perpetual_slot_collection(
+        &self,
+        metrics: Arc<BackfillerMetricsConfig>,
+        wait_period: Duration,
+        mut rx: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<(), IngesterError> {
+        info!("Starting perpetual slot parser");
+
+        let slots_collector = SlotsCollector::new(
+            self.rocks_client.clone(),
+            self.big_table_client.big_table_inner_client.clone(),
+            metrics.clone(),
+        );
+
+        let top_collected_slot = self
+            .rocks_client
+            .get_parameter::<u64>(rocks_db::parameters::Parameter::LastFetchedSlot)
+            .await?;
+        let mut parse_until = self.slot_parse_until;
+        if let Some(slot) = top_collected_slot {
+            parse_until = slot;
+        }
+        loop {
+            let top_collected_slot = slots_collector
+                .collect_slots(BBG_PREFIX, u64::MAX, parse_until, &rx)
+                .await;
+            if let Some(slot) = top_collected_slot {
+                parse_until = slot;
+                if let Err(e) = self
+                    .rocks_client
+                    .put_parameter(rocks_db::parameters::Parameter::LastFetchedSlot, slot)
+                    .await
+                {
+                    error!("Error while updating last fetched slot: {}", e);
+                }
+            }
+
+            let sleep = tokio::time::sleep(wait_period);
+            tokio::select! {
+            _ = sleep => {},
+            _ = rx.recv() => {
+                info!("Received stop signal, stopping perpetual slot parser");
+                return Ok(());
+            },
+            }
+        }
+    }
+
+    pub async fn run_perpetual_slot_processing<C, P, S>(
+        &self,
+        metrics: Arc<BackfillerMetricsConfig>,
+        slot_getter: Arc<S>,
+        block_consumer: Arc<C>,
+        block_producer: Arc<P>,
+        wait_period: Duration,
+        rx: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<(), IngesterError>
+    where
+        C: BlockConsumer,
+        P: BlockProducer,
+        S: SlotGetter,
+    {
+        let transactions_parser = Arc::new(TransactionsParser::new(
+            self.rocks_client.clone(),
+            slot_getter,
+            block_consumer,
+            block_producer,
+            metrics.clone(),
+            self.workers_count,
+            self.chunk_size,
+        ));
+
+        let mut rx = rx.resubscribe();
+        while rx.is_empty() {
+            transactions_parser
+                .process_all_slots(rx.resubscribe())
+                .await;
+            tokio::select! {
+            _ = tokio::time::sleep(wait_period) => {},
+            _ = rx.recv() => {
+                info!("Received stop signal, returning from run_perpetual_slot_fetching");
+                return Ok(());
+            }
+            }
+        }
+        Ok(())
+    }
+
     pub async fn start_backfill<C, P>(
         &self,
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-        keep_running: Arc<AtomicBool>,
+        rx: tokio::sync::broadcast::Receiver<()>,
         metrics: Arc<BackfillerMetricsConfig>,
         block_consumer: Arc<C>,
         block_producer: Arc<P>,
@@ -72,41 +163,32 @@ impl Backfiller {
         let slots_collector = SlotsCollector::new(
             self.rocks_client.clone(),
             self.big_table_client.big_table_inner_client.clone(),
-            self.slot_start_from,
-            self.slot_parse_until,
             metrics.clone(),
         );
-
-        let cloned_keep_running = keep_running.clone();
+        let start_from = self.slot_start_from;
+        let parse_until = self.slot_parse_until;
+        let rx1 = rx.resubscribe();
+        let rx2 = rx.resubscribe();
         tasks.lock().await.spawn(tokio::spawn(async move {
             info!("Running slots parser...");
-
-            tokio::select! {
-                _ = slots_collector.collect_slots(BBG_PREFIX) => {},
-                _ = async {
-                    while cloned_keep_running.load(Ordering::SeqCst) {
-                        tokio::time::sleep(Duration::from_secs(1)).await
-                    }
-                } => {}
-            }
+            slots_collector
+                .collect_slots(BBG_PREFIX, start_from, parse_until, &rx1)
+                .await;
         }));
 
         let transactions_parser = Arc::new(TransactionsParser::new(
             self.rocks_client.clone(),
+            Arc::new(BubblegumSlotGetter::new(self.rocks_client.clone())),
             block_consumer,
             block_producer,
             metrics.clone(),
             self.workers_count,
             self.chunk_size,
         ));
-
-        let cloned_keep_running = keep_running.clone();
         tasks.lock().await.spawn(tokio::spawn(async move {
             info!("Running transactions parser...");
 
-            transactions_parser
-                .parse_transactions(cloned_keep_running)
-                .await;
+            transactions_parser.parse_transactions(rx2).await;
         }));
 
         Ok(())
@@ -114,8 +196,9 @@ impl Backfiller {
 }
 
 #[derive(Clone)]
-pub struct TransactionsParser<C: BlockConsumer, P: BlockProducer> {
+pub struct TransactionsParser<C: BlockConsumer, P: BlockProducer, S: SlotGetter> {
     rocks_client: Arc<rocks_db::Storage>,
+    slot_getter: Arc<S>,
     consumer: Arc<C>,
     producer: Arc<P>,
     metrics: Arc<BackfillerMetricsConfig>,
@@ -123,21 +206,24 @@ pub struct TransactionsParser<C: BlockConsumer, P: BlockProducer> {
     chunk_size: usize,
 }
 
-impl<C, P> TransactionsParser<C, P>
+impl<C, P, S> TransactionsParser<C, P, S>
 where
     C: BlockConsumer,
     P: BlockProducer,
+    S: SlotGetter,
 {
     pub fn new(
         rocks_client: Arc<rocks_db::Storage>,
+        slot_getter: Arc<S>,
         consumer: Arc<C>,
         producer: Arc<P>,
         metrics: Arc<BackfillerMetricsConfig>,
         workers_count: usize,
         chunk_size: usize,
-    ) -> TransactionsParser<C, P> {
+    ) -> TransactionsParser<C, P, S> {
         TransactionsParser {
             rocks_client,
+            slot_getter,
             consumer,
             producer,
             metrics,
@@ -148,7 +234,7 @@ where
 
     pub async fn parse_raw_transactions(
         &self,
-        keep_running: Arc<AtomicBool>,
+        rx: Receiver<()>,
         permits: usize,
         start_slot: Option<u64>,
     ) {
@@ -161,7 +247,7 @@ where
         let semaphore = Arc::new(tokio::sync::Semaphore::new(permits));
         let mut tasks = Vec::new();
         for next in slots_to_parse_iter {
-            if !keep_running.load(Ordering::SeqCst) {
+            if !rx.is_empty() {
                 tracing::info!("terminating transactions parser");
                 break;
             }
@@ -184,8 +270,8 @@ where
                 let p = self.producer.clone();
                 let m = self.metrics.clone();
                 let chunk_size = self.chunk_size;
-                let keep_running_clone = keep_running.clone();
                 let task_number = cnt.fetch_add(1, Ordering::Relaxed);
+                let rx = rx.resubscribe();
                 tasks.push(tokio::task::spawn(async move {
                     let _permit = permit;
                     tracing::info!(
@@ -193,8 +279,7 @@ where
                         task_number,
                         slots.len()
                     );
-                    let res =
-                        Self::parse_slots(c, p, m, chunk_size, slots, keep_running_clone).await;
+                    let res = Self::parse_slots(c, p, m, chunk_size, slots, rx.resubscribe()).await;
                     if let Err(err) = res {
                         error!("Error parsing slots: {}", err);
                     }
@@ -210,7 +295,6 @@ where
             let p = self.producer.clone();
             let m = self.metrics.clone();
             let chunk_size = self.chunk_size;
-            let keep_running_clone = keep_running.clone();
             let task_number = cnt.fetch_add(1, Ordering::Relaxed);
             tasks.push(tokio::task::spawn(async move {
                 let _permit = permit;
@@ -219,7 +303,7 @@ where
                     task_number,
                     slots.len()
                 );
-                let res = Self::parse_slots(c, p, m, chunk_size, slots, keep_running_clone).await;
+                let res = Self::parse_slots(c, p, m, chunk_size, slots, rx.resubscribe()).await;
                 if let Err(err) = res {
                     error!("Error parsing slots: {}", err);
                 }
@@ -230,33 +314,62 @@ where
         tracing::info!("Transactions parser has finished working");
     }
 
-    pub async fn parse_transactions(&self, keep_running: Arc<AtomicBool>) {
-        let mut counter = GET_SLOT_RETRIES;
+    pub async fn process_all_slots(&self, rx: Receiver<()>) {
+        let slots_iter = self.slot_getter.get_unprocessed_slots_iter();
+        let chunk_size = self.workers_count * self.chunk_size;
 
-        'outer: while keep_running.load(Ordering::SeqCst) {
-            let mut slots_to_parse_iter = self.rocks_client.bubblegum_slots.iter_end();
+        let mut slots_batch = Vec::with_capacity(chunk_size);
+
+        for slot in slots_iter {
+            if !rx.is_empty() {
+                info!("Received stop signal, returning from process_all_slots");
+                return;
+            }
+            slots_batch.push(slot);
+            if slots_batch.len() >= chunk_size {
+                info!("Got {} slots to parse", slots_batch.len());
+                let res = self
+                    .process_slots(slots_batch.clone(), rx.resubscribe())
+                    .await;
+                match res {
+                    Ok(processed) => {
+                        info!("Processed {} slots", processed);
+                    }
+                    Err(err) => {
+                        error!("Error processing slots: {}", err);
+                    }
+                }
+                slots_batch.clear();
+            }
+        }
+        if !rx.is_empty() {
+            info!("Received stop signal, returning");
+            return;
+        }
+        if !slots_batch.is_empty() {
+            info!("Got {} slots to parse", slots_batch.len());
+            let res = self.process_slots(slots_batch, rx.resubscribe()).await;
+            match res {
+                Ok(processed) => {
+                    info!("Processed {} slots", processed);
+                }
+                Err(err) => {
+                    error!("Error processing slots: {}", err);
+                }
+            }
+        }
+    }
+
+    pub async fn parse_transactions(&self, rx: Receiver<()>) {
+        let mut counter = GET_SLOT_RETRIES;
+        'outer: while rx.is_empty() {
+            let mut slots_to_parse_iter = self.slot_getter.get_unprocessed_slots_iter();
             let mut slots_to_parse_vec = Vec::new();
 
             while slots_to_parse_vec.len() <= self.workers_count * self.chunk_size {
                 match slots_to_parse_iter.next() {
-                    Some(result) => {
-                        match result {
-                            Ok((key, _)) => {
-                                let blgm_slot_key = String::from_utf8(key.to_vec());
-
-                                if blgm_slot_key.is_err() {
-                                    error!("Error while converting key received from RocksDB to string");
-                                    continue;
-                                }
-
-                                let slot = bubblegum_slots_key_to_value(blgm_slot_key.unwrap());
-                                slots_to_parse_vec.push(slot);
-                            }
-                            Err(e) => {
-                                error!("Error while iterating over bubblegum slots: {:?}", e);
-                                break;
-                            }
-                        }
+                    Some(slot) => {
+                        slots_to_parse_vec.push(slot);
                     }
                     None => {
                         if slots_to_parse_vec.is_empty() {
@@ -277,50 +390,56 @@ where
             }
 
             counter = GET_SLOT_RETRIES;
-            tracing::debug!("Got {} slots to parse", slots_to_parse_vec.len());
-            let res = Self::parse_slots(
-                self.consumer.clone(),
-                self.producer.clone(),
-                self.metrics.clone(),
-                self.chunk_size,
-                slots_to_parse_vec.clone(),
-                keep_running.clone(),
-            )
-            .await;
+            let res = self
+                .process_slots(slots_to_parse_vec, rx.resubscribe())
+                .await;
             match res {
-                Ok(v) => self.delete_slots(v).await,
+                Ok(processed) => {
+                    info!("Processed {} slots", processed);
+                }
                 Err(err) => {
-                    error!("Error parsing slots: {}", err);
-                    continue;
+                    error!("Error processing slots: {}", err);
                 }
             }
         }
         tracing::info!("Transactions parser has finished working");
     }
 
-    async fn delete_slots(&self, slots: Vec<u64>) {
+    async fn process_slots(
+        &self,
+        slots_to_parse_vec: Vec<u64>,
+        rx: Receiver<()>,
+    ) -> Result<u64, String> {
+        tracing::debug!("Got {} slots to parse", slots_to_parse_vec.len());
+        let res = Self::parse_slots(
+            self.consumer.clone(),
+            self.producer.clone(),
+            self.metrics.clone(),
+            self.chunk_size,
+            slots_to_parse_vec.clone(),
+            rx,
+        )
+        .await?;
+        let len = res.len() as u64;
         let mut counter = DELETE_SLOT_RETRIES;
-
         while counter > 0 {
-            let delete_result = self
-                .rocks_client
-                .bubblegum_slots
-                .delete_batch(slots.iter().map(|k| form_bubblegum_slots_key(*k)).collect())
-                .await;
-
-            match delete_result {
+            let result = self.slot_getter.mark_slots_processed(res.clone()).await;
+            match result {
                 Ok(_) => {
                     break;
                 }
                 Err(err) => {
-                    error!("Error deleting slot: {}", err);
+                    error!("Error putting processed slots: {}", err);
                     counter -= 1;
                     tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_ROCKSDB_OPERATION))
                         .await;
-                    continue;
+                    if counter == 0 {
+                        return Err(err.to_string());
+                    }
                 }
             }
         }
+        Ok(len)
     }
 
     pub async fn parse_slots(
@@ -329,27 +448,28 @@ where
         metrics: Arc<BackfillerMetricsConfig>,
         chunk_size: usize,
         slots: Vec<u64>,
-        keep_running: Arc<AtomicBool>,
+        rx: Receiver<()>,
     ) -> Result<Vec<u64>, String> {
         let mut tasks = Vec::new();
         let mut successful = Vec::new();
         for chunk in slots.chunks(chunk_size) {
-            if !keep_running.load(Ordering::SeqCst) {
+            if !rx.is_empty() {
                 break;
             }
             let chunk = chunk.to_vec();
             let c = consumer.clone();
             let p = producer.clone();
             let m = metrics.clone();
-            let keep_running_clone = keep_running.clone();
+            let rx1 = rx.resubscribe();
             let task: tokio::task::JoinHandle<Vec<u64>> = tokio::spawn(async move {
                 let mut processed = Vec::new();
                 for s in chunk {
-                    if !keep_running_clone.load(Ordering::SeqCst) {
+                    if !rx1.is_empty() {
                         break;
                     }
                     if c.already_processed_slot(s).await.unwrap_or(false) {
-                        tracing::debug!("Slot {} is already processed, skipping", s);
+                        tracing::trace!("Slot {} is already processed, skipping", s);
+                        m.inc_data_processed("slots_skipped_total");
                         processed.push(s);
                         continue;
                     }

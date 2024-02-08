@@ -46,6 +46,26 @@ pub fn decode_u64_pubkey(bytes: Vec<u8>) -> Result<(u64, Pubkey)> {
     Ok((slot, pubkey))
 }
 
+pub fn encode_pubkey_u64(pubkey: Pubkey, slot: u64) -> Vec<u8> {
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    let slot_size = std::mem::size_of::<u64>();
+    let mut key = Vec::with_capacity(pubkey_size + slot_size);
+    key.extend_from_slice(&pubkey.to_bytes());
+    key.extend_from_slice(&slot.to_be_bytes());
+    key
+}
+
+pub fn decode_pubkey_u64(bytes: Vec<u8>) -> Result<(Pubkey, u64)> {
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    let slot_size = std::mem::size_of::<u64>();
+    if bytes.len() != slot_size + pubkey_size {
+        return Err(crate::StorageError::InvalidKeyLength);
+    }
+    let pubkey = Pubkey::try_from(&bytes[..pubkey_size])?;
+    let slot = u64::from_be_bytes(bytes[pubkey_size..].try_into()?);
+    Ok((pubkey, slot))
+}
+
 pub fn encode_string(key: String) -> Vec<u8> {
     key.into_bytes()
 }
@@ -114,6 +134,18 @@ mod tests {
     fn test_decode_pubkey_invalid_data() {
         let invalid_data = vec![]; // An intentionally invalid byte sequence
         assert!(decode_pubkey(invalid_data).is_err());
+    }
+
+    #[test]
+    fn test_encode_decode_pubkey_u64() {
+        let slot = 12345u64;
+        let pubkey = Pubkey::new_unique(); // or some other way to create a Pubkey
+
+        let encoded = encode_pubkey_u64(pubkey, slot);
+        let decoded = decode_pubkey_u64(encoded).unwrap();
+
+        assert_eq!(decoded.0, pubkey);
+        assert_eq!(decoded.1, slot);
     }
 
     // Add more tests as needed...

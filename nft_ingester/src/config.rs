@@ -62,6 +62,13 @@ pub struct BackfillerConfig {
     pub chunk_size: usize,
     #[serde(default = "default_permitted_tasks")]
     pub permitted_tasks: usize,
+    #[serde(default = "default_wait_period_sec")]
+    pub wait_period_sec: u64,
+    #[serde(default)]
+    pub should_reingest: bool,
+}
+fn default_wait_period_sec() -> u64 {
+    60
 }
 
 fn default_workers_count() -> usize {
@@ -136,6 +143,22 @@ pub struct IngesterConfig {
     pub run_profiling: Option<bool>,
     pub profiling_file_path_container: Option<String>,
     pub store_db_backups: Option<bool>,
+    #[serde(default)]
+    pub rpc_retry_interval_millis: u64,
+    #[serde(default)]
+    pub run_sequence_consistent_checker: bool,
+    #[serde(default = "default_sequence_consistent_checker_wait_period_sec")]
+    pub sequence_consistent_checker_wait_period_sec: u64,
+    #[serde(default = "default_sequence_consister_skip_check_slots_offset")]
+    pub sequence_consister_skip_check_slots_offset: u64,
+}
+
+fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
+    60
+}
+
+fn default_sequence_consister_skip_check_slots_offset() -> u64 {
+    20
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
@@ -493,6 +516,8 @@ mod tests {
                 workers_count: 100,
                 chunk_size: 5,
                 permitted_tasks: 500,
+                wait_period_sec: 60,
+                should_reingest: false,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
@@ -520,6 +545,8 @@ mod tests {
                 workers_count: 100,
                 chunk_size: 5,
                 permitted_tasks: 500,
+                wait_period_sec: 60,
+                should_reingest: false,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");

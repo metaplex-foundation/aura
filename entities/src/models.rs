@@ -72,9 +72,9 @@ pub struct CompleteAssetDetails {
 
     // From AssetOwner as Tuples
     pub owner: Updated<Pubkey>,
-    pub delegate: Option<Updated<Pubkey>>,
+    pub delegate: Updated<Option<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
-    pub owner_delegate_seq: Option<Updated<u64>>,
+    pub owner_delegate_seq: Updated<Option<u64>>,
 
     // Separate fields
     pub asset_leaf: Option<Updated<AssetLeaf>>,
@@ -169,7 +169,7 @@ impl<T> Updated<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct BufferedTransaction {
     pub transaction: Vec<u8>,
     // this flag tells if the transaction should be mapped from extrnode flatbuffer to mplx flatbuffer structure
@@ -180,5 +180,12 @@ pub struct BufferedTransaction {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SignatureWithSlot {
     pub signature: Signature,
+    pub slot: u64,
+}
+
+#[derive(Default)]
+pub struct TreeState {
+    pub tree: Pubkey,
+    pub seq: u64,
     pub slot: u64,
 }

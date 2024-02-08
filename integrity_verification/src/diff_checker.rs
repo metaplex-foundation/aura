@@ -7,13 +7,24 @@ use crate::params::{
 };
 use crate::requests::Body;
 use crate::slots_dumper::FileSlotsDumper;
+use crate::{_check_proof, check_proof};
+use anchor_lang::AnchorDeserialize;
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
 use metrics_utils::{BackfillerMetricsConfig, IntegrityVerificationMetricsConfig};
 use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
 use regex::Regex;
 use serde_json::{json, Value};
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_program::pubkey::Pubkey;
+use spl_account_compression::canopy::fill_in_proof_from_canopy;
+use spl_account_compression::state::{
+    merkle_tree_get_size, ConcurrentMerkleTreeHeader, CONCURRENT_MERKLE_TREE_HEADER_SIZE_V1,
+};
+use spl_account_compression::zero_copy::ZeroCopy;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
 use usecase::bigtable::BigTableClient;
 use usecase::slots_collector::SlotsCollector;
@@ -27,13 +38,13 @@ pub const GET_ASSET_BY_CREATOR_METHOD: &str = "getAssetsByCreator";
 
 const REQUESTS_INTERVAL_MILLIS: u64 = 1500;
 const BIGTABLE_TIMEOUT: u32 = 1000;
-const GET_SLOT_METHOD: &str = "getSlot";
 const TEST_RETRIES: usize = 10;
 
 #[derive(Default)]
-struct DiffWithReferenceResponse {
+struct DiffWithResponses {
     diff: Option<String>,
     reference_response: Value,
+    testing_response: Value,
 }
 
 struct CollectSlotsTools {
@@ -52,6 +63,7 @@ where
     keys_fetcher: T,
     metrics: Arc<IntegrityVerificationMetricsConfig>,
     collect_slots_tools: Option<CollectSlotsTools>,
+    rpc_client: RpcClient,
     regexes: Vec<Regex>,
 }
 
@@ -105,6 +117,7 @@ where
         }
 
         Self {
+            rpc_client: RpcClient::new(reference_host.clone()),
             reference_host,
             testing_host,
             api: IntegrityVerificationApi::new(),
@@ -144,7 +157,7 @@ where
         None
     }
 
-    async fn check_request(&self, req: &Body) -> DiffWithReferenceResponse {
+    async fn check_request(&self, req: &Body) -> DiffWithResponses {
         let request = json!(req).to_string();
         let reference_response_fut = self.api.make_request(&self.reference_host, &request);
         let testing_response_fut = self.api.make_request(&self.testing_host, &request);
@@ -156,7 +169,7 @@ where
             Err(e) => {
                 self.metrics.inc_network_errors_reference_host();
                 error!("Reference host network error: {}", e);
-                return DiffWithReferenceResponse::default();
+                return DiffWithResponses::default();
             }
         };
         let testing_response = match testing_response {
@@ -164,13 +177,14 @@ where
             Err(e) => {
                 self.metrics.inc_network_errors_testing_host();
                 error!("Testing host network error: {}", e);
-                return DiffWithReferenceResponse::default();
+                return DiffWithResponses::default();
             }
         };
 
-        DiffWithReferenceResponse {
+        DiffWithResponses {
             diff: self.compare_responses(&reference_response, &testing_response),
             reference_response,
+            testing_response,
         }
     }
 
@@ -185,26 +199,50 @@ where
     {
         for req in requests.iter() {
             metrics_inc_total_fn();
-            let mut diff_with_reference_response = DiffWithReferenceResponse::default();
+            let mut diff_with_responses = DiffWithResponses::default();
             for _ in 0..TEST_RETRIES {
-                diff_with_reference_response = self.check_request(req).await;
-                if diff_with_reference_response.diff.is_none() {
+                diff_with_responses = self.check_request(req).await;
+                if diff_with_responses.diff.is_none() {
                     break;
                 }
                 // Prevent rate-limit errors
                 tokio::time::sleep(Duration::from_millis(REQUESTS_INTERVAL_MILLIS)).await;
             }
 
-            if let Some(diff) = diff_with_reference_response.diff {
-                metrics_inc_failed_fn();
+            let mut test_failed = false;
+            if let Some(diff) = diff_with_responses.diff {
+                test_failed = true;
                 error!(
                     "{}: mismatch responses: req: {:#?}, diff: {}",
                     req.method, req, diff
                 );
-
-                self.try_collect_slots(req, &diff_with_reference_response.reference_response)
+                let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
+                self.try_collect_slots(req, &diff_with_responses.reference_response, &rx)
                     .await;
             }
+
+            if req.method == GET_ASSET_PROOF_METHOD {
+                let asset_id = req.params["id"].as_str().unwrap_or_default();
+                test_failed = match self
+                    .check_proof_valid(asset_id, diff_with_responses.testing_response)
+                    .await
+                {
+                    Ok(proof_valid) => {
+                        if !proof_valid {
+                            error!("Invalid proof for {} asset", asset_id)
+                        };
+                        !proof_valid
+                    }
+                    Err(e) => {
+                        error!("Check proof valid: {}", e);
+                        test_failed
+                    }
+                };
+            }
+            if test_failed {
+                metrics_inc_failed_fn();
+            }
+
             // Prevent rate-limit errors
             tokio::time::sleep(Duration::from_millis(REQUESTS_INTERVAL_MILLIS)).await;
         }
@@ -372,7 +410,7 @@ impl<T> DiffChecker<T>
 where
     T: IntegrityVerificationKeysFetcher + Send + Sync,
 {
-    async fn try_collect_slots(&self, req: &Body, reference_response: &Value) {
+    async fn try_collect_slots(&self, req: &Body, reference_response: &Value, rx: &Receiver<()>) {
         let collect_tools = match &self.collect_slots_tools {
             None => return,
             Some(collect_tools) => collect_tools,
@@ -402,39 +440,85 @@ where
                 return;
             }
         };
-        collect_tools.collect_slots(asset_id, tree_id, slot).await;
+        collect_tools
+            .collect_slots(asset_id, tree_id, slot, rx)
+            .await;
     }
 
     async fn get_slot(&self) -> Result<u64, IntegrityVerificationError> {
-        let resp = self
-            .api
-            .make_request(
-                &self.reference_host,
-                &json!(Body::new(GET_SLOT_METHOD, json!([]),)).to_string(),
-            )
-            .await?;
-        let slot = match resp["result"].as_u64() {
-            None => return Err(IntegrityVerificationError::CannotGetSlot(resp.to_string())),
-            Some(slot) => slot,
-        };
+        Ok(self.rpc_client.get_slot().await?)
+    }
 
-        Ok(slot)
+    async fn check_proof_valid(
+        &self,
+        asset_id: &str,
+        response: Value,
+    ) -> Result<bool, IntegrityVerificationError> {
+        let tree_id = response["result"]["tree_id"].as_str().ok_or(
+            IntegrityVerificationError::CannotGetResponseField("tree_id".to_string()),
+        )?;
+        let leaf = Pubkey::from_str(response["result"]["leaf"].as_str().ok_or(
+            IntegrityVerificationError::CannotGetResponseField("leaf".to_string()),
+        )?)?
+        .to_bytes();
+
+        let get_asset_req = json!(&Body::new(
+            GET_ASSET_METHOD,
+            json!(generate_get_asset_params(asset_id.to_string()))
+        ))
+        .to_string();
+        let get_asset_fut = self.api.make_request(&self.reference_host, &get_asset_req);
+        let tree_id_pk = Pubkey::from_str(tree_id)?;
+        let get_account_data_fut = self.rpc_client.get_account_data(&tree_id_pk);
+        let (get_asset, account_data) = tokio::join!(get_asset_fut, get_account_data_fut);
+        let get_asset = get_asset?;
+        let leaf_index = get_asset["result"]["compression"]["leaf_id"]
+            .as_u64()
+            .ok_or(IntegrityVerificationError::CannotGetResponseField(
+                "leaf_id".to_string(),
+            ))? as u32;
+        let mut tree_acc_info = account_data?;
+
+        let (header_bytes, rest) =
+            tree_acc_info.split_at_mut(CONCURRENT_MERKLE_TREE_HEADER_SIZE_V1);
+        let header = ConcurrentMerkleTreeHeader::try_from_slice(header_bytes)?;
+        let merkle_tree_size = merkle_tree_get_size(&header)?;
+        let (tree_bytes, canopy_bytes) = rest.split_at_mut(merkle_tree_size);
+
+        let mut initial_proofs = response["result"]["proof"]
+            .as_array()
+            .ok_or(IntegrityVerificationError::CannotGetResponseField(
+                "proof".to_string(),
+            ))?
+            .iter()
+            .filter_map(|proof| {
+                proof
+                    .as_str()
+                    .and_then(|v| Pubkey::from_str(v).ok().map(|p| p.to_bytes()))
+            })
+            .collect::<Vec<_>>();
+        fill_in_proof_from_canopy(
+            canopy_bytes,
+            header.get_max_depth(),
+            leaf_index,
+            &mut initial_proofs,
+        )?;
+
+        check_proof!(&header, &tree_bytes, initial_proofs, leaf, leaf_index)
     }
 }
 
 impl CollectSlotsTools {
-    async fn collect_slots(&self, asset: &str, tree_key: &str, slot: u64) {
+    async fn collect_slots(&self, asset: &str, tree_key: &str, slot: u64, rx: &Receiver<()>) {
         let slots_collector = SlotsCollector::new(
             Arc::new(FileSlotsDumper::new(self.format_filename(tree_key, asset))),
             self.bigtable_client.big_table_inner_client.clone(),
-            slot,
-            0,
             self.metrics.clone(),
         );
 
         info!("Start collecting slots for {}", tree_key);
         slots_collector
-            .collect_slots(&format!("{}/", tree_key))
+            .collect_slots(&format!("{}/", tree_key), slot, 0, rx)
             .await;
         info!("Collected slots for {}", tree_key);
     }
@@ -491,6 +575,7 @@ mod tests {
     #[cfg(feature = "bigtable_tests")]
     #[tokio::test]
     async fn test_save_slots_to_file() {
+        let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
         create_test_diff_checker()
             .await
             .collect_slots_tools
@@ -499,6 +584,7 @@ mod tests {
                 "BAtEs7TuGm2hP2owc9cTit2TNfVzpPFyQAAvkDWs6tDm",
                 "4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE",
                 244259062,
+                &rx,
             )
             .await;
     }
