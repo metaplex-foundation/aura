@@ -4,8 +4,6 @@ use interface::slots_dumper::SlotsDumper;
 use metrics_utils::SequenceConsistentGapfillMetricsConfig;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
 use tracing::{info, warn};
 use usecase::slots_collector::{RowKeysGetter, SlotsCollector};
 
@@ -18,6 +16,7 @@ where
     sequence_consistent_manager: Arc<S>,
     slots_collector: Arc<SlotsCollector<T, R>>,
     metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
+    skip_check_slots_offset: u64,
 }
 
 impl<T, R, S> SequenceConsistentGapfiller<T, R, S>
@@ -30,16 +29,30 @@ where
         sequence_consistent_manager: Arc<S>,
         slots_collector: SlotsCollector<T, R>,
         metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
-        _tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+        skip_check_slots_offset: u64,
     ) -> Self {
         Self {
             sequence_consistent_manager,
             slots_collector: Arc::new(slots_collector),
             metrics,
+            skip_check_slots_offset,
         }
     }
 
     pub async fn collect_sequences_gaps(&self, rx: Receiver<()>) {
+        let last_ingested_slot = self
+            .sequence_consistent_manager
+            .get_last_ingested_slot()
+            .await;
+        let last_ingested_slot = match last_ingested_slot {
+            Err(e) => {
+                tracing::error!("Failed to get last ingested slot: {}", e);
+                None
+            }
+            Ok(last_ingested_slot) => last_ingested_slot,
+        };
+        let last_ingested_slot = last_ingested_slot.unwrap_or(u64::MAX);
+        let last_slot_to_look_for_gaps = last_ingested_slot - self.skip_check_slots_offset;
         let mut last_consistent_seq = 0;
         let mut prev_state = TreeState::default();
         let mut gap_found = false;
@@ -47,6 +60,10 @@ where
             if !rx.is_empty() {
                 info!("Stop iteration over tree iterator...");
                 return;
+            }
+            // Skip the most recent slots to avoid gaps in recent slots.
+            if current_state.slot > last_slot_to_look_for_gaps {
+                continue;
             }
             if current_state.tree == prev_state.tree && current_state.seq != prev_state.seq + 1 {
                 warn!(
@@ -89,11 +106,11 @@ where
     async fn save_tree_gap_analyze(
         &self,
         tree: solana_program::pubkey::Pubkey,
-        last_consistent_seq: u64,
+        _last_consistent_seq: u64, // TODO: use this parameter if we need to optimize the runtime of the iterator to skip the already consistent sequences. For example, store it with a tree in a separate column family.
         gap_found: bool,
     ) {
         self.sequence_consistent_manager
-            .process_tree_gap(tree, gap_found, last_consistent_seq)
+            .process_tree_gap(tree, gap_found)
             .await;
         self.metrics
             .set_total_tree_with_gaps(self.sequence_consistent_manager.gaps_count());
