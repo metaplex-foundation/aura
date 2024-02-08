@@ -82,8 +82,8 @@ impl Backfiller {
         if let Some(slot) = top_collected_slot {
             parse_until = slot;
         }
-        let finalized_slot = finalized_slot_getter.get_finalized_slot().await?;
         loop {
+            let finalized_slot = finalized_slot_getter.get_finalized_slot().await?;
             let top_collected_slot = slots_collector
                 .collect_slots(BBG_PREFIX, finalized_slot, parse_until, &rx)
                 .await;
