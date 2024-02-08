@@ -82,17 +82,17 @@ fn remove_column_families(db_path: String, columns_to_remove: &[&str]) {
     // Get the existing column families
     let cf_names = DB::list_cf(&options, &db_path).expect("Failed to list column families.");
 
-    let db = rocks_db::Storage::open(&db_path, Arc::new(Mutex::new(JoinSet::new()))).expect("Failed to open DB.");
+    let db = rocks_db::Storage::open(&db_path, Arc::new(Mutex::new(JoinSet::new())))
+        .expect("Failed to open DB.");
     let db = db.db;
     columns_to_remove.iter().for_each(|cf_name| {
         if !cf_names.contains(&cf_name.to_string()) {
             println!("Column family {} does not exist. Skipping it", cf_name);
         } else {
             db.drop_cf(cf_name)
-            .unwrap_or_else(|_| panic!("Failed to drop column family {}.", cf_name));
+                .unwrap_or_else(|_| panic!("Failed to drop column family {}.", cf_name));
         }
     });
-    
-    println!("Column families removed successfully.");
 
+    println!("Column families removed successfully.");
 }
