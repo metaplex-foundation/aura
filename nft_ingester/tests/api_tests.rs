@@ -3,9 +3,22 @@
 mod tests {
     use std::sync::Arc;
 
-    use digital_asset_types::rpc::{filter::AssetSorting, response::AssetList};
+    use digital_asset_types::rpc::response::AssetList;
+    use entities::{
+        api_req_params::{AssetSortBy, AssetSortDirection, AssetSorting, GetAsset, SearchAssets},
+        enums::{
+            ChainMutability, Interface, OwnerType, OwnershipModel, RoyaltyModel, RoyaltyTargetType,
+            SpecificationAssetClass, TokenStandard,
+        },
+        models::{ChainDataV1, Updated},
+    };
     use metrics_utils::ApiMetricsConfig;
-    use nft_ingester::api::SearchAssets;
+    use rocks_db::{
+        offchain_data::OffChainData, AssetAuthority, AssetDynamicDetails, AssetOwner,
+        AssetStaticDetails,
+    };
+    use serde_json::{json, Value};
+    use solana_program::pubkey::Pubkey;
     use testcontainers::clients::Cli;
 
     const SLOT_UPDATED: u64 = 100;
@@ -130,21 +143,19 @@ mod tests {
         {
             let payload = SearchAssets {
                 limit: Some(limit),
-                interface: Some(digital_asset_types::rpc::Interface::V1NFT),
-                owner_type: Some(digital_asset_types::rpc::OwnershipModel::Single),
+                interface: Some(Interface::V1NFT),
+                owner_type: Some(OwnershipModel::Single),
                 frozen: Some(false),
                 supply: Some(1),
                 compressed: Some(false),
                 compressible: Some(false),
-                royalty_target_type: Some(digital_asset_types::rpc::RoyaltyModel::Creators),
+                royalty_target_type: Some(RoyaltyModel::Creators),
                 royalty_amount: Some(0),
                 burnt: Some(false),
                 json_uri: Some("http://example.com".to_string()),
                 sort_by: Some(AssetSorting {
-                    sort_by: digital_asset_types::rpc::filter::AssetSortBy::Created,
-                    sort_direction: Some(
-                        digital_asset_types::rpc::filter::AssetSortDirection::Desc,
-                    ),
+                    sort_by: AssetSortBy::Created,
+                    sort_direction: Some(AssetSortDirection::Desc),
                 }),
                 ..Default::default()
             };
@@ -253,7 +264,7 @@ mod tests {
             let ref_value = generated_assets.owners[13].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
-                delegate: Some(ref_value.delegate.unwrap().value.to_string()),
+                delegate: Some(ref_value.delegate.value.unwrap().to_string()),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -290,7 +301,7 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 royalty_target: Some(ref_value.creators.value[0].creator.to_string()),
-                royalty_target_type: Some(digital_asset_types::rpc::RoyaltyModel::Creators),
+                royalty_target_type: Some(RoyaltyModel::Creators),
                 royalty_amount: Some(ref_value.royalty_amount.value as u32),
                 ..Default::default()
             };
@@ -305,6 +316,110 @@ mod tests {
                 "asset should match the pubkey"
             );
         }
+        env.teardown().await;
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_asset_none_grouping_with_token_standard() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+        );
+
+        let pb = Pubkey::new_unique();
+        let authority = Pubkey::new_unique();
+
+        let mut chain_data = ChainDataV1 {
+            name: "name".to_string(),
+            symbol: "symbol".to_string(),
+            edition_nonce: Some(1),
+            primary_sale_happened: false,
+            token_standard: Some(TokenStandard::NonFungible),
+            uses: None,
+            chain_mutability: Some(ChainMutability::Mutable),
+        };
+        chain_data.sanitize();
+
+        let chain_data = json!(chain_data);
+        let asset_static_details = AssetStaticDetails {
+            pubkey: pb,
+            specification_asset_class: SpecificationAssetClass::Nft,
+            royalty_target_type: RoyaltyTargetType::Creators,
+            created_at: 12 as i64,
+        };
+
+        let dynamic_details = AssetDynamicDetails {
+            pubkey: pb,
+            is_compressed: Updated::new(12, Some(12), true),
+            is_compressible: Updated::new(12, Some(12), false),
+            supply: Some(Updated::new(12, Some(12), 1)),
+            seq: Some(Updated::new(12, Some(12), 12)),
+            onchain_data: Some(Updated::new(12, Some(12), chain_data.to_string())),
+            creators: Updated::new(12, Some(12), vec![]),
+            royalty_amount: Updated::new(12, Some(12), 5),
+            url: Updated::new(12, Some(12), "https://ping-pong".to_string()),
+            ..Default::default()
+        };
+
+        let asset_authority = AssetAuthority {
+            pubkey: pb,
+            authority,
+            slot_updated: 12,
+        };
+
+        let owner = AssetOwner {
+            pubkey: pb,
+            owner: Updated::new(12, Some(12), authority),
+            delegate: Updated::new(12, Some(12), None),
+            owner_type: Updated::new(12, Some(12), OwnerType::Single),
+            owner_delegate_seq: Updated::new(12, Some(12), Some(12)),
+        };
+
+        let metadata = OffChainData {
+            url: "https://ping-pong".to_string(),
+            metadata: "{\"msg\": \"hallo\"}".to_string(),
+        };
+        env.rocks_env
+            .storage
+            .asset_offchain_data
+            .put(metadata.url.clone(), metadata)
+            .unwrap();
+
+        env.rocks_env
+            .storage
+            .asset_static_data
+            .put(pb, asset_static_details)
+            .unwrap();
+        env.rocks_env
+            .storage
+            .asset_dynamic_data
+            .put(pb, dynamic_details)
+            .unwrap();
+        env.rocks_env
+            .storage
+            .asset_authority_data
+            .put(pb, asset_authority)
+            .unwrap();
+        env.rocks_env
+            .storage
+            .asset_owner_data
+            .put(pb, owner)
+            .unwrap();
+
+        let payload = GetAsset { id: pb.to_string() };
+        let response = api.get_asset(payload).await.unwrap();
+
+        assert_eq!(response["grouping"], Value::Array(vec![]));
+        assert_eq!(
+            response["content"]["metadata"]["token_standard"],
+            "NonFungible"
+        );
+
         env.teardown().await;
     }
 }

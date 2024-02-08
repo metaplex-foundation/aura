@@ -13,6 +13,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 use crate::errors::StorageError;
+use crate::parameters::ParameterColumn;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
 pub mod asset;
@@ -272,6 +273,12 @@ impl Storage {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_cl_item",
                     cl_items::ClItem::merge_cl_items,
+                );
+            }
+            ParameterColumn::<u64>::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_top_parameter_column",
+                    parameters::merge_top_parameter,
                 );
             }
             AssetOwnerDeprecated::NAME => {
