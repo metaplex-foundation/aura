@@ -135,22 +135,32 @@ pub fn v1_content_from_json(asset_data: &asset_data::Model) -> Result<Content, D
     let selector = &mut selector_fn;
     let chain_data_selector = &mut chain_data_selector_fn;
     let mut meta: MetadataMap = MetadataMap::new();
+
     let name = safe_select(chain_data_selector, "$.name");
     if let Some(name) = name {
         meta.set_item("name", name.clone());
     }
+
     let symbol = safe_select(chain_data_selector, "$.symbol");
     if let Some(symbol) = symbol {
         meta.set_item("symbol", symbol.clone());
     }
+
     let desc = safe_select(selector, "$.description");
     if let Some(desc) = desc {
         meta.set_item("description", desc.clone());
     }
+
     let symbol = safe_select(selector, "$.attributes");
     if let Some(symbol) = symbol {
         meta.set_item("attributes", symbol.clone());
     }
+
+    let token_standard = safe_select(chain_data_selector, "$.token_standard");
+    if let Some(standard) = token_standard {
+        meta.set_item("token_standard", standard.clone());
+    }
+
     let mut links = HashMap::new();
     let link_fields = vec!["image", "animation_url", "external_url"];
     for f in link_fields {
@@ -159,6 +169,7 @@ pub fn v1_content_from_json(asset_data: &asset_data::Model) -> Result<Content, D
             links.insert(f.to_string(), l.to_owned());
         }
     }
+
     let _metadata = safe_select(selector, "description");
     let mut actual_files: HashMap<String, File> = HashMap::new();
     if let Some(files) = selector("$.properties.files[*]")
@@ -173,6 +184,7 @@ pub fn v1_content_from_json(asset_data: &asset_data::Model) -> Result<Content, D
                     uri = v.get("url");
                 }
                 let mime_type = v.get("type");
+
                 match (uri, mime_type) {
                     (Some(u), Some(m)) => {
                         if let Some(str_uri) = u.as_str() {
