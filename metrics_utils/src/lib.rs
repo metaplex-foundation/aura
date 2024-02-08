@@ -362,52 +362,7 @@ impl MetricsTrait for MetricState {
         self.sequence_consistent_gapfill_metrics.start_time();
 
         self.api_metrics.register(&mut self.registry);
-        self.registry.register(
-            "ingester_start_time",
-            "Binary start time",
-            self.ingester_metrics.start_time.clone(),
-        );
-
-        self.registry.register(
-            "ingester_parsed_data",
-            "Total amount of parsed data",
-            self.ingester_metrics.parsers.clone(),
-        );
-        self.registry.register(
-            "ingester_processed",
-            "Total amount of processed data",
-            self.ingester_metrics.process.clone(),
-        );
-        self.registry.register(
-            "ingester_parsed_data_latency",
-            "Histogram of data parsing duration",
-            self.ingester_metrics.latency.clone(),
-        );
-        self.registry.register(
-            "ingester_buffers",
-            "Buffer size",
-            self.ingester_metrics.buffers.clone(),
-        );
-        self.registry.register(
-            "ingester_query_retries",
-            "Total amount of query retries data",
-            self.ingester_metrics.retries.clone(),
-        );
-        self.registry.register(
-            "ingester_bublegum_instructions",
-            "Total number of bubblegum instructions processed",
-            self.ingester_metrics.instructions.clone(),
-        );
-        self.registry.register(
-            "ingester_rocksdb_backup_latency",
-            "Histogram of rocksdb backup duration",
-            self.ingester_metrics.rocksdb_backup_latency.clone(),
-        );
-        self.registry.register(
-            "ingester_last_processed_slot",
-            "The last processed slot by ingester",
-            self.ingester_metrics.last_processed_slot.clone(),
-        );
+        self.ingester_metrics.register(&mut self.registry);
 
         self.registry.register(
             "json_downloader_latency_task",
