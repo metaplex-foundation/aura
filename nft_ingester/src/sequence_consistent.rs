@@ -1,6 +1,6 @@
 use entities::models::TreeState;
-use interface::finalized_slot_getter::FinalizedSlotGetter;
 use interface::sequence_consistent::SequenceConsistentManager;
+use interface::slot_getter::FinalizedSlotGetter;
 use interface::slots_dumper::SlotsDumper;
 use metrics_utils::SequenceConsistentGapfillMetricsConfig;
 use std::sync::Arc;

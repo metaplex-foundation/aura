@@ -3,7 +3,7 @@ use entities::models::{BufferedTransaction, SignatureWithSlot};
 use flatbuffers::FlatBufferBuilder;
 use futures::{stream, StreamExt, TryStreamExt};
 use interface::error::UsecaseError;
-use interface::finalized_slot_getter::FinalizedSlotGetter;
+use interface::slot_getter::FinalizedSlotGetter;
 use interface::solana_rpc::TransactionsGetter;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use solana_client::nonblocking::rpc_client::RpcClient;
