@@ -18,7 +18,7 @@ mod tests {
         transaction_ingester,
     };
     use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
-    use rocks_db::{bubblegum_slots::BubblegumSlotGetter, transaction::TransactionProcessor};
+    use rocks_db::{bubblegum_slots::BubblegumSlotGetter, transaction::TransactionProcessor, Storage};
     use setup::rocks::RocksTestEnvironment;
     use solana_program::pubkey::Pubkey;
     use solana_transaction_status::{
@@ -117,6 +117,10 @@ mod tests {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_consume_a_block_and_check_if_processed2() {
+        let data = entities::TARGET_PUBKEY.lock();
+        if let Ok(mut res) = data {
+            *res = Some(Pubkey::try_from("4dVaNGqsEZet56kEFnGPYbWoYv5HKGp5FpSdZZNfcm4c").unwrap());
+        }
         let big_table_client = Arc::new(
             BigTableClient::connect_new_with("../../creds.json".to_string(), 1000)
                 .await
@@ -134,8 +138,63 @@ mod tests {
             bubblegum_updates_processor.clone(),
         ));
 
-        let slot = 245333166;
+        let slot = 245300233;
         let block = big_table_client.get_block(slot).await.unwrap();
+        let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
+        let mut results = Vec::new();
+        for tx in txs.iter() {
+            if !is_bubblegum_transaction_encoded(tx) {
+                continue;
+            }
+            let builder = FlatBufferBuilder::new();
+            let encoded_tx = tx.clone();
+            let tx_wrap = EncodedConfirmedTransactionWithStatusMeta {
+                transaction: encoded_tx,
+                slot,
+                block_time: block.block_time,
+            };
+
+            let builder = seralize_encoded_transaction_with_status(builder, tx_wrap).unwrap();
+
+            let tx = builder.finished_data().to_vec();
+            let tx = BufferedTransaction {
+                transaction: tx,
+                map_flatbuffer: false,
+            };
+
+            results.push(
+                tx_ingester
+                    .get_ingest_transaction_results(tx.clone())
+                    .map_err(|e| e.to_string())
+                    .unwrap(),
+            );
+        }
+        tracing::info!("Results: {:?}", results);
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_a_persisted_block_contains_a_transaction_for_a_tree() {
+        let data = entities::TARGET_PUBKEY.lock();
+        if let Ok(mut res) = data {
+            *res = Some(Pubkey::try_from("4dVaNGqsEZet56kEFnGPYbWoYv5HKGp5FpSdZZNfcm4c").unwrap());
+        }
+        
+        // let block_source = Storage::open(db_path, join_set)
+        let storage = RocksTestEnvironment::new(&[]).storage;
+
+        let bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
+            storage.clone(),
+            Arc::new(IngesterMetricsConfig::new()),
+            Arc::new(Mutex::new(VecDeque::<Task>::new())),
+        ));
+
+        let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
+            bubblegum_updates_processor.clone(),
+        ));
+
+        let slot = 245599713;
+        let block = storage.get_block(slot).await.unwrap();
         let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
         let mut results = Vec::new();
         for tx in txs.iter() {
