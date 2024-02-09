@@ -226,6 +226,10 @@ impl MessageHandler {
                                                 metadata: m.clone(),
                                                 slot: account_info.slot(),
                                                 lamports: account_info.lamports(),
+                                                executable: account_info.executable(),
+                                                metadata_owner: account_info
+                                                    .owner()
+                                                    .map(|o| Pubkey::from(o.0).to_string()),
                                             },
                                         );
                                     }
@@ -236,6 +240,10 @@ impl MessageHandler {
                                             metadata: m.clone(),
                                             slot: account_info.slot(),
                                             lamports: account_info.lamports(),
+                                            executable: account_info.executable(),
+                                            metadata_owner: account_info
+                                                .owner()
+                                                .map(|o| Pubkey::from(o.0).to_string()),
                                         },
                                     );
                                 }

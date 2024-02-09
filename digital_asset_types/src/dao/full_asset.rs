@@ -22,5 +22,7 @@ pub struct FullAssetList {
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssetDataModelWithLamports {
     pub asset: asset_data::Model,
-    pub lamports: u64,
+    pub lamports: Option<u64>,
+    pub executable: Option<bool>,
+    pub metadata_owner: Option<String>,
 }

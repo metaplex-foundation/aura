@@ -331,10 +331,11 @@ fn convert_rocks_offchain_data(
         .map(|m| ChainMutability::deserialize(m).unwrap_or(ChainMutability::Unknown))
         .unwrap_or(ChainMutability::Unknown);
 
-    let lamports = ch_data
-        .get("lamports")
-        .and_then(|m| m.as_u64())
-        .unwrap_or_default();
+    let lamports = ch_data.get("lamports").and_then(|m| m.as_u64());
+    let executable = ch_data.get("executable").and_then(|m| m.as_bool());
+    let metadata_owner = ch_data
+        .get("metadata_owner")
+        .and_then(|m| m.as_str().map(|m| m.to_string()));
 
     Ok(AssetDataModelWithLamports {
         asset: asset_data::Model {
@@ -349,6 +350,8 @@ fn convert_rocks_offchain_data(
             reindex: None,
         },
         lamports,
+        executable,
+        metadata_owner,
     })
 }
 

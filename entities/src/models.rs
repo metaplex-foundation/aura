@@ -120,6 +120,10 @@ pub struct ChainDataV1 {
     pub chain_mutability: Option<ChainMutability>, // TODO: move this feild to AssetDynamicDetails struct
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lamports: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub executable: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata_owner: Option<String>,
 }
 
 impl ChainDataV1 {
