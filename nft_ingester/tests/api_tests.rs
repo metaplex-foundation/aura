@@ -422,4 +422,99 @@ mod tests {
 
         env.teardown().await;
     }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_asset_without_offchain_data() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+        );
+
+        let pb = Pubkey::new_unique();
+        let authority = Pubkey::new_unique();
+
+        let mut chain_data = ChainDataV1 {
+            name: "name".to_string(),
+            symbol: "symbol".to_string(),
+            edition_nonce: Some(1),
+            primary_sale_happened: false,
+            token_standard: Some(TokenStandard::NonFungible),
+            uses: None,
+            chain_mutability: Some(ChainMutability::Mutable),
+        };
+        chain_data.sanitize();
+
+        let chain_data = json!(chain_data);
+        let asset_static_details = AssetStaticDetails {
+            pubkey: pb,
+            specification_asset_class: SpecificationAssetClass::Nft,
+            royalty_target_type: RoyaltyTargetType::Creators,
+            created_at: 12 as i64,
+        };
+
+        let dynamic_details = AssetDynamicDetails {
+            pubkey: pb,
+            is_compressed: Updated::new(12, Some(12), true),
+            is_compressible: Updated::new(12, Some(12), false),
+            supply: Some(Updated::new(12, Some(12), 1)),
+            seq: Some(Updated::new(12, Some(12), 12)),
+            onchain_data: Some(Updated::new(12, Some(12), chain_data.to_string())),
+            creators: Updated::new(12, Some(12), vec![]),
+            royalty_amount: Updated::new(12, Some(12), 5),
+            url: Updated::new(12, Some(12), "".to_string()),
+            ..Default::default()
+        };
+
+        let asset_authority = AssetAuthority {
+            pubkey: pb,
+            authority,
+            slot_updated: 12,
+        };
+
+        let owner = AssetOwner {
+            pubkey: pb,
+            owner: Updated::new(12, Some(12), authority),
+            delegate: Updated::new(12, Some(12), None),
+            owner_type: Updated::new(12, Some(12), OwnerType::Single),
+            owner_delegate_seq: Updated::new(12, Some(12), Some(12)),
+        };
+
+        env.rocks_env
+            .storage
+            .asset_static_data
+            .put(pb, asset_static_details)
+            .unwrap();
+        env.rocks_env
+            .storage
+            .asset_dynamic_data
+            .put(pb, dynamic_details)
+            .unwrap();
+        env.rocks_env
+            .storage
+            .asset_authority_data
+            .put(pb, asset_authority)
+            .unwrap();
+        env.rocks_env
+            .storage
+            .asset_owner_data
+            .put(pb, owner)
+            .unwrap();
+
+        let payload = GetAsset { id: pb.to_string() };
+        let response = api.get_asset(payload).await.unwrap();
+
+        assert_eq!(response["id"], pb.to_string());
+        assert_eq!(response["grouping"], Value::Array(vec![]));
+        assert_eq!(
+            response["content"]["metadata"]["token_standard"],
+            "NonFungible"
+        );
+
+        env.teardown().await;
+    }
 }
