@@ -9,7 +9,7 @@ use crate::{
     storage_traits::AssetIndexStorage,
     PgClient,
 };
-use entities::models::{AssetIndex, Creator};
+use entities::models::{AssetIndex, Creator, UrlWithStatus};
 
 #[async_trait]
 impl AssetIndexStorage for PgClient {
@@ -39,7 +39,11 @@ impl AssetIndexStorage for PgClient {
             .iter()
             .filter_map(|asset_index| asset_index.metadata_url.clone())
             .collect::<HashSet<_>>()
-            .into_iter()
+            .iter()
+            .map(|url| UrlWithStatus {
+                metadata_url: url.metadata_url.trim().replace('\0', ""),
+                is_downloaded: url.is_downloaded,
+            })
             .collect();
 
         let mut metadata_url_map: HashMap<String, i64> = HashMap::new();

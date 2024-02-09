@@ -63,6 +63,13 @@ impl MessageHandler {
             BYTE_PREFIX_TX_SIMPLE_FINALIZED
             | BYTE_PREFIX_TX_FINALIZED
             | BYTE_PREFIX_TX_PROCESSED => {
+                let status = utils::flatbuffer::transaction_info_generated::transaction_info::root_as_transaction_info(
+                    &data,
+                ).ok().and_then(|tx| tx.transaction_meta().and_then(|meta| meta.status()));
+                // status is None if there no error with tx
+                if status.is_some() {
+                    return;
+                }
                 let mut res = self.buffer.transactions.lock().await;
                 res.push_back(BufferedTransaction {
                     transaction: data,

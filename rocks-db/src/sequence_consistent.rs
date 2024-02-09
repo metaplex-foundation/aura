@@ -3,6 +3,7 @@ use crate::{key_encoders, Storage};
 use async_trait::async_trait;
 use entities::models::TreeState;
 use interface::sequence_consistent::SequenceConsistentManager;
+use interface::slot_getter::LastProcessedSlotGetter;
 use solana_sdk::pubkey::Pubkey;
 use tracing::error;
 
@@ -27,7 +28,7 @@ impl SequenceConsistentManager for Storage {
         self.trees_gaps.iter_start().count() as i64
     }
 
-    async fn process_tree_gap(&self, tree: Pubkey, gap_found: bool, _last_consistent_seq: u64) {
+    async fn process_tree_gap(&self, tree: Pubkey, gap_found: bool) {
         let result = if gap_found {
             self.trees_gaps.put_async(tree, TreesGaps {}).await
         } else {
@@ -40,5 +41,14 @@ impl SequenceConsistentManager for Storage {
                 e
             );
         }
+    }
+}
+
+#[async_trait]
+impl LastProcessedSlotGetter for Storage {
+    async fn get_last_ingested_slot(&self) -> Result<Option<u64>, String> {
+        self.get_parameter::<u64>(crate::parameters::Parameter::TopSeenSlot)
+            .await
+            .map_err(|e| e.to_string())
     }
 }
