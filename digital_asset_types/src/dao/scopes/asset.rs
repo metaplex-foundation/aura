@@ -22,8 +22,8 @@ use crate::dao::sea_orm_active_enums::{
     SpecificationVersions,
 };
 use crate::dao::{
-    asset, asset_authority, asset_creators, asset_data, asset_grouping, AssetDataModelWithLamports,
-    FullAsset, GroupingSize, Pagination,
+    asset, asset_authority, asset_creators, asset_data, asset_grouping, AssetDataModel, FullAsset,
+    GroupingSize, Pagination,
 };
 
 pub const PROCESSING_METADATA_STATE: &str = "processing";
@@ -306,7 +306,7 @@ fn convert_rocks_offchain_data(
     asset_pubkey: &Pubkey,
     offchain_data: &OffChainData,
     asset_dynamic_data: &HashMap<Pubkey, AssetDynamicDetails>,
-) -> Result<AssetDataModelWithLamports, DbErr> {
+) -> Result<AssetDataModel, DbErr> {
     let mut metadata = offchain_data.metadata.clone();
 
     if metadata == PROCESSING_METADATA_STATE || metadata.is_empty() {
@@ -337,7 +337,7 @@ fn convert_rocks_offchain_data(
         .get("metadata_owner")
         .and_then(|m| m.as_str().map(|m| m.to_string()));
 
-    Ok(AssetDataModelWithLamports {
+    Ok(AssetDataModel {
         asset: asset_data::Model {
             id: dynamic_data.pubkey.to_bytes().to_vec(),
             chain_data_mutability,
