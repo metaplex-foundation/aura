@@ -16,6 +16,8 @@ entities = { path = "../entities" }
 solana-sdk = "~1.16"
 tracing  ="0.1.40"
 log = "0.4.20"
+metrics-utils = { path = "../metrics_utils" }
+chrono = "0.4.31"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

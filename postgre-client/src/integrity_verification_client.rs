@@ -1,6 +1,6 @@
-use crate::model::VerificationRequiredField;
 use crate::storage_traits::IntegrityVerificationKeysFetcher;
-use crate::PgClient;
+use crate::{model::VerificationRequiredField, SQL_COMPONENT};
+use crate::{PgClient, SELECT_ACTION};
 use async_trait::async_trait;
 use solana_sdk::bs58;
 use sqlx::{QueryBuilder, Row};
@@ -31,11 +31,18 @@ impl PgClient {
         query_builder.push(&field);
         query_builder.push(" FROM random");
         let query = query_builder.build();
-
-        let rows = query
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e| e.to_string())?;
+        let start_time = chrono::Utc::now();
+        let rows = query.fetch_all(&self.pool).await.map_err(|e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, SELECT_ACTION, "integrity_asset_by_field");
+            e.to_string()
+        })?;
+        self.metrics.observe_request(
+            SQL_COMPONENT,
+            SELECT_ACTION,
+            "integrity_asset_by_field",
+            start_time,
+        );
 
         Ok(rows
             .into_iter()
@@ -64,10 +71,17 @@ impl PgClient {
             UNION ALL
             SELECT ast_pubkey FROM random";
 
+        let start_time = chrono::Utc::now();
         let rows = sqlx::query(query)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                self.metrics
+                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "integrity_asset");
+                e.to_string()
+            })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, SELECT_ACTION, "integrity_asset", start_time);
 
         Ok(rows
             .into_iter()
@@ -110,10 +124,24 @@ impl IntegrityVerificationKeysFetcher for PgClient {
             UNION ALL
             SELECT asc_creator FROM random";
 
+        let start_time = chrono::Utc::now();
         let rows = sqlx::query(query)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                self.metrics.observe_error(
+                    SQL_COMPONENT,
+                    SELECT_ACTION,
+                    "integrity_asset_creators",
+                );
+                e.to_string()
+            })?;
+        self.metrics.observe_request(
+            SQL_COMPONENT,
+            SELECT_ACTION,
+            "integrity_asset_creators",
+            start_time,
+        );
 
         Ok(rows
             .into_iter()

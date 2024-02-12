@@ -1,4 +1,5 @@
 use log::info;
+use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -25,6 +26,7 @@ pub async fn start_api(
     rocks_db: Arc<Storage>,
     keep_running: Arc<AtomicBool>,
     metrics: Arc<ApiMetricsConfig>,
+    red_metrics: Arc<RequestErrorDurationMetrics>,
 ) -> Result<(), DasApiError> {
     env::set_var(
         env_logger::DEFAULT_FILTER_ENV,
@@ -35,7 +37,7 @@ pub async fn start_api(
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server_port));
 
     let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
-    let api = DasApi::from_config(config, metrics, rocks_db).await?;
+    let api = DasApi::from_config(config, metrics, red_metrics, rocks_db).await?;
 
     run_api(api, Some(request_middleware), addr, keep_running).await
 }

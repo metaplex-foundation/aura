@@ -6,6 +6,7 @@ use clap::Parser;
 use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info, warn};
+use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::{backfiller, config, transaction_ingester};
 use rocks_db::bubblegum_slots::{
     BubblegumSlotGetter, ForceReingestableSlotGetter, IngestableSlotGetter,
@@ -85,6 +86,7 @@ pub async fn main() -> Result<(), IngesterError> {
         SynchronizerMetricsConfig::new(),
         JsonMigratorMetricsConfig::new(),
         SequenceConsistentGapfillMetricsConfig::new(),
+        RequestErrorDurationMetrics::new(),
     );
     metrics_state.register_metrics();
 
@@ -246,11 +248,13 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
+    let cloned_red_metrics = metrics_state.red_metrics.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
             cloned_rocks_storage.clone(),
             cloned_keep_running,
             metrics_state.api_metrics.clone(),
+            cloned_red_metrics,
         )
         .await
         {
@@ -484,6 +488,7 @@ pub async fn main() -> Result<(), IngesterError> {
             &config.database_config.get_database_url().unwrap(),
             100,
             max_postgre_connections,
+            metrics_state.red_metrics.clone(),
         )
         .await?,
     );
