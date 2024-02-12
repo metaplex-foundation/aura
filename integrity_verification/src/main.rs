@@ -66,6 +66,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                 config.big_table_creds_path.clone(),
                 config.slots_collect_path_container.clone(),
                 config.collect_slots,
+                config.test_retries,
             )
             .await;
             run_tests(
@@ -89,6 +90,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                 config.big_table_creds_path.clone(),
                 config.slots_collect_path_container.clone(),
                 config.collect_slots,
+                config.test_retries,
             )
             .await;
             run_tests(

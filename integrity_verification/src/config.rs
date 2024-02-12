@@ -9,6 +9,10 @@ pub enum TestSourceMode {
     Database,
 }
 
+fn default_test_retries() -> u64 {
+    20
+}
+
 #[derive(Deserialize, Debug)]
 pub struct IntegrityVerificationConfig {
     pub metrics_port: u16,
@@ -27,6 +31,8 @@ pub struct IntegrityVerificationConfig {
     pub slots_collect_path_container: Option<String>,
     #[serde(default)]
     pub collect_slots: bool,
+    #[serde(default = "default_test_retries")]
+    pub test_retries: u64,
 }
 
 // Use unwraps because it just config-setup stage
