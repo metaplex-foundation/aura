@@ -562,6 +562,7 @@ mod tests {
             Some(String::from("../../creds.json")),
             Some("./".to_string()),
             true,
+            20,
         )
         .await
     }
