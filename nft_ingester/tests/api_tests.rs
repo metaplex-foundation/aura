@@ -1,8 +1,11 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use std::sync::Arc;
+    use std::{collections::HashMap, sync::Arc};
 
+    use blockbuster::token_metadata::state::{
+        Data, Key, Metadata, TokenStandard as BLKTokenStandard,
+    };
     use digital_asset_types::rpc::response::AssetList;
     use entities::{
         api_req_params::{AssetSortBy, AssetSortDirection, AssetSorting, GetAsset, SearchAssets},
@@ -12,10 +15,17 @@ mod tests {
         },
         models::{ChainDataV1, Updated},
     };
-    use metrics_utils::ApiMetricsConfig;
+    use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig};
+    use nft_ingester::{
+        buffer::Buffer,
+        db_v2::DBClient,
+        mplx_updates_processor::{MetadataInfo, MplxAccsProcessor},
+        token_updates_processor::TokenAccsProcessor,
+    };
     use rocks_db::{
-        offchain_data::OffChainData, AssetAuthority, AssetDynamicDetails, AssetOwner,
-        AssetStaticDetails,
+        columns::{Mint, TokenAccount},
+        offchain_data::OffChainData,
+        AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
     };
     use serde_json::{json, Value};
     use solana_program::pubkey::Pubkey;
@@ -514,6 +524,147 @@ mod tests {
             response["content"]["metadata"]["token_standard"],
             "NonFungible"
         );
+
+        env.teardown().await;
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_fungible_asset() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+        );
+
+        let buffer = Arc::new(Buffer::new());
+
+        let db_client = Arc::new(DBClient {
+            pool: env.pg_env.pool.clone(),
+        });
+
+        let token_updates_processor = TokenAccsProcessor::new(
+            env.rocks_env.storage.clone(),
+            db_client.clone(),
+            buffer.clone(),
+            Arc::new(IngesterMetricsConfig::new()),
+            1,
+        );
+        let mplx_updates_processor = MplxAccsProcessor::new(
+            1,
+            buffer.clone(),
+            db_client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+
+        let token_key = Pubkey::new_unique();
+        let mint_key = Pubkey::new_unique();
+        let owner_key = Pubkey::new_unique();
+
+        let mint_auth_key = Pubkey::new_unique();
+
+        let token_acc = TokenAccount {
+            pubkey: token_key,
+            mint: mint_key,
+            delegate: None,
+            owner: owner_key,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 1,
+            amount: 1,
+        };
+
+        let mint_acc = Mint {
+            pubkey: mint_key,
+            slot_updated: 1,
+            supply: 1,
+            decimals: 0,
+            mint_authority: Some(mint_auth_key),
+            freeze_authority: None,
+        };
+
+        let metadata = MetadataInfo {
+            metadata: Metadata {
+                key: Key::MetadataV1,
+                update_authority: Pubkey::new_unique(),
+                mint: mint_key,
+                data: Data {
+                    name: "name".to_string(),
+                    symbol: "symbol".to_string(),
+                    uri: "https://ping-pong".to_string(),
+                    seller_fee_basis_points: 10,
+                    creators: None,
+                },
+                primary_sale_happened: false,
+                is_mutable: true,
+                edition_nonce: None,
+                token_standard: Some(BLKTokenStandard::Fungible),
+                collection: None,
+                uses: None,
+                collection_details: None,
+                programmable_config: None,
+            },
+            slot: 1,
+        };
+        let mut metadata_info = HashMap::new();
+        metadata_info.insert(mint_key.to_bytes().to_vec(), metadata);
+
+        let metadata = OffChainData {
+            url: "https://ping-pong".to_string(),
+            metadata: "{\"msg\": \"hallo\"}".to_string(),
+        };
+
+        env.rocks_env
+            .storage
+            .asset_offchain_data
+            .put(metadata.url.clone(), metadata)
+            .unwrap();
+
+        token_updates_processor
+            .transform_and_save_mint_accs(&[mint_acc])
+            .await;
+        token_updates_processor
+            .transform_and_save_token_accs(&[token_acc])
+            .await;
+
+        mplx_updates_processor
+            .transform_and_save_metadata(&metadata_info)
+            .await;
+
+        let payload = GetAsset {
+            id: mint_key.to_string(),
+        };
+        let response = api.get_asset(payload).await.unwrap();
+
+        assert_eq!(response["ownership"]["ownership_model"], "single");
+        assert_eq!(response["ownership"]["owner"], "");
+        assert_eq!(response["interface"], "FungibleToken".to_string());
+
+        let mint_acc = Mint {
+            pubkey: mint_key,
+            slot_updated: 2,
+            supply: 2,
+            decimals: 0,
+            mint_authority: Some(mint_auth_key),
+            freeze_authority: None,
+        };
+
+        token_updates_processor
+            .transform_and_save_mint_accs(&[mint_acc])
+            .await;
+
+        let payload = GetAsset {
+            id: mint_key.to_string(),
+        };
+        let response = api.get_asset(payload).await.unwrap();
+
+        assert_eq!(response["ownership"]["ownership_model"], "token");
+        assert_eq!(response["ownership"]["owner"], "");
+        assert_eq!(response["interface"], "FungibleToken".to_string());
 
         env.teardown().await;
     }

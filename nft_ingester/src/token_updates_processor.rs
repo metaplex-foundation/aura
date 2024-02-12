@@ -112,11 +112,7 @@ impl TokenAccsProcessor {
                             None,
                             token_account.delegate,
                         ),
-                        owner_type: Updated::new(
-                            token_account.slot_updated as u64,
-                            None,
-                            OwnerType::Single,
-                        ),
+                        owner_type: Updated::default(),
                         owner_delegate_seq: Updated::new(
                             token_account.slot_updated as u64,
                             None,
@@ -200,31 +196,53 @@ impl TokenAccsProcessor {
     }
 
     pub async fn transform_and_save_mint_accs(&self, mint_accs_to_save: &[Mint]) {
-        let save_values = mint_accs_to_save.to_owned().clone().into_iter().fold(
-            HashMap::new(),
-            |mut acc: HashMap<_, _>, mint| {
-                acc.insert(
-                    mint.pubkey,
-                    AssetDynamicDetails {
-                        pubkey: mint.pubkey,
-                        supply: Some(Updated::new(
-                            mint.slot_updated as u64,
-                            None,
-                            mint.supply as u64,
-                        )),
-                        seq: Some(Updated::new(
-                            mint.slot_updated as u64,
-                            None,
-                            mint.slot_updated as u64,
-                        )),
-                        ..Default::default()
-                    },
-                );
-                acc
-            },
-        );
+        let (save_values, owner_type_update) =
+            mint_accs_to_save.to_owned().clone().into_iter().fold(
+                (HashMap::new(), HashMap::new()),
+                |mut acc: (HashMap<_, _>, HashMap<_, _>), mint| {
+                    acc.0.insert(
+                        mint.pubkey,
+                        AssetDynamicDetails {
+                            pubkey: mint.pubkey,
+                            supply: Some(Updated::new(
+                                mint.slot_updated as u64,
+                                None,
+                                mint.supply as u64,
+                            )),
+                            seq: Some(Updated::new(
+                                mint.slot_updated as u64,
+                                None,
+                                mint.slot_updated as u64,
+                            )),
+                            ..Default::default()
+                        },
+                    );
+
+                    let owner_type_value = if mint.supply > 1 {
+                        OwnerType::Token
+                    } else {
+                        OwnerType::Single
+                    };
+
+                    acc.1.insert(
+                        mint.pubkey,
+                        AssetOwner {
+                            pubkey: mint.pubkey,
+                            owner_type: Updated::new(
+                                mint.slot_updated as u64,
+                                None,
+                                owner_type_value,
+                            ),
+                            ..Default::default()
+                        },
+                    );
+
+                    acc
+                },
+            );
 
         let begin_processing = Instant::now();
+
         let res = self
             .rocks_db
             .asset_dynamic_data
@@ -232,6 +250,14 @@ impl TokenAccsProcessor {
             .await;
 
         result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
+
+        let res = self
+            .rocks_db
+            .asset_owner_data
+            .merge_batch(owner_type_update)
+            .await;
+
+        result_to_metrics(self.metrics.clone(), &res, "owner_type_update");
 
         mint_accs_to_save.iter().for_each(|mint| {
             let upd_res = self

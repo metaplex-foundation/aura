@@ -311,6 +311,22 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
     let rpc_creators = to_creators(creators);
     let rpc_groups = to_grouping(groups)?;
     let interface = get_interface(&asset)?;
+
+    let mut owner = asset
+        .owner
+        .clone()
+        .map(|o| bs58::encode(o).into_string())
+        .unwrap_or("".to_string());
+    let mut grouping = Some(rpc_groups);
+
+    match interface {
+        Interface::FungibleAsset | Interface::FungibleToken => {
+            owner = "".to_string();
+            grouping = None;
+        }
+        _ => {}
+    }
+
     let content = get_content(&asset, &data)?;
     let mut chain_data_selector_fn = jsonpath_lib::selector(&data.chain_data);
     let chain_data_selector = &mut chain_data_selector_fn;
@@ -347,7 +363,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
                 .map(|e| e.trim().to_string())
                 .unwrap_or_default(),
         }),
-        grouping: Some(rpc_groups),
+        grouping,
         royalty: Some(Royalty {
             royalty_model: asset.royalty_target_type.into(),
             target: asset.royalty_target.map(|s| bs58::encode(s).into_string()),
@@ -362,10 +378,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
             delegated: asset.delegate.is_some(),
             delegate: asset.delegate.map(|s| bs58::encode(s).into_string()),
             ownership_model: asset.owner_type.into(),
-            owner: asset
-                .owner
-                .map(|o| bs58::encode(o).into_string())
-                .unwrap_or("".to_string()),
+            owner,
         },
         supply: match interface {
             Interface::V1NFT => Some(Supply {
