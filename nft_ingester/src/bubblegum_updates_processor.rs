@@ -447,6 +447,9 @@ impl BubblegumTxProcessor {
                             total: u.total,
                         }),
                         chain_mutability: Some(chain_mutability),
+                        lamports: None,
+                        executable: None,
+                        metadata_owner: None,
                     };
                     chain_data.sanitize();
 
@@ -862,6 +865,9 @@ impl BubblegumTxProcessor {
                             })
                             .transpose()?,
                         chain_mutability: Some(chain_mutability),
+                        lamports: None,
+                        executable: None,
+                        metadata_owner: None,
                     };
                     chain_data.sanitize();
                     let chain_data_json = serde_json::to_value(chain_data)

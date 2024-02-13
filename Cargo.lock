@@ -4014,7 +4014,6 @@ dependencies = [
  "serde_json",
  "setup",
  "solana-bigtable-connection",
- "solana-client",
  "solana-program",
  "solana-sdk",
  "solana-storage-bigtable",
