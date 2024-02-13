@@ -20,11 +20,12 @@ use solana_sdk::pubkey::Pubkey;
 use utils::flatbuffer::account_data_generated::account_data::root_as_account_data;
 
 use rocks_db::columns::{Mint, TokenAccount};
+use rocks_db::editions::{EditionV1, MasterEdition, TokenMetadataEdition};
 
 use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
-use crate::mplx_updates_processor::MetadataInfo;
+use crate::mplx_updates_processor::{MetadataInfo, TokenMetadata};
 
 const BYTE_PREFIX_TX_SIMPLE_FINALIZED: u8 = 22;
 const BYTE_PREFIX_TX_FINALIZED: u8 = 12;
@@ -36,6 +37,23 @@ pub struct MessageHandler {
     buffer: Arc<Buffer>,
     token_acc_parser: Arc<TokenAccountParser>,
     mplx_acc_parser: Arc<TokenMetadataParser>,
+}
+
+macro_rules! update_or_insert {
+    ($map:expr, $key:expr, $create:expr, $should_update:expr) => {{
+        let mut map = $map.lock().await;
+        let entry = map.entry($key);
+        match entry {
+            std::collections::hash_map::Entry::Occupied(mut o) => {
+                if $should_update(o.get()) {
+                    o.insert($create());
+                }
+            }
+            std::collections::hash_map::Entry::Vacant(v) => {
+                v.insert($create());
+            }
+        }
+    }};
 }
 
 impl MessageHandler {
@@ -214,39 +232,71 @@ impl MessageHandler {
 
                         match &parsing_result.data {
                             TokenMetadataAccountData::MetadataV1(m) => {
-                                let mut metadata = self.buffer.mplx_metadata_info.lock().await;
-
-                                if let Some(existed_models) =
-                                    metadata.get(m.mint.to_bytes().as_ref())
-                                {
-                                    if existed_models.slot < account_info.slot() {
-                                        metadata.insert(
-                                            key.0.to_vec(),
-                                            MetadataInfo {
-                                                metadata: m.clone(),
-                                                slot: account_info.slot(),
-                                                lamports: account_info.lamports(),
-                                                executable: account_info.executable(),
-                                                metadata_owner: account_info
-                                                    .owner()
-                                                    .map(|o| Pubkey::from(o.0).to_string()),
+                                update_or_insert!(
+                                    self.buffer.mplx_metadata_info,
+                                    key.0.to_vec(),
+                                    || MetadataInfo {
+                                        metadata: m.clone(),
+                                        slot: account_info.slot(),
+                                        write_version: account_info.write_version(),
+                                        lamports: account_info.lamports(),
+                                        executable: account_info.executable(),
+                                        metadata_owner: account_info
+                                            .owner()
+                                            .map(|o| Pubkey::from(o.0).to_string()),
+                                    },
+                                    |existing: &MetadataInfo| existing.write_version
+                                        < account_info.write_version()
+                                );
+                            }
+                            TokenMetadataAccountData::MasterEditionV1(m) => {
+                                update_or_insert!(
+                                    self.buffer.token_metadata_editions,
+                                    Pubkey::from(key.0),
+                                    || TokenMetadata {
+                                        edition: TokenMetadataEdition::MasterEdition(
+                                            MasterEdition {
+                                                supply: m.supply,
+                                                max_supply: m.max_supply,
                                             },
-                                        );
-                                    }
-                                } else {
-                                    metadata.insert(
-                                        key.0.to_vec(),
-                                        MetadataInfo {
-                                            metadata: m.clone(),
-                                            slot: account_info.slot(),
-                                            lamports: account_info.lamports(),
-                                            executable: account_info.executable(),
-                                            metadata_owner: account_info
-                                                .owner()
-                                                .map(|o| Pubkey::from(o.0).to_string()),
-                                        },
-                                    );
-                                }
+                                        ),
+                                        write_version: account_info.write_version(),
+                                    },
+                                    |existing: &TokenMetadata| existing.write_version
+                                        < account_info.write_version()
+                                );
+                            }
+                            TokenMetadataAccountData::MasterEditionV2(m) => {
+                                update_or_insert!(
+                                    self.buffer.token_metadata_editions,
+                                    Pubkey::from(key.0),
+                                    || TokenMetadata {
+                                        edition: TokenMetadataEdition::MasterEdition(
+                                            MasterEdition {
+                                                supply: m.supply,
+                                                max_supply: m.max_supply,
+                                            },
+                                        ),
+                                        write_version: account_info.write_version(),
+                                    },
+                                    |existing: &TokenMetadata| existing.write_version
+                                        < account_info.write_version()
+                                );
+                            }
+                            TokenMetadataAccountData::EditionV1(e) => {
+                                update_or_insert!(
+                                    self.buffer.token_metadata_editions,
+                                    Pubkey::from(key.0),
+                                    || TokenMetadata {
+                                        edition: TokenMetadataEdition::EditionV1(EditionV1 {
+                                            parent: e.parent,
+                                            edition: e.edition,
+                                        },),
+                                        write_version: account_info.write_version(),
+                                    },
+                                    |existing: &TokenMetadata| existing.write_version
+                                        < account_info.write_version()
+                                );
                             }
                             _ => debug!("Not implemented"),
                         };
@@ -352,4 +402,103 @@ fn test_token_account_uninitialized() {
         Err(solana_program::program_error::ProgramError::UninitializedAccount),
         unpack_res
     )
+}
+
+#[cfg(feature = "rpc_tests")]
+#[tokio::test]
+async fn test_edition_pda() {
+    use blockbuster::program_handler::ProgramParser;
+    use blockbuster::programs::token_metadata::{TokenMetadataAccountData, TokenMetadataParser};
+    use blockbuster::programs::ProgramParseResult;
+    use mpl_token_metadata::accounts::MasterEdition;
+    use plerkle_serialization::solana_geyser_plugin_interface_shims::ReplicaAccountInfoV2;
+
+    let master_edition_pubkey =
+        Pubkey::from_str("9Rfs2otkZpsLPomKUGku7DaFv9YvtkV9a87nqTUgMBhC").unwrap();
+    let edition_pubkey = Pubkey::from_str("1163REUqapQVzoet7GLuWFrvRVTrmYBYu8FDEXmeUEz").unwrap();
+    let client = RpcClient::new("https://docs-demo.solana-mainnet.quiknode.pro/".to_string());
+    let edition_account = client.get_account(&edition_pubkey).await.unwrap();
+    let master_edition_account = client.get_account(&master_edition_pubkey).await.unwrap();
+
+    let ser_edition_account = plerkle_serialization::serializer::serialize_account(
+        FlatBufferBuilder::new(),
+        &ReplicaAccountInfoV2 {
+            pubkey: edition_pubkey.to_bytes().as_ref(),
+            lamports: edition_account.lamports,
+            owner: edition_account.owner.to_bytes().as_ref(),
+            executable: edition_account.executable,
+            rent_epoch: edition_account.rent_epoch,
+            data: edition_account.data.as_ref(),
+            write_version: 0,
+            txn_signature: None,
+        },
+        0,
+        false,
+    );
+    let parser = TokenMetadataParser {};
+    let binding = ser_edition_account.finished_data().to_owned();
+    let binding = plerkle_serialization::root_as_account_info(binding.as_ref()).unwrap();
+    let binding = parser.handle_account(&binding).unwrap();
+    let binding = binding.result_type();
+    let binding = match binding {
+        ProgramParseResult::TokenMetadata(c) => c,
+        _ => {
+            panic!()
+        }
+    };
+    let edition = if let TokenMetadataAccountData::EditionV1(account) = &binding.data {
+        Some(account)
+    } else {
+        None
+    };
+    // check that account is really EditionV1
+    assert_ne!(None, edition);
+
+    let ser_master_edition_account = plerkle_serialization::serializer::serialize_account(
+        FlatBufferBuilder::new(),
+        &ReplicaAccountInfoV2 {
+            pubkey: master_edition_pubkey.to_bytes().as_ref(),
+            lamports: master_edition_account.lamports,
+            owner: master_edition_account.owner.to_bytes().as_ref(),
+            executable: master_edition_account.executable,
+            rent_epoch: master_edition_account.rent_epoch,
+            data: master_edition_account.data.as_ref(),
+            write_version: 0,
+            txn_signature: None,
+        },
+        0,
+        false,
+    );
+    let binding = ser_master_edition_account.finished_data().to_owned();
+    let binding = plerkle_serialization::root_as_account_info(binding.as_ref()).unwrap();
+    let binding = parser.handle_account(&binding).unwrap();
+    let binding = binding.result_type();
+    let binding = match binding {
+        ProgramParseResult::TokenMetadata(c) => c,
+        _ => {
+            panic!()
+        }
+    };
+
+    let master_edition = if let TokenMetadataAccountData::MasterEditionV1(account) = &binding.data {
+        Some(account)
+    } else {
+        None
+    };
+    // check that account is really MasterEditionV1
+    assert_ne!(None, master_edition);
+    assert_eq!(
+        edition_pubkey,
+        MasterEdition::find_pda(
+            &Pubkey::from_str("iPZvpCFQeSjaC37WG2z5RfzTRFrMzcruwPaY3oeN9aN").unwrap()
+        )
+        .0
+    );
+    assert_eq!(
+        master_edition_pubkey,
+        MasterEdition::find_pda(
+            &Pubkey::from_str("HHh5kp1XK9tTZsdmbuikVmNv2wmKStV4MQRa3vdXsL7S").unwrap()
+        )
+        .0
+    );
 }

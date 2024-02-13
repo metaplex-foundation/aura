@@ -33,6 +33,15 @@ pub struct AssetStaticDetails {
     pub specification_asset_class: SpecificationAssetClass,
     pub royalty_target_type: RoyaltyTargetType,
     pub created_at: i64,
+    pub edition_address: Pubkey,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AssetStaticDetailsDeprecated {
+    pub pubkey: Pubkey,
+    pub specification_asset_class: SpecificationAssetClass,
+    pub royalty_target_type: RoyaltyTargetType,
+    pub created_at: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -136,6 +145,21 @@ fn update_optional_field<T: Clone + Default>(
 }
 
 impl TypedColumn for AssetStaticDetails {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    // The value type is the Asset struct itself
+    const NAME: &'static str = "ASSET_STATIC_V2"; // Name of the column family
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetStaticDetailsDeprecated {
     type KeyType = Pubkey;
     type ValueType = Self;
     // The value type is the Asset struct itself

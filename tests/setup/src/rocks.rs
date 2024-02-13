@@ -159,6 +159,7 @@ pub fn generate_test_static_data(pubkey: Pubkey, slot: u64) -> AssetStaticDetail
         created_at: slot as i64,
         specification_asset_class: entities::enums::SpecificationAssetClass::Nft,
         royalty_target_type: entities::enums::RoyaltyTargetType::Creators,
+        edition_address: Default::default(),
     }
 }
 

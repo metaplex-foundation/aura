@@ -351,6 +351,7 @@ mod tests {
             specification_asset_class: SpecificationAssetClass::Nft,
             royalty_target_type: RoyaltyTargetType::Creators,
             created_at: 12 as i64,
+            edition_address: MasterEdition::find_pda(&pb).0,
         };
 
         let dynamic_details = AssetDynamicDetails {

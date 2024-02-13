@@ -6,7 +6,9 @@ use std::time::SystemTime;
 
 use blockbuster::token_metadata::state::{Metadata, TokenStandard, UseMethod};
 use log::error;
+use mpl_token_metadata::accounts::MasterEdition;
 use serde_json::json;
+use solana_program::pubkey::Pubkey;
 use tokio::time::Instant;
 
 use entities::enums::{RoyaltyTargetType, SpecificationAssetClass};
@@ -14,6 +16,7 @@ use entities::models::Updated;
 use entities::models::{ChainDataV1, Creator, Uses};
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
 use rocks_db::asset::{AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails};
+use rocks_db::editions::TokenMetadataEdition;
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
 
@@ -39,9 +42,15 @@ pub struct RocksMetadataModels {
 pub struct MetadataInfo {
     pub metadata: Metadata,
     pub slot: u64,
+    pub write_version: u64,
     pub lamports: u64,
     pub executable: bool,
     pub metadata_owner: Option<String>,
+}
+
+pub struct TokenMetadata {
+    pub edition: TokenMetadataEdition,
+    pub write_version: u64,
 }
 
 #[derive(Clone)]
@@ -85,6 +94,53 @@ impl MplxAccsProcessor {
             rocks_db,
             metrics,
             last_received_at: None,
+        }
+    }
+
+    pub async fn process_edition_accs(&mut self, keep_running: Arc<AtomicBool>) {
+        while keep_running.load(Ordering::SeqCst) {
+            let buffer_len = self.buffer.token_metadata_editions.lock().await.len();
+            if buffer_len < self.batch_size {
+                // sleep only in case when buffer is empty or n seconds passed since last insert
+                if buffer_len == 0
+                    || self.last_received_at.is_some_and(|t| {
+                        t.elapsed().is_ok_and(|e| e.as_secs() < FLUSH_INTERVAL_SEC)
+                    })
+                {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(WORKER_IDLE_TIMEOUT_MS))
+                        .await;
+                    continue;
+                }
+            }
+
+            let _editions = {
+                let mut editions_buffer = self.buffer.token_metadata_editions.lock().await;
+                let mut elems = HashMap::new();
+
+                for key in editions_buffer
+                    .keys()
+                    .take(self.batch_size)
+                    .cloned()
+                    .collect::<Vec<Pubkey>>()
+                {
+                    if let Some(value) = editions_buffer.remove(&key) {
+                        elems.insert(key, value);
+                    }
+                }
+
+                elems
+            };
+            // let metadata_models = self.create_rocks_metadata_models(&metadata_info).await;
+
+            // store data
+            let begin_processing = Instant::now();
+            // self.store_metadata_models(&metadata_models).await;
+            self.metrics.set_latency(
+                "editions_saving",
+                begin_processing.elapsed().as_millis() as f64,
+            );
+
+            self.last_received_at = Some(SystemTime::now());
         }
     }
 
@@ -188,6 +244,7 @@ impl MplxAccsProcessor {
                 specification_asset_class: class,
                 royalty_target_type: RoyaltyTargetType::Creators,
                 created_at: metadata_info.slot as i64,
+                edition_address: MasterEdition::find_pda(&mint).0,
             });
 
             let mut chain_data = ChainDataV1 {

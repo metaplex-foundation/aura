@@ -81,6 +81,9 @@ harness = false
 name = "ingester_benchmark"
 harness = false
 
+[features]
+rpc_tests = []
+
 [dependencies.utils]
 version = "0.1.8"
 git = "https://github.com/extrnode/solana-geyser-zmq"
