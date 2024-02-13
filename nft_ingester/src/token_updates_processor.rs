@@ -10,6 +10,7 @@ use metrics_utils::IngesterMetricsConfig;
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
 use rocks_db::columns::{Mint, TokenAccount};
 use rocks_db::Storage;
+use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -26,6 +27,12 @@ pub struct TokenAccsProcessor {
     pub metrics: Arc<IngesterMetricsConfig>,
     last_received_mint_at: Option<SystemTime>,
     last_received_token_acc_at: Option<SystemTime>,
+}
+
+#[derive(Default)]
+struct DynamicAndAssetOwnerDetails {
+    pub asset_dynamic_details: HashMap<Pubkey, AssetDynamicDetails>,
+    pub asset_owner_details: HashMap<Pubkey, AssetOwner>,
 }
 
 impl TokenAccsProcessor {
@@ -196,11 +203,11 @@ impl TokenAccsProcessor {
     }
 
     pub async fn transform_and_save_mint_accs(&self, mint_accs_to_save: &[Mint]) {
-        let (save_values, owner_type_update) =
+        let dynamic_and_asset_owner_details =
             mint_accs_to_save.to_owned().clone().into_iter().fold(
-                (HashMap::new(), HashMap::new()),
-                |mut acc: (HashMap<_, _>, HashMap<_, _>), mint| {
-                    acc.0.insert(
+                DynamicAndAssetOwnerDetails::default(),
+                |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, mint| {
+                    accumulated_asset_info.asset_dynamic_details.insert(
                         mint.pubkey,
                         AssetDynamicDetails {
                             pubkey: mint.pubkey,
@@ -224,7 +231,7 @@ impl TokenAccsProcessor {
                         OwnerType::Single
                     };
 
-                    acc.1.insert(
+                    accumulated_asset_info.asset_owner_details.insert(
                         mint.pubkey,
                         AssetOwner {
                             pubkey: mint.pubkey,
@@ -237,7 +244,7 @@ impl TokenAccsProcessor {
                         },
                     );
 
-                    acc
+                    accumulated_asset_info
                 },
             );
 
@@ -246,7 +253,7 @@ impl TokenAccsProcessor {
         let res = self
             .rocks_db
             .asset_dynamic_data
-            .merge_batch(save_values)
+            .merge_batch(dynamic_and_asset_owner_details.asset_dynamic_details)
             .await;
 
         result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
@@ -254,7 +261,7 @@ impl TokenAccsProcessor {
         let res = self
             .rocks_db
             .asset_owner_data
-            .merge_batch(owner_type_update)
+            .merge_batch(dynamic_and_asset_owner_details.asset_owner_details)
             .await;
 
         result_to_metrics(self.metrics.clone(), &res, "owner_type_update");
