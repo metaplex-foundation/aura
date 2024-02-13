@@ -5,7 +5,7 @@ use sqlx::{Postgres, QueryBuilder};
 use crate::{
     model::{AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, SearchAssetsFilter},
     storage_traits::AssetPubkeyFilteredFetcher,
-    PgClient,
+    PgClient, SELECT_ACTION, SQL_COMPONENT,
 };
 
 #[derive(sqlx::FromRow, Debug)]
@@ -228,10 +228,17 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         let (mut query_builder, order_reversed) =
             Self::build_search_query(filter, order, limit, page, before, after);
         let query = query_builder.build_query_as::<AssetRawResponse>();
+        let start_time = chrono::Utc::now();
         let result = query
             .fetch_all(&self.pool)
             .await
-            .map_err(|e: sqlx::Error| e.to_string())?;
+            .map_err(|e: sqlx::Error| {
+                self.metrics
+                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "assets_v3");
+                e.to_string()
+            })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, SELECT_ACTION, "assets_v3", start_time);
         let r = result
             .into_iter()
             .map(|r| AssetSortedIndex::from((&r, &order.sort_by)));

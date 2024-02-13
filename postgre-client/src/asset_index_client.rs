@@ -7,7 +7,8 @@ use sqlx::{Postgres, QueryBuilder, Transaction};
 use crate::{
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
     storage_traits::AssetIndexStorage,
-    PgClient,
+    PgClient, BATCH_DELETE_ACTION, BATCH_SELECT_ACTION, BATCH_UPSERT_ACTION, SELECT_ACTION,
+    SQL_COMPONENT, TRANSACTION_ACTION, UPDATE_ACTION,
 };
 use entities::models::{AssetIndex, Creator, UrlWithStatus};
 
@@ -17,13 +18,15 @@ impl AssetIndexStorage for PgClient {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
             "SELECT last_synced_asset_update_key FROM last_synced_key WHERE id = 1",
         );
-
+        let start_time = chrono::Utc::now();
         let query = query_builder.build_query_as::<(Option<Vec<u8>>,)>();
-        let result = query
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e| e.to_string())?;
-
+        let result = query.fetch_one(&self.pool).await.map_err(|e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, SELECT_ACTION, "last_synced_key");
+            e.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, SELECT_ACTION, "last_synced_key", start_time);
         Ok(result.0)
     }
 
@@ -32,7 +35,14 @@ impl AssetIndexStorage for PgClient {
         asset_indexes: &[AssetIndex],
         last_key: &[u8],
     ) -> Result<(), String> {
-        let mut transaction = self.pool.begin().await.map_err(|e| e.to_string())?;
+        let start_time = chrono::Utc::now();
+        let mut transaction = self.pool.begin().await.map_err(|e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "begin");
+            e.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "begin", start_time);
 
         // First we need to bulk upsert metadata_url into metadata and get back ids for each metadata_url to upsert into assets_v3
         let mut metadata_urls: Vec<_> = asset_indexes
@@ -166,10 +176,14 @@ impl AssetIndexStorage for PgClient {
             WHERE assets_v3.ast_slot_updated <= EXCLUDED.ast_slot_updated OR assets_v3.ast_slot_updated IS NULL;");
 
         let query = query_builder.build();
-        query
-            .execute(&mut transaction)
-            .await
-            .map_err(|e| e.to_string())?;
+        let start_time = chrono::Utc::now();
+        query.execute(&mut transaction).await.map_err(|e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, BATCH_UPSERT_ACTION, "assets_v3");
+            e.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, BATCH_UPSERT_ACTION, "assets_v3", start_time);
 
         // Asset creators will be updated in 2 steps:
         // 1. Delete creators for the assets that are being updated and don't exist anymore
@@ -195,10 +209,18 @@ impl AssetIndexStorage for PgClient {
             );
 
             let query = query_builder.build();
-            query
-                .execute(&mut transaction)
-                .await
-                .map_err(|e| e.to_string())?;
+            let start_time = chrono::Utc::now();
+            query.execute(&mut transaction).await.map_err(|e| {
+                self.metrics
+                    .observe_error(SQL_COMPONENT, BATCH_DELETE_ACTION, "asset_creators_v3");
+                e.to_string()
+            })?;
+            self.metrics.observe_request(
+                SQL_COMPONENT,
+                BATCH_DELETE_ACTION,
+                "asset_creators_v3",
+                start_time,
+            );
         }
 
         // Bulk upsert for asset_creators_v3
@@ -219,10 +241,18 @@ impl AssetIndexStorage for PgClient {
             query_builder.push(" ON CONFLICT (asc_creator, asc_pubkey) DO UPDATE SET asc_verified = EXCLUDED.asc_verified WHERE asset_creators_v3.asc_slot_updated <= EXCLUDED.asc_slot_updated;");
 
             let query = query_builder.build();
-            query
-                .execute(&mut transaction)
-                .await
-                .map_err(|e| e.to_string())?;
+            let start_time = chrono::Utc::now();
+            query.execute(&mut transaction).await.map_err(|e| {
+                self.metrics
+                    .observe_error(SQL_COMPONENT, BATCH_UPSERT_ACTION, "asset_creators_v3");
+                e.to_string()
+            })?;
+            self.metrics.observe_request(
+                SQL_COMPONENT,
+                BATCH_UPSERT_ACTION,
+                "asset_creators_v3",
+                start_time,
+            );
         }
 
         // Update last_synced_key
@@ -231,13 +261,23 @@ impl AssetIndexStorage for PgClient {
         query_builder.push_bind(last_key).push(" WHERE id = 1");
 
         let query = query_builder.build();
-        query
-            .execute(&mut transaction)
-            .await
-            .map_err(|e| e.to_string())?;
+        let start_time = chrono::Utc::now();
+        query.execute(&mut transaction).await.map_err(|e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, UPDATE_ACTION, "last_synced_key");
+            e.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, UPDATE_ACTION, "last_synced_key", start_time);
 
-        transaction.commit().await.map_err(|e| e.to_string())?;
-
+        let start_time = chrono::Utc::now();
+        transaction.commit().await.map_err(|e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "commit");
+            e.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "commit", start_time);
         Ok(())
     }
 }
@@ -270,11 +310,18 @@ impl PgClient {
         }
         query_builder.push(");");
         let query = query_builder.build_query_as::<CreatorRawResponse>();
-        let creators_result = query
-            .fetch_all(transaction)
-            .await
-            .map_err(|err| err.to_string())?;
-
+        let start_time = chrono::Utc::now();
+        let creators_result = query.fetch_all(transaction).await.map_err(|err| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, BATCH_SELECT_ACTION, "asset_creators_v3");
+            err.to_string()
+        })?;
+        self.metrics.observe_request(
+            SQL_COMPONENT,
+            BATCH_SELECT_ACTION,
+            "asset_creators_v3",
+            start_time,
+        );
         Ok(creators_result
             .iter()
             .map(|c| {

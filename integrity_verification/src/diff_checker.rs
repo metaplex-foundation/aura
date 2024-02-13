@@ -530,9 +530,12 @@ impl CollectSlotsTools {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use crate::diff_checker::DiffChecker;
     use crate::file_keys_fetcher::FileKeysFetcher;
     use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
+    use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::utils::start_metrics;
     use metrics_utils::{
         BackfillerMetricsConfig, IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig,
@@ -547,6 +550,7 @@ mod tests {
         let mut metrics = IntegrityVerificationMetrics::new(
             IntegrityVerificationMetricsConfig::new(),
             BackfillerMetricsConfig::new(),
+            Arc::new(RequestErrorDurationMetrics::new()),
         );
         metrics.register_metrics();
         start_metrics(metrics.registry, Some(6001)).await;
