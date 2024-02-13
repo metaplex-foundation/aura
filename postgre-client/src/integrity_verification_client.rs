@@ -53,26 +53,25 @@ impl PgClient {
             .collect::<Vec<_>>())
     }
 
-    async fn get_verification_required_keys(&self) -> Result<Vec<String>, String> {
+    async fn get_verification_required_keys(
+        &self,
+        proof_check: bool,
+    ) -> Result<Vec<String>, String> {
         // select 50 newer keys and 50 random ones
-        let query = "WITH sorted AS (
-                SELECT ast_pubkey
-                FROM assets_v3
-                ORDER BY ast_slot_updated DESC
-                LIMIT 50
-            ),
-            random AS (
-                SELECT ast_pubkey
-                FROM assets_v3
-                  where ast_pubkey NOT IN (SELECT ast_pubkey FROM sorted)
-                ORDER BY RANDOM() LIMIT 50
-            )
-            SELECT ast_pubkey FROM sorted
-            UNION ALL
-            SELECT ast_pubkey FROM random";
+        let mut query_builder =
+            QueryBuilder::new("WITH sorted AS (SELECT ast_pubkey FROM assets_v3 ");
+        if proof_check {
+            query_builder.push(" WHERE ast_is_compressed IS TRUE ");
+        }
+        query_builder.push(" ORDER BY ast_slot_updated DESC LIMIT 50), random AS (SELECT ast_pubkey FROM assets_v3 WHERE ");
+        if proof_check {
+            query_builder.push(" ast_is_compressed IS TRUE AND ");
+        }
+        query_builder.push(" ast_pubkey NOT IN (SELECT ast_pubkey FROM sorted) ORDER BY RANDOM() LIMIT 50) SELECT ast_pubkey FROM sorted UNION ALL SELECT ast_pubkey FROM random");
 
         let start_time = chrono::Utc::now();
-        let rows = sqlx::query(query)
+        let rows = query_builder
+            .build()
             .fetch_all(&self.pool)
             .await
             .map_err(|e| {
@@ -163,10 +162,10 @@ impl IntegrityVerificationKeysFetcher for PgClient {
     }
 
     async fn get_verification_required_assets_keys(&self) -> Result<Vec<String>, String> {
-        self.get_verification_required_keys().await
+        self.get_verification_required_keys(false).await
     }
 
     async fn get_verification_required_assets_proof_keys(&self) -> Result<Vec<String>, String> {
-        self.get_verification_required_keys().await
+        self.get_verification_required_keys(true).await
     }
 }
