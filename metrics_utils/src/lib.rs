@@ -1,6 +1,8 @@
 pub mod errors;
+pub mod red;
 pub mod utils;
 use chrono::Utc;
+use red::RequestErrorDurationMetrics;
 use std::fmt;
 use std::sync::Arc;
 
@@ -14,6 +16,7 @@ use prometheus_client::registry::Registry;
 pub struct IntegrityVerificationMetrics {
     pub integrity_verification_metrics: Arc<IntegrityVerificationMetricsConfig>,
     pub slot_collector_metrics: Arc<BackfillerMetricsConfig>,
+    pub red_metrics: Arc<RequestErrorDurationMetrics>,
     pub registry: Registry,
 }
 
@@ -21,10 +24,12 @@ impl IntegrityVerificationMetrics {
     pub fn new(
         integrity_verification_metrics: IntegrityVerificationMetricsConfig,
         slot_collector_metrics: BackfillerMetricsConfig,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Self {
         Self {
             integrity_verification_metrics: Arc::new(integrity_verification_metrics),
             slot_collector_metrics: Arc::new(slot_collector_metrics),
+            red_metrics,
             registry: Registry::default(),
         }
     }
@@ -40,6 +45,7 @@ pub struct MetricState {
     pub synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     pub json_migrator_metrics: Arc<JsonMigratorMetricsConfig>,
     pub sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
+    pub red_metrics: Arc<RequestErrorDurationMetrics>,
     pub registry: Registry,
 }
 
@@ -54,6 +60,7 @@ impl MetricState {
         synchronizer_metrics: SynchronizerMetricsConfig,
         json_migrator_metrics: JsonMigratorMetricsConfig,
         sequence_consistent_gapfill_metrics: SequenceConsistentGapfillMetricsConfig,
+        red_metrics: RequestErrorDurationMetrics,
     ) -> Self {
         Self {
             ingester_metrics: Arc::new(ingester_metrics),
@@ -65,6 +72,7 @@ impl MetricState {
             synchronizer_metrics: Arc::new(synchronizer_metrics),
             json_migrator_metrics: Arc::new(json_migrator_metrics),
             sequence_consistent_gapfill_metrics: Arc::new(sequence_consistent_gapfill_metrics),
+            red_metrics: Arc::new(red_metrics),
         }
     }
 }
@@ -323,6 +331,29 @@ impl ApiMetricsConfig {
             })
             .observe(duration);
     }
+
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "api_http_requests",
+            "The number of HTTP requests made",
+            self.requests.clone(),
+        );
+        registry.register(
+            "api_http_search_asset_requests",
+            "The number of searchAsset requests made",
+            self.search_asset_requests.clone(),
+        );
+        registry.register(
+            "api_call_latency",
+            "A histogram of the request duration",
+            self.latency.clone(),
+        );
+        registry.register(
+            "api_start_time",
+            "Binary start time",
+            self.start_time.clone(),
+        );
+    }
 }
 
 impl Default for ApiMetricsConfig {
@@ -334,30 +365,11 @@ impl Default for ApiMetricsConfig {
 impl MetricsTrait for MetricState {
     fn register_metrics(&mut self) {
         self.api_metrics.start_time();
+        self.ingester_metrics.start_time();
         self.json_downloader_metrics.start_time();
         self.sequence_consistent_gapfill_metrics.start_time();
 
-        self.registry.register(
-            "api_http_requests",
-            "The number of HTTP requests made",
-            self.api_metrics.requests.clone(),
-        );
-        self.registry.register(
-            "api_http_search_asset_requests",
-            "The number of searchAsset requests made",
-            self.api_metrics.search_asset_requests.clone(),
-        );
-        self.registry.register(
-            "api_call_latency",
-            "A histogram of the request duration",
-            self.api_metrics.latency.clone(),
-        );
-        self.registry.register(
-            "api_start_time",
-            "Binary start time",
-            self.api_metrics.start_time.clone(),
-        );
-
+        self.api_metrics.register(&mut self.registry);
         self.ingester_metrics.register(&mut self.registry);
 
         self.json_downloader_metrics.register(&mut self.registry);
@@ -425,6 +437,7 @@ impl MetricsTrait for MetricState {
                 .scans_latency
                 .clone(),
         );
+        self.red_metrics.register(&mut self.registry);
     }
 }
 

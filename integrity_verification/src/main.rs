@@ -6,6 +6,7 @@ use crate::diff_checker::{
 use crate::error::IntegrityVerificationError;
 use crate::file_keys_fetcher::FileKeysFetcher;
 use clap::Parser;
+use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
     BackfillerMetricsConfig, IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig,
@@ -47,6 +48,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
     let mut metrics = IntegrityVerificationMetrics::new(
         IntegrityVerificationMetricsConfig::new(),
         BackfillerMetricsConfig::new(),
+        Arc::new(RequestErrorDurationMetrics::new()),
     );
     metrics.register_metrics();
     start_metrics(metrics.registry, Some(config.metrics_port)).await;
@@ -84,7 +86,14 @@ async fn main() -> Result<(), IntegrityVerificationError> {
             let diff_checker = DiffChecker::new(
                 config.reference_host.clone(),
                 config.testing_host.clone(),
-                PgClient::new(&config.database_url.clone().unwrap(), 100, 500).await,
+                PgClient::new(
+                    &config.database_url.clone().unwrap(),
+                    100,
+                    500,
+                    metrics.red_metrics,
+                )
+                .await
+                .unwrap(),
                 metrics.integrity_verification_metrics.clone(),
                 metrics.slot_collector_metrics.clone(),
                 config.big_table_creds_path.clone(),

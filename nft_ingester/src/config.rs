@@ -189,6 +189,28 @@ fn default_log_level() -> String {
     "warn".to_string()
 }
 
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct ApiConfig {
+    pub database_config: DatabaseConfig,
+    pub rocks_db_path_container: Option<String>,
+    pub rocks_db_secondary_path_container: Option<String>,
+    pub rocks_sync_interval_seconds: u64,
+    pub metrics_port: Option<u16>,
+    pub server_port: u16,
+    pub rust_log: Option<String>,
+    pub peer_grpc_port: u16,
+    pub peer_grpc_max_gap_slots: u64,
+    #[serde(default)]
+    pub run_profiling: bool,
+    pub profiling_file_path_container: Option<String>,
+}
+
+impl ApiConfig {
+    pub fn get_log_level(&self) -> String {
+        self.rust_log.clone().unwrap_or("warn".to_string())
+    }
+}
+
 impl IngesterConfig {
     pub fn get_metrics_port(
         &self,

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use entities::enums::TaskStatus;
 use log::{error, info};
+use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
     ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
@@ -41,6 +42,7 @@ pub async fn main() -> Result<(), IngesterError> {
         SynchronizerMetricsConfig::new(),
         JsonMigratorMetricsConfig::new(),
         SequenceConsistentGapfillMetricsConfig::new(),
+        RequestErrorDurationMetrics::new(),
     );
     metrics_state.register_metrics();
     start_metrics(metrics_state.registry, Some(config.metrics_port)).await;

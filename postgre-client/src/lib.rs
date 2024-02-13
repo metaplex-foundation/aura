@@ -1,10 +1,11 @@
 use entities::enums::TaskStatus;
 use entities::models::UrlWithStatus;
+use metrics_utils::red::RequestErrorDurationMetrics;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
-    ConnectOptions, PgPool, Postgres, QueryBuilder, Row, Transaction,
+    ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Row, Transaction,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use tracing::log::LevelFilter;
 
 pub mod asset_filter_client;
@@ -14,13 +15,26 @@ pub mod integrity_verification_client;
 pub mod model;
 pub mod storage_traits;
 
+pub const SQL_COMPONENT: &str = "sql";
+pub const SELECT_ACTION: &str = "select";
+pub const UPDATE_ACTION: &str = "update";
+pub const BATCH_SELECT_ACTION: &str = "batch_select";
+pub const BATCH_UPSERT_ACTION: &str = "batch_upsert";
+pub const BATCH_DELETE_ACTION: &str = "batch_delete";
+pub const TRANSACTION_ACTION: &str = "transaction";
 #[derive(Clone)]
 pub struct PgClient {
     pub pool: PgPool,
+    pub metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl PgClient {
-    pub async fn new(url: &str, min_connections: u32, max_connections: u32) -> Self {
+    pub async fn new(
+        url: &str,
+        min_connections: u32,
+        max_connections: u32,
+        metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Self, Error> {
         let mut options: PgConnectOptions = url.parse().unwrap();
         options.log_statements(LevelFilter::Off);
 
@@ -28,14 +42,13 @@ impl PgClient {
             .min_connections(min_connections)
             .max_connections(max_connections)
             .connect_with(options)
-            .await
-            .unwrap();
+            .await?;
 
-        Self { pool }
+        Ok(Self { pool, metrics })
     }
 
-    pub fn new_with_pool(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new_with_pool(pool: PgPool, metrics: Arc<RequestErrorDurationMetrics>) -> Self {
+        Self { pool, metrics }
     }
 
     pub async fn insert_tasks(
@@ -55,10 +68,14 @@ impl PgClient {
         query_builder.push(" ON CONFLICT (tsk_metadata_url) DO NOTHING;");
 
         let query = query_builder.build();
-        query
-            .execute(transaction)
-            .await
-            .map_err(|err| err.to_string())?;
+        let start_time = chrono::Utc::now();
+        query.execute(transaction).await.map_err(|err| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, BATCH_UPSERT_ACTION, "tasks");
+            err.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, BATCH_UPSERT_ACTION, "tasks", start_time);
 
         Ok(())
     }
@@ -84,11 +101,14 @@ impl PgClient {
 
         let query = query_builder.build();
 
-        let rows_result = query
-            .fetch_all(transaction)
-            .await
-            .map_err(|err| err.to_string())?;
-
+        let start_time = chrono::Utc::now();
+        let rows_result = query.fetch_all(transaction).await.map_err(|err| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, BATCH_SELECT_ACTION, "tasks");
+            err.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, BATCH_SELECT_ACTION, "tasks", start_time);
         let mut metadata_ids_map = HashMap::new();
 
         for row in rows_result {
