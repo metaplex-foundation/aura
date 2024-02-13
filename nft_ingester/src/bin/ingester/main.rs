@@ -485,7 +485,7 @@ pub async fn main() -> Result<(), IngesterError> {
             100,
             max_postgre_connections,
         )
-        .await,
+        .await?,
     );
 
     let synchronizer = Synchronizer::new(

@@ -1,4 +1,5 @@
 use log::info;
+use postgre_client::PgClient;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -35,6 +36,31 @@ pub async fn start_api(
 
     let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
     let api = DasApi::from_config(config, metrics, rocks_db).await?;
+
+    run_api(api, Some(request_middleware), addr, keep_running).await
+}
+
+pub async fn start_api_v2(
+    pg_client: Arc<PgClient>,
+    rocks_db: Arc<Storage>,
+    keep_running: Arc<AtomicBool>,
+    metrics: Arc<ApiMetricsConfig>,
+    port: u16,
+) -> Result<(), DasApiError> {
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    // todo: setup middleware, looks like too many shit related to backups are there
+    // let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
+    let api = DasApi::new(pg_client, rocks_db, metrics);
+
+    run_api(api, None, addr, keep_running).await
+}
+
+async fn run_api(
+    api: DasApi,
+    request_middleware: Option<RpcRequestMiddleware>,
+    addr: SocketAddr,
+    keep_running: Arc<AtomicBool>,
+) -> Result<(), DasApiError> {
     let rpc = RpcApiBuilder::build(api)?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(RUNTIME_WORKER_THREAD_COUNT)
@@ -42,28 +68,33 @@ pub async fn start_api(
         .build()
         .expect("Runtime");
 
-    let server = ServerBuilder::new(rpc)
+    let mut builder = ServerBuilder::new(rpc)
         .event_loop_executor(runtime.handle().clone())
         .threads(1)
         .cors(DomainsValidation::AllowOnly(vec![
             AccessControlAllowOrigin::Any,
         ]))
-        .request_middleware(request_middleware)
         .cors_allow_headers(AccessControlAllowHeaders::Any)
         .cors_max_age(Some(MAX_CORS_AGE))
         .max_request_body_size(MAX_REQUEST_BODY_SIZE)
-        .health_api(("/health", "health"))
-        .start_http(&addr);
+        .health_api(("/health", "health"));
+    if let Some(mw) = request_middleware {
+        builder = builder.request_middleware(mw);
+    }
+    let server = builder.start_http(&addr);
 
     let server = server.unwrap();
     info!("API Server Started");
 
-    while keep_running.load(Ordering::SeqCst) {
+    loop {
+        if !keep_running.load(Ordering::SeqCst) {
+            info!("Shutting down server");
+            runtime.shutdown_background();
+            break;
+        }
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     }
 
-    info!("Shutting down server");
-    runtime.shutdown_background();
     server.wait();
 
     info!("API Server ended");
