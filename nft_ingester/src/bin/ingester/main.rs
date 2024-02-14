@@ -215,6 +215,14 @@ pub async fn main() -> Result<(), IngesterError> {
                 .process_mint_accs(cloned_keep_running)
                 .await;
         }));
+
+        let mut cloned_mplx_parser = mplx_accs_parser.clone();
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            cloned_mplx_parser
+                .process_edition_accs(cloned_keep_running)
+                .await;
+        }));
     }
 
     let first_processed_slot = Arc::new(AtomicU64::new(0));

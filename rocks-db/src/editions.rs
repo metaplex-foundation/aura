@@ -1,8 +1,10 @@
 use crate::column::TypedColumn;
 use crate::key_encoders::{decode_pubkey, encode_pubkey};
 use crate::Result;
+use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
+use tracing::error;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum TokenMetadataEdition {
@@ -12,14 +14,18 @@ pub enum TokenMetadataEdition {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MasterEdition {
+    pub key: Pubkey,
     pub supply: u64,
     pub max_supply: Option<u64>,
+    pub write_version: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EditionV1 {
+    pub key: Pubkey,
     pub parent: Pubkey,
     pub edition: u64,
+    pub write_version: u64,
 }
 
 impl TypedColumn for TokenMetadataEdition {
@@ -34,5 +40,56 @@ impl TypedColumn for TokenMetadataEdition {
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
         decode_pubkey(bytes)
+    }
+}
+
+impl TokenMetadataEdition {
+    pub fn merge_token_metadata_edition(
+        _new_key: &[u8],
+        existing_val: Option<&[u8]>,
+        operands: &MergeOperands,
+    ) -> Option<Vec<u8>> {
+        let mut result = vec![];
+        let mut write_version = 0;
+        if let Some(existing_val) = existing_val {
+            match serde_cbor::from_slice(existing_val) {
+                Ok(TokenMetadataEdition::MasterEdition(value)) => {
+                    write_version = value.write_version;
+                    result = existing_val.to_vec();
+                }
+                Ok(TokenMetadataEdition::EditionV1(value)) => {
+                    write_version = value.write_version;
+                    result = existing_val.to_vec();
+                }
+                Err(e) => {
+                    error!(
+                        "RocksDB: TokenMetadataEdition deserialize existing_val: {}",
+                        e
+                    )
+                }
+            }
+        }
+
+        for op in operands {
+            match serde_cbor::from_slice(op) {
+                Ok(TokenMetadataEdition::MasterEdition(new_val)) => {
+                    if new_val.write_version > write_version {
+                        write_version = new_val.write_version;
+                        result = op.to_vec();
+                    }
+                }
+                Ok(TokenMetadataEdition::EditionV1(new_val)) => {
+                    if new_val.write_version > write_version {
+                        write_version = new_val.write_version;
+                        result = op.to_vec();
+                    }
+                }
+                Err(e) => {
+                    error!("RocksDB: TokenMetadataEdition deserialize new_val: {}", e)
+                }
+            }
+        }
+
+        Some(result)
     }
 }

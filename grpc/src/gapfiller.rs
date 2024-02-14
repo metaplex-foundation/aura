@@ -86,44 +86,46 @@ pub struct AssetDetails {
     pub royalty_target_type: i32,
     #[prost(uint64, tag = "4")]
     pub slot_created: u64,
+    #[prost(bytes = "vec", tag = "5")]
+    pub edition_address: ::prost::alloc::vec::Vec<u8>,
     /// From AssetDynamicDetails as Tuples
-    #[prost(message, optional, tag = "5")]
-    pub is_compressible: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "6")]
-    pub is_compressed: ::core::option::Option<DynamicBoolField>,
+    pub is_compressible: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "7")]
-    pub is_frozen: ::core::option::Option<DynamicBoolField>,
+    pub is_compressed: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "8")]
-    pub supply: ::core::option::Option<DynamicUint64Field>,
+    pub is_frozen: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "9")]
-    pub seq: ::core::option::Option<DynamicUint64Field>,
+    pub supply: ::core::option::Option<DynamicUint64Field>,
     #[prost(message, optional, tag = "10")]
-    pub is_burnt: ::core::option::Option<DynamicBoolField>,
+    pub seq: ::core::option::Option<DynamicUint64Field>,
     #[prost(message, optional, tag = "11")]
-    pub was_decompressed: ::core::option::Option<DynamicBoolField>,
+    pub is_burnt: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "12")]
-    pub creators: ::core::option::Option<DynamicCreatorsField>,
+    pub was_decompressed: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "13")]
-    pub royalty_amount: ::core::option::Option<DynamicUint32Field>,
+    pub creators: ::core::option::Option<DynamicCreatorsField>,
     #[prost(message, optional, tag = "14")]
-    pub authority: ::core::option::Option<DynamicBytesField>,
+    pub royalty_amount: ::core::option::Option<DynamicUint32Field>,
     #[prost(message, optional, tag = "15")]
-    pub owner: ::core::option::Option<DynamicBytesField>,
+    pub authority: ::core::option::Option<DynamicBytesField>,
     #[prost(message, optional, tag = "16")]
-    pub delegate: ::core::option::Option<DynamicBytesField>,
+    pub owner: ::core::option::Option<DynamicBytesField>,
     #[prost(message, optional, tag = "17")]
-    pub owner_type: ::core::option::Option<DynamicEnumField>,
+    pub delegate: ::core::option::Option<DynamicBytesField>,
     #[prost(message, optional, tag = "18")]
-    pub owner_delegate_seq: ::core::option::Option<DynamicUint64Field>,
+    pub owner_type: ::core::option::Option<DynamicEnumField>,
     #[prost(message, optional, tag = "19")]
-    pub asset_leaf: ::core::option::Option<AssetLeaf>,
+    pub owner_delegate_seq: ::core::option::Option<DynamicUint64Field>,
     #[prost(message, optional, tag = "20")]
-    pub collection: ::core::option::Option<AssetCollection>,
+    pub asset_leaf: ::core::option::Option<AssetLeaf>,
     #[prost(message, optional, tag = "21")]
-    pub chain_data: ::core::option::Option<ChainDataV1>,
+    pub collection: ::core::option::Option<AssetCollection>,
     #[prost(message, optional, tag = "22")]
+    pub chain_data: ::core::option::Option<ChainDataV1>,
+    #[prost(message, optional, tag = "23")]
     pub cl_leaf: ::core::option::Option<ClLeaf>,
-    #[prost(message, repeated, tag = "23")]
+    #[prost(message, repeated, tag = "24")]
     pub cl_items: ::prost::alloc::vec::Vec<ClItem>,
 }
 /// Dynamic field messages

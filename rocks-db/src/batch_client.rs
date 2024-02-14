@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
 use entities::enums::SpecificationVersions;
-use mpl_token_metadata::accounts::MasterEdition;
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 
@@ -261,7 +260,7 @@ impl Storage {
                 specification_asset_class: data.specification_asset_class,
                 royalty_target_type: data.royalty_target_type,
                 created_at: data.slot_created as i64,
-                edition_address: MasterEdition::find_pda(&data.pubkey).0, // TODO
+                edition_address: data.edition_address,
             },
         )?;
 

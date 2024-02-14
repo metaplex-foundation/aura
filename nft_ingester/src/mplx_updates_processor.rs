@@ -113,7 +113,7 @@ impl MplxAccsProcessor {
                 }
             }
 
-            let _editions = {
+            let editions = {
                 let mut editions_buffer = self.buffer.token_metadata_editions.lock().await;
                 let mut elems = HashMap::new();
 
@@ -124,17 +124,22 @@ impl MplxAccsProcessor {
                     .collect::<Vec<Pubkey>>()
                 {
                     if let Some(value) = editions_buffer.remove(&key) {
-                        elems.insert(key, value);
+                        elems.insert(key, value.edition);
                     }
                 }
 
                 elems
             };
-            // let metadata_models = self.create_rocks_metadata_models(&metadata_info).await;
 
-            // store data
             let begin_processing = Instant::now();
-            // self.store_metadata_models(&metadata_models).await;
+            let res = self
+                .rocks_db
+                .token_metadata_edition_cbor
+                .merge_batch_cbor(editions)
+                .await;
+
+            result_to_metrics(self.metrics.clone(), &res, "editions_saving");
+
             self.metrics.set_latency(
                 "editions_saving",
                 begin_processing.elapsed().as_millis() as f64,

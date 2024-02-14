@@ -152,6 +152,7 @@ async fn get_complete_asset_details(
         specification_asset_class: static_data.specification_asset_class,
         royalty_target_type: static_data.royalty_target_type,
         slot_created: static_data.created_at as u64,
+        edition_address: static_data.edition_address,
         is_compressible: dynamic_data.is_compressible,
         is_compressed: dynamic_data.is_compressed,
         is_frozen: dynamic_data.is_frozen,

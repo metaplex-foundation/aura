@@ -99,29 +99,30 @@ message AssetDetails {
     SpecificationAssetClass specification_asset_class = 2;
     RoyaltyTargetType royalty_target_type = 3;
     uint64 slot_created = 4;
+    bytes edition_address = 5;
 
     // From AssetDynamicDetails as Tuples
-    DynamicBoolField is_compressible = 5;
-    DynamicBoolField is_compressed = 6;
-    DynamicBoolField is_frozen = 7;
-    DynamicUint64Field supply = 8;
-    DynamicUint64Field seq = 9;
-    DynamicBoolField is_burnt = 10;
-    DynamicBoolField was_decompressed = 11;
-    DynamicCreatorsField creators = 12;
-    DynamicUint32Field royalty_amount = 13;
-    DynamicBytesField authority = 14;
-    DynamicBytesField owner = 15;
-    DynamicBytesField delegate = 16;
-    DynamicEnumField owner_type = 17;
-    DynamicUint64Field owner_delegate_seq = 18;
+    DynamicBoolField is_compressible = 6;
+    DynamicBoolField is_compressed = 7;
+    DynamicBoolField is_frozen = 8;
+    DynamicUint64Field supply = 9;
+    DynamicUint64Field seq = 10;
+    DynamicBoolField is_burnt = 11;
+    DynamicBoolField was_decompressed = 12;
+    DynamicCreatorsField creators = 13;
+    DynamicUint32Field royalty_amount = 14;
+    DynamicBytesField authority = 15;
+    DynamicBytesField owner = 16;
+    DynamicBytesField delegate = 17;
+    DynamicEnumField owner_type = 18;
+    DynamicUint64Field owner_delegate_seq = 19;
 
-    AssetLeaf asset_leaf = 19;
-    AssetCollection collection = 20;
-    ChainDataV1 chain_data = 21;
+    AssetLeaf asset_leaf = 20;
+    AssetCollection collection = 21;
+    ChainDataV1 chain_data = 22;
 
-    ClLeaf cl_leaf = 22;
-    repeated ClItem cl_items = 23;
+    ClLeaf cl_leaf = 23;
+    repeated ClItem cl_items = 24;
 }
 
 // Dynamic field messages

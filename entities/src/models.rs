@@ -53,6 +53,7 @@ pub struct CompleteAssetDetails {
     pub specification_asset_class: SpecificationAssetClass,
     pub royalty_target_type: RoyaltyTargetType,
     pub slot_created: u64,
+    pub edition_address: Pubkey,
 
     // From AssetDynamicDetails as Tuples
     pub is_compressible: Updated<bool>,

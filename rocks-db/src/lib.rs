@@ -361,7 +361,7 @@ impl Storage {
             TokenMetadataEdition::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_metadata_edition_keep_existing",
-                    asset::AssetStaticDetails::merge_keep_existing,
+                    TokenMetadataEdition::merge_token_metadata_edition,
                 );
             }
             AssetStaticDetailsDeprecated::NAME => {

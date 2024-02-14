@@ -40,17 +40,17 @@ pub struct MessageHandler {
 }
 
 macro_rules! update_or_insert {
-    ($map:expr, $key:expr, $create:expr, $should_update:expr) => {{
+    ($map:expr, $key:expr, $value:expr, $should_update:expr) => {{
         let mut map = $map.lock().await;
         let entry = map.entry($key);
         match entry {
             std::collections::hash_map::Entry::Occupied(mut o) => {
                 if $should_update(o.get()) {
-                    o.insert($create());
+                    o.insert($value);
                 }
             }
             std::collections::hash_map::Entry::Vacant(v) => {
-                v.insert($create());
+                v.insert($value);
             }
         }
     }};
@@ -235,7 +235,7 @@ impl MessageHandler {
                                 update_or_insert!(
                                     self.buffer.mplx_metadata_info,
                                     key.0.to_vec(),
-                                    || MetadataInfo {
+                                    MetadataInfo {
                                         metadata: m.clone(),
                                         slot: account_info.slot(),
                                         write_version: account_info.write_version(),
@@ -253,11 +253,13 @@ impl MessageHandler {
                                 update_or_insert!(
                                     self.buffer.token_metadata_editions,
                                     Pubkey::from(key.0),
-                                    || TokenMetadata {
+                                    TokenMetadata {
                                         edition: TokenMetadataEdition::MasterEdition(
                                             MasterEdition {
+                                                key: Pubkey::from(key.0),
                                                 supply: m.supply,
                                                 max_supply: m.max_supply,
+                                                write_version: account_info.write_version()
                                             },
                                         ),
                                         write_version: account_info.write_version(),
@@ -270,11 +272,13 @@ impl MessageHandler {
                                 update_or_insert!(
                                     self.buffer.token_metadata_editions,
                                     Pubkey::from(key.0),
-                                    || TokenMetadata {
+                                    TokenMetadata {
                                         edition: TokenMetadataEdition::MasterEdition(
                                             MasterEdition {
+                                                key: Pubkey::from(key.0),
                                                 supply: m.supply,
                                                 max_supply: m.max_supply,
+                                                write_version: account_info.write_version()
                                             },
                                         ),
                                         write_version: account_info.write_version(),
@@ -287,10 +291,12 @@ impl MessageHandler {
                                 update_or_insert!(
                                     self.buffer.token_metadata_editions,
                                     Pubkey::from(key.0),
-                                    || TokenMetadata {
+                                    TokenMetadata {
                                         edition: TokenMetadataEdition::EditionV1(EditionV1 {
+                                            key: Pubkey::from(key.0),
                                             parent: e.parent,
                                             edition: e.edition,
+                                            write_version: account_info.write_version()
                                         },),
                                         write_version: account_info.write_version(),
                                     },
