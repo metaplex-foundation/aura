@@ -322,7 +322,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
     match interface {
         Interface::FungibleAsset | Interface::FungibleToken => {
             owner = "".to_string();
-            grouping = None;
+            grouping = Some(vec![]);
         }
         _ => {}
     }
