@@ -36,7 +36,7 @@ pub mod storage_traits;
 pub mod transaction;
 pub mod transaction_client;
 pub mod tree_seq;
-
+pub mod dump_client;
 pub type Result<T> = std::result::Result<T, StorageError>;
 
 pub struct Storage {

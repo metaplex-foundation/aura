@@ -47,7 +47,7 @@ CREATE TABLE asset_creators_v3 (
 CREATE INDEX asset_creators_v3_creator ON asset_creators_v3(asc_creator, asc_verified);
 
 CREATE TABLE tasks (
-    tsk_id bigserial
+    tsk_id bytea
         CONSTRAINT tasks_pk
             PRIMARY KEY,
     tsk_metadata_url text NOT NULL,
@@ -79,7 +79,7 @@ CREATE TABLE assets_v3 (
 	ast_is_compressed bool NOT NULL DEFAULT false,
 	ast_is_frozen bool NOT NULL DEFAULT false,
 	ast_supply bigint,
-	ast_metadata_url_id bigint NULL,
+	ast_metadata_url_id bytea NULL,
 	ast_slot_updated bigint NOT NULL,
 	CONSTRAINT assets_pkey PRIMARY KEY (ast_pubkey),
     FOREIGN KEY (ast_metadata_url_id) REFERENCES tasks(tsk_id) ON DELETE RESTRICT ON UPDATE CASCADE
