@@ -37,7 +37,7 @@ where
     pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
     metrics: Arc<ApiMetricsConfig>,
-    proof_checker: Arc<PC>,
+    proof_checker: Option<Arc<PC>>,
 }
 
 impl<PC> DasApi<PC>
@@ -48,7 +48,7 @@ where
         pg_client: Arc<PgClient>,
         rocks_db: Arc<Storage>,
         metrics: Arc<ApiMetricsConfig>,
-        proof_checker: Arc<PC>,
+        proof_checker: Option<Arc<PC>>,
     ) -> Self {
         let db_connection = SqlxPostgresConnector::from_sqlx_postgres_pool(pg_client.pool.clone());
 
@@ -66,7 +66,7 @@ where
         metrics: Arc<ApiMetricsConfig>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         rocks_db: Arc<Storage>,
-        proof_checker: Arc<PC>,
+        proof_checker: Option<Arc<PC>>,
     ) -> Result<Self, DasApiError> {
         let pool = PgPoolOptions::new()
             .max_connections(250)
@@ -157,10 +157,7 @@ where
         Ok(json!("ok"))
     }
 
-    pub async fn get_asset_proof(
-        &self,
-        payload: GetAssetProof,
-    ) -> Result<Value, DasApiError> {
+    pub async fn get_asset_proof(&self, payload: GetAssetProof) -> Result<Value, DasApiError> {
         let label = "get_asset_proof";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
@@ -241,10 +238,7 @@ where
         Ok(json!(res))
     }
 
-    pub async fn get_asset_batch(
-        &self,
-        payload: GetAssetBatch,
-    ) -> Result<Value, DasApiError> {
+    pub async fn get_asset_batch(&self, payload: GetAssetBatch) -> Result<Value, DasApiError> {
         let label = "get_asset_batch";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();

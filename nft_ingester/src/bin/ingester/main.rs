@@ -251,8 +251,13 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_red_metrics = metrics_state.red_metrics.clone();
-    let rpc_client = RpcClient::new(config.rpc_host.to_string());
-    let proof_checker = Arc::new(MaybeProofChecker::new(rpc_client, config.check_proofs_probability));
+
+    let proof_checker = config.rpc_host.clone().map(|host| {
+        Arc::new(MaybeProofChecker::new(
+            RpcClient::new(host),
+            config.check_proofs_probability,
+        ))
+    });
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
             cloned_rocks_storage.clone(),

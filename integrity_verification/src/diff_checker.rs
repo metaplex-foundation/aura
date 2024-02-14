@@ -487,7 +487,6 @@ where
     }
 }
 
-
 impl CollectSlotsTools {
     async fn collect_slots(&self, asset: &str, tree_key: &str, slot: u64, rx: &Receiver<()>) {
         let slots_collector = SlotsCollector::new(

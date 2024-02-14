@@ -1,9 +1,9 @@
 use plerkle_serialization::error::PlerkleSerializationError;
 use solana_client::client_error::ClientError;
+use solana_program::pubkey::ParsePubkeyError;
 use solana_sdk::signature::ParseSignatureError;
 use solana_storage_bigtable::Error;
 use thiserror::Error;
-use solana_program::pubkey::ParsePubkeyError;
 
 // TODO: rename the error enum as soon as it gets at least 3 errors
 #[derive(Error, Debug, PartialEq)]

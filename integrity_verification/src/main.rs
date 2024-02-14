@@ -23,7 +23,6 @@ use tracing::{error, info};
 mod api;
 mod config;
 mod diff_checker;
-mod error;
 mod file_keys_fetcher;
 mod params;
 mod requests;

@@ -29,7 +29,7 @@ struct SimpleChangeLog {
 pub async fn get_proof_for_assets(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
-    proof_checker: Arc<impl ProofChecker + Sync + Send + 'static>,
+    proof_checker: Option<Arc<impl ProofChecker + Sync + Send + 'static>>,
     metrics: Arc<ApiMetricsConfig>,
 ) -> Result<HashMap<String, Option<AssetProof>>, DbErr> {
     let mut results: HashMap<String, Option<AssetProof>> =
@@ -135,7 +135,7 @@ fn get_asset_proof(
     asset_id: &Pubkey,
     nodes: &[SimpleChangeLog],
     leaves: &HashMap<Vec<u8>, (cl_items::Model, u64)>,
-    proof_checker: Arc<impl ProofChecker + Sync + Send + 'static>,
+    proof_checker: Option<Arc<impl ProofChecker + Sync + Send + 'static>>,
     metrics: Arc<ApiMetricsConfig>,
 ) -> Option<AssetProof> {
     let leaf_key = asset_id.to_bytes().to_vec();
@@ -196,33 +196,34 @@ fn get_asset_proof(
         .filter_map(|k| Pubkey::try_from(k.clone()).ok())
         .collect();
     let leaf_b58 = bs58::encode(&leaf.hash).into_string();
-    let lf = Pubkey::from_str(leaf_b58.as_str()).unwrap_or_default();
-    let metrics = metrics.clone();
-    let cloned_checker = proof_checker.clone();
-    let asset_id = *asset_id;
-    tokio::spawn(async move {
-        match cloned_checker
-            .check_proof(tree_id, initial_proofs, nonce as u32, lf.to_bytes())
-            .await
-        {
-            Ok(true) => metrics.inc_proof_checks("proof", metrics_utils::MetricStatus::SUCCESS),
-            Ok(false) => {
-                warn!(
-                    "Proof for asset {:?} of tree {:?} is invalid",
-                    asset_id, tree_id
-                );
-                metrics.inc_proof_checks("proof", metrics_utils::MetricStatus::FAILURE)
+    if let Some(proof_checker) = proof_checker {
+        let lf = Pubkey::from_str(leaf_b58.as_str()).unwrap_or_default();
+        let metrics = metrics.clone();
+        let cloned_checker = proof_checker.clone();
+        let asset_id = *asset_id;
+        tokio::spawn(async move {
+            match cloned_checker
+                .check_proof(tree_id, initial_proofs, nonce as u32, lf.to_bytes())
+                .await
+            {
+                Ok(true) => metrics.inc_proof_checks("proof", metrics_utils::MetricStatus::SUCCESS),
+                Ok(false) => {
+                    warn!(
+                        "Proof for asset {:?} of tree {:?} is invalid",
+                        asset_id, tree_id
+                    );
+                    metrics.inc_proof_checks("proof", metrics_utils::MetricStatus::FAILURE)
+                }
+                Err(e) => {
+                    warn!(
+                        "Proof check for asset {:?} of tree {:?} failed: {}",
+                        asset_id, tree_id, e
+                    );
+                    metrics.inc_proof_checks("proof", metrics_utils::MetricStatus::FAILURE)
+                }
             }
-            Err(e) => {
-                warn!(
-                    "Proof check for asset {:?} of tree {:?} failed: {}",
-                    asset_id, tree_id, e
-                );
-                metrics.inc_proof_checks("proof", metrics_utils::MetricStatus::FAILURE)
-            }
-        }
-    });
-
+        });
+    }
     let proof = proof
         .iter()
         .map(|model| bs58::encode(model).into_string())

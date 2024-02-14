@@ -1,9 +1,9 @@
 use log::info;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
-use usecase::proofs::MaybeProofChecker;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use usecase::proofs::MaybeProofChecker;
 
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
@@ -28,7 +28,7 @@ pub async fn start_api(
     keep_running: Arc<AtomicBool>,
     metrics: Arc<ApiMetricsConfig>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
-    proof_checker: Arc<MaybeProofChecker>,
+    proof_checker: Option<Arc<MaybeProofChecker>>,
 ) -> Result<(), DasApiError> {
     env::set_var(
         env_logger::DEFAULT_FILTER_ENV,
@@ -50,7 +50,7 @@ pub async fn start_api_v2(
     keep_running: Arc<AtomicBool>,
     metrics: Arc<ApiMetricsConfig>,
     port: u16,
-    proof_checker: Arc<MaybeProofChecker>,
+    proof_checker: Option<Arc<MaybeProofChecker>>,
 ) -> Result<(), DasApiError> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     // todo: setup middleware, looks like too many shit related to backups are there
