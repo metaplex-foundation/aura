@@ -40,7 +40,8 @@ pub async fn main() -> Result<(), IngesterError> {
     let mut registry = Registry::default();
     let metrics = Arc::new(ApiMetricsConfig::new());
     metrics.register(&mut registry);
-
+    let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
+    red_metrics.register(&mut registry);
     tokio::spawn(async move {
         match setup_metrics(registry, config.metrics_port).await {
             Ok(_) => {
@@ -61,6 +62,7 @@ pub async fn main() -> Result<(), IngesterError> {
         config.database_config.get_database_url()?.as_str(),
         min_connections,
         max_connections,
+        red_metrics.clone(),
     )
     .await?;
     let pg_client = Arc::new(pg_client);

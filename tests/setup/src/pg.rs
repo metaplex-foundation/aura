@@ -1,5 +1,6 @@
 use entities::enums::*;
 use entities::models::{AssetIndex, Creator, UrlWithStatus};
+use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::storage_traits::AssetIndexStorage;
 use postgre_client::PgClient;
 use rand::Rng;
@@ -33,7 +34,8 @@ impl<'a> TestEnvironment<'a> {
     pub async fn new(cli: &'a Cli) -> TestEnvironment<'a> {
         let node = cli.run(images::postgres::Postgres::default());
         let (pool, db_name) = setup_database(&node).await;
-        let client = PgClient::new_with_pool(pool.clone());
+        let client =
+            PgClient::new_with_pool(pool.clone(), Arc::new(RequestErrorDurationMetrics::new()));
 
         TestEnvironment {
             client: Arc::new(client),
@@ -102,7 +104,10 @@ pub async fn setup_database(
     run_sql_script(&test_db_pool, "../init_v3.sql")
         .await
         .unwrap();
-    let asset_index_storage = PgClient::new_with_pool(test_db_pool.clone());
+    let asset_index_storage = PgClient::new_with_pool(
+        test_db_pool.clone(),
+        Arc::new(RequestErrorDurationMetrics::new()),
+    );
 
     // Verify initial fetch_last_synced_id returns None
     assert!(asset_index_storage
