@@ -370,7 +370,7 @@ pub struct Uses {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Supply {
-    pub print_max_supply: Option<u64>, // None value mean that NFT is printable and has an unlimited supply
+    pub print_max_supply: Option<u64>, // None value mean that NFT is printable and has an unlimited supply (https://developers.metaplex.com/token-metadata/print)
     pub print_current_supply: u64,
     pub edition_nonce: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]

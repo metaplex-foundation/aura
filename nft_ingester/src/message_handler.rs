@@ -406,6 +406,8 @@ fn test_token_account_uninitialized() {
     )
 }
 
+// Test proofs that EditionV1 && MasterEditionV1 accounts addresses
+// can be obtained using the same PDA function
 #[cfg(feature = "rpc_tests")]
 #[tokio::test]
 async fn test_edition_pda() {
