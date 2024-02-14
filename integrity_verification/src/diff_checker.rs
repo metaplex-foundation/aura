@@ -1,5 +1,4 @@
 use crate::api::IntegrityVerificationApi;
-use crate::error::IntegrityVerificationError;
 use crate::params::{
     generate_get_asset_params, generate_get_asset_proof_params,
     generate_get_assets_by_authority_params, generate_get_assets_by_creator_params,
@@ -7,20 +6,14 @@ use crate::params::{
 };
 use crate::requests::Body;
 use crate::slots_dumper::FileSlotsDumper;
-use crate::{_check_proof, check_proof};
-use anchor_lang::AnchorDeserialize;
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
+use interface::error::IntegrityVerificationError;
 use metrics_utils::{BackfillerMetricsConfig, IntegrityVerificationMetricsConfig};
 use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
 use regex::Regex;
 use serde_json::{json, Value};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
-use spl_account_compression::canopy::fill_in_proof_from_canopy;
-use spl_account_compression::state::{
-    merkle_tree_get_size, ConcurrentMerkleTreeHeader, CONCURRENT_MERKLE_TREE_HEADER_SIZE_V1,
-};
-use spl_account_compression::zero_copy::ZeroCopy;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -464,6 +457,15 @@ where
         )?)?
         .to_bytes();
 
+        let initial_proofs = response["result"]["proof"]
+            .as_array()
+            .ok_or(IntegrityVerificationError::CannotGetResponseField(
+                "proof".to_string(),
+            ))?
+            .iter()
+            .filter_map(|proof| proof.as_str().and_then(|v| Pubkey::from_str(v).ok()))
+            .collect::<Vec<_>>();
+
         let get_asset_req = json!(&Body::new(
             GET_ASSET_METHOD,
             json!(generate_get_asset_params(asset_id.to_string()))
@@ -479,36 +481,12 @@ where
             .ok_or(IntegrityVerificationError::CannotGetResponseField(
                 "leaf_id".to_string(),
             ))? as u32;
-        let mut tree_acc_info = account_data?;
+        let tree_acc_info = account_data?;
 
-        let (header_bytes, rest) =
-            tree_acc_info.split_at_mut(CONCURRENT_MERKLE_TREE_HEADER_SIZE_V1);
-        let header = ConcurrentMerkleTreeHeader::try_from_slice(header_bytes)?;
-        let merkle_tree_size = merkle_tree_get_size(&header)?;
-        let (tree_bytes, canopy_bytes) = rest.split_at_mut(merkle_tree_size);
-
-        let mut initial_proofs = response["result"]["proof"]
-            .as_array()
-            .ok_or(IntegrityVerificationError::CannotGetResponseField(
-                "proof".to_string(),
-            ))?
-            .iter()
-            .filter_map(|proof| {
-                proof
-                    .as_str()
-                    .and_then(|v| Pubkey::from_str(v).ok().map(|p| p.to_bytes()))
-            })
-            .collect::<Vec<_>>();
-        fill_in_proof_from_canopy(
-            canopy_bytes,
-            header.get_max_depth(),
-            leaf_index,
-            &mut initial_proofs,
-        )?;
-
-        check_proof!(&header, &tree_bytes, initial_proofs, leaf, leaf_index)
+        usecase::proofs::validate_proofs(tree_acc_info, initial_proofs, leaf_index, leaf)
     }
 }
+
 
 impl CollectSlotsTools {
     async fn collect_slots(&self, asset: &str, tree_key: &str, slot: u64, rx: &Receiver<()>) {

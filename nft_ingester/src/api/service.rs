@@ -1,6 +1,7 @@
 use log::info;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
+use usecase::proofs::MaybeProofChecker;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -27,6 +28,7 @@ pub async fn start_api(
     keep_running: Arc<AtomicBool>,
     metrics: Arc<ApiMetricsConfig>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
+    proof_checker: Arc<MaybeProofChecker>,
 ) -> Result<(), DasApiError> {
     env::set_var(
         env_logger::DEFAULT_FILTER_ENV,
@@ -37,7 +39,7 @@ pub async fn start_api(
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server_port));
 
     let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
-    let api = DasApi::from_config(config, metrics, red_metrics, rocks_db).await?;
+    let api = DasApi::from_config(config, metrics, red_metrics, rocks_db, proof_checker).await?;
 
     run_api(api, Some(request_middleware), addr, keep_running).await
 }
@@ -48,17 +50,18 @@ pub async fn start_api_v2(
     keep_running: Arc<AtomicBool>,
     metrics: Arc<ApiMetricsConfig>,
     port: u16,
+    proof_checker: Arc<MaybeProofChecker>,
 ) -> Result<(), DasApiError> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     // todo: setup middleware, looks like too many shit related to backups are there
     // let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
-    let api = DasApi::new(pg_client, rocks_db, metrics);
+    let api = DasApi::new(pg_client, rocks_db, metrics, proof_checker);
 
     run_api(api, None, addr, keep_running).await
 }
 
 async fn run_api(
-    api: DasApi,
+    api: DasApi<MaybeProofChecker>,
     request_middleware: Option<RpcRequestMiddleware>,
     addr: SocketAddr,
     keep_running: Arc<AtomicBool>,

@@ -3,9 +3,9 @@ use crate::diff_checker::{
     DiffChecker, GET_ASSET_BY_AUTHORITY_METHOD, GET_ASSET_BY_CREATOR_METHOD,
     GET_ASSET_BY_GROUP_METHOD, GET_ASSET_BY_OWNER_METHOD, GET_ASSET_METHOD, GET_ASSET_PROOF_METHOD,
 };
-use crate::error::IntegrityVerificationError;
 use crate::file_keys_fetcher::FileKeysFetcher;
 use clap::Parser;
+use interface::error::IntegrityVerificationError;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
@@ -25,7 +25,6 @@ mod config;
 mod diff_checker;
 mod error;
 mod file_keys_fetcher;
-mod merkle_tree;
 mod params;
 mod requests;
 mod slots_dumper;

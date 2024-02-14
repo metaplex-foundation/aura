@@ -290,6 +290,7 @@ pub struct ApiMetricsConfig {
     search_asset_requests: Family<MethodLabel, Counter>,
     start_time: Gauge,
     latency: Family<MethodLabel, Histogram>,
+    proof_checks: Family<MetricLabelWithStatus, Counter>,
 }
 
 impl ApiMetricsConfig {
@@ -301,6 +302,7 @@ impl ApiMetricsConfig {
             latency: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(20.0, 1.8, 10))
             }),
+            proof_checks: Family::<MetricLabelWithStatus, Counter>::default(),
         }
     }
 
@@ -331,6 +333,14 @@ impl ApiMetricsConfig {
             })
             .observe(duration);
     }
+    pub fn inc_proof_checks(&self, label: &str, status: MetricStatus) -> u64 {
+        self.proof_checks
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_owned(),
+                status,
+            })
+            .inc()
+    }
 
     pub fn register(&self, registry: &mut Registry) {
         registry.register(
@@ -352,6 +362,11 @@ impl ApiMetricsConfig {
             "api_start_time",
             "Binary start time",
             self.start_time.clone(),
+        );
+        registry.register(
+            "api_proof_checks",
+            "The number of proof checks made",
+            self.proof_checks.clone(),
         );
     }
 }

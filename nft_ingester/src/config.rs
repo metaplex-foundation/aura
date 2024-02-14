@@ -151,6 +151,9 @@ pub struct IngesterConfig {
     pub sequence_consistent_checker_wait_period_sec: u64,
     #[serde(default = "default_sequence_consister_skip_check_slots_offset")]
     pub sequence_consister_skip_check_slots_offset: u64, // TODO: remove in future if there no need in that env
+    pub rpc_host: String,
+    #[serde(default="default_check_proofs_probability")]
+    pub check_proofs_probability: f64,
 }
 
 fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
@@ -203,6 +206,13 @@ pub struct ApiConfig {
     #[serde(default)]
     pub run_profiling: bool,
     pub profiling_file_path_container: Option<String>,
+    pub rpc_host: String,
+    #[serde(default="default_check_proofs_probability")]
+    pub check_proofs_probability: f64,
+}
+
+fn default_check_proofs_probability() -> f64 {
+    0.1
 }
 
 impl ApiConfig {

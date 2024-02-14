@@ -11,6 +11,7 @@ use nft_ingester::{backfiller, config, transaction_ingester};
 use rocks_db::bubblegum_slots::{
     BubblegumSlotGetter, ForceReingestableSlotGetter, IngestableSlotGetter,
 };
+use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -49,6 +50,7 @@ use nft_ingester::backfiller::{
     connect_new_bigtable_from_config, DirectBlockParser, TransactionsParser,
 };
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
+use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::SlotsCollector;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
@@ -249,12 +251,15 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_red_metrics = metrics_state.red_metrics.clone();
+    let rpc_client = RpcClient::new(config.rpc_host.to_string());
+    let proof_checker = Arc::new(MaybeProofChecker::new(rpc_client, config.check_proofs_probability));
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
             cloned_rocks_storage.clone(),
             cloned_keep_running,
             metrics_state.api_metrics.clone(),
             cloned_red_metrics,
+            proof_checker,
         )
         .await
         {

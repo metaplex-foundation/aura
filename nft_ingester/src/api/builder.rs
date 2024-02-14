@@ -2,13 +2,14 @@ use std::sync::Arc;
 
 use jsonrpc_core::types::params::Params;
 use jsonrpc_core::IoHandler;
+use usecase::proofs::MaybeProofChecker;
 
 use crate::api::*;
 
 pub struct RpcApiBuilder;
 
 impl RpcApiBuilder {
-    pub fn build(api: DasApi) -> Result<IoHandler, DasApiError> {
+    pub fn build(api: DasApi<MaybeProofChecker>) -> Result<IoHandler, DasApiError> {
         let mut module = IoHandler::default();
         let api = Arc::new(api);
 
@@ -114,7 +115,7 @@ impl RpcApiBuilder {
         module.add_alias("getGrouping", "get_grouping");
 
         module.add_method("search_assets", move |rpc_params: Params| {
-            let api: Arc<DasApi> = api.clone();
+            let api = api.clone();
             async move {
                 api.search_assets(rpc_params.parse()?)
                     .await
