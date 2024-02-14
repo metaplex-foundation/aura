@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bincode::{deserialize, serialize};
 use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::Updated;
+use entities::models::{EditionData, Updated};
 use log::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,7 @@ pub struct AssetSelectedMaps {
     pub assets_leaf: HashMap<Pubkey, AssetLeaf>,
     pub offchain_data: HashMap<String, crate::offchain_data::OffChainData>,
     pub urls: HashMap<String, String>,
+    pub editions: HashMap<Pubkey, EditionData>,
 }
 
 // The following structures are used to store the asset data in the rocksdb database. The data is spread across multiple columns based on the update pattern.

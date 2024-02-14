@@ -196,3 +196,11 @@ pub struct TreeState {
     pub seq: u64,
     pub slot: u64,
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct EditionData {
+    pub key: Pubkey,
+    pub supply: u64,
+    pub max_supply: Option<u64>,
+    pub edition_number: Option<u64>,
+}

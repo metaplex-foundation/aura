@@ -306,6 +306,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         authorities,
         creators,
         groups,
+        edition_data,
     } = asset;
     let rpc_authorities = to_authority(authorities);
     let rpc_creators = to_creators(creators);
@@ -368,10 +369,11 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
                 .unwrap_or("".to_string()),
         },
         supply: match interface {
-            Interface::V1NFT => Some(Supply {
+            Interface::V1NFT => edition_data.map(|e| Supply {
                 edition_nonce,
-                print_current_supply: 0,
-                print_max_supply: 0,
+                print_current_supply: e.supply,
+                print_max_supply: e.max_supply,
+                edition_number: e.edition_number,
             }),
             _ => None,
         },

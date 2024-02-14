@@ -40,12 +40,12 @@ pub struct MessageHandler {
 }
 
 macro_rules! update_or_insert {
-    ($map:expr, $key:expr, $value:expr, $should_update:expr) => {{
+    ($map:expr, $key:expr, $value:expr, $update_write_version:expr) => {{
         let mut map = $map.lock().await;
         let entry = map.entry($key);
         match entry {
             std::collections::hash_map::Entry::Occupied(mut o) => {
-                if $should_update(o.get()) {
+                if o.get().write_version < $update_write_version {
                     o.insert($value);
                 }
             }
@@ -245,8 +245,7 @@ impl MessageHandler {
                                             .owner()
                                             .map(|o| Pubkey::from(o.0).to_string()),
                                     },
-                                    |existing: &MetadataInfo| existing.write_version
-                                        < account_info.write_version()
+                                    account_info.write_version()
                                 );
                             }
                             TokenMetadataAccountData::MasterEditionV1(m) => {
@@ -264,8 +263,7 @@ impl MessageHandler {
                                         ),
                                         write_version: account_info.write_version(),
                                     },
-                                    |existing: &TokenMetadata| existing.write_version
-                                        < account_info.write_version()
+                                    account_info.write_version()
                                 );
                             }
                             TokenMetadataAccountData::MasterEditionV2(m) => {
@@ -283,8 +281,7 @@ impl MessageHandler {
                                         ),
                                         write_version: account_info.write_version(),
                                     },
-                                    |existing: &TokenMetadata| existing.write_version
-                                        < account_info.write_version()
+                                    account_info.write_version()
                                 );
                             }
                             TokenMetadataAccountData::EditionV1(e) => {
@@ -300,8 +297,7 @@ impl MessageHandler {
                                         },),
                                         write_version: account_info.write_version(),
                                     },
-                                    |existing: &TokenMetadata| existing.write_version
-                                        < account_info.write_version()
+                                    account_info.write_version()
                                 );
                             }
                             _ => debug!("Not implemented"),
