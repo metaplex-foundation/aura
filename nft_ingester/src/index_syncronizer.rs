@@ -65,6 +65,9 @@ where
         if last_indexed_key.is_some() && last_indexed_key.unwrap() >= last_key.unwrap() {
             return Ok(());
         }
+        self.metrics
+            .set_last_synchronized_slot("last_known_updated_seq", last_key.unwrap().0 as i64);
+
         let mut starting_key = last_indexed_key;
         let mut processed_keys = HashSet::<Pubkey>::new();
         // Loop until no more new keys are returned
@@ -101,6 +104,8 @@ where
 
             self.metrics
                 .set_last_synchronized_slot("last_synchronized_slot", last_included_key.1 as i64);
+            self.metrics
+                .set_last_synchronized_slot("last_synchronized_seq", last_included_key.0 as i64);
 
             self.metrics.inc_number_of_records_synchronized(
                 "synchronized_records",
@@ -113,6 +118,8 @@ where
             // add the processed keys to the set
             processed_keys.extend(updated_keys);
         }
+        self.metrics
+            .inc_number_of_records_synchronized("synchronization_runs", 1);
         Ok(())
     }
 
@@ -148,9 +155,9 @@ mod tests {
     use super::*;
     use entities::models::{AssetIndex, UrlWithStatus};
     use metrics_utils::{
-        ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig,
-        JsonDownloaderMetricsConfig, JsonMigratorMetricsConfig, MetricState, MetricsTrait,
-        RpcBackfillerMetricsConfig, SequenceConsistentGapfillMetricsConfig,
+        red::RequestErrorDurationMetrics, ApiMetricsConfig, BackfillerMetricsConfig,
+        IngesterMetricsConfig, JsonDownloaderMetricsConfig, JsonMigratorMetricsConfig, MetricState,
+        MetricsTrait, RpcBackfillerMetricsConfig, SequenceConsistentGapfillMetricsConfig,
         SynchronizerMetricsConfig,
     };
     use mockall;
@@ -204,6 +211,7 @@ mod tests {
             SynchronizerMetricsConfig::new(),
             JsonMigratorMetricsConfig::new(),
             SequenceConsistentGapfillMetricsConfig::new(),
+            RequestErrorDurationMetrics::new(),
         );
         metrics_state.register_metrics();
 
@@ -242,6 +250,7 @@ mod tests {
             SynchronizerMetricsConfig::new(),
             JsonMigratorMetricsConfig::new(),
             SequenceConsistentGapfillMetricsConfig::new(),
+            RequestErrorDurationMetrics::new(),
         );
         metrics_state.register_metrics();
 
@@ -311,6 +320,7 @@ mod tests {
             SynchronizerMetricsConfig::new(),
             JsonMigratorMetricsConfig::new(),
             SequenceConsistentGapfillMetricsConfig::new(),
+            RequestErrorDurationMetrics::new(),
         );
         metrics_state.register_metrics();
 
@@ -390,6 +400,7 @@ mod tests {
             SynchronizerMetricsConfig::new(),
             JsonMigratorMetricsConfig::new(),
             SequenceConsistentGapfillMetricsConfig::new(),
+            RequestErrorDurationMetrics::new(),
         );
         metrics_state.register_metrics();
 
@@ -508,6 +519,7 @@ mod tests {
             SynchronizerMetricsConfig::new(),
             JsonMigratorMetricsConfig::new(),
             SequenceConsistentGapfillMetricsConfig::new(),
+            RequestErrorDurationMetrics::new(),
         );
         metrics_state.register_metrics();
 

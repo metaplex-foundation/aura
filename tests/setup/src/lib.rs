@@ -1,7 +1,9 @@
 pub mod pg;
 pub mod rocks;
 
-use metrics_utils::{MetricsTrait, SequenceConsistentGapfillMetricsConfig};
+use metrics_utils::{
+    red::RequestErrorDurationMetrics, MetricsTrait, SequenceConsistentGapfillMetricsConfig,
+};
 use std::sync::{atomic::AtomicBool, Arc};
 use testcontainers::clients::Cli;
 
@@ -30,6 +32,7 @@ impl<'a> TestEnvironment<'a> {
             metrics_utils::SynchronizerMetricsConfig::new(),
             metrics_utils::JsonMigratorMetricsConfig::new(),
             SequenceConsistentGapfillMetricsConfig::new(),
+            RequestErrorDurationMetrics::new(),
         );
         metrics_state.register_metrics();
 

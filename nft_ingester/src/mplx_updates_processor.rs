@@ -39,6 +39,9 @@ pub struct RocksMetadataModels {
 pub struct MetadataInfo {
     pub metadata: Metadata,
     pub slot: u64,
+    pub lamports: u64,
+    pub executable: bool,
+    pub metadata_owner: Option<String>,
 }
 
 #[derive(Clone)]
@@ -204,6 +207,9 @@ impl MplxAccsProcessor {
                     total: u.total,
                 }),
                 chain_mutability: None,
+                lamports: Some(metadata_info.lamports),
+                executable: Some(metadata_info.executable),
+                metadata_owner: metadata_info.metadata_owner.clone(),
             };
             chain_data.sanitize();
 

@@ -31,7 +31,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # Building the services
 FROM cacher AS builder
 COPY . .
-RUN cargo build --release --bin ingester --bin raw_backfiller
+RUN cargo build --release --bin ingester --bin api --bin raw_backfiller
 
 # Final image
 FROM rust:1.75-slim-bullseye
@@ -42,5 +42,6 @@ RUN groupadd $APP_USER && useradd -g $APP_USER $APP_USER && mkdir -p ${APP}
 
 COPY --from=builder /rust/target/release/ingester ${APP}/ingester
 COPY --from=builder /rust/target/release/raw_backfiller ${APP}/raw_backfiller
+COPY --from=builder /rust/target/release/api ${APP}/api
 WORKDIR ${APP}
 STOPSIGNAL SIGINT

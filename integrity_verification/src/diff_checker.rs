@@ -38,7 +38,6 @@ pub const GET_ASSET_BY_CREATOR_METHOD: &str = "getAssetsByCreator";
 
 const REQUESTS_INTERVAL_MILLIS: u64 = 1500;
 const BIGTABLE_TIMEOUT: u32 = 1000;
-const TEST_RETRIES: usize = 10;
 
 #[derive(Default)]
 struct DiffWithResponses {
@@ -65,6 +64,7 @@ where
     collect_slots_tools: Option<CollectSlotsTools>,
     rpc_client: RpcClient,
     regexes: Vec<Regex>,
+    test_retries: u64,
 }
 
 impl<T> DiffChecker<T>
@@ -81,6 +81,7 @@ where
         bigtable_creds: Option<String>,
         slots_collect_path: Option<String>,
         collect_slots_for_proofs: bool,
+        test_retries: u64,
     ) -> Self {
         // Regular expressions, that purposed to filter out some difference between
         // testing and reference hosts that we already know about
@@ -125,6 +126,7 @@ where
             metrics: test_metrics,
             collect_slots_tools,
             regexes,
+            test_retries,
         }
     }
 }
@@ -200,7 +202,7 @@ where
         for req in requests.iter() {
             metrics_inc_total_fn();
             let mut diff_with_responses = DiffWithResponses::default();
-            for _ in 0..TEST_RETRIES {
+            for _ in 0..self.test_retries {
                 diff_with_responses = self.check_request(req).await;
                 if diff_with_responses.diff.is_none() {
                     break;
@@ -530,9 +532,12 @@ impl CollectSlotsTools {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use crate::diff_checker::DiffChecker;
     use crate::file_keys_fetcher::FileKeysFetcher;
     use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
+    use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::utils::start_metrics;
     use metrics_utils::{
         BackfillerMetricsConfig, IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig,
@@ -547,6 +552,7 @@ mod tests {
         let mut metrics = IntegrityVerificationMetrics::new(
             IntegrityVerificationMetricsConfig::new(),
             BackfillerMetricsConfig::new(),
+            Arc::new(RequestErrorDurationMetrics::new()),
         );
         metrics.register_metrics();
         start_metrics(metrics.registry, Some(6001)).await;
@@ -560,6 +566,7 @@ mod tests {
             Some(String::from("../../creds.json")),
             Some("./".to_string()),
             true,
+            20,
         )
         .await
     }

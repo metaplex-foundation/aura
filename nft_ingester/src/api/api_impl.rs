@@ -4,6 +4,7 @@ use digital_asset_types::dapi::{
     get_asset, get_asset_batch, get_assets_by_authority, get_assets_by_creator,
     get_assets_by_group, get_assets_by_owner, get_proof_for_assets, search_assets,
 };
+use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
 
@@ -53,6 +54,7 @@ impl DasApi {
     pub async fn from_config(
         config: Config,
         metrics: Arc<ApiMetricsConfig>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
         rocks_db: Arc<Storage>,
     ) -> Result<Self, DasApiError> {
         let pool = PgPoolOptions::new()
@@ -61,7 +63,7 @@ impl DasApi {
             .await?;
 
         let conn = SqlxPostgresConnector::from_sqlx_postgres_pool(pool.clone());
-        let pg_client = PgClient::new_with_pool(pool);
+        let pg_client = PgClient::new_with_pool(pool, red_metrics);
         Ok(DasApi {
             db_connection: conn,
             pg_client: Arc::new(pg_client),
