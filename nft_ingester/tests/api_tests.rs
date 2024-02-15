@@ -341,7 +341,6 @@ mod tests {
             primary_sale_happened: false,
             token_standard: Some(TokenStandard::NonFungible),
             uses: None,
-            chain_mutability: Some(ChainMutability::Mutable),
         };
         chain_data.sanitize();
 
@@ -364,6 +363,10 @@ mod tests {
             creators: Updated::new(12, Some(12), vec![]),
             royalty_amount: Updated::new(12, Some(12), 5),
             url: Updated::new(12, Some(12), "https://ping-pong".to_string()),
+            chain_mutability: Some(Updated::new(12, Some(12), ChainMutability::Mutable)),
+            lamports: Some(Updated::new(12, Some(12), 1)),
+            executable: Some(Updated::new(12, Some(12), false)),
+            metadata_owner: Updated::new(12, Some(12), "ff".to_string()),
             ..Default::default()
         };
 

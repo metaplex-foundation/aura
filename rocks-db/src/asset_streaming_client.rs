@@ -164,6 +164,10 @@ async fn get_complete_asset_details(
         creators: dynamic_data.creators,
         royalty_amount: dynamic_data.royalty_amount,
         url: dynamic_data.url,
+        chain_mutability: dynamic_data.chain_mutability,
+        lamports: dynamic_data.lamports,
+        executable: dynamic_data.executable,
+        metadata_owner: dynamic_data.metadata_owner,
         authority: Updated::new(
             authority.slot_updated,
             None, //todo: where do we get seq?

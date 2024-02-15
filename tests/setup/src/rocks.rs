@@ -142,6 +142,10 @@ pub fn create_test_dynamic_data(pubkey: Pubkey, slot: u64, url: String) -> Asset
         creators: Updated::new(slot, None, vec![generate_test_creator()]),
         royalty_amount: Updated::new(slot, None, 0),
         url: Updated::new(slot, None, url),
+        chain_mutability: Default::default(),
+        lamports: None,
+        executable: None,
+        metadata_owner: None,
     }
 }
 

@@ -1,8 +1,9 @@
 use crate::gapfiller::{
-    AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ClItem, ClLeaf, Creator,
-    DynamicBoolField, DynamicBytesField, DynamicCreatorsField, DynamicEnumField,
-    DynamicUint32Field, DynamicUint64Field, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
-    SpecificationVersions, TokenStandard, UseMethod, Uses,
+    AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ChainMutability, ClItem, ClLeaf,
+    Creator, DynamicBoolField, DynamicBytesField, DynamicChainMutability, DynamicCreatorsField,
+    DynamicEnumField, DynamicStringField, DynamicUint32Field, DynamicUint64Field, OwnerType,
+    RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TokenStandard, UseMethod,
+    Uses,
 };
 use entities::models::{CompleteAssetDetails, Updated};
 use solana_sdk::pubkey::Pubkey;
@@ -46,6 +47,10 @@ impl From<CompleteAssetDetails> for AssetDetails {
             delegate,
             owner_type: Some(value.owner_type.into()),
             owner_delegate_seq,
+            chain_mutability: value.chain_mutability.map(|v| v.into()),
+            lamports: value.lamports.map(|v| v.into()),
+            executable: value.executable.map(|v| v.into()),
+            metadata_owner: value.metadata_owner.map(|v| v.into()),
             asset_leaf: value.asset_leaf.map(|v| v.into()),
             collection: value.collection.map(|v| v.into()),
             chain_data: value.onchain_data.map(|v| v.into()),
@@ -67,6 +72,16 @@ impl From<Updated<bool>> for DynamicBoolField {
 
 impl From<Updated<u64>> for DynamicUint64Field {
     fn from(value: Updated<u64>) -> Self {
+        Self {
+            value: value.value,
+            slot_updated: value.slot_updated,
+            seq_updated: value.seq,
+        }
+    }
+}
+
+impl From<Updated<String>> for DynamicStringField {
+    fn from(value: Updated<String>) -> Self {
         Self {
             value: value.value,
             slot_updated: value.slot_updated,
@@ -99,6 +114,16 @@ impl From<Updated<entities::enums::OwnerType>> for DynamicEnumField {
     fn from(value: Updated<entities::enums::OwnerType>) -> Self {
         Self {
             value: OwnerType::from(value.value).into(),
+            slot_updated: value.slot_updated,
+            seq_updated: value.seq,
+        }
+    }
+}
+
+impl From<Updated<entities::enums::ChainMutability>> for DynamicChainMutability {
+    fn from(value: Updated<entities::enums::ChainMutability>) -> Self {
+        Self {
+            value: ChainMutability::from(value.value).into(),
             slot_updated: value.slot_updated,
             seq_updated: value.seq,
         }
@@ -270,4 +295,10 @@ impl_from_enum!(
     Burn,
     Multiple,
     Single
+);
+impl_from_enum!(
+    entities::enums::ChainMutability,
+    ChainMutability,
+    Immutable,
+    Mutable
 );
