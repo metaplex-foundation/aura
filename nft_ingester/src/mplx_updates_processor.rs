@@ -57,7 +57,8 @@ pub struct MplxAccsProcessor {
     pub rocks_db: Arc<Storage>,
     pub buffer: Arc<Buffer>,
     pub metrics: Arc<IngesterMetricsConfig>,
-    last_received_at: Option<SystemTime>,
+    last_received_metadata_at: Option<SystemTime>,
+    last_received_edition_at: Option<SystemTime>,
 }
 
 macro_rules! store_assets {
@@ -139,7 +140,8 @@ impl MplxAccsProcessor {
             db_client_v2,
             rocks_db,
             metrics,
-            last_received_at: None,
+            last_received_metadata_at: None,
+            last_received_edition_at: None,
         }
     }
 
@@ -150,9 +152,9 @@ impl MplxAccsProcessor {
             self.buffer.token_metadata_editions,
             self.batch_size,
             |s: TokenMetadata| s.edition,
-            self.last_received_at,
+            self.last_received_edition_at,
             Self::transform_and_store_edition_accs,
-            "editions_saving"
+            "edition"
         );
     }
 
@@ -163,7 +165,7 @@ impl MplxAccsProcessor {
             self.buffer.mplx_metadata_info,
             self.batch_size,
             |s: MetadataInfo| s,
-            self.last_received_at,
+            self.last_received_metadata_at,
             Self::transform_and_store_metadata_accs,
             "mplx_metadata"
         );
