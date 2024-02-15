@@ -123,6 +123,10 @@ message AssetDetails {
 
     ClLeaf cl_leaf = 23;
     repeated ClItem cl_items = 24;
+
+    // From TokenMetadataEdition
+    EditionV1 edition = 25;
+    MasterEdition master_edition = 26;
 }
 
 // Dynamic field messages
@@ -178,6 +182,19 @@ message ClItem {
     uint64 slot_updated = 7;
 }
 
+message EditionV1 {
+    bytes key = 1;
+    bytes parent = 2;
+    uint64 edition = 3;
+    uint64 write_version = 4;
+}
+
+message MasterEdition {
+    bytes key = 1;
+    uint64 supply = 2;
+    optional uint64 max_supply = 3;
+    uint64 write_version = 4;
+}
 
 // RangeRequest and AssetDetailsResponse for data synchronization
 message RangeRequest {

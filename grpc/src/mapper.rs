@@ -1,8 +1,8 @@
 use crate::gapfiller::{
     AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ClItem, ClLeaf, Creator,
     DynamicBoolField, DynamicBytesField, DynamicCreatorsField, DynamicEnumField,
-    DynamicUint32Field, DynamicUint64Field, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
-    SpecificationVersions, TokenStandard, UseMethod, Uses,
+    DynamicUint32Field, DynamicUint64Field, EditionV1, MasterEdition, OwnerType, RoyaltyTargetType,
+    SpecificationAssetClass, SpecificationVersions, TokenStandard, UseMethod, Uses,
 };
 use entities::models::{CompleteAssetDetails, Updated};
 use solana_sdk::pubkey::Pubkey;
@@ -51,6 +51,8 @@ impl From<CompleteAssetDetails> for AssetDetails {
             chain_data: value.onchain_data.map(|v| v.into()),
             cl_leaf: value.cl_leaf.map(|v| v.into()),
             cl_items: value.cl_items.into_iter().map(ClItem::from).collect(),
+            edition: value.edition.map(|e| e.into()),
+            master_edition: value.master_edition.map(|e| e.into()),
         }
     }
 }
@@ -203,6 +205,29 @@ impl From<entities::models::Uses> for Uses {
         }
     }
 }
+
+impl From<entities::models::MasterEdition> for MasterEdition {
+    fn from(value: entities::models::MasterEdition) -> Self {
+        Self {
+            key: value.key.to_bytes().to_vec(),
+            supply: value.supply,
+            max_supply: value.max_supply,
+            write_version: value.write_version,
+        }
+    }
+}
+
+impl From<entities::models::EditionV1> for EditionV1 {
+    fn from(value: entities::models::EditionV1) -> Self {
+        Self {
+            key: value.key.to_bytes().to_vec(),
+            parent: value.parent.to_bytes().to_vec(),
+            edition: value.edition,
+            write_version: value.write_version,
+        }
+    }
+}
+
 macro_rules! impl_from_enum {
     ($src:ty, $dst:ident, $($variant:ident),*) => {
         impl From<$src> for $dst {

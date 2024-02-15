@@ -20,12 +20,13 @@ use solana_sdk::pubkey::Pubkey;
 use utils::flatbuffer::account_data_generated::account_data::root_as_account_data;
 
 use rocks_db::columns::{Mint, TokenAccount};
-use rocks_db::editions::{EditionV1, MasterEdition, TokenMetadataEdition};
+use rocks_db::editions::TokenMetadataEdition;
 
 use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
 use crate::mplx_updates_processor::{MetadataInfo, TokenMetadata};
+use entities::models::{EditionV1, MasterEdition};
 
 const BYTE_PREFIX_TX_SIMPLE_FINALIZED: u8 = 22;
 const BYTE_PREFIX_TX_FINALIZED: u8 = 12;
