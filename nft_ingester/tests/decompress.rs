@@ -27,7 +27,7 @@ mod tests {
         collections::HashMap,
         io::{self, Read},
     };
-    use std::{fs::File, sync::atomic::AtomicBool};
+    use std::fs::File;
     use testcontainers::clients::Cli;
     use tokio::sync::broadcast;
     use tokio::sync::Mutex;
@@ -82,7 +82,7 @@ mod tests {
         ));
         let producer = rocks_storage.clone();
 
-        let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
+        let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
         TransactionsParser::<
             DirectBlockParser<BackfillTransactionIngester, Storage>,
