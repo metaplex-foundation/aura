@@ -146,9 +146,13 @@ async fn get_complete_asset_details(
     .flatten()
     .collect::<Vec<_>>();
 
-    let token_metadata_edition = Storage::column::<TokenMetadataEdition>(backend.clone())
-        .get_cbor_encoded(pubkey)
-        .await?;
+    let token_metadata_edition = if let Some(edition_address) = static_data.edition_address {
+        Storage::column::<TokenMetadataEdition>(backend.clone())
+            .get_cbor_encoded(edition_address)
+            .await?
+    } else {
+        None
+    };
     let (edition, master_edition) = match token_metadata_edition {
         None => (None, None),
         Some(TokenMetadataEdition::MasterEdition(master_edition)) => (None, Some(master_edition)),
