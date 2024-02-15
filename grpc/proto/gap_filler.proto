@@ -192,7 +192,7 @@ message EditionV1 {
 message MasterEdition {
     bytes key = 1;
     uint64 supply = 2;
-    optional uint64 max_supply = 3;
+    google.protobuf.UInt64Value max_supply = 3;
     uint64 write_version = 4;
 }
 

@@ -241,7 +241,7 @@ pub struct MasterEdition {
     pub key: ::prost::alloc::vec::Vec<u8>,
     #[prost(uint64, tag = "2")]
     pub supply: u64,
-    #[prost(uint64, optional, tag = "3")]
+    #[prost(message, optional, tag = "3")]
     pub max_supply: ::core::option::Option<u64>,
     #[prost(uint64, tag = "4")]
     pub write_version: u64,
