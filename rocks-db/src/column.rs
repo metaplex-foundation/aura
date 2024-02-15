@@ -303,7 +303,6 @@ where
             .map_err(|e| StorageError::Common(e.to_string()))?
     }
 
-    // Відповідна синхронна функція
     fn batch_get_sync_generic<F>(
         backend: Arc<DB>,
         keys: Vec<C::KeyType>,
