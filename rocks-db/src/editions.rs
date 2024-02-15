@@ -1,6 +1,7 @@
 use crate::column::TypedColumn;
 use crate::key_encoders::{decode_pubkey, encode_pubkey};
 use crate::Result;
+use entities::models::{EditionV1, MasterEdition};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
@@ -10,22 +11,6 @@ use tracing::error;
 pub enum TokenMetadataEdition {
     EditionV1(EditionV1),
     MasterEdition(MasterEdition),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MasterEdition {
-    pub key: Pubkey,
-    pub supply: u64,
-    pub max_supply: Option<u64>,
-    pub write_version: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct EditionV1 {
-    pub key: Pubkey,
-    pub parent: Pubkey,
-    pub edition: u64,
-    pub write_version: u64,
 }
 
 impl TypedColumn for TokenMetadataEdition {

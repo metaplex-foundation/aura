@@ -10,6 +10,7 @@ use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::cl_items::{ClItem, ClLeaf};
+use crate::editions::TokenMetadataEdition;
 use crate::{
     asset::{AssetCollection, AssetLeaf, SlotAssetIdx},
     column::TypedColumn,
@@ -77,7 +78,7 @@ async fn get_complete_asset_details(
     let static_data = Storage::column::<AssetStaticDetails>(backend.clone()).get(pubkey)?;
     let static_data = match static_data {
         None => {
-            return Err(crate::errors::StorageError::Common(
+            return Err(StorageError::Common(
                 "Asset static data not found".to_string(),
             ));
         }
@@ -87,7 +88,7 @@ async fn get_complete_asset_details(
     let dynamic_data = Storage::column::<AssetDynamicDetails>(backend.clone()).get(pubkey)?;
     let dynamic_data = match dynamic_data {
         None => {
-            return Err(crate::errors::StorageError::Common(
+            return Err(StorageError::Common(
                 "Asset dynamic data not found".to_string(),
             ));
         }
@@ -96,7 +97,7 @@ async fn get_complete_asset_details(
     let authority = Storage::column::<AssetAuthority>(backend.clone()).get(pubkey)?;
     let authority = match authority {
         None => {
-            return Err(crate::errors::StorageError::Common(
+            return Err(StorageError::Common(
                 "Asset authority not found".to_string(),
             ));
         }
@@ -105,9 +106,7 @@ async fn get_complete_asset_details(
     let owner = Storage::column::<AssetOwner>(backend.clone()).get(pubkey)?;
     let owner = match owner {
         None => {
-            return Err(crate::errors::StorageError::Common(
-                "Asset owner not found".to_string(),
-            ));
+            return Err(StorageError::Common("Asset owner not found".to_string()));
         }
         Some(owner) => owner,
     };
@@ -146,6 +145,26 @@ async fn get_complete_asset_details(
     .into_iter()
     .flatten()
     .collect::<Vec<_>>();
+
+    let token_metadata_edition = Storage::column::<TokenMetadataEdition>(backend.clone())
+        .get_cbor_encoded(pubkey)
+        .await?;
+    let (edition, master_edition) = match token_metadata_edition {
+        None => (None, None),
+        Some(TokenMetadataEdition::MasterEdition(master_edition)) => (None, Some(master_edition)),
+        Some(TokenMetadataEdition::EditionV1(edition)) => {
+            let parent = Storage::column::<TokenMetadataEdition>(backend.clone())
+                .get_cbor_encoded(edition.parent)
+                .await?;
+            let master_edition =
+                if let Some(TokenMetadataEdition::MasterEdition(master_edition)) = parent {
+                    Some(master_edition)
+                } else {
+                    None
+                };
+            (Some(edition), master_edition)
+        }
+    };
 
     Ok(CompleteAssetDetails {
         pubkey: static_data.pubkey,
@@ -215,6 +234,8 @@ async fn get_complete_asset_details(
                 slot_updated: item.slot_updated,
             })
             .collect(),
+        edition,
+        master_edition,
     })
 }
 

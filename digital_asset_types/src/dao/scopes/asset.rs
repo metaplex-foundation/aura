@@ -614,10 +614,9 @@ fn asset_selected_maps_into_full_asset(
                     .map_or(vec![], |v| vec![v]),
                     edition_data: asset_selected_maps.assets_static.get(id).and_then(
                         |static_details| {
-                            asset_selected_maps
-                                .editions
-                                .get(&static_details.edition_address)
-                                .cloned()
+                            static_details
+                                .edition_address
+                                .and_then(|e| asset_selected_maps.editions.get(&e).cloned())
                         },
                     ),
                 }),

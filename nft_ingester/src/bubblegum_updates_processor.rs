@@ -17,7 +17,6 @@ use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
-use mpl_token_metadata::accounts::MasterEdition;
 use num_traits::FromPrimitive;
 use plerkle_serialization::{Pubkey as FBPubkey, TransactionInfo};
 use rocks_db::asset::AssetOwner;
@@ -460,7 +459,7 @@ impl BubblegumTxProcessor {
                         specification_asset_class: SpecificationAssetClass::Nft,
                         royalty_target_type: RoyaltyTargetType::Creators,
                         created_at: bundle.slot as i64,
-                        edition_address: MasterEdition::find_pda(&id).0,
+                        edition_address: None,
                     };
                     asset_update.static_update = Some(AssetUpdate {
                         pk: id,
