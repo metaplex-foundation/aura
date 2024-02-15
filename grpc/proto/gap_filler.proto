@@ -130,12 +130,12 @@ message AssetDetails {
     AssetCollection collection = 25;
     ChainDataV1 chain_data = 26;
 
-    ClLeaf cl_leaf = 23;
-    repeated ClItem cl_items = 24;
+    ClLeaf cl_leaf = 27;
+    repeated ClItem cl_items = 28;
 
     // From TokenMetadataEdition
-    EditionV1 edition = 25;
-    MasterEdition master_edition = 26;
+    EditionV1 edition = 29;
+    MasterEdition master_edition = 30;
 }
 
 // Dynamic field messages

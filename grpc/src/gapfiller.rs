@@ -136,9 +136,9 @@ pub struct AssetDetails {
     #[prost(message, repeated, tag = "28")]
     pub cl_items: ::prost::alloc::vec::Vec<ClItem>,
     /// From TokenMetadataEdition
-    #[prost(message, optional, tag = "25")]
+    #[prost(message, optional, tag = "29")]
     pub edition: ::core::option::Option<EditionV1>,
-    #[prost(message, optional, tag = "26")]
+    #[prost(message, optional, tag = "30")]
     pub master_edition: ::core::option::Option<MasterEdition>,
 }
 /// Dynamic field messages
