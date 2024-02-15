@@ -237,7 +237,7 @@ impl MessageHandler {
                                     key.0.to_vec(),
                                     MetadataInfo {
                                         metadata: m.clone(),
-                                        slot: account_info.slot(),
+                                        slot_updated: account_info.slot(),
                                         write_version: account_info.write_version(),
                                         lamports: account_info.lamports(),
                                         executable: account_info.executable(),
@@ -262,6 +262,7 @@ impl MessageHandler {
                                             },
                                         ),
                                         write_version: account_info.write_version(),
+                                        slot_updated: account_info.slot(),
                                     },
                                     account_info.write_version()
                                 );
@@ -280,6 +281,7 @@ impl MessageHandler {
                                             },
                                         ),
                                         write_version: account_info.write_version(),
+                                        slot_updated: account_info.slot(),
                                     },
                                     account_info.write_version()
                                 );
@@ -296,6 +298,7 @@ impl MessageHandler {
                                             write_version: account_info.write_version()
                                         },),
                                         write_version: account_info.write_version(),
+                                        slot_updated: account_info.slot(),
                                     },
                                     account_info.write_version()
                                 );

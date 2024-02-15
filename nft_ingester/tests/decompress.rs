@@ -196,7 +196,7 @@ mod tests {
                 collection_details: None,
                 programmable_config: None,
             },
-            slot: nft_created_slot as u64,
+            slot_updated: nft_created_slot as u64,
         };
 
         let mut map = HashMap::new();

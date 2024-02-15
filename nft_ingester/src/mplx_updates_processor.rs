@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use blockbuster::token_metadata::state::{Metadata, TokenStandard, UseMethod};
+use blockbuster::token_metadata::state::{Metadata, TokenStandard};
 use log::error;
 use mpl_token_metadata::accounts::MasterEdition;
 use serde_json::json;
@@ -23,10 +23,6 @@ use rocks_db::Storage;
 use crate::buffer::Buffer;
 use crate::db_v2::{DBClient as DBClientV2, Task};
 
-// interval after which buffer is flushed
-pub const FLUSH_INTERVAL_SEC: u64 = 5;
-// worker idle timeout
-pub const WORKER_IDLE_TIMEOUT_MS: u64 = 100;
 // arbitrary number, should be enough to not overflow batch insert command at Postgre
 pub const MAX_BUFFERED_TASKS_TO_TAKE: usize = 5000;
 
@@ -41,7 +37,7 @@ pub struct RocksMetadataModels {
 
 pub struct MetadataInfo {
     pub metadata: Metadata,
-    pub slot: u64,
+    pub slot_updated: u64,
     pub write_version: u64,
     pub lamports: u64,
     pub executable: bool,
@@ -51,6 +47,7 @@ pub struct MetadataInfo {
 pub struct TokenMetadata {
     pub edition: TokenMetadataEdition,
     pub write_version: u64,
+    pub slot_updated: u64,
 }
 
 #[derive(Clone)]
@@ -79,6 +76,55 @@ macro_rules! store_assets {
     }};
 }
 
+#[macro_export]
+macro_rules! process_accounts {
+    ($self:expr, $keep_running:expr, $buffer:expr, $batch_size:expr, $extract_value:expr, $last_received_at:expr, $transform_and_save:expr, $metric_name:expr) => {
+        // interval after which buffer is flushed
+        const WORKER_IDLE_TIMEOUT_MS: u64 = 100;
+        // worker idle timeout
+        const FLUSH_INTERVAL_SEC: u64 = 5;
+
+        #[allow(clippy::redundant_closure_call)]
+        while $keep_running.load(std::sync::atomic::Ordering::SeqCst) {
+            let buffer_len = $buffer.lock().await.len();
+            if buffer_len < $batch_size {
+                if buffer_len == 0
+                    || $last_received_at.is_some_and(|t| {
+                        t.elapsed().is_ok_and(|e| e.as_secs() < FLUSH_INTERVAL_SEC)
+                    })
+                {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(WORKER_IDLE_TIMEOUT_MS))
+                        .await;
+                    continue;
+                }
+            }
+
+            let mut max_slot = 0;
+            let items_to_save = {
+                let mut items = $buffer.lock().await;
+                let mut elems = HashMap::new();
+
+                for key in items.keys().take($batch_size).cloned().collect::<Vec<_>>() {
+                    if let Some(value) = items.remove(&key) {
+                        if value.slot_updated > max_slot {
+                            max_slot = value.slot_updated;
+                        }
+                        elems.insert(key, $extract_value(value));
+                    }
+                }
+                elems
+            };
+
+            $transform_and_save(&$self, &items_to_save).await;
+
+            $self
+                .metrics
+                .set_last_processed_slot($metric_name, max_slot as i64);
+            $last_received_at = Some(SystemTime::now());
+        }
+    };
+}
+
 impl MplxAccsProcessor {
     pub fn new(
         batch_size: usize,
@@ -98,112 +144,61 @@ impl MplxAccsProcessor {
     }
 
     pub async fn process_edition_accs(&mut self, keep_running: Arc<AtomicBool>) {
-        while keep_running.load(Ordering::SeqCst) {
-            let buffer_len = self.buffer.token_metadata_editions.lock().await.len();
-            if buffer_len < self.batch_size {
-                // sleep only in case when buffer is empty or n seconds passed since last insert
-                if buffer_len == 0
-                    || self.last_received_at.is_some_and(|t| {
-                        t.elapsed().is_ok_and(|e| e.as_secs() < FLUSH_INTERVAL_SEC)
-                    })
-                {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(WORKER_IDLE_TIMEOUT_MS))
-                        .await;
-                    continue;
-                }
-            }
-
-            let editions = {
-                let mut editions_buffer = self.buffer.token_metadata_editions.lock().await;
-                let mut elems = HashMap::new();
-
-                for key in editions_buffer
-                    .keys()
-                    .take(self.batch_size)
-                    .cloned()
-                    .collect::<Vec<Pubkey>>()
-                {
-                    if let Some(value) = editions_buffer.remove(&key) {
-                        elems.insert(key, value.edition);
-                    }
-                }
-
-                elems
-            };
-
-            let begin_processing = Instant::now();
-            let res = self
-                .rocks_db
-                .token_metadata_edition_cbor
-                .merge_batch_cbor(editions)
-                .await;
-
-            result_to_metrics(self.metrics.clone(), &res, "editions_saving");
-
-            self.metrics.set_latency(
-                "editions_saving",
-                begin_processing.elapsed().as_millis() as f64,
-            );
-
-            self.last_received_at = Some(SystemTime::now());
-        }
+        process_accounts!(
+            self,
+            keep_running,
+            self.buffer.token_metadata_editions,
+            self.batch_size,
+            |s: TokenMetadata| s.edition,
+            self.last_received_at,
+            Self::transform_and_store_edition_accs,
+            "editions_saving"
+        );
     }
 
     pub async fn process_metadata_accs(&mut self, keep_running: Arc<AtomicBool>) {
-        while keep_running.load(Ordering::SeqCst) {
-            let buffer_len = self.buffer.mplx_metadata_len().await;
-            if buffer_len < self.batch_size {
-                // sleep only in case when buffer is empty or n seconds passed since last insert
-                if buffer_len == 0
-                    || self.last_received_at.is_some_and(|t| {
-                        t.elapsed().is_ok_and(|e| e.as_secs() < FLUSH_INTERVAL_SEC)
-                    })
-                {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(WORKER_IDLE_TIMEOUT_MS))
-                        .await;
-                    continue;
-                }
-            }
+        process_accounts!(
+            self,
+            keep_running,
+            self.buffer.mplx_metadata_info,
+            self.batch_size,
+            |s: MetadataInfo| s,
+            self.last_received_at,
+            Self::transform_and_store_metadata_accs,
+            "mplx_metadata"
+        );
+    }
 
-            let mut max_slot = 0;
-            let metadata_info = {
-                let mut metadata_info_buffer = self.buffer.mplx_metadata_info.lock().await;
-                let mut elems = HashMap::new();
+    async fn transform_and_store_metadata_accs(
+        &self,
+        metadata_info: &HashMap<Vec<u8>, MetadataInfo>,
+    ) {
+        let metadata_models = self.create_rocks_metadata_models(metadata_info).await;
 
-                for key in metadata_info_buffer
-                    .keys()
-                    .take(self.batch_size)
-                    .cloned()
-                    .collect::<Vec<Vec<u8>>>()
-                {
-                    if let Some(value) = metadata_info_buffer.remove(&key) {
-                        if value.slot > max_slot {
-                            max_slot = value.slot;
-                        }
+        let begin_processing = Instant::now();
+        self.store_metadata_models(&metadata_models).await;
+        self.metrics.set_latency(
+            "accounts_saving",
+            begin_processing.elapsed().as_millis() as f64,
+        );
+    }
 
-                        elems.insert(key, value);
-                    }
-                }
+    async fn transform_and_store_edition_accs(
+        &self,
+        editions: &HashMap<Pubkey, TokenMetadataEdition>,
+    ) {
+        let begin_processing = Instant::now();
+        let res = self
+            .rocks_db
+            .token_metadata_edition_cbor
+            .merge_batch_cbor(editions.to_owned())
+            .await;
 
-                elems
-            };
-            let metadata_models = self.create_rocks_metadata_models(&metadata_info).await;
-
-            // store data
-            let begin_processing = Instant::now();
-
-            self.store_metadata_models(&metadata_models).await;
-
-            self.metrics.set_latency(
-                "accounts_saving",
-                begin_processing.elapsed().as_millis() as f64,
-            );
-
-            self.metrics
-                .set_last_processed_slot("mplx_metadata", max_slot as i64);
-
-            self.last_received_at = Some(SystemTime::now());
-        }
+        result_to_metrics(self.metrics.clone(), &res, "editions_saving");
+        self.metrics.set_latency(
+            "editions_saving",
+            begin_processing.elapsed().as_millis() as f64,
+        );
     }
 
     pub async fn store_metadata_models(&self, metadata_models: &RocksMetadataModels) {
@@ -248,7 +243,7 @@ impl MplxAccsProcessor {
                 pubkey: mint,
                 specification_asset_class: class,
                 royalty_target_type: RoyaltyTargetType::Creators,
-                created_at: metadata_info.slot as i64,
+                created_at: metadata_info.slot_updated as i64,
                 edition_address: MasterEdition::find_pda(&mint).0,
             });
 
@@ -257,11 +252,9 @@ impl MplxAccsProcessor {
                 symbol: data.symbol.clone(),
                 edition_nonce: metadata.edition_nonce,
                 primary_sale_happened: metadata.primary_sale_happened,
-                token_standard: metadata
-                    .token_standard
-                    .map(|s| token_standard_from_mpl_state(&s)),
+                token_standard: metadata.token_standard.map(|s| s.into()),
                 uses: metadata.uses.map(|u| Uses {
-                    use_method: use_method_from_mpl_state(&u.use_method),
+                    use_method: u.use_method.into(),
                     remaining: u.remaining,
                     total: u.total,
                 }),
@@ -277,19 +270,19 @@ impl MplxAccsProcessor {
             // supply field saving inside process_mint_accs fn
             models.asset_dynamic.push(AssetDynamicDetails {
                 pubkey: mint,
-                is_compressible: Updated::new(metadata_info.slot, None, false),
-                is_compressed: Updated::new(metadata_info.slot, None, false),
-                is_frozen: Updated::new(metadata_info.slot, None, false),
+                is_compressible: Updated::new(metadata_info.slot_updated, None, false),
+                is_compressed: Updated::new(metadata_info.slot_updated, None, false),
+                is_frozen: Updated::new(metadata_info.slot_updated, None, false),
                 seq: None,
-                is_burnt: Updated::new(metadata_info.slot, None, false),
-                was_decompressed: Updated::new(metadata_info.slot, None, false),
+                is_burnt: Updated::new(metadata_info.slot_updated, None, false),
+                was_decompressed: Updated::new(metadata_info.slot_updated, None, false),
                 onchain_data: Some(Updated::new(
-                    metadata_info.slot,
+                    metadata_info.slot_updated,
                     None,
                     chain_data.to_string(),
                 )),
                 creators: Updated::new(
-                    metadata_info.slot,
+                    metadata_info.slot_updated,
                     None,
                     data.clone()
                         .creators
@@ -303,11 +296,11 @@ impl MplxAccsProcessor {
                         .collect(),
                 ),
                 royalty_amount: Updated::new(
-                    metadata_info.slot,
+                    metadata_info.slot_updated,
                     None,
                     data.seller_fee_basis_points,
                 ),
-                url: Updated::new(metadata_info.slot, None, uri.clone()),
+                url: Updated::new(metadata_info.slot_updated, None, uri.clone()),
                 ..Default::default()
             });
 
@@ -326,7 +319,7 @@ impl MplxAccsProcessor {
                     collection: c.key,
                     is_collection_verified: c.verified,
                     collection_seq: None,
-                    slot_updated: metadata_info.slot,
+                    slot_updated: metadata_info.slot_updated,
                 });
             } else if let Some(creators) = data.creators {
                 if !creators.is_empty() {
@@ -335,7 +328,7 @@ impl MplxAccsProcessor {
                         collection: creators[0].address,
                         is_collection_verified: true,
                         collection_seq: None,
-                        slot_updated: metadata_info.slot,
+                        slot_updated: metadata_info.slot_updated,
                     });
                 }
             }
@@ -343,7 +336,7 @@ impl MplxAccsProcessor {
             models.asset_authority.push(AssetAuthority {
                 pubkey: mint,
                 authority,
-                slot_updated: metadata_info.slot,
+                slot_updated: metadata_info.slot_updated,
             });
         }
 
@@ -423,29 +416,6 @@ impl MplxAccsProcessor {
         if !tasks_to_insert.is_empty() {
             let res = self.db_client_v2.insert_tasks(&mut tasks_to_insert).await;
             result_to_metrics(self.metrics.clone(), &res, "accounts_saving_tasks");
-        }
-    }
-}
-
-pub fn use_method_from_mpl_state(value: &UseMethod) -> entities::enums::UseMethod {
-    match value {
-        UseMethod::Burn => entities::enums::UseMethod::Burn,
-        UseMethod::Multiple => entities::enums::UseMethod::Multiple,
-        UseMethod::Single => entities::enums::UseMethod::Single,
-    }
-}
-
-pub fn token_standard_from_mpl_state(value: &TokenStandard) -> entities::enums::TokenStandard {
-    match value {
-        TokenStandard::NonFungible => entities::enums::TokenStandard::NonFungible,
-        TokenStandard::FungibleAsset => entities::enums::TokenStandard::FungibleAsset,
-        TokenStandard::Fungible => entities::enums::TokenStandard::Fungible,
-        TokenStandard::NonFungibleEdition => entities::enums::TokenStandard::NonFungibleEdition,
-        TokenStandard::ProgrammableNonFungible => {
-            entities::enums::TokenStandard::ProgrammableNonFungible
-        }
-        TokenStandard::ProgrammableNonFungibleEdition => {
-            entities::enums::TokenStandard::ProgrammableNonFungibleEdition
         }
     }
 }
