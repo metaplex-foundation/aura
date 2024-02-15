@@ -53,7 +53,7 @@ pub struct CompleteAssetDetails {
     pub specification_asset_class: SpecificationAssetClass,
     pub royalty_target_type: RoyaltyTargetType,
     pub slot_created: u64,
-    pub edition_address: Pubkey,
+    pub edition_address: Option<Pubkey>,
 
     // From AssetDynamicDetails as Tuples
     pub is_compressible: Updated<bool>,
@@ -88,6 +88,10 @@ pub struct CompleteAssetDetails {
     // Cl elements
     pub cl_leaf: Option<ClLeaf>,
     pub cl_items: Vec<ClItem>,
+
+    // TokenMetadataEdition
+    pub edition: Option<EditionV1>,
+    pub master_edition: Option<MasterEdition>,
 }
 
 /// Leaf information about compressed asset
@@ -199,4 +203,20 @@ pub struct EditionData {
     pub supply: u64,
     pub max_supply: Option<u64>,
     pub edition_number: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MasterEdition {
+    pub key: Pubkey,
+    pub supply: u64,
+    pub max_supply: Option<u64>,
+    pub write_version: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct EditionV1 {
+    pub key: Pubkey,
+    pub parent: Pubkey,
+    pub edition: u64,
+    pub write_version: u64,
 }

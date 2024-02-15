@@ -120,7 +120,7 @@ impl Storage {
                 .get_editions(
                     assets_static
                         .values()
-                        .map(|s| s.edition_address)
+                        .filter_map(|s| s.edition_address)
                         .collect::<Vec<_>>(),
                 )
                 .await?,

@@ -86,8 +86,8 @@ pub struct AssetDetails {
     pub royalty_target_type: i32,
     #[prost(uint64, tag = "4")]
     pub slot_created: u64,
-    #[prost(bytes = "vec", tag = "5")]
-    pub edition_address: ::prost::alloc::vec::Vec<u8>,
+    #[prost(message, optional, tag = "5")]
+    pub edition_address: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
     /// From AssetDynamicDetails as Tuples
     #[prost(message, optional, tag = "6")]
     pub is_compressible: ::core::option::Option<DynamicBoolField>,
@@ -135,6 +135,11 @@ pub struct AssetDetails {
     pub cl_leaf: ::core::option::Option<ClLeaf>,
     #[prost(message, repeated, tag = "28")]
     pub cl_items: ::prost::alloc::vec::Vec<ClItem>,
+    /// From TokenMetadataEdition
+    #[prost(message, optional, tag = "25")]
+    pub edition: ::core::option::Option<EditionV1>,
+    #[prost(message, optional, tag = "26")]
+    pub master_edition: ::core::option::Option<MasterEdition>,
 }
 /// Dynamic field messages
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -244,6 +249,30 @@ pub struct ClItem {
     pub cli_hash: ::prost::alloc::vec::Vec<u8>,
     #[prost(uint64, tag = "7")]
     pub slot_updated: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EditionV1 {
+    #[prost(bytes = "vec", tag = "1")]
+    pub key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "2")]
+    pub parent: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint64, tag = "3")]
+    pub edition: u64,
+    #[prost(uint64, tag = "4")]
+    pub write_version: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MasterEdition {
+    #[prost(bytes = "vec", tag = "1")]
+    pub key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint64, tag = "2")]
+    pub supply: u64,
+    #[prost(message, optional, tag = "3")]
+    pub max_supply: ::core::option::Option<u64>,
+    #[prost(uint64, tag = "4")]
+    pub write_version: u64,
 }
 /// RangeRequest and AssetDetailsResponse for data synchronization
 #[allow(clippy::derive_partial_eq_without_eq)]

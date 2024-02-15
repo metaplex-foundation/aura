@@ -104,7 +104,7 @@ message AssetDetails {
     SpecificationAssetClass specification_asset_class = 2;
     RoyaltyTargetType royalty_target_type = 3;
     uint64 slot_created = 4;
-    bytes edition_address = 5;
+    google.protobuf.BytesValue edition_address = 5;
 
     // From AssetDynamicDetails as Tuples
     DynamicBoolField is_compressible = 6;
@@ -130,8 +130,12 @@ message AssetDetails {
     AssetCollection collection = 25;
     ChainDataV1 chain_data = 26;
 
-    ClLeaf cl_leaf = 27;
-    repeated ClItem cl_items = 28;
+    ClLeaf cl_leaf = 23;
+    repeated ClItem cl_items = 24;
+
+    // From TokenMetadataEdition
+    EditionV1 edition = 25;
+    MasterEdition master_edition = 26;
 }
 
 // Dynamic field messages
@@ -199,6 +203,19 @@ message ClItem {
     uint64 slot_updated = 7;
 }
 
+message EditionV1 {
+    bytes key = 1;
+    bytes parent = 2;
+    uint64 edition = 3;
+    uint64 write_version = 4;
+}
+
+message MasterEdition {
+    bytes key = 1;
+    uint64 supply = 2;
+    google.protobuf.UInt64Value max_supply = 3;
+    uint64 write_version = 4;
+}
 
 // RangeRequest and AssetDetailsResponse for data synchronization
 message RangeRequest {

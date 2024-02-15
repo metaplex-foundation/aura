@@ -34,7 +34,7 @@ pub struct AssetStaticDetails {
     pub specification_asset_class: SpecificationAssetClass,
     pub royalty_target_type: RoyaltyTargetType,
     pub created_at: i64,
-    pub edition_address: Pubkey,
+    pub edition_address: Option<Pubkey>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

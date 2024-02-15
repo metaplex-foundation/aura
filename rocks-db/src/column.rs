@@ -103,17 +103,41 @@ where
         Ok(())
     }
 
+    fn merge_with_batch_generic<F>(
+        &self,
+        batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        key: C::KeyType,
+        value: &C::ValueType,
+        serialize_fn: F,
+    ) -> Result<()>
+    where
+        F: Fn(&C::ValueType) -> Result<Vec<u8>>,
+    {
+        let serialized_value = serialize_fn(value)?;
+        batch.merge_cf(&self.handle(), C::encode_key(key), serialized_value);
+        Ok(())
+    }
+
     pub(crate) fn merge_with_batch(
         &self,
         batch: &mut rocksdb::WriteBatchWithTransaction<false>,
         key: C::KeyType,
         value: &C::ValueType,
     ) -> Result<()> {
-        let serialized_value = serialize(value)?;
+        self.merge_with_batch_generic(batch, key, value, |v| {
+            serialize(v).map_err(|e| StorageError::Common(e.to_string()))
+        })
+    }
 
-        batch.merge_cf(&self.handle(), C::encode_key(key), serialized_value);
-
-        Ok(())
+    pub(crate) fn merge_with_batch_cbor(
+        &self,
+        batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        key: C::KeyType,
+        value: &C::ValueType,
+    ) -> Result<()> {
+        self.merge_with_batch_generic(batch, key, value, |v| {
+            serde_cbor::to_vec(v).map_err(|e| StorageError::Common(e.to_string()))
+        })
     }
 
     pub(crate) fn put_with_batch(
