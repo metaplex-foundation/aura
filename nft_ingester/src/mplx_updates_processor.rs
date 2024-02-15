@@ -249,7 +249,7 @@ impl MplxAccsProcessor {
                 specification_asset_class: class,
                 royalty_target_type: RoyaltyTargetType::Creators,
                 created_at: metadata_info.slot as i64,
-                edition_address: MasterEdition::find_pda(&mint).0,
+                edition_address: Some(MasterEdition::find_pda(&mint).0),
             });
 
             let mut chain_data = ChainDataV1 {

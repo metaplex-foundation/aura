@@ -29,7 +29,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
                 value.specification_asset_class,
             )
             .into(),
-            edition_address: value.edition_address.to_bytes().to_vec(),
+            edition_address: value.edition_address.map(|e| e.to_bytes().to_vec()),
             royalty_target_type: RoyaltyTargetType::from(value.royalty_target_type).into(),
             slot_created: value.slot_created,
             is_compressible: Some(value.is_compressible.into()),

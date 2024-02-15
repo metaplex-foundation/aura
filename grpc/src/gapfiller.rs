@@ -86,8 +86,8 @@ pub struct AssetDetails {
     pub royalty_target_type: i32,
     #[prost(uint64, tag = "4")]
     pub slot_created: u64,
-    #[prost(bytes = "vec", tag = "5")]
-    pub edition_address: ::prost::alloc::vec::Vec<u8>,
+    #[prost(message, optional, tag = "5")]
+    pub edition_address: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
     /// From AssetDynamicDetails as Tuples
     #[prost(message, optional, tag = "6")]
     pub is_compressible: ::core::option::Option<DynamicBoolField>,

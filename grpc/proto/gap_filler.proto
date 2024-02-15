@@ -99,7 +99,7 @@ message AssetDetails {
     SpecificationAssetClass specification_asset_class = 2;
     RoyaltyTargetType royalty_target_type = 3;
     uint64 slot_created = 4;
-    bytes edition_address = 5;
+    google.protobuf.BytesValue edition_address = 5;
 
     // From AssetDynamicDetails as Tuples
     DynamicBoolField is_compressible = 6;
