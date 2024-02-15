@@ -256,6 +256,7 @@ pub async fn main() -> Result<(), IngesterError> {
         Arc::new(MaybeProofChecker::new(
             RpcClient::new(host),
             config.check_proofs_probability,
+            config.check_proofs_commitment,
         ))
     });
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {

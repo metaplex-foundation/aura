@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use interface::proofs::ProofChecker;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
+use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 use spl_account_compression::canopy::fill_in_proof_from_canopy;
 use spl_account_compression::state::{
     merkle_tree_get_size, ConcurrentMerkleTreeHeader, CONCURRENT_MERKLE_TREE_HEADER_SIZE_V1,
@@ -16,13 +17,19 @@ use interface::error::IntegrityVerificationError;
 pub struct MaybeProofChecker {
     rpc_client: RpcClient,
     check_probability: f64,
+    commitment_level: CommitmentLevel,
 }
 
 impl MaybeProofChecker {
-    pub fn new(rpc_client: RpcClient, check_probability: f64) -> Self {
+    pub fn new(
+        rpc_client: RpcClient,
+        check_probability: f64,
+        commitment_level: CommitmentLevel,
+    ) -> Self {
         Self {
             rpc_client,
             check_probability,
+            commitment_level,
         }
     }
 }
@@ -39,9 +46,24 @@ impl ProofChecker for MaybeProofChecker {
         if rand::random::<f64>() > self.check_probability {
             return Ok(true);
         }
-        let account_data = self.rpc_client.get_account_data(&tree_id_pk).await;
-        let tree_acc_info = account_data.map_err(|e| e.to_string())?;
-        validate_proofs(tree_acc_info, initial_proofs, leaf_index, leaf).map_err(|e| e.to_string())
+        let account_data = self
+            .rpc_client
+            .get_account_with_commitment(
+                &tree_id_pk,
+                CommitmentConfig {
+                    commitment: self.commitment_level,
+                },
+            )
+            .await;
+        let tree_acc_info = account_data
+            .map_err(|e| e.to_string())?
+            .value
+            .map(|acc| acc.data);
+        if tree_acc_info.is_none() {
+            return Err("Tree account not found".to_string());
+        }
+        validate_proofs(tree_acc_info.unwrap(), initial_proofs, leaf_index, leaf)
+            .map_err(|e| e.to_string())
     }
 }
 

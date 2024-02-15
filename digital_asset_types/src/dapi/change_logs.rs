@@ -234,7 +234,7 @@ fn get_asset_proof(
         leaf: leaf_b58,
         proof,
         node_index: leaf.node_idx,
-        tree_id: bs58::encode(&leaf.tree).into_string(),
+        tree_id: tree_id.to_string(),
     })
 }
 
