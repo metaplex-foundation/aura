@@ -21,13 +21,13 @@ mod tests {
     };
     use solana_sdk::pubkey::Pubkey;
     use sqlx::{Pool, Postgres};
+    use std::fs::File;
     use std::str::FromStr;
     use std::sync::Arc;
     use std::{
         collections::HashMap,
         io::{self, Read},
     };
-    use std::fs::File;
     use testcontainers::clients::Cli;
     use tokio::sync::broadcast;
     use tokio::sync::Mutex;
