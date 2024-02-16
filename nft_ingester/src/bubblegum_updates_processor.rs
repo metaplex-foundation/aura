@@ -446,10 +446,6 @@ impl BubblegumTxProcessor {
                             remaining: u.remaining,
                             total: u.total,
                         }),
-                        chain_mutability: Some(chain_mutability),
-                        lamports: None,
-                        executable: None,
-                        metadata_owner: None,
                     };
                     chain_data.sanitize();
 
@@ -508,6 +504,11 @@ impl BubblegumTxProcessor {
                                 args.seller_fee_basis_points,
                             ),
                             url: Updated::new(bundle.slot, Some(cl.seq), uri.clone()),
+                            chain_mutability: Some(Updated::new(
+                                bundle.slot,
+                                Some(cl.seq),
+                                chain_mutability,
+                            )),
                             ..Default::default()
                         }),
                     });
@@ -865,10 +866,6 @@ impl BubblegumTxProcessor {
                                 })
                             })
                             .transpose()?,
-                        chain_mutability: Some(chain_mutability),
-                        lamports: None,
-                        executable: None,
-                        metadata_owner: None,
                     };
                     chain_data.sanitize();
                     let chain_data_json = serde_json::to_value(chain_data)
@@ -935,6 +932,11 @@ impl BubblegumTxProcessor {
                                 Some(cl.seq),
                                 seller_fee_basis_points,
                             ),
+                            chain_mutability: Some(Updated::new(
+                                bundle.slot,
+                                Some(cl.seq),
+                                chain_mutability,
+                            )),
                             ..Default::default()
                         }),
                     });

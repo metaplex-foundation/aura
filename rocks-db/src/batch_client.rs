@@ -287,6 +287,10 @@ impl Storage {
                 creators: data.creators,
                 royalty_amount: data.royalty_amount,
                 url: data.url,
+                chain_mutability: data.chain_mutability,
+                lamports: data.lamports,
+                executable: data.executable,
+                metadata_owner: data.metadata_owner,
             },
         )?;
 

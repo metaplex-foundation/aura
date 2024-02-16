@@ -118,19 +118,27 @@ pub struct AssetDetails {
     #[prost(message, optional, tag = "19")]
     pub owner_delegate_seq: ::core::option::Option<DynamicUint64Field>,
     #[prost(message, optional, tag = "20")]
-    pub asset_leaf: ::core::option::Option<AssetLeaf>,
+    pub chain_mutability: ::core::option::Option<DynamicChainMutability>,
     #[prost(message, optional, tag = "21")]
-    pub collection: ::core::option::Option<AssetCollection>,
+    pub lamports: ::core::option::Option<DynamicUint64Field>,
     #[prost(message, optional, tag = "22")]
-    pub chain_data: ::core::option::Option<ChainDataV1>,
+    pub executable: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "23")]
+    pub metadata_owner: ::core::option::Option<DynamicStringField>,
+    #[prost(message, optional, tag = "24")]
+    pub asset_leaf: ::core::option::Option<AssetLeaf>,
+    #[prost(message, optional, tag = "25")]
+    pub collection: ::core::option::Option<AssetCollection>,
+    #[prost(message, optional, tag = "26")]
+    pub chain_data: ::core::option::Option<ChainDataV1>,
+    #[prost(message, optional, tag = "27")]
     pub cl_leaf: ::core::option::Option<ClLeaf>,
-    #[prost(message, repeated, tag = "24")]
+    #[prost(message, repeated, tag = "28")]
     pub cl_items: ::prost::alloc::vec::Vec<ClItem>,
     /// From TokenMetadataEdition
-    #[prost(message, optional, tag = "25")]
+    #[prost(message, optional, tag = "29")]
     pub edition: ::core::option::Option<EditionV1>,
-    #[prost(message, optional, tag = "26")]
+    #[prost(message, optional, tag = "30")]
     pub master_edition: ::core::option::Option<MasterEdition>,
 }
 /// Dynamic field messages
@@ -169,6 +177,26 @@ pub struct DynamicUint32Field {
 pub struct DynamicBytesField {
     #[prost(bytes = "vec", tag = "1")]
     pub value: ::prost::alloc::vec::Vec<u8>,
+    #[prost(message, optional, tag = "2")]
+    pub seq_updated: ::core::option::Option<u64>,
+    #[prost(uint64, tag = "3")]
+    pub slot_updated: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DynamicStringField {
+    #[prost(string, tag = "1")]
+    pub value: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub seq_updated: ::core::option::Option<u64>,
+    #[prost(uint64, tag = "3")]
+    pub slot_updated: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DynamicChainMutability {
+    #[prost(enumeration = "ChainMutability", tag = "1")]
+    pub value: i32,
     #[prost(message, optional, tag = "2")]
     pub seq_updated: ::core::option::Option<u64>,
     #[prost(uint64, tag = "3")]
@@ -402,6 +430,32 @@ impl OwnerType {
             "OWNER_TYPE_UNKNOWN" => Some(Self::Unknown),
             "OWNER_TYPE_TOKEN" => Some(Self::Token),
             "OWNER_TYPE_SINGLE" => Some(Self::Single),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ChainMutability {
+    Immutable = 0,
+    Mutable = 1,
+}
+impl ChainMutability {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            ChainMutability::Immutable => "CHAIN_MUTABILITY_IMMUTABLE",
+            ChainMutability::Mutable => "CHAIN_MUTABILITY_MUTABLE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "CHAIN_MUTABILITY_IMMUTABLE" => Some(Self::Immutable),
+            "CHAIN_MUTABILITY_MUTABLE" => Some(Self::Mutable),
             _ => None,
         }
     }

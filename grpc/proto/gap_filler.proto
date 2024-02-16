@@ -36,6 +36,11 @@ enum OwnerType {
     OWNER_TYPE_SINGLE = 2;
 }
 
+enum ChainMutability {
+    CHAIN_MUTABILITY_IMMUTABLE = 0;
+    CHAIN_MUTABILITY_MUTABLE = 1;
+}
+
 enum TokenStandard {
     NON_FUNGIBLE = 0;
     FUNGIBLE_ASSET = 1;
@@ -116,17 +121,21 @@ message AssetDetails {
     DynamicBytesField delegate = 17;
     DynamicEnumField owner_type = 18;
     DynamicUint64Field owner_delegate_seq = 19;
+    DynamicChainMutability chain_mutability = 20;
+    DynamicUint64Field lamports = 21;
+    DynamicBoolField executable = 22;
+    DynamicStringField metadata_owner = 23;
 
-    AssetLeaf asset_leaf = 20;
-    AssetCollection collection = 21;
-    ChainDataV1 chain_data = 22;
+    AssetLeaf asset_leaf = 24;
+    AssetCollection collection = 25;
+    ChainDataV1 chain_data = 26;
 
-    ClLeaf cl_leaf = 23;
-    repeated ClItem cl_items = 24;
+    ClLeaf cl_leaf = 27;
+    repeated ClItem cl_items = 28;
 
     // From TokenMetadataEdition
-    EditionV1 edition = 25;
-    MasterEdition master_edition = 26;
+    EditionV1 edition = 29;
+    MasterEdition master_edition = 30;
 }
 
 // Dynamic field messages
@@ -150,6 +159,18 @@ message DynamicUint32Field {
 
 message DynamicBytesField {
     bytes value = 1;
+    google.protobuf.UInt64Value seq_updated = 2;
+    uint64 slot_updated = 3;
+}
+
+message DynamicStringField {
+    string value = 1;
+    google.protobuf.UInt64Value seq_updated = 2;
+    uint64 slot_updated = 3;
+}
+
+message DynamicChainMutability {
+    ChainMutability value = 1;
     google.protobuf.UInt64Value seq_updated = 2;
     uint64 slot_updated = 3;
 }
