@@ -342,6 +342,9 @@ mod tests {
             token_standard: Some(TokenStandard::NonFungible),
             uses: None,
             chain_mutability: Some(ChainMutability::Mutable),
+            lamports: Some(10),
+            executable: Some(false),
+            metadata_owner: None,
         };
         chain_data.sanitize();
 
