@@ -6,7 +6,6 @@ use entities::enums::{
 use hex;
 use inflector::Inflector;
 use serde::{Serialize, Serializer};
-use sha2::{Digest, Sha256};
 use solana_sdk::pubkey::Pubkey;
 use std::{collections::HashSet, io::Write};
 
@@ -123,13 +122,9 @@ impl Storage {
             .await
             .map_err(|e| e.to_string())?;
         for (key, index) in indexes {
-            let metadata_url = index.metadata_url.map(|url| {
-                let mut hasher = Sha256::new();
-                let url = url.metadata_url.trim();
-                hasher.update(url);
-                let metadata_key = hasher.finalize().to_vec();
-                (metadata_key, url.to_string())
-            });
+            let metadata_url = index
+                .metadata_url
+                .map(|url| (url.get_metadata_id(), url.metadata_url.trim().to_owned()));
             if let Some((ref metadata_key, ref url)) = metadata_url {
                 if !metadata_key_set.contains(metadata_key) {
                     metadata_key_set.insert(metadata_key.clone());

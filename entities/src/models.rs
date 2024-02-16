@@ -3,12 +3,22 @@ use crate::enums::{
     TokenStandard, UseMethod,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Eq, Hash)]
 pub struct UrlWithStatus {
     pub metadata_url: String,
     pub is_downloaded: bool,
+}
+
+impl UrlWithStatus {
+    pub fn get_metadata_id(&self) -> Vec<u8> {
+        let mut hasher = Sha256::new();
+        let url = self.metadata_url.trim();
+        hasher.update(url);
+        hasher.finalize().to_vec()
+    }
 }
 
 // AssetIndex is the struct that is stored in the postgres database and is used to query the asset pubkeys.
@@ -194,4 +204,33 @@ pub struct TreeState {
     pub tree: Pubkey,
     pub seq: u64,
     pub slot: u64,
+}
+
+#[cfg(test)]
+mod tests{
+    use super::*;
+    
+    #[test]
+    fn test_url_with_status() {
+        let url = "http://example.com".to_string();
+        let url_with_status = UrlWithStatus {
+            metadata_url: url,
+            is_downloaded: false,
+        };
+        let metadata_id = url_with_status.get_metadata_id();
+        assert_eq!(metadata_id.len(), 32);
+        assert_eq!(hex::encode(metadata_id),"f0e6a6a97042a4f1f1c87f5f7d44315b2d852c2df5c7991cc66241bf7072d1c4");
+    }
+
+    #[test]
+    fn test_url_with_status_trimmed() {
+        let url = "  http://example.com  ".to_string();
+        let url_with_status = UrlWithStatus {
+            metadata_url: url,
+            is_downloaded: false,
+        };
+        let metadata_id = url_with_status.get_metadata_id();
+        assert_eq!(metadata_id.len(), 32);
+        assert_eq!(hex::encode(metadata_id),"f0e6a6a97042a4f1f1c87f5f7d44315b2d852c2df5c7991cc66241bf7072d1c4");
+    }
 }

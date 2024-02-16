@@ -49,21 +49,9 @@ impl AssetIndexStorage for PgClient {
             })
             .collect();
 
-        let mut metadata_url_map: HashMap<String, i64> = HashMap::new();
-
         if !metadata_urls.is_empty() {
             metadata_urls.sort_by(|a, b| a.metadata_url.cmp(&b.metadata_url));
             self.insert_tasks(&mut transaction, metadata_urls.clone())
-                .await?;
-            // todo: jsut generate the task id.
-            metadata_url_map = self
-                .get_tasks_ids(
-                    &mut transaction,
-                    metadata_urls
-                        .into_iter()
-                        .map(|url_with_status| url_with_status.metadata_url)
-                        .collect(),
-                )
                 .await?;
         }
 
@@ -118,10 +106,7 @@ impl AssetIndexStorage for PgClient {
             ast_slot_updated) ",
         );
         query_builder.push_values(asset_indexes, |mut builder, asset_index| {
-            let metadata_id = match asset_index.metadata_url {
-                Some(ref url) => metadata_url_map.get(&url.metadata_url),
-                None => None,
-            };
+            let metadata_id = asset_index.metadata_url.map(|u| u.get_metadata_id());
             builder
                 .push_bind(asset_index.pubkey.to_bytes().to_vec())
                 .push_bind(SpecificationVersions::from(
@@ -169,15 +154,13 @@ impl AssetIndexStorage for PgClient {
             ast_slot_updated = EXCLUDED.ast_slot_updated
             WHERE assets_v3.ast_slot_updated <= EXCLUDED.ast_slot_updated OR assets_v3.ast_slot_updated IS NULL;");
 
-        let query = query_builder.build();
-        let start_time = chrono::Utc::now();
-        query.execute(&mut transaction).await.map_err(|e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, BATCH_UPSERT_ACTION, "assets_v3");
-            e.to_string()
-        })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, BATCH_UPSERT_ACTION, "assets_v3", start_time);
+        self.execute_query_with_metrics(
+            &mut transaction,
+            &mut query_builder,
+            BATCH_UPSERT_ACTION,
+            "assets_v3",
+        )
+        .await?;
 
         // Asset creators will be updated in 2 steps:
         // 1. Delete creators for the assets that are being updated and don't exist anymore
@@ -201,20 +184,13 @@ impl AssetIndexStorage for PgClient {
                         .push_bind(pubkey.to_bytes());
                 },
             );
-
-            let query = query_builder.build();
-            let start_time = chrono::Utc::now();
-            query.execute(&mut transaction).await.map_err(|e| {
-                self.metrics
-                    .observe_error(SQL_COMPONENT, BATCH_DELETE_ACTION, "asset_creators_v3");
-                e.to_string()
-            })?;
-            self.metrics.observe_request(
-                SQL_COMPONENT,
+            self.execute_query_with_metrics(
+                &mut transaction,
+                &mut query_builder,
                 BATCH_DELETE_ACTION,
                 "asset_creators_v3",
-                start_time,
-            );
+            )
+            .await?;
         }
 
         // Bulk upsert for asset_creators_v3
@@ -234,35 +210,14 @@ impl AssetIndexStorage for PgClient {
             );
             query_builder.push(" ON CONFLICT (asc_creator, asc_pubkey) DO UPDATE SET asc_verified = EXCLUDED.asc_verified WHERE asset_creators_v3.asc_slot_updated <= EXCLUDED.asc_slot_updated;");
 
-            let query = query_builder.build();
-            let start_time = chrono::Utc::now();
-            query.execute(&mut transaction).await.map_err(|e| {
-                self.metrics
-                    .observe_error(SQL_COMPONENT, BATCH_UPSERT_ACTION, "asset_creators_v3");
-                e.to_string()
-            })?;
-            self.metrics.observe_request(
-                SQL_COMPONENT,
-                BATCH_UPSERT_ACTION,
-                "asset_creators_v3",
-                start_time,
-            );
+            self.execute_query_with_metrics(&mut transaction, &mut query_builder, BATCH_UPSERT_ACTION, "asset_creators_v3").await?;
         }
 
         // Update last_synced_key
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("UPDATE last_synced_key SET last_synced_asset_update_key = ");
         query_builder.push_bind(last_key).push(" WHERE id = 1");
-
-        let query = query_builder.build();
-        let start_time = chrono::Utc::now();
-        query.execute(&mut transaction).await.map_err(|e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, UPDATE_ACTION, "last_synced_key");
-            e.to_string()
-        })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, UPDATE_ACTION, "last_synced_key", start_time);
+        self.execute_query_with_metrics(&mut transaction, &mut query_builder, UPDATE_ACTION, "last_synced_key").await?;
         self.commit_transaction(transaction).await
     }
 }
