@@ -83,6 +83,7 @@ harness = false
 
 [features]
 rpc_tests = []
+integration_tests = []
 
 [dependencies.utils]
 version = "0.1.8"
@@ -97,5 +98,3 @@ name = "migrator"
 [[bin]]
 name = "raw_backfiller"
 
-[features]
-integration_tests = []
