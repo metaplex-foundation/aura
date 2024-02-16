@@ -122,6 +122,7 @@ impl From<&crate::rpc::Interface> for SpecificationAssetClass {
     fn from(interface: &crate::rpc::Interface) -> Self {
         match interface {
             crate::rpc::Interface::FungibleAsset => Self::FungibleAsset,
+            crate::rpc::Interface::FungibleToken => Self::FungibleToken,
             crate::rpc::Interface::Identity => Self::IdentityNft,
             crate::rpc::Interface::Nft
             | crate::rpc::Interface::V1NFT

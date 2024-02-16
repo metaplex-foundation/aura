@@ -88,7 +88,7 @@ pub struct AssetAuthority {
     pub slot_updated: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AssetOwner {
     pub pubkey: Pubkey,
     pub owner: Updated<Pubkey>,

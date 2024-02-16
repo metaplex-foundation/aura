@@ -572,56 +572,46 @@ fn asset_selected_maps_into_full_asset(
     id: &Pubkey,
     asset_selected_maps: &AssetSelectedMaps,
 ) -> Option<FullAsset> {
-    match asset_selected_maps
+    let offchain_data = asset_selected_maps
         .urls
         .get(&id.to_string())
-        .and_then(|url| asset_selected_maps.offchain_data.get(url))
-    {
-        Some(offchain_data) => {
-            match convert_rocks_offchain_data(
+        .and_then(|url| asset_selected_maps.offchain_data.get(url).cloned())
+        .unwrap_or_default();
+
+    match convert_rocks_offchain_data(id, &offchain_data, &asset_selected_maps.assets_dynamic) {
+        Ok(data) => convert_rocks_asset_model(
+            id,
+            &asset_selected_maps.assets_static,
+            &asset_selected_maps.assets_owner,
+            &asset_selected_maps.assets_dynamic,
+            &asset_selected_maps.assets_leaf,
+        )
+        .ok()
+        .map(|asset| FullAsset {
+            asset,
+            data,
+            authorities: vec![convert_rocks_authority_model(
                 id,
-                offchain_data,
-                &asset_selected_maps.assets_dynamic,
-            ) {
-                Ok(data) => convert_rocks_asset_model(
-                    id,
-                    &asset_selected_maps.assets_static,
-                    &asset_selected_maps.assets_owner,
-                    &asset_selected_maps.assets_dynamic,
-                    &asset_selected_maps.assets_leaf,
-                )
-                .ok()
-                .map(|asset| FullAsset {
-                    asset,
-                    data,
-                    authorities: vec![convert_rocks_authority_model(
-                        id,
-                        &asset_selected_maps.assets_authority,
-                    )],
-                    creators: convert_rocks_creators_model(id, &asset_selected_maps.assets_dynamic),
-                    groups: convert_rocks_grouping_model(
-                        id,
-                        &asset_selected_maps.assets_collection,
-                    )
-                    .map_or(vec![], |v| vec![v]),
-                    edition_data: asset_selected_maps.assets_static.get(id).and_then(
-                        |static_details| {
-                            static_details
-                                .edition_address
-                                .and_then(|e| asset_selected_maps.editions.get(&e).cloned())
-                        },
-                    ),
-                }),
-                Err(e) => {
-                    error!(
-                        "Could not cast asset into asset data model. Key: {:?}. Error: {:?}",
-                        &id, e
-                    );
-                    None
-                }
-            }
+                &asset_selected_maps.assets_authority,
+            )],
+            creators: convert_rocks_creators_model(id, &asset_selected_maps.assets_dynamic),
+            groups: convert_rocks_grouping_model(id, &asset_selected_maps.assets_collection)
+                .map_or(vec![], |v| vec![v]),
+            edition_data: asset_selected_maps.assets_static.get(id).and_then(
+                |static_details| {
+                    static_details
+                        .edition_address
+                        .and_then(|e| asset_selected_maps.editions.get(&e).cloned())
+                },
+            )
+        }),
+        Err(e) => {
+            error!(
+                "Could not cast asset into asset data model. Key: {:?}. Error: {:?}",
+                &id, e
+            );
+            None
         }
-        None => None,
     }
 }
 

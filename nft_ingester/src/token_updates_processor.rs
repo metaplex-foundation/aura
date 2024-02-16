@@ -10,6 +10,7 @@ use metrics_utils::IngesterMetricsConfig;
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
 use rocks_db::columns::{Mint, TokenAccount};
 use rocks_db::Storage;
+use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -26,6 +27,12 @@ pub struct TokenAccsProcessor {
     pub metrics: Arc<IngesterMetricsConfig>,
     last_received_mint_at: Option<SystemTime>,
     last_received_token_acc_at: Option<SystemTime>,
+}
+
+#[derive(Default)]
+struct DynamicAndAssetOwnerDetails {
+    pub asset_dynamic_details: HashMap<Pubkey, AssetDynamicDetails>,
+    pub asset_owner_details: HashMap<Pubkey, AssetOwner>,
 }
 
 impl TokenAccsProcessor {
@@ -95,10 +102,10 @@ impl TokenAccsProcessor {
     }
 
     pub async fn transform_and_save_token_accs(&self, accs_to_save: &[TokenAccount]) {
-        let save_values = accs_to_save.to_owned().clone().into_iter().fold(
-            HashMap::new(),
-            |mut acc: HashMap<_, _>, token_account| {
-                acc.insert(
+        let dynamic_and_asset_owner_details = accs_to_save.to_owned().clone().into_iter().fold(
+            DynamicAndAssetOwnerDetails::default(),
+            |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, token_account| {
+                accumulated_asset_info.asset_owner_details.insert(
                     token_account.mint,
                     AssetOwner {
                         pubkey: token_account.mint,
@@ -112,11 +119,7 @@ impl TokenAccsProcessor {
                             None,
                             token_account.delegate,
                         ),
-                        owner_type: Updated::new(
-                            token_account.slot_updated as u64,
-                            None,
-                            OwnerType::Single,
-                        ),
+                        owner_type: Updated::default(),
                         owner_delegate_seq: Updated::new(
                             token_account.slot_updated as u64,
                             None,
@@ -124,7 +127,21 @@ impl TokenAccsProcessor {
                         ),
                     },
                 );
-                acc
+
+                accumulated_asset_info.asset_dynamic_details.insert(
+                    token_account.mint,
+                    AssetDynamicDetails {
+                        pubkey: token_account.mint,
+                        is_frozen: Updated::new(
+                            token_account.slot_updated as u64,
+                            None,
+                            token_account.frozen,
+                        ),
+                        ..Default::default()
+                    },
+                );
+
+                accumulated_asset_info
             },
         );
 
@@ -132,10 +149,18 @@ impl TokenAccsProcessor {
         let res = self
             .rocks_db
             .asset_owner_data
-            .merge_batch(save_values)
+            .merge_batch(dynamic_and_asset_owner_details.asset_owner_details)
             .await;
 
         result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
+
+        let res = self
+            .rocks_db
+            .asset_dynamic_data
+            .merge_batch(dynamic_and_asset_owner_details.asset_dynamic_details)
+            .await;
+
+        result_to_metrics(self.metrics.clone(), &res, "accounts_updating_is_frozen");
 
         accs_to_save.iter().for_each(|acc| {
             let upd_res = self
@@ -200,38 +225,68 @@ impl TokenAccsProcessor {
     }
 
     pub async fn transform_and_save_mint_accs(&self, mint_accs_to_save: &[Mint]) {
-        let save_values = mint_accs_to_save.to_owned().clone().into_iter().fold(
-            HashMap::new(),
-            |mut acc: HashMap<_, _>, mint| {
-                acc.insert(
-                    mint.pubkey,
-                    AssetDynamicDetails {
-                        pubkey: mint.pubkey,
-                        supply: Some(Updated::new(
-                            mint.slot_updated as u64,
-                            None,
-                            mint.supply as u64,
-                        )),
-                        seq: Some(Updated::new(
-                            mint.slot_updated as u64,
-                            None,
-                            mint.slot_updated as u64,
-                        )),
-                        ..Default::default()
-                    },
-                );
-                acc
-            },
-        );
+        let dynamic_and_asset_owner_details =
+            mint_accs_to_save.to_owned().clone().into_iter().fold(
+                DynamicAndAssetOwnerDetails::default(),
+                |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, mint| {
+                    accumulated_asset_info.asset_dynamic_details.insert(
+                        mint.pubkey,
+                        AssetDynamicDetails {
+                            pubkey: mint.pubkey,
+                            supply: Some(Updated::new(
+                                mint.slot_updated as u64,
+                                None,
+                                mint.supply as u64,
+                            )),
+                            seq: Some(Updated::new(
+                                mint.slot_updated as u64,
+                                None,
+                                mint.slot_updated as u64,
+                            )),
+                            ..Default::default()
+                        },
+                    );
+
+                    let owner_type_value = if mint.supply > 1 {
+                        OwnerType::Token
+                    } else {
+                        OwnerType::Single
+                    };
+
+                    accumulated_asset_info.asset_owner_details.insert(
+                        mint.pubkey,
+                        AssetOwner {
+                            pubkey: mint.pubkey,
+                            owner_type: Updated::new(
+                                mint.slot_updated as u64,
+                                None,
+                                owner_type_value,
+                            ),
+                            ..Default::default()
+                        },
+                    );
+
+                    accumulated_asset_info
+                },
+            );
 
         let begin_processing = Instant::now();
+
         let res = self
             .rocks_db
             .asset_dynamic_data
-            .merge_batch(save_values)
+            .merge_batch(dynamic_and_asset_owner_details.asset_dynamic_details)
             .await;
 
         result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
+
+        let res = self
+            .rocks_db
+            .asset_owner_data
+            .merge_batch(dynamic_and_asset_owner_details.asset_owner_details)
+            .await;
+
+        result_to_metrics(self.metrics.clone(), &res, "owner_type_update");
 
         mint_accs_to_save.iter().for_each(|mint| {
             let upd_res = self
