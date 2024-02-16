@@ -16,6 +16,7 @@ mod tests {
         models::{ChainDataV1, Updated},
     };
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig};
+    use mpl_token_metadata::accounts::MasterEdition;
     use nft_ingester::{
         buffer::Buffer,
         db_v2::DBClient,
@@ -351,10 +352,6 @@ mod tests {
             primary_sale_happened: false,
             token_standard: Some(TokenStandard::NonFungible),
             uses: None,
-            chain_mutability: Some(ChainMutability::Mutable),
-            lamports: Some(10),
-            executable: Some(false),
-            metadata_owner: None,
         };
         chain_data.sanitize();
 
@@ -364,6 +361,7 @@ mod tests {
             specification_asset_class: SpecificationAssetClass::Nft,
             royalty_target_type: RoyaltyTargetType::Creators,
             created_at: 12 as i64,
+            edition_address: Some(MasterEdition::find_pda(&pb).0),
         };
 
         let dynamic_details = AssetDynamicDetails {
@@ -376,6 +374,10 @@ mod tests {
             creators: Updated::new(12, Some(12), vec![]),
             royalty_amount: Updated::new(12, Some(12), 5),
             url: Updated::new(12, Some(12), "https://ping-pong".to_string()),
+            chain_mutability: Some(Updated::new(12, Some(12), ChainMutability::Mutable)),
+            lamports: Some(Updated::new(12, Some(12), 1)),
+            executable: Some(Updated::new(12, Some(12), false)),
+            metadata_owner: Some(Updated::new(12, Some(12), "ff".to_string())),
             ..Default::default()
         };
 
@@ -458,7 +460,6 @@ mod tests {
             primary_sale_happened: false,
             token_standard: Some(TokenStandard::NonFungible),
             uses: None,
-            chain_mutability: Some(ChainMutability::Mutable),
         };
         chain_data.sanitize();
 
@@ -468,6 +469,7 @@ mod tests {
             specification_asset_class: SpecificationAssetClass::Nft,
             royalty_target_type: RoyaltyTargetType::Creators,
             created_at: 12 as i64,
+            edition_address: Some(MasterEdition::find_pda(&pb).0),
         };
 
         let dynamic_details = AssetDynamicDetails {
@@ -612,6 +614,10 @@ mod tests {
                 programmable_config: None,
             },
             slot: 1,
+            write_version: 1,
+            lamports: 1,
+            executable: false,
+            metadata_owner: None,
         };
         let mut metadata_info = HashMap::new();
         metadata_info.insert(mint_key.to_bytes().to_vec(), metadata);

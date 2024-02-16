@@ -31,6 +31,7 @@ interface = { path = "../interface" }
 solana-transaction-status = "~1.16"
 tracing = "0.1.40"
 serde_cbor = "0.11.2"
+mpl-token-metadata = { version = "3.2.3"}
 rustyline = "13.0.0"
 
 [dev-dependencies]

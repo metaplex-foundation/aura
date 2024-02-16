@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use bincode::{deserialize, serialize};
-use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::Updated;
+use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
+use entities::models::{EditionData, Updated};
 use log::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,7 @@ pub struct AssetSelectedMaps {
     pub assets_leaf: HashMap<Pubkey, AssetLeaf>,
     pub offchain_data: HashMap<String, crate::offchain_data::OffChainData>,
     pub urls: HashMap<String, String>,
+    pub editions: HashMap<Pubkey, EditionData>,
 }
 
 // The following structures are used to store the asset data in the rocksdb database. The data is spread across multiple columns based on the update pattern.
@@ -33,10 +34,39 @@ pub struct AssetStaticDetails {
     pub specification_asset_class: SpecificationAssetClass,
     pub royalty_target_type: RoyaltyTargetType,
     pub created_at: i64,
+    pub edition_address: Option<Pubkey>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AssetStaticDetailsDeprecated {
+    pub pubkey: Pubkey,
+    pub specification_asset_class: SpecificationAssetClass,
+    pub royalty_target_type: RoyaltyTargetType,
+    pub created_at: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AssetDynamicDetails {
+    pub pubkey: Pubkey,
+    pub is_compressible: Updated<bool>,
+    pub is_compressed: Updated<bool>,
+    pub is_frozen: Updated<bool>,
+    pub supply: Option<Updated<u64>>,
+    pub seq: Option<Updated<u64>>,
+    pub is_burnt: Updated<bool>,
+    pub was_decompressed: Updated<bool>,
+    pub onchain_data: Option<Updated<String>>,
+    pub creators: Updated<Vec<entities::models::Creator>>,
+    pub royalty_amount: Updated<u16>,
+    pub url: Updated<String>,
+    pub chain_mutability: Option<Updated<ChainMutability>>,
+    pub lamports: Option<Updated<u64>>,
+    pub executable: Option<Updated<bool>>,
+    pub metadata_owner: Option<Updated<String>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AssetDynamicDetailsDeprecated {
     pub pubkey: Pubkey,
     pub is_compressible: Updated<bool>,
     pub is_compressed: Updated<bool>,
@@ -139,7 +169,36 @@ impl TypedColumn for AssetStaticDetails {
     type KeyType = Pubkey;
     type ValueType = Self;
     // The value type is the Asset struct itself
+    const NAME: &'static str = "ASSET_STATIC_V2"; // Name of the column family
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetStaticDetailsDeprecated {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    // The value type is the Asset struct itself
     const NAME: &'static str = "ASSET_STATIC"; // Name of the column family
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetDynamicDetailsDeprecated {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_DYNAMIC";
 
     fn encode_key(pubkey: Pubkey) -> Vec<u8> {
         encode_pubkey(pubkey)
@@ -153,7 +212,7 @@ impl TypedColumn for AssetStaticDetails {
 impl TypedColumn for AssetDynamicDetails {
     type KeyType = Pubkey;
     type ValueType = Self;
-    const NAME: &'static str = "ASSET_DYNAMIC";
+    const NAME: &'static str = "ASSET_DYNAMIC_V2";
 
     fn encode_key(pubkey: Pubkey) -> Vec<u8> {
         encode_pubkey(pubkey)
@@ -239,6 +298,16 @@ impl AssetDynamicDetails {
                         update_field(&mut current_val.was_decompressed, &new_val.was_decompressed);
                         update_optional_field(&mut current_val.onchain_data, &new_val.onchain_data);
                         update_field(&mut current_val.url, &new_val.url);
+                        update_optional_field(
+                            &mut current_val.chain_mutability,
+                            &new_val.chain_mutability,
+                        );
+                        update_optional_field(&mut current_val.lamports, &new_val.lamports);
+                        update_optional_field(&mut current_val.executable, &new_val.executable);
+                        update_optional_field(
+                            &mut current_val.metadata_owner,
+                            &new_val.metadata_owner,
+                        );
 
                         current_val
                     } else {
@@ -268,6 +337,18 @@ impl AssetDynamicDetails {
                 .map_or(0, |onchain_data| onchain_data.slot_updated),
             self.creators.slot_updated,
             self.royalty_amount.slot_updated,
+            self.chain_mutability
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.lamports
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.executable
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.metadata_owner
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
         ]
         .into_iter()
         .max()

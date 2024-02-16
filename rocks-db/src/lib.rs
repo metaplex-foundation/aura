@@ -4,6 +4,8 @@ use std::{marker::PhantomData, sync::Arc};
 use asset::{AssetOwnerDeprecated, SlotAssetIdx};
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
+use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
+use crate::editions::TokenMetadataEdition;
 pub use asset::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
 };
@@ -24,6 +26,7 @@ mod batch_client;
 pub mod bubblegum_slots;
 pub mod cl_items;
 pub mod column;
+pub mod editions;
 pub mod errors;
 pub mod key_encoders;
 pub mod offchain_data;
@@ -41,7 +44,9 @@ pub type Result<T> = std::result::Result<T, StorageError>;
 
 pub struct Storage {
     pub asset_static_data: Column<AssetStaticDetails>,
+    pub asset_static_data_deprecated: Column<AssetStaticDetailsDeprecated>,
     pub asset_dynamic_data: Column<AssetDynamicDetails>,
+    pub asset_dynamic_data_deprecated: Column<AssetDynamicDetailsDeprecated>,
     pub asset_authority_data: Column<AssetAuthority>,
     pub asset_owner_data_deprecated: Column<AssetOwnerDeprecated>,
     pub asset_owner_data: Column<AssetOwner>,
@@ -59,6 +64,7 @@ pub struct Storage {
     pub slot_asset_idx: Column<SlotAssetIdx>,
     pub tree_seq_idx: Column<TreeSeqIdx>,
     pub trees_gaps: Column<TreesGaps>,
+    pub token_metadata_edition_cbor: Column<TokenMetadataEdition>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
 }
@@ -70,6 +76,7 @@ impl Storage {
     ) -> Self {
         let asset_static_data = Self::column(db.clone());
         let asset_dynamic_data = Self::column(db.clone());
+        let asset_dynamic_data_deprecated = Self::column(db.clone());
         let asset_authority_data = Self::column(db.clone());
         let asset_owner_data = Self::column(db.clone());
         let asset_owner_data_deprecated = Self::column(db.clone());
@@ -88,10 +95,13 @@ impl Storage {
         let slot_asset_idx = Self::column(db.clone());
         let tree_seq_idx = Self::column(db.clone());
         let trees_gaps = Self::column(db.clone());
+        let token_metadata_edition_cbor = Self::column(db.clone());
+        let asset_static_data_deprecated = Self::column(db.clone());
 
         Self {
             asset_static_data,
             asset_dynamic_data,
+            asset_dynamic_data_deprecated,
             asset_authority_data,
             asset_owner_data,
             asset_owner_data_deprecated,
@@ -111,6 +121,8 @@ impl Storage {
             join_set,
             tree_seq_idx,
             trees_gaps,
+            token_metadata_edition_cbor,
+            asset_static_data_deprecated,
         }
     }
 
@@ -147,6 +159,7 @@ impl Storage {
             Self::new_cf_descriptor::<offchain_data::OffChainData>(),
             Self::new_cf_descriptor::<AssetStaticDetails>(),
             Self::new_cf_descriptor::<AssetDynamicDetails>(),
+            Self::new_cf_descriptor::<AssetDynamicDetailsDeprecated>(),
             Self::new_cf_descriptor::<AssetAuthority>(),
             Self::new_cf_descriptor::<AssetOwnerDeprecated>(),
             Self::new_cf_descriptor::<asset::AssetLeaf>(),
@@ -164,6 +177,8 @@ impl Storage {
             Self::new_cf_descriptor::<AssetOwner>(),
             Self::new_cf_descriptor::<TreeSeqIdx>(),
             Self::new_cf_descriptor::<TreesGaps>(),
+            Self::new_cf_descriptor::<TokenMetadataEdition>(),
+            Self::new_cf_descriptor::<AssetStaticDetailsDeprecated>(),
         ]
     }
 
@@ -243,6 +258,12 @@ impl Storage {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_dynamic_details",
                     asset::AssetDynamicDetails::merge_dynamic_details,
+                );
+            }
+            asset::AssetDynamicDetailsDeprecated::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_dynamic_details_deprecated",
+                    AssetStaticDetails::merge_keep_existing,
                 );
             }
             asset::AssetAuthority::NAME => {
@@ -344,6 +365,18 @@ impl Storage {
             TreesGaps::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_trees_gaps_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            TokenMetadataEdition::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_token_metadata_edition_keep_existing",
+                    TokenMetadataEdition::merge_token_metadata_edition,
+                );
+            }
+            AssetStaticDetailsDeprecated::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_asset_static_deprecated_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }

@@ -4,9 +4,11 @@ use std::sync::atomic::Ordering;
 
 use crate::asset::{AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx};
 use crate::column::Column;
+use crate::editions::TokenMetadataEdition;
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
+use entities::models::EditionData;
 use std::collections::HashMap;
 
 impl Storage {
@@ -112,8 +114,17 @@ impl Storage {
             .into_iter()
             .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
             .collect::<HashMap<_, _>>();
+        let assets_static = to_map!(assets_static);
         Ok(AssetSelectedMaps {
-            assets_static: to_map!(assets_static),
+            editions: self
+                .get_editions(
+                    assets_static
+                        .values()
+                        .filter_map(|s| s.edition_address)
+                        .collect::<Vec<_>>(),
+                )
+                .await?,
+            assets_static,
             assets_dynamic,
             assets_authority: to_map!(assets_authority),
             assets_collection: to_map!(assets_collection),
@@ -122,5 +133,68 @@ impl Storage {
             offchain_data,
             urls,
         })
+    }
+
+    async fn get_editions(
+        &self,
+        edition_keys: Vec<Pubkey>,
+    ) -> Result<HashMap<Pubkey, EditionData>> {
+        let first_batch = self
+            .token_metadata_edition_cbor
+            .batch_get_cbor(edition_keys)
+            .await?;
+        let mut edition_data_list = Vec::new();
+        let mut parent_keys = Vec::new();
+
+        for token_metadata_edition in &first_batch {
+            match token_metadata_edition {
+                Some(TokenMetadataEdition::EditionV1(edition)) => {
+                    parent_keys.push(edition.parent);
+                }
+                Some(TokenMetadataEdition::MasterEdition(master)) => {
+                    edition_data_list.push(EditionData {
+                        key: master.key,
+                        supply: master.supply,
+                        max_supply: master.max_supply,
+                        edition_number: None,
+                    });
+                }
+                None => {}
+            }
+        }
+
+        if !parent_keys.is_empty() {
+            let master_edition_map = self
+                .token_metadata_edition_cbor
+                .batch_get_cbor(parent_keys)
+                .await?
+                .into_iter()
+                .filter_map(|e| {
+                    if let Some(TokenMetadataEdition::MasterEdition(master)) = e {
+                        Some((master.key, master))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<HashMap<_, _>>();
+
+            for token_metadata_edition in first_batch.iter().flatten() {
+                if let TokenMetadataEdition::EditionV1(edition) = token_metadata_edition {
+                    if let Some(master) = master_edition_map.get(&edition.parent) {
+                        edition_data_list.push(EditionData {
+                            key: edition.key,
+                            supply: master.supply,
+                            max_supply: master.max_supply,
+                            edition_number: Some(edition.edition),
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(edition_data_list
+            .into_iter()
+            .map(|edition| (edition.key, edition))
+            .collect::<HashMap<_, _>>())
     }
 }

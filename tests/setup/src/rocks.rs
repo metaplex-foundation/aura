@@ -142,6 +142,10 @@ pub fn create_test_dynamic_data(pubkey: Pubkey, slot: u64, url: String) -> Asset
         creators: Updated::new(slot, None, vec![generate_test_creator()]),
         royalty_amount: Updated::new(slot, None, 0),
         url: Updated::new(slot, None, url),
+        chain_mutability: Default::default(),
+        lamports: None,
+        executable: None,
+        metadata_owner: None,
     }
 }
 
@@ -159,6 +163,7 @@ pub fn generate_test_static_data(pubkey: Pubkey, slot: u64) -> AssetStaticDetail
         created_at: slot as i64,
         specification_asset_class: entities::enums::SpecificationAssetClass::Nft,
         royalty_target_type: entities::enums::RoyaltyTargetType::Creators,
+        edition_address: Default::default(),
     }
 }
 
