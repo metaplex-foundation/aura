@@ -13,6 +13,7 @@ mod tests {
         models::{ChainDataV1, Updated},
     };
     use metrics_utils::ApiMetricsConfig;
+    use mpl_token_metadata::accounts::MasterEdition;
     use rocks_db::{
         offchain_data::OffChainData, AssetAuthority, AssetDynamicDetails, AssetOwner,
         AssetStaticDetails,
@@ -341,10 +342,6 @@ mod tests {
             primary_sale_happened: false,
             token_standard: Some(TokenStandard::NonFungible),
             uses: None,
-            chain_mutability: Some(ChainMutability::Mutable),
-            lamports: Some(10),
-            executable: Some(false),
-            metadata_owner: None,
         };
         chain_data.sanitize();
 
@@ -370,7 +367,7 @@ mod tests {
             chain_mutability: Some(Updated::new(12, Some(12), ChainMutability::Mutable)),
             lamports: Some(Updated::new(12, Some(12), 1)),
             executable: Some(Updated::new(12, Some(12), false)),
-            metadata_owner: Updated::new(12, Some(12), "ff".to_string()),
+            metadata_owner: Some(Updated::new(12, Some(12), "ff".to_string())),
             ..Default::default()
         };
 
