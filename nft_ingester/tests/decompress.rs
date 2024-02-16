@@ -206,6 +206,7 @@ mod tests {
             lamports: 1,
             executable: false,
             metadata_owner: None,
+            write_version: 1,
         };
 
         let mut map = HashMap::new();
