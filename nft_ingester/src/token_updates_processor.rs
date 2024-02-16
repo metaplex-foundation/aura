@@ -102,10 +102,10 @@ impl TokenAccsProcessor {
     }
 
     pub async fn transform_and_save_token_accs(&self, accs_to_save: &[TokenAccount]) {
-        let save_values = accs_to_save.to_owned().clone().into_iter().fold(
-            HashMap::new(),
-            |mut acc: HashMap<_, _>, token_account| {
-                acc.insert(
+        let dynamic_and_asset_owner_details = accs_to_save.to_owned().clone().into_iter().fold(
+            DynamicAndAssetOwnerDetails::default(),
+            |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, token_account| {
+                accumulated_asset_info.asset_owner_details.insert(
                     token_account.mint,
                     AssetOwner {
                         pubkey: token_account.mint,
@@ -127,7 +127,21 @@ impl TokenAccsProcessor {
                         ),
                     },
                 );
-                acc
+
+                accumulated_asset_info.asset_dynamic_details.insert(
+                    token_account.mint,
+                    AssetDynamicDetails {
+                        pubkey: token_account.mint,
+                        is_frozen: Updated::new(
+                            token_account.slot_updated as u64,
+                            None,
+                            token_account.frozen,
+                        ),
+                        ..Default::default()
+                    },
+                );
+
+                accumulated_asset_info
             },
         );
 
@@ -135,10 +149,18 @@ impl TokenAccsProcessor {
         let res = self
             .rocks_db
             .asset_owner_data
-            .merge_batch(save_values)
+            .merge_batch(dynamic_and_asset_owner_details.asset_owner_details)
             .await;
 
         result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
+
+        let res = self
+            .rocks_db
+            .asset_dynamic_data
+            .merge_batch(dynamic_and_asset_owner_details.asset_dynamic_details)
+            .await;
+
+        result_to_metrics(self.metrics.clone(), &res, "accounts_updating_is_frozen");
 
         accs_to_save.iter().for_each(|acc| {
             let upd_res = self
