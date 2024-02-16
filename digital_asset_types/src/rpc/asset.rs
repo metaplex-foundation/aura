@@ -34,6 +34,8 @@ pub enum Interface {
     Nft,
     #[serde(rename = "FungibleAsset")]
     FungibleAsset,
+    #[serde(rename = "FungibleToken")]
+    FungibleToken,
     #[serde(rename = "Custom")]
     Custom,
     #[serde(rename = "Identity")]
@@ -69,6 +71,8 @@ impl From<(&SpecificationVersions, &SpecificationAssetClass)> for Interface {
             (SpecificationVersions::V1, SpecificationAssetClass::ProgrammableNft) => {
                 Interface::ProgrammableNFT
             }
+            (_, SpecificationAssetClass::FungibleAsset) => Interface::FungibleAsset,
+            (_, SpecificationAssetClass::FungibleToken) => Interface::FungibleToken,
             _ => Interface::Custom,
         }
     }

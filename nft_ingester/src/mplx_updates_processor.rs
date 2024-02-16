@@ -126,23 +126,26 @@ impl MplxAccsProcessor {
 
                 elems
             };
-            let metadata_models = self.create_rocks_metadata_models(&metadata_info).await;
 
-            // store data
-            let begin_processing = Instant::now();
-
-            self.store_metadata_models(&metadata_models).await;
-
-            self.metrics.set_latency(
-                "accounts_saving",
-                begin_processing.elapsed().as_millis() as f64,
-            );
+            self.transform_and_save_metadata(&metadata_info).await;
 
             self.metrics
                 .set_last_processed_slot("mplx_metadata", max_slot as i64);
-
             self.last_received_at = Some(SystemTime::now());
         }
+    }
+
+    pub async fn transform_and_save_metadata(&self, metadata: &HashMap<Vec<u8>, MetadataInfo>) {
+        let metadata_models = self.create_rocks_metadata_models(metadata).await;
+
+        let begin_processing = Instant::now();
+
+        self.store_metadata_models(&metadata_models).await;
+
+        self.metrics.set_latency(
+            "accounts_saving",
+            begin_processing.elapsed().as_millis() as f64,
+        );
     }
 
     pub async fn store_metadata_models(&self, metadata_models: &RocksMetadataModels) {
