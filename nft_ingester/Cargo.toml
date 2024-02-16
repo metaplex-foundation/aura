@@ -96,3 +96,6 @@ name = "migrator"
 
 [[bin]]
 name = "raw_backfiller"
+
+[features]
+integration_tests = []

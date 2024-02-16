@@ -7,13 +7,14 @@ mod tests {
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
         buffer::Buffer,
-        transaction_ingester,
+        transaction_ingester::{self, BackfillTransactionIngester},
     };
-    use rocks_db::{offchain_data::OffChainData, Storage};
+    use rocks_db::{bubblegum_slots::BubblegumSlotGetter, offchain_data::OffChainData, Storage};
+    use std::fs::File;
     use std::io::{self, Read};
     use std::sync::Arc;
-    use std::{fs::File, sync::atomic::AtomicBool};
     use testcontainers::clients::Cli;
+    use tokio::sync::broadcast;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
 
@@ -63,7 +64,6 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             buffer.json_tasks.clone(),
-            true,
         ));
 
         let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
@@ -72,19 +72,24 @@ mod tests {
 
         let consumer = Arc::new(DirectBlockParser::new(
             tx_ingester.clone(),
+            env.rocks_env.storage.clone(),
             Arc::new(BackfillerMetricsConfig::new()),
         ));
         let producer = rocks_storage.clone();
 
-        let keep_running = Arc::new(AtomicBool::new(true));
+        let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
-        TransactionsParser::parse_slots(
+        TransactionsParser::<
+            DirectBlockParser<BackfillTransactionIngester, Storage>,
+            Storage,
+            BubblegumSlotGetter,
+        >::parse_slots(
             consumer.clone(),
             producer.clone(),
             Arc::new(BackfillerMetricsConfig::new()),
             1,
             slots_to_parse,
-            keep_running,
+            shutdown_rx,
         )
         .await
         .unwrap();
@@ -166,7 +171,6 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             buffer.json_tasks.clone(),
-            true,
         ));
 
         let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
@@ -175,19 +179,24 @@ mod tests {
 
         let consumer = Arc::new(DirectBlockParser::new(
             tx_ingester.clone(),
+            env.rocks_env.storage.clone(),
             Arc::new(BackfillerMetricsConfig::new()),
         ));
         let producer = rocks_storage.clone();
 
-        let keep_running = Arc::new(AtomicBool::new(true));
+        let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
-        TransactionsParser::parse_slots(
+        TransactionsParser::<
+            DirectBlockParser<BackfillTransactionIngester, Storage>,
+            Storage,
+            BubblegumSlotGetter,
+        >::parse_slots(
             consumer.clone(),
             producer.clone(),
             Arc::new(BackfillerMetricsConfig::new()),
             1,
             slots_to_parse,
-            keep_running,
+            shutdown_rx,
         )
         .await
         .unwrap();
