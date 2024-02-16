@@ -12,6 +12,7 @@ pub mod asset_filter_client;
 pub mod asset_index_client;
 pub mod converters;
 pub mod integrity_verification_client;
+pub mod load_client;
 pub mod model;
 pub mod storage_traits;
 
@@ -22,6 +23,10 @@ pub const BATCH_SELECT_ACTION: &str = "batch_select";
 pub const BATCH_UPSERT_ACTION: &str = "batch_upsert";
 pub const BATCH_DELETE_ACTION: &str = "batch_delete";
 pub const TRANSACTION_ACTION: &str = "transaction";
+pub const COPY_ACTION: &str = "copy";
+pub const DROP_ACTION: &str = "drop";
+pub const ALTER_ACTION: &str = "alter";
+pub const CREATE_ACTION: &str = "create";
 #[derive(Clone)]
 pub struct PgClient {
     pub pool: PgPool,
@@ -56,6 +61,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         metadata_urls: Vec<UrlWithStatus>,
     ) -> Result<(), String> {
+        // todo: generate the task id.
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("INSERT INTO tasks (tsk_metadata_url, tsk_status) ");
         query_builder.push_values(metadata_urls.iter(), |mut builder, metadata_url| {
@@ -119,5 +125,32 @@ impl PgClient {
         }
 
         Ok(metadata_ids_map)
+    }
+
+    async fn start_transaction(&self) -> Result<Transaction<'_, Postgres>, String> {
+        let start_time = chrono::Utc::now();
+        let transaction = self.pool.begin().await.map_err(|e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "begin");
+            e.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "begin", start_time);
+        Ok(transaction)
+    }
+
+    async fn commit_transaction(
+        &self,
+        transaction: Transaction<'_, Postgres>,
+    ) -> Result<(), String> {
+        let start_time = chrono::Utc::now();
+        transaction.commit().await.map_err(|e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "commit");
+            e.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "commit", start_time);
+        Ok(())
     }
 }

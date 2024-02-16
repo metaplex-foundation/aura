@@ -6,10 +6,12 @@ use postgre_client::PgClient;
 use rand::Rng;
 use solana_sdk::pubkey::Pubkey;
 use sqlx::{Executor, Pool, Postgres};
+use std::collections::BTreeMap;
 use std::fs;
 use std::sync::Arc;
-use testcontainers::clients::Cli;
-use testcontainers::*;
+use testcontainers::core::WaitFor;
+use testcontainers::{Container, Image};
+use testcontainers_modules::testcontainers::clients::Cli;
 use uuid::Uuid;
 
 async fn run_sql_script(pool: &Pool<Postgres>, file_path: &str) -> Result<(), sqlx::Error> {
@@ -27,12 +29,76 @@ pub struct TestEnvironment<'a> {
     pub client: Arc<PgClient>,
     pub pool: Pool<Postgres>,
     pub db_name: String,
-    pub node: Container<'a, images::postgres::Postgres>,
+    pub node: Container<'a, PgContainer>,
+}
+
+pub struct PgContainer {
+    c: testcontainers_modules::postgres::Postgres,
+    volumes: BTreeMap<String, String>,
+}
+
+impl Default for PgContainer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PgContainer {
+    pub fn new() -> Self {
+        let c = testcontainers_modules::postgres::Postgres::default();
+        let volumes = BTreeMap::new();
+        Self { c, volumes }
+    }
+    pub fn with_volume(mut self, host_path: String, container_path: String) -> Self {
+        self.volumes.insert(host_path, container_path);
+        self
+    }
+}
+
+impl Image for PgContainer {
+    type Args = ();
+
+    fn name(&self) -> String {
+        self.c.name()
+    }
+
+    fn tag(&self) -> String {
+        self.c.tag()
+    }
+
+    fn ready_conditions(&self) -> Vec<WaitFor> {
+        self.c.ready_conditions()
+    }
+
+    fn env_vars(&self) -> Box<dyn Iterator<Item = (&String, &String)> + '_> {
+        self.c.env_vars()
+    }
+
+    fn volumes(&self) -> Box<dyn Iterator<Item = (&String, &String)> + '_> {
+        Box::new(self.volumes.iter())
+    }
 }
 
 impl<'a> TestEnvironment<'a> {
+    pub async fn new_with_mount(cli: &'a Cli, path: &str) -> TestEnvironment<'a> {
+        let image = PgContainer::new().with_volume(path.to_string(), path.to_string());
+
+        let node = cli.run(image);
+        let (pool, db_name) = setup_database(&node).await;
+        let client =
+            PgClient::new_with_pool(pool.clone(), Arc::new(RequestErrorDurationMetrics::new()));
+
+        TestEnvironment {
+            client: Arc::new(client),
+            pool,
+            db_name,
+            node,
+        }
+    }
     pub async fn new(cli: &'a Cli) -> TestEnvironment<'a> {
-        let node = cli.run(images::postgres::Postgres::default());
+        let image = PgContainer::new();
+
+        let node = cli.run(image);
         let (pool, db_name) = setup_database(&node).await;
         let client =
             PgClient::new_with_pool(pool.clone(), Arc::new(RequestErrorDurationMetrics::new()));
@@ -74,9 +140,7 @@ impl<'a> TestEnvironment<'a> {
     }
 }
 
-pub async fn setup_database(
-    node: &Container<'_, images::postgres::Postgres>,
-) -> (Pool<Postgres>, String) {
+pub async fn setup_database<T: Image>(node: &Container<'_, T>) -> (Pool<Postgres>, String) {
     let default_connection_string = format!(
         "postgres://postgres:postgres@localhost:{}",
         node.get_host_port_ipv4(5432)
@@ -119,7 +183,7 @@ pub async fn setup_database(
     (test_db_pool, db_name)
 }
 
-pub async fn teardown(node: &Container<'_, images::postgres::Postgres>, db_name: &str) {
+pub async fn teardown<T: Image>(node: &Container<'_, T>, db_name: &str) {
     let default_connection_string = format!(
         "postgres://postgres:postgres@localhost:{}",
         node.get_host_port_ipv4(5432)

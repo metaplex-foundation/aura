@@ -8,7 +8,7 @@ use crate::{
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
     storage_traits::AssetIndexStorage,
     PgClient, BATCH_DELETE_ACTION, BATCH_SELECT_ACTION, BATCH_UPSERT_ACTION, SELECT_ACTION,
-    SQL_COMPONENT, TRANSACTION_ACTION, UPDATE_ACTION,
+    SQL_COMPONENT, UPDATE_ACTION,
 };
 use entities::models::{AssetIndex, Creator, UrlWithStatus};
 
@@ -35,14 +35,7 @@ impl AssetIndexStorage for PgClient {
         asset_indexes: &[AssetIndex],
         last_key: &[u8],
     ) -> Result<(), String> {
-        let start_time = chrono::Utc::now();
-        let mut transaction = self.pool.begin().await.map_err(|e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "begin");
-            e.to_string()
-        })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "begin", start_time);
+        let mut transaction = self.start_transaction().await?;
 
         // First we need to bulk upsert metadata_url into metadata and get back ids for each metadata_url to upsert into assets_v3
         let mut metadata_urls: Vec<_> = asset_indexes
@@ -62,6 +55,7 @@ impl AssetIndexStorage for PgClient {
             metadata_urls.sort_by(|a, b| a.metadata_url.cmp(&b.metadata_url));
             self.insert_tasks(&mut transaction, metadata_urls.clone())
                 .await?;
+            // todo: jsut generate the task id.
             metadata_url_map = self
                 .get_tasks_ids(
                     &mut transaction,
@@ -269,16 +263,7 @@ impl AssetIndexStorage for PgClient {
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, UPDATE_ACTION, "last_synced_key", start_time);
-
-        let start_time = chrono::Utc::now();
-        transaction.commit().await.map_err(|e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "commit");
-            e.to_string()
-        })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "commit", start_time);
-        Ok(())
+        self.commit_transaction(transaction).await
     }
 }
 
