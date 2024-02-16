@@ -15,8 +15,8 @@ mod tests {
         },
         models::{ChainDataV1, Updated},
     };
-    use mpl_token_metadata::accounts::MasterEdition;
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig};
+    use mpl_token_metadata::accounts::MasterEdition;
     use nft_ingester::{
         buffer::Buffer,
         db_v2::DBClient,

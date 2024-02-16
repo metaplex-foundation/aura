@@ -597,13 +597,14 @@ fn asset_selected_maps_into_full_asset(
             creators: convert_rocks_creators_model(id, &asset_selected_maps.assets_dynamic),
             groups: convert_rocks_grouping_model(id, &asset_selected_maps.assets_collection)
                 .map_or(vec![], |v| vec![v]),
-            edition_data: asset_selected_maps.assets_static.get(id).and_then(
-                |static_details| {
+            edition_data: asset_selected_maps
+                .assets_static
+                .get(id)
+                .and_then(|static_details| {
                     static_details
                         .edition_address
                         .and_then(|e| asset_selected_maps.editions.get(&e).cloned())
-                },
-            )
+                }),
         }),
         Err(e) => {
             error!(
