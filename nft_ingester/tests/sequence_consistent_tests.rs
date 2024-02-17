@@ -155,17 +155,7 @@ mod tests {
                 ])
             });
         let row_keys_getter_arc = Arc::new(row_keys_getter);
-        let mut metrics_state = MetricState::new(
-            IngesterMetricsConfig::new(),
-            ApiMetricsConfig::new(),
-            JsonDownloaderMetricsConfig::new(),
-            BackfillerMetricsConfig::new(),
-            RpcBackfillerMetricsConfig::new(),
-            SynchronizerMetricsConfig::new(),
-            JsonMigratorMetricsConfig::new(),
-            SequenceConsistentGapfillMetricsConfig::new(),
-            RequestErrorDurationMetrics::new(),
-        );
+        let mut metrics_state = MetricState::new();
         metrics_state.register_metrics();
         start_metrics(metrics_state.registry, Some(4444)).await;
 

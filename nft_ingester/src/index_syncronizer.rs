@@ -202,17 +202,7 @@ mod tests {
     async fn test_synchronizer_over_2_empty_storages() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
-        let mut metrics_state = MetricState::new(
-            IngesterMetricsConfig::new(),
-            ApiMetricsConfig::new(),
-            JsonDownloaderMetricsConfig::new(),
-            BackfillerMetricsConfig::new(),
-            RpcBackfillerMetricsConfig::new(),
-            SynchronizerMetricsConfig::new(),
-            JsonMigratorMetricsConfig::new(),
-            SequenceConsistentGapfillMetricsConfig::new(),
-            RequestErrorDurationMetrics::new(),
-        );
+        let mut metrics_state = MetricState::new();
         metrics_state.register_metrics();
 
         index_storage
@@ -241,17 +231,7 @@ mod tests {
     async fn test_synchronizer_with_records_in_primary_storage() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
-        let mut metrics_state = MetricState::new(
-            IngesterMetricsConfig::new(),
-            ApiMetricsConfig::new(),
-            JsonDownloaderMetricsConfig::new(),
-            BackfillerMetricsConfig::new(),
-            RpcBackfillerMetricsConfig::new(),
-            SynchronizerMetricsConfig::new(),
-            JsonMigratorMetricsConfig::new(),
-            SequenceConsistentGapfillMetricsConfig::new(),
-            RequestErrorDurationMetrics::new(),
-        );
+        let mut metrics_state = MetricState::new();
         metrics_state.register_metrics();
 
         // Index storage starts empty
@@ -311,17 +291,7 @@ mod tests {
     async fn test_synchronizer_with_small_batch_size() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
-        let mut metrics_state = MetricState::new(
-            IngesterMetricsConfig::new(),
-            ApiMetricsConfig::new(),
-            JsonDownloaderMetricsConfig::new(),
-            BackfillerMetricsConfig::new(),
-            RpcBackfillerMetricsConfig::new(),
-            SynchronizerMetricsConfig::new(),
-            JsonMigratorMetricsConfig::new(),
-            SequenceConsistentGapfillMetricsConfig::new(),
-            RequestErrorDurationMetrics::new(),
-        );
+        let mut metrics_state = MetricState::new();
         metrics_state.register_metrics();
 
         // Index storage starts empty
@@ -391,17 +361,7 @@ mod tests {
     async fn test_synchronizer_with_existing_index_data() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
-        let mut metrics_state = MetricState::new(
-            IngesterMetricsConfig::new(),
-            ApiMetricsConfig::new(),
-            JsonDownloaderMetricsConfig::new(),
-            BackfillerMetricsConfig::new(),
-            RpcBackfillerMetricsConfig::new(),
-            SynchronizerMetricsConfig::new(),
-            JsonMigratorMetricsConfig::new(),
-            SequenceConsistentGapfillMetricsConfig::new(),
-            RequestErrorDurationMetrics::new(),
-        );
+        let mut metrics_state = MetricState::new();
         metrics_state.register_metrics();
 
         let index_key = (95, 2, Pubkey::new_unique());
@@ -510,17 +470,7 @@ mod tests {
     async fn test_synchronizer_with_synced_databases() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockIndexStorage::new();
-        let mut metrics_state = MetricState::new(
-            IngesterMetricsConfig::new(),
-            ApiMetricsConfig::new(),
-            JsonDownloaderMetricsConfig::new(),
-            BackfillerMetricsConfig::new(),
-            RpcBackfillerMetricsConfig::new(),
-            SynchronizerMetricsConfig::new(),
-            JsonMigratorMetricsConfig::new(),
-            SequenceConsistentGapfillMetricsConfig::new(),
-            RequestErrorDurationMetrics::new(),
-        );
+        let mut metrics_state = MetricState::new();
         metrics_state.register_metrics();
 
         let key = Pubkey::new_unique();

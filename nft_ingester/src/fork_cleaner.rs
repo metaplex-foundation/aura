@@ -1,0 +1,76 @@
+use entities::models::ForkedItem;
+use interface::fork_cleaner::{ClItemsManager, ForkChecker};
+use interface::slot_getter::FinalizedSlotGetter;
+use metrics_utils::ForkCleanerMetricsConfig;
+use std::collections::HashSet;
+use std::sync::Arc;
+use tokio::sync::broadcast::Receiver;
+use tracing::info;
+
+const CI_ITEMS_DELETE_BATCH_SIZE: usize = 1000;
+
+pub struct ForkCleaner<CM, FC, FSG>
+where
+    CM: ClItemsManager,
+    FC: ForkChecker,
+    FSG: FinalizedSlotGetter,
+{
+    cl_items_manager: Arc<CM>,
+    fork_checker: Arc<FC>,
+    metrics: Arc<ForkCleanerMetricsConfig>,
+    finalized_slot_getter: Arc<FSG>,
+}
+
+impl<CM, FC, FSG> ForkCleaner<CM, FC, FSG>
+where
+    CM: ClItemsManager,
+    FC: ForkChecker,
+    FSG: FinalizedSlotGetter,
+{
+    pub fn new(
+        cl_items_manager: Arc<CM>,
+        fork_checker: Arc<FC>,
+        metrics: Arc<ForkCleanerMetricsConfig>,
+        finalized_slot_getter: Arc<FSG>,
+    ) -> Self {
+        Self {
+            cl_items_manager,
+            fork_checker,
+            metrics,
+            finalized_slot_getter,
+        }
+    }
+
+    pub async fn clean_forks(&self, rx: Receiver<()>) {
+        let last_slot_for_check = self
+            .finalized_slot_getter
+            .get_finalized_slot_no_error()
+            .await;
+        let mut forked_slots = HashSet::new();
+        let mut delete_items = Vec::new();
+        for cl_item in self.cl_items_manager.items_iter() {
+            if !rx.is_empty() {
+                info!("Stop iteration over cl items iterator...");
+                return;
+            }
+            if cl_item.slot_updated > last_slot_for_check {
+                continue;
+            }
+            if self.fork_checker.is_forked_slot(cl_item.slot_updated).await {
+                delete_items.push(ForkedItem {
+                    tree: cl_item.cli_tree_key,
+                    seq: cl_item.cli_seq,
+                    node_idx: cl_item.cli_node_idx,
+                });
+                forked_slots.insert(cl_item.slot_updated);
+            }
+            if delete_items.len() >= CI_ITEMS_DELETE_BATCH_SIZE {
+                self.cl_items_manager
+                    .delete_items(std::mem::take(&mut delete_items))
+                    .await;
+            }
+        }
+        self.cl_items_manager.delete_items(delete_items).await;
+        self.metrics.set_forks_detected(forked_slots.len() as i64);
+    }
+}

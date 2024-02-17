@@ -220,3 +220,10 @@ pub struct EditionV1 {
     pub edition: u64,
     pub write_version: u64,
 }
+
+#[derive(Default)]
+pub struct ForkedItem {
+    pub tree: Pubkey,
+    pub seq: u64,
+    pub node_idx: u64,
+}

@@ -549,11 +549,7 @@ mod tests {
     // this function used only inside tests under rpc_tests and bigtable_tests features, that do not running in our CI
     #[allow(dead_code)]
     async fn create_test_diff_checker() -> DiffChecker<FileKeysFetcher> {
-        let mut metrics = IntegrityVerificationMetrics::new(
-            IntegrityVerificationMetricsConfig::new(),
-            BackfillerMetricsConfig::new(),
-            Arc::new(RequestErrorDurationMetrics::new()),
-        );
+        let mut metrics = IntegrityVerificationMetrics::new();
         metrics.register_metrics();
         start_metrics(metrics.registry, Some(6001)).await;
 
