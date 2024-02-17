@@ -160,11 +160,10 @@ mod tests {
         );
 
         let mut finalized_slot_getter = MockFinalizedSlotGetter::new();
-
         finalized_slot_getter
-            .expect_get_finalized_slot()
+            .expect_get_finalized_slot_no_error()
             .times(1)
-            .return_once(move || Ok(212));
+            .return_once(move || 212);
 
         let arc_finalized_slot_getter = Arc::new(finalized_slot_getter);
 
