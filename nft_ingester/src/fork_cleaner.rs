@@ -1,6 +1,5 @@
 use entities::models::ForkedItem;
 use interface::fork_cleaner::{ClItemsManager, ForkChecker};
-use interface::slot_getter::FinalizedSlotGetter;
 use metrics_utils::ForkCleanerMetricsConfig;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -9,43 +8,35 @@ use tracing::info;
 
 const CI_ITEMS_DELETE_BATCH_SIZE: usize = 1000;
 
-pub struct ForkCleaner<CM, FC, FSG>
+pub struct ForkCleaner<CM, FC>
 where
     CM: ClItemsManager,
     FC: ForkChecker,
-    FSG: FinalizedSlotGetter,
 {
     cl_items_manager: Arc<CM>,
     fork_checker: Arc<FC>,
     metrics: Arc<ForkCleanerMetricsConfig>,
-    finalized_slot_getter: Arc<FSG>,
 }
 
-impl<CM, FC, FSG> ForkCleaner<CM, FC, FSG>
+impl<CM, FC> ForkCleaner<CM, FC>
 where
     CM: ClItemsManager,
     FC: ForkChecker,
-    FSG: FinalizedSlotGetter,
 {
     pub fn new(
         cl_items_manager: Arc<CM>,
         fork_checker: Arc<FC>,
         metrics: Arc<ForkCleanerMetricsConfig>,
-        finalized_slot_getter: Arc<FSG>,
     ) -> Self {
         Self {
             cl_items_manager,
             fork_checker,
             metrics,
-            finalized_slot_getter,
         }
     }
 
     pub async fn clean_forks(&self, rx: Receiver<()>) {
-        let last_slot_for_check = self
-            .finalized_slot_getter
-            .get_finalized_slot_no_error()
-            .await;
+        let last_slot_for_check = self.fork_checker.last_slot_for_check();
         let mut forked_slots = HashSet::new();
         let mut delete_items = Vec::new();
         for cl_item in self.cl_items_manager.items_iter() {

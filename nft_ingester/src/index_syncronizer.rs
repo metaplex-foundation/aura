@@ -154,12 +154,7 @@ where
 mod tests {
     use super::*;
     use entities::models::{AssetIndex, UrlWithStatus};
-    use metrics_utils::{
-        red::RequestErrorDurationMetrics, ApiMetricsConfig, BackfillerMetricsConfig,
-        IngesterMetricsConfig, JsonDownloaderMetricsConfig, JsonMigratorMetricsConfig, MetricState,
-        MetricsTrait, RpcBackfillerMetricsConfig, SequenceConsistentGapfillMetricsConfig,
-        SynchronizerMetricsConfig,
-    };
+    use metrics_utils::{MetricState, MetricsTrait};
     use mockall;
     use postgre_client::storage_traits::MockAssetIndexStorage as MockIndexStorage;
     use rocks_db::storage_traits::MockAssetIndexStorage as MockPrimaryStorage;

@@ -2,14 +2,8 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use interface::slot_getter::MockFinalizedSlotGetter;
-    use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::utils::start_metrics;
-    use metrics_utils::{
-        ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig,
-        JsonDownloaderMetricsConfig, JsonMigratorMetricsConfig, MetricState, MetricsTrait,
-        RpcBackfillerMetricsConfig, SequenceConsistentGapfillMetricsConfig,
-        SynchronizerMetricsConfig,
-    };
+    use metrics_utils::{MetricState, MetricsTrait};
     use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
     use rocks_db::bubblegum_slots::bubblegum_slots_key_to_value;
     use rocks_db::key_encoders::{decode_pubkey, decode_pubkey_u64, decode_string};

@@ -639,7 +639,6 @@ pub async fn main() -> Result<(), IngesterError> {
         rocks_storage.clone(),
         rocks_storage.clone(),
         metrics_state.fork_cleaner_metrics.clone(),
-        rpc_backfiller.clone(),
     );
     let mut rx = shutdown_rx.resubscribe();
     let metrics = metrics_state.fork_cleaner_metrics.clone();

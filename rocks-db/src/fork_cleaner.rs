@@ -4,6 +4,8 @@ use entities::models::{ClItem, ForkedItem};
 use interface::fork_cleaner::{ClItemsManager, ForkChecker};
 use tracing::error;
 
+const SLOT_CHECK_OFFSET: u64 = 1000;
+
 #[async_trait]
 impl ClItemsManager for Storage {
     fn items_iter(&self) -> impl Iterator<Item = ClItem> {
@@ -42,5 +44,18 @@ impl ForkChecker for Storage {
                 true
             }
         }
+    }
+
+    fn last_slot_for_check(&self) -> u64 {
+        for (key, _) in self.raw_blocks_cbor.iter_end().filter_map(Result::ok) {
+            match crate::key_encoders::decode_u64(key.to_vec()) {
+                Ok(key) => return key.saturating_sub(SLOT_CHECK_OFFSET),
+                Err(e) => {
+                    error!("Decode raw block key: {}", e);
+                }
+            };
+        }
+        // if there no saved block - we cannot do any check
+        0
     }
 }

@@ -10,4 +10,5 @@ pub trait ClItemsManager {
 #[async_trait]
 pub trait ForkChecker {
     async fn is_forked_slot(&self, slot: u64) -> bool;
+    fn last_slot_for_check(&self) -> u64;
 }
