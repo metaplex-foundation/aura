@@ -149,11 +149,11 @@ mod tests {
         };
 
         spl_token_accs_parser
-            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_acc)].collect())
+            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_acc)].into_iter().collect())
             .await;
 
         spl_token_accs_parser
-            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].collect())
+            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
 
         let decompressed_token_data = MetadataInfo {
