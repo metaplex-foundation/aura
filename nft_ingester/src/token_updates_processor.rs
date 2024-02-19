@@ -81,8 +81,7 @@ impl TokenAccsProcessor {
         &self,
         operation: F,
         asset_updates: Vec<(u64, Pubkey)>,
-        metric_name_latency: &str,
-        metric_name_result: &str,
+        metric_name: &str,
     ) where
         F: Future<Output = Result<T, StorageError>>,
     {
@@ -97,11 +96,9 @@ impl TokenAccsProcessor {
             }
         });
 
-        self.metrics.set_latency(
-            metric_name_latency,
-            begin_processing.elapsed().as_millis() as f64,
-        );
-        result_to_metrics(self.metrics.clone(), &result, metric_name_result);
+        self.metrics
+            .set_latency(metric_name, begin_processing.elapsed().as_millis() as f64);
+        result_to_metrics(self.metrics.clone(), &result, metric_name);
     }
 
     pub async fn transform_and_save_token_accs(
@@ -165,7 +162,6 @@ impl TokenAccsProcessor {
                 .map(|a| (a.slot_updated as u64, a.mint))
                 .collect::<Vec<_>>(),
             "token_accounts_saving",
-            "accounts_saving_owner",
         )
         .await
     }
@@ -202,7 +198,6 @@ impl TokenAccsProcessor {
                 .map(|a| (a.slot_updated as u64, a.pubkey))
                 .collect::<Vec<_>>(),
             "mint_accounts_saving",
-            "accounts_saving_dynamic_data",
         )
         .await
     }
