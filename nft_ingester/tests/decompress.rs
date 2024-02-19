@@ -119,7 +119,6 @@ mod tests {
 
         let spl_token_accs_parser = TokenAccsProcessor::new(
             env_rocks.clone(),
-            db_client.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,
@@ -150,11 +149,11 @@ mod tests {
         };
 
         spl_token_accs_parser
-            .transform_and_save_token_accs(&vec![token_acc])
+            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_acc)].collect())
             .await;
 
         spl_token_accs_parser
-            .transform_and_save_mint_accs(&vec![mint_acc])
+            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].collect())
             .await;
 
         let decompressed_token_data = MetadataInfo {

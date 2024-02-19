@@ -553,7 +553,6 @@ mod tests {
 
         let token_updates_processor = TokenAccsProcessor::new(
             env.rocks_env.storage.clone(),
-            db_client.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,
@@ -634,10 +633,10 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_accs(&[mint_acc])
+            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].collect())
             .await;
         token_updates_processor
-            .transform_and_save_token_accs(&[token_acc])
+            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_acc)].collect())
             .await;
 
         mplx_updates_processor
@@ -663,7 +662,7 @@ mod tests {
         };
 
         token_updates_processor
-            .transform_and_save_mint_accs(&[mint_acc])
+            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].collect())
             .await;
 
         let payload = GetAsset {

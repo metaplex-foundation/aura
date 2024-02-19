@@ -182,7 +182,6 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let token_accs_parser = TokenAccsProcessor::new(
         rocks_storage.clone(),
-        db_client_v2.clone(),
         buffer.clone(),
         metrics_state.ingester_metrics.clone(),
         config.spl_buffer_size,

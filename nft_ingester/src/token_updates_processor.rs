@@ -1,5 +1,4 @@
 use crate::buffer::Buffer;
-use crate::db_v2::DBClient;
 use crate::mplx_updates_processor::result_to_metrics;
 use crate::process_accounts;
 use entities::models::Updated;
@@ -22,7 +21,6 @@ use tokio::time::Instant;
 pub struct TokenAccsProcessor {
     pub rocks_db: Arc<Storage>,
     pub batch_size: usize,
-    pub db_client: Arc<DBClient>,
 
     pub buffer: Arc<Buffer>,
     pub metrics: Arc<IngesterMetricsConfig>,
@@ -39,7 +37,6 @@ struct DynamicAndAssetOwnerDetails {
 impl TokenAccsProcessor {
     pub fn new(
         rocks_db: Arc<Storage>,
-        db_client: Arc<DBClient>,
         buffer: Arc<Buffer>,
         metrics: Arc<IngesterMetricsConfig>,
         batch_size: usize,
@@ -49,7 +46,6 @@ impl TokenAccsProcessor {
             buffer,
             metrics,
             batch_size,
-            db_client,
             last_received_mint_at: None,
             last_received_token_acc_at: None,
         }
