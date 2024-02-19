@@ -65,7 +65,7 @@ where
                     .await;
             }
         }
-        if delete_items.len() > 0 {
+        if !delete_items.is_empty() {
             self.cl_items_manager.delete_items(delete_items).await;
         }
         self.metrics.set_forks_detected(forked_slots.len() as i64);
