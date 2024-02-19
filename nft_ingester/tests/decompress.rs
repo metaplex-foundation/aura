@@ -11,23 +11,25 @@ mod tests {
         db_v2::DBClient,
         mplx_updates_processor::{MetadataInfo, MplxAccsProcessor},
         token_updates_processor::TokenAccsProcessor,
-        transaction_ingester,
+        transaction_ingester::{self, BackfillTransactionIngester},
     };
     use rocks_db::{
+        bubblegum_slots::BubblegumSlotGetter,
         columns::{Mint, TokenAccount},
         offchain_data::OffChainData,
         Storage,
     };
     use solana_sdk::pubkey::Pubkey;
     use sqlx::{Pool, Postgres};
+    use std::fs::File;
     use std::str::FromStr;
     use std::sync::Arc;
     use std::{
         collections::HashMap,
         io::{self, Read},
     };
-    use std::{fs::File, sync::atomic::AtomicBool};
     use testcontainers::clients::Cli;
+    use tokio::sync::broadcast;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
 
@@ -67,7 +69,6 @@ mod tests {
             env_rocks,
             Arc::new(IngesterMetricsConfig::new()),
             buffer.json_tasks.clone(),
-            true,
         ));
 
         let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
@@ -76,19 +77,24 @@ mod tests {
 
         let consumer = Arc::new(DirectBlockParser::new(
             tx_ingester.clone(),
+            rocks_storage.clone(),
             Arc::new(BackfillerMetricsConfig::new()),
         ));
         let producer = rocks_storage.clone();
 
-        let keep_running = Arc::new(AtomicBool::new(true));
+        let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
-        TransactionsParser::parse_slots(
+        TransactionsParser::<
+            DirectBlockParser<BackfillTransactionIngester, Storage>,
+            Storage,
+            BubblegumSlotGetter,
+        >::parse_slots(
             consumer.clone(),
             producer.clone(),
             Arc::new(BackfillerMetricsConfig::new()),
             1,
             slots_to_parse,
-            keep_running,
+            shutdown_rx,
         )
         .await
         .unwrap();
@@ -197,6 +203,10 @@ mod tests {
                 programmable_config: None,
             },
             slot_updated: nft_created_slot as u64,
+            lamports: 1,
+            executable: false,
+            metadata_owner: None,
+            write_version: 1,
         };
 
         let mut map = HashMap::new();

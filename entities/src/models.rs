@@ -67,6 +67,10 @@ pub struct CompleteAssetDetails {
     pub creators: Updated<Vec<Creator>>,
     pub royalty_amount: Updated<u16>,
     pub url: Updated<String>,
+    pub chain_mutability: Option<Updated<ChainMutability>>,
+    pub lamports: Option<Updated<u64>>,
+    pub executable: Option<Updated<bool>>,
+    pub metadata_owner: Option<Updated<String>>,
 
     // From AssetAuthority as Tuple
     pub authority: Updated<Pubkey>,
@@ -121,14 +125,6 @@ pub struct ChainDataV1 {
     pub token_standard: Option<TokenStandard>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uses: Option<Uses>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub chain_mutability: Option<ChainMutability>, // TODO: move this feild to AssetDynamicDetails struct
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub lamports: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub executable: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata_owner: Option<String>,
 }
 
 impl ChainDataV1 {

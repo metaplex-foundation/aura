@@ -10,6 +10,7 @@ use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
 use rocks_db::columns::{Mint, TokenAccount};
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
+use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::AtomicBool;
@@ -27,6 +28,12 @@ pub struct TokenAccsProcessor {
     pub metrics: Arc<IngesterMetricsConfig>,
     last_received_mint_at: Option<SystemTime>,
     last_received_token_acc_at: Option<SystemTime>,
+}
+
+#[derive(Default)]
+struct DynamicAndAssetOwnerDetails {
+    pub asset_dynamic_details: HashMap<Pubkey, AssetDynamicDetails>,
+    pub asset_owner_details: HashMap<Pubkey, AssetOwner>,
 }
 
 impl TokenAccsProcessor {
@@ -105,10 +112,10 @@ impl TokenAccsProcessor {
         &self,
         accs_to_save: &HashMap<Vec<u8>, TokenAccount>,
     ) {
-        let save_values = accs_to_save.clone().into_values().fold(
-            HashMap::new(),
-            |mut acc: HashMap<_, _>, token_account| {
-                acc.insert(
+        let dynamic_and_asset_owner_details = accs_to_save.to_owned().clone().into_iter().fold(
+            DynamicAndAssetOwnerDetails::default(),
+            |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, token_account| {
+                accumulated_asset_info.asset_owner_details.insert(
                     token_account.mint,
                     AssetOwner {
                         pubkey: token_account.mint,
@@ -122,11 +129,7 @@ impl TokenAccsProcessor {
                             None,
                             token_account.delegate,
                         ),
-                        owner_type: Updated::new(
-                            token_account.slot_updated as u64,
-                            None,
-                            OwnerType::Single,
-                        ),
+                        owner_type: Updated::default(),
                         owner_delegate_seq: Updated::new(
                             token_account.slot_updated as u64,
                             None,
@@ -134,7 +137,21 @@ impl TokenAccsProcessor {
                         ),
                     },
                 );
-                acc
+
+                accumulated_asset_info.asset_dynamic_details.insert(
+                    token_account.mint,
+                    AssetDynamicDetails {
+                        pubkey: token_account.mint,
+                        is_frozen: Updated::new(
+                            token_account.slot_updated as u64,
+                            None,
+                            token_account.frozen,
+                        ),
+                        ..Default::default()
+                    },
+                );
+
+                accumulated_asset_info
             },
         );
 

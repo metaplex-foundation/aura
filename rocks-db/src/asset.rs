@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use bincode::{deserialize, serialize};
-use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
+use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::{EditionData, Updated};
 use log::{error, warn};
 use rocksdb::MergeOperands;
@@ -59,6 +59,26 @@ pub struct AssetDynamicDetails {
     pub creators: Updated<Vec<entities::models::Creator>>,
     pub royalty_amount: Updated<u16>,
     pub url: Updated<String>,
+    pub chain_mutability: Option<Updated<ChainMutability>>,
+    pub lamports: Option<Updated<u64>>,
+    pub executable: Option<Updated<bool>>,
+    pub metadata_owner: Option<Updated<String>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AssetDynamicDetailsDeprecated {
+    pub pubkey: Pubkey,
+    pub is_compressible: Updated<bool>,
+    pub is_compressed: Updated<bool>,
+    pub is_frozen: Updated<bool>,
+    pub supply: Option<Updated<u64>>,
+    pub seq: Option<Updated<u64>>,
+    pub is_burnt: Updated<bool>,
+    pub was_decompressed: Updated<bool>,
+    pub onchain_data: Option<Updated<String>>,
+    pub creators: Updated<Vec<entities::models::Creator>>,
+    pub royalty_amount: Updated<u16>,
+    pub url: Updated<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -68,7 +88,7 @@ pub struct AssetAuthority {
     pub slot_updated: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AssetOwner {
     pub pubkey: Pubkey,
     pub owner: Updated<Pubkey>,
@@ -175,10 +195,24 @@ impl TypedColumn for AssetStaticDetailsDeprecated {
     }
 }
 
-impl TypedColumn for AssetDynamicDetails {
+impl TypedColumn for AssetDynamicDetailsDeprecated {
     type KeyType = Pubkey;
     type ValueType = Self;
     const NAME: &'static str = "ASSET_DYNAMIC";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetDynamicDetails {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_DYNAMIC_V2";
 
     fn encode_key(pubkey: Pubkey) -> Vec<u8> {
         encode_pubkey(pubkey)
@@ -264,6 +298,16 @@ impl AssetDynamicDetails {
                         update_field(&mut current_val.was_decompressed, &new_val.was_decompressed);
                         update_optional_field(&mut current_val.onchain_data, &new_val.onchain_data);
                         update_field(&mut current_val.url, &new_val.url);
+                        update_optional_field(
+                            &mut current_val.chain_mutability,
+                            &new_val.chain_mutability,
+                        );
+                        update_optional_field(&mut current_val.lamports, &new_val.lamports);
+                        update_optional_field(&mut current_val.executable, &new_val.executable);
+                        update_optional_field(
+                            &mut current_val.metadata_owner,
+                            &new_val.metadata_owner,
+                        );
 
                         current_val
                     } else {
@@ -293,6 +337,18 @@ impl AssetDynamicDetails {
                 .map_or(0, |onchain_data| onchain_data.slot_updated),
             self.creators.slot_updated,
             self.royalty_amount.slot_updated,
+            self.chain_mutability
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.lamports
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.executable
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.metadata_owner
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
         ]
         .into_iter()
         .max()

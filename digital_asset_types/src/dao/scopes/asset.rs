@@ -6,7 +6,6 @@ use std::sync::Arc;
 use log::error;
 use sea_orm::prelude::Json;
 use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult, Order};
-use serde::Deserialize;
 use solana_sdk::pubkey::Pubkey;
 
 use rocks_db::asset::{
@@ -326,21 +325,14 @@ fn convert_rocks_offchain_data(
     )
     .unwrap_or(serde_json::Value::Null);
 
-    let chain_data_mutability = ch_data
-        .get("chain_mutability")
-        .map(|m| ChainMutability::deserialize(m).unwrap_or(ChainMutability::Unknown))
-        .unwrap_or(ChainMutability::Unknown);
-
-    let lamports = ch_data.get("lamports").and_then(|m| m.as_u64());
-    let executable = ch_data.get("executable").and_then(|m| m.as_bool());
-    let metadata_owner = ch_data
-        .get("metadata_owner")
-        .and_then(|m| m.as_str().map(|m| m.to_string()));
-
     Ok(AssetDataModel {
         asset: asset_data::Model {
             id: dynamic_data.pubkey.to_bytes().to_vec(),
-            chain_data_mutability,
+            chain_data_mutability: dynamic_data
+                .chain_mutability
+                .clone()
+                .map(|m| m.value.into())
+                .unwrap_or(ChainMutability::Unknown),
             chain_data: ch_data,
             metadata_url: offchain_data.url.clone(),
             metadata_mutability: Mutability::Immutable,
@@ -349,9 +341,9 @@ fn convert_rocks_offchain_data(
             slot_updated: dynamic_data.get_slot_updated() as i64,
             reindex: None,
         },
-        lamports,
-        executable,
-        metadata_owner,
+        lamports: dynamic_data.lamports.clone().map(|v| v.value),
+        executable: dynamic_data.executable.clone().map(|v| v.value),
+        metadata_owner: dynamic_data.metadata_owner.clone().map(|v| v.value),
     })
 }
 
@@ -580,56 +572,47 @@ fn asset_selected_maps_into_full_asset(
     id: &Pubkey,
     asset_selected_maps: &AssetSelectedMaps,
 ) -> Option<FullAsset> {
-    match asset_selected_maps
+    let offchain_data = asset_selected_maps
         .urls
         .get(&id.to_string())
-        .and_then(|url| asset_selected_maps.offchain_data.get(url))
-    {
-        Some(offchain_data) => {
-            match convert_rocks_offchain_data(
+        .and_then(|url| asset_selected_maps.offchain_data.get(url).cloned())
+        .unwrap_or_default();
+
+    match convert_rocks_offchain_data(id, &offchain_data, &asset_selected_maps.assets_dynamic) {
+        Ok(data) => convert_rocks_asset_model(
+            id,
+            &asset_selected_maps.assets_static,
+            &asset_selected_maps.assets_owner,
+            &asset_selected_maps.assets_dynamic,
+            &asset_selected_maps.assets_leaf,
+        )
+        .ok()
+        .map(|asset| FullAsset {
+            asset,
+            data,
+            authorities: vec![convert_rocks_authority_model(
                 id,
-                offchain_data,
-                &asset_selected_maps.assets_dynamic,
-            ) {
-                Ok(data) => convert_rocks_asset_model(
-                    id,
-                    &asset_selected_maps.assets_static,
-                    &asset_selected_maps.assets_owner,
-                    &asset_selected_maps.assets_dynamic,
-                    &asset_selected_maps.assets_leaf,
-                )
-                .ok()
-                .map(|asset| FullAsset {
-                    asset,
-                    data,
-                    authorities: vec![convert_rocks_authority_model(
-                        id,
-                        &asset_selected_maps.assets_authority,
-                    )],
-                    creators: convert_rocks_creators_model(id, &asset_selected_maps.assets_dynamic),
-                    groups: convert_rocks_grouping_model(
-                        id,
-                        &asset_selected_maps.assets_collection,
-                    )
-                    .map_or(vec![], |v| vec![v]),
-                    edition_data: asset_selected_maps.assets_static.get(id).and_then(
-                        |static_details| {
-                            static_details
-                                .edition_address
-                                .and_then(|e| asset_selected_maps.editions.get(&e).cloned())
-                        },
-                    ),
+                &asset_selected_maps.assets_authority,
+            )],
+            creators: convert_rocks_creators_model(id, &asset_selected_maps.assets_dynamic),
+            groups: convert_rocks_grouping_model(id, &asset_selected_maps.assets_collection)
+                .map_or(vec![], |v| vec![v]),
+            edition_data: asset_selected_maps
+                .assets_static
+                .get(id)
+                .and_then(|static_details| {
+                    static_details
+                        .edition_address
+                        .and_then(|e| asset_selected_maps.editions.get(&e).cloned())
                 }),
-                Err(e) => {
-                    error!(
-                        "Could not cast asset into asset data model. Key: {:?}. Error: {:?}",
-                        &id, e
-                    );
-                    None
-                }
-            }
+        }),
+        Err(e) => {
+            error!(
+                "Could not cast asset into asset data model. Key: {:?}. Error: {:?}",
+                &id, e
+            );
+            None
         }
-        None => None,
     }
 }
 

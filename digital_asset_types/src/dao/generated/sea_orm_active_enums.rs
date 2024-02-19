@@ -97,6 +97,15 @@ pub enum ChainMutability {
     #[sea_orm(string_value = "unknown")]
     Unknown,
 }
+
+impl From<entities::enums::ChainMutability> for ChainMutability {
+    fn from(value: entities::enums::ChainMutability) -> Self {
+        match value {
+            entities::enums::ChainMutability::Immutable => ChainMutability::Immutable,
+            entities::enums::ChainMutability::Mutable => ChainMutability::Mutable,
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(
     rs_type = "String",
