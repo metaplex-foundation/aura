@@ -56,7 +56,7 @@ impl ForkChecker for Storage {
         }
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
-            "iterator_top",
+            "full_iteration",
             RAW_BLOCKS_CBOR_ENDPOINT,
             start_time,
         );
@@ -68,7 +68,15 @@ impl ForkChecker for Storage {
         let start_time = chrono::Utc::now();
         for (key, _) in self.raw_blocks_cbor.iter_end().filter_map(Result::ok) {
             match crate::key_encoders::decode_u64(key.to_vec()) {
-                Ok(key) => return key,
+                Ok(key) => {
+                    self.red_metrics.observe_request(
+                        ROCKS_COMPONENT,
+                        "iterator_top",
+                        RAW_BLOCKS_CBOR_ENDPOINT,
+                        start_time,
+                    );
+                    return key;
+                }
                 Err(e) => {
                     error!("Decode raw block key: {}", e);
                 }
@@ -76,7 +84,7 @@ impl ForkChecker for Storage {
         }
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
-            "full_iteration",
+            "iterator_top",
             RAW_BLOCKS_CBOR_ENDPOINT,
             start_time,
         );
