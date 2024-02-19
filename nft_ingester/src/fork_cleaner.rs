@@ -8,6 +8,7 @@ use tracing::info;
 
 const CI_ITEMS_DELETE_BATCH_SIZE: usize = 1000;
 const SLOT_CHECK_OFFSET: u64 = 1000;
+const ROCKS_COMPONENT: &str = "RocksDB";
 
 pub struct ForkCleaner<CM, FC>
 where
@@ -37,10 +38,27 @@ where
     }
 
     pub async fn clean_forks(&self, rx: Receiver<()>) {
+        let start_time = chrono::Utc::now();
         let last_slot_for_check = self
             .fork_checker
             .last_slot_for_check()
             .saturating_sub(SLOT_CHECK_OFFSET);
+        self.metrics.red_metrics.observe_request(
+            ROCKS_COMPONENT,
+            "last_slot_for_check",
+            "raw_blocks_cbor",
+            start_time,
+        );
+
+        let start_time = chrono::Utc::now();
+        let all_non_forked_slots = self.fork_checker.get_all_non_forked_slots();
+        self.metrics.red_metrics.observe_request(
+            ROCKS_COMPONENT,
+            "get_all_non_forked_slots",
+            "raw_blocks_cbor",
+            start_time,
+        );
+
         let mut forked_slots = HashSet::new();
         let mut delete_items = Vec::new();
         for cl_item in self.cl_items_manager.items_iter() {
@@ -51,7 +69,7 @@ where
             if cl_item.slot_updated > last_slot_for_check {
                 continue;
             }
-            if self.fork_checker.is_forked_slot(cl_item.slot_updated).await {
+            if !all_non_forked_slots.contains(&cl_item.slot_updated) {
                 delete_items.push(ForkedItem {
                     tree: cl_item.cli_tree_key,
                     seq: cl_item.cli_seq,
@@ -60,14 +78,26 @@ where
                 forked_slots.insert(cl_item.slot_updated);
             }
             if delete_items.len() >= CI_ITEMS_DELETE_BATCH_SIZE {
-                self.cl_items_manager
-                    .delete_items(std::mem::take(&mut delete_items))
-                    .await;
+                self.delete_items(&mut delete_items).await;
             }
         }
         if !delete_items.is_empty() {
-            self.cl_items_manager.delete_items(delete_items).await;
+            self.delete_items(&mut delete_items).await;
         }
         self.metrics.set_forks_detected(forked_slots.len() as i64);
+    }
+
+    async fn delete_items(&self, delete_items: &mut Vec<ForkedItem>) {
+        self.metrics.inc_by_deleted_items(delete_items.len() as u64);
+        let start_time = chrono::Utc::now();
+        self.cl_items_manager
+            .delete_items(std::mem::take(delete_items))
+            .await;
+        self.metrics.red_metrics.observe_request(
+            ROCKS_COMPONENT,
+            "delete_items",
+            "cl_items",
+            start_time,
+        );
     }
 }

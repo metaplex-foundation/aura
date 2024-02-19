@@ -2,6 +2,7 @@ use crate::Storage;
 use async_trait::async_trait;
 use entities::models::{ClItem, ForkedItem};
 use interface::fork_cleaner::{ClItemsManager, ForkChecker};
+use std::collections::HashSet;
 use tracing::error;
 
 #[async_trait]
@@ -34,14 +35,18 @@ impl ClItemsManager for Storage {
 
 #[async_trait]
 impl ForkChecker for Storage {
-    async fn is_forked_slot(&self, slot: u64) -> bool {
-        match self.raw_blocks_cbor.has_key(slot).await {
-            Ok(has_key) => !has_key,
-            Err(e) => {
-                error!("Check raw blocks has key {}", e);
-                true
-            }
+    fn get_all_non_forked_slots(&self) -> HashSet<u64> {
+        let mut all_keys = HashSet::new();
+        for (key, _) in self.raw_blocks_cbor.iter_start().filter_map(Result::ok) {
+            match crate::key_encoders::decode_u64(key.to_vec()) {
+                Ok(key) => all_keys.insert(key),
+                Err(e) => {
+                    error!("Decode raw block key: {}", e);
+                    continue;
+                }
+            };
         }
+        all_keys
     }
 
     fn last_slot_for_check(&self) -> u64 {
