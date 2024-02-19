@@ -44,7 +44,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
         );
-        let limit = 10;
+        let limit = 15;
         let before: Option<String>;
         let after: Option<String>;
         // test base case with only a limit and default (0) page
