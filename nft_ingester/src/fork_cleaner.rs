@@ -8,7 +8,7 @@ use tracing::info;
 
 const CI_ITEMS_DELETE_BATCH_SIZE: usize = 1000;
 const SLOT_CHECK_OFFSET: u64 = 1000;
-const ROCKS_COMPONENT: &str = "RocksDB";
+const ROCKS_COMPONENT: &str = "rocks_db";
 
 pub struct ForkCleaner<CM, FC>
 where
