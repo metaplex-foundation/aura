@@ -44,7 +44,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
         );
-        let limit = 15;
+        let limit = 10;
         let before: Option<String>;
         let after: Option<String>;
         // test base case with only a limit and default (0) page
@@ -218,6 +218,7 @@ mod tests {
         }
         // test a request with a creator verified field, considering the value was randomly generated in the dynamic data
         {
+            let limit = 20;
             let payload = SearchAssets {
                 limit: Some(limit),
                 creator_verified: Some(true),
