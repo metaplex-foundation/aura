@@ -7,7 +7,7 @@ use tracing::error;
 
 const ROCKS_COMPONENT: &str = "rocks_db";
 const DROP_ACTION: &str = "drop";
-const RAW_BLOCKS_CBOR_ENDPOINT: &str = "RAW_BLOCKS_CBOR";
+const RAW_BLOCKS_CBOR_ENDPOINT: &str = "raw_blocks_cbor";
 
 #[async_trait]
 impl ClItemsManager for Storage {
