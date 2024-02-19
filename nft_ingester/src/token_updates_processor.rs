@@ -3,6 +3,7 @@ use crate::db_v2::DBClient;
 use crate::mplx_updates_processor::result_to_metrics;
 use crate::process_accounts;
 use entities::models::Updated;
+use futures::future;
 use log::error;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
@@ -156,9 +157,14 @@ impl TokenAccsProcessor {
             );
 
         self.finalize_processing(
-            self.rocks_db
-                .asset_owner_data
-                .merge_batch(dynamic_and_asset_owner_details.asset_owner_details),
+            future::try_join(
+                self.rocks_db
+                    .asset_owner_data
+                    .merge_batch(dynamic_and_asset_owner_details.asset_owner_details),
+                self.rocks_db
+                    .asset_dynamic_data
+                    .merge_batch(dynamic_and_asset_owner_details.asset_dynamic_details),
+            ),
             accs_to_save
                 .values()
                 .map(|a| (a.slot_updated as u64, a.mint))
