@@ -2,6 +2,7 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use entities::api_req_params::{GetAsset, GetAssetProof};
+    use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
@@ -37,6 +38,7 @@ mod tests {
 
         zip_extract::extract(storage_archieve, tx_storage_dir.path(), false).unwrap();
 
+        let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let transactions_storage = Storage::open(
             &format!(
                 "{}{}",
@@ -44,6 +46,7 @@ mod tests {
                 "/test_rocks"
             ),
             mutexed_tasks.clone(),
+            red_metrics.clone(),
         )
         .unwrap();
 
@@ -144,6 +147,7 @@ mod tests {
 
         zip_extract::extract(storage_archieve, tx_storage_dir.path(), false).unwrap();
 
+        let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let transactions_storage = Storage::open(
             &format!(
                 "{}{}",
@@ -151,6 +155,7 @@ mod tests {
                 "/test_rocks"
             ),
             mutexed_tasks.clone(),
+            red_metrics.clone(),
         )
         .unwrap();
 

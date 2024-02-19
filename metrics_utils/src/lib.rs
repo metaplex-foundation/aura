@@ -60,6 +60,7 @@ impl Default for MetricState {
 
 impl MetricState {
     pub fn new() -> Self {
+        let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         Self {
             ingester_metrics: Arc::new(IngesterMetricsConfig::new()),
             api_metrics: Arc::new(ApiMetricsConfig::new()),
@@ -71,8 +72,8 @@ impl MetricState {
             sequence_consistent_gapfill_metrics: Arc::new(
                 SequenceConsistentGapfillMetricsConfig::new(),
             ),
-            red_metrics: Arc::new(RequestErrorDurationMetrics::new()),
-            fork_cleaner_metrics: Arc::new(ForkCleanerMetricsConfig::new()),
+            fork_cleaner_metrics: Arc::new(ForkCleanerMetricsConfig::new(red_metrics.clone())),
+            red_metrics,
             registry: Registry::default(),
         }
     }
@@ -1041,21 +1042,19 @@ pub struct ForkCleanerMetricsConfig {
     total_scans: Counter,
     scans_latency: Histogram,
     forks_detected: Gauge,
-}
-
-impl Default for ForkCleanerMetricsConfig {
-    fn default() -> Self {
-        Self::new()
-    }
+    deleted_items: Counter,
+    pub red_metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl ForkCleanerMetricsConfig {
-    pub fn new() -> Self {
+    pub fn new(red_metrics: Arc<RequestErrorDurationMetrics>) -> Self {
         Self {
             start_time: Default::default(),
             total_scans: Default::default(),
             scans_latency: Histogram::new(exponential_buckets(1.0, 2.0, 12)),
             forks_detected: Default::default(),
+            deleted_items: Default::default(),
+            red_metrics,
         }
     }
     pub fn start_time(&self) -> i64 {
@@ -1069,6 +1068,9 @@ impl ForkCleanerMetricsConfig {
     }
     pub fn set_scans_latency(&self, duration: f64) {
         self.scans_latency.observe(duration);
+    }
+    pub fn inc_by_deleted_items(&self, count: u64) -> u64 {
+        self.deleted_items.inc_by(count)
     }
     pub fn register(&self, registry: &mut Registry) {
         registry.register(
@@ -1093,6 +1095,11 @@ impl ForkCleanerMetricsConfig {
             "fork_cleaner_scans_latency",
             "A histogram of fork cleaner scans latency",
             self.scans_latency.clone(),
+        );
+        registry.register(
+            "deleted_items",
+            "Total count of deleted cl items",
+            self.deleted_items.clone(),
         );
     }
 }
