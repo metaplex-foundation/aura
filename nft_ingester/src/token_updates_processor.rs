@@ -108,49 +108,48 @@ impl TokenAccsProcessor {
         &self,
         accs_to_save: &HashMap<Vec<u8>, TokenAccount>,
     ) {
-        let dynamic_and_asset_owner_details =
-            accs_to_save.values().to_owned().clone().into_iter().fold(
-                DynamicAndAssetOwnerDetails::default(),
-                |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, token_account| {
-                    accumulated_asset_info.asset_owner_details.insert(
-                        token_account.mint,
-                        AssetOwner {
-                            pubkey: token_account.mint,
-                            owner: Updated::new(
-                                token_account.slot_updated as u64,
-                                None,
-                                token_account.owner,
-                            ),
-                            delegate: Updated::new(
-                                token_account.slot_updated as u64,
-                                None,
-                                token_account.delegate,
-                            ),
-                            owner_type: Updated::default(),
-                            owner_delegate_seq: Updated::new(
-                                token_account.slot_updated as u64,
-                                None,
-                                None,
-                            ),
-                        },
-                    );
+        let dynamic_and_asset_owner_details = accs_to_save.clone().into_values().fold(
+            DynamicAndAssetOwnerDetails::default(),
+            |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, token_account| {
+                accumulated_asset_info.asset_owner_details.insert(
+                    token_account.mint,
+                    AssetOwner {
+                        pubkey: token_account.mint,
+                        owner: Updated::new(
+                            token_account.slot_updated as u64,
+                            None,
+                            token_account.owner,
+                        ),
+                        delegate: Updated::new(
+                            token_account.slot_updated as u64,
+                            None,
+                            token_account.delegate,
+                        ),
+                        owner_type: Updated::default(),
+                        owner_delegate_seq: Updated::new(
+                            token_account.slot_updated as u64,
+                            None,
+                            None,
+                        ),
+                    },
+                );
 
-                    accumulated_asset_info.asset_dynamic_details.insert(
-                        token_account.mint,
-                        AssetDynamicDetails {
-                            pubkey: token_account.mint,
-                            is_frozen: Updated::new(
-                                token_account.slot_updated as u64,
-                                None,
-                                token_account.frozen,
-                            ),
-                            ..Default::default()
-                        },
-                    );
+                accumulated_asset_info.asset_dynamic_details.insert(
+                    token_account.mint,
+                    AssetDynamicDetails {
+                        pubkey: token_account.mint,
+                        is_frozen: Updated::new(
+                            token_account.slot_updated as u64,
+                            None,
+                            token_account.frozen,
+                        ),
+                        ..Default::default()
+                    },
+                );
 
-                    accumulated_asset_info
-                },
-            );
+                accumulated_asset_info
+            },
+        );
 
         self.finalize_processing(
             future::try_join(
