@@ -37,6 +37,7 @@ mod tests {
 
         zip_extract::extract(storage_archieve, tx_storage_dir.path(), false).unwrap();
 
+        let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let transactions_storage = Storage::open(
             &format!(
                 "{}{}",
@@ -44,6 +45,7 @@ mod tests {
                 "/test_rocks"
             ),
             mutexed_tasks.clone(),
+            red_metrics.clone(),
         )
         .unwrap();
 
@@ -144,6 +146,7 @@ mod tests {
 
         zip_extract::extract(storage_archieve, tx_storage_dir.path(), false).unwrap();
 
+        let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let transactions_storage = Storage::open(
             &format!(
                 "{}{}",
@@ -151,6 +154,7 @@ mod tests {
                 "/test_rocks"
             ),
             mutexed_tasks.clone(),
+            red_metrics.clone(),
         )
         .unwrap();
 

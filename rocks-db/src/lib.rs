@@ -11,6 +11,7 @@ pub use asset::{
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
+use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
@@ -68,12 +69,14 @@ pub struct Storage {
     pub token_metadata_edition_cbor: Column<TokenMetadataEdition>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+    red_metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl Storage {
     pub fn new(
         db: Arc<DB>,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Self {
         let asset_static_data = Self::column(db.clone());
         let asset_dynamic_data = Self::column(db.clone());
@@ -124,12 +127,14 @@ impl Storage {
             trees_gaps,
             token_metadata_edition_cbor,
             asset_static_data_deprecated,
+            red_metrics,
         }
     }
 
     pub fn open(
         db_path: &str,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self> {
         let cf_descriptors = Self::create_cf_descriptors();
         let db = Arc::new(DB::open_cf_descriptors(
@@ -137,13 +142,14 @@ impl Storage {
             db_path,
             cf_descriptors,
         )?);
-        Ok(Self::new(db, join_set))
+        Ok(Self::new(db, join_set, red_metrics))
     }
 
     pub fn open_secondary(
         primary_path: &str,
         secondary_path: &str,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self> {
         let cf_descriptors = Self::create_cf_descriptors();
         let db = Arc::new(DB::open_cf_descriptors_as_secondary(
@@ -152,7 +158,7 @@ impl Storage {
             secondary_path,
             cf_descriptors,
         )?);
-        Ok(Self::new(db, join_set))
+        Ok(Self::new(db, join_set, red_metrics))
     }
 
     fn create_cf_descriptors() -> Vec<ColumnFamilyDescriptor> {

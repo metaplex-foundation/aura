@@ -13,6 +13,7 @@ use std::{
 };
 use tokio::{sync::Mutex, task::JoinSet};
 
+use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
 use testcontainers::clients::Cli;
 
@@ -70,7 +71,7 @@ fn ingest_benchmark(c: &mut Criterion) {
     zip_extract::extract(storage_archieve, tx_storage_dir.path(), false).unwrap();
     let tasks = JoinSet::new();
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
-
+    let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let transactions_storage = Storage::open(
         &format!(
             "{}{}",
@@ -78,6 +79,7 @@ fn ingest_benchmark(c: &mut Criterion) {
             "/test_rocks"
         ),
         mutexed_tasks.clone(),
+        red_metrics,
     )
     .unwrap();
 

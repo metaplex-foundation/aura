@@ -3300,7 +3300,6 @@ dependencies = [
  "async-trait",
  "entities",
  "futures",
- "metrics-utils",
  "mockall 0.12.1",
  "plerkle_serialization",
  "solana-client",

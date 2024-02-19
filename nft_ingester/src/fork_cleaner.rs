@@ -39,11 +39,9 @@ where
     pub async fn clean_forks(&self, rx: Receiver<()>) {
         let last_slot_for_check = self
             .fork_checker
-            .last_slot_for_check(self.metrics.red_metrics.clone())
+            .last_slot_for_check()
             .saturating_sub(SLOT_CHECK_OFFSET);
-        let all_non_forked_slots = self
-            .fork_checker
-            .get_all_non_forked_slots(self.metrics.red_metrics.clone());
+        let all_non_forked_slots = self.fork_checker.get_all_non_forked_slots();
         let mut forked_slots = HashSet::new();
         let mut delete_items = Vec::new();
         for cl_item in self.cl_items_manager.items_iter() {
@@ -75,10 +73,7 @@ where
     async fn delete_items(&self, delete_items: &mut Vec<ForkedItem>) {
         self.metrics.inc_by_deleted_items(delete_items.len() as u64);
         self.cl_items_manager
-            .delete_items(
-                std::mem::take(delete_items),
-                self.metrics.red_metrics.clone(),
-            )
+            .delete_items(std::mem::take(delete_items))
             .await;
     }
 }

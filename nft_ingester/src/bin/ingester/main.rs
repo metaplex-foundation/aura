@@ -140,6 +140,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .clone()
             .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
         mutexed_tasks.clone(),
+        metrics_state.red_metrics.clone(),
     )
     .unwrap();
 

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use entities::enums::TaskStatus;
 use log::{error, info};
+use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait};
 use tokio::sync::{broadcast, Mutex};
@@ -34,12 +35,23 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
     let keep_running = Arc::new(AtomicBool::new(true));
+    let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
 
-    let storage = Storage::open(&config.json_target_db.clone(), mutexed_tasks.clone()).unwrap();
+    let storage = Storage::open(
+        &config.json_target_db.clone(),
+        mutexed_tasks.clone(),
+        red_metrics.clone(),
+    )
+    .unwrap();
 
     let target_storage = Arc::new(storage);
 
-    let source_storage = Storage::open(&config.json_source_db, mutexed_tasks.clone()).unwrap();
+    let source_storage = Storage::open(
+        &config.json_source_db,
+        mutexed_tasks.clone(),
+        red_metrics.clone(),
+    )
+    .unwrap();
     let source_storage = Arc::new(source_storage);
 
     let json_migrator = JsonMigrator::new(

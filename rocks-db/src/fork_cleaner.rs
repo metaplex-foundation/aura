@@ -2,9 +2,7 @@ use crate::Storage;
 use async_trait::async_trait;
 use entities::models::{ClItem, ForkedItem};
 use interface::fork_cleaner::{ClItemsManager, ForkChecker};
-use metrics_utils::red::RequestErrorDurationMetrics;
 use std::collections::HashSet;
-use std::sync::Arc;
 use tracing::error;
 
 const ROCKS_COMPONENT: &str = "rocks_db";
@@ -20,11 +18,7 @@ impl ClItemsManager for Storage {
             .flat_map(|(_, value)| bincode::deserialize::<ClItem>(value.as_ref()))
     }
 
-    async fn delete_items(
-        &self,
-        keys: Vec<ForkedItem>,
-        red_metrics: Arc<RequestErrorDurationMetrics>,
-    ) {
+    async fn delete_items(&self, keys: Vec<ForkedItem>) {
         let start_time = chrono::Utc::now();
         let (cl_items_res, tree_seq_idx_res) = tokio::join!(
             self.cl_items
@@ -41,16 +35,14 @@ impl ClItemsManager for Storage {
                 error!("{}: {}", res.1, e);
             }
         }
-        red_metrics.observe_request(ROCKS_COMPONENT, DROP_ACTION, "cl_items", start_time);
+        self.red_metrics
+            .observe_request(ROCKS_COMPONENT, DROP_ACTION, "cl_items", start_time);
     }
 }
 
 #[async_trait]
 impl ForkChecker for Storage {
-    fn get_all_non_forked_slots(
-        &self,
-        red_metrics: Arc<RequestErrorDurationMetrics>,
-    ) -> HashSet<u64> {
+    fn get_all_non_forked_slots(&self) -> HashSet<u64> {
         let start_time = chrono::Utc::now();
         let mut all_keys = HashSet::new();
         for (key, _) in self.raw_blocks_cbor.iter_start().filter_map(Result::ok) {
@@ -62,9 +54,9 @@ impl ForkChecker for Storage {
                 }
             };
         }
-        red_metrics.observe_request(
+        self.red_metrics.observe_request(
             ROCKS_COMPONENT,
-            "get_all_non_forked_slots",
+            "iterator_top",
             RAW_BLOCKS_CBOR_ENDPOINT,
             start_time,
         );
@@ -72,7 +64,7 @@ impl ForkChecker for Storage {
         all_keys
     }
 
-    fn last_slot_for_check(&self, red_metrics: Arc<RequestErrorDurationMetrics>) -> u64 {
+    fn last_slot_for_check(&self) -> u64 {
         let start_time = chrono::Utc::now();
         for (key, _) in self.raw_blocks_cbor.iter_end().filter_map(Result::ok) {
             match crate::key_encoders::decode_u64(key.to_vec()) {
@@ -82,9 +74,9 @@ impl ForkChecker for Storage {
                 }
             };
         }
-        red_metrics.observe_request(
+        self.red_metrics.observe_request(
             ROCKS_COMPONENT,
-            "last_slot_for_check",
+            "full_iteration",
             RAW_BLOCKS_CBOR_ENDPOINT,
             start_time,
         );
