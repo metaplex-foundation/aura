@@ -290,6 +290,7 @@ pub struct ApiMetricsConfig {
     search_asset_requests: Family<MethodLabel, Counter>,
     start_time: Gauge,
     latency: Family<MethodLabel, Histogram>,
+    search_asset_latency: Family<MethodLabel, Histogram>,
 }
 
 impl ApiMetricsConfig {
@@ -299,6 +300,9 @@ impl ApiMetricsConfig {
             search_asset_requests: Family::<MethodLabel, Counter>::default(),
             start_time: Default::default(),
             latency: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(20.0, 1.8, 10))
+            }),
+            search_asset_latency: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(20.0, 1.8, 10))
             }),
         }
@@ -331,6 +335,13 @@ impl ApiMetricsConfig {
             })
             .observe(duration);
     }
+    pub fn set_search_asset_latency(&self, label: &str, duration: f64) {
+        self.search_asset_latency
+            .get_or_create(&MethodLabel {
+                method_name: label.to_owned(),
+            })
+            .observe(duration);
+    }
 
     pub fn register(&self, registry: &mut Registry) {
         registry.register(
@@ -347,6 +358,11 @@ impl ApiMetricsConfig {
             "api_call_latency",
             "A histogram of the request duration",
             self.latency.clone(),
+        );
+        registry.register(
+            "search_asset_latency",
+            "A histogram of the searchAsset request duration",
+            self.search_asset_latency.clone(),
         );
         registry.register(
             "api_start_time",
@@ -650,7 +666,6 @@ impl JsonMigratorMetricsConfig {
 pub struct IngesterMetricsConfig {
     start_time: Gauge,
     latency: Family<MetricLabel, Histogram>,
-    parsers: Family<MetricLabelWithStatus, Counter>,
     process: Family<MetricLabelWithStatus, Counter>,
     buffers: Family<MetricLabel, Gauge>,
     retries: Family<MetricLabel, Counter>,
@@ -666,7 +681,6 @@ impl IngesterMetricsConfig {
             latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
                 Histogram::new([1.0, 10.0, 50.0, 100.0].into_iter())
             }),
-            parsers: Family::<MetricLabelWithStatus, Counter>::default(),
             process: Family::<MetricLabelWithStatus, Counter>::default(),
             buffers: Family::<MetricLabel, Gauge>::default(),
             retries: Family::<MetricLabel, Counter>::default(),
@@ -702,15 +716,6 @@ impl IngesterMetricsConfig {
                 name: label.to_owned(),
             })
             .set(buffer_size);
-    }
-
-    pub fn inc_parser(&self, label: &str, status: MetricStatus) -> u64 {
-        self.parsers
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_owned(),
-                status,
-            })
-            .inc()
     }
 
     pub fn inc_process(&self, label: &str, status: MetricStatus) -> u64 {
@@ -754,11 +759,6 @@ impl IngesterMetricsConfig {
             self.start_time.clone(),
         );
 
-        registry.register(
-            "ingester_parsed_data",
-            "Total amount of parsed data",
-            self.parsers.clone(),
-        );
         registry.register(
             "ingester_processed",
             "Total amount of processed data",
