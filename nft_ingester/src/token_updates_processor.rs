@@ -2,7 +2,6 @@ use crate::buffer::Buffer;
 use crate::db_v2::DBClient;
 use crate::mplx_updates_processor::result_to_metrics;
 use crate::process_accounts;
-use entities::enums::OwnerType;
 use entities::models::Updated;
 use log::error;
 use metrics_utils::IngesterMetricsConfig;
@@ -84,7 +83,7 @@ impl TokenAccsProcessor {
     async fn finalize_processing<T, F>(
         &self,
         operation: F,
-        asset_updates: Vec<(u64, solana_program::pubkey::Pubkey)>,
+        asset_updates: Vec<(u64, Pubkey)>,
         metric_name_latency: &str,
         metric_name_result: &str,
     ) where
@@ -112,51 +111,54 @@ impl TokenAccsProcessor {
         &self,
         accs_to_save: &HashMap<Vec<u8>, TokenAccount>,
     ) {
-        let dynamic_and_asset_owner_details = accs_to_save.to_owned().clone().into_iter().fold(
-            DynamicAndAssetOwnerDetails::default(),
-            |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, token_account| {
-                accumulated_asset_info.asset_owner_details.insert(
-                    token_account.mint,
-                    AssetOwner {
-                        pubkey: token_account.mint,
-                        owner: Updated::new(
-                            token_account.slot_updated as u64,
-                            None,
-                            token_account.owner,
-                        ),
-                        delegate: Updated::new(
-                            token_account.slot_updated as u64,
-                            None,
-                            token_account.delegate,
-                        ),
-                        owner_type: Updated::default(),
-                        owner_delegate_seq: Updated::new(
-                            token_account.slot_updated as u64,
-                            None,
-                            None,
-                        ),
-                    },
-                );
+        let dynamic_and_asset_owner_details =
+            accs_to_save.values().to_owned().clone().into_iter().fold(
+                DynamicAndAssetOwnerDetails::default(),
+                |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, token_account| {
+                    accumulated_asset_info.asset_owner_details.insert(
+                        token_account.mint,
+                        AssetOwner {
+                            pubkey: token_account.mint,
+                            owner: Updated::new(
+                                token_account.slot_updated as u64,
+                                None,
+                                token_account.owner,
+                            ),
+                            delegate: Updated::new(
+                                token_account.slot_updated as u64,
+                                None,
+                                token_account.delegate,
+                            ),
+                            owner_type: Updated::default(),
+                            owner_delegate_seq: Updated::new(
+                                token_account.slot_updated as u64,
+                                None,
+                                None,
+                            ),
+                        },
+                    );
 
-                accumulated_asset_info.asset_dynamic_details.insert(
-                    token_account.mint,
-                    AssetDynamicDetails {
-                        pubkey: token_account.mint,
-                        is_frozen: Updated::new(
-                            token_account.slot_updated as u64,
-                            None,
-                            token_account.frozen,
-                        ),
-                        ..Default::default()
-                    },
-                );
+                    accumulated_asset_info.asset_dynamic_details.insert(
+                        token_account.mint,
+                        AssetDynamicDetails {
+                            pubkey: token_account.mint,
+                            is_frozen: Updated::new(
+                                token_account.slot_updated as u64,
+                                None,
+                                token_account.frozen,
+                            ),
+                            ..Default::default()
+                        },
+                    );
 
-                accumulated_asset_info
-            },
-        );
+                    accumulated_asset_info
+                },
+            );
 
         self.finalize_processing(
-            self.rocks_db.asset_owner_data.merge_batch(save_values),
+            self.rocks_db
+                .asset_owner_data
+                .merge_batch(dynamic_and_asset_owner_details.asset_owner_details),
             accs_to_save
                 .values()
                 .map(|a| (a.slot_updated as u64, a.mint))

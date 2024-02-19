@@ -300,19 +300,19 @@ impl MplxAccsProcessor {
                 ),
                 url: Updated::new(metadata_info.slot_updated, None, uri.clone()),
                 lamports: Some(Updated::new(
-                    metadata_info.slot,
+                    metadata_info.slot_updated,
                     None,
                     metadata_info.lamports,
                 )),
                 executable: Some(Updated::new(
-                    metadata_info.slot,
+                    metadata_info.slot_updated,
                     None,
                     metadata_info.executable,
                 )),
                 metadata_owner: metadata_info
                     .metadata_owner
                     .clone()
-                    .map(|m| Updated::new(metadata_info.slot, None, m)),
+                    .map(|m| Updated::new(metadata_info.slot_updated, None, m)),
                 ..Default::default()
             });
 
