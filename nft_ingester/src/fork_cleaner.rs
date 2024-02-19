@@ -7,6 +7,7 @@ use tokio::sync::broadcast::Receiver;
 use tracing::info;
 
 const CI_ITEMS_DELETE_BATCH_SIZE: usize = 1000;
+const SLOT_CHECK_OFFSET: u64 = 1000;
 
 pub struct ForkCleaner<CM, FC>
 where
@@ -36,7 +37,10 @@ where
     }
 
     pub async fn clean_forks(&self, rx: Receiver<()>) {
-        let last_slot_for_check = self.fork_checker.last_slot_for_check();
+        let last_slot_for_check = self
+            .fork_checker
+            .last_slot_for_check()
+            .saturating_sub(SLOT_CHECK_OFFSET);
         let mut forked_slots = HashSet::new();
         let mut delete_items = Vec::new();
         for cl_item in self.cl_items_manager.items_iter() {
@@ -61,7 +65,9 @@ where
                     .await;
             }
         }
-        self.cl_items_manager.delete_items(delete_items).await;
+        if delete_items.len() > 0 {
+            self.cl_items_manager.delete_items(delete_items).await;
+        }
         self.metrics.set_forks_detected(forked_slots.len() as i64);
     }
 }
