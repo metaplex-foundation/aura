@@ -472,6 +472,8 @@ mod tests {
             edition_address: Some(MasterEdition::find_pda(&pb).0),
         };
 
+        let json_uri = "http://someUrl.com".to_string();
+
         let dynamic_details = AssetDynamicDetails {
             pubkey: pb,
             is_compressed: Updated::new(12, Some(12), true),
@@ -481,7 +483,7 @@ mod tests {
             onchain_data: Some(Updated::new(12, Some(12), chain_data.to_string())),
             creators: Updated::new(12, Some(12), vec![]),
             royalty_amount: Updated::new(12, Some(12), 5),
-            url: Updated::new(12, Some(12), "".to_string()),
+            url: Updated::new(12, Some(12), json_uri.clone()),
             ..Default::default()
         };
 
@@ -529,6 +531,7 @@ mod tests {
             response["content"]["metadata"]["token_standard"],
             "NonFungible"
         );
+        assert_eq!(response["content"]["json_uri"], json_uri);
 
         env.teardown().await;
     }
@@ -674,6 +677,149 @@ mod tests {
         assert_eq!(response["ownership"]["ownership_model"], "token");
         assert_eq!(response["ownership"]["owner"], "");
         assert_eq!(response["interface"], "FungibleToken".to_string());
+
+        env.teardown().await;
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_asset_programable_interface() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+        );
+
+        let buffer = Arc::new(Buffer::new());
+
+        let db_client = Arc::new(DBClient {
+            pool: env.pg_env.pool.clone(),
+        });
+
+        let token_updates_processor = TokenAccsProcessor::new(
+            env.rocks_env.storage.clone(),
+            db_client.clone(),
+            buffer.clone(),
+            Arc::new(IngesterMetricsConfig::new()),
+            1,
+        );
+        let mplx_updates_processor = MplxAccsProcessor::new(
+            1,
+            buffer.clone(),
+            db_client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+
+        let mut metadata_info = HashMap::new();
+        let mut mint_accs = Vec::new();
+        let mut token_accs = Vec::new();
+
+        let token_standards = vec![
+            BLKTokenStandard::ProgrammableNonFungible,
+            BLKTokenStandard::ProgrammableNonFungibleEdition,
+        ];
+
+        for standard in token_standards.iter() {
+            let token_key = Pubkey::new_unique();
+            let mint_key = Pubkey::new_unique();
+            let owner_key = Pubkey::new_unique();
+
+            let mint_auth_key = Pubkey::new_unique();
+
+            let token_acc = TokenAccount {
+                pubkey: token_key,
+                mint: mint_key,
+                delegate: None,
+                owner: owner_key,
+                frozen: false,
+                delegated_amount: 0,
+                slot_updated: 1,
+                amount: 1,
+            };
+
+            let mint_acc = Mint {
+                pubkey: mint_key,
+                slot_updated: 1,
+                supply: 1,
+                decimals: 0,
+                mint_authority: Some(mint_auth_key),
+                freeze_authority: None,
+            };
+
+            let metadata = MetadataInfo {
+                metadata: Metadata {
+                    key: Key::MetadataV1,
+                    update_authority: Pubkey::new_unique(),
+                    mint: mint_key,
+                    data: Data {
+                        name: "name".to_string(),
+                        symbol: "symbol".to_string(),
+                        uri: "https://ping-pong".to_string(),
+                        seller_fee_basis_points: 10,
+                        creators: None,
+                    },
+                    primary_sale_happened: false,
+                    is_mutable: true,
+                    edition_nonce: None,
+                    token_standard: Some(*standard),
+                    collection: None,
+                    uses: None,
+                    collection_details: None,
+                    programmable_config: None,
+                },
+                slot: 1,
+                write_version: 1,
+                lamports: 1,
+                executable: false,
+                metadata_owner: None,
+            };
+
+            metadata_info.insert(mint_key.to_bytes().to_vec(), metadata);
+            mint_accs.push(mint_acc);
+            token_accs.push(token_acc);
+        }
+
+        let metadata = OffChainData {
+            url: "https://ping-pong".to_string(),
+            metadata: "{\"msg\": \"hallo\"}".to_string(),
+        };
+
+        env.rocks_env
+            .storage
+            .asset_offchain_data
+            .put(metadata.url.clone(), metadata)
+            .unwrap();
+
+        token_updates_processor
+            .transform_and_save_mint_accs(&mint_accs)
+            .await;
+        token_updates_processor
+            .transform_and_save_token_accs(&token_accs)
+            .await;
+
+        mplx_updates_processor
+            .transform_and_save_metadata(&metadata_info)
+            .await;
+
+        let payload = GetAsset {
+            id: mint_accs[0].pubkey.to_string(),
+        };
+        let response = api.get_asset(payload).await.unwrap();
+
+        assert_eq!(response["id"], mint_accs[0].pubkey.to_string());
+        assert_eq!(response["interface"], "ProgrammableNFT".to_string());
+
+        let payload = GetAsset {
+            id: mint_accs[1].pubkey.to_string(),
+        };
+        let response = api.get_asset(payload).await.unwrap();
+
+        assert_eq!(response["id"], mint_accs[1].pubkey.to_string());
+        assert_eq!(response["interface"], "ProgrammableNFT".to_string());
 
         env.teardown().await;
     }
