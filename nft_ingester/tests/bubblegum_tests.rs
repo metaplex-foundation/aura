@@ -2,6 +2,7 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use entities::api_req_params::{GetAsset, GetAssetProof};
+    use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
