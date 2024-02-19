@@ -8,7 +8,6 @@ use tracing::info;
 
 const CI_ITEMS_DELETE_BATCH_SIZE: usize = 1000;
 const SLOT_CHECK_OFFSET: u64 = 1000;
-const ROCKS_COMPONENT: &str = "rocks_db";
 
 pub struct ForkCleaner<CM, FC>
 where
@@ -38,27 +37,13 @@ where
     }
 
     pub async fn clean_forks(&self, rx: Receiver<()>) {
-        let start_time = chrono::Utc::now();
         let last_slot_for_check = self
             .fork_checker
-            .last_slot_for_check()
+            .last_slot_for_check(self.metrics.red_metrics.clone())
             .saturating_sub(SLOT_CHECK_OFFSET);
-        self.metrics.red_metrics.observe_request(
-            ROCKS_COMPONENT,
-            "last_slot_for_check",
-            "raw_blocks_cbor",
-            start_time,
-        );
-
-        let start_time = chrono::Utc::now();
-        let all_non_forked_slots = self.fork_checker.get_all_non_forked_slots();
-        self.metrics.red_metrics.observe_request(
-            ROCKS_COMPONENT,
-            "get_all_non_forked_slots",
-            "raw_blocks_cbor",
-            start_time,
-        );
-
+        let all_non_forked_slots = self
+            .fork_checker
+            .get_all_non_forked_slots(self.metrics.red_metrics.clone());
         let mut forked_slots = HashSet::new();
         let mut delete_items = Vec::new();
         for cl_item in self.cl_items_manager.items_iter() {
@@ -89,15 +74,11 @@ where
 
     async fn delete_items(&self, delete_items: &mut Vec<ForkedItem>) {
         self.metrics.inc_by_deleted_items(delete_items.len() as u64);
-        let start_time = chrono::Utc::now();
         self.cl_items_manager
-            .delete_items(std::mem::take(delete_items))
+            .delete_items(
+                std::mem::take(delete_items),
+                self.metrics.red_metrics.clone(),
+            )
             .await;
-        self.metrics.red_metrics.observe_request(
-            ROCKS_COMPONENT,
-            "delete_items",
-            "cl_items",
-            start_time,
-        );
     }
 }

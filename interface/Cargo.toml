@@ -17,3 +17,4 @@ plerkle_serialization = "1.5.2"
 solana-transaction-status = "~1.16"
 solana-storage-bigtable = "~1.16"
 solana-program = "~1.16"
+metrics-utils = { path = "../metrics_utils" }
