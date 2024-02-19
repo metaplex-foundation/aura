@@ -414,6 +414,23 @@ where
             .await
             .map_err(|e| StorageError::Common(e.to_string()))?
     }
+
+    pub async fn has_key(&self, key: C::KeyType) -> Result<bool> {
+        let db = self.backend.clone();
+        tokio::task::spawn_blocking(move || Self::sync_has_key(db, key))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?
+    }
+
+    pub(crate) fn sync_has_key(db: Arc<DB>, key: C::KeyType) -> crate::Result<bool> {
+        let cf = &db.cf_handle(C::NAME).unwrap();
+        let encoded_key = C::encode_key(key);
+        if !db.key_may_exist_cf(cf, &encoded_key) {
+            return Ok(false);
+        }
+        let res = db.get_cf(cf, &encoded_key)?;
+        Ok(res.is_some())
+    }
 }
 
 pub mod columns {

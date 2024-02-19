@@ -218,6 +218,7 @@ mod tests {
         }
         // test a request with a creator verified field, considering the value was randomly generated in the dynamic data
         {
+            let limit = 20;
             let payload = SearchAssets {
                 limit: Some(limit),
                 creator_verified: Some(true),

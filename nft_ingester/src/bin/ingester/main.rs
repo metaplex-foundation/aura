@@ -6,7 +6,6 @@ use clap::Parser;
 use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info, warn};
-use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::{backfiller, config, transaction_ingester};
 use rocks_db::bubblegum_slots::{
     BubblegumSlotGetter, ForceReingestableSlotGetter, IngestableSlotGetter,
@@ -18,11 +17,7 @@ use tokio::time::Instant;
 use backfill_rpc::rpc::BackfillRPC;
 use interface::signature_persistence::ProcessingDataGetter;
 use metrics_utils::utils::start_metrics;
-use metrics_utils::{
-    ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
-    JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig,
-    SequenceConsistentGapfillMetricsConfig, SynchronizerMetricsConfig,
-};
+use metrics_utils::{BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait};
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
@@ -48,6 +43,7 @@ use tonic::transport::Server;
 use nft_ingester::backfiller::{
     connect_new_bigtable_from_config, DirectBlockParser, TransactionsParser,
 };
+use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::slots_collector::SlotsCollector;
 
@@ -77,17 +73,7 @@ pub async fn main() -> Result<(), IngesterError> {
         );
     }
 
-    let mut metrics_state = MetricState::new(
-        IngesterMetricsConfig::new(),
-        ApiMetricsConfig::new(),
-        JsonDownloaderMetricsConfig::new(),
-        BackfillerMetricsConfig::new(),
-        RpcBackfillerMetricsConfig::new(),
-        SynchronizerMetricsConfig::new(),
-        JsonMigratorMetricsConfig::new(),
-        SequenceConsistentGapfillMetricsConfig::new(),
-        RequestErrorDurationMetrics::new(),
-    );
+    let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
 
     // try to restore rocksDB first
@@ -648,6 +634,33 @@ pub async fn main() -> Result<(), IngesterError> {
             info!("Force slot persister finished working");
         }));
     }
+
+    let fork_cleaner = ForkCleaner::new(
+        rocks_storage.clone(),
+        rocks_storage.clone(),
+        metrics_state.fork_cleaner_metrics.clone(),
+    );
+    let mut rx = shutdown_rx.resubscribe();
+    let metrics = metrics_state.fork_cleaner_metrics.clone();
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        info!("Start cleaning forks...");
+        loop {
+            let start = Instant::now();
+            fork_cleaner
+                .clean_forks(rx.resubscribe())
+                .await;
+            metrics.set_scans_latency(start.elapsed().as_secs_f64());
+            metrics.inc_total_scans();
+            tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_secs(config.sequence_consistent_checker_wait_period_sec)) => {},
+                    _ = rx.recv() => {
+                        info!("Received stop signal, stopping cleaning forks");
+                        return;
+                    }
+                };
+        }
+    }));
+
     start_metrics(
         metrics_state.registry,
         config.get_metrics_port(config.consumer_number)?,

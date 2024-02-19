@@ -3,13 +3,8 @@ use std::sync::Arc;
 
 use entities::enums::TaskStatus;
 use log::{error, info};
-use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
-use metrics_utils::{
-    ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
-    JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig,
-    SequenceConsistentGapfillMetricsConfig, SynchronizerMetricsConfig,
-};
+use metrics_utils::{JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait};
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::{JoinError, JoinSet};
 
@@ -33,17 +28,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let database_pool = DBClient::new(&config.database_config.clone()).await?;
     let pg_client = Arc::new(database_pool);
 
-    let mut metrics_state = MetricState::new(
-        IngesterMetricsConfig::new(),
-        ApiMetricsConfig::new(),
-        JsonDownloaderMetricsConfig::new(),
-        BackfillerMetricsConfig::new(),
-        RpcBackfillerMetricsConfig::new(),
-        SynchronizerMetricsConfig::new(),
-        JsonMigratorMetricsConfig::new(),
-        SequenceConsistentGapfillMetricsConfig::new(),
-        RequestErrorDurationMetrics::new(),
-    );
+    let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
     start_metrics(metrics_state.registry, Some(config.metrics_port)).await;
 
