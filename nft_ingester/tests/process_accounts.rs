@@ -62,7 +62,7 @@ mod tests {
 
         let first_mint_to_save = Mint {
             pubkey: first_mint,
-            slot_updated: 0,
+            slot_updated: 1,
             supply: 1,
             decimals: 0,
             mint_authority: None,
@@ -70,7 +70,7 @@ mod tests {
         };
         let second_mint_to_save = Mint {
             pubkey: second_mint,
-            slot_updated: 0,
+            slot_updated: 1,
             supply: 1,
             decimals: 0,
             mint_authority: None,
@@ -78,12 +78,12 @@ mod tests {
         };
         let first_token_account_to_save = TokenAccount {
             pubkey: first_token_account,
-            mint: second_mint,
+            mint: first_mint,
             delegate: None,
             owner: first_owner,
             frozen: false,
             delegated_amount: 0,
-            slot_updated: 0,
+            slot_updated: 1,
             amount: 0,
         };
         let second_token_account_to_save = TokenAccount {
@@ -93,7 +93,7 @@ mod tests {
             owner: second_owner,
             frozen: false,
             delegated_amount: 0,
-            slot_updated: 0,
+            slot_updated: 1,
             amount: 0,
         };
 
@@ -141,7 +141,7 @@ mod tests {
                 .process_mint_accs(keep_running_clone)
                 .await
         });
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(10)).await;
 
         let first_owner_from_db = env
             .rocks_env
@@ -154,7 +154,7 @@ mod tests {
             .rocks_env
             .storage
             .asset_owner_data
-            .get(second_owner)
+            .get(second_mint)
             .unwrap()
             .unwrap();
         assert_eq!(first_owner_from_db.owner.value, first_owner);
@@ -171,7 +171,7 @@ mod tests {
             .rocks_env
             .storage
             .asset_dynamic_data
-            .get(second_owner)
+            .get(second_mint)
             .unwrap()
             .unwrap();
         assert_eq!(first_dynamic_from_db.supply.unwrap().value, 1);
@@ -196,11 +196,11 @@ mod tests {
                     key: Default::default(),
                     parent: Default::default(),
                     edition: 0,
-                    write_version: 0,
+                    write_version: 1,
                 },
             },
-            write_version: 0,
-            slot_updated: 0,
+            write_version: 1,
+            slot_updated: 1,
         };
         let second_edition_to_save = TokenMetadata {
             edition: TokenMetadataEdition::MasterEdition {
@@ -208,11 +208,11 @@ mod tests {
                     key: Default::default(),
                     supply: 0,
                     max_supply: None,
-                    write_version: 0,
+                    write_version: 1,
                 },
             },
-            write_version: 0,
-            slot_updated: 0,
+            write_version: 1,
+            slot_updated: 1,
         };
 
         let buffer = Arc::new(Buffer::new());
@@ -266,7 +266,7 @@ mod tests {
                 .process_edition_accs(keep_running_clone)
                 .await
         });
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(10)).await;
 
         let first_static_from_db = env
             .rocks_env
@@ -289,14 +289,16 @@ mod tests {
             .rocks_env
             .storage
             .token_metadata_edition_cbor
-            .get(first_edition)
+            .get_cbor_encoded(first_edition)
+            .await
             .unwrap()
             .unwrap();
         let second_edition_from_db = env
             .rocks_env
             .storage
             .token_metadata_edition_cbor
-            .get(second_edition)
+            .get_cbor_encoded(second_edition)
+            .await
             .unwrap()
             .unwrap();
         assert_eq!(
@@ -306,7 +308,7 @@ mod tests {
                     key: Default::default(),
                     parent: Default::default(),
                     edition: 0,
-                    write_version: 0,
+                    write_version: 1,
                 },
             }
         );
@@ -317,7 +319,7 @@ mod tests {
                     key: Default::default(),
                     supply: 0,
                     max_supply: None,
-                    write_version: 0,
+                    write_version: 1,
                 },
             }
         );

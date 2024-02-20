@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use tracing::error;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum TokenMetadataEdition {
     EditionV1(EditionV1),
     MasterEdition(MasterEdition),

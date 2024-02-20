@@ -1,6 +1,7 @@
 use crate::buffer::Buffer;
 use crate::mplx_updates_processor::result_to_metrics;
 use crate::process_accounts;
+use entities::enums::OwnerType;
 use entities::models::Updated;
 use futures::future;
 use log::error;
@@ -56,7 +57,7 @@ impl TokenAccsProcessor {
             self,
             keep_running,
             self.buffer.mints,
-            self.batch_size / 5,
+            self.batch_size,
             |s: Mint| s,
             self.last_received_mint_at,
             Self::transform_and_save_mint_accs,
@@ -167,10 +168,10 @@ impl TokenAccsProcessor {
     }
 
     pub async fn transform_and_save_mint_accs(&self, mint_accs_to_save: &HashMap<Vec<u8>, Mint>) {
-        let save_values = mint_accs_to_save.clone().into_values().fold(
-            HashMap::new(),
-            |mut acc: HashMap<_, _>, mint| {
-                acc.insert(
+        let dynamic_and_asset_owner_details = mint_accs_to_save.clone().into_values().fold(
+            DynamicAndAssetOwnerDetails::default(),
+            |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, mint| {
+                accumulated_asset_info.asset_dynamic_details.insert(
                     mint.pubkey,
                     AssetDynamicDetails {
                         pubkey: mint.pubkey,
@@ -187,12 +188,35 @@ impl TokenAccsProcessor {
                         ..Default::default()
                     },
                 );
-                acc
+
+                let owner_type_value = if mint.supply > 1 {
+                    OwnerType::Token
+                } else {
+                    OwnerType::Single
+                };
+
+                accumulated_asset_info.asset_owner_details.insert(
+                    mint.pubkey,
+                    AssetOwner {
+                        pubkey: mint.pubkey,
+                        owner_type: Updated::new(mint.slot_updated as u64, None, owner_type_value),
+                        ..Default::default()
+                    },
+                );
+
+                accumulated_asset_info
             },
         );
 
         self.finalize_processing(
-            self.rocks_db.asset_dynamic_data.merge_batch(save_values),
+            future::try_join(
+                self.rocks_db
+                    .asset_dynamic_data
+                    .merge_batch(dynamic_and_asset_owner_details.asset_dynamic_details),
+                self.rocks_db
+                    .asset_owner_data
+                    .merge_batch(dynamic_and_asset_owner_details.asset_owner_details),
+            ),
             mint_accs_to_save
                 .values()
                 .map(|a| (a.slot_updated as u64, a.pubkey))
