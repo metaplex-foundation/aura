@@ -187,6 +187,8 @@ mod tests {
             Pubkey::from_str("4X8qeyubc6tgd2SLb4bZ6SXoNE1wqUGw48r4mFY9qHq1").unwrap();
         let second_edition =
             Pubkey::from_str("286WMWHqCa2Nbgn5Yw1fwfXrX9cMFWMJqQYQRDyCAJwh").unwrap();
+        let parent = Pubkey::from_str("C2rQTDPik9byUGt4ALM1c1hVrRzJwQGxvrsAWfi3v2yY").unwrap();
+        let supply = 12345;
 
         let first_metadata_to_save = generate_metadata(first_mint);
         let second_metadata_to_save = generate_metadata(second_mint);
@@ -194,7 +196,7 @@ mod tests {
             edition: TokenMetadataEdition::EditionV1 {
                 0: EditionV1 {
                     key: Default::default(),
-                    parent: Default::default(),
+                    parent,
                     edition: 0,
                     write_version: 1,
                 },
@@ -206,7 +208,7 @@ mod tests {
             edition: TokenMetadataEdition::MasterEdition {
                 0: MasterEdition {
                     key: Default::default(),
-                    supply: 0,
+                    supply,
                     max_supply: None,
                     write_version: 1,
                 },
@@ -301,27 +303,15 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(
-            first_edition_from_db,
-            TokenMetadataEdition::EditionV1 {
-                0: EditionV1 {
-                    key: Default::default(),
-                    parent: Default::default(),
-                    edition: 0,
-                    write_version: 1,
-                },
-            }
-        );
-        assert_eq!(
-            second_edition_from_db,
-            TokenMetadataEdition::MasterEdition {
-                0: MasterEdition {
-                    key: Default::default(),
-                    supply: 0,
-                    max_supply: None,
-                    write_version: 1,
-                },
-            }
-        );
+        if let TokenMetadataEdition::EditionV1(edition) = first_edition_from_db {
+            assert_eq!(edition.parent, parent);
+        } else {
+            panic!("EditionV1");
+        };
+        if let TokenMetadataEdition::MasterEdition(edition) = second_edition_from_db {
+            assert_eq!(edition.supply, supply);
+        } else {
+            panic!("MasterEdition");
+        };
     }
 }

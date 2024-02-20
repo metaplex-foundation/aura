@@ -205,7 +205,7 @@ pub struct EditionData {
     pub edition_number: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MasterEdition {
     pub key: Pubkey,
     pub supply: u64,
@@ -213,7 +213,7 @@ pub struct MasterEdition {
     pub write_version: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EditionV1 {
     pub key: Pubkey,
     pub parent: Pubkey,
