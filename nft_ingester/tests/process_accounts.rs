@@ -11,7 +11,6 @@ mod tests {
     use rocks_db::columns::{Mint, TokenAccount};
     use rocks_db::editions::TokenMetadataEdition;
     use solana_program::pubkey::Pubkey;
-    use std::str::FromStr;
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
     use std::time::Duration;
@@ -50,15 +49,12 @@ mod tests {
     #[cfg(test)]
     #[tokio::test]
     async fn token_update_process() {
-        let first_mint = Pubkey::from_str("5zYdh7eB538fv5Xnjbqg2rZfapY993vwwNYUoP59uz61").unwrap();
-        let second_mint = Pubkey::from_str("94ZDcq2epe5QqG1egicMXVYmsGkZKBYRmxTH5g4eZxVe").unwrap();
-        let first_token_account =
-            Pubkey::from_str("4X8qeyubc6tgd2SLb4bZ6SXoNE1wqUGw48r4mFY9qHq1").unwrap();
-        let second_token_account =
-            Pubkey::from_str("286WMWHqCa2Nbgn5Yw1fwfXrX9cMFWMJqQYQRDyCAJwh").unwrap();
-        let first_owner = Pubkey::from_str("3JFC4cB56Er45nWVe29Bhnn5GnwQzSmHVf6eUq9ac91h").unwrap();
-        let second_owner =
-            Pubkey::from_str("C2rQTDPik9byUGt4ALM1c1hVrRzJwQGxvrsAWfi3v2yY").unwrap();
+        let first_mint = Pubkey::new_unique();
+        let second_mint = Pubkey::new_unique();
+        let first_token_account = Pubkey::new_unique();
+        let second_token_account = Pubkey::new_unique();
+        let first_owner = Pubkey::new_unique();
+        let second_owner = Pubkey::new_unique();
 
         let first_mint_to_save = Mint {
             pubkey: first_mint,
@@ -181,13 +177,11 @@ mod tests {
     #[cfg(test)]
     #[tokio::test]
     async fn mplx_update_process() {
-        let first_mint = Pubkey::from_str("5zYdh7eB538fv5Xnjbqg2rZfapY993vwwNYUoP59uz61").unwrap();
-        let second_mint = Pubkey::from_str("94ZDcq2epe5QqG1egicMXVYmsGkZKBYRmxTH5g4eZxVe").unwrap();
-        let first_edition =
-            Pubkey::from_str("4X8qeyubc6tgd2SLb4bZ6SXoNE1wqUGw48r4mFY9qHq1").unwrap();
-        let second_edition =
-            Pubkey::from_str("286WMWHqCa2Nbgn5Yw1fwfXrX9cMFWMJqQYQRDyCAJwh").unwrap();
-        let parent = Pubkey::from_str("C2rQTDPik9byUGt4ALM1c1hVrRzJwQGxvrsAWfi3v2yY").unwrap();
+        let first_mint = Pubkey::new_unique();
+        let second_mint = Pubkey::new_unique();
+        let first_edition = Pubkey::new_unique();
+        let second_edition = Pubkey::new_unique();
+        let parent = Pubkey::new_unique();
         let supply = 12345;
 
         let first_metadata_to_save = generate_metadata(first_mint);
@@ -306,12 +300,12 @@ mod tests {
         if let TokenMetadataEdition::EditionV1(edition) = first_edition_from_db {
             assert_eq!(edition.parent, parent);
         } else {
-            panic!("EditionV1");
+            panic!("expected EditionV1 enum variant");
         };
         if let TokenMetadataEdition::MasterEdition(edition) = second_edition_from_db {
             assert_eq!(edition.supply, supply);
         } else {
-            panic!("MasterEdition");
+            panic!("expected MasterEdition enum variant");
         };
     }
 }

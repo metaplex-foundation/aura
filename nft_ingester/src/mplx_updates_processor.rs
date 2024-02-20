@@ -88,7 +88,7 @@ macro_rules! process_accounts {
         #[allow(clippy::redundant_closure_call)]
         while $keep_running.load(std::sync::atomic::Ordering::SeqCst) {
             let buffer_len = $buffer.lock().await.len();
-            if buffer_len >= $batch_size {
+            if buffer_len < $batch_size {
                 if buffer_len == 0
                     || $last_received_at.is_some_and(|t| {
                         t.elapsed().is_ok_and(|e| e.as_secs() < FLUSH_INTERVAL_SEC)
