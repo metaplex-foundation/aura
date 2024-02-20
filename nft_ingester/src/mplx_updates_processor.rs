@@ -479,7 +479,7 @@ impl MplxAccsProcessor {
         metadatas: Vec<BurntMetadata>,
     ) -> Result<(), StorageError> {
         let metadata_slot_burnt: HashMap<Pubkey, u64> =
-            metadatas.iter().map(|v| (v.key, v.slot).clone()).collect();
+            metadatas.iter().map(|v| (v.key, v.slot)).collect();
 
         let mtd_mint_map: Vec<MetadataMintMap> = self
             .rocks_db
@@ -487,7 +487,7 @@ impl MplxAccsProcessor {
             .batch_get(metadata_slot_burnt.keys().cloned().collect())
             .await?
             .into_iter()
-            .filter_map(|v| v)
+            .flatten()
             .collect();
 
         let asset_dynamic_details: Vec<AssetDynamicDetails> = mtd_mint_map
