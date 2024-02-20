@@ -86,16 +86,23 @@ where
             return Ok(());
         }
         let metadata_keys = self.index_storage.get_existing_metadata_keys().await?;
+        tracing::debug!(
+            "Prepared the existing {} metadata keys to skip those from dump",
+            metadata_keys.len()
+        );
         let path = std::path::Path::new(self.dump_path.as_str());
+        tracing::info!("Dumping the primary storage to {}", self.dump_path);
         self.primary_storage
             .dump_db(path, metadata_keys, self.dump_synchronizer_batch_size, rx)
             .await?;
+        tracing::info!("Dump is complete. Loading the dump into the index storage");
         let last_included_rocks_key = last_key
             .map(|(seq, slot, pubkey)| encode_u64x2_pubkey(seq, slot, pubkey))
             .unwrap();
         self.index_storage
             .load_from_dump(path, last_included_rocks_key.as_slice())
             .await?;
+        tracing::info!("Dump is loaded into the index storage");
         Ok(())
     }
 
@@ -267,7 +274,6 @@ mod tests {
             1000,
             200_000,
             "".to_string(),
-            // 1000,
             metrics_state.synchronizer_metrics.clone(),
         );
         let keep_running = Arc::new(AtomicBool::new(true));
@@ -340,7 +346,6 @@ mod tests {
             1000,
             200_000,
             "".to_string(),
-            // 1000,
             metrics_state.synchronizer_metrics.clone(),
         );
         let keep_running = Arc::new(AtomicBool::new(true));
@@ -423,7 +428,6 @@ mod tests {
             1,
             200_000,
             "".to_string(),
-            // 1000,
             metrics_state.synchronizer_metrics.clone(),
         ); // Small batch size
         let keep_running = Arc::new(AtomicBool::new(true));
@@ -545,7 +549,6 @@ mod tests {
             2,
             200_000,
             "".to_string(),
-            // 1000,
             metrics_state.synchronizer_metrics.clone(),
         );
         let keep_running = Arc::new(AtomicBool::new(true));
@@ -603,7 +606,6 @@ mod tests {
             1000,
             200_000,
             "".to_string(),
-            // 1000,
             metrics_state.synchronizer_metrics.clone(),
         );
         let keep_running = Arc::new(AtomicBool::new(true));

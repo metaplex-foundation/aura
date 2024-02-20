@@ -139,6 +139,8 @@ pub struct IngesterConfig {
     pub dump_synchronizer_batch_size: usize,
     #[serde(default = "default_dump_path")]
     pub dump_path: String,
+    #[serde(default)]
+    pub run_dump_synchronize_on_start: bool,
     pub gapfiller_peer_addr: String,
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
