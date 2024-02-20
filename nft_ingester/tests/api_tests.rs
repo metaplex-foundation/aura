@@ -1,7 +1,13 @@
 #[cfg(test)]
-// #[cfg(feature = "integration_tests")]
+#[cfg(feature = "integration_tests")]
 mod tests {
-    use std::{collections::HashMap, sync::{atomic::{AtomicBool, Ordering}, Arc}};
+    use std::{
+        collections::HashMap,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+    };
 
     use blockbuster::token_metadata::state::{
         Data, Key, Metadata, TokenStandard as BLKTokenStandard,
@@ -773,11 +779,14 @@ mod tests {
             metadata: "{\"msg\": \"hallo\"}".to_string(),
         };
 
-        let (metadata_key, _) = Pubkey::find_program_address(&[
-            "metadata".as_ref(),
-            blockbuster::programs::token_metadata::token_metadata_id().as_ref(),
-            mint_key.as_ref(),
-        ], &blockbuster::programs::token_metadata::token_metadata_id());
+        let (metadata_key, _) = Pubkey::find_program_address(
+            &[
+                "metadata".as_ref(),
+                blockbuster::programs::token_metadata::token_metadata_id().as_ref(),
+                mint_key.as_ref(),
+            ],
+            &blockbuster::programs::token_metadata::token_metadata_id(),
+        );
 
         let mut mtd_buff = buffer.mplx_metadata_info.lock().await;
 
@@ -791,7 +800,9 @@ mod tests {
 
         let cloned_keep_running = keep_running.clone();
         tokio::spawn(async move {
-            mplx_updates_processor.process_metadata_accs(cloned_keep_running).await;
+            mplx_updates_processor
+                .process_metadata_accs(cloned_keep_running)
+                .await;
         });
 
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
