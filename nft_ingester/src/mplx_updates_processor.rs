@@ -171,7 +171,7 @@ impl MplxAccsProcessor {
         );
     }
 
-    async fn transform_and_store_metadata_accs(
+    pub async fn transform_and_store_metadata_accs(
         &self,
         metadata_info: &HashMap<Vec<u8>, MetadataInfo>,
     ) {

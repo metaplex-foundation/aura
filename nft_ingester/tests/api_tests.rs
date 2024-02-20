@@ -612,7 +612,7 @@ mod tests {
                 collection_details: None,
                 programmable_config: None,
             },
-            slot: 1,
+            slot_updated: 1,
             write_version: 1,
             lamports: 1,
             executable: false,
@@ -640,7 +640,7 @@ mod tests {
             .await;
 
         mplx_updates_processor
-            .transform_and_save_metadata(&metadata_info)
+            .transform_and_store_metadata_accs(&metadata_info)
             .await;
 
         let payload = GetAsset {
