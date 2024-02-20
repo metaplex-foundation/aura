@@ -3,9 +3,9 @@ use entities::models::UrlWithStatus;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
-    ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Row, Transaction,
+    ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tracing::log::LevelFilter;
 
 pub mod asset_filter_client;
@@ -73,7 +73,13 @@ impl PgClient {
         });
         query_builder.push(" ON CONFLICT (tsk_metadata_url) DO NOTHING;");
 
-        self.execute_query_with_metrics(transaction, &mut query_builder, BATCH_UPSERT_ACTION, "tasks").await
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            BATCH_UPSERT_ACTION,
+            "tasks",
+        )
+        .await
     }
 
     async fn start_transaction(&self) -> Result<Transaction<'_, Postgres>, String> {
@@ -100,6 +106,20 @@ impl PgClient {
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "commit", start_time);
+        Ok(())
+    }
+    async fn rollback_transaction(
+        &self,
+        transaction: Transaction<'_, Postgres>,
+    ) -> Result<(), String> {
+        let start_time = chrono::Utc::now();
+        transaction.rollback().await.map_err(|e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "rollback");
+            e.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "rollback", start_time);
         Ok(())
     }
 }

@@ -454,21 +454,20 @@ impl PgClient {
         .await
     }
 
-    pub async fn copy_all(
+    pub(crate) async fn copy_all(
         &self,
         matadata_copy_path: String,
         asset_creators_copy_path: String,
         assets_copy_path: String,
+        transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), String> {
-        let mut transaction = self.start_transaction().await?;
-        self.drop_indexes(&mut transaction).await?;
-        self.copy_metadata_from(&mut transaction, matadata_copy_path)
+        self.drop_indexes(transaction).await?;
+        self.copy_metadata_from(transaction, matadata_copy_path)
             .await?;
-        self.copy_asset_creators_from(&mut transaction, asset_creators_copy_path)
+        self.copy_asset_creators_from(transaction, asset_creators_copy_path)
             .await?;
-        self.copy_assets_from(&mut transaction, assets_copy_path)
-            .await?;
-        self.recreate_indexes(&mut transaction).await?;
-        self.commit_transaction(transaction).await
+        self.copy_assets_from(transaction, assets_copy_path).await?;
+        self.recreate_indexes(transaction).await?;
+        Ok(())
     }
 }

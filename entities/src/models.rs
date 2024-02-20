@@ -207,9 +207,9 @@ pub struct TreeState {
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use super::*;
-    
+
     #[test]
     fn test_url_with_status() {
         let url = "http://example.com".to_string();
@@ -219,7 +219,10 @@ mod tests{
         };
         let metadata_id = url_with_status.get_metadata_id();
         assert_eq!(metadata_id.len(), 32);
-        assert_eq!(hex::encode(metadata_id),"f0e6a6a97042a4f1f1c87f5f7d44315b2d852c2df5c7991cc66241bf7072d1c4");
+        assert_eq!(
+            hex::encode(metadata_id),
+            "f0e6a6a97042a4f1f1c87f5f7d44315b2d852c2df5c7991cc66241bf7072d1c4"
+        );
     }
 
     #[test]
@@ -231,6 +234,9 @@ mod tests{
         };
         let metadata_id = url_with_status.get_metadata_id();
         assert_eq!(metadata_id.len(), 32);
-        assert_eq!(hex::encode(metadata_id),"f0e6a6a97042a4f1f1c87f5f7d44315b2d852c2df5c7991cc66241bf7072d1c4");
+        assert_eq!(
+            hex::encode(metadata_id),
+            "f0e6a6a97042a4f1f1c87f5f7d44315b2d852c2df5c7991cc66241bf7072d1c4"
+        );
     }
 }

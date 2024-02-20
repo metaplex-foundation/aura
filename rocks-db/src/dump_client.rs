@@ -1,5 +1,10 @@
-use crate::{key_encoders::decode_pubkey, storage_traits::AssetIndexReader, Storage};
-use csv::Writer;
+use crate::{
+    key_encoders::decode_pubkey,
+    storage_traits::{AssetIndexReader, Dumper},
+    Storage,
+};
+use async_trait::async_trait;
+use csv::{Writer, WriterBuilder};
 use entities::enums::{
     OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
 };
@@ -7,7 +12,7 @@ use hex;
 use inflector::Inflector;
 use serde::{Serialize, Serializer};
 use solana_sdk::pubkey::Pubkey;
-use std::{collections::HashSet, io::Write};
+use std::{collections::HashSet, fs::File, io::Write};
 
 fn serialize_as_snake_case<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -67,12 +72,12 @@ impl Storage {
         creators_writer: &mut Writer<W>,
         assets_writer: &mut Writer<W>,
         batch_size: usize,
+        mut metadata_key_set: HashSet<Vec<u8>>,
         rx: tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), String> {
         let iter = self.asset_static_data.iter_start();
         // collect batch of keys
         let mut batch = Vec::with_capacity(batch_size);
-        let mut metadata_key_set = HashSet::new();
         for k in iter
             .filter_map(|k| k.ok())
             .filter_map(|(key, _)| decode_pubkey(key.to_vec()).ok())
@@ -90,7 +95,7 @@ impl Storage {
                 batch.clear();
             }
             if !rx.is_empty() {
-                break;
+                return Err("dump cancelled".to_string());
             }
         }
         if !batch.is_empty() {
@@ -165,11 +170,64 @@ impl Storage {
                 ast_slot_updated: index.slot_updated,
             };
             assets_writer.serialize(record).map_err(|e| e.to_string())?;
-            // metadata_writer.serialize(asset)?;
-            // creators_writer.serialize(asset)?;
-            // assets_writer.serialize(asset)?;
         }
 
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Dumper for Storage {
+    async fn dump_db(
+        &self,
+        base_path: &std::path::Path,
+        metadata_key_set: HashSet<Vec<u8>>,
+        batch_size: usize,
+        rx: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<(), String> {
+        let metadata_path = base_path.join("metadata.csv").to_str().map(str::to_owned);
+        if metadata_path.is_none() {
+            return Err("invalid path".to_string());
+        }
+        let creators_path = base_path.join("creators.csv").to_str().map(str::to_owned);
+        if creators_path.is_none() {
+            return Err("invalid path".to_string());
+        }
+        let assets_path = base_path.join("assets.csv").to_str().map(str::to_owned);
+        if assets_path.is_none() {
+            return Err("invalid path".to_string());
+        }
+        tracing::info!(
+            "Dumping to metadata: {:?}, creators: {:?}, assets: {:?}",
+            metadata_path,
+            creators_path,
+            assets_path
+        );
+        let metadata_file = File::create(metadata_path.unwrap()).unwrap();
+        let assets_file = File::create(assets_path.unwrap()).unwrap();
+        let creators_file = File::create(creators_path.unwrap()).unwrap();
+        let mut metadata_writer = WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(metadata_file);
+        let mut assets_writer = WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(assets_file);
+        let mut creators_writer = WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(creators_file);
+
+        self.dump_csv(
+            &mut metadata_writer,
+            &mut creators_writer,
+            &mut assets_writer,
+            batch_size,
+            metadata_key_set,
+            rx,
+        )
+        .await?;
+        metadata_writer.flush().map_err(|e| e.to_string())?;
+        creators_writer.flush().map_err(|e| e.to_string())?;
+        assets_writer.flush().map_err(|e| e.to_string())?;
         Ok(())
     }
 }

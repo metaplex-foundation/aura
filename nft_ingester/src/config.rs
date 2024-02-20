@@ -135,6 +135,10 @@ pub struct IngesterConfig {
     pub rocks_backup_dir: String,
     pub run_bubblegum_backfiller: bool,
     pub synchronizer_batch_size: usize,
+    #[serde(default = "default_dump_synchronizer_batch_size")]
+    pub dump_synchronizer_batch_size: usize,
+    #[serde(default = "default_dump_path")]
+    pub dump_path: String,
     pub gapfiller_peer_addr: String,
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
@@ -151,6 +155,14 @@ pub struct IngesterConfig {
     pub sequence_consistent_checker_wait_period_sec: u64,
     #[serde(default = "default_sequence_consister_skip_check_slots_offset")]
     pub sequence_consister_skip_check_slots_offset: u64, // TODO: remove in future if there no need in that env
+}
+
+fn default_dump_path() -> String {
+    "/tmp/sync_dump".to_string()
+}
+
+fn default_dump_synchronizer_batch_size() -> usize {
+    200_000
 }
 
 fn default_sequence_consistent_checker_wait_period_sec() -> u64 {

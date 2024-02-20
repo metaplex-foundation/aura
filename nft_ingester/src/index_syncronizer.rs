@@ -20,6 +20,8 @@ where
     primary_storage: Arc<T>,
     index_storage: Arc<U>,
     batch_size: usize,
+    dump_synchronizer_batch_size: usize,
+    dump_path: String,
     metrics: Arc<SynchronizerMetricsConfig>,
 }
 
@@ -32,12 +34,16 @@ where
         primary_storage: Arc<T>,
         index_storage: Arc<U>,
         batch_size: usize,
+        dump_synchronizer_batch_size: usize,
+        dump_path: String,
         metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Self {
         Synchronizer {
             primary_storage,
             index_storage,
             batch_size,
+            dump_synchronizer_batch_size,
+            dump_path,
             metrics,
         }
     }
@@ -67,7 +73,38 @@ where
         }
         self.metrics
             .set_last_synchronized_slot("last_known_updated_seq", last_key.unwrap().0 as i64);
+        self.regular_syncronize(keep_running, last_indexed_key, last_key)
+            .await
+    }
 
+    pub async fn full_syncronize(
+        &self,
+        rx: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<(), IngesterError> {
+        let last_key = self.primary_storage.last_known_asset_updated_key()?;
+        if last_key.is_none() {
+            return Ok(());
+        }
+        let metadata_keys = self.index_storage.get_existing_metadata_keys().await?;
+        let path = std::path::Path::new(self.dump_path.as_str());
+        self.primary_storage
+            .dump_db(path, metadata_keys, self.dump_synchronizer_batch_size, rx)
+            .await?;
+        let last_included_rocks_key = last_key
+            .map(|(seq, slot, pubkey)| encode_u64x2_pubkey(seq, slot, pubkey))
+            .unwrap();
+        self.index_storage
+            .load_from_dump(path, last_included_rocks_key.as_slice())
+            .await?;
+        Ok(())
+    }
+
+    async fn regular_syncronize(
+        &self,
+        keep_running: Arc<AtomicBool>,
+        last_indexed_key: Option<(u64, u64, Pubkey)>,
+        last_key: Option<(u64, u64, Pubkey)>,
+    ) -> Result<(), IngesterError> {
         let mut starting_key = last_indexed_key;
         let mut processed_keys = HashSet::<Pubkey>::new();
         // Loop until no more new keys are returned
@@ -228,6 +265,9 @@ mod tests {
             Arc::new(primary_storage),
             Arc::new(index_storage),
             1000,
+            200_000,
+            "".to_string(),
+            // 1000,
             metrics_state.synchronizer_metrics.clone(),
         );
         let keep_running = Arc::new(AtomicBool::new(true));
@@ -298,6 +338,9 @@ mod tests {
             Arc::new(primary_storage),
             Arc::new(index_storage),
             1000,
+            200_000,
+            "".to_string(),
+            // 1000,
             metrics_state.synchronizer_metrics.clone(),
         );
         let keep_running = Arc::new(AtomicBool::new(true));
@@ -378,6 +421,9 @@ mod tests {
             Arc::new(primary_storage),
             Arc::new(index_storage),
             1,
+            200_000,
+            "".to_string(),
+            // 1000,
             metrics_state.synchronizer_metrics.clone(),
         ); // Small batch size
         let keep_running = Arc::new(AtomicBool::new(true));
@@ -497,6 +543,9 @@ mod tests {
             Arc::new(primary_storage),
             Arc::new(index_storage),
             2,
+            200_000,
+            "".to_string(),
+            // 1000,
             metrics_state.synchronizer_metrics.clone(),
         );
         let keep_running = Arc::new(AtomicBool::new(true));
@@ -552,6 +601,9 @@ mod tests {
             Arc::new(primary_storage),
             Arc::new(index_storage),
             1000,
+            200_000,
+            "".to_string(),
+            // 1000,
             metrics_state.synchronizer_metrics.clone(),
         );
         let keep_running = Arc::new(AtomicBool::new(true));
