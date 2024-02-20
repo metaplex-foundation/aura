@@ -15,6 +15,7 @@ use nft_ingester::init::graceful_stop;
 use nft_ingester::transaction_ingester;
 use prometheus_client::registry::Registry;
 
+use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
 use rocks_db::bubblegum_slots::BubblegumSlotGetter;
@@ -68,7 +69,13 @@ pub async fn main() -> Result<(), IngesterError> {
         .clone()
         .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string());
 
-    let storage = Storage::open(&primary_storage_path, mutexed_tasks.clone()).unwrap();
+    let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    let storage = Storage::open(
+        &primary_storage_path,
+        mutexed_tasks.clone(),
+        red_metrics.clone(),
+    )
+    .unwrap();
 
     let rocks_storage = Arc::new(storage);
 

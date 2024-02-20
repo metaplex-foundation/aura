@@ -17,7 +17,7 @@ use crate::{AssetDynamicDetails, Result, Storage};
 
 /// This column family stores change log items for asset proof construction.
 /// Basically, it stores all nodes of the tree.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ClItem {
     pub cli_node_idx: u64,
     pub cli_tree_key: Pubkey,

@@ -8,6 +8,7 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
     use tempfile::TempDir;
 
+    use metrics_utils::red::RequestErrorDurationMetrics;
     use rocks_db::key_encoders::encode_u64x2_pubkey;
     use rocks_db::storage_traits::AssetUpdateIndexStorage;
     use rocks_db::{AssetDynamicDetails, AssetOwner, Storage};
@@ -21,9 +22,11 @@ mod tests {
     #[test]
     fn test_process_asset_updates_batch_empty_db() {
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
+        let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let storage = Storage::open(
             temp_dir.path().to_str().unwrap(),
             Arc::new(Mutex::new(JoinSet::new())),
+            red_metrics.clone(),
         )
         .expect("Failed to create a database");
 

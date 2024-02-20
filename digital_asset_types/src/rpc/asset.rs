@@ -34,6 +34,8 @@ pub enum Interface {
     Nft,
     #[serde(rename = "FungibleAsset")]
     FungibleAsset,
+    #[serde(rename = "FungibleToken")]
+    FungibleToken,
     #[serde(rename = "Custom")]
     Custom,
     #[serde(rename = "Identity")]
@@ -69,6 +71,8 @@ impl From<(&SpecificationVersions, &SpecificationAssetClass)> for Interface {
             (SpecificationVersions::V1, SpecificationAssetClass::ProgrammableNft) => {
                 Interface::ProgrammableNFT
             }
+            (_, SpecificationAssetClass::FungibleAsset) => Interface::FungibleAsset,
+            (_, SpecificationAssetClass::FungibleToken) => Interface::FungibleToken,
             _ => Interface::Custom,
         }
     }
@@ -370,9 +374,11 @@ pub struct Uses {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Supply {
-    pub print_max_supply: u64,
+    pub print_max_supply: Option<u64>, // None value mean that NFT is printable and has an unlimited supply (https://developers.metaplex.com/token-metadata/print)
     pub print_current_supply: u64,
     pub edition_nonce: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edition_number: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

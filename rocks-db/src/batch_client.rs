@@ -8,6 +8,7 @@ use solana_sdk::pubkey::Pubkey;
 use crate::asset::{AssetCollection, AssetLeaf, AssetsUpdateIdx, SlotAssetIdx};
 use crate::cl_items::{ClItem, ClLeaf};
 use crate::column::TypedColumn;
+use crate::editions::TokenMetadataEdition;
 use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
 use crate::storage_traits::{AssetIndexReader, AssetSlotStorage, AssetUpdateIndexStorage};
@@ -260,6 +261,7 @@ impl Storage {
                 specification_asset_class: data.specification_asset_class,
                 royalty_target_type: data.royalty_target_type,
                 created_at: data.slot_created as i64,
+                edition_address: data.edition_address,
             },
         )?;
 
@@ -285,6 +287,10 @@ impl Storage {
                 creators: data.creators,
                 royalty_amount: data.royalty_amount,
                 url: data.url,
+                chain_mutability: data.chain_mutability,
+                lamports: data.lamports,
+                executable: data.executable,
+                metadata_owner: data.metadata_owner,
             },
         )?;
 
@@ -365,6 +371,20 @@ impl Storage {
                     cli_hash: item.cli_hash.clone(),
                     slot_updated: item.slot_updated,
                 },
+            )?;
+        }
+        if let Some(edition) = data.edition {
+            self.token_metadata_edition_cbor.merge_with_batch_cbor(
+                &mut batch,
+                edition.key,
+                &TokenMetadataEdition::EditionV1(edition),
+            )?;
+        }
+        if let Some(master_edition) = data.master_edition {
+            self.token_metadata_edition_cbor.merge_with_batch_cbor(
+                &mut batch,
+                master_edition.key,
+                &TokenMetadataEdition::MasterEdition(master_edition),
             )?;
         }
         self.write_batch(batch).await?;
