@@ -96,7 +96,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let proof_checker = config.rpc_host.map(|host| {
         Arc::new(MaybeProofChecker::new(
-            RpcClient::new(host),
+            Arc::new(RpcClient::new(host)),
             config.check_proofs_probability,
             config.check_proofs_commitment,
         ))

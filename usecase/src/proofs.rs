@@ -9,20 +9,21 @@ use spl_account_compression::state::{
     merkle_tree_get_size, ConcurrentMerkleTreeHeader, CONCURRENT_MERKLE_TREE_HEADER_SIZE_V1,
 };
 use spl_account_compression::zero_copy::ZeroCopy;
+use std::sync::Arc;
 
 use anchor_lang::prelude::*;
 use interface::error::IntegrityVerificationError;
 
 /// MaybeProofChecker checks the proofs with the configured probability of the check to occur.
 pub struct MaybeProofChecker {
-    rpc_client: RpcClient,
+    rpc_client: Arc<RpcClient>,
     check_probability: f64,
     commitment_level: CommitmentLevel,
 }
 
 impl MaybeProofChecker {
     pub fn new(
-        rpc_client: RpcClient,
+        rpc_client: Arc<RpcClient>,
         check_probability: f64,
         commitment_level: CommitmentLevel,
     ) -> Self {
@@ -42,7 +43,7 @@ impl ProofChecker for MaybeProofChecker {
         initial_proofs: Vec<Pubkey>,
         leaf_index: u32,
         leaf: [u8; 32],
-    ) -> core::result::Result<bool, String> {
+    ) -> core::result::Result<bool, IntegrityVerificationError> {
         if rand::random::<f64>() > self.check_probability {
             return Ok(true);
         }
@@ -56,14 +57,15 @@ impl ProofChecker for MaybeProofChecker {
             )
             .await;
         let tree_acc_info = account_data
-            .map_err(|e| e.to_string())?
+            .map_err(IntegrityVerificationError::Rpc)?
             .value
             .map(|acc| acc.data);
         if tree_acc_info.is_none() {
-            return Err("Tree account not found".to_string());
+            return Err(IntegrityVerificationError::TreeAccountNotFound(
+                tree_id_pk.to_string(),
+            ));
         }
         validate_proofs(tree_acc_info.unwrap(), initial_proofs, leaf_index, leaf)
-            .map_err(|e| e.to_string())
     }
 }
 

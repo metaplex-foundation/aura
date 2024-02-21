@@ -61,6 +61,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                 config.slots_collect_path_container.clone(),
                 config.collect_slots,
                 config.test_retries,
+                config.check_proofs_commitment,
             )
             .await;
             run_tests(
@@ -92,6 +93,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                 config.slots_collect_path_container.clone(),
                 config.collect_slots,
                 config.test_retries,
+                config.check_proofs_commitment,
             )
             .await;
             run_tests(

@@ -32,6 +32,7 @@ solana-client = "~1.16"
 solana-program = "~1.16"
 spl-concurrent-merkle-tree = "0.2.0"
 anchor-lang = "0.29.0"
+solana-sdk = { version = "~1.16" }
 
 [features]
 rpc_tests = []

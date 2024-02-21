@@ -3285,6 +3285,7 @@ dependencies = [
  "serde_json",
  "solana-client",
  "solana-program",
+ "solana-sdk",
  "spl-account-compression 0.3.0",
  "spl-concurrent-merkle-tree",
  "thiserror",

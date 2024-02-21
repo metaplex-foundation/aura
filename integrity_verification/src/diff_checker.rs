@@ -8,18 +8,21 @@ use crate::requests::Body;
 use crate::slots_dumper::FileSlotsDumper;
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
 use interface::error::IntegrityVerificationError;
+use interface::proofs::ProofChecker;
 use metrics_utils::{BackfillerMetricsConfig, IntegrityVerificationMetricsConfig};
 use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
 use regex::Regex;
 use serde_json::{json, Value};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
+use solana_sdk::commitment_config::CommitmentLevel;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
 use usecase::bigtable::BigTableClient;
+use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::SlotsCollector;
 
 pub const GET_ASSET_METHOD: &str = "getAsset";
@@ -55,7 +58,8 @@ where
     keys_fetcher: T,
     metrics: Arc<IntegrityVerificationMetricsConfig>,
     collect_slots_tools: Option<CollectSlotsTools>,
-    rpc_client: RpcClient,
+    rpc_client: Arc<RpcClient>,
+    proof_checker: MaybeProofChecker,
     regexes: Vec<Regex>,
     test_retries: u64,
 }
@@ -75,6 +79,7 @@ where
         slots_collect_path: Option<String>,
         collect_slots_for_proofs: bool,
         test_retries: u64,
+        commitment_level: CommitmentLevel,
     ) -> Self {
         // Regular expressions, that purposed to filter out some difference between
         // testing and reference hosts that we already know about
@@ -109,9 +114,10 @@ where
                 metrics: slot_collect_metrics,
             })
         }
-
+        let rpc_client = Arc::new(RpcClient::new(reference_host.clone()));
+        let proof_checker = MaybeProofChecker::new(rpc_client.clone(), 1.0, commitment_level);
         Self {
-            rpc_client: RpcClient::new(reference_host.clone()),
+            rpc_client,
             reference_host,
             testing_host,
             api: IntegrityVerificationApi::new(),
@@ -120,6 +126,7 @@ where
             collect_slots_tools,
             regexes,
             test_retries,
+            proof_checker,
         }
     }
 }
@@ -471,19 +478,19 @@ where
             json!(generate_get_asset_params(asset_id.to_string()))
         ))
         .to_string();
-        let get_asset_fut = self.api.make_request(&self.reference_host, &get_asset_req);
-        let tree_id_pk = Pubkey::from_str(tree_id)?;
-        let get_account_data_fut = self.rpc_client.get_account_data(&tree_id_pk);
-        let (get_asset, account_data) = tokio::join!(get_asset_fut, get_account_data_fut);
-        let get_asset = get_asset?;
+        let get_asset = self
+            .api
+            .make_request(&self.reference_host, &get_asset_req)
+            .await?;
+        let tree_id_pk: Pubkey = Pubkey::from_str(tree_id)?;
         let leaf_index = get_asset["result"]["compression"]["leaf_id"]
             .as_u64()
             .ok_or(IntegrityVerificationError::CannotGetResponseField(
                 "leaf_id".to_string(),
             ))? as u32;
-        let tree_acc_info = account_data?;
-
-        usecase::proofs::validate_proofs(tree_acc_info, initial_proofs, leaf_index, leaf)
+        self.proof_checker
+            .check_proof(tree_id_pk, initial_proofs, leaf_index, leaf)
+            .await
     }
 }
 
@@ -534,6 +541,7 @@ mod tests {
             Some("./".to_string()),
             true,
             20,
+            CommitmentLevel::Processed,
         )
         .await
     }

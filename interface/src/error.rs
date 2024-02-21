@@ -68,4 +68,6 @@ pub enum IntegrityVerificationError {
     Anchor(#[from] anchor_lang::error::Error),
     #[error("CannotCreateMerkleTree: depth [{0}], size [{1}]")]
     CannotCreateMerkleTree(u32, u32),
+    #[error("TreeAccountNotFound {0}")]
+    TreeAccountNotFound(String),
 }
