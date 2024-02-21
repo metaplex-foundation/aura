@@ -11,6 +11,7 @@ services:
     network_mode: host
     volumes:
       - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
+      - ${INGESTER_SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:${INGESTER_SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:rw
       - ${INGESTER_ROCKS_BACKUP_DIR}:${INGESTER_ROCKS_BACKUP_DIR}:rw
       - ${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:rw
       - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
@@ -76,6 +77,7 @@ services:
       POSTGRES_DB: solana
     volumes:
       - ${POSTGRE_DB_PATH:-./db-data}:/var/lib/postgresql/data/:rw
+      - ${INGESTER_SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:${INGESTER_SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:ro
     logging:
       options:
         max-size: "100m"
