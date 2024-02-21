@@ -60,7 +60,6 @@ impl Default for MetricState {
 
 impl MetricState {
     pub fn new() -> Self {
-        let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         Self {
             ingester_metrics: Arc::new(IngesterMetricsConfig::new()),
             api_metrics: Arc::new(ApiMetricsConfig::new()),
@@ -72,8 +71,8 @@ impl MetricState {
             sequence_consistent_gapfill_metrics: Arc::new(
                 SequenceConsistentGapfillMetricsConfig::new(),
             ),
-            fork_cleaner_metrics: Arc::new(ForkCleanerMetricsConfig::new(red_metrics.clone())),
-            red_metrics,
+            fork_cleaner_metrics: Arc::new(ForkCleanerMetricsConfig::new()),
+            red_metrics: Arc::new(RequestErrorDurationMetrics::new()),
             registry: Registry::default(),
         }
     }
@@ -1043,18 +1042,22 @@ pub struct ForkCleanerMetricsConfig {
     scans_latency: Histogram,
     forks_detected: Gauge,
     deleted_items: Counter,
-    pub red_metrics: Arc<RequestErrorDurationMetrics>,
+}
+
+impl Default for ForkCleanerMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ForkCleanerMetricsConfig {
-    pub fn new(red_metrics: Arc<RequestErrorDurationMetrics>) -> Self {
+    pub fn new() -> Self {
         Self {
             start_time: Default::default(),
             total_scans: Default::default(),
             scans_latency: Histogram::new(exponential_buckets(1.0, 2.0, 12)),
             forks_detected: Default::default(),
             deleted_items: Default::default(),
-            red_metrics,
         }
     }
     pub fn start_time(&self) -> i64 {
