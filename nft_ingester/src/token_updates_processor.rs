@@ -238,11 +238,6 @@ impl TokenAccsProcessor {
                                 None,
                                 mint.supply as u64,
                             )),
-                            seq: Some(Updated::new(
-                                mint.slot_updated as u64,
-                                None,
-                                mint.slot_updated as u64,
-                            )),
                             ..Default::default()
                         },
                     );
