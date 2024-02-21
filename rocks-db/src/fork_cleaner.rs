@@ -8,6 +8,8 @@ use tracing::error;
 const ROCKS_COMPONENT: &str = "rocks_db";
 const DROP_ACTION: &str = "drop";
 const RAW_BLOCKS_CBOR_ENDPOINT: &str = "raw_blocks_cbor";
+const FULL_ITERATION_ACTION: &str = "full_iteration";
+const ITERATOR_TOP_ACTION: &str = "iterator_top";
 
 #[async_trait]
 impl ClItemsManager for Storage {
@@ -56,7 +58,7 @@ impl ForkChecker for Storage {
         }
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
-            "full_iteration",
+            FULL_ITERATION_ACTION,
             RAW_BLOCKS_CBOR_ENDPOINT,
             start_time,
         );
@@ -71,7 +73,7 @@ impl ForkChecker for Storage {
                 Ok(key) => {
                     self.red_metrics.observe_request(
                         ROCKS_COMPONENT,
-                        "iterator_top",
+                        ITERATOR_TOP_ACTION,
                         RAW_BLOCKS_CBOR_ENDPOINT,
                         start_time,
                     );
@@ -84,7 +86,7 @@ impl ForkChecker for Storage {
         }
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
-            "iterator_top",
+            ITERATOR_TOP_ACTION,
             RAW_BLOCKS_CBOR_ENDPOINT,
             start_time,
         );
