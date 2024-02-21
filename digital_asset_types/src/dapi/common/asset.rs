@@ -306,11 +306,28 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         authorities,
         creators,
         groups,
+        edition_data,
     } = asset;
     let rpc_authorities = to_authority(authorities);
     let rpc_creators = to_creators(creators);
     let rpc_groups = to_grouping(groups)?;
     let interface = get_interface(&asset)?;
+
+    let mut owner = asset
+        .owner
+        .clone()
+        .map(|o| bs58::encode(o).into_string())
+        .unwrap_or("".to_string());
+    let mut grouping = Some(rpc_groups);
+
+    match interface {
+        Interface::FungibleAsset | Interface::FungibleToken => {
+            owner = "".to_string();
+            grouping = Some(vec![]);
+        }
+        _ => {}
+    }
+
     let content = get_content(&asset, &data.asset)?;
     let mut chain_data_selector_fn = jsonpath_lib::selector(&data.asset.chain_data);
     let chain_data_selector = &mut chain_data_selector_fn;
@@ -347,7 +364,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
                 .map(|e| e.trim().to_string())
                 .unwrap_or_default(),
         }),
-        grouping: Some(rpc_groups),
+        grouping,
         royalty: Some(Royalty {
             royalty_model: asset.royalty_target_type.into(),
             target: asset.royalty_target.map(|s| bs58::encode(s).into_string()),
@@ -362,16 +379,14 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
             delegated: asset.delegate.is_some(),
             delegate: asset.delegate.map(|s| bs58::encode(s).into_string()),
             ownership_model: asset.owner_type.into(),
-            owner: asset
-                .owner
-                .map(|o| bs58::encode(o).into_string())
-                .unwrap_or("".to_string()),
+            owner,
         },
         supply: match interface {
-            Interface::V1NFT => Some(Supply {
+            Interface::V1NFT => edition_data.map(|e| Supply {
                 edition_nonce,
-                print_current_supply: 0,
-                print_max_supply: 0,
+                print_current_supply: e.supply,
+                print_max_supply: e.max_supply,
+                edition_number: e.edition_number,
             }),
             _ => None,
         },

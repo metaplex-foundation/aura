@@ -103,17 +103,41 @@ where
         Ok(())
     }
 
+    fn merge_with_batch_generic<F>(
+        &self,
+        batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        key: C::KeyType,
+        value: &C::ValueType,
+        serialize_fn: F,
+    ) -> Result<()>
+    where
+        F: Fn(&C::ValueType) -> Result<Vec<u8>>,
+    {
+        let serialized_value = serialize_fn(value)?;
+        batch.merge_cf(&self.handle(), C::encode_key(key), serialized_value);
+        Ok(())
+    }
+
     pub(crate) fn merge_with_batch(
         &self,
         batch: &mut rocksdb::WriteBatchWithTransaction<false>,
         key: C::KeyType,
         value: &C::ValueType,
     ) -> Result<()> {
-        let serialized_value = serialize(value)?;
+        self.merge_with_batch_generic(batch, key, value, |v| {
+            serialize(v).map_err(|e| StorageError::Common(e.to_string()))
+        })
+    }
 
-        batch.merge_cf(&self.handle(), C::encode_key(key), serialized_value);
-
-        Ok(())
+    pub(crate) fn merge_with_batch_cbor(
+        &self,
+        batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        key: C::KeyType,
+        value: &C::ValueType,
+    ) -> Result<()> {
+        self.merge_with_batch_generic(batch, key, value, |v| {
+            serde_cbor::to_vec(v).map_err(|e| StorageError::Common(e.to_string()))
+        })
     }
 
     pub(crate) fn put_with_batch(
@@ -129,18 +153,34 @@ where
         Ok(())
     }
 
-    pub async fn merge_batch(&self, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
+    async fn merge_batch_generic<F>(
+        &self,
+        values: HashMap<C::KeyType, C::ValueType>,
+        serialize_fn: F,
+    ) -> Result<()>
+    where
+        F: Fn(&C::ValueType) -> Result<Vec<u8>> + Copy + Send + 'static,
+    {
         let db = self.backend.clone();
         let values = values.clone();
-        tokio::task::spawn_blocking(move || Self::merge_batch_sync(db, values))
-            .await
-            .map_err(|e| StorageError::Common(e.to_string()))?
+        tokio::task::spawn_blocking(move || {
+            Self::merge_batch_sync_generic(db, values, serialize_fn)
+        })
+        .await
+        .map_err(|e| StorageError::Common(e.to_string()))?
     }
 
-    fn merge_batch_sync(backend: Arc<DB>, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
+    fn merge_batch_sync_generic<F>(
+        backend: Arc<DB>,
+        values: HashMap<C::KeyType, C::ValueType>,
+        serialize_fn: F,
+    ) -> Result<()>
+    where
+        F: Fn(&C::ValueType) -> Result<Vec<u8>>,
+    {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for (k, v) in values.iter() {
-            let serialized_value = serialize(v)?;
+            let serialized_value = serialize_fn(v)?;
             batch.merge_cf(
                 &backend.cf_handle(C::NAME).unwrap(),
                 C::encode_key(k.clone()),
@@ -151,18 +191,46 @@ where
         Ok(())
     }
 
-    pub async fn put_batch(&self, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
+    pub async fn merge_batch(&self, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
+        self.merge_batch_generic(values, |v| {
+            serialize(v).map_err(|e| StorageError::Common(e.to_string()))
+        })
+        .await
+    }
+
+    pub async fn merge_batch_cbor(&self, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
+        self.merge_batch_generic(values, |v| {
+            serde_cbor::to_vec(v).map_err(|e| StorageError::Common(e.to_string()))
+        })
+        .await
+    }
+
+    async fn put_batch_generic<F>(
+        &self,
+        values: HashMap<C::KeyType, C::ValueType>,
+        serialize_fn: F,
+    ) -> Result<()>
+    where
+        F: Fn(&C::ValueType) -> Result<Vec<u8>> + Copy + Send + 'static,
+    {
         let db = self.backend.clone();
         let values = values.clone();
-        tokio::task::spawn_blocking(move || Self::put_batch_sync(db, values))
+        tokio::task::spawn_blocking(move || Self::put_batch_sync_generic(db, values, serialize_fn))
             .await
             .map_err(|e| StorageError::Common(e.to_string()))?
     }
 
-    fn put_batch_sync(backend: Arc<DB>, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
+    fn put_batch_sync_generic<F>(
+        backend: Arc<DB>,
+        values: HashMap<C::KeyType, C::ValueType>,
+        serialize_fn: F,
+    ) -> Result<()>
+    where
+        F: Fn(&C::ValueType) -> Result<Vec<u8>>,
+    {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for (k, v) in values.iter() {
-            let serialized_value = serialize(v)?;
+            let serialized_value = serialize_fn(v)?;
             batch.put_cf(
                 &backend.cf_handle(C::NAME).unwrap(),
                 C::encode_key(k.clone()),
@@ -171,6 +239,20 @@ where
         }
         backend.write(batch)?;
         Ok(())
+    }
+
+    pub async fn put_batch(&self, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
+        self.put_batch_generic(values, |v| {
+            serialize(v).map_err(|e| StorageError::Common(e.to_string()))
+        })
+        .await
+    }
+
+    pub async fn put_batch_cbor(&self, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
+        self.put_batch_generic(values, |v| {
+            serde_cbor::to_vec(v).map_err(|e| StorageError::Common(e.to_string()))
+        })
+        .await
     }
 
     pub async fn get_cbor_encoded(&self, key: C::KeyType) -> Result<Option<C::ValueType>> {
@@ -206,10 +288,29 @@ where
         result
     }
 
-    fn batch_get_sync(
+    async fn batch_get_generic<F>(
+        &self,
+        keys: Vec<C::KeyType>,
+        deserialize_fn: F,
+    ) -> Result<Vec<Option<C::ValueType>>>
+    where
+        F: Fn(&[u8]) -> Result<C::ValueType> + Copy + Send + 'static,
+    {
+        let db = self.backend.clone();
+        let keys = keys.clone();
+        tokio::task::spawn_blocking(move || Self::batch_get_sync_generic(db, keys, deserialize_fn))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?
+    }
+
+    fn batch_get_sync_generic<F>(
         backend: Arc<DB>,
         keys: Vec<C::KeyType>,
-    ) -> Result<Vec<Option<C::ValueType>>> {
+        deserialize_fn: F,
+    ) -> Result<Vec<Option<C::ValueType>>>
+    where
+        F: Fn(&[u8]) -> Result<C::ValueType>,
+    {
         backend
             .batched_multi_get_cf(
                 &backend.cf_handle(C::NAME).unwrap(),
@@ -219,21 +320,25 @@ where
             .into_iter()
             .map(|res| {
                 res.map_err(StorageError::from).and_then(|opt| {
-                    opt.map(|pinned| {
-                        deserialize::<C::ValueType>(pinned.as_ref()).map_err(StorageError::from)
-                    })
-                    .transpose()
+                    opt.map(|pinned| deserialize_fn(pinned.as_ref()))
+                        .transpose()
                 })
             })
             .collect()
     }
 
     pub async fn batch_get(&self, keys: Vec<C::KeyType>) -> Result<Vec<Option<C::ValueType>>> {
-        let db = self.backend.clone();
-        let keys = keys.clone();
-        tokio::task::spawn_blocking(move || Self::batch_get_sync(db, keys))
-            .await
-            .map_err(|e| StorageError::Common(e.to_string()))?
+        self.batch_get_generic(keys, |bytes| {
+            deserialize::<C::ValueType>(bytes).map_err(StorageError::from)
+        })
+        .await
+    }
+
+    pub async fn batch_get_cbor(&self, keys: Vec<C::KeyType>) -> Result<Vec<Option<C::ValueType>>> {
+        self.batch_get_generic(keys, |bytes| {
+            serde_cbor::from_slice(bytes).map_err(|e| StorageError::Common(e.to_string()))
+        })
+        .await
     }
 
     pub fn decode_key(&self, bytes: Vec<u8>) -> Result<C::KeyType> {
@@ -308,6 +413,23 @@ where
         tokio::task::spawn_blocking(move || Self::delete_range_sync(db, from, to))
             .await
             .map_err(|e| StorageError::Common(e.to_string()))?
+    }
+
+    pub async fn has_key(&self, key: C::KeyType) -> Result<bool> {
+        let db = self.backend.clone();
+        tokio::task::spawn_blocking(move || Self::sync_has_key(db, key))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?
+    }
+
+    pub(crate) fn sync_has_key(db: Arc<DB>, key: C::KeyType) -> crate::Result<bool> {
+        let cf = &db.cf_handle(C::NAME).unwrap();
+        let encoded_key = C::encode_key(key);
+        if !db.key_may_exist_cf(cf, &encoded_key) {
+            return Ok(false);
+        }
+        let res = db.get_cf(cf, &encoded_key)?;
+        Ok(res.is_some())
     }
 }
 

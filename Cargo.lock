@@ -5676,6 +5676,7 @@ dependencies = [
  "lz4",
  "metrics-utils",
  "mockall 0.12.1",
+ "mpl-token-metadata 3.2.3",
  "num_cpus",
  "rand 0.8.5",
  "reqwest",

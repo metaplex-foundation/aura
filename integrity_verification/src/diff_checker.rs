@@ -509,28 +509,18 @@ impl CollectSlotsTools {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use crate::diff_checker::DiffChecker;
     use crate::file_keys_fetcher::FileKeysFetcher;
     use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
-    use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::utils::start_metrics;
-    use metrics_utils::{
-        BackfillerMetricsConfig, IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig,
-        MetricsTrait,
-    };
+    use metrics_utils::{IntegrityVerificationMetrics, MetricsTrait};
     use regex::Regex;
     use serde_json::json;
 
     // this function used only inside tests under rpc_tests and bigtable_tests features, that do not running in our CI
     #[allow(dead_code)]
     async fn create_test_diff_checker() -> DiffChecker<FileKeysFetcher> {
-        let mut metrics = IntegrityVerificationMetrics::new(
-            IntegrityVerificationMetricsConfig::new(),
-            BackfillerMetricsConfig::new(),
-            Arc::new(RequestErrorDurationMetrics::new()),
-        );
+        let mut metrics = IntegrityVerificationMetrics::new();
         metrics.register_metrics();
         start_metrics(metrics.registry, Some(6001)).await;
 

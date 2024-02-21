@@ -1,8 +1,9 @@
 use crate::gapfiller::{
-    AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ClItem, ClLeaf, Creator,
-    DynamicBoolField, DynamicBytesField, DynamicCreatorsField, DynamicEnumField,
-    DynamicUint32Field, DynamicUint64Field, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
-    SpecificationVersions, TokenStandard, UseMethod, Uses,
+    AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ChainMutability, ClItem, ClLeaf,
+    Creator, DynamicBoolField, DynamicBytesField, DynamicChainMutability, DynamicCreatorsField,
+    DynamicEnumField, DynamicStringField, DynamicUint32Field, DynamicUint64Field, EditionV1,
+    MasterEdition, OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
+    TokenStandard, UseMethod, Uses,
 };
 use entities::models::{CompleteAssetDetails, Updated};
 use solana_sdk::pubkey::Pubkey;
@@ -29,6 +30,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
                 value.specification_asset_class,
             )
             .into(),
+            edition_address: value.edition_address.map(|e| e.to_bytes().to_vec()),
             royalty_target_type: RoyaltyTargetType::from(value.royalty_target_type).into(),
             slot_created: value.slot_created,
             is_compressible: Some(value.is_compressible.into()),
@@ -45,11 +47,17 @@ impl From<CompleteAssetDetails> for AssetDetails {
             delegate,
             owner_type: Some(value.owner_type.into()),
             owner_delegate_seq,
+            chain_mutability: value.chain_mutability.map(|v| v.into()),
+            lamports: value.lamports.map(|v| v.into()),
+            executable: value.executable.map(|v| v.into()),
+            metadata_owner: value.metadata_owner.map(|v| v.into()),
             asset_leaf: value.asset_leaf.map(|v| v.into()),
             collection: value.collection.map(|v| v.into()),
             chain_data: value.onchain_data.map(|v| v.into()),
             cl_leaf: value.cl_leaf.map(|v| v.into()),
             cl_items: value.cl_items.into_iter().map(ClItem::from).collect(),
+            edition: value.edition.map(|e| e.into()),
+            master_edition: value.master_edition.map(|e| e.into()),
         }
     }
 }
@@ -66,6 +74,16 @@ impl From<Updated<bool>> for DynamicBoolField {
 
 impl From<Updated<u64>> for DynamicUint64Field {
     fn from(value: Updated<u64>) -> Self {
+        Self {
+            value: value.value,
+            slot_updated: value.slot_updated,
+            seq_updated: value.seq,
+        }
+    }
+}
+
+impl From<Updated<String>> for DynamicStringField {
+    fn from(value: Updated<String>) -> Self {
         Self {
             value: value.value,
             slot_updated: value.slot_updated,
@@ -98,6 +116,16 @@ impl From<Updated<entities::enums::OwnerType>> for DynamicEnumField {
     fn from(value: Updated<entities::enums::OwnerType>) -> Self {
         Self {
             value: OwnerType::from(value.value).into(),
+            slot_updated: value.slot_updated,
+            seq_updated: value.seq,
+        }
+    }
+}
+
+impl From<Updated<entities::enums::ChainMutability>> for DynamicChainMutability {
+    fn from(value: Updated<entities::enums::ChainMutability>) -> Self {
+        Self {
+            value: ChainMutability::from(value.value).into(),
             slot_updated: value.slot_updated,
             seq_updated: value.seq,
         }
@@ -202,6 +230,29 @@ impl From<entities::models::Uses> for Uses {
         }
     }
 }
+
+impl From<entities::models::MasterEdition> for MasterEdition {
+    fn from(value: entities::models::MasterEdition) -> Self {
+        Self {
+            key: value.key.to_bytes().to_vec(),
+            supply: value.supply,
+            max_supply: value.max_supply,
+            write_version: value.write_version,
+        }
+    }
+}
+
+impl From<entities::models::EditionV1> for EditionV1 {
+    fn from(value: entities::models::EditionV1) -> Self {
+        Self {
+            key: value.key.to_bytes().to_vec(),
+            parent: value.parent.to_bytes().to_vec(),
+            edition: value.edition,
+            write_version: value.write_version,
+        }
+    }
+}
+
 macro_rules! impl_from_enum {
     ($src:ty, $dst:ident, $($variant:ident),*) => {
         impl From<$src> for $dst {
@@ -269,4 +320,10 @@ impl_from_enum!(
     Burn,
     Multiple,
     Single
+);
+impl_from_enum!(
+    entities::enums::ChainMutability,
+    ChainMutability,
+    Immutable,
+    Mutable
 );

@@ -53,6 +53,7 @@ pub struct CompleteAssetDetails {
     pub specification_asset_class: SpecificationAssetClass,
     pub royalty_target_type: RoyaltyTargetType,
     pub slot_created: u64,
+    pub edition_address: Option<Pubkey>,
 
     // From AssetDynamicDetails as Tuples
     pub is_compressible: Updated<bool>,
@@ -66,6 +67,10 @@ pub struct CompleteAssetDetails {
     pub creators: Updated<Vec<Creator>>,
     pub royalty_amount: Updated<u16>,
     pub url: Updated<String>,
+    pub chain_mutability: Option<Updated<ChainMutability>>,
+    pub lamports: Option<Updated<u64>>,
+    pub executable: Option<Updated<bool>>,
+    pub metadata_owner: Option<Updated<String>>,
 
     // From AssetAuthority as Tuple
     pub authority: Updated<Pubkey>,
@@ -83,6 +88,10 @@ pub struct CompleteAssetDetails {
     // Cl elements
     pub cl_leaf: Option<ClLeaf>,
     pub cl_items: Vec<ClItem>,
+
+    // TokenMetadataEdition
+    pub edition: Option<EditionV1>,
+    pub master_edition: Option<MasterEdition>,
 }
 
 /// Leaf information about compressed asset
@@ -116,14 +125,6 @@ pub struct ChainDataV1 {
     pub token_standard: Option<TokenStandard>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uses: Option<Uses>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub chain_mutability: Option<ChainMutability>, // TODO: move this feild to AssetDynamicDetails struct
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub lamports: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub executable: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata_owner: Option<String>,
 }
 
 impl ChainDataV1 {
@@ -194,4 +195,35 @@ pub struct TreeState {
     pub tree: Pubkey,
     pub seq: u64,
     pub slot: u64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct EditionData {
+    pub key: Pubkey,
+    pub supply: u64,
+    pub max_supply: Option<u64>,
+    pub edition_number: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MasterEdition {
+    pub key: Pubkey,
+    pub supply: u64,
+    pub max_supply: Option<u64>,
+    pub write_version: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct EditionV1 {
+    pub key: Pubkey,
+    pub parent: Pubkey,
+    pub edition: u64,
+    pub write_version: u64,
+}
+
+#[derive(Default)]
+pub struct ForkedItem {
+    pub tree: Pubkey,
+    pub seq: u64,
+    pub node_idx: u64,
 }

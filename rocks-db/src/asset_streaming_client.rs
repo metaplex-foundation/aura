@@ -10,6 +10,7 @@ use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::cl_items::{ClItem, ClLeaf};
+use crate::editions::TokenMetadataEdition;
 use crate::{
     asset::{AssetCollection, AssetLeaf, SlotAssetIdx},
     column::TypedColumn,
@@ -77,7 +78,7 @@ async fn get_complete_asset_details(
     let static_data = Storage::column::<AssetStaticDetails>(backend.clone()).get(pubkey)?;
     let static_data = match static_data {
         None => {
-            return Err(crate::errors::StorageError::Common(
+            return Err(StorageError::Common(
                 "Asset static data not found".to_string(),
             ));
         }
@@ -87,7 +88,7 @@ async fn get_complete_asset_details(
     let dynamic_data = Storage::column::<AssetDynamicDetails>(backend.clone()).get(pubkey)?;
     let dynamic_data = match dynamic_data {
         None => {
-            return Err(crate::errors::StorageError::Common(
+            return Err(StorageError::Common(
                 "Asset dynamic data not found".to_string(),
             ));
         }
@@ -96,7 +97,7 @@ async fn get_complete_asset_details(
     let authority = Storage::column::<AssetAuthority>(backend.clone()).get(pubkey)?;
     let authority = match authority {
         None => {
-            return Err(crate::errors::StorageError::Common(
+            return Err(StorageError::Common(
                 "Asset authority not found".to_string(),
             ));
         }
@@ -105,9 +106,7 @@ async fn get_complete_asset_details(
     let owner = Storage::column::<AssetOwner>(backend.clone()).get(pubkey)?;
     let owner = match owner {
         None => {
-            return Err(crate::errors::StorageError::Common(
-                "Asset owner not found".to_string(),
-            ));
+            return Err(StorageError::Common("Asset owner not found".to_string()));
         }
         Some(owner) => owner,
     };
@@ -147,11 +146,36 @@ async fn get_complete_asset_details(
     .flatten()
     .collect::<Vec<_>>();
 
+    let token_metadata_edition = if let Some(edition_address) = static_data.edition_address {
+        Storage::column::<TokenMetadataEdition>(backend.clone())
+            .get_cbor_encoded(edition_address)
+            .await?
+    } else {
+        None
+    };
+    let (edition, master_edition) = match token_metadata_edition {
+        None => (None, None),
+        Some(TokenMetadataEdition::MasterEdition(master_edition)) => (None, Some(master_edition)),
+        Some(TokenMetadataEdition::EditionV1(edition)) => {
+            let parent = Storage::column::<TokenMetadataEdition>(backend.clone())
+                .get_cbor_encoded(edition.parent)
+                .await?;
+            let master_edition =
+                if let Some(TokenMetadataEdition::MasterEdition(master_edition)) = parent {
+                    Some(master_edition)
+                } else {
+                    None
+                };
+            (Some(edition), master_edition)
+        }
+    };
+
     Ok(CompleteAssetDetails {
         pubkey: static_data.pubkey,
         specification_asset_class: static_data.specification_asset_class,
         royalty_target_type: static_data.royalty_target_type,
         slot_created: static_data.created_at as u64,
+        edition_address: static_data.edition_address,
         is_compressible: dynamic_data.is_compressible,
         is_compressed: dynamic_data.is_compressed,
         is_frozen: dynamic_data.is_frozen,
@@ -163,6 +187,10 @@ async fn get_complete_asset_details(
         creators: dynamic_data.creators,
         royalty_amount: dynamic_data.royalty_amount,
         url: dynamic_data.url,
+        chain_mutability: dynamic_data.chain_mutability,
+        lamports: dynamic_data.lamports,
+        executable: dynamic_data.executable,
+        metadata_owner: dynamic_data.metadata_owner,
         authority: Updated::new(
             authority.slot_updated,
             None, //todo: where do we get seq?
@@ -214,6 +242,8 @@ async fn get_complete_asset_details(
                 slot_updated: item.slot_updated,
             })
             .collect(),
+        edition,
+        master_edition,
     })
 }
 

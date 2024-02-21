@@ -1,3 +1,4 @@
+use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -10,6 +11,7 @@ use tonic::async_trait;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::columns::{Mint, TokenAccount};
 
+use crate::mplx_updates_processor::TokenMetadata;
 use crate::{db_v2::Task, mplx_updates_processor::MetadataInfo};
 
 #[derive(Default)]
@@ -19,6 +21,7 @@ pub struct Buffer {
     pub token_accs: Mutex<HashMap<Vec<u8>, TokenAccount>>,
     pub mints: Mutex<HashMap<Vec<u8>, Mint>>,
     pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
+    pub token_metadata_editions: Mutex<HashMap<Pubkey, TokenMetadata>>,
 }
 
 impl Buffer {
@@ -29,17 +32,19 @@ impl Buffer {
             token_accs: Mutex::new(HashMap::new()),
             mints: Mutex::new(HashMap::new()),
             json_tasks: Arc::new(Mutex::new(VecDeque::<Task>::new())),
+            token_metadata_editions: Mutex::new(HashMap::new()),
         }
     }
 
     pub async fn debug(&self) {
         println!(
-            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\n",
+            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\nToken Metadata Editions buffer: {}\n",
             self.mplx_metadata_info.lock().await.len(),
             self.transactions.lock().await.len(),
             self.token_accs.lock().await.len(),
             self.mints.lock().await.len(),
             self.json_tasks.lock().await.len(),
+            self.token_metadata_editions.lock().await.len(),
         );
     }
 
@@ -51,6 +56,10 @@ impl Buffer {
         metrics.set_buffer(
             "buffer_mplx_accounts",
             self.mplx_metadata_info.lock().await.len() as i64,
+        );
+        metrics.set_buffer(
+            "buffer_editions",
+            self.token_metadata_editions.lock().await.len() as i64,
         );
     }
 

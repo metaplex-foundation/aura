@@ -20,16 +20,18 @@ pub struct IntegrityVerificationMetrics {
     pub registry: Registry,
 }
 
+impl Default for IntegrityVerificationMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IntegrityVerificationMetrics {
-    pub fn new(
-        integrity_verification_metrics: IntegrityVerificationMetricsConfig,
-        slot_collector_metrics: BackfillerMetricsConfig,
-        red_metrics: Arc<RequestErrorDurationMetrics>,
-    ) -> Self {
+    pub fn new() -> Self {
         Self {
-            integrity_verification_metrics: Arc::new(integrity_verification_metrics),
-            slot_collector_metrics: Arc::new(slot_collector_metrics),
-            red_metrics,
+            integrity_verification_metrics: Arc::new(IntegrityVerificationMetricsConfig::new()),
+            slot_collector_metrics: Arc::new(BackfillerMetricsConfig::new()),
+            red_metrics: Arc::new(RequestErrorDurationMetrics::new()),
             registry: Registry::default(),
         }
     }
@@ -46,33 +48,33 @@ pub struct MetricState {
     pub json_migrator_metrics: Arc<JsonMigratorMetricsConfig>,
     pub sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
     pub red_metrics: Arc<RequestErrorDurationMetrics>,
+    pub fork_cleaner_metrics: Arc<ForkCleanerMetricsConfig>,
     pub registry: Registry,
 }
 
+impl Default for MetricState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MetricState {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        ingester_metrics: IngesterMetricsConfig,
-        api_metrics: ApiMetricsConfig,
-        json_downloader_metrics: JsonDownloaderMetricsConfig,
-        backfiller_metrics: BackfillerMetricsConfig,
-        rpc_backfiller_metrics: RpcBackfillerMetricsConfig,
-        synchronizer_metrics: SynchronizerMetricsConfig,
-        json_migrator_metrics: JsonMigratorMetricsConfig,
-        sequence_consistent_gapfill_metrics: SequenceConsistentGapfillMetricsConfig,
-        red_metrics: RequestErrorDurationMetrics,
-    ) -> Self {
+    pub fn new() -> Self {
+        let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         Self {
-            ingester_metrics: Arc::new(ingester_metrics),
-            api_metrics: Arc::new(api_metrics),
-            json_downloader_metrics: Arc::new(json_downloader_metrics),
+            ingester_metrics: Arc::new(IngesterMetricsConfig::new()),
+            api_metrics: Arc::new(ApiMetricsConfig::new()),
+            json_downloader_metrics: Arc::new(JsonDownloaderMetricsConfig::new()),
+            backfiller_metrics: Arc::new(BackfillerMetricsConfig::new()),
+            rpc_backfiller_metrics: Arc::new(RpcBackfillerMetricsConfig::new()),
+            synchronizer_metrics: Arc::new(SynchronizerMetricsConfig::new()),
+            json_migrator_metrics: Arc::new(JsonMigratorMetricsConfig::new()),
+            sequence_consistent_gapfill_metrics: Arc::new(
+                SequenceConsistentGapfillMetricsConfig::new(),
+            ),
+            fork_cleaner_metrics: Arc::new(ForkCleanerMetricsConfig::new(red_metrics.clone())),
+            red_metrics,
             registry: Registry::default(),
-            backfiller_metrics: Arc::new(backfiller_metrics),
-            rpc_backfiller_metrics: Arc::new(rpc_backfiller_metrics),
-            synchronizer_metrics: Arc::new(synchronizer_metrics),
-            json_migrator_metrics: Arc::new(json_migrator_metrics),
-            sequence_consistent_gapfill_metrics: Arc::new(sequence_consistent_gapfill_metrics),
-            red_metrics: Arc::new(red_metrics),
         }
     }
 }
@@ -383,6 +385,7 @@ impl MetricsTrait for MetricState {
         self.ingester_metrics.start_time();
         self.json_downloader_metrics.start_time();
         self.sequence_consistent_gapfill_metrics.start_time();
+        self.fork_cleaner_metrics.start_time();
 
         self.api_metrics.register(&mut self.registry);
         self.ingester_metrics.register(&mut self.registry);
@@ -430,29 +433,10 @@ impl MetricsTrait for MetricState {
         );
 
         self.json_migrator_metrics.register(&mut self.registry);
-
-        self.registry.register(
-            "total_inconsistent_trees",
-            "Total count of inconsistent trees",
-            self.sequence_consistent_gapfill_metrics
-                .total_tree_with_gaps
-                .clone(),
-        );
-
-        self.registry.register(
-            "total_scans",
-            "Total count of inconsistent trees scans",
-            self.sequence_consistent_gapfill_metrics.total_scans.clone(),
-        );
-
-        self.registry.register(
-            "scans_latency",
-            "A histogram of inconsistent trees scans latency",
-            self.sequence_consistent_gapfill_metrics
-                .scans_latency
-                .clone(),
-        );
+        self.sequence_consistent_gapfill_metrics
+            .register(&mut self.registry);
         self.red_metrics.register(&mut self.registry);
+        self.fork_cleaner_metrics.register(&mut self.registry);
     }
 }
 
@@ -1039,5 +1023,98 @@ impl SequenceConsistentGapfillMetricsConfig {
     }
     pub fn set_scans_latency(&self, duration: f64) {
         self.scans_latency.observe(duration);
+    }
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "sequence_consistent_start_time",
+            "Sequence consistent gapfiller start time",
+            self.start_time.clone(),
+        );
+
+        registry.register(
+            "total_inconsistent_trees",
+            "Total count of inconsistent trees",
+            self.total_tree_with_gaps.clone(),
+        );
+
+        registry.register(
+            "total_sequence_consistent_scans",
+            "Total count of inconsistent trees scans",
+            self.total_scans.clone(),
+        );
+
+        registry.register(
+            "sequence_consistent_scans_latency",
+            "A histogram of inconsistent trees scans latency",
+            self.scans_latency.clone(),
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ForkCleanerMetricsConfig {
+    start_time: Gauge,
+    total_scans: Counter,
+    scans_latency: Histogram,
+    forks_detected: Gauge,
+    deleted_items: Counter,
+    pub red_metrics: Arc<RequestErrorDurationMetrics>,
+}
+
+impl ForkCleanerMetricsConfig {
+    pub fn new(red_metrics: Arc<RequestErrorDurationMetrics>) -> Self {
+        Self {
+            start_time: Default::default(),
+            total_scans: Default::default(),
+            scans_latency: Histogram::new(exponential_buckets(1.0, 2.0, 12)),
+            forks_detected: Default::default(),
+            deleted_items: Default::default(),
+            red_metrics,
+        }
+    }
+    pub fn start_time(&self) -> i64 {
+        self.start_time.set(Utc::now().timestamp())
+    }
+    pub fn set_forks_detected(&self, count: i64) -> i64 {
+        self.forks_detected.set(count)
+    }
+    pub fn inc_total_scans(&self) -> u64 {
+        self.total_scans.inc()
+    }
+    pub fn set_scans_latency(&self, duration: f64) {
+        self.scans_latency.observe(duration);
+    }
+    pub fn inc_by_deleted_items(&self, count: u64) -> u64 {
+        self.deleted_items.inc_by(count)
+    }
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "fork_cleaner_start_time",
+            "Fork cleaner start time",
+            self.start_time.clone(),
+        );
+
+        registry.register(
+            "total_forks_detected",
+            "Total forks detected",
+            self.forks_detected.clone(),
+        );
+
+        registry.register(
+            "total_fork_cleaner_scans",
+            "Total count of fork cleaner scans",
+            self.total_scans.clone(),
+        );
+
+        registry.register(
+            "fork_cleaner_scans_latency",
+            "A histogram of fork cleaner scans latency",
+            self.scans_latency.clone(),
+        );
+        registry.register(
+            "deleted_items",
+            "Total count of deleted cl items",
+            self.deleted_items.clone(),
+        );
     }
 }

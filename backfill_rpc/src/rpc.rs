@@ -166,6 +166,16 @@ impl FinalizedSlotGetter for BackfillRPC {
             })
             .await?)
     }
+    async fn get_finalized_slot_no_error(&self) -> u64 {
+        match self.get_finalized_slot().await {
+            Err(e) => {
+                tracing::error!("Failed to get finalized slot: {}", e);
+                None
+            }
+            Ok(last_ingested_slot) => Some(last_ingested_slot),
+        }
+        .unwrap_or(u64::MAX)
+    }
 }
 
 #[cfg(feature = "rpc_tests")]

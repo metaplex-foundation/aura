@@ -6,11 +6,9 @@ use crate::diff_checker::{
 use crate::file_keys_fetcher::FileKeysFetcher;
 use clap::Parser;
 use interface::error::IntegrityVerificationError;
-use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
-    BackfillerMetricsConfig, IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig,
-    MetricsTrait,
+    IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig, MetricsTrait,
 };
 use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
 use postgre_client::PgClient;
@@ -43,11 +41,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
     env_logger::init();
     info!("IntegrityVerification start");
 
-    let mut metrics = IntegrityVerificationMetrics::new(
-        IntegrityVerificationMetricsConfig::new(),
-        BackfillerMetricsConfig::new(),
-        Arc::new(RequestErrorDurationMetrics::new()),
-    );
+    let mut metrics = IntegrityVerificationMetrics::new();
     metrics.register_metrics();
     start_metrics(metrics.registry, Some(config.metrics_port)).await;
 
