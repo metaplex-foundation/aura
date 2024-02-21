@@ -480,7 +480,8 @@ where
                     let block = match p.get_block(s).await {
                         Ok(block) => block,
                         Err(err) => {
-                            error!("Error getting block: {}", err);
+                            error!("Error getting block {}: {}", s, err);
+                            m.inc_data_processed("error_getting_block");
                             continue;
                         }
                     };
