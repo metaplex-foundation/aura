@@ -823,7 +823,7 @@ mod tests {
             .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
         token_updates_processor
-            .transform_and_save_token_accs(&[token_acc])
+            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_acc)].into_iter().collect())
             .await;
 
         let payload = GetAsset {
