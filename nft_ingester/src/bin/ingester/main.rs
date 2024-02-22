@@ -613,16 +613,10 @@ pub async fn main() -> Result<(), IngesterError> {
         let metrics = Arc::new(BackfillerMetricsConfig::new());
         metrics.register_with_prefix(&mut metrics_state.registry, "force_slot_persister_");
 
-        let consumer = Arc::new(DirectBlockParser::new(
-            tx_ingester.clone(),
-            rocks_storage.clone(),
-            metrics_state.backfiller_metrics.clone(),
-        ));
-
         let transactions_parser = Arc::new(TransactionsParser::new(
             rocks_storage.clone(),
             force_reingestable_slot_processor.clone(),
-            consumer,
+            force_reingestable_slot_processor.clone(),
             producer,
             metrics.clone(),
             backfiller_config.workers_count,
