@@ -7,7 +7,7 @@ use tokio::sync::broadcast::Receiver;
 use tracing::info;
 
 const CI_ITEMS_DELETE_BATCH_SIZE: usize = 1000;
-const SLOT_CHECK_OFFSET: u64 = 1000;
+const SLOT_CHECK_OFFSET: u64 = 1500;
 
 pub struct ForkCleaner<CM, FC>
 where
