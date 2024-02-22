@@ -232,6 +232,11 @@ impl MessageHandler {
                         let key = account_info.pubkey().unwrap();
 
                         match &parsing_result.data {
+                            TokenMetadataAccountData::EmptyAccount => {
+                                let mut buff = self.buffer.burnt_metadata_at_slot.lock().await;
+
+                                buff.insert(key.0.to_vec(), account_info.slot());
+                            }
                             TokenMetadataAccountData::MetadataV1(m) => {
                                 update_or_insert!(
                                     self.buffer.mplx_metadata_info,

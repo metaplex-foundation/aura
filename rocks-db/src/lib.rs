@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
-use asset::{AssetOwnerDeprecated, SlotAssetIdx};
+use asset::{AssetOwnerDeprecated, MetadataMintMap, SlotAssetIdx};
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
@@ -11,6 +11,7 @@ pub use asset::{
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
+use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
@@ -28,6 +29,7 @@ pub mod cl_items;
 pub mod column;
 pub mod editions;
 pub mod errors;
+pub mod fork_cleaner;
 pub mod key_encoders;
 pub mod offchain_data;
 pub mod parameters;
@@ -47,6 +49,7 @@ pub struct Storage {
     pub asset_static_data_deprecated: Column<AssetStaticDetailsDeprecated>,
     pub asset_dynamic_data: Column<AssetDynamicDetails>,
     pub asset_dynamic_data_deprecated: Column<AssetDynamicDetailsDeprecated>,
+    pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_authority_data: Column<AssetAuthority>,
     pub asset_owner_data_deprecated: Column<AssetOwnerDeprecated>,
     pub asset_owner_data: Column<AssetOwner>,
@@ -67,16 +70,19 @@ pub struct Storage {
     pub token_metadata_edition_cbor: Column<TokenMetadataEdition>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+    red_metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl Storage {
     pub fn new(
         db: Arc<DB>,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Self {
         let asset_static_data = Self::column(db.clone());
         let asset_dynamic_data = Self::column(db.clone());
         let asset_dynamic_data_deprecated = Self::column(db.clone());
+        let metadata_mint_map = Self::column(db.clone());
         let asset_authority_data = Self::column(db.clone());
         let asset_owner_data = Self::column(db.clone());
         let asset_owner_data_deprecated = Self::column(db.clone());
@@ -102,6 +108,7 @@ impl Storage {
             asset_static_data,
             asset_dynamic_data,
             asset_dynamic_data_deprecated,
+            metadata_mint_map,
             asset_authority_data,
             asset_owner_data,
             asset_owner_data_deprecated,
@@ -123,12 +130,14 @@ impl Storage {
             trees_gaps,
             token_metadata_edition_cbor,
             asset_static_data_deprecated,
+            red_metrics,
         }
     }
 
     pub fn open(
         db_path: &str,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self> {
         let cf_descriptors = Self::create_cf_descriptors();
         let db = Arc::new(DB::open_cf_descriptors(
@@ -136,13 +145,14 @@ impl Storage {
             db_path,
             cf_descriptors,
         )?);
-        Ok(Self::new(db, join_set))
+        Ok(Self::new(db, join_set, red_metrics))
     }
 
     pub fn open_secondary(
         primary_path: &str,
         secondary_path: &str,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self> {
         let cf_descriptors = Self::create_cf_descriptors();
         let db = Arc::new(DB::open_cf_descriptors_as_secondary(
@@ -151,7 +161,7 @@ impl Storage {
             secondary_path,
             cf_descriptors,
         )?);
-        Ok(Self::new(db, join_set))
+        Ok(Self::new(db, join_set, red_metrics))
     }
 
     fn create_cf_descriptors() -> Vec<ColumnFamilyDescriptor> {
@@ -160,6 +170,7 @@ impl Storage {
             Self::new_cf_descriptor::<AssetStaticDetails>(),
             Self::new_cf_descriptor::<AssetDynamicDetails>(),
             Self::new_cf_descriptor::<AssetDynamicDetailsDeprecated>(),
+            Self::new_cf_descriptor::<MetadataMintMap>(),
             Self::new_cf_descriptor::<AssetAuthority>(),
             Self::new_cf_descriptor::<AssetOwnerDeprecated>(),
             Self::new_cf_descriptor::<asset::AssetLeaf>(),
@@ -305,6 +316,12 @@ impl Storage {
             AssetOwnerDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_asset_owner_deprecated_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            MetadataMintMap::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_metadata_mint_map_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }

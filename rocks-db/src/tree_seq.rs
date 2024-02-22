@@ -3,7 +3,7 @@ use crate::key_encoders;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct TreeSeqIdx {
     pub slot: u64,
 }

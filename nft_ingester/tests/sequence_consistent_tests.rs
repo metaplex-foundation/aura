@@ -2,14 +2,8 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use interface::slot_getter::MockFinalizedSlotGetter;
-    use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::utils::start_metrics;
-    use metrics_utils::{
-        ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig,
-        JsonDownloaderMetricsConfig, JsonMigratorMetricsConfig, MetricState, MetricsTrait,
-        RpcBackfillerMetricsConfig, SequenceConsistentGapfillMetricsConfig,
-        SynchronizerMetricsConfig,
-    };
+    use metrics_utils::{MetricState, MetricsTrait};
     use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
     use rocks_db::bubblegum_slots::bubblegum_slots_key_to_value;
     use rocks_db::key_encoders::{decode_pubkey, decode_pubkey_u64, decode_string};
@@ -155,17 +149,7 @@ mod tests {
                 ])
             });
         let row_keys_getter_arc = Arc::new(row_keys_getter);
-        let mut metrics_state = MetricState::new(
-            IngesterMetricsConfig::new(),
-            ApiMetricsConfig::new(),
-            JsonDownloaderMetricsConfig::new(),
-            BackfillerMetricsConfig::new(),
-            RpcBackfillerMetricsConfig::new(),
-            SynchronizerMetricsConfig::new(),
-            JsonMigratorMetricsConfig::new(),
-            SequenceConsistentGapfillMetricsConfig::new(),
-            RequestErrorDurationMetrics::new(),
-        );
+        let mut metrics_state = MetricState::new();
         metrics_state.register_metrics();
         start_metrics(metrics_state.registry, Some(4444)).await;
 
@@ -176,11 +160,10 @@ mod tests {
         );
 
         let mut finalized_slot_getter = MockFinalizedSlotGetter::new();
-
         finalized_slot_getter
-            .expect_get_finalized_slot()
+            .expect_get_finalized_slot_no_error()
             .times(1)
-            .return_once(move || Ok(212));
+            .return_once(move || 212);
 
         let arc_finalized_slot_getter = Arc::new(finalized_slot_getter);
 

@@ -14,7 +14,9 @@ use rocksdb::{Options, DB};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
+use metrics_utils::red::RequestErrorDurationMetrics;
 use std::env;
+
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), String> {
     // Retrieve the database path from command-line arguments
@@ -82,8 +84,13 @@ fn remove_column_families(db_path: String, columns_to_remove: &[&str]) {
     // Get the existing column families
     let cf_names = DB::list_cf(&options, &db_path).expect("Failed to list column families.");
 
-    let db = rocks_db::Storage::open(&db_path, Arc::new(Mutex::new(JoinSet::new())))
-        .expect("Failed to open DB.");
+    let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    let db = rocks_db::Storage::open(
+        &db_path,
+        Arc::new(Mutex::new(JoinSet::new())),
+        red_metrics.clone(),
+    )
+    .expect("Failed to open DB.");
     let db = db.db;
     columns_to_remove.iter().for_each(|cf_name| {
         if !cf_names.contains(&cf_name.to_string()) {

@@ -5,6 +5,7 @@ use rand::{random, Rng};
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 
+use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::{
     asset::AssetCollection, offchain_data::OffChainData, AssetAuthority, AssetDynamicDetails,
     AssetOwner, AssetStaticDetails, Storage,
@@ -29,8 +30,13 @@ impl RocksTestEnvironment {
     pub fn new(keys: &[(u64, Pubkey)]) -> Self {
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
         let join_set = Arc::new(Mutex::new(JoinSet::new()));
-        let storage = Storage::open(temp_dir.path().to_str().unwrap(), join_set)
-            .expect("Failed to create a database");
+        let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+        let storage = Storage::open(
+            temp_dir.path().to_str().unwrap(),
+            join_set,
+            red_metrics.clone(),
+        )
+        .expect("Failed to create a database");
         for &(slot, ref pubkey) in keys {
             storage.asset_updated(slot, *pubkey).unwrap();
         }
