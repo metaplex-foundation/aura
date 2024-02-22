@@ -1,6 +1,8 @@
 use sqlx::{Execute, Postgres, QueryBuilder, Transaction};
 
-use crate::{PgClient, ALTER_ACTION, COPY_ACTION, CREATE_ACTION, DROP_ACTION, SQL_COMPONENT};
+use crate::{
+    PgClient, ALTER_ACTION, COPY_ACTION, CREATE_ACTION, DROP_ACTION, SQL_COMPONENT, TRUNCATE_ACTION,
+};
 
 impl PgClient {
     pub async fn copy_metadata_from(
@@ -33,6 +35,31 @@ impl PgClient {
             "asset_creators",
         )
         .await
+    }
+
+    pub async fn truncate_asset_creators(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), String> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("TRUNCATE asset_creators_v3;");
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            TRUNCATE_ACTION,
+            "asset_creators",
+        )
+        .await
+    }
+
+    pub async fn truncate_assets(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), String> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("TRUNCATE assets_v3;");
+        self.execute_query_with_metrics(transaction, &mut query_builder, TRUNCATE_ACTION, "assets")
+            .await
     }
 
     pub async fn copy_assets_from(
@@ -462,6 +489,8 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), String> {
         self.drop_indexes(transaction).await?;
+        self.truncate_assets(transaction).await?;
+        self.truncate_asset_creators(transaction).await?;
         self.copy_metadata_from(transaction, matadata_copy_path)
             .await?;
         self.copy_asset_creators_from(transaction, asset_creators_copy_path)

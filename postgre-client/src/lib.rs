@@ -24,6 +24,7 @@ pub const BATCH_UPSERT_ACTION: &str = "batch_upsert";
 pub const BATCH_DELETE_ACTION: &str = "batch_delete";
 pub const TRANSACTION_ACTION: &str = "transaction";
 pub const COPY_ACTION: &str = "copy";
+pub const TRUNCATE_ACTION: &str = "truncate";
 pub const DROP_ACTION: &str = "drop";
 pub const ALTER_ACTION: &str = "alter";
 pub const CREATE_ACTION: &str = "create";
