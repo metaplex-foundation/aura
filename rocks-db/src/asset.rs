@@ -83,6 +83,8 @@ pub struct AssetDynamicDetailsDeprecated {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct MetadataMintMap {
+    // this is Metadata acc pubkey
+    // it's PDA with next seeds ["metadata", metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s, mint_key]
     pub pubkey: Pubkey,
     pub mint_key: Pubkey,
 }
