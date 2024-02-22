@@ -327,19 +327,46 @@ impl MplxAccsProcessor {
             // supply field saving inside process_mint_accs fn
             models.asset_dynamic.push(AssetDynamicDetails {
                 pubkey: mint,
-                is_compressible: Updated::new(metadata_info.slot, None, false),
-                is_compressed: Updated::new(metadata_info.slot, None, false),
-                is_frozen: Updated::new(metadata_info.slot, None, false),
+                is_compressible: Updated::new(
+                    metadata_info.slot,
+                    Some(metadata_info.write_version),
+                    None,
+                    false,
+                ),
+                is_compressed: Updated::new(
+                    metadata_info.slot,
+                    Some(metadata_info.write_version),
+                    None,
+                    false,
+                ),
+                is_frozen: Updated::new(
+                    metadata_info.slot,
+                    Some(metadata_info.write_version),
+                    None,
+                    false,
+                ),
                 seq: None,
-                is_burnt: Updated::new(metadata_info.slot, None, false),
-                was_decompressed: Updated::new(metadata_info.slot, None, false),
+                is_burnt: Updated::new(
+                    metadata_info.slot,
+                    Some(metadata_info.write_version),
+                    None,
+                    false,
+                ),
+                was_decompressed: Updated::new(
+                    metadata_info.slot,
+                    Some(metadata_info.write_version),
+                    None,
+                    false,
+                ),
                 onchain_data: Some(Updated::new(
                     metadata_info.slot,
+                    Some(metadata_info.write_version),
                     None,
                     chain_data.to_string(),
                 )),
                 creators: Updated::new(
                     metadata_info.slot,
+                    Some(metadata_info.write_version),
                     None,
                     data.clone()
                         .creators
@@ -354,24 +381,36 @@ impl MplxAccsProcessor {
                 ),
                 royalty_amount: Updated::new(
                     metadata_info.slot,
+                    Some(metadata_info.write_version),
                     None,
                     data.seller_fee_basis_points,
                 ),
-                url: Updated::new(metadata_info.slot, None, uri.clone()),
+                url: Updated::new(
+                    metadata_info.slot,
+                    Some(metadata_info.write_version),
+                    None,
+                    uri.clone(),
+                ),
                 lamports: Some(Updated::new(
                     metadata_info.slot,
+                    Some(metadata_info.write_version),
                     None,
                     metadata_info.lamports,
                 )),
                 executable: Some(Updated::new(
                     metadata_info.slot,
+                    Some(metadata_info.write_version),
                     None,
                     metadata_info.executable,
                 )),
-                metadata_owner: metadata_info
-                    .metadata_owner
-                    .clone()
-                    .map(|m| Updated::new(metadata_info.slot, None, m)),
+                metadata_owner: metadata_info.metadata_owner.clone().map(|m| {
+                    Updated::new(
+                        metadata_info.slot,
+                        Some(metadata_info.write_version),
+                        None,
+                        m,
+                    )
+                }),
                 ..Default::default()
             });
 
@@ -391,6 +430,7 @@ impl MplxAccsProcessor {
                     is_collection_verified: c.verified,
                     collection_seq: None,
                     slot_updated: metadata_info.slot,
+                    write_version: Some(metadata_info.write_version),
                 });
             } else if let Some(creators) = data.creators {
                 if !creators.is_empty() {
@@ -400,6 +440,7 @@ impl MplxAccsProcessor {
                         is_collection_verified: true,
                         collection_seq: None,
                         slot_updated: metadata_info.slot,
+                        write_version: Some(metadata_info.write_version),
                     });
                 }
             }
@@ -408,6 +449,7 @@ impl MplxAccsProcessor {
                 pubkey: mint,
                 authority,
                 slot_updated: metadata_info.slot,
+                write_version: Some(metadata_info.write_version),
             });
         }
 
@@ -494,7 +536,12 @@ impl MplxAccsProcessor {
             .iter()
             .map(|map| AssetDynamicDetails {
                 pubkey: map.mint_key,
-                is_burnt: Updated::new(*metadata_slot_burnt.get(&map.pubkey).unwrap(), None, true),
+                is_burnt: Updated::new(
+                    *metadata_slot_burnt.get(&map.pubkey).unwrap(),
+                    None, // once we got burn we may not even check write version
+                    None,
+                    true,
+                ),
                 ..Default::default()
             })
             .collect();

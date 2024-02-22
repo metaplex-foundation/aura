@@ -119,7 +119,12 @@ async fn get_complete_asset_details(
         Some(onchain_data) => {
             let v = serde_json::from_str(&onchain_data.value)
                 .map_err(|e| StorageError::Common(e.to_string()))?;
-            Some(Updated::new(onchain_data.slot_updated, onchain_data.seq, v))
+            Some(Updated::new(
+                onchain_data.slot_updated,
+                onchain_data.write_version,
+                onchain_data.seq,
+                v,
+            ))
         }
     };
 
@@ -193,7 +198,8 @@ async fn get_complete_asset_details(
         metadata_owner: dynamic_data.metadata_owner,
         authority: Updated::new(
             authority.slot_updated,
-            None, //todo: where do we get seq?
+            None, // TODO
+            None, //TODO: where do we get seq?
             authority.authority,
         ),
         owner: owner.owner,
@@ -203,7 +209,8 @@ async fn get_complete_asset_details(
         collection: collection.map(|collection| {
             Updated::new(
                 collection.slot_updated,
-                None, //todo: where do we get seq?
+                collection.write_version,
+                collection.collection_seq,
                 entities::models::AssetCollection {
                     collection: collection.collection,
                     is_collection_verified: collection.is_collection_verified,
@@ -219,6 +226,7 @@ async fn get_complete_asset_details(
         asset_leaf: asset_leaf.map(|leaf| {
             Updated::new(
                 leaf.slot_updated,
+                None,
                 None,
                 entities::models::AssetLeaf {
                     leaf: leaf.leaf,

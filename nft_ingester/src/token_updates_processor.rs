@@ -111,17 +111,20 @@ impl TokenAccsProcessor {
                         pubkey: token_account.mint,
                         owner: Updated::new(
                             token_account.slot_updated as u64,
+                            Some(token_account.write_version),
                             None,
                             token_account.owner,
                         ),
                         delegate: Updated::new(
                             token_account.slot_updated as u64,
+                            Some(token_account.write_version),
                             None,
                             token_account.delegate,
                         ),
                         owner_type: Updated::default(),
                         owner_delegate_seq: Updated::new(
                             token_account.slot_updated as u64,
+                            Some(token_account.write_version),
                             None,
                             None,
                         ),
@@ -134,6 +137,7 @@ impl TokenAccsProcessor {
                         pubkey: token_account.mint,
                         is_frozen: Updated::new(
                             token_account.slot_updated as u64,
+                            Some(token_account.write_version),
                             None,
                             token_account.frozen,
                         ),
@@ -235,11 +239,13 @@ impl TokenAccsProcessor {
                             pubkey: mint.pubkey,
                             supply: Some(Updated::new(
                                 mint.slot_updated as u64,
+                                Some(mint.write_version),
                                 None,
                                 mint.supply as u64,
                             )),
                             seq: Some(Updated::new(
                                 mint.slot_updated as u64,
+                                Some(mint.write_version),
                                 None,
                                 mint.slot_updated as u64,
                             )),
@@ -259,6 +265,7 @@ impl TokenAccsProcessor {
                             pubkey: mint.pubkey,
                             owner_type: Updated::new(
                                 mint.slot_updated as u64,
+                                Some(mint.write_version),
                                 None,
                                 owner_type_value,
                             ),
