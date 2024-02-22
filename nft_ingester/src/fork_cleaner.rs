@@ -41,7 +41,7 @@ where
             .fork_checker
             .last_slot_for_check()
             .saturating_sub(SLOT_CHECK_OFFSET);
-        let all_non_forked_slots = self.fork_checker.get_all_non_forked_slots();
+        let all_non_forked_slots = self.fork_checker.get_all_non_forked_slots(rx.resubscribe());
         let mut forked_slots = HashSet::new();
         let mut delete_items = Vec::new();
         for cl_item in self.cl_items_manager.items_iter() {

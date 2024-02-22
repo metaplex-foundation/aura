@@ -28,7 +28,7 @@ use usecase::slots_collector::SlotsCollector;
 const BBG_PREFIX: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY/";
 pub const GET_SIGNATURES_LIMIT: usize = 2000;
 pub const GET_SLOT_RETRIES: u32 = 3;
-pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 30;
+pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 10;
 pub const GET_DATA_FROM_BG_RETRIES: u32 = 5;
 pub const SECONDS_TO_RETRY_ROCKSDB_OPERATION: u64 = 5;
 pub const DELETE_SLOT_RETRIES: u32 = 5;
@@ -364,7 +364,6 @@ where
     }
 
     pub async fn parse_transactions(&self, rx: Receiver<()>) {
-        let mut counter = GET_SLOT_RETRIES;
         'outer: while rx.is_empty() {
             let mut slots_to_parse_iter = self.slot_getter.get_unprocessed_slots_iter();
             let mut slots_to_parse_vec = Vec::new();
@@ -377,10 +376,6 @@ where
                     None => {
                         if slots_to_parse_vec.is_empty() {
                             warn!("No slots to parse");
-                            counter -= 1;
-                            if counter == 0 {
-                                break 'outer;
-                            }
                             tokio::time::sleep(Duration::from_secs(SECONDS_TO_WAIT_NEW_SLOTS))
                                 .await;
                             continue 'outer;
@@ -392,7 +387,6 @@ where
                 }
             }
 
-            counter = GET_SLOT_RETRIES;
             let res = self
                 .process_slots(slots_to_parse_vec, rx.resubscribe())
                 .await;
