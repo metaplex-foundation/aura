@@ -447,6 +447,7 @@ pub mod columns {
         pub delegated_amount: i64,
         pub slot_updated: i64,
         pub amount: i64,
+        pub write_version: u64,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -457,6 +458,7 @@ pub mod columns {
         pub decimals: i32,
         pub mint_authority: Option<Pubkey>,
         pub freeze_authority: Option<Pubkey>,
+        pub write_version: u64,
     }
 }
 

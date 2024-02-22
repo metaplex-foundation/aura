@@ -280,6 +280,7 @@ impl Storage {
                 onchain_data: data.onchain_data.map(|chain_data| {
                     Updated::new(
                         chain_data.slot_updated,
+                        chain_data.write_version,
                         chain_data.seq,
                         json!(chain_data.value).to_string(),
                     )
@@ -301,6 +302,7 @@ impl Storage {
                 pubkey: data.pubkey,
                 authority: data.authority.value,
                 slot_updated: data.authority.slot_updated,
+                write_version: data.authority.write_version,
             },
         )?;
 
@@ -314,6 +316,7 @@ impl Storage {
                     is_collection_verified: collection.value.is_collection_verified,
                     collection_seq: collection.value.collection_seq,
                     slot_updated: collection.slot_updated,
+                    write_version: collection.write_version,
                 },
             )?;
         }

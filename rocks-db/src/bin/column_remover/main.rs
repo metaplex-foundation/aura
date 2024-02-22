@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use log::info;
-use rocks_db::asset::{self, AssetOwnerDeprecated};
+use rocks_db::asset::{self, AssetAuthorityDeprecated, AssetOwnerDeprecated};
 use rocks_db::column::TypedColumn;
 use rocks_db::tree_seq::TreeSeqIdx;
 use rocks_db::{
@@ -34,9 +34,11 @@ pub async fn main() -> Result<(), String> {
         AssetStaticDetails::NAME,
         AssetDynamicDetails::NAME,
         AssetAuthority::NAME,
+        AssetAuthorityDeprecated::NAME,
         AssetOwnerDeprecated::NAME,
         asset::AssetLeaf::NAME,
         asset::AssetCollection::NAME,
+        asset::AssetCollectionDeprecated::NAME,
         cl_items::ClItem::NAME,
         cl_items::ClLeaf::NAME,
         asset::AssetsUpdateIdx::NAME,

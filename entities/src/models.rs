@@ -162,14 +162,16 @@ pub struct ClLeaf {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Updated<T> {
     pub slot_updated: u64,
+    pub write_version: Option<u64>,
     pub seq: Option<u64>,
     pub value: T,
 }
 
 impl<T> Updated<T> {
-    pub fn new(slot_updated: u64, seq: Option<u64>, value: T) -> Self {
+    pub fn new(slot_updated: u64, write_version: Option<u64>, seq: Option<u64>, value: T) -> Self {
         Self {
             slot_updated,
+            write_version,
             seq,
             value,
         }

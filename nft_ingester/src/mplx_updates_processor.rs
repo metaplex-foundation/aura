@@ -340,17 +340,34 @@ impl MplxAccsProcessor {
             // supply field saving inside process_mint_accs fn
             models.asset_dynamic.push(AssetDynamicDetails {
                 pubkey: mint,
-                is_compressible: Updated::new(metadata_info.slot, None, false),
-                is_compressed: Updated::new(metadata_info.slot, None, false),
+                is_compressible: Updated::new(
+                    metadata_info.slot,
+                    Some(metadata_info.write_version),
+                    None,
+                    false,
+                ),
+                is_compressed: Updated::new(
+                    metadata_info.slot,
+                    Some(metadata_info.write_version),
+                    None,
+                    false,
+                ),
                 seq: None,
-                was_decompressed: Updated::new(metadata_info.slot, None, false),
+                was_decompressed: Updated::new(
+                    metadata_info.slot,
+                    Some(metadata_info.write_version),
+                    None,
+                    false,
+                ),
                 onchain_data: Some(Updated::new(
                     metadata_info.slot,
+                    Some(metadata_info.write_version),
                     None,
                     chain_data.to_string(),
                 )),
                 creators: Updated::new(
                     metadata_info.slot,
+                    Some(metadata_info.write_version),
                     None,
                     data.clone()
                         .creators
@@ -365,25 +382,33 @@ impl MplxAccsProcessor {
                 ),
                 royalty_amount: Updated::new(
                     metadata_info.slot,
+                    Some(metadata_info.write_version),
                     None,
                     data.seller_fee_basis_points,
                 ),
-                url: Updated::new(metadata_info.slot, None, uri.clone()),
+                url: Updated::new(
+                    metadata_info.slot,
+                    Some(metadata_info.write_version),
+                    None,
+                    uri.clone(),
+                ),
                 lamports: Some(Updated::new(
                     metadata_info.slot,
+                    Some(metadata_info.write_version),
                     None,
                     metadata_info.lamports,
                 )),
                 executable: Some(Updated::new(
                     metadata_info.slot,
+                    Some(metadata_info.write_version),
                     None,
                     metadata_info.executable,
                 )),
                 metadata_owner: metadata_info
                     .metadata_owner
                     .clone()
-                    .map(|m| Updated::new(metadata_info.slot, None, m)),
-                chain_mutability: Some(Updated::new(metadata_info.slot, None, chain_mutability)),
+                    .map(|m| Updated::new(metadata_info.slot, Some(metadata_info.write_version), None, m)),
+                chain_mutability: Some(Updated::new(metadata_info.slot, Some(metadata_info.write_version), None, chain_mutability)),
                 ..Default::default()
             });
 
@@ -403,6 +428,7 @@ impl MplxAccsProcessor {
                     is_collection_verified: c.verified,
                     collection_seq: None,
                     slot_updated: metadata_info.slot,
+                    write_version: Some(metadata_info.write_version),
                 });
             }
 
@@ -410,6 +436,7 @@ impl MplxAccsProcessor {
                 pubkey: mint,
                 authority,
                 slot_updated: metadata_info.slot,
+                write_version: Some(metadata_info.write_version),
             });
         }
 
@@ -481,7 +508,7 @@ impl MplxAccsProcessor {
         metadatas: Vec<BurntMetadata>,
     ) -> Result<(), StorageError> {
         let metadata_slot_burnt: HashMap<Pubkey, u64> =
-            metadatas.iter().map(|v| (v.key, v.slot).clone()).collect();
+            metadatas.iter().map(|v| (v.key, v.slot)).collect();
 
         let mtd_mint_map: Vec<MetadataMintMap> = self
             .rocks_db
@@ -489,14 +516,19 @@ impl MplxAccsProcessor {
             .batch_get(metadata_slot_burnt.keys().cloned().collect())
             .await?
             .into_iter()
-            .filter_map(|v| v)
+            .flatten()
             .collect();
 
         let asset_dynamic_details: Vec<AssetDynamicDetails> = mtd_mint_map
             .iter()
             .map(|map| AssetDynamicDetails {
                 pubkey: map.mint_key,
-                is_burnt: Updated::new(*metadata_slot_burnt.get(&map.pubkey).unwrap(), None, true),
+                is_burnt: Updated::new(
+                    *metadata_slot_burnt.get(&map.pubkey).unwrap(),
+                    None, // once we got burn we may not even check write version
+                    None,
+                    true,
+                ),
                 ..Default::default()
             })
             .collect();
