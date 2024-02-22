@@ -60,7 +60,6 @@ impl Default for MetricState {
 
 impl MetricState {
     pub fn new() -> Self {
-        let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         Self {
             ingester_metrics: Arc::new(IngesterMetricsConfig::new()),
             api_metrics: Arc::new(ApiMetricsConfig::new()),
@@ -72,8 +71,8 @@ impl MetricState {
             sequence_consistent_gapfill_metrics: Arc::new(
                 SequenceConsistentGapfillMetricsConfig::new(),
             ),
-            fork_cleaner_metrics: Arc::new(ForkCleanerMetricsConfig::new(red_metrics.clone())),
-            red_metrics,
+            fork_cleaner_metrics: Arc::new(ForkCleanerMetricsConfig::new()),
+            red_metrics: Arc::new(RequestErrorDurationMetrics::new()),
             registry: Registry::default(),
         }
     }
@@ -293,6 +292,7 @@ pub struct ApiMetricsConfig {
     start_time: Gauge,
     latency: Family<MethodLabel, Histogram>,
     proof_checks: Family<MetricLabelWithStatus, Counter>,
+    search_asset_latency: Family<MethodLabel, Histogram>,
 }
 
 impl ApiMetricsConfig {
@@ -305,6 +305,9 @@ impl ApiMetricsConfig {
                 Histogram::new(exponential_buckets(20.0, 1.8, 10))
             }),
             proof_checks: Family::<MetricLabelWithStatus, Counter>::default(),
+            search_asset_latency: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(20.0, 1.8, 10))
+            }),
         }
     }
 
@@ -335,6 +338,7 @@ impl ApiMetricsConfig {
             })
             .observe(duration);
     }
+
     pub fn inc_proof_checks(&self, label: &str, status: MetricStatus) -> u64 {
         self.proof_checks
             .get_or_create(&MetricLabelWithStatus {
@@ -342,6 +346,14 @@ impl ApiMetricsConfig {
                 status,
             })
             .inc()
+    }
+
+    pub fn set_search_asset_latency(&self, label: &str, duration: f64) {
+        self.search_asset_latency
+            .get_or_create(&MethodLabel {
+                method_name: label.to_owned(),
+            })
+            .observe(duration);
     }
 
     pub fn register(&self, registry: &mut Registry) {
@@ -359,6 +371,11 @@ impl ApiMetricsConfig {
             "api_call_latency",
             "A histogram of the request duration",
             self.latency.clone(),
+        );
+        registry.register(
+            "search_asset_latency",
+            "A histogram of the searchAsset request duration",
+            self.search_asset_latency.clone(),
         );
         registry.register(
             "api_start_time",
@@ -649,7 +666,6 @@ impl JsonMigratorMetricsConfig {
 pub struct IngesterMetricsConfig {
     start_time: Gauge,
     latency: Family<MetricLabel, Histogram>,
-    parsers: Family<MetricLabelWithStatus, Counter>,
     process: Family<MetricLabelWithStatus, Counter>,
     buffers: Family<MetricLabel, Gauge>,
     retries: Family<MetricLabel, Counter>,
@@ -665,7 +681,6 @@ impl IngesterMetricsConfig {
             latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
                 Histogram::new([1.0, 10.0, 50.0, 100.0].into_iter())
             }),
-            parsers: Family::<MetricLabelWithStatus, Counter>::default(),
             process: Family::<MetricLabelWithStatus, Counter>::default(),
             buffers: Family::<MetricLabel, Gauge>::default(),
             retries: Family::<MetricLabel, Counter>::default(),
@@ -701,15 +716,6 @@ impl IngesterMetricsConfig {
                 name: label.to_owned(),
             })
             .set(buffer_size);
-    }
-
-    pub fn inc_parser(&self, label: &str, status: MetricStatus) -> u64 {
-        self.parsers
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_owned(),
-                status,
-            })
-            .inc()
     }
 
     pub fn inc_process(&self, label: &str, status: MetricStatus) -> u64 {
@@ -753,11 +759,6 @@ impl IngesterMetricsConfig {
             self.start_time.clone(),
         );
 
-        registry.register(
-            "ingester_parsed_data",
-            "Total amount of parsed data",
-            self.parsers.clone(),
-        );
         registry.register(
             "ingester_processed",
             "Total amount of processed data",
@@ -1058,18 +1059,22 @@ pub struct ForkCleanerMetricsConfig {
     scans_latency: Histogram,
     forks_detected: Gauge,
     deleted_items: Counter,
-    pub red_metrics: Arc<RequestErrorDurationMetrics>,
+}
+
+impl Default for ForkCleanerMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ForkCleanerMetricsConfig {
-    pub fn new(red_metrics: Arc<RequestErrorDurationMetrics>) -> Self {
+    pub fn new() -> Self {
         Self {
             start_time: Default::default(),
             total_scans: Default::default(),
             scans_latency: Histogram::new(exponential_buckets(1.0, 2.0, 12)),
             forks_detected: Default::default(),
             deleted_items: Default::default(),
-            red_metrics,
         }
     }
     pub fn start_time(&self) -> i64 {

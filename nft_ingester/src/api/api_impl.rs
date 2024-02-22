@@ -457,7 +457,9 @@ where
         .await;
 
         self.metrics
-            .set_latency(&label, latency_timer.elapsed().as_millis() as f64);
+            .set_search_asset_latency(&label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics
+            .set_latency("search_asset", latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }

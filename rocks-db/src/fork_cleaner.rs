@@ -8,6 +8,8 @@ use tracing::error;
 const ROCKS_COMPONENT: &str = "rocks_db";
 const DROP_ACTION: &str = "drop";
 const RAW_BLOCKS_CBOR_ENDPOINT: &str = "raw_blocks_cbor";
+const FULL_ITERATION_ACTION: &str = "full_iteration";
+const ITERATOR_TOP_ACTION: &str = "iterator_top";
 
 #[async_trait]
 impl ClItemsManager for Storage {
@@ -56,7 +58,7 @@ impl ForkChecker for Storage {
         }
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
-            "iterator_top",
+            FULL_ITERATION_ACTION,
             RAW_BLOCKS_CBOR_ENDPOINT,
             start_time,
         );
@@ -68,7 +70,15 @@ impl ForkChecker for Storage {
         let start_time = chrono::Utc::now();
         for (key, _) in self.raw_blocks_cbor.iter_end().filter_map(Result::ok) {
             match crate::key_encoders::decode_u64(key.to_vec()) {
-                Ok(key) => return key,
+                Ok(key) => {
+                    self.red_metrics.observe_request(
+                        ROCKS_COMPONENT,
+                        ITERATOR_TOP_ACTION,
+                        RAW_BLOCKS_CBOR_ENDPOINT,
+                        start_time,
+                    );
+                    return key;
+                }
                 Err(e) => {
                     error!("Decode raw block key: {}", e);
                 }
@@ -76,7 +86,7 @@ impl ForkChecker for Storage {
         }
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
-            "full_iteration",
+            ITERATOR_TOP_ACTION,
             RAW_BLOCKS_CBOR_ENDPOINT,
             start_time,
         );
