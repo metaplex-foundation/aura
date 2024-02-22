@@ -617,7 +617,7 @@ pub async fn main() -> Result<(), IngesterError> {
             rocks_storage.clone(),
             force_reingestable_slot_processor.clone(),
             force_reingestable_slot_processor.clone(),
-            producer,
+            producer.clone(),
             metrics.clone(),
             backfiller_config.workers_count,
             backfiller_config.chunk_size,
@@ -627,6 +627,31 @@ pub async fn main() -> Result<(), IngesterError> {
             info!("Running slot force persister...");
             transactions_parser.parse_transactions(rx).await;
             info!("Force slot persister finished working");
+        }));
+
+        let consumer = Arc::new(DirectBlockParser::new(
+            tx_ingester.clone(),
+            rocks_storage.clone(),
+            metrics_state.backfiller_metrics.clone(),
+        ));
+        let slot_getter = Arc::new(IngestableSlotGetter::new(rocks_storage.clone()));
+        let rx = shutdown_rx.resubscribe();
+        let metrics = Arc::new(BackfillerMetricsConfig::new());
+        metrics.register_with_prefix(&mut metrics_state.registry, "ingestable_slot_persister_");
+
+        let transactions_parser = Arc::new(TransactionsParser::new(
+            rocks_storage.clone(),
+            slot_getter,
+            consumer,
+            rocks_storage.clone(),
+            metrics.clone(),
+            backfiller_config.workers_count,
+            backfiller_config.chunk_size,
+        ));
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            info!("Running ingestable slot persister...");
+            transactions_parser.parse_transactions(rx).await;
+            info!("Ingestable slot persister finished working");
         }));
     }
 
