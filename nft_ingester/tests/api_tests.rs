@@ -710,7 +710,7 @@ mod tests {
             Arc::new(IngesterMetricsConfig::new()),
             1,
         );
-        let mut mplx_updates_processor = MplxAccsProcessor::new(
+        let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
             db_client.clone(),
