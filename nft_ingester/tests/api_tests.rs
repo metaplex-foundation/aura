@@ -706,7 +706,6 @@ mod tests {
 
         let token_updates_processor = TokenAccsProcessor::new(
             env.rocks_env.storage.clone(),
-            db_client.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,
@@ -766,7 +765,7 @@ mod tests {
                 collection_details: None,
                 programmable_config: None,
             },
-            slot: 1,
+            slot_updated: 1,
             write_version: 1,
             lamports: 1,
             executable: false,
@@ -795,7 +794,7 @@ mod tests {
         let mut burnt_buff = buffer.burnt_metadata_at_slot.lock().await;
 
         burnt_buff.insert(
-            metadata_key.to_bytes().to_vec(),
+            metadata_key,
             BurntMetadataSlot { slot_updated: 2 },
         );
         drop(burnt_buff);
@@ -824,7 +823,7 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_accs(&[mint_acc])
+            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
         token_updates_processor
             .transform_and_save_token_accs(&[token_acc])
