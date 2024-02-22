@@ -793,10 +793,7 @@ mod tests {
 
         let mut burnt_buff = buffer.burnt_metadata_at_slot.lock().await;
 
-        burnt_buff.insert(
-            metadata_key,
-            BurntMetadataSlot { slot_updated: 2 },
-        );
+        burnt_buff.insert(metadata_key, BurntMetadataSlot { slot_updated: 2 });
         drop(burnt_buff);
 
         let mut mplx_updates_processor_clone = mplx_updates_processor.clone();
