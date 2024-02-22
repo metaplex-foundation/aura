@@ -385,7 +385,7 @@ impl Storage {
     }
 
     fn url_with_status_for(&self, dynamic_info: &AssetDynamicDetails) -> Option<UrlWithStatus> {
-        if dynamic_info.url.value.trim().len() == 0 {
+        if dynamic_info.url.value.trim().is_empty(){
             None
         } else {
             Some(UrlWithStatus {
