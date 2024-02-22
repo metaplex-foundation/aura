@@ -6,16 +6,18 @@ use flatbuffers::FlatBufferBuilder;
 use futures::future::join_all;
 use interface::signature_persistence::{BlockConsumer, BlockProducer};
 use interface::slot_getter::FinalizedSlotGetter;
-use interface::slots_dumper::SlotGetter;
+use interface::slots_dumper::{SlotGetter, SlotsDumper};
 use log::{error, info, warn};
 use metrics_utils::BackfillerMetricsConfig;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
-use rocks_db::bubblegum_slots::BubblegumSlotGetter;
+use rocks_db::bubblegum_slots::{BubblegumSlotGetter, ForceReingestableSlots};
 use rocks_db::column::TypedColumn;
 use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
+use rocks_db::Storage;
 use solana_transaction_status::{
     EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta,
 };
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
@@ -676,4 +678,98 @@ fn is_bubblegum_transaction_encoded(tx: &EncodedTransactionWithStatusMeta) -> bo
         }
     }
     false
+}
+
+pub struct ForceReingestableSlotGetter<T, P>
+where
+    T: TransactionProcessor,
+    P: TransactionResultPersister,
+{
+    rocks_client: Arc<Storage>,
+    direct_block_parser: Arc<DirectBlockParser<T, P>>,
+}
+
+impl<T, P> ForceReingestableSlotGetter<T, P>
+where
+    T: TransactionProcessor,
+    P: TransactionResultPersister,
+{
+    pub fn new(
+        rocks_client: Arc<Storage>,
+        direct_block_parser: Arc<DirectBlockParser<T, P>>,
+    ) -> ForceReingestableSlotGetter<T, P> {
+        ForceReingestableSlotGetter {
+            rocks_client,
+            direct_block_parser,
+        }
+    }
+}
+
+#[async_trait]
+impl<T, P> SlotGetter for ForceReingestableSlotGetter<T, P>
+where
+    T: TransactionProcessor,
+    P: TransactionResultPersister,
+{
+    fn get_unprocessed_slots_iter(&self) -> impl Iterator<Item = u64> {
+        self.rocks_client
+            .force_reingestable_slots
+            .iter_start()
+            .filter_map(|k| k.ok())
+            .map(|(k, _)| ForceReingestableSlots::decode_key(k.to_vec()))
+            .filter_map(|k| k.ok())
+    }
+
+    async fn mark_slots_processed(&self, slots: Vec<u64>) -> core::result::Result<(), String> {
+        self.rocks_client
+            .force_reingestable_slots
+            .delete_batch(slots.clone())
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<T, P> SlotsDumper for ForceReingestableSlotGetter<T, P>
+where
+    T: TransactionProcessor,
+    P: TransactionResultPersister,
+{
+    async fn dump_slots(&self, slots: &[u64]) {
+        if slots.is_empty() {
+            return;
+        }
+        if let Err(e) = self
+            .rocks_client
+            .force_reingestable_slots
+            .put_batch(slots.iter().fold(HashMap::new(), |mut acc, slot| {
+                acc.insert(*slot, ForceReingestableSlots {});
+                acc
+            }))
+            .await
+        {
+            tracing::error!("Error putting force-reingestable slots: {}", e);
+        }
+    }
+}
+
+#[async_trait]
+impl<T, P> BlockConsumer for ForceReingestableSlotGetter<T, P>
+where
+    T: TransactionProcessor,
+    P: TransactionResultPersister,
+{
+    async fn consume_block(
+        &self,
+        slot: u64,
+        block: solana_transaction_status::UiConfirmedBlock,
+    ) -> Result<(), String> {
+        self.rocks_client.consume_block(slot, block.clone()).await?;
+        self.direct_block_parser.consume_block(slot, block).await
+    }
+
+    async fn already_processed_slot(&self, _slot: u64) -> Result<bool, String> {
+        return Ok(false);
+    }
 }
