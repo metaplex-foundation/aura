@@ -81,10 +81,9 @@ where
         &self,
         rx: tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), IngesterError> {
-        let last_key = self.primary_storage.last_known_asset_updated_key()?;
-        if last_key.is_none() {
+        let Some((seq, slot, pubkey)) = self.primary_storage.last_known_asset_updated_key()? else {
             return Ok(());
-        }
+        };
         let metadata_keys = self.index_storage.get_existing_metadata_keys().await?;
         tracing::debug!(
             "Prepared the existing {} metadata keys to skip those from dump",
@@ -96,9 +95,8 @@ where
             .dump_db(path, metadata_keys, self.dump_synchronizer_batch_size, rx)
             .await?;
         tracing::info!("Dump is complete. Loading the dump into the index storage");
-        let last_included_rocks_key = last_key
-            .map(|(seq, slot, pubkey)| encode_u64x2_pubkey(seq, slot, pubkey))
-            .unwrap();
+        let last_included_rocks_key = encode_u64x2_pubkey(seq, slot, pubkey);
+
         self.index_storage
             .load_from_dump(path, last_included_rocks_key.as_slice())
             .await?;

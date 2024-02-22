@@ -225,9 +225,6 @@ impl Dumper for Storage {
             rx,
         )
         .await?;
-        metadata_writer.flush().map_err(|e| e.to_string())?;
-        creators_writer.flush().map_err(|e| e.to_string())?;
-        assets_writer.flush().map_err(|e| e.to_string())?;
         Ok(())
     }
 }

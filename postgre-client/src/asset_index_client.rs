@@ -227,27 +227,19 @@ impl AssetIndexStorage for PgClient {
         base_path: &std::path::Path,
         last_key: &[u8],
     ) -> Result<(), String> {
-        let metadata_path = base_path.join("metadata.csv").to_str().map(str::to_owned);
-        if metadata_path.is_none() {
+        let Some(metadata_path) = base_path.join("metadata.csv").to_str().map(str::to_owned) else {
             return Err("invalid path".to_string());
-        }
-        let creators_path = base_path.join("creators.csv").to_str().map(str::to_owned);
-        if creators_path.is_none() {
+        };
+        let Some(creators_path) = base_path.join("creators.csv").to_str().map(str::to_owned) else {
             return Err("invalid path".to_string());
-        }
-        let assets_path = base_path.join("assets.csv").to_str().map(str::to_owned);
-        if assets_path.is_none() {
+        };
+        let Some(assets_path) = base_path.join("assets.csv").to_str().map(str::to_owned) else {
             return Err("invalid path".to_string());
-        }
+        };
         let mut transaction = self.start_transaction().await?;
 
-        self.copy_all(
-            metadata_path.unwrap(),
-            creators_path.unwrap(),
-            assets_path.unwrap(),
-            &mut transaction,
-        )
-        .await?;
+        self.copy_all(metadata_path, creators_path, assets_path, &mut transaction)
+            .await?;
         self.update_last_synced_key(last_key, &mut transaction)
             .await?;
         self.commit_transaction(transaction).await?;
