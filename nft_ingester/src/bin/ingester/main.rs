@@ -191,6 +191,13 @@ pub async fn main() -> Result<(), IngesterError> {
                 .process_token_accs(cloned_keep_running)
                 .await;
         }));
+        let mut cloned_mplx_parser = mplx_accs_parser.clone();
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            cloned_mplx_parser
+                .process_burnt_accs(cloned_keep_running)
+                .await;
+        }));
 
         let mut cloned_token_parser = token_accs_parser.clone();
 

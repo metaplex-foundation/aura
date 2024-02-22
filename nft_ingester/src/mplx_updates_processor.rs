@@ -12,8 +12,8 @@ use solana_program::pubkey::Pubkey;
 use tokio::time::Instant;
 
 use entities::enums::{RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::Updated;
 use entities::models::{ChainDataV1, Creator, Uses};
+use entities::models::{PubkeyWithSlot, Updated};
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails, MetadataMintMap,
@@ -59,6 +59,11 @@ pub struct BurntMetadata {
     pub slot: u64,
 }
 
+#[derive(Clone, Debug)]
+pub struct BurntMetadataSlot {
+    pub slot_updated: u64,
+}
+
 #[derive(Clone)]
 pub struct MplxAccsProcessor {
     pub batch_size: usize,
@@ -68,6 +73,7 @@ pub struct MplxAccsProcessor {
     pub metrics: Arc<IngesterMetricsConfig>,
     last_received_metadata_at: Option<SystemTime>,
     last_received_edition_at: Option<SystemTime>,
+    last_received_burnt_asset_at: Option<SystemTime>,
 }
 
 macro_rules! store_assets {
@@ -151,6 +157,7 @@ impl MplxAccsProcessor {
             metrics,
             last_received_metadata_at: None,
             last_received_edition_at: None,
+            last_received_burnt_asset_at: None,
         }
     }
 
@@ -180,6 +187,33 @@ impl MplxAccsProcessor {
         );
     }
 
+    pub async fn process_burnt_accs(&mut self, keep_running: Arc<AtomicBool>) {
+        process_accounts!(
+            self,
+            keep_running,
+            self.buffer.burnt_metadata_at_slot,
+            self.batch_size,
+            |s: BurntMetadataSlot| s,
+            self.last_received_burnt_asset_at,
+            Self::transform_and_store_burnt_metadata,
+            "burn_metadata"
+        );
+    }
+
+    pub async fn transform_and_store_burnt_metadata(
+        &self,
+        metadata_info: &HashMap<Pubkey, BurntMetadataSlot>,
+    ) {
+        let begin_processing = Instant::now();
+        if let Err(e) = self.mark_metadata_as_burnt(metadata_info).await {
+            error!("Mark metadata as burnt: {}", e);
+        }
+        self.metrics.set_latency(
+            "burn_metadata",
+            begin_processing.elapsed().as_millis() as f64,
+        );
+    }
+
     pub async fn transform_and_store_metadata_accs(
         &self,
         metadata_info: &HashMap<Vec<u8>, MetadataInfo>,
@@ -192,34 +226,6 @@ impl MplxAccsProcessor {
             "accounts_saving",
             begin_processing.elapsed().as_millis() as f64,
         );
-        let mut burnt_metadatas = self.buffer.burnt_metadata_at_slot.lock().await;
-
-        if burnt_metadatas.len() == 0 {
-            continue;
-        }
-
-        let mut metadata_to_update = Vec::new();
-
-        for key in burnt_metadatas
-            .keys()
-            .take(self.batch_size)
-            .cloned()
-            .collect::<Vec<Vec<u8>>>()
-        {
-            if let Some(slot) = burnt_metadatas.remove(&key) {
-                let metadata_key = Pubkey::try_from(key);
-                match metadata_key {
-                    Ok(key) => metadata_to_update.push(BurntMetadata { key, slot }),
-                    Err(e) => {
-                        error!("Could not recreate Pubkey from vec: {:?}", e);
-                    }
-                }
-            }
-        }
-
-        if let Err(e) = self.mark_metadata_as_burnt(metadata_to_update).await {
-            error!("Error during marking metadata as burnt: {:?}", e);
-        }
     }
 
     async fn transform_and_store_edition_accs(
@@ -250,14 +256,18 @@ impl MplxAccsProcessor {
             self.store_metadata_mint(metadata_models.metadata_mint.clone())
         );
 
-        metadata_models.asset_dynamic.iter().for_each(|asset| {
-            let upd_res = self
-                .rocks_db
-                .asset_updated(asset.get_slot_updated(), asset.pubkey);
-            if let Err(e) = upd_res {
-                error!("Error while updating assets update idx: {}", e);
-            }
-        });
+        if let Err(e) = self.rocks_db.asset_updated_batch(
+            metadata_models
+                .asset_dynamic
+                .iter()
+                .map(|asset| PubkeyWithSlot {
+                    slot: asset.get_slot_updated(),
+                    pubkey: asset.pubkey,
+                })
+                .collect(),
+        ) {
+            error!("Error while updating assets update idx: {}", e);
+        }
     }
 
     pub async fn create_rocks_metadata_models(
@@ -467,11 +477,8 @@ impl MplxAccsProcessor {
 
     async fn mark_metadata_as_burnt(
         &self,
-        metadatas: Vec<BurntMetadata>,
+        metadata_slot_burnt: &HashMap<Pubkey, BurntMetadataSlot>,
     ) -> Result<(), StorageError> {
-        let metadata_slot_burnt: HashMap<Pubkey, u64> =
-            metadatas.iter().map(|v| (v.key, v.slot)).collect();
-
         let mtd_mint_map: Vec<MetadataMintMap> = self
             .rocks_db
             .metadata_mint_map
@@ -485,7 +492,14 @@ impl MplxAccsProcessor {
             .iter()
             .map(|map| AssetDynamicDetails {
                 pubkey: map.mint_key,
-                is_burnt: Updated::new(*metadata_slot_burnt.get(&map.pubkey).unwrap(), None, true),
+                is_burnt: Updated::new(
+                    metadata_slot_burnt
+                        .get(&map.pubkey)
+                        .map(|s| s.slot_updated)
+                        .unwrap_or_default(),
+                    None,
+                    true,
+                ),
                 ..Default::default()
             })
             .collect();

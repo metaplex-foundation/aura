@@ -26,7 +26,7 @@ mod tests {
     use nft_ingester::{
         buffer::Buffer,
         db_v2::DBClient,
-        mplx_updates_processor::{MetadataInfo, MplxAccsProcessor},
+        mplx_updates_processor::{BurntMetadataSlot, MetadataInfo, MplxAccsProcessor},
         token_updates_processor::TokenAccsProcessor,
     };
     use rocks_db::{
@@ -794,13 +794,24 @@ mod tests {
 
         let mut burnt_buff = buffer.burnt_metadata_at_slot.lock().await;
 
-        burnt_buff.insert(metadata_key.to_bytes().to_vec(), 2);
+        burnt_buff.insert(
+            metadata_key.to_bytes().to_vec(),
+            BurntMetadataSlot { slot_updated: 2 },
+        );
         drop(burnt_buff);
 
+        let mut mplx_updates_processor_clone = mplx_updates_processor.clone();
         let cloned_keep_running = keep_running.clone();
         tokio::spawn(async move {
-            mplx_updates_processor
+            mplx_updates_processor_clone
                 .process_metadata_accs(cloned_keep_running)
+                .await;
+        });
+        let mut mplx_updates_processor_clone = mplx_updates_processor.clone();
+        let cloned_keep_running = keep_running.clone();
+        tokio::spawn(async move {
+            mplx_updates_processor_clone
+                .process_burnt_accs(cloned_keep_running)
                 .await;
         });
 

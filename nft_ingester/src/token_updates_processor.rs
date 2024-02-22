@@ -2,7 +2,7 @@ use crate::buffer::Buffer;
 use crate::mplx_updates_processor::result_to_metrics;
 use crate::process_accounts;
 use entities::enums::OwnerType;
-use entities::models::Updated;
+use entities::models::{PubkeyWithSlot, Updated};
 use futures::future;
 use log::error;
 use metrics_utils::IngesterMetricsConfig;
@@ -89,13 +89,14 @@ impl TokenAccsProcessor {
         let begin_processing = Instant::now();
         let result = operation.await;
 
-        asset_updates.into_iter().for_each(|(slot, pk)| {
-            let upd_res = self.rocks_db.asset_updated(slot, pk);
-
-            if let Err(e) = upd_res {
-                error!("Error while updating assets update idx: {}", e);
-            }
-        });
+        if let Err(e) = self.rocks_db.asset_updated_batch(
+            asset_updates
+                .into_iter()
+                .map(|(slot, pubkey)| PubkeyWithSlot { slot, pubkey })
+                .collect(),
+        ) {
+            error!("Error while updating assets update idx: {}", e);
+        }
 
         self.metrics
             .set_latency(metric_name, begin_processing.elapsed().as_millis() as f64);

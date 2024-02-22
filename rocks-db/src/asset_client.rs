@@ -8,7 +8,7 @@ use crate::editions::TokenMetadataEdition;
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
-use entities::models::EditionData;
+use entities::models::{EditionData, PubkeyWithSlot};
 use std::collections::HashMap;
 
 impl Storage {
@@ -31,6 +31,15 @@ impl Storage {
     }
 
     // TODO: Add a backfiller to fill the slot_asset_idx based on the assets_update_idx
+
+    pub fn asset_updated_batch(&self, items: Vec<PubkeyWithSlot>) -> Result<()> {
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        items.iter().try_for_each(|item| {
+            self.asset_updated_with_batch(&mut batch, item.slot, item.pubkey)
+        })?;
+        self.db.write(batch)?;
+        Ok(())
+    }
 
     pub fn asset_updated(&self, slot: u64, pubkey: Pubkey) -> Result<()> {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
