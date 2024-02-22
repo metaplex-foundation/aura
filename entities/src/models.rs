@@ -13,8 +13,16 @@ pub struct UrlWithStatus {
 }
 
 impl UrlWithStatus {
+    pub fn new(metadata_url: &str, is_downloaded: bool) -> Self {
+        Self {
+            metadata_url: metadata_url.trim().to_string(),
+            is_downloaded,
+        }
+    }
     pub fn get_metadata_id(&self) -> Vec<u8> {
         let mut hasher = Sha256::new();
+        // triming the url to remove any leading or trailing whitespaces,
+        // as some of the legacy versions of the database have contained the urls with whitespaces
         let url = self.metadata_url.trim();
         hasher.update(url);
         hasher.finalize().to_vec()
@@ -257,7 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn test_url_with_status_trimmed() {
+    fn test_url_with_status_trimmed_on_untrimmed_data() {
         let url = "  http://example.com  ".to_string();
         let url_with_status = UrlWithStatus {
             metadata_url: url,
@@ -269,5 +277,12 @@ mod tests {
             hex::encode(metadata_id),
             "f0e6a6a97042a4f1f1c87f5f7d44315b2d852c2df5c7991cc66241bf7072d1c4"
         );
+    }
+
+    #[test]
+    fn test_new_url_with_status_trimmes_url() {
+        let url = "  http://example.com  ".to_string();
+        let url_with_status: UrlWithStatus = UrlWithStatus::new(&url, false);
+        assert_eq!(url_with_status.metadata_url, "http://example.com");
     }
 }

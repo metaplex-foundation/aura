@@ -48,6 +48,8 @@ use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::slots_collector::SlotsCollector;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
+pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
+pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -84,12 +86,12 @@ pub async fn main() -> Result<(), IngesterError> {
     let max_postgre_connections = config
         .database_config
         .get_max_postgres_connections()
-        .unwrap_or(100);
+        .unwrap_or(DEFAULT_MAX_POSTGRES_CONNECTIONS);
 
     let index_storage = Arc::new(
         PgClient::new(
             &config.database_config.get_database_url().unwrap(),
-            100,
+            DEFAULT_MIN_POSTGRES_CONNECTIONS,
             max_postgre_connections,
             metrics_state.red_metrics.clone(),
         )

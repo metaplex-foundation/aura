@@ -43,10 +43,7 @@ impl AssetIndexStorage for PgClient {
             .filter_map(|asset_index| asset_index.metadata_url.clone())
             .collect::<HashSet<_>>()
             .iter()
-            .map(|url| UrlWithStatus {
-                metadata_url: url.metadata_url.trim().replace('\0', ""),
-                is_downloaded: url.is_downloaded,
-            })
+            .map(|url| UrlWithStatus::new(url.metadata_url.as_str(), url.is_downloaded))
             .collect();
 
         if !metadata_urls.is_empty() {
