@@ -523,6 +523,7 @@ mod tests {
     use metrics_utils::{IntegrityVerificationMetrics, MetricsTrait};
     use regex::Regex;
     use serde_json::json;
+    use solana_sdk::commitment_config::CommitmentLevel;
 
     // this function used only inside tests under rpc_tests and bigtable_tests features, that do not running in our CI
     #[allow(dead_code)]
