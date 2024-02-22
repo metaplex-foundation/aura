@@ -3,7 +3,8 @@ use async_trait::async_trait;
 use entities::models::{ClItem, ForkedItem};
 use interface::fork_cleaner::{ClItemsManager, ForkChecker};
 use std::collections::HashSet;
-use tracing::error;
+use tokio::sync::broadcast::Receiver;
+use tracing::{error, info};
 
 const ROCKS_COMPONENT: &str = "rocks_db";
 const DROP_ACTION: &str = "drop";
@@ -44,10 +45,14 @@ impl ClItemsManager for Storage {
 
 #[async_trait]
 impl ForkChecker for Storage {
-    fn get_all_non_forked_slots(&self) -> HashSet<u64> {
+    fn get_all_non_forked_slots(&self, rx: Receiver<()>) -> HashSet<u64> {
         let start_time = chrono::Utc::now();
         let mut all_keys = HashSet::new();
         for (key, _) in self.raw_blocks_cbor.iter_start().filter_map(Result::ok) {
+            if !rx.is_empty() {
+                info!("Stop iteration over raw_blocks_cbor iterator...");
+                return all_keys;
+            }
             match crate::key_encoders::decode_u64(key.to_vec()) {
                 Ok(key) => all_keys.insert(key),
                 Err(e) => {
