@@ -288,6 +288,18 @@ impl Storage {
                     AssetStaticDetails::merge_keep_existing,
                 );
             }
+            asset::AssetAuthorityDeprecated::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_asset_authority_deprecated",
+                    AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            asset::AssetCollectionDeprecated::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_asset_collection_deprecated",
+                    AssetStaticDetails::merge_keep_existing,
+                );
+            }
             asset::AssetAuthority::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_asset_authorities",
