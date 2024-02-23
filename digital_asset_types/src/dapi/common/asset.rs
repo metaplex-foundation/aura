@@ -319,11 +319,13 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         .map(|o| bs58::encode(o).into_string())
         .unwrap_or("".to_string());
     let mut grouping = Some(rpc_groups);
+    let mut frozen = asset.frozen;
 
     match interface {
         Interface::FungibleAsset | Interface::FungibleToken => {
             owner = "".to_string();
             grouping = Some(vec![]);
+            frozen = false;
         }
         _ => {}
     }
@@ -375,7 +377,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         }),
         creators: Some(rpc_creators),
         ownership: Ownership {
-            frozen: asset.frozen,
+            frozen,
             delegated: asset.delegate.is_some(),
             delegate: asset.delegate.map(|s| bs58::encode(s).into_string()),
             ownership_model: asset.owner_type.into(),
