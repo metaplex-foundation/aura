@@ -699,10 +699,11 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());
