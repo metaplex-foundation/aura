@@ -776,7 +776,7 @@ mod tests {
                     collection_details: None,
                     programmable_config: None,
                 },
-                slot: 1,
+                slot_updated: 1,
                 write_version: 1,
                 lamports: 1,
                 executable: false,
@@ -800,14 +800,24 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
+            .transform_and_save_mint_accs(
+                &mint_accs
+                    .into_iter()
+                    .map(|mint| (mint.pubkey.to_bytes().to_vec(), mint))
+                    .collect(),
+            )
             .await;
         token_updates_processor
-            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_accs)].into_iter().collect())
+            .transform_and_save_token_accs(
+                &token_accs
+                    .into_iter()
+                    .map(|token_acc| (token_acc.pubkey.to_bytes().to_vec(), token_acc))
+                    .collect(),
+            )
             .await;
 
         mplx_updates_processor
-            .transform_and_save_metadata(&metadata_info)
+            .transform_and_store_metadata_accs(&metadata_info)
             .await;
 
         let payload = GetAsset {
