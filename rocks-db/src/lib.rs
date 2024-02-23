@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
-use asset::{AssetOwnerDeprecated, SlotAssetIdx};
+use asset::{AssetOwnerDeprecated, MetadataMintMap, SlotAssetIdx};
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
@@ -49,6 +49,7 @@ pub struct Storage {
     pub asset_static_data_deprecated: Column<AssetStaticDetailsDeprecated>,
     pub asset_dynamic_data: Column<AssetDynamicDetails>,
     pub asset_dynamic_data_deprecated: Column<AssetDynamicDetailsDeprecated>,
+    pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_authority_data: Column<AssetAuthority>,
     pub asset_owner_data_deprecated: Column<AssetOwnerDeprecated>,
     pub asset_owner_data: Column<AssetOwner>,
@@ -81,6 +82,7 @@ impl Storage {
         let asset_static_data = Self::column(db.clone());
         let asset_dynamic_data = Self::column(db.clone());
         let asset_dynamic_data_deprecated = Self::column(db.clone());
+        let metadata_mint_map = Self::column(db.clone());
         let asset_authority_data = Self::column(db.clone());
         let asset_owner_data = Self::column(db.clone());
         let asset_owner_data_deprecated = Self::column(db.clone());
@@ -106,6 +108,7 @@ impl Storage {
             asset_static_data,
             asset_dynamic_data,
             asset_dynamic_data_deprecated,
+            metadata_mint_map,
             asset_authority_data,
             asset_owner_data,
             asset_owner_data_deprecated,
@@ -167,6 +170,7 @@ impl Storage {
             Self::new_cf_descriptor::<AssetStaticDetails>(),
             Self::new_cf_descriptor::<AssetDynamicDetails>(),
             Self::new_cf_descriptor::<AssetDynamicDetailsDeprecated>(),
+            Self::new_cf_descriptor::<MetadataMintMap>(),
             Self::new_cf_descriptor::<AssetAuthority>(),
             Self::new_cf_descriptor::<AssetOwnerDeprecated>(),
             Self::new_cf_descriptor::<asset::AssetLeaf>(),
@@ -312,6 +316,12 @@ impl Storage {
             AssetOwnerDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_asset_owner_deprecated_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            MetadataMintMap::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_metadata_mint_map_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }

@@ -33,6 +33,7 @@ mod tests {
     use tokio::sync::broadcast;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
+    use usecase::proofs::MaybeProofChecker;
 
     // 242856151 slot when decompress happened
 
@@ -242,10 +243,11 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -313,10 +315,11 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -384,10 +387,11 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -455,10 +459,11 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());

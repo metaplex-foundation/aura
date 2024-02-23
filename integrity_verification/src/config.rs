@@ -1,6 +1,7 @@
 use figment::providers::Env;
 use figment::Figment;
 use serde_derive::Deserialize;
+use solana_sdk::commitment_config::CommitmentLevel;
 
 #[derive(Deserialize, Default, PartialEq, Debug, Clone)]
 pub enum TestSourceMode {
@@ -33,6 +34,12 @@ pub struct IntegrityVerificationConfig {
     pub collect_slots: bool,
     #[serde(default = "default_test_retries")]
     pub test_retries: u64,
+    #[serde(default = "default_check_proofs_commitment")]
+    pub check_proofs_commitment: CommitmentLevel,
+}
+
+fn default_check_proofs_commitment() -> CommitmentLevel {
+    CommitmentLevel::Processed
 }
 
 // Use unwraps because it just config-setup stage

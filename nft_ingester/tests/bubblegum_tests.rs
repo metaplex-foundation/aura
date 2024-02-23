@@ -18,6 +18,7 @@ mod tests {
     use tokio::sync::broadcast;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
+    use usecase::proofs::MaybeProofChecker;
 
     #[tokio::test]
     #[tracing_test::traced_test]
@@ -55,10 +56,11 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -164,10 +166,11 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());

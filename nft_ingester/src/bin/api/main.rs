@@ -13,9 +13,11 @@ use prometheus_client::registry::Registry;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tonic::transport::Server;
+use usecase::proofs::MaybeProofChecker;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
@@ -91,6 +93,14 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
+
+    let proof_checker = config.rpc_host.map(|host| {
+        Arc::new(MaybeProofChecker::new(
+            Arc::new(RpcClient::new(host)),
+            config.check_proofs_probability,
+            config.check_proofs_commitment,
+        ))
+    });
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api_v2(
             pg_client.clone(),
@@ -98,6 +108,7 @@ pub async fn main() -> Result<(), IngesterError> {
             cloned_keep_running,
             metrics.clone(),
             config.server_port,
+            proof_checker,
         )
         .await
         {

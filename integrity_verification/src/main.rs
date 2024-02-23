@@ -3,9 +3,9 @@ use crate::diff_checker::{
     DiffChecker, GET_ASSET_BY_AUTHORITY_METHOD, GET_ASSET_BY_CREATOR_METHOD,
     GET_ASSET_BY_GROUP_METHOD, GET_ASSET_BY_OWNER_METHOD, GET_ASSET_METHOD, GET_ASSET_PROOF_METHOD,
 };
-use crate::error::IntegrityVerificationError;
 use crate::file_keys_fetcher::FileKeysFetcher;
 use clap::Parser;
+use interface::error::IntegrityVerificationError;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
     IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig, MetricsTrait,
@@ -21,9 +21,7 @@ use tracing::{error, info};
 mod api;
 mod config;
 mod diff_checker;
-mod error;
 mod file_keys_fetcher;
-mod merkle_tree;
 mod params;
 mod requests;
 mod slots_dumper;
@@ -63,6 +61,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                 config.slots_collect_path_container.clone(),
                 config.collect_slots,
                 config.test_retries,
+                config.check_proofs_commitment,
             )
             .await;
             run_tests(
@@ -94,6 +93,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                 config.slots_collect_path_container.clone(),
                 config.collect_slots,
                 config.test_retries,
+                config.check_proofs_commitment,
             )
             .await;
             run_tests(
