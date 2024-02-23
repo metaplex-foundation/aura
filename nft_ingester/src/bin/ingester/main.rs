@@ -49,6 +49,8 @@ use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::SlotsCollector;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
+pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
+pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -82,10 +84,56 @@ pub async fn main() -> Result<(), IngesterError> {
         restore_rocksdb(&config).await?;
     }
 
+    let max_postgre_connections = config
+        .database_config
+        .get_max_postgres_connections()
+        .unwrap_or(DEFAULT_MAX_POSTGRES_CONNECTIONS);
+
+    let index_storage = Arc::new(
+        PgClient::new(
+            &config.database_config.get_database_url().unwrap(),
+            DEFAULT_MIN_POSTGRES_CONNECTIONS,
+            max_postgre_connections,
+            metrics_state.red_metrics.clone(),
+        )
+        .await?,
+    );
+
     let db_client_v2 = Arc::new(DBClientV2::new(&config.database_config).await?);
 
-    let mut tasks = JoinSet::new();
+    let tasks = JoinSet::new();
 
+    let mutexed_tasks = Arc::new(Mutex::new(tasks));
+    // start parsers
+    let storage = Storage::open(
+        &config
+            .rocks_db_path_container
+            .clone()
+            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        mutexed_tasks.clone(),
+        metrics_state.red_metrics.clone(),
+    )
+    .unwrap();
+
+    let rocks_storage = Arc::new(storage);
+
+    let synchronizer = Synchronizer::new(
+        rocks_storage.clone(),
+        index_storage.clone(),
+        config.synchronizer_batch_size,
+        config.dump_synchronizer_batch_size,
+        config.dump_path.to_string(),
+        metrics_state.synchronizer_metrics.clone(),
+    );
+    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
+
+    if config.run_dump_synchronize_on_start {
+        tracing::info!("Running dump synchronizer on start");
+        synchronizer
+            .full_syncronize(shutdown_rx.resubscribe())
+            .await
+            .unwrap();
+    }
     // setup buffer
     let buffer = Arc::new(Buffer::new());
 
@@ -108,14 +156,14 @@ pub async fn main() -> Result<(), IngesterError> {
     let keep_running = Arc::new(AtomicBool::new(true));
     let cloned_keep_running = keep_running.clone();
 
-    tasks.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         geyser_tcp_receiver
             .connect(geyser_addr, cloned_keep_running)
             .await
             .unwrap()
     }));
     let cloned_keep_running = keep_running.clone();
-    tasks.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         snapshot_tcp_receiver
             .connect(snapshot_addr, cloned_keep_running)
             .await
@@ -125,7 +173,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_buffer = buffer.clone();
     let cloned_keep_running = keep_running.clone();
     let cloned_metrics = metrics_state.ingester_metrics.clone();
-    tasks.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
             cloned_buffer.debug().await;
             cloned_buffer.capture_metrics(&cloned_metrics).await;
@@ -133,19 +181,6 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     }));
 
-    let mutexed_tasks = Arc::new(Mutex::new(tasks));
-    // start parsers
-    let storage = Storage::open(
-        &config
-            .rocks_db_path_container
-            .clone()
-            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
-        mutexed_tasks.clone(),
-        metrics_state.red_metrics.clone(),
-    )
-    .unwrap();
-
-    let rocks_storage = Arc::new(storage);
     let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap_or(0);
 
     // start backup service
@@ -318,7 +353,6 @@ pub async fn main() -> Result<(), IngesterError> {
     let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
         backfill_bubblegum_updates_processor.clone(),
     ));
-    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     let backfiller_config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
     let big_table_client = Arc::new(
         connect_new_bigtable_from_config(backfiller_config.clone())
@@ -488,28 +522,6 @@ pub async fn main() -> Result<(), IngesterError> {
             }
         };
     }
-
-    let max_postgre_connections = config
-        .database_config
-        .get_max_postgres_connections()
-        .unwrap_or(100);
-
-    let index_storage = Arc::new(
-        PgClient::new(
-            &config.database_config.get_database_url().unwrap(),
-            100,
-            max_postgre_connections,
-            metrics_state.red_metrics.clone(),
-        )
-        .await?,
-    );
-
-    let synchronizer = Synchronizer::new(
-        rocks_storage.clone(),
-        index_storage.clone(),
-        config.synchronizer_batch_size,
-        metrics_state.synchronizer_metrics.clone(),
-    );
 
     let cloned_keep_running = keep_running.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {

@@ -7,8 +7,8 @@ use sqlx::{Postgres, QueryBuilder, Transaction};
 use crate::{
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
     storage_traits::AssetIndexStorage,
-    PgClient, BATCH_DELETE_ACTION, BATCH_SELECT_ACTION, BATCH_UPSERT_ACTION, SELECT_ACTION,
-    SQL_COMPONENT, TRANSACTION_ACTION, UPDATE_ACTION,
+    PgClient, BATCH_DELETE_ACTION, BATCH_SELECT_ACTION, BATCH_UPSERT_ACTION, CREATE_ACTION,
+    DROP_ACTION, SELECT_ACTION, SQL_COMPONENT, UPDATE_ACTION,
 };
 use entities::models::{AssetIndex, Creator, UrlWithStatus};
 
@@ -35,14 +35,7 @@ impl AssetIndexStorage for PgClient {
         asset_indexes: &[AssetIndex],
         last_key: &[u8],
     ) -> Result<(), String> {
-        let start_time = chrono::Utc::now();
-        let mut transaction = self.pool.begin().await.map_err(|e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "begin");
-            e.to_string()
-        })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "begin", start_time);
+        let mut transaction = self.start_transaction().await?;
 
         // First we need to bulk upsert metadata_url into metadata and get back ids for each metadata_url to upsert into assets_v3
         let mut metadata_urls: Vec<_> = asset_indexes
@@ -50,26 +43,12 @@ impl AssetIndexStorage for PgClient {
             .filter_map(|asset_index| asset_index.metadata_url.clone())
             .collect::<HashSet<_>>()
             .iter()
-            .map(|url| UrlWithStatus {
-                metadata_url: url.metadata_url.trim().replace('\0', ""),
-                is_downloaded: url.is_downloaded,
-            })
+            .map(|url| UrlWithStatus::new(url.metadata_url.as_str(), url.is_downloaded))
             .collect();
-
-        let mut metadata_url_map: HashMap<String, i64> = HashMap::new();
 
         if !metadata_urls.is_empty() {
             metadata_urls.sort_by(|a, b| a.metadata_url.cmp(&b.metadata_url));
             self.insert_tasks(&mut transaction, metadata_urls.clone())
-                .await?;
-            metadata_url_map = self
-                .get_tasks_ids(
-                    &mut transaction,
-                    metadata_urls
-                        .into_iter()
-                        .map(|url_with_status| url_with_status.metadata_url)
-                        .collect(),
-                )
                 .await?;
         }
 
@@ -124,10 +103,7 @@ impl AssetIndexStorage for PgClient {
             ast_slot_updated) ",
         );
         query_builder.push_values(asset_indexes, |mut builder, asset_index| {
-            let metadata_id = match asset_index.metadata_url {
-                Some(ref url) => metadata_url_map.get(&url.metadata_url),
-                None => None,
-            };
+            let metadata_id = asset_index.metadata_url.map(|u| u.get_metadata_id());
             builder
                 .push_bind(asset_index.pubkey.to_bytes().to_vec())
                 .push_bind(SpecificationVersions::from(
@@ -175,15 +151,13 @@ impl AssetIndexStorage for PgClient {
             ast_slot_updated = EXCLUDED.ast_slot_updated
             WHERE assets_v3.ast_slot_updated <= EXCLUDED.ast_slot_updated OR assets_v3.ast_slot_updated IS NULL;");
 
-        let query = query_builder.build();
-        let start_time = chrono::Utc::now();
-        query.execute(&mut transaction).await.map_err(|e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, BATCH_UPSERT_ACTION, "assets_v3");
-            e.to_string()
-        })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, BATCH_UPSERT_ACTION, "assets_v3", start_time);
+        self.execute_query_with_metrics(
+            &mut transaction,
+            &mut query_builder,
+            BATCH_UPSERT_ACTION,
+            "assets_v3",
+        )
+        .await?;
 
         // Asset creators will be updated in 2 steps:
         // 1. Delete creators for the assets that are being updated and don't exist anymore
@@ -207,20 +181,13 @@ impl AssetIndexStorage for PgClient {
                         .push_bind(pubkey.to_bytes());
                 },
             );
-
-            let query = query_builder.build();
-            let start_time = chrono::Utc::now();
-            query.execute(&mut transaction).await.map_err(|e| {
-                self.metrics
-                    .observe_error(SQL_COMPONENT, BATCH_DELETE_ACTION, "asset_creators_v3");
-                e.to_string()
-            })?;
-            self.metrics.observe_request(
-                SQL_COMPONENT,
+            self.execute_query_with_metrics(
+                &mut transaction,
+                &mut query_builder,
                 BATCH_DELETE_ACTION,
                 "asset_creators_v3",
-                start_time,
-            );
+            )
+            .await?;
         }
 
         // Bulk upsert for asset_creators_v3
@@ -240,46 +207,80 @@ impl AssetIndexStorage for PgClient {
             );
             query_builder.push(" ON CONFLICT (asc_creator, asc_pubkey) DO UPDATE SET asc_verified = EXCLUDED.asc_verified WHERE asset_creators_v3.asc_slot_updated <= EXCLUDED.asc_slot_updated;");
 
-            let query = query_builder.build();
-            let start_time = chrono::Utc::now();
-            query.execute(&mut transaction).await.map_err(|e| {
-                self.metrics
-                    .observe_error(SQL_COMPONENT, BATCH_UPSERT_ACTION, "asset_creators_v3");
-                e.to_string()
-            })?;
-            self.metrics.observe_request(
-                SQL_COMPONENT,
+            self.execute_query_with_metrics(
+                &mut transaction,
+                &mut query_builder,
                 BATCH_UPSERT_ACTION,
                 "asset_creators_v3",
-                start_time,
-            );
+            )
+            .await?;
         }
 
+        self.update_last_synced_key(last_key, &mut transaction)
+            .await?;
         // Update last_synced_key
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("UPDATE last_synced_key SET last_synced_asset_update_key = ");
-        query_builder.push_bind(last_key).push(" WHERE id = 1");
+        self.commit_transaction(transaction).await
+    }
 
-        let query = query_builder.build();
-        let start_time = chrono::Utc::now();
-        query.execute(&mut transaction).await.map_err(|e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, UPDATE_ACTION, "last_synced_key");
-            e.to_string()
-        })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, UPDATE_ACTION, "last_synced_key", start_time);
+    async fn load_from_dump(
+        &self,
+        base_path: &std::path::Path,
+        last_key: &[u8],
+    ) -> Result<(), String> {
+        let Some(metadata_path) = base_path.join("metadata.csv").to_str().map(str::to_owned) else {
+            return Err("invalid path".to_string());
+        };
+        let Some(creators_path) = base_path.join("creators.csv").to_str().map(str::to_owned) else {
+            return Err("invalid path".to_string());
+        };
+        let Some(assets_path) = base_path.join("assets.csv").to_str().map(str::to_owned) else {
+            return Err("invalid path".to_string());
+        };
+        let mut transaction = self.start_transaction().await?;
 
-        let start_time = chrono::Utc::now();
-        transaction.commit().await.map_err(|e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "commit");
-            e.to_string()
-        })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "commit", start_time);
+        self.copy_all(metadata_path, creators_path, assets_path, &mut transaction)
+            .await?;
+        self.update_last_synced_key(last_key, &mut transaction)
+            .await?;
+        self.commit_transaction(transaction).await?;
         Ok(())
     }
+
+    async fn get_existing_metadata_keys(&self) -> Result<HashSet<Vec<u8>>, String> {
+        let mut set = HashSet::new();
+        let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "DECLARE all_tasks CURSOR FOR SELECT tsk_id FROM tasks WHERE tsk_id IS NOT NULL",
+        );
+        self.execute_query_with_metrics(&mut tx, &mut query_builder, CREATE_ACTION, "cursor")
+            .await?;
+        loop {
+            let mut query_builder: QueryBuilder<'_, Postgres> =
+                QueryBuilder::new("FETCH 10000 FROM all_tasks");
+            // Fetch a batch of rows from the cursor
+            let query = query_builder.build_query_as::<TaskIdRawResponse>();
+            let rows = query.fetch_all(&mut tx).await.map_err(|e| e.to_string())?;
+
+            // If no rows were fetched, we are done
+            if rows.is_empty() {
+                break;
+            }
+
+            for row in rows {
+                set.insert(row.tsk_id);
+            }
+        }
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("CLOSE all_tasks");
+        self.execute_query_with_metrics(&mut tx, &mut query_builder, DROP_ACTION, "cursor")
+            .await?;
+        self.rollback_transaction(tx).await?;
+        Ok(set)
+    }
+}
+
+#[derive(sqlx::FromRow, Debug)]
+struct TaskIdRawResponse {
+    pub(crate) tsk_id: Vec<u8>,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -378,6 +379,24 @@ impl PgClient {
             new_or_updated,
             to_remove,
         }
+    }
+
+    async fn update_last_synced_key(
+        &self,
+        last_key: &[u8],
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), String> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("UPDATE last_synced_key SET last_synced_asset_update_key = ");
+        query_builder.push_bind(last_key).push(" WHERE id = 1");
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            UPDATE_ACTION,
+            "last_synced_key",
+        )
+        .await?;
+        Ok(())
     }
 }
 

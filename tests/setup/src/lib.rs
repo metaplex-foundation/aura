@@ -28,6 +28,8 @@ impl<'a> TestEnvironment<'a> {
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             BATCH_SIZE,
+            200_000,
+            "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
         );
         syncronizer

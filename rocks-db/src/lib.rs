@@ -27,6 +27,7 @@ mod batch_client;
 pub mod bubblegum_slots;
 pub mod cl_items;
 pub mod column;
+pub mod dump_client;
 pub mod editions;
 pub mod errors;
 pub mod fork_cleaner;
@@ -41,7 +42,6 @@ pub mod storage_traits;
 pub mod transaction;
 pub mod transaction_client;
 pub mod tree_seq;
-
 pub type Result<T> = std::result::Result<T, StorageError>;
 
 pub struct Storage {

@@ -10,7 +10,7 @@ pub enum TestSourceMode {
     Database,
 }
 
-fn default_test_retries() -> u64 {
+const fn default_test_retries() -> u64 {
     20
 }
 
@@ -38,7 +38,7 @@ pub struct IntegrityVerificationConfig {
     pub check_proofs_commitment: CommitmentLevel,
 }
 
-fn default_check_proofs_commitment() -> CommitmentLevel {
+const fn default_check_proofs_commitment() -> CommitmentLevel {
     CommitmentLevel::Processed
 }
 

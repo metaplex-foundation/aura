@@ -24,6 +24,7 @@ impl PgClient {
         before: Option<String>,
         after: Option<String>,
     ) -> (QueryBuilder<'a, Postgres>, bool) {
+        // todo: remove the inner join with tasks and only perform it if the metadata_url_id is present in the filter
         let mut query_builder = QueryBuilder::new(
             "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 INNER JOIN tasks ON ast_metadata_url_id = tsk_id",
         );

@@ -27,12 +27,25 @@ pub trait AssetIndexReader {
     async fn get_asset_indexes(&self, keys: &[Pubkey]) -> Result<HashMap<Pubkey, AssetIndex>>;
 }
 
-pub trait AssetIndexStorage: AssetIndexReader + AssetUpdateIndexStorage {}
+#[automock]
+#[async_trait]
+pub trait Dumper {
+    async fn dump_db(
+        &self,
+        base_path: &std::path::Path,
+        metadata_key_set: HashSet<Vec<u8>>,
+        batch_size: usize,
+        rx: tokio::sync::broadcast::Receiver<()>,
+    ) -> core::result::Result<(), String>;
+}
+
+pub trait AssetIndexStorage: AssetIndexReader + AssetUpdateIndexStorage + Dumper {}
 
 #[derive(Default)]
 pub struct MockAssetIndexStorage {
     pub mock_update_index_storage: MockAssetUpdateIndexStorage,
     pub mock_asset_index_reader: MockAssetIndexReader,
+    pub mock_dumper: MockDumper,
 }
 
 impl MockAssetIndexStorage {
@@ -40,6 +53,7 @@ impl MockAssetIndexStorage {
         MockAssetIndexStorage {
             mock_update_index_storage: MockAssetUpdateIndexStorage::new(),
             mock_asset_index_reader: MockAssetIndexReader::new(),
+            mock_dumper: MockDumper::new(),
         }
     }
 }
@@ -66,6 +80,21 @@ impl AssetUpdateIndexStorage for MockAssetIndexStorage {
 impl AssetIndexReader for MockAssetIndexStorage {
     async fn get_asset_indexes(&self, keys: &[Pubkey]) -> Result<HashMap<Pubkey, AssetIndex>> {
         self.mock_asset_index_reader.get_asset_indexes(keys).await
+    }
+}
+
+#[async_trait]
+impl Dumper for MockAssetIndexStorage {
+    async fn dump_db(
+        &self,
+        base_path: &std::path::Path,
+        metadata_key_set: HashSet<Vec<u8>>,
+        batch_size: usize,
+        rx: tokio::sync::broadcast::Receiver<()>,
+    ) -> core::result::Result<(), String> {
+        self.mock_dumper
+            .dump_db(base_path, metadata_key_set, batch_size, rx)
+            .await
     }
 }
 

@@ -1,65 +1,26 @@
--- this file contains the SQL statements to create the tables and indexes for the v3 schema, where postgres acts as a secondary index for the Solana blockchain data.
--- it uses the same types as v2, so it's not duplicated here.
--- TODO: add data/indexes needed for other API endpoints and not only search assets
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TYPE royalty_target_type AS ENUM (
-	'unknown',
-	'creators',
-	'fanout',
-	'single'
-);
-CREATE TYPE specification_versions AS ENUM (
-    'unknown',
-    'v0',
-    'v1',
-    'v2'
-);
-CREATE TYPE specification_asset_class AS ENUM (
-    'unknown',
-    'fungible_token',
-    'fungible_asset',
-    'nft',
-    'printable_nft',
-    'print',
-    'transfer_restricted_nft',
-    'non_transferable_nft',
-    'identity_nft'
-);
-CREATE TYPE owner_type AS ENUM (
-    'unknown',
-    'token',
-    'single'
-);
-CREATE TYPE task_status AS ENUM (
-	'pending',
-	'running',
-	'success',
-	'failed'
-);
+DROP TABLE assets_v3;
 
-CREATE TABLE asset_creators_v3 (
-    asc_pubkey bytea NOT NULL,
-    asc_creator bytea NOT NULL,
-    asc_verified bool NOT NULL,
-	asc_slot_updated bigint NOT NULL, -- not really the updated slot of the creator, but of an asset, is used to upsert the row properly
-    CONSTRAINT asset_creators_v3_pkey PRIMARY KEY (asc_pubkey, asc_creator)
-);
-CREATE INDEX asset_creators_v3_creator ON asset_creators_v3(asc_creator, asc_verified);
+DELETE FROM tasks WHERE tsk_metadata_url = '';
 
-CREATE TABLE tasks (
-    tsk_id bytea
-        CONSTRAINT tasks_pk
-            PRIMARY KEY,
-    tsk_metadata_url text NOT NULL,
-    tsk_status task_status NOT NULL,
-    tsk_locked_until timestamptz NULL DEFAULT (now() AT TIME ZONE 'utc'::text),
-    tsk_attempts int2 NOT NULL DEFAULT 0,
-    tsk_max_attempts int2 NOT NULL DEFAULT 10,
-    tsk_error text
-);
-CREATE UNIQUE INDEX tasks_metadata_url ON tasks (tsk_metadata_url);
-CREATE INDEX tasks_status ON tasks (tsk_status);
-CREATE INDEX tasks_locked_until ON tasks (tsk_locked_until);
+ALTER TABLE tasks
+ADD COLUMN tsk_id_hash bytea;
+
+UPDATE tasks
+SET tsk_id_hash = digest(tsk_metadata_url, 'sha256');
+
+-- Ensure there are no null hashes
+ALTER TABLE tasks ALTER COLUMN tsk_id_hash SET NOT NULL;
+
+-- Add the primary key
+ALTER TABLE tasks ADD CONSTRAINT tsk_id_hash_pkey PRIMARY KEY (tsk_id_hash);
+
+
+ALTER TABLE tasks DROP COLUMN tsk_id;
+
+ALTER TABLE tasks RENAME COLUMN tsk_id_hash TO tsk_id;
+
 
 CREATE TABLE assets_v3 (
 	ast_pubkey bytea NOT NULL,
@@ -112,12 +73,3 @@ CREATE INDEX assets_v3_is_frozen ON assets_v3(ast_is_frozen) WHERE ast_is_frozen
 
 CREATE INDEX assets_v3_supply ON assets_v3(ast_supply) WHERE ast_supply IS NOT NULL;
 CREATE INDEX assets_v3_slot_updated ON assets_v3(ast_slot_updated);
-
-CREATE TABLE last_synced_key (
-    id integer NOT NULL PRIMARY KEY DEFAULT 1,
-    last_synced_asset_update_key bytea,
-	constraint only_one_row check (id = 1)
-);
-
--- Insert an initial row (assuming there's no last_synced_key initially)
-INSERT INTO last_synced_key (last_synced_asset_update_key) VALUES (null);
