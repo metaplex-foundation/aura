@@ -142,6 +142,20 @@ impl PgClient {
         Ok(())
     }
 
+    async fn create_index(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        name: &str,
+        on_query_string: &str,
+    ) -> Result<(), String> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("CREATE INDEX ");
+        query_builder.push(name);
+        query_builder.push(" ON ");
+        query_builder.push(on_query_string);
+        query_builder.push(";");
+        self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, name)
+            .await
+    }
     pub async fn recreate_indexes(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
@@ -150,191 +164,30 @@ impl PgClient {
             QueryBuilder::new("ALTER TABLE assets_v3 ENABLE TRIGGER ALL;");
         self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "assets_v3")
             .await?;
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("CREATE INDEX asset_creators_v3_creator ON asset_creators_v3(asc_creator, asc_verified);");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_asset_creators_v3_creator",
-        )
-        .await?;
 
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("CREATE INDEX assets_v3_specification_version ON assets_v3 (ast_specification_version) WHERE ast_specification_version <> 'v1'::specification_versions;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_specification_version",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("CREATE INDEX assets_v3_specification_asset_class ON assets_v3 (ast_specification_asset_class) WHERE ast_specification_asset_class IS NOT NULL AND ast_specification_asset_class <> 'unknown'::specification_asset_class;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_specification_asset_class",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("CREATE INDEX assets_v3_royalty_target_type ON assets_v3 (ast_royalty_target_type) WHERE ast_royalty_target_type <> 'creators'::royalty_target_type;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_royalty_target_type",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "CREATE INDEX assets_v3_royalty_amount ON assets_v3 (ast_royalty_amount);",
-        );
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_royalty_amount",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "CREATE INDEX assets_v3_slot_created ON assets_v3 (ast_slot_created);",
-        );
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_slot_created",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("CREATE INDEX assets_v3_owner_type ON assets_v3 (ast_owner_type) WHERE ast_owner_type IS NOT NULL AND ast_owner_type <> 'unknown'::owner_type;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_owner_type",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("CREATE INDEX assets_v3_metadata_url ON assets_v3 (ast_metadata_url_id) WHERE ast_metadata_url_id IS NOT NULL;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_metadata_url",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "CREATE INDEX assets_v3_owner ON assets_v3(ast_owner) WHERE ast_owner IS NOT NULL;",
-        );
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_owner",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("CREATE INDEX assets_v3_delegate ON assets_v3(ast_delegate) WHERE ast_delegate IS NOT NULL;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_delegate",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("CREATE INDEX assets_v3_authority ON assets_v3(ast_authority) WHERE ast_authority IS NOT NULL;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_authority",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("CREATE INDEX assets_v3_collection_is_collection_verified ON assets_v3(ast_collection, ast_is_collection_verified) WHERE ast_collection IS NOT NULL;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_collection_is_collection_verified",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("CREATE INDEX assets_v3_is_burnt ON assets_v3(ast_is_burnt) WHERE ast_is_burnt IS TRUE;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_is_burnt",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("CREATE INDEX assets_v3_is_compressible ON assets_v3(ast_is_compressible) WHERE ast_is_compressible IS TRUE;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_is_compressible",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "CREATE INDEX assets_v3_is_compressed ON assets_v3(ast_is_compressed);",
-        );
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_is_compressed",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("CREATE INDEX assets_v3_is_frozen ON assets_v3(ast_is_frozen) WHERE ast_is_frozen IS TRUE;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_is_frozen",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "CREATE INDEX assets_v3_supply ON assets_v3(ast_supply) WHERE ast_supply IS NOT NULL;",
-        );
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_supply",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "CREATE INDEX assets_v3_slot_updated ON assets_v3(ast_slot_updated);",
-        );
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            CREATE_ACTION,
-            "ind_assets_v3_slot_updated",
-        )
-        .await
+        for (index, on_query_string) in [
+("asset_creators_v3_creator", "asset_creators_v3(asc_creator, asc_verified)"),
+("assets_v3_specification_version", "assets_v3 (ast_specification_version) WHERE ast_specification_version <> 'v1'::specification_versions"),
+("assets_v3_specification_asset_class", "assets_v3 (ast_specification_asset_class) WHERE ast_specification_asset_class IS NOT NULL AND ast_specification_asset_class <> 'unknown'::specification_asset_class"),
+("assets_v3_royalty_target_type", "assets_v3 (ast_royalty_target_type) WHERE ast_royalty_target_type <> 'creators'::royalty_target_type"),
+("assets_v3_royalty_amount", "assets_v3 (ast_royalty_amount)"),
+("assets_v3_slot_created", "assets_v3 (ast_slot_created)"),
+("assets_v3_owner_type", "assets_v3 (ast_owner_type) WHERE ast_owner_type IS NOT NULL AND ast_owner_type <> 'unknown'::owner_type"),
+("assets_v3_metadata_url", "assets_v3 (ast_metadata_url_id) WHERE ast_metadata_url_id IS NOT NULL"),
+("assets_v3_owner", "assets_v3(ast_owner) WHERE ast_owner IS NOT NULL"),
+("assets_v3_delegate", "assets_v3(ast_delegate) WHERE ast_delegate IS NOT NULL"),
+("assets_v3_authority", "assets_v3(ast_authority) WHERE ast_authority IS NOT NULL"),
+("assets_v3_collection_is_collection_verified", "assets_v3(ast_collection, ast_is_collection_verified) WHERE ast_collection IS NOT NULL"),
+("assets_v3_is_burnt", "assets_v3(ast_is_burnt) WHERE ast_is_burnt IS TRUE"),
+("assets_v3_is_compressible", "assets_v3(ast_is_compressible) WHERE ast_is_compressible IS TRUE"),
+("assets_v3_is_compressed", "assets_v3(ast_is_compressed)"),
+("assets_v3_is_frozen", "assets_v3(ast_is_frozen) WHERE ast_is_frozen IS TRUE"),
+("assets_v3_supply", "assets_v3(ast_supply) WHERE ast_supply IS NOT NULL"),
+("assets_v3_slot_updated", "assets_v3(ast_slot_updated)"),
+            ]{
+                self.create_index(transaction, index, on_query_string).await?;
+            }
+        Ok(())
     }
 
     pub(crate) async fn copy_all(
