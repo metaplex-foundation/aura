@@ -239,6 +239,12 @@ pub struct EditionV1 {
     pub write_version: u64,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PubkeyWithSlot {
+    pub pubkey: Pubkey,
+    pub slot: u64,
+}
+
 #[derive(Default)]
 pub struct ForkedItem {
     pub tree: Pubkey,
