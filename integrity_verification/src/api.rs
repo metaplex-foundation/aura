@@ -1,4 +1,4 @@
-use crate::error::IntegrityVerificationError;
+use interface::error::IntegrityVerificationError;
 use reqwest::Client;
 
 #[derive(Debug)]

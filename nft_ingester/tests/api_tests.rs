@@ -37,6 +37,7 @@ mod tests {
     use serde_json::{json, Value};
     use solana_program::pubkey::Pubkey;
     use testcontainers::clients::Cli;
+    use usecase::proofs::MaybeProofChecker;
 
     const SLOT_UPDATED: u64 = 100;
     #[tokio::test]
@@ -45,10 +46,11 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
         let limit = 10;
         let before: Option<String>;
@@ -343,10 +345,11 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
 
         let pb = Pubkey::new_unique();
@@ -451,10 +454,11 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
 
         let pb = Pubkey::new_unique();
@@ -549,10 +553,11 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -694,10 +699,11 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -837,10 +843,11 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
         );
 
         let keep_running = Arc::new(AtomicBool::new(true));

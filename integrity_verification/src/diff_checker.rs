@@ -1,5 +1,4 @@
 use crate::api::IntegrityVerificationApi;
-use crate::error::IntegrityVerificationError;
 use crate::params::{
     generate_get_asset_params, generate_get_asset_proof_params,
     generate_get_assets_by_authority_params, generate_get_assets_by_creator_params,
@@ -7,26 +6,23 @@ use crate::params::{
 };
 use crate::requests::Body;
 use crate::slots_dumper::FileSlotsDumper;
-use crate::{_check_proof, check_proof};
-use anchor_lang::AnchorDeserialize;
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
+use interface::error::IntegrityVerificationError;
+use interface::proofs::ProofChecker;
 use metrics_utils::{BackfillerMetricsConfig, IntegrityVerificationMetricsConfig};
 use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
 use regex::Regex;
 use serde_json::{json, Value};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
-use spl_account_compression::canopy::fill_in_proof_from_canopy;
-use spl_account_compression::state::{
-    merkle_tree_get_size, ConcurrentMerkleTreeHeader, CONCURRENT_MERKLE_TREE_HEADER_SIZE_V1,
-};
-use spl_account_compression::zero_copy::ZeroCopy;
+use solana_sdk::commitment_config::CommitmentLevel;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
 use usecase::bigtable::BigTableClient;
+use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::SlotsCollector;
 
 pub const GET_ASSET_METHOD: &str = "getAsset";
@@ -62,7 +58,8 @@ where
     keys_fetcher: T,
     metrics: Arc<IntegrityVerificationMetricsConfig>,
     collect_slots_tools: Option<CollectSlotsTools>,
-    rpc_client: RpcClient,
+    rpc_client: Arc<RpcClient>,
+    proof_checker: MaybeProofChecker,
     regexes: Vec<Regex>,
     test_retries: u64,
 }
@@ -82,6 +79,7 @@ where
         slots_collect_path: Option<String>,
         collect_slots_for_proofs: bool,
         test_retries: u64,
+        commitment_level: CommitmentLevel,
     ) -> Self {
         // Regular expressions, that purposed to filter out some difference between
         // testing and reference hosts that we already know about
@@ -116,9 +114,10 @@ where
                 metrics: slot_collect_metrics,
             })
         }
-
+        let rpc_client = Arc::new(RpcClient::new(reference_host.clone()));
+        let proof_checker = MaybeProofChecker::new(rpc_client.clone(), 1.0, commitment_level);
         Self {
-            rpc_client: RpcClient::new(reference_host.clone()),
+            rpc_client,
             reference_host,
             testing_host,
             api: IntegrityVerificationApi::new(),
@@ -127,6 +126,7 @@ where
             collect_slots_tools,
             regexes,
             test_retries,
+            proof_checker,
         }
     }
 }
@@ -464,49 +464,33 @@ where
         )?)?
         .to_bytes();
 
-        let get_asset_req = json!(&Body::new(
-            GET_ASSET_METHOD,
-            json!(generate_get_asset_params(asset_id.to_string()))
-        ))
-        .to_string();
-        let get_asset_fut = self.api.make_request(&self.reference_host, &get_asset_req);
-        let tree_id_pk = Pubkey::from_str(tree_id)?;
-        let get_account_data_fut = self.rpc_client.get_account_data(&tree_id_pk);
-        let (get_asset, account_data) = tokio::join!(get_asset_fut, get_account_data_fut);
-        let get_asset = get_asset?;
-        let leaf_index = get_asset["result"]["compression"]["leaf_id"]
-            .as_u64()
-            .ok_or(IntegrityVerificationError::CannotGetResponseField(
-                "leaf_id".to_string(),
-            ))? as u32;
-        let mut tree_acc_info = account_data?;
-
-        let (header_bytes, rest) =
-            tree_acc_info.split_at_mut(CONCURRENT_MERKLE_TREE_HEADER_SIZE_V1);
-        let header = ConcurrentMerkleTreeHeader::try_from_slice(header_bytes)?;
-        let merkle_tree_size = merkle_tree_get_size(&header)?;
-        let (tree_bytes, canopy_bytes) = rest.split_at_mut(merkle_tree_size);
-
-        let mut initial_proofs = response["result"]["proof"]
+        let initial_proofs = response["result"]["proof"]
             .as_array()
             .ok_or(IntegrityVerificationError::CannotGetResponseField(
                 "proof".to_string(),
             ))?
             .iter()
-            .filter_map(|proof| {
-                proof
-                    .as_str()
-                    .and_then(|v| Pubkey::from_str(v).ok().map(|p| p.to_bytes()))
-            })
+            .filter_map(|proof| proof.as_str().and_then(|v| Pubkey::from_str(v).ok()))
             .collect::<Vec<_>>();
-        fill_in_proof_from_canopy(
-            canopy_bytes,
-            header.get_max_depth(),
-            leaf_index,
-            &mut initial_proofs,
-        )?;
 
-        check_proof!(&header, &tree_bytes, initial_proofs, leaf, leaf_index)
+        let get_asset_req = json!(&Body::new(
+            GET_ASSET_METHOD,
+            json!(generate_get_asset_params(asset_id.to_string()))
+        ))
+        .to_string();
+        let get_asset = self
+            .api
+            .make_request(&self.reference_host, &get_asset_req)
+            .await?;
+        let tree_id_pk: Pubkey = Pubkey::from_str(tree_id)?;
+        let leaf_index = get_asset["result"]["compression"]["leaf_id"]
+            .as_u64()
+            .ok_or(IntegrityVerificationError::CannotGetResponseField(
+                "leaf_id".to_string(),
+            ))? as u32;
+        self.proof_checker
+            .check_proof(tree_id_pk, initial_proofs, leaf_index, leaf)
+            .await
     }
 }
 
@@ -539,6 +523,7 @@ mod tests {
     use metrics_utils::{IntegrityVerificationMetrics, MetricsTrait};
     use regex::Regex;
     use serde_json::json;
+    use solana_sdk::commitment_config::CommitmentLevel;
 
     // this function used only inside tests under rpc_tests and bigtable_tests features, that do not running in our CI
     #[allow(dead_code)]
@@ -557,6 +542,7 @@ mod tests {
             Some("./".to_string()),
             true,
             20,
+            CommitmentLevel::Processed,
         )
         .await
     }
