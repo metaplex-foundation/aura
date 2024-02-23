@@ -11,7 +11,7 @@ use serde_json::json;
 use solana_program::pubkey::Pubkey;
 use tokio::time::Instant;
 
-use entities::enums::{RoyaltyTargetType, SpecificationAssetClass};
+use entities::enums::{ChainMutability, RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::Updated;
 use entities::models::{ChainDataV1, Creator, Uses};
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
@@ -324,14 +324,18 @@ impl MplxAccsProcessor {
 
             let chain_data = json!(chain_data);
 
+            let chain_mutability = if metadata_info.metadata.is_mutable {
+                ChainMutability::Mutable
+            } else {
+                ChainMutability::Immutable
+            };
+
             // supply field saving inside process_mint_accs fn
             models.asset_dynamic.push(AssetDynamicDetails {
                 pubkey: mint,
                 is_compressible: Updated::new(metadata_info.slot, None, false),
                 is_compressed: Updated::new(metadata_info.slot, None, false),
-                is_frozen: Updated::new(metadata_info.slot, None, false),
                 seq: None,
-                is_burnt: Updated::new(metadata_info.slot, None, false),
                 was_decompressed: Updated::new(metadata_info.slot, None, false),
                 onchain_data: Some(Updated::new(
                     metadata_info.slot,
@@ -372,6 +376,7 @@ impl MplxAccsProcessor {
                     .metadata_owner
                     .clone()
                     .map(|m| Updated::new(metadata_info.slot, None, m)),
+                chain_mutability: Some(Updated::new(metadata_info.slot, None, chain_mutability)),
                 ..Default::default()
             });
 
