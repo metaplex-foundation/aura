@@ -68,19 +68,19 @@ pub struct BackfillerConfig {
     #[serde(default)]
     pub should_reingest: bool,
 }
-fn default_wait_period_sec() -> u64 {
+const fn default_wait_period_sec() -> u64 {
     60
 }
 
-fn default_workers_count() -> usize {
+const fn default_workers_count() -> usize {
     100
 }
 
-fn default_chunk_size() -> usize {
+const fn default_chunk_size() -> usize {
     5
 }
 
-fn default_permitted_tasks() -> usize {
+const fn default_permitted_tasks() -> usize {
     500
 }
 
@@ -169,15 +169,15 @@ fn default_dump_path() -> String {
     "/tmp/sync_dump".to_string()
 }
 
-fn default_dump_synchronizer_batch_size() -> usize {
+const fn default_dump_synchronizer_batch_size() -> usize {
     200_000
 }
 
-fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
+const fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
     60
 }
 
-fn default_sequence_consister_skip_check_slots_offset() -> u64 {
+const fn default_sequence_consister_skip_check_slots_offset() -> u64 {
     20
 }
 
@@ -230,11 +230,11 @@ pub struct ApiConfig {
     pub check_proofs_commitment: CommitmentLevel,
 }
 
-fn default_check_proofs_probability() -> f64 {
+const fn default_check_proofs_probability() -> f64 {
     0.1
 }
 
-fn default_check_proofs_commitment() -> CommitmentLevel {
+const fn default_check_proofs_commitment() -> CommitmentLevel {
     CommitmentLevel::Finalized
 }
 
