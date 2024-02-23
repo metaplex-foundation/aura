@@ -384,7 +384,11 @@ impl MplxAccsProcessor {
                     .metadata_owner
                     .clone()
                     .map(|m| Updated::new(metadata_info.slot_updated, None, m)),
-                chain_mutability: Some(Updated::new(metadata_info.slot_updated, None, chain_mutability)),
+                chain_mutability: Some(Updated::new(
+                    metadata_info.slot_updated,
+                    None,
+                    chain_mutability,
+                )),
                 ..Default::default()
             });
 
