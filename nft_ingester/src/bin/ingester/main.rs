@@ -170,7 +170,6 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let token_accs_parser = TokenAccsProcessor::new(
         rocks_storage.clone(),
-        db_client_v2.clone(),
         buffer.clone(),
         metrics_state.ingester_metrics.clone(),
         config.spl_buffer_size,
@@ -192,6 +191,13 @@ pub async fn main() -> Result<(), IngesterError> {
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
             cloned_token_parser
                 .process_token_accs(cloned_keep_running)
+                .await;
+        }));
+        let mut cloned_mplx_parser = mplx_accs_parser.clone();
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            cloned_mplx_parser
+                .process_burnt_accs(cloned_keep_running)
                 .await;
         }));
 

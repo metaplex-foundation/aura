@@ -123,7 +123,6 @@ mod tests {
 
         let spl_token_accs_parser = TokenAccsProcessor::new(
             env_rocks.clone(),
-            db_client.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,
@@ -154,11 +153,11 @@ mod tests {
         };
 
         spl_token_accs_parser
-            .transform_and_save_token_accs(&vec![token_acc])
+            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_acc)].into_iter().collect())
             .await;
 
         spl_token_accs_parser
-            .transform_and_save_mint_accs(&vec![mint_acc])
+            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
 
         let decompressed_token_data = MetadataInfo {
@@ -206,7 +205,7 @@ mod tests {
                 collection_details: None,
                 programmable_config: None,
             },
-            slot: nft_created_slot as u64,
+            slot_updated: nft_created_slot as u64,
             lamports: 1,
             executable: false,
             metadata_owner: None,

@@ -53,11 +53,44 @@ pub enum TokenStandard {
     ProgrammableNonFungibleEdition, // NonFungible with programmable configuration
 }
 
+impl From<blockbuster::token_metadata::state::TokenStandard> for TokenStandard {
+    fn from(value: blockbuster::token_metadata::state::TokenStandard) -> Self {
+        match value {
+            blockbuster::token_metadata::state::TokenStandard::NonFungible => {
+                TokenStandard::NonFungible
+            }
+            blockbuster::token_metadata::state::TokenStandard::FungibleAsset => {
+                TokenStandard::FungibleAsset
+            }
+            blockbuster::token_metadata::state::TokenStandard::Fungible => TokenStandard::Fungible,
+            blockbuster::token_metadata::state::TokenStandard::NonFungibleEdition => {
+                TokenStandard::NonFungibleEdition
+            }
+            blockbuster::token_metadata::state::TokenStandard::ProgrammableNonFungible => {
+                TokenStandard::ProgrammableNonFungible
+            }
+            blockbuster::token_metadata::state::TokenStandard::ProgrammableNonFungibleEdition => {
+                TokenStandard::ProgrammableNonFungibleEdition
+            }
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
 pub enum UseMethod {
     Burn,
     Multiple,
     Single,
+}
+
+impl From<blockbuster::token_metadata::state::UseMethod> for UseMethod {
+    fn from(value: blockbuster::token_metadata::state::UseMethod) -> Self {
+        match value {
+            blockbuster::token_metadata::state::UseMethod::Burn => UseMethod::Burn,
+            blockbuster::token_metadata::state::UseMethod::Multiple => UseMethod::Multiple,
+            blockbuster::token_metadata::state::UseMethod::Single => UseMethod::Single,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, Copy)]

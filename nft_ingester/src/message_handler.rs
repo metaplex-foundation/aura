@@ -25,7 +25,7 @@ use rocks_db::editions::TokenMetadataEdition;
 use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
-use crate::mplx_updates_processor::{MetadataInfo, TokenMetadata};
+use crate::mplx_updates_processor::{BurntMetadataSlot, MetadataInfo, TokenMetadata};
 use entities::models::{EditionV1, MasterEdition};
 
 const BYTE_PREFIX_TX_SIMPLE_FINALIZED: u8 = 22;
@@ -242,7 +242,12 @@ impl MessageHandler {
                             TokenMetadataAccountData::EmptyAccount => {
                                 let mut buff = self.buffer.burnt_metadata_at_slot.lock().await;
 
-                                buff.insert(key.0.to_vec(), account_info.slot());
+                                buff.insert(
+                                    Pubkey::from(key.0),
+                                    BurntMetadataSlot {
+                                        slot_updated: account_info.slot(),
+                                    },
+                                );
                             }
                             TokenMetadataAccountData::MetadataV1(m) => {
                                 update_or_insert!(
@@ -250,7 +255,7 @@ impl MessageHandler {
                                     key.0.to_vec(),
                                     MetadataInfo {
                                         metadata: m.clone(),
-                                        slot: account_info.slot(),
+                                        slot_updated: account_info.slot(),
                                         write_version: account_info.write_version(),
                                         lamports: account_info.lamports(),
                                         executable: account_info.executable(),
@@ -275,6 +280,7 @@ impl MessageHandler {
                                             },
                                         ),
                                         write_version: account_info.write_version(),
+                                        slot_updated: account_info.slot(),
                                     },
                                     account_info.write_version()
                                 );
@@ -293,6 +299,7 @@ impl MessageHandler {
                                             },
                                         ),
                                         write_version: account_info.write_version(),
+                                        slot_updated: account_info.slot(),
                                     },
                                     account_info.write_version()
                                 );
@@ -309,6 +316,7 @@ impl MessageHandler {
                                             write_version: account_info.write_version()
                                         },),
                                         write_version: account_info.write_version(),
+                                        slot_updated: account_info.slot(),
                                     },
                                     account_info.write_version()
                                 );

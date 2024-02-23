@@ -26,7 +26,7 @@ mod tests {
     use nft_ingester::{
         buffer::Buffer,
         db_v2::DBClient,
-        mplx_updates_processor::{MetadataInfo, MplxAccsProcessor},
+        mplx_updates_processor::{BurntMetadataSlot, MetadataInfo, MplxAccsProcessor},
         token_updates_processor::TokenAccsProcessor,
     };
     use rocks_db::{
@@ -568,7 +568,6 @@ mod tests {
 
         let token_updates_processor = TokenAccsProcessor::new(
             env.rocks_env.storage.clone(),
-            db_client.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,
@@ -628,7 +627,7 @@ mod tests {
                 collection_details: None,
                 programmable_config: None,
             },
-            slot: 1,
+            slot_updated: 1,
             write_version: 1,
             lamports: 1,
             executable: false,
@@ -649,14 +648,14 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_accs(&[mint_acc])
+            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
         token_updates_processor
-            .transform_and_save_token_accs(&[token_acc])
+            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_acc)].into_iter().collect())
             .await;
 
         mplx_updates_processor
-            .transform_and_save_metadata(&metadata_info)
+            .transform_and_store_metadata_accs(&metadata_info)
             .await;
 
         let payload = GetAsset {
@@ -678,7 +677,7 @@ mod tests {
         };
 
         token_updates_processor
-            .transform_and_save_mint_accs(&[mint_acc])
+            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
 
         let payload = GetAsset {
@@ -714,7 +713,6 @@ mod tests {
 
         let token_updates_processor = TokenAccsProcessor::new(
             env.rocks_env.storage.clone(),
-            db_client.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,
@@ -784,7 +782,7 @@ mod tests {
                     collection_details: None,
                     programmable_config: None,
                 },
-                slot: 1,
+                slot_updated: 1,
                 write_version: 1,
                 lamports: 1,
                 executable: false,
@@ -808,14 +806,25 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_accs(&mint_accs)
+            .transform_and_save_mint_accs(
+                &mint_accs
+                    .clone()
+                    .into_iter()
+                    .map(|mint| (mint.pubkey.to_bytes().to_vec(), mint))
+                    .collect(),
+            )
             .await;
         token_updates_processor
-            .transform_and_save_token_accs(&token_accs)
+            .transform_and_save_token_accs(
+                &token_accs
+                    .into_iter()
+                    .map(|token_acc| (token_acc.pubkey.to_bytes().to_vec(), token_acc))
+                    .collect(),
+            )
             .await;
 
         mplx_updates_processor
-            .transform_and_save_metadata(&metadata_info)
+            .transform_and_store_metadata_accs(&metadata_info)
             .await;
 
         let payload = GetAsset {
@@ -860,12 +869,11 @@ mod tests {
 
         let token_updates_processor = TokenAccsProcessor::new(
             env.rocks_env.storage.clone(),
-            db_client.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,
         );
-        let mut mplx_updates_processor = MplxAccsProcessor::new(
+        let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
             db_client.clone(),
@@ -920,7 +928,7 @@ mod tests {
                 collection_details: None,
                 programmable_config: None,
             },
-            slot: 1,
+            slot_updated: 1,
             write_version: 1,
             lamports: 1,
             executable: false,
@@ -948,13 +956,21 @@ mod tests {
 
         let mut burnt_buff = buffer.burnt_metadata_at_slot.lock().await;
 
-        burnt_buff.insert(metadata_key.to_bytes().to_vec(), 2);
+        burnt_buff.insert(metadata_key, BurntMetadataSlot { slot_updated: 2 });
         drop(burnt_buff);
 
+        let mut mplx_updates_processor_clone = mplx_updates_processor.clone();
         let cloned_keep_running = keep_running.clone();
         tokio::spawn(async move {
-            mplx_updates_processor
+            mplx_updates_processor_clone
                 .process_metadata_accs(cloned_keep_running)
+                .await;
+        });
+        let mut mplx_updates_processor_clone = mplx_updates_processor.clone();
+        let cloned_keep_running = keep_running.clone();
+        tokio::spawn(async move {
+            mplx_updates_processor_clone
+                .process_burnt_accs(cloned_keep_running)
                 .await;
         });
 
@@ -967,10 +983,10 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_accs(&[mint_acc])
+            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
         token_updates_processor
-            .transform_and_save_token_accs(&[token_acc])
+            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_acc)].into_iter().collect())
             .await;
 
         let payload = GetAsset {
