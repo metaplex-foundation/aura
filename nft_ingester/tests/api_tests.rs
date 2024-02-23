@@ -802,6 +802,7 @@ mod tests {
         token_updates_processor
             .transform_and_save_mint_accs(
                 &mint_accs
+                    .clone()
                     .into_iter()
                     .map(|mint| (mint.pubkey.to_bytes().to_vec(), mint))
                     .collect(),
