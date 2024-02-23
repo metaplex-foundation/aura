@@ -179,7 +179,7 @@ impl JsonDownloader {
                                     }
                                 }
                                 Err(e) => {
-                                    error!("Error downloading metadata: {}", e);
+                                    debug!("Error downloading metadata: {}", e);
                                     cloned_metrics.inc_tasks("unknown", MetricStatus::FAILURE);
                                 }
                             }

@@ -2,8 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use interface::signature_persistence::BlockConsumer;
-use interface::slots_dumper::{SlotGetter, SlotsDumper};
+use interface::slots_dumper::SlotGetter;
 use serde::{Deserialize, Serialize};
 
 use crate::column::TypedColumn;
@@ -140,79 +139,5 @@ impl TypedColumn for ForceReingestableSlots {
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
         decode_u64(bytes)
-    }
-}
-
-pub struct ForceReingestableSlotGetter {
-    rocks_client: Arc<crate::Storage>,
-}
-
-impl ForceReingestableSlotGetter {
-    pub fn new(rocks_client: Arc<crate::Storage>) -> ForceReingestableSlotGetter {
-        ForceReingestableSlotGetter { rocks_client }
-    }
-}
-
-#[async_trait]
-impl SlotGetter for ForceReingestableSlotGetter {
-    fn get_unprocessed_slots_iter(&self) -> impl Iterator<Item = u64> {
-        self.rocks_client
-            .force_reingestable_slots
-            .iter_start()
-            .filter_map(|k| k.ok())
-            .map(|(k, _)| ForceReingestableSlots::decode_key(k.to_vec()))
-            .filter_map(|k| k.ok())
-    }
-
-    async fn mark_slots_processed(&self, slots: Vec<u64>) -> core::result::Result<(), String> {
-        self.rocks_client
-            .ingestable_slots
-            .put_batch(slots.iter().fold(HashMap::new(), |mut acc, slot| {
-                acc.insert(*slot, IngestableSlots {});
-                acc
-            }))
-            .await
-            .map_err(|e| e.to_string())?;
-        self.rocks_client
-            .force_reingestable_slots
-            .delete_batch(slots.clone())
-            .await
-            .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl SlotsDumper for ForceReingestableSlotGetter {
-    async fn dump_slots(&self, slots: &[u64]) {
-        if slots.is_empty() {
-            return;
-        }
-        if let Err(e) = self
-            .rocks_client
-            .force_reingestable_slots
-            .put_batch(slots.iter().fold(HashMap::new(), |mut acc, slot| {
-                acc.insert(*slot, ForceReingestableSlots {});
-                acc
-            }))
-            .await
-        {
-            tracing::error!("Error putting force-reingestable slots: {}", e);
-        }
-    }
-}
-
-#[async_trait]
-impl BlockConsumer for ForceReingestableSlotGetter {
-    async fn consume_block(
-        &self,
-        slot: u64,
-        block: solana_transaction_status::UiConfirmedBlock,
-    ) -> core::result::Result<(), String> {
-        self.rocks_client.consume_block(slot, block).await
-    }
-
-    async fn already_processed_slot(&self, _slot: u64) -> core::result::Result<bool, String> {
-        return Ok(false);
     }
 }

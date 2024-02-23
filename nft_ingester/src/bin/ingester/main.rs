@@ -7,9 +7,7 @@ use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info, warn};
 use nft_ingester::{backfiller, config, transaction_ingester};
-use rocks_db::bubblegum_slots::{
-    BubblegumSlotGetter, ForceReingestableSlotGetter, IngestableSlotGetter,
-};
+use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
@@ -42,7 +40,8 @@ use rocks_db::{backup_service, Storage};
 use tonic::transport::Server;
 
 use nft_ingester::backfiller::{
-    connect_new_bigtable_from_config, DirectBlockParser, TransactionsParser,
+    connect_new_bigtable_from_config, DirectBlockParser, ForceReingestableSlotGetter,
+    TransactionsParser,
 };
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
@@ -583,8 +582,14 @@ pub async fn main() -> Result<(), IngesterError> {
     }));
 
     if config.run_sequence_consistent_checker {
-        let force_reingestable_slot_processor =
-            Arc::new(ForceReingestableSlotGetter::new(rocks_storage.clone()));
+        let force_reingestable_slot_processor = Arc::new(ForceReingestableSlotGetter::new(
+            rocks_storage.clone(),
+            Arc::new(DirectBlockParser::new(
+                tx_ingester.clone(),
+                rocks_storage.clone(),
+                metrics_state.backfiller_metrics.clone(),
+            )),
+        ));
 
         let slots_collector = SlotsCollector::new(
             force_reingestable_slot_processor.clone(),
@@ -624,17 +629,11 @@ pub async fn main() -> Result<(), IngesterError> {
         let metrics = Arc::new(BackfillerMetricsConfig::new());
         metrics.register_with_prefix(&mut metrics_state.registry, "force_slot_persister_");
 
-        let consumer = Arc::new(DirectBlockParser::new(
-            tx_ingester.clone(),
-            rocks_storage.clone(),
-            metrics_state.backfiller_metrics.clone(),
-        ));
-
         let transactions_parser = Arc::new(TransactionsParser::new(
             rocks_storage.clone(),
             force_reingestable_slot_processor.clone(),
-            consumer,
-            producer,
+            force_reingestable_slot_processor.clone(),
+            producer.clone(),
             metrics.clone(),
             backfiller_config.workers_count,
             backfiller_config.chunk_size,
