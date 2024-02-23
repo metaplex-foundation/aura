@@ -5,75 +5,36 @@ use crate::{
 };
 
 impl PgClient {
-    pub async fn copy_metadata_from(
+    async fn copy_table_from(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         path: String,
+        table: &str,
+        columns: &str,
     ) -> Result<(), String> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("COPY tasks (tsk_id, tsk_metadata_url, tsk_status) FROM '");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("COPY ");
+        query_builder.push(table);
+        query_builder.push(" (");
+        query_builder.push(columns);
+        query_builder.push(") FROM '");
         query_builder.push(path);
         query_builder.push("' WITH (FORMAT csv);");
-        self.execute_query_with_metrics(transaction, &mut query_builder, COPY_ACTION, "tasks")
+        self.execute_query_with_metrics(transaction, &mut query_builder, COPY_ACTION, table)
+            .await?;
+        Ok(())
+    }
+    async fn truncate_table(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        table: &str,
+    ) -> Result<(), String> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("TRUNCATE ");
+        query_builder.push(table);
+        query_builder.push(";");
+        self.execute_query_with_metrics(transaction, &mut query_builder, TRUNCATE_ACTION, table)
             .await
     }
 
-    pub async fn copy_asset_creators_from(
-        &self,
-        transaction: &mut Transaction<'_, Postgres>,
-        path: String,
-    ) -> Result<(), String> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "COPY asset_creators_v3 (asc_pubkey, asc_creator, asc_verified, asc_slot_updated) FROM '",
-        );
-        query_builder.push(path);
-        query_builder.push("' WITH (FORMAT csv);");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            COPY_ACTION,
-            "asset_creators",
-        )
-        .await
-    }
-
-    pub async fn truncate_asset_creators(
-        &self,
-        transaction: &mut Transaction<'_, Postgres>,
-    ) -> Result<(), String> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("TRUNCATE asset_creators_v3;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            TRUNCATE_ACTION,
-            "asset_creators",
-        )
-        .await
-    }
-
-    pub async fn truncate_assets(
-        &self,
-        transaction: &mut Transaction<'_, Postgres>,
-    ) -> Result<(), String> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("TRUNCATE assets_v3;");
-        self.execute_query_with_metrics(transaction, &mut query_builder, TRUNCATE_ACTION, "assets")
-            .await
-    }
-
-    pub async fn copy_assets_from(
-        &self,
-        transaction: &mut Transaction<'_, Postgres>,
-        path: String,
-    ) -> Result<(), String> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("COPY assets_v3 (ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_authority, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated) FROM '");
-        query_builder.push(path);
-        query_builder.push("' WITH (FORMAT csv);");
-        self.execute_query_with_metrics(transaction, &mut query_builder, COPY_ACTION, "assets")
-            .await
-    }
     pub async fn execute_query_with_metrics(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
@@ -198,13 +159,25 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), String> {
         self.drop_indexes(transaction).await?;
-        self.truncate_assets(transaction).await?;
-        self.truncate_asset_creators(transaction).await?;
-        self.copy_metadata_from(transaction, matadata_copy_path)
-            .await?;
-        self.copy_asset_creators_from(transaction, asset_creators_copy_path)
-            .await?;
-        self.copy_assets_from(transaction, assets_copy_path).await?;
+        for table in ["assets_v3", "asset_creators_v3"] {
+            self.truncate_table(transaction, table).await?;
+        }
+
+        for (table, path, columns) in [
+            ("tasks", matadata_copy_path, "tsk_id, tsk_metadata_url, tsk_status"),
+            (
+                "asset_creators_v3",
+                asset_creators_copy_path,
+                "asc_pubkey, asc_creator, asc_verified, asc_slot_updated",
+            ),
+            (
+                "assets_v3",
+                assets_copy_path,
+                "ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_authority, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated",
+            ),
+        ] {
+            self.copy_table_from(transaction, path, table, columns).await?;
+        }
         self.recreate_indexes(transaction).await?;
         Ok(())
     }
