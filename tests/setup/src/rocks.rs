@@ -100,10 +100,6 @@ impl RocksTestEnvironment {
                 .put(*pk, authority_data.clone())
                 .unwrap();
             self.storage
-                .asset_owner_data
-                .put(*pk, owner_data.clone())
-                .unwrap();
-            self.storage
                 .asset_static_data
                 .put(*pk, static_data.clone())
                 .unwrap();
@@ -200,7 +196,7 @@ fn generate_test_collection(pubkey: Pubkey) -> AssetCollection {
     AssetCollection {
         pubkey,
         collection: Pubkey::new_unique(),
-        slot_updated: random(),
+        slot_updated: rand::thread_rng().gen_range(0..100),
         is_collection_verified: random(),
         collection_seq: random(),
         write_version: None,

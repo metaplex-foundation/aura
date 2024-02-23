@@ -3,15 +3,16 @@ use entities::models::UrlWithStatus;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
-    ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Row, Transaction,
+    ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tracing::log::LevelFilter;
 
 pub mod asset_filter_client;
 pub mod asset_index_client;
 pub mod converters;
 pub mod integrity_verification_client;
+pub mod load_client;
 pub mod model;
 pub mod storage_traits;
 
@@ -22,6 +23,11 @@ pub const BATCH_SELECT_ACTION: &str = "batch_select";
 pub const BATCH_UPSERT_ACTION: &str = "batch_upsert";
 pub const BATCH_DELETE_ACTION: &str = "batch_delete";
 pub const TRANSACTION_ACTION: &str = "transaction";
+pub const COPY_ACTION: &str = "copy";
+pub const TRUNCATE_ACTION: &str = "truncate";
+pub const DROP_ACTION: &str = "drop";
+pub const ALTER_ACTION: &str = "alter";
+pub const CREATE_ACTION: &str = "create";
 #[derive(Clone)]
 pub struct PgClient {
     pub pool: PgPool,
@@ -57,9 +63,10 @@ impl PgClient {
         metadata_urls: Vec<UrlWithStatus>,
     ) -> Result<(), String> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("INSERT INTO tasks (tsk_metadata_url, tsk_status) ");
+            QueryBuilder::new("INSERT INTO tasks (tsk_id, tsk_metadata_url, tsk_status) ");
         query_builder.push_values(metadata_urls.iter(), |mut builder, metadata_url| {
-            builder.push_bind(metadata_url.metadata_url.clone());
+            builder.push_bind(metadata_url.get_metadata_id());
+            builder.push_bind(metadata_url.metadata_url.trim().to_owned());
             builder.push_bind(match metadata_url.is_downloaded {
                 true => TaskStatus::Success,
                 false => TaskStatus::Pending,
@@ -67,57 +74,53 @@ impl PgClient {
         });
         query_builder.push(" ON CONFLICT (tsk_metadata_url) DO NOTHING;");
 
-        let query = query_builder.build();
-        let start_time = chrono::Utc::now();
-        query.execute(transaction).await.map_err(|err| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, BATCH_UPSERT_ACTION, "tasks");
-            err.to_string()
-        })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, BATCH_UPSERT_ACTION, "tasks", start_time);
-
-        Ok(())
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            BATCH_UPSERT_ACTION,
+            "tasks",
+        )
+        .await
     }
 
-    pub async fn get_tasks_ids(
-        &self,
-        transaction: &mut Transaction<'_, Postgres>,
-        metadata_urls: Vec<String>,
-    ) -> Result<HashMap<String, i64>, String> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "SELECT tsk_id, tsk_metadata_url FROM tasks WHERE tsk_metadata_url in (",
-        );
-
-        let urls_len = metadata_urls.len();
-
-        for (i, url) in metadata_urls.iter().enumerate() {
-            query_builder.push_bind(url);
-            if i < urls_len - 1 {
-                query_builder.push(",");
-            }
-        }
-        query_builder.push(");");
-
-        let query = query_builder.build();
-
+    async fn start_transaction(&self) -> Result<Transaction<'_, Postgres>, String> {
         let start_time = chrono::Utc::now();
-        let rows_result = query.fetch_all(transaction).await.map_err(|err| {
+        let transaction = self.pool.begin().await.map_err(|e| {
             self.metrics
-                .observe_error(SQL_COMPONENT, BATCH_SELECT_ACTION, "tasks");
-            err.to_string()
+                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "begin");
+            e.to_string()
         })?;
         self.metrics
-            .observe_request(SQL_COMPONENT, BATCH_SELECT_ACTION, "tasks", start_time);
-        let mut metadata_ids_map = HashMap::new();
+            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "begin", start_time);
+        Ok(transaction)
+    }
 
-        for row in rows_result {
-            let metadata_id: i64 = row.get("tsk_id");
-            let metadata_url: String = row.get("tsk_metadata_url");
-
-            metadata_ids_map.insert(metadata_url, metadata_id);
-        }
-
-        Ok(metadata_ids_map)
+    async fn commit_transaction(
+        &self,
+        transaction: Transaction<'_, Postgres>,
+    ) -> Result<(), String> {
+        let start_time = chrono::Utc::now();
+        transaction.commit().await.map_err(|e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "commit");
+            e.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "commit", start_time);
+        Ok(())
+    }
+    async fn rollback_transaction(
+        &self,
+        transaction: Transaction<'_, Postgres>,
+    ) -> Result<(), String> {
+        let start_time = chrono::Utc::now();
+        transaction.rollback().await.map_err(|e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "rollback");
+            e.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "rollback", start_time);
+        Ok(())
     }
 }

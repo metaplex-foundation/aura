@@ -68,19 +68,19 @@ pub struct BackfillerConfig {
     #[serde(default)]
     pub should_reingest: bool,
 }
-fn default_wait_period_sec() -> u64 {
+const fn default_wait_period_sec() -> u64 {
     60
 }
 
-fn default_workers_count() -> usize {
+const fn default_workers_count() -> usize {
     100
 }
 
-fn default_chunk_size() -> usize {
+const fn default_chunk_size() -> usize {
     5
 }
 
-fn default_permitted_tasks() -> usize {
+const fn default_permitted_tasks() -> usize {
     500
 }
 
@@ -136,6 +136,12 @@ pub struct IngesterConfig {
     pub rocks_backup_dir: String,
     pub run_bubblegum_backfiller: bool,
     pub synchronizer_batch_size: usize,
+    #[serde(default = "default_dump_synchronizer_batch_size")]
+    pub dump_synchronizer_batch_size: usize,
+    #[serde(default = "default_dump_path")]
+    pub dump_path: String,
+    #[serde(default)]
+    pub run_dump_synchronize_on_start: bool,
     pub gapfiller_peer_addr: String,
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
@@ -159,11 +165,19 @@ pub struct IngesterConfig {
     pub check_proofs_commitment: CommitmentLevel,
 }
 
-fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
+fn default_dump_path() -> String {
+    "/tmp/sync_dump".to_string()
+}
+
+const fn default_dump_synchronizer_batch_size() -> usize {
+    200_000
+}
+
+const fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
     60
 }
 
-fn default_sequence_consister_skip_check_slots_offset() -> u64 {
+const fn default_sequence_consister_skip_check_slots_offset() -> u64 {
     20
 }
 
@@ -216,11 +230,11 @@ pub struct ApiConfig {
     pub check_proofs_commitment: CommitmentLevel,
 }
 
-fn default_check_proofs_probability() -> f64 {
+const fn default_check_proofs_probability() -> f64 {
     0.1
 }
 
-fn default_check_proofs_commitment() -> CommitmentLevel {
+const fn default_check_proofs_commitment() -> CommitmentLevel {
     CommitmentLevel::Finalized
 }
 

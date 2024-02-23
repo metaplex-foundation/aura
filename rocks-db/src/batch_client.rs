@@ -137,15 +137,7 @@ impl AssetIndexReader for Storage {
                 existed_index.creators = dynamic_info.creators.clone().value;
                 existed_index.royalty_amount = dynamic_info.royalty_amount.value as i64;
                 existed_index.slot_updated = dynamic_info.get_slot_updated() as i64;
-                existed_index.metadata_url = Some(UrlWithStatus {
-                    metadata_url: dynamic_info.url.value.clone(),
-                    is_downloaded: self
-                        .asset_offchain_data
-                        .get(dynamic_info.url.value.clone())
-                        .ok()
-                        .flatten()
-                        .is_some(),
-                });
+                existed_index.metadata_url = self.url_with_status_for(dynamic_info);
             } else {
                 let asset_index = AssetIndex {
                     pubkey: dynamic_info.pubkey,
@@ -157,15 +149,7 @@ impl AssetIndexReader for Storage {
                     creators: dynamic_info.creators.clone().value,
                     royalty_amount: dynamic_info.royalty_amount.value as i64,
                     slot_updated: dynamic_info.get_slot_updated() as i64,
-                    metadata_url: Some(UrlWithStatus {
-                        metadata_url: dynamic_info.url.value.clone(),
-                        is_downloaded: self
-                            .asset_offchain_data
-                            .get(dynamic_info.url.value.clone())
-                            .ok()
-                            .flatten()
-                            .is_some(),
-                    }),
+                    metadata_url: self.url_with_status_for(dynamic_info),
                     ..Default::default()
                 };
 
@@ -401,5 +385,21 @@ impl Storage {
             .map_err(|e| StorageError::Common(e.to_string()))?
             .map_err(|e| StorageError::Common(e.to_string()))?;
         Ok(())
+    }
+
+    fn url_with_status_for(&self, dynamic_info: &AssetDynamicDetails) -> Option<UrlWithStatus> {
+        if dynamic_info.url.value.trim().is_empty() {
+            None
+        } else {
+            Some(UrlWithStatus {
+                metadata_url: dynamic_info.url.value.clone(),
+                is_downloaded: self
+                    .asset_offchain_data
+                    .get(dynamic_info.url.value.clone())
+                    .ok()
+                    .flatten()
+                    .is_some(),
+            })
+        }
     }
 }
