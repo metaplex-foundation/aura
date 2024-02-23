@@ -291,10 +291,17 @@ impl MplxAccsProcessor {
             let data = metadata.data;
             let authority = metadata.update_authority;
             let uri = data.uri.trim().replace('\0', "");
-            let class: SpecificationAssetClass = match metadata.token_standard {
+            let class = match metadata.token_standard {
                 Some(TokenStandard::NonFungible) => SpecificationAssetClass::Nft,
                 Some(TokenStandard::FungibleAsset) => SpecificationAssetClass::FungibleAsset,
                 Some(TokenStandard::Fungible) => SpecificationAssetClass::FungibleToken,
+                Some(TokenStandard::NonFungibleEdition) => SpecificationAssetClass::Nft,
+                Some(TokenStandard::ProgrammableNonFungible) => {
+                    SpecificationAssetClass::ProgrammableNft
+                }
+                Some(TokenStandard::ProgrammableNonFungibleEdition) => {
+                    SpecificationAssetClass::ProgrammableNft
+                }
                 _ => SpecificationAssetClass::Unknown,
             };
 
@@ -397,16 +404,6 @@ impl MplxAccsProcessor {
                     collection_seq: None,
                     slot_updated: metadata_info.slot,
                 });
-            } else if let Some(creators) = data.creators {
-                if !creators.is_empty() {
-                    models.asset_collection.push(AssetCollection {
-                        pubkey: mint,
-                        collection: creators[0].address,
-                        is_collection_verified: true,
-                        collection_seq: None,
-                        slot_updated: metadata_info.slot,
-                    });
-                }
             }
 
             models.asset_authority.push(AssetAuthority {

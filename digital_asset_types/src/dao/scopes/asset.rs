@@ -334,7 +334,7 @@ fn convert_rocks_offchain_data(
                 .map(|m| m.value.into())
                 .unwrap_or(ChainMutability::Unknown),
             chain_data: ch_data,
-            metadata_url: offchain_data.url.clone(),
+            metadata_url: dynamic_data.url.value.clone(),
             metadata_mutability: Mutability::Immutable,
             metadata: Json::from_str(metadata.as_str())
                 .map_err(|e| DbErr::Custom(e.to_string()))?,
