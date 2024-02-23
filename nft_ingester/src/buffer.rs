@@ -22,6 +22,7 @@ pub struct Buffer {
     pub mints: Mutex<HashMap<Vec<u8>, Mint>>,
     pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
     pub token_metadata_editions: Mutex<HashMap<Pubkey, TokenMetadata>>,
+    pub burnt_metadata_at_slot: Mutex<HashMap<Vec<u8>, u64>>,
 }
 
 impl Buffer {
@@ -33,18 +34,20 @@ impl Buffer {
             mints: Mutex::new(HashMap::new()),
             json_tasks: Arc::new(Mutex::new(VecDeque::<Task>::new())),
             token_metadata_editions: Mutex::new(HashMap::new()),
+            burnt_metadata_at_slot: Mutex::new(HashMap::new()),
         }
     }
 
     pub async fn debug(&self) {
         println!(
-            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\nToken Metadata Editions buffer: {}\n",
+            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\nToken Metadata Editions buffer: {}\nBurnt Metadata buffer: {}\n",
             self.mplx_metadata_info.lock().await.len(),
             self.transactions.lock().await.len(),
             self.token_accs.lock().await.len(),
             self.mints.lock().await.len(),
             self.json_tasks.lock().await.len(),
             self.token_metadata_editions.lock().await.len(),
+            self.burnt_metadata_at_slot.lock().await.len(),
         );
     }
 

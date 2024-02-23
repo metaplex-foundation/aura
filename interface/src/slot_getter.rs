@@ -6,6 +6,7 @@ use mockall::automock;
 #[async_trait]
 pub trait FinalizedSlotGetter {
     async fn get_finalized_slot(&self) -> Result<u64, UsecaseError>;
+    async fn get_finalized_slot_no_error(&self) -> u64;
 }
 
 #[async_trait]

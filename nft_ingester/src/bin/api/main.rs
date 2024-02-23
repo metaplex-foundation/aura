@@ -83,6 +83,7 @@ pub async fn main() -> Result<(), IngesterError> {
         &primary_storage_path,
         &secondary_storage_path,
         mutexed_tasks.clone(),
+        red_metrics.clone(),
     )
     .unwrap();
 

@@ -1,6 +1,7 @@
 use entities::models::{CompleteAssetDetails, Updated};
 use futures::stream;
 use interface::asset_streaming_and_discovery::AsyncError;
+use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::gapfiller::process_asset_details_stream;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
@@ -20,10 +21,12 @@ fn create_test_complete_asset_details(pubkey: Pubkey) -> CompleteAssetDetails {
 #[tokio::test]
 async fn test_process_asset_details_stream() {
     let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
+    let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let storage = Arc::new(
         Storage::open(
             temp_dir.path().to_str().unwrap(),
             Arc::new(Mutex::new(JoinSet::new())),
+            red_metrics.clone(),
         )
         .expect("Failed to create a database"),
     );

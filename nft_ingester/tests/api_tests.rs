@@ -1,7 +1,13 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use std::{collections::HashMap, sync::Arc};
+    use std::{
+        collections::HashMap,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+    };
 
     use blockbuster::token_metadata::state::{
         Data, Key, Metadata, TokenStandard as BLKTokenStandard,
@@ -218,6 +224,7 @@ mod tests {
         }
         // test a request with a creator verified field, considering the value was randomly generated in the dynamic data
         {
+            let limit = 20;
             let payload = SearchAssets {
                 limit: Some(limit),
                 creator_verified: Some(true),
@@ -820,6 +827,156 @@ mod tests {
 
         assert_eq!(response["id"], mint_accs[1].pubkey.to_string());
         assert_eq!(response["interface"], "ProgrammableNFT".to_string());
+
+        env.teardown().await;
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_burnt() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+        );
+
+        let keep_running = Arc::new(AtomicBool::new(true));
+
+        let buffer = Arc::new(Buffer::new());
+
+        let db_client = Arc::new(DBClient {
+            pool: env.pg_env.pool.clone(),
+        });
+
+        let token_updates_processor = TokenAccsProcessor::new(
+            env.rocks_env.storage.clone(),
+            db_client.clone(),
+            buffer.clone(),
+            Arc::new(IngesterMetricsConfig::new()),
+            1,
+        );
+        let mut mplx_updates_processor = MplxAccsProcessor::new(
+            1,
+            buffer.clone(),
+            db_client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+
+        let token_key = Pubkey::new_unique();
+        let mint_key = Pubkey::new_unique();
+        let owner_key = Pubkey::new_unique();
+
+        let mint_auth_key = Pubkey::new_unique();
+
+        let token_acc = TokenAccount {
+            pubkey: token_key,
+            mint: mint_key,
+            delegate: None,
+            owner: owner_key,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 1,
+            amount: 1,
+        };
+
+        let mint_acc = Mint {
+            pubkey: mint_key,
+            slot_updated: 1,
+            supply: 1,
+            decimals: 0,
+            mint_authority: Some(mint_auth_key),
+            freeze_authority: None,
+        };
+
+        let metadata = MetadataInfo {
+            metadata: Metadata {
+                key: Key::MetadataV1,
+                update_authority: Pubkey::new_unique(),
+                mint: mint_key,
+                data: Data {
+                    name: "name".to_string(),
+                    symbol: "symbol".to_string(),
+                    uri: "https://ping-pong".to_string(),
+                    seller_fee_basis_points: 10,
+                    creators: None,
+                },
+                primary_sale_happened: false,
+                is_mutable: true,
+                edition_nonce: None,
+                token_standard: Some(BLKTokenStandard::Fungible),
+                collection: None,
+                uses: None,
+                collection_details: None,
+                programmable_config: None,
+            },
+            slot: 1,
+            write_version: 1,
+            lamports: 1,
+            executable: false,
+            metadata_owner: None,
+        };
+
+        let metadata_ofch = OffChainData {
+            url: "https://ping-pong".to_string(),
+            metadata: "{\"msg\": \"hallo\"}".to_string(),
+        };
+
+        let (metadata_key, _) = Pubkey::find_program_address(
+            &[
+                "metadata".as_ref(),
+                blockbuster::programs::token_metadata::token_metadata_id().as_ref(),
+                mint_key.as_ref(),
+            ],
+            &blockbuster::programs::token_metadata::token_metadata_id(),
+        );
+
+        let mut mtd_buff = buffer.mplx_metadata_info.lock().await;
+
+        mtd_buff.insert(metadata_key.to_bytes().to_vec(), metadata);
+        drop(mtd_buff);
+
+        let mut burnt_buff = buffer.burnt_metadata_at_slot.lock().await;
+
+        burnt_buff.insert(metadata_key.to_bytes().to_vec(), 2);
+        drop(burnt_buff);
+
+        let cloned_keep_running = keep_running.clone();
+        tokio::spawn(async move {
+            mplx_updates_processor
+                .process_metadata_accs(cloned_keep_running)
+                .await;
+        });
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        env.rocks_env
+            .storage
+            .asset_offchain_data
+            .put(metadata_ofch.url.clone(), metadata_ofch)
+            .unwrap();
+
+        token_updates_processor
+            .transform_and_save_mint_accs(&[mint_acc])
+            .await;
+        token_updates_processor
+            .transform_and_save_token_accs(&[token_acc])
+            .await;
+
+        let payload = GetAsset {
+            id: mint_key.to_string(),
+        };
+        let response = api.get_asset(payload).await.unwrap();
+
+        assert_eq!(response["ownership"]["ownership_model"], "single");
+        assert_eq!(response["ownership"]["owner"], "");
+        assert_eq!(response["interface"], "FungibleToken".to_string());
+        assert_eq!(response["burnt"], true);
+
+        keep_running.store(false, Ordering::SeqCst);
 
         env.teardown().await;
     }

@@ -81,6 +81,14 @@ pub struct AssetDynamicDetailsDeprecated {
     pub url: Updated<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct MetadataMintMap {
+    // this is Metadata acc pubkey
+    // it's PDA with next seeds ["metadata", metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s, mint_key]
+    pub pubkey: Pubkey,
+    pub mint_key: Pubkey,
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct AssetAuthority {
     pub pubkey: Pubkey,
@@ -213,6 +221,20 @@ impl TypedColumn for AssetDynamicDetails {
     type KeyType = Pubkey;
     type ValueType = Self;
     const NAME: &'static str = "ASSET_DYNAMIC_V2";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for MetadataMintMap {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "METADATA_MINT_MAP";
 
     fn encode_key(pubkey: Pubkey) -> Vec<u8> {
         encode_pubkey(pubkey)

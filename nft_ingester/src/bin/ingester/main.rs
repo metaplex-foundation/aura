@@ -6,11 +6,8 @@ use clap::Parser;
 use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info, warn};
-use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::{backfiller, config, transaction_ingester};
-use rocks_db::bubblegum_slots::{
-    BubblegumSlotGetter, ForceReingestableSlotGetter, IngestableSlotGetter,
-};
+use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -18,11 +15,7 @@ use tokio::time::Instant;
 use backfill_rpc::rpc::BackfillRPC;
 use interface::signature_persistence::ProcessingDataGetter;
 use metrics_utils::utils::start_metrics;
-use metrics_utils::{
-    ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig, JsonDownloaderMetricsConfig,
-    JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait, RpcBackfillerMetricsConfig,
-    SequenceConsistentGapfillMetricsConfig, SynchronizerMetricsConfig,
-};
+use metrics_utils::{BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait};
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
@@ -46,8 +39,10 @@ use rocks_db::{backup_service, Storage};
 use tonic::transport::Server;
 
 use nft_ingester::backfiller::{
-    connect_new_bigtable_from_config, DirectBlockParser, TransactionsParser,
+    connect_new_bigtable_from_config, DirectBlockParser, ForceReingestableSlotGetter,
+    TransactionsParser,
 };
+use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::slots_collector::SlotsCollector;
 
@@ -77,17 +72,7 @@ pub async fn main() -> Result<(), IngesterError> {
         );
     }
 
-    let mut metrics_state = MetricState::new(
-        IngesterMetricsConfig::new(),
-        ApiMetricsConfig::new(),
-        JsonDownloaderMetricsConfig::new(),
-        BackfillerMetricsConfig::new(),
-        RpcBackfillerMetricsConfig::new(),
-        SynchronizerMetricsConfig::new(),
-        JsonMigratorMetricsConfig::new(),
-        SequenceConsistentGapfillMetricsConfig::new(),
-        RequestErrorDurationMetrics::new(),
-    );
+    let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
 
     // try to restore rocksDB first
@@ -154,6 +139,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .clone()
             .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
         mutexed_tasks.clone(),
+        metrics_state.red_metrics.clone(),
     )
     .unwrap();
 
@@ -585,8 +571,14 @@ pub async fn main() -> Result<(), IngesterError> {
     }));
 
     if config.run_sequence_consistent_checker {
-        let force_reingestable_slot_processor =
-            Arc::new(ForceReingestableSlotGetter::new(rocks_storage.clone()));
+        let force_reingestable_slot_processor = Arc::new(ForceReingestableSlotGetter::new(
+            rocks_storage.clone(),
+            Arc::new(DirectBlockParser::new(
+                tx_ingester.clone(),
+                rocks_storage.clone(),
+                metrics_state.backfiller_metrics.clone(),
+            )),
+        ));
 
         let slots_collector = SlotsCollector::new(
             force_reingestable_slot_processor.clone(),
@@ -626,17 +618,11 @@ pub async fn main() -> Result<(), IngesterError> {
         let metrics = Arc::new(BackfillerMetricsConfig::new());
         metrics.register_with_prefix(&mut metrics_state.registry, "force_slot_persister_");
 
-        let consumer = Arc::new(DirectBlockParser::new(
-            tx_ingester.clone(),
-            rocks_storage.clone(),
-            metrics_state.backfiller_metrics.clone(),
-        ));
-
         let transactions_parser = Arc::new(TransactionsParser::new(
             rocks_storage.clone(),
             force_reingestable_slot_processor.clone(),
-            consumer,
-            producer,
+            force_reingestable_slot_processor.clone(),
+            producer.clone(),
             metrics.clone(),
             backfiller_config.workers_count,
             backfiller_config.chunk_size,
@@ -648,6 +634,33 @@ pub async fn main() -> Result<(), IngesterError> {
             info!("Force slot persister finished working");
         }));
     }
+
+    let fork_cleaner = ForkCleaner::new(
+        rocks_storage.clone(),
+        rocks_storage.clone(),
+        metrics_state.fork_cleaner_metrics.clone(),
+    );
+    let mut rx = shutdown_rx.resubscribe();
+    let metrics = metrics_state.fork_cleaner_metrics.clone();
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        info!("Start cleaning forks...");
+        loop {
+            let start = Instant::now();
+            fork_cleaner
+                .clean_forks(rx.resubscribe())
+                .await;
+            metrics.set_scans_latency(start.elapsed().as_secs_f64());
+            metrics.inc_total_scans();
+            tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_secs(config.sequence_consistent_checker_wait_period_sec)) => {},
+                    _ = rx.recv() => {
+                        info!("Received stop signal, stopping cleaning forks");
+                        return;
+                    }
+                };
+        }
+    }));
+
     start_metrics(
         metrics_state.registry,
         config.get_metrics_port(config.consumer_number)?,

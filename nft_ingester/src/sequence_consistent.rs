@@ -43,15 +43,10 @@ where
     }
 
     pub async fn collect_sequences_gaps(&self, rx: Receiver<()>) {
-        let last_slot_to_look_for_gaps =
-            match self.finalized_slot_getter.get_finalized_slot().await {
-                Err(e) => {
-                    tracing::error!("Failed to get finalized slot: {}", e);
-                    None
-                }
-                Ok(last_ingested_slot) => Some(last_ingested_slot),
-            }
-            .unwrap_or(u64::MAX);
+        let last_slot_to_look_for_gaps = self
+            .finalized_slot_getter
+            .get_finalized_slot_no_error()
+            .await;
         let mut last_consistent_seq = 0;
         let mut prev_state = TreeState::default();
         let mut gap_found = false;
