@@ -19,7 +19,7 @@ mod tests {
             ChainMutability, Interface, OwnerType, OwnershipModel, RoyaltyModel, RoyaltyTargetType,
             SpecificationAssetClass, TokenStandard,
         },
-        models::{ChainDataV1, Updated},
+        models::{ChainDataV1, UpdateVersion, Updated},
     };
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig};
     use mpl_token_metadata::accounts::MasterEdition;
@@ -376,18 +376,34 @@ mod tests {
 
         let dynamic_details = AssetDynamicDetails {
             pubkey: pb,
-            is_compressed: Updated::new(12, None, Some(12), true),
-            is_compressible: Updated::new(12, None, Some(12), false),
-            supply: Some(Updated::new(12, None, Some(12), 1)),
-            seq: Some(Updated::new(12, None, Some(12), 12)),
-            onchain_data: Some(Updated::new(12, None, Some(12), chain_data.to_string())),
-            creators: Updated::new(12, None, Some(12), vec![]),
-            royalty_amount: Updated::new(12, None, Some(12), 5),
-            url: Updated::new(12, None, Some(12), "https://ping-pong".to_string()),
-            chain_mutability: Some(Updated::new(12, None, Some(12), ChainMutability::Mutable)),
-            lamports: Some(Updated::new(12, None, Some(12), 1)),
-            executable: Some(Updated::new(12, None, Some(12), false)),
-            metadata_owner: Some(Updated::new(12, None, Some(12), "ff".to_string())),
+            is_compressed: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            is_compressible: Updated::new(12, Some(UpdateVersion::Sequence(12)), false),
+            supply: Some(Updated::new(12, Some(UpdateVersion::Sequence(12)), 1)),
+            seq: Some(Updated::new(12, Some(UpdateVersion::Sequence(12)), 12)),
+            onchain_data: Some(Updated::new(
+                12,
+                Some(UpdateVersion::Sequence(12)),
+                chain_data.to_string(),
+            )),
+            creators: Updated::new(12, Some(UpdateVersion::Sequence(12)), vec![]),
+            royalty_amount: Updated::new(12, Some(UpdateVersion::Sequence(12)), 5),
+            url: Updated::new(
+                12,
+                Some(UpdateVersion::Sequence(12)),
+                "https://ping-pong".to_string(),
+            ),
+            chain_mutability: Some(Updated::new(
+                12,
+                Some(UpdateVersion::Sequence(12)),
+                ChainMutability::Mutable,
+            )),
+            lamports: Some(Updated::new(12, Some(UpdateVersion::Sequence(12)), 1)),
+            executable: Some(Updated::new(12, Some(UpdateVersion::Sequence(12)), false)),
+            metadata_owner: Some(Updated::new(
+                12,
+                Some(UpdateVersion::Sequence(12)),
+                "ff".to_string(),
+            )),
             ..Default::default()
         };
 
@@ -400,10 +416,10 @@ mod tests {
 
         let owner = AssetOwner {
             pubkey: pb,
-            owner: Updated::new(12, None, Some(12), authority),
-            delegate: Updated::new(12, None, Some(12), None),
-            owner_type: Updated::new(12, None, Some(12), OwnerType::Single),
-            owner_delegate_seq: Updated::new(12, None, Some(12), Some(12)),
+            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), authority),
+            delegate: Updated::new(12, Some(UpdateVersion::Sequence(12)), None),
+            owner_type: Updated::new(12, Some(UpdateVersion::Sequence(12)), OwnerType::Single),
+            owner_delegate_seq: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(12)),
         };
 
         let metadata = OffChainData {
@@ -488,14 +504,18 @@ mod tests {
 
         let dynamic_details = AssetDynamicDetails {
             pubkey: pb,
-            is_compressed: Updated::new(12, None, Some(12), true),
-            is_compressible: Updated::new(12, None, Some(12), false),
-            supply: Some(Updated::new(12, None, Some(12), 1)),
-            seq: Some(Updated::new(12, None, Some(12), 12)),
-            onchain_data: Some(Updated::new(12, None, Some(12), chain_data.to_string())),
-            creators: Updated::new(12, None, Some(12), vec![]),
-            royalty_amount: Updated::new(12, None, Some(12), 5),
-            url: Updated::new(12, None, Some(12), json_uri.clone()),
+            is_compressed: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            is_compressible: Updated::new(12, Some(UpdateVersion::Sequence(12)), false),
+            supply: Some(Updated::new(12, Some(UpdateVersion::Sequence(12)), 1)),
+            seq: Some(Updated::new(12, Some(UpdateVersion::Sequence(12)), 12)),
+            onchain_data: Some(Updated::new(
+                12,
+                Some(UpdateVersion::Sequence(12)),
+                chain_data.to_string(),
+            )),
+            creators: Updated::new(12, Some(UpdateVersion::Sequence(12)), vec![]),
+            royalty_amount: Updated::new(12, Some(UpdateVersion::Sequence(12)), 5),
+            url: Updated::new(12, Some(UpdateVersion::Sequence(12)), json_uri.clone()),
             ..Default::default()
         };
 
@@ -508,10 +528,10 @@ mod tests {
 
         let owner = AssetOwner {
             pubkey: pb,
-            owner: Updated::new(12, None, Some(12), authority),
-            delegate: Updated::new(12, None, Some(12), None),
-            owner_type: Updated::new(12, None, Some(12), OwnerType::Single),
-            owner_delegate_seq: Updated::new(12, None, Some(12), Some(12)),
+            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), authority),
+            delegate: Updated::new(12, Some(UpdateVersion::Sequence(12)), None),
+            owner_type: Updated::new(12, Some(UpdateVersion::Sequence(12)), OwnerType::Single),
+            owner_delegate_seq: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(12)),
         };
 
         env.rocks_env

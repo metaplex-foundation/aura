@@ -7,6 +7,7 @@ use log::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
+use std::cmp::Ordering;
 
 use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
 use crate::Result;
@@ -157,18 +158,20 @@ pub struct AssetCollectionDeprecated {
 }
 
 fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
-    if current.seq.is_some() && new.seq.is_some() {
-        if new.seq.unwrap() > current.seq.unwrap() {
-            *current = new.clone();
+    if current.update_version.is_some() && new.update_version.is_some() {
+        match current
+            .update_version
+            .clone()
+            .unwrap()
+            .partial_cmp(&new.update_version.clone().unwrap())
+        {
+            Some(Ordering::Less) => {
+                *current = new.clone();
+                return;
+            }
+            Some(Ordering::Greater) => return,
+            _ => {} // types are different need to check slot
         }
-        return;
-    }
-
-    if current.write_version.is_some() && new.write_version.is_some() {
-        if new.write_version.unwrap() > current.write_version.unwrap() {
-            *current = new.clone();
-        }
-        return;
     }
 
     if new.slot_updated > current.slot_updated {
@@ -180,26 +183,23 @@ fn update_optional_field<T: Clone + Default>(
     current: &mut Option<Updated<T>>,
     new: &Option<Updated<T>>,
 ) {
-    if new.clone().unwrap_or_default().seq.is_some()
-        && current.clone().unwrap_or_default().seq.is_some()
+    if current.clone().unwrap_or_default().update_version.is_some()
+        && new.clone().unwrap_or_default().update_version.is_some()
     {
-        if new.clone().unwrap_or_default().seq.unwrap()
-            > current.clone().unwrap_or_default().seq.unwrap()
+        match current
+            .clone()
+            .unwrap_or_default()
+            .update_version
+            .unwrap()
+            .partial_cmp(&new.clone().unwrap_or_default().update_version.unwrap())
         {
-            *current = new.clone();
+            Some(Ordering::Less) => {
+                *current = new.clone();
+                return;
+            }
+            Some(Ordering::Greater) => return,
+            _ => {} // types are different need to check slot
         }
-        return;
-    }
-
-    if new.clone().unwrap_or_default().write_version.is_some()
-        && current.clone().unwrap_or_default().write_version.is_some()
-    {
-        if new.clone().unwrap_or_default().write_version.unwrap()
-            > current.clone().unwrap_or_default().write_version.unwrap()
-        {
-            *current = new.clone();
-        }
-        return;
     }
 
     if new.clone().unwrap_or_default().slot_updated

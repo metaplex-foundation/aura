@@ -12,7 +12,7 @@ use solana_program::pubkey::Pubkey;
 use tokio::time::Instant;
 
 use entities::enums::{ChainMutability, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::{ChainDataV1, Creator, Uses};
+use entities::models::{ChainDataV1, Creator, UpdateVersion, Uses};
 use entities::models::{PubkeyWithSlot, Updated};
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
 use rocks_db::asset::{
@@ -343,33 +343,28 @@ impl MplxAccsProcessor {
                 pubkey: mint,
                 is_compressible: Updated::new(
                     metadata_info.slot_updated,
-                    Some(metadata_info.write_version),
-                    None,
+                    Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                     false,
                 ),
                 is_compressed: Updated::new(
                     metadata_info.slot_updated,
-                    Some(metadata_info.write_version),
-                    None,
+                    Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                     false,
                 ),
                 seq: None,
                 was_decompressed: Updated::new(
                     metadata_info.slot_updated,
-                    Some(metadata_info.write_version),
-                    None,
+                    Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                     false,
                 ),
                 onchain_data: Some(Updated::new(
                     metadata_info.slot_updated,
-                    Some(metadata_info.write_version),
-                    None,
+                    Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                     chain_data.to_string(),
                 )),
                 creators: Updated::new(
                     metadata_info.slot_updated,
-                    Some(metadata_info.write_version),
-                    None,
+                    Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                     data.clone()
                         .creators
                         .unwrap_or_default()
@@ -383,40 +378,34 @@ impl MplxAccsProcessor {
                 ),
                 royalty_amount: Updated::new(
                     metadata_info.slot_updated,
-                    Some(metadata_info.write_version),
-                    None,
+                    Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                     data.seller_fee_basis_points,
                 ),
                 url: Updated::new(
                     metadata_info.slot_updated,
-                    Some(metadata_info.write_version),
-                    None,
+                    Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                     uri.clone(),
                 ),
                 lamports: Some(Updated::new(
                     metadata_info.slot_updated,
-                    Some(metadata_info.write_version),
-                    None,
+                    Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                     metadata_info.lamports,
                 )),
                 executable: Some(Updated::new(
                     metadata_info.slot_updated,
-                    Some(metadata_info.write_version),
-                    None,
+                    Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                     metadata_info.executable,
                 )),
                 metadata_owner: metadata_info.metadata_owner.clone().map(|m| {
                     Updated::new(
                         metadata_info.slot_updated,
-                        Some(metadata_info.write_version),
-                        None,
+                        Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                         m,
                     )
                 }),
                 chain_mutability: Some(Updated::new(
                     metadata_info.slot_updated,
-                    Some(metadata_info.write_version),
-                    None,
+                    Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                     chain_mutability,
                 )),
                 ..Default::default()
@@ -533,7 +522,6 @@ impl MplxAccsProcessor {
                 is_burnt: Updated::new(
                     metadata_slot_burnt.get(&map.pubkey).unwrap().slot_updated,
                     None, // once we got burn we may not even check write version
-                    None,
                     true,
                 ),
                 ..Default::default()

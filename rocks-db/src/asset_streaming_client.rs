@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use entities::models::{CompleteAssetDetails, Updated};
+use entities::models::{CompleteAssetDetails, UpdateVersion, Updated};
 use interface::asset_streaming_and_discovery::{
     AssetDetailsStream, AssetDetailsStreamer, AsyncError,
 };
@@ -121,8 +121,7 @@ async fn get_complete_asset_details(
                 .map_err(|e| StorageError::Common(e.to_string()))?;
             Some(Updated::new(
                 onchain_data.slot_updated,
-                onchain_data.write_version,
-                onchain_data.seq,
+                onchain_data.update_version,
                 v,
             ))
         }
@@ -196,21 +195,20 @@ async fn get_complete_asset_details(
         lamports: dynamic_data.lamports,
         executable: dynamic_data.executable,
         metadata_owner: dynamic_data.metadata_owner,
-        authority: Updated::new(
-            authority.slot_updated,
-            None, // TODO
-            None, //TODO: where do we get seq?
-            authority.authority,
-        ),
+        authority: Updated::new(authority.slot_updated, None, authority.authority),
         owner: owner.owner,
         delegate: owner.delegate,
         owner_type: owner.owner_type,
         owner_delegate_seq: owner.owner_delegate_seq,
         collection: collection.map(|collection| {
+            let update_version = if let Some(seq) = collection.collection_seq {
+                Some(UpdateVersion::Sequence(seq))
+            } else {
+                collection.write_version.map(UpdateVersion::WriteVersion)
+            };
             Updated::new(
                 collection.slot_updated,
-                collection.write_version,
-                collection.collection_seq,
+                update_version,
                 entities::models::AssetCollection {
                     collection: collection.collection,
                     is_collection_verified: collection.is_collection_verified,
@@ -226,7 +224,6 @@ async fn get_complete_asset_details(
         asset_leaf: asset_leaf.map(|leaf| {
             Updated::new(
                 leaf.slot_updated,
-                None,
                 None,
                 entities::models::AssetLeaf {
                     leaf: leaf.leaf,

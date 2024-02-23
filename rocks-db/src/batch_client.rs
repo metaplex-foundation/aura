@@ -13,7 +13,7 @@ use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
 use crate::storage_traits::{AssetIndexReader, AssetSlotStorage, AssetUpdateIndexStorage};
 use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage};
-use entities::models::{AssetIndex, CompleteAssetDetails, Updated, UrlWithStatus};
+use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, UrlWithStatus};
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<(u64, u64, Pubkey)>> {
@@ -264,8 +264,7 @@ impl Storage {
                 onchain_data: data.onchain_data.map(|chain_data| {
                     Updated::new(
                         chain_data.slot_updated,
-                        chain_data.write_version,
-                        chain_data.seq,
+                        chain_data.update_version,
                         json!(chain_data.value).to_string(),
                     )
                 }),
@@ -279,6 +278,15 @@ impl Storage {
             },
         )?;
 
+        let write_version = if let Some(write_v) = data.authority.update_version {
+            match write_v {
+                UpdateVersion::WriteVersion(v) => Some(v),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
         self.asset_authority_data.merge_with_batch(
             &mut batch,
             data.pubkey,
@@ -286,11 +294,20 @@ impl Storage {
                 pubkey: data.pubkey,
                 authority: data.authority.value,
                 slot_updated: data.authority.slot_updated,
-                write_version: data.authority.write_version,
+                write_version,
             },
         )?;
 
         if let Some(collection) = data.collection {
+            let write_version = if let Some(write_v) = collection.update_version {
+                match write_v {
+                    UpdateVersion::WriteVersion(v) => Some(v),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+
             self.asset_collection_data.merge_with_batch(
                 &mut batch,
                 data.pubkey,
@@ -300,7 +317,7 @@ impl Storage {
                     is_collection_verified: collection.value.is_collection_verified,
                     collection_seq: collection.value.collection_seq,
                     slot_updated: collection.slot_updated,
-                    write_version: collection.write_version,
+                    write_version,
                 },
             )?;
         }

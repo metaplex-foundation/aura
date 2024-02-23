@@ -2,7 +2,7 @@ use crate::buffer::Buffer;
 use crate::mplx_updates_processor::result_to_metrics;
 use crate::process_accounts;
 use entities::enums::OwnerType;
-use entities::models::{PubkeyWithSlot, Updated};
+use entities::models::{PubkeyWithSlot, UpdateVersion, Updated};
 use futures::future;
 use log::error;
 use metrics_utils::IngesterMetricsConfig;
@@ -116,21 +116,18 @@ impl TokenAccsProcessor {
                         pubkey: token_account.mint,
                         owner: Updated::new(
                             token_account.slot_updated as u64,
-                            Some(token_account.write_version),
-                            None,
+                            Some(UpdateVersion::WriteVersion(token_account.write_version)),
                             token_account.owner,
                         ),
                         delegate: Updated::new(
                             token_account.slot_updated as u64,
-                            Some(token_account.write_version),
-                            None,
+                            Some(UpdateVersion::WriteVersion(token_account.write_version)),
                             token_account.delegate,
                         ),
                         owner_type: Updated::default(),
                         owner_delegate_seq: Updated::new(
                             token_account.slot_updated as u64,
-                            Some(token_account.write_version),
-                            None,
+                            Some(UpdateVersion::WriteVersion(token_account.write_version)),
                             None,
                         ),
                     },
@@ -142,8 +139,7 @@ impl TokenAccsProcessor {
                         pubkey: token_account.mint,
                         is_frozen: Updated::new(
                             token_account.slot_updated as u64,
-                            Some(token_account.write_version),
-                            None,
+                            Some(UpdateVersion::WriteVersion(token_account.write_version)),
                             token_account.frozen,
                         ),
                         ..Default::default()
@@ -182,8 +178,7 @@ impl TokenAccsProcessor {
                         pubkey: mint.pubkey,
                         supply: Some(Updated::new(
                             mint.slot_updated as u64,
-                            Some(mint.write_version),
-                            None,
+                            Some(UpdateVersion::WriteVersion(mint.write_version)),
                             mint.supply as u64,
                         )),
                         ..Default::default()
@@ -202,8 +197,7 @@ impl TokenAccsProcessor {
                         pubkey: mint.pubkey,
                         owner_type: Updated::new(
                             mint.slot_updated as u64,
-                            Some(mint.write_version),
-                            None,
+                            Some(UpdateVersion::WriteVersion(mint.write_version)),
                             owner_type_value,
                         ),
                         ..Default::default()

@@ -12,7 +12,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
         let delegate = value.delegate.value.map(|key| DynamicBytesField {
             value: key.to_bytes().to_vec(),
             slot_updated: value.delegate.slot_updated,
-            seq_updated: value.delegate.seq,
+            seq_updated: value.delegate.get_upd_ver_seq(),
         });
 
         let owner_delegate_seq = value
@@ -21,7 +21,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
             .map(|seq| DynamicUint64Field {
                 value: seq,
                 slot_updated: value.owner_delegate_seq.slot_updated,
-                seq_updated: value.owner_delegate_seq.seq,
+                seq_updated: value.owner_delegate_seq.get_upd_ver_seq(),
             });
 
         Self {
@@ -67,7 +67,7 @@ impl From<Updated<bool>> for DynamicBoolField {
         Self {
             value: value.value,
             slot_updated: value.slot_updated,
-            seq_updated: value.seq,
+            seq_updated: value.get_upd_ver_seq(),
         }
     }
 }
@@ -77,7 +77,7 @@ impl From<Updated<u64>> for DynamicUint64Field {
         Self {
             value: value.value,
             slot_updated: value.slot_updated,
-            seq_updated: value.seq,
+            seq_updated: value.get_upd_ver_seq(),
         }
     }
 }
@@ -85,9 +85,9 @@ impl From<Updated<u64>> for DynamicUint64Field {
 impl From<Updated<String>> for DynamicStringField {
     fn from(value: Updated<String>) -> Self {
         Self {
-            value: value.value,
+            value: value.clone().value,
             slot_updated: value.slot_updated,
-            seq_updated: value.seq,
+            seq_updated: value.get_upd_ver_seq(),
         }
     }
 }
@@ -97,7 +97,7 @@ impl From<Updated<u16>> for DynamicUint32Field {
         Self {
             value: value.value as u32,
             slot_updated: value.slot_updated,
-            seq_updated: value.seq,
+            seq_updated: value.get_upd_ver_seq(),
         }
     }
 }
@@ -107,7 +107,7 @@ impl From<Updated<Pubkey>> for DynamicBytesField {
         Self {
             value: value.value.to_bytes().to_vec(),
             slot_updated: value.slot_updated,
-            seq_updated: value.seq,
+            seq_updated: value.get_upd_ver_seq(),
         }
     }
 }
@@ -117,7 +117,7 @@ impl From<Updated<entities::enums::OwnerType>> for DynamicEnumField {
         Self {
             value: OwnerType::from(value.value).into(),
             slot_updated: value.slot_updated,
-            seq_updated: value.seq,
+            seq_updated: value.get_upd_ver_seq(),
         }
     }
 }
@@ -127,7 +127,7 @@ impl From<Updated<entities::enums::ChainMutability>> for DynamicChainMutability 
         Self {
             value: ChainMutability::from(value.value).into(),
             slot_updated: value.slot_updated,
-            seq_updated: value.seq,
+            seq_updated: value.get_upd_ver_seq(),
         }
     }
 }
@@ -146,7 +146,7 @@ impl From<Updated<Vec<entities::models::Creator>>> for DynamicCreatorsField {
         Self {
             creators: value.value.iter().map(|v| v.into()).collect(),
             slot_updated: value.slot_updated,
-            seq_updated: value.seq,
+            seq_updated: value.get_upd_ver_seq(),
         }
     }
 }
@@ -161,7 +161,7 @@ impl From<Updated<entities::models::AssetLeaf>> for AssetLeaf {
             creator_hash: value.value.creator_hash.map(|h| h.to_bytes().to_vec()),
             leaf_seq: value.value.leaf_seq,
             slot_updated: value.slot_updated,
-            seq_updated: value.seq,
+            seq_updated: value.get_upd_ver_seq(),
         }
     }
 }
@@ -197,7 +197,7 @@ impl From<Updated<entities::models::AssetCollection>> for AssetCollection {
             is_collection_verified: value.value.is_collection_verified,
             collection_seq: value.value.collection_seq,
             slot_updated: value.slot_updated,
-            seq_updated: value.seq,
+            seq_updated: value.get_upd_ver_seq(),
         }
     }
 }
@@ -210,13 +210,14 @@ impl From<Updated<entities::models::ChainDataV1>> for ChainDataV1 {
             edition_nonce: value.value.edition_nonce.map(|v| v as u32),
             primary_sale_happened: value.value.primary_sale_happened,
             token_standard: value
+                .clone()
                 .value
                 .token_standard
                 .map(|v| TokenStandard::from(v).into())
                 .unwrap_or_default(),
-            uses: value.value.uses.map(|v| v.into()),
+            uses: value.clone().value.uses.map(|v| v.into()),
             slot_updated: value.slot_updated,
-            seq_updated: value.seq,
+            seq_updated: value.get_upd_ver_seq(),
         }
     }
 }
