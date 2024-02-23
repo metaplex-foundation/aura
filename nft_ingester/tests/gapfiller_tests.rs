@@ -13,7 +13,7 @@ use rocks_db::Storage;
 fn create_test_complete_asset_details(pubkey: Pubkey) -> CompleteAssetDetails {
     CompleteAssetDetails {
         pubkey,
-        supply: Some(Updated::new(1, None, 10)),
+        supply: Some(Updated::new(1, None, None, 10)),
         ..Default::default()
     }
 }
@@ -50,12 +50,12 @@ async fn test_process_asset_details_stream() {
         .get(first_key.clone())
         .unwrap()
         .unwrap();
-    assert_eq!(selected_data.supply, Some(Updated::new(1, None, 10)));
+    assert_eq!(selected_data.supply, Some(Updated::new(1, None, None, 10)));
 
     let selected_data = storage
         .asset_dynamic_data
         .get(second_key.clone())
         .unwrap()
         .unwrap();
-    assert_eq!(selected_data.supply, Some(Updated::new(1, None, 10)));
+    assert_eq!(selected_data.supply, Some(Updated::new(1, None, None, 10)));
 }

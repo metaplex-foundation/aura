@@ -348,9 +348,9 @@ mod tests {
 
         let new_data = AssetDynamicDetails {
             pubkey: pk,
-            is_compressible: Updated::new(10, None, true),
-            is_compressed: Updated::new(0, None, true),
-            supply: Some(Updated::new(0, None, 5)),
+            is_compressible: Updated::new(10, None, None, true),
+            is_compressed: Updated::new(0, None, None, true),
+            supply: Some(Updated::new(0, None, None, 5)),
             ..Default::default()
         };
         storage
@@ -360,15 +360,21 @@ mod tests {
             .unwrap();
 
         let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
-        assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
-        assert_eq!(selected_data.is_compressed, Updated::new(0, None, false)); // slot in new_data not greater than slot in start data, so that field must not change
-        assert_eq!(selected_data.supply, Some(Updated::new(0, None, 1))); // slot in new_data not greater than slot in start data, so that field must not change
+        assert_eq!(
+            selected_data.is_compressible,
+            Updated::new(10, None, None, true)
+        );
+        assert_eq!(
+            selected_data.is_compressed,
+            Updated::new(0, None, None, false)
+        ); // slot in new_data not greater than slot in start data, so that field must not change
+        assert_eq!(selected_data.supply, Some(Updated::new(0, None, None, 1))); // slot in new_data not greater than slot in start data, so that field must not change
 
         let new_data = AssetDynamicDetails {
             pubkey: pk,
-            is_compressible: Updated::new(5, None, false),
-            is_compressed: Updated::new(0, None, true),
-            supply: Some(Updated::new(3, None, 5)),
+            is_compressible: Updated::new(5, None, None, false),
+            is_compressed: Updated::new(0, None, None, true),
+            supply: Some(Updated::new(3, None, None, 5)),
             ..Default::default()
         };
         storage
@@ -378,13 +384,19 @@ mod tests {
             .unwrap();
 
         let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
-        assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
-        assert_eq!(selected_data.is_compressed, Updated::new(0, None, false));
-        assert_eq!(selected_data.supply, Some(Updated::new(3, None, 5)));
+        assert_eq!(
+            selected_data.is_compressible,
+            Updated::new(10, None, None, true)
+        );
+        assert_eq!(
+            selected_data.is_compressed,
+            Updated::new(0, None, None, false)
+        );
+        assert_eq!(selected_data.supply, Some(Updated::new(3, None, None, 5)));
 
         let new_data = AssetDynamicDetails {
             pubkey: pk,
-            is_compressible: Updated::new(5, Some(1), false),
+            is_compressible: Updated::new(5, None, Some(1), false),
             ..Default::default()
         };
         storage
@@ -394,7 +406,10 @@ mod tests {
             .unwrap();
 
         let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
-        assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
+        assert_eq!(
+            selected_data.is_compressible,
+            Updated::new(10, None, None, true)
+        );
         // data will not be updated because slot is lower
         // and to update data based of seq both new and old records have to have that value
     }
@@ -407,10 +422,10 @@ mod tests {
 
         let asset_owner_data = AssetOwner {
             pubkey: pk,
-            owner: Updated::new(1, Some(1), owner),
-            delegate: Updated::new(1, Some(1), Some(owner)),
-            owner_type: Updated::new(1, Some(1), OwnerType::Single),
-            owner_delegate_seq: Updated::new(1, Some(1), Some(1)),
+            owner: Updated::new(1, None, Some(1), owner),
+            delegate: Updated::new(1, None, Some(1), Some(owner)),
+            owner_type: Updated::new(1, None, Some(1), OwnerType::Single),
+            owner_delegate_seq: Updated::new(1, None, Some(1), Some(1)),
         };
 
         storage
@@ -427,10 +442,10 @@ mod tests {
 
         let updated_owner_data = AssetOwner {
             pubkey: pk,
-            owner: Updated::new(2, Some(2), new_owner),
-            delegate: Updated::new(2, Some(2), None),
-            owner_type: Updated::new(2, Some(2), OwnerType::Single),
-            owner_delegate_seq: Updated::new(2, Some(2), Some(2)),
+            owner: Updated::new(2, None, Some(2), new_owner),
+            delegate: Updated::new(2, None, Some(2), None),
+            owner_type: Updated::new(2, None, Some(2), OwnerType::Single),
+            owner_delegate_seq: Updated::new(2, None, Some(2), Some(2)),
         };
 
         storage

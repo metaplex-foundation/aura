@@ -137,17 +137,17 @@ pub const PUBKEY_OF_TWOS: Pubkey = Pubkey::new_from_array([2u8; 32]);
 pub fn create_test_dynamic_data(pubkey: Pubkey, slot: u64, url: String) -> AssetDynamicDetails {
     AssetDynamicDetails {
         pubkey,
-        is_compressible: Updated::new(slot, None, false),
-        is_compressed: Updated::new(slot, None, false),
-        is_frozen: Updated::new(slot, None, false),
-        supply: Some(Updated::new(slot, None, 1)),
+        is_compressible: Updated::new(slot, None, None, false),
+        is_compressed: Updated::new(slot, None, None, false),
+        is_frozen: Updated::new(slot, None, None, false),
+        supply: Some(Updated::new(slot, None, None, 1)),
         seq: None,
-        is_burnt: Updated::new(slot, None, false),
-        was_decompressed: Updated::new(slot, None, false),
+        is_burnt: Updated::new(slot, None, None, false),
+        was_decompressed: Updated::new(slot, None, None, false),
         onchain_data: None,
-        creators: Updated::new(slot, None, vec![generate_test_creator()]),
-        royalty_amount: Updated::new(slot, None, 0),
-        url: Updated::new(slot, None, url),
+        creators: Updated::new(slot, None, None, vec![generate_test_creator()]),
+        royalty_amount: Updated::new(slot, None, None, 0),
+        url: Updated::new(slot, None, None, url),
         chain_mutability: Default::default(),
         lamports: None,
         executable: None,
@@ -178,6 +178,7 @@ pub fn generate_test_authority(pubkey: Pubkey) -> AssetAuthority {
         pubkey,
         authority: Pubkey::new_unique(),
         slot_updated: rand::thread_rng().gen_range(0..100),
+        write_version: None,
     }
 }
 
@@ -192,7 +193,7 @@ pub fn generate_test_owner(pubkey: Pubkey) -> AssetOwner {
 }
 
 fn generate_test_updated<T>(v: T) -> Updated<T> {
-    Updated::new(rand::thread_rng().gen_range(0..100), None, v)
+    Updated::new(rand::thread_rng().gen_range(0..100), None, None, v)
 }
 
 fn generate_test_collection(pubkey: Pubkey) -> AssetCollection {
@@ -202,5 +203,6 @@ fn generate_test_collection(pubkey: Pubkey) -> AssetCollection {
         slot_updated: random(),
         is_collection_verified: random(),
         collection_seq: random(),
+        write_version: None,
     }
 }

@@ -459,12 +459,10 @@ impl AssetAuthority {
                             write_version = new_val.write_version;
                             result = op.to_vec();
                         }
-                    } else {
-                        if new_val.slot_updated > slot {
-                            slot = new_val.slot_updated;
-                            write_version = new_val.write_version;
-                            result = op.to_vec();
-                        }
+                    } else if new_val.slot_updated > slot {
+                        slot = new_val.slot_updated;
+                        write_version = new_val.write_version;
+                        result = op.to_vec();
                     }
                 }
                 Err(e) => {
@@ -694,13 +692,11 @@ impl AssetCollection {
                             collection_seq = new_val.collection_seq;
                             result = op.to_vec();
                         }
-                    } else {
-                        if new_val.slot_updated > slot {
-                            slot = new_val.slot_updated;
-                            write_version = new_val.write_version;
-                            collection_seq = new_val.collection_seq;
-                            result = op.to_vec();
-                        }
+                    } else if new_val.slot_updated > slot {
+                        slot = new_val.slot_updated;
+                        write_version = new_val.write_version;
+                        collection_seq = new_val.collection_seq;
+                        result = op.to_vec();
                     }
                 }
                 Err(e) => {
