@@ -707,7 +707,6 @@ mod tests {
 
         let token_updates_processor = TokenAccsProcessor::new(
             env.rocks_env.storage.clone(),
-            db_client.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,
@@ -801,10 +800,10 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_accs(&mint_accs)
+            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
         token_updates_processor
-            .transform_and_save_token_accs(&token_accs)
+            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_accs)].into_iter().collect())
             .await;
 
         mplx_updates_processor
