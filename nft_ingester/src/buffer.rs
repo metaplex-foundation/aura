@@ -11,7 +11,7 @@ use tonic::async_trait;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::columns::{Mint, TokenAccount};
 
-use crate::mplx_updates_processor::TokenMetadata;
+use crate::mplx_updates_processor::{BurntMetadataSlot, TokenMetadata};
 use crate::{db_v2::Task, mplx_updates_processor::MetadataInfo};
 
 #[derive(Default)]
@@ -22,7 +22,7 @@ pub struct Buffer {
     pub mints: Mutex<HashMap<Vec<u8>, Mint>>,
     pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
     pub token_metadata_editions: Mutex<HashMap<Pubkey, TokenMetadata>>,
-    pub burnt_metadata_at_slot: Mutex<HashMap<Vec<u8>, u64>>,
+    pub burnt_metadata_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
 }
 
 impl Buffer {

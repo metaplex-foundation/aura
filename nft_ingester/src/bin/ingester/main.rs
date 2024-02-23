@@ -8,6 +8,7 @@ use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info, warn};
 use nft_ingester::{backfiller, config, transaction_ingester};
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
+use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -44,6 +45,7 @@ use nft_ingester::backfiller::{
 };
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
+use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::SlotsCollector;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
@@ -168,7 +170,6 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let token_accs_parser = TokenAccsProcessor::new(
         rocks_storage.clone(),
-        db_client_v2.clone(),
         buffer.clone(),
         metrics_state.ingester_metrics.clone(),
         config.spl_buffer_size,
@@ -190,6 +191,13 @@ pub async fn main() -> Result<(), IngesterError> {
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
             cloned_token_parser
                 .process_token_accs(cloned_keep_running)
+                .await;
+        }));
+        let mut cloned_mplx_parser = mplx_accs_parser.clone();
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            cloned_mplx_parser
+                .process_burnt_accs(cloned_keep_running)
                 .await;
         }));
 
@@ -243,12 +251,21 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_red_metrics = metrics_state.red_metrics.clone();
+
+    let proof_checker = config.rpc_host.clone().map(|host| {
+        Arc::new(MaybeProofChecker::new(
+            Arc::new(RpcClient::new(host)),
+            config.check_proofs_probability,
+            config.check_proofs_commitment,
+        ))
+    });
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
             cloned_rocks_storage.clone(),
             cloned_keep_running,
             metrics_state.api_metrics.clone(),
             cloned_red_metrics,
+            proof_checker,
         )
         .await
         {

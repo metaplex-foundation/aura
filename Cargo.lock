@@ -2142,6 +2142,7 @@ dependencies = [
  "interface",
  "jsonpath_lib",
  "log",
+ "metrics-utils",
  "mime_guess",
  "postgre-client",
  "rocks-db",
@@ -2316,6 +2317,7 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 name = "entities"
 version = "0.1.0"
 dependencies = [
+ "blockbuster",
  "num-derive 0.4.1",
  "num-traits",
  "schemars",
@@ -3284,6 +3286,7 @@ dependencies = [
  "serde_json",
  "solana-client",
  "solana-program",
+ "solana-sdk",
  "spl-account-compression 0.3.0",
  "spl-concurrent-merkle-tree",
  "thiserror",
@@ -3297,11 +3300,15 @@ dependencies = [
 name = "interface"
 version = "0.1.0"
 dependencies = [
+ "anchor-lang 0.29.0",
  "async-trait",
  "entities",
  "futures",
  "mockall 0.12.1",
  "plerkle_serialization",
+ "reqwest",
+ "serde_derive",
+ "serde_json",
  "solana-client",
  "solana-program",
  "solana-sdk",
@@ -4047,6 +4054,7 @@ dependencies = [
  "serde_json",
  "setup",
  "solana-bigtable-connection",
+ "solana-client",
  "solana-program",
  "solana-sdk",
  "solana-storage-bigtable",
@@ -8892,6 +8900,7 @@ dependencies = [
 name = "usecase"
 version = "0.1.0"
 dependencies = [
+ "anchor-lang 0.29.0",
  "async-trait",
  "entities",
  "futures",
@@ -8899,10 +8908,18 @@ dependencies = [
  "metrics-utils",
  "mockall 0.12.1",
  "mpl-bubblegum",
+ "rand 0.8.5",
+ "serde",
+ "serde_derive",
+ "serde_json",
  "solana-bigtable-connection",
+ "solana-client",
+ "solana-program",
  "solana-sdk",
  "solana-storage-bigtable",
  "solana-transaction-status",
+ "spl-account-compression 0.3.0",
+ "spl-concurrent-merkle-tree",
  "tokio",
  "tracing",
 ]

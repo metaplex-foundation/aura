@@ -7,6 +7,7 @@ use std::{
 use figment::{providers::Env, Figment};
 use interface::asset_streaming_and_discovery::PeerDiscovery;
 use serde::Deserialize;
+use solana_sdk::commitment_config::CommitmentLevel;
 use tracing_subscriber::fmt;
 
 use crate::error::IngesterError;
@@ -151,6 +152,11 @@ pub struct IngesterConfig {
     pub sequence_consistent_checker_wait_period_sec: u64,
     #[serde(default = "default_sequence_consister_skip_check_slots_offset")]
     pub sequence_consister_skip_check_slots_offset: u64, // TODO: remove in future if there no need in that env
+    pub rpc_host: Option<String>,
+    #[serde(default = "default_check_proofs_probability")]
+    pub check_proofs_probability: f64,
+    #[serde(default = "default_check_proofs_commitment")]
+    pub check_proofs_commitment: CommitmentLevel,
 }
 
 fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
@@ -203,6 +209,19 @@ pub struct ApiConfig {
     #[serde(default)]
     pub run_profiling: bool,
     pub profiling_file_path_container: Option<String>,
+    pub rpc_host: Option<String>,
+    #[serde(default = "default_check_proofs_probability")]
+    pub check_proofs_probability: f64,
+    #[serde(default = "default_check_proofs_commitment")]
+    pub check_proofs_commitment: CommitmentLevel,
+}
+
+fn default_check_proofs_probability() -> f64 {
+    0.1
+}
+
+fn default_check_proofs_commitment() -> CommitmentLevel {
+    CommitmentLevel::Finalized
 }
 
 impl ApiConfig {

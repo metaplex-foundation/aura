@@ -4,6 +4,7 @@ use digital_asset_types::dapi::{
     get_asset, get_asset_batch, get_assets_by_authority, get_assets_by_creator,
     get_assets_by_group, get_assets_by_owner, get_proof_for_assets, search_assets,
 };
+use interface::proofs::ProofChecker;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
@@ -28,18 +29,26 @@ use {
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
 
-pub struct DasApi {
+pub struct DasApi<PC>
+where
+    PC: ProofChecker + Sync + Send + 'static,
+{
     db_connection: DatabaseConnection,
     pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
     metrics: Arc<ApiMetricsConfig>,
+    proof_checker: Option<Arc<PC>>,
 }
 
-impl DasApi {
+impl<PC> DasApi<PC>
+where
+    PC: ProofChecker + Sync + Send + 'static,
+{
     pub fn new(
         pg_client: Arc<PgClient>,
         rocks_db: Arc<Storage>,
         metrics: Arc<ApiMetricsConfig>,
+        proof_checker: Option<Arc<PC>>,
     ) -> Self {
         let db_connection = SqlxPostgresConnector::from_sqlx_postgres_pool(pg_client.pool.clone());
 
@@ -48,6 +57,7 @@ impl DasApi {
             pg_client,
             rocks_db,
             metrics,
+            proof_checker,
         }
     }
 
@@ -56,6 +66,7 @@ impl DasApi {
         metrics: Arc<ApiMetricsConfig>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         rocks_db: Arc<Storage>,
+        proof_checker: Option<Arc<PC>>,
     ) -> Result<Self, DasApiError> {
         let pool = PgPoolOptions::new()
             .max_connections(250)
@@ -69,6 +80,7 @@ impl DasApi {
             pg_client: Arc::new(pg_client),
             rocks_db,
             metrics,
+            proof_checker,
         })
     }
 
@@ -123,8 +135,11 @@ pub fn not_found() -> DasApiError {
     DasApiError::NoDataFoundError
 }
 
-impl DasApi {
-    pub async fn check_health(self: &DasApi) -> Result<Value, DasApiError> {
+impl<PC> DasApi<PC>
+where
+    PC: ProofChecker + Sync + Send + 'static,
+{
+    pub async fn check_health(&self) -> Result<Value, DasApiError> {
         let label = "check_health";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
@@ -142,16 +157,19 @@ impl DasApi {
         Ok(json!("ok"))
     }
 
-    pub async fn get_asset_proof(
-        self: &DasApi,
-        payload: GetAssetProof,
-    ) -> Result<Value, DasApiError> {
+    pub async fn get_asset_proof(&self, payload: GetAssetProof) -> Result<Value, DasApiError> {
         let label = "get_asset_proof";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let id = validate_pubkey(payload.id.clone())?;
-        let assets = get_proof_for_assets(self.rocks_db.clone(), vec![id]).await?;
+        let assets = get_proof_for_assets(
+            self.rocks_db.clone(),
+            vec![id],
+            self.proof_checker.clone(),
+            self.metrics.clone(),
+        )
+        .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -168,7 +186,7 @@ impl DasApi {
     }
 
     pub async fn get_asset_proof_batch(
-        self: &DasApi,
+        &self,
         payload: GetAssetProofBatch,
     ) -> Result<Value, DasApiError> {
         let label = "get_asset_proof_batch";
@@ -185,9 +203,14 @@ impl DasApi {
             .map(validate_pubkey)
             .collect::<Result<Vec<_>, _>>()?;
 
-        let res = get_proof_for_assets(self.rocks_db.clone(), ids)
-            .await
-            .map_err(Into::<DasApiError>::into);
+        let res = get_proof_for_assets(
+            self.rocks_db.clone(),
+            ids,
+            self.proof_checker.clone(),
+            self.metrics.clone(),
+        )
+        .await
+        .map_err(Into::<DasApiError>::into);
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -195,7 +218,7 @@ impl DasApi {
         Ok(json!(res?))
     }
 
-    pub async fn get_asset(self: &DasApi, payload: GetAsset) -> Result<Value, DasApiError> {
+    pub async fn get_asset(&self, payload: GetAsset) -> Result<Value, DasApiError> {
         let label = "get_asset";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
@@ -215,10 +238,7 @@ impl DasApi {
         Ok(json!(res))
     }
 
-    pub async fn get_asset_batch(
-        self: &DasApi,
-        payload: GetAssetBatch,
-    ) -> Result<Value, DasApiError> {
+    pub async fn get_asset_batch(&self, payload: GetAssetBatch) -> Result<Value, DasApiError> {
         let label = "get_asset_batch";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
@@ -247,7 +267,7 @@ impl DasApi {
     }
 
     pub async fn get_assets_by_owner(
-        self: &DasApi,
+        &self,
         payload: GetAssetsByOwner,
     ) -> Result<Value, DasApiError> {
         let label = "get_assets_by_owner";
@@ -287,7 +307,7 @@ impl DasApi {
     }
 
     pub async fn get_assets_by_group(
-        self: &DasApi,
+        &self,
         payload: GetAssetsByGroup,
     ) -> Result<Value, DasApiError> {
         let label = "get_assets_by_group";
@@ -329,7 +349,7 @@ impl DasApi {
     }
 
     pub async fn get_assets_by_creator(
-        self: &DasApi,
+        &self,
         payload: GetAssetsByCreator,
     ) -> Result<Value, DasApiError> {
         let label = "get_assets_by_creator";
@@ -372,7 +392,7 @@ impl DasApi {
     }
 
     pub async fn get_assets_by_authority(
-        self: &DasApi,
+        &self,
         payload: GetAssetsByAuthority,
     ) -> Result<Value, DasApiError> {
         let label = "get_assets_by_authority";
@@ -410,7 +430,7 @@ impl DasApi {
         Ok(json!(res?))
     }
 
-    pub async fn search_assets(self: &DasApi, payload: SearchAssets) -> Result<Value, DasApiError> {
+    pub async fn search_assets(&self, payload: SearchAssets) -> Result<Value, DasApiError> {
         // use names of the filter fields as a label for better understanding of the endpoint usage
         let label = payload.extract_some_fields();
         self.metrics.inc_search_asset_requests(&label);
@@ -444,7 +464,7 @@ impl DasApi {
         Ok(json!(res?))
     }
 
-    pub async fn get_grouping(self: &DasApi, payload: GetGrouping) -> Result<Value, DasApiError> {
+    pub async fn get_grouping(&self, payload: GetGrouping) -> Result<Value, DasApiError> {
         let label = "get_grouping";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
