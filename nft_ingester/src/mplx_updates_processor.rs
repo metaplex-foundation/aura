@@ -412,7 +412,12 @@ impl MplxAccsProcessor {
                         m,
                     )
                 }),
-                chain_mutability: Some(Updated::new(metadata_info.slot, Some(metadata_info.write_version), None, chain_mutability)),
+                chain_mutability: Some(Updated::new(
+                    metadata_info.slot,
+                    Some(metadata_info.write_version),
+                    None,
+                    chain_mutability,
+                )),
                 ..Default::default()
             });
 

@@ -491,7 +491,7 @@ mod tests {
             onchain_data: Some(Updated::new(12, None, Some(12), chain_data.to_string())),
             creators: Updated::new(12, None, Some(12), vec![]),
             royalty_amount: Updated::new(12, None, Some(12), 5),
-            url: Updated::new(12, None, Some(12), "".to_string()),
+            url: Updated::new(12, None, Some(12), json_uri.clone()),
             ..Default::default()
         };
 
@@ -751,6 +751,7 @@ mod tests {
                 delegated_amount: 0,
                 slot_updated: 1,
                 amount: 1,
+                write_version: 1,
             };
 
             let mint_acc = Mint {
@@ -760,6 +761,7 @@ mod tests {
                 decimals: 0,
                 mint_authority: Some(mint_auth_key),
                 freeze_authority: None,
+                write_version: 1,
             };
 
             let metadata = MetadataInfo {
