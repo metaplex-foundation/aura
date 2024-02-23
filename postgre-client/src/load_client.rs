@@ -96,6 +96,19 @@ impl PgClient {
             }
         }
     }
+
+    async fn drop_index(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        index: &str,
+    ) -> Result<(), String> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("DROP INDEX ");
+        query_builder.push(index);
+        query_builder.push(";");
+        self.execute_query_with_metrics(transaction, &mut query_builder, DROP_ACTION, index)
+            .await
+    }
+
     pub async fn drop_indexes(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
@@ -104,186 +117,29 @@ impl PgClient {
             QueryBuilder::new("ALTER TABLE assets_v3 DISABLE TRIGGER ALL;");
         self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "assets_v3")
             .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX asset_creators_v3_creator;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_asset_creators_v3_creator",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_specification_version;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_specification_version",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_specification_asset_class;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_specification_asset_class",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_royalty_target_type;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_royalty_target_type",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_royalty_amount;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_royalty_amount",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_slot_created;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_slot_created",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_owner_type;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_owner_type",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_metadata_url;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_metadata_url",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_owner;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_owner",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_delegate;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_delegate",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_authority;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_authority",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_collection_is_collection_verified;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_collection_is_collection_verified",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_is_burnt;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_is_burnt",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_is_compressible;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_is_compressible",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_is_compressed;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_is_compressed",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_is_frozen;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_is_frozen",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_supply;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_supply",
-        )
-        .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DROP INDEX assets_v3_slot_updated;");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            DROP_ACTION,
-            "ind_assets_v3_slot_updated",
-        )
-        .await
+        for index in [
+            "asset_creators_v3_creator",
+            "assets_v3_specification_version",
+            "assets_v3_specification_asset_class",
+            "assets_v3_royalty_target_type",
+            "assets_v3_royalty_amount",
+            "assets_v3_slot_created",
+            "assets_v3_owner_type",
+            "assets_v3_metadata_url",
+            "assets_v3_owner",
+            "assets_v3_delegate",
+            "assets_v3_authority",
+            "assets_v3_collection_is_collection_verified",
+            "assets_v3_is_burnt",
+            "assets_v3_is_compressible",
+            "assets_v3_is_compressed",
+            "assets_v3_is_frozen",
+            "assets_v3_supply",
+            "assets_v3_slot_updated",
+        ] {
+            self.drop_index(transaction, index).await?;
+        }
+        Ok(())
     }
 
     pub async fn recreate_indexes(
