@@ -11,7 +11,7 @@ use serde_json::json;
 use solana_program::pubkey::Pubkey;
 use tokio::time::Instant;
 
-use entities::enums::{RoyaltyTargetType, SpecificationAssetClass};
+use entities::enums::{ChainMutability, RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::{ChainDataV1, Creator, Uses};
 use entities::models::{PubkeyWithSlot, Updated};
 use metrics_utils::{IngesterMetricsConfig, MetricStatus};
@@ -294,10 +294,17 @@ impl MplxAccsProcessor {
             let data = metadata.data;
             let authority = metadata.update_authority;
             let uri = data.uri.trim().replace('\0', "");
-            let class: SpecificationAssetClass = match metadata.token_standard {
+            let class = match metadata.token_standard {
                 Some(TokenStandard::NonFungible) => SpecificationAssetClass::Nft,
                 Some(TokenStandard::FungibleAsset) => SpecificationAssetClass::FungibleAsset,
                 Some(TokenStandard::Fungible) => SpecificationAssetClass::FungibleToken,
+                Some(TokenStandard::NonFungibleEdition) => SpecificationAssetClass::Nft,
+                Some(TokenStandard::ProgrammableNonFungible) => {
+                    SpecificationAssetClass::ProgrammableNft
+                }
+                Some(TokenStandard::ProgrammableNonFungibleEdition) => {
+                    SpecificationAssetClass::ProgrammableNft
+                }
                 _ => SpecificationAssetClass::Unknown,
             };
 
@@ -325,14 +332,18 @@ impl MplxAccsProcessor {
 
             let chain_data = json!(chain_data);
 
+            let chain_mutability = if metadata_info.metadata.is_mutable {
+                ChainMutability::Mutable
+            } else {
+                ChainMutability::Immutable
+            };
+
             // supply field saving inside process_mint_accs fn
             models.asset_dynamic.push(AssetDynamicDetails {
                 pubkey: mint,
                 is_compressible: Updated::new(metadata_info.slot_updated, None, false),
                 is_compressed: Updated::new(metadata_info.slot_updated, None, false),
-                is_frozen: Updated::new(metadata_info.slot_updated, None, false),
                 seq: None,
-                is_burnt: Updated::new(metadata_info.slot_updated, None, false),
                 was_decompressed: Updated::new(metadata_info.slot_updated, None, false),
                 onchain_data: Some(Updated::new(
                     metadata_info.slot_updated,
@@ -373,6 +384,7 @@ impl MplxAccsProcessor {
                     .metadata_owner
                     .clone()
                     .map(|m| Updated::new(metadata_info.slot_updated, None, m)),
+                chain_mutability: Some(Updated::new(metadata_info.slot_updated, None, chain_mutability)),
                 ..Default::default()
             });
 
@@ -393,16 +405,6 @@ impl MplxAccsProcessor {
                     collection_seq: None,
                     slot_updated: metadata_info.slot_updated,
                 });
-            } else if let Some(creators) = data.creators {
-                if !creators.is_empty() {
-                    models.asset_collection.push(AssetCollection {
-                        pubkey: mint,
-                        collection: creators[0].address,
-                        is_collection_verified: true,
-                        collection_seq: None,
-                        slot_updated: metadata_info.slot_updated,
-                    });
-                }
             }
 
             models.asset_authority.push(AssetAuthority {
