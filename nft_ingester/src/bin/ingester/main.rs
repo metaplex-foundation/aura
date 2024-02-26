@@ -662,33 +662,33 @@ pub async fn main() -> Result<(), IngesterError> {
             transactions_parser.parse_transactions(rx).await;
             info!("Force slot persister finished working");
         }));
-    }
 
-    let fork_cleaner = ForkCleaner::new(
-        rocks_storage.clone(),
-        rocks_storage.clone(),
-        metrics_state.fork_cleaner_metrics.clone(),
-    );
-    let mut rx = shutdown_rx.resubscribe();
-    let metrics = metrics_state.fork_cleaner_metrics.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        info!("Start cleaning forks...");
-        loop {
-            let start = Instant::now();
-            fork_cleaner
-                .clean_forks(rx.resubscribe())
-                .await;
-            metrics.set_scans_latency(start.elapsed().as_secs_f64());
-            metrics.inc_total_scans();
-            tokio::select! {
+        let fork_cleaner = ForkCleaner::new(
+            rocks_storage.clone(),
+            rocks_storage.clone(),
+            metrics_state.fork_cleaner_metrics.clone(),
+        );
+        let mut rx = shutdown_rx.resubscribe();
+        let metrics = metrics_state.fork_cleaner_metrics.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            info!("Start cleaning forks...");
+            loop {
+                let start = Instant::now();
+                fork_cleaner
+                    .clean_forks(rx.resubscribe())
+                    .await;
+                metrics.set_scans_latency(start.elapsed().as_secs_f64());
+                metrics.inc_total_scans();
+                tokio::select! {
                     _ = tokio::time::sleep(Duration::from_secs(config.sequence_consistent_checker_wait_period_sec)) => {},
                     _ = rx.recv() => {
                         info!("Received stop signal, stopping cleaning forks");
                         return;
                     }
                 };
-        }
-    }));
+            }
+        }));
+    }
 
     start_metrics(
         metrics_state.registry,
