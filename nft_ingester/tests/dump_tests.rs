@@ -28,7 +28,6 @@ mod tests {
         let syncronizer = Synchronizer::new(
             storage,
             client.clone(),
-            1,
             2000,
             temp_dir_path.to_string(),
             Arc::new(SynchronizerMetricsConfig::new()),

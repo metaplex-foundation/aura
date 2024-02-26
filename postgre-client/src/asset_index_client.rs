@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    vec,
+};
 
 use async_trait::async_trait;
 use solana_sdk::pubkey::Pubkey;
@@ -8,9 +11,14 @@ use crate::{
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
     storage_traits::AssetIndexStorage,
     PgClient, BATCH_DELETE_ACTION, BATCH_SELECT_ACTION, BATCH_UPSERT_ACTION, CREATE_ACTION,
-    DROP_ACTION, SELECT_ACTION, SQL_COMPONENT, UPDATE_ACTION,
+    DROP_ACTION, INSERT_TASK_PARAMETERS_COUNT, POSTGRES_PARAMETERS_COUNT_LIMIT, SELECT_ACTION,
+    SQL_COMPONENT, UPDATE_ACTION,
 };
 use entities::models::{AssetIndex, Creator, UrlWithStatus};
+
+pub const INSERT_ASSET_PARAMETERS_COUNT: usize = 19;
+pub const DELETE_ASSET_CREATOR_PARAMETERS_COUNT: usize = 2;
+pub const INSERT_ASSET_CREATOR_PARAMETERS_COUNT: usize = 4;
 
 #[async_trait]
 impl AssetIndexStorage for PgClient {
@@ -35,8 +43,6 @@ impl AssetIndexStorage for PgClient {
         asset_indexes: &[AssetIndex],
         last_key: &[u8],
     ) -> Result<(), String> {
-        let mut transaction = self.start_transaction().await?;
-
         // First we need to bulk upsert metadata_url into metadata and get back ids for each metadata_url to upsert into assets_v3
         let mut metadata_urls: Vec<_> = asset_indexes
             .iter()
@@ -45,12 +51,7 @@ impl AssetIndexStorage for PgClient {
             .iter()
             .map(|url| UrlWithStatus::new(url.metadata_url.as_str(), url.is_downloaded))
             .collect();
-
-        if !metadata_urls.is_empty() {
-            metadata_urls.sort_by(|a, b| a.metadata_url.cmp(&b.metadata_url));
-            self.insert_tasks(&mut transaction, metadata_urls.clone())
-                .await?;
-        }
+        metadata_urls.sort_by(|a, b| a.metadata_url.cmp(&b.metadata_url));
 
         let mut asset_indexes = asset_indexes.to_vec();
         asset_indexes.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
@@ -74,146 +75,52 @@ impl AssetIndexStorage for PgClient {
             other => other,
         });
 
-        let updated_keys = asset_indexes
+        let updated_keys: Vec<Vec<u8>> = asset_indexes
             .iter()
             .map(|asset_index| asset_index.pubkey.to_bytes().to_vec())
             .collect::<Vec<Vec<u8>>>();
 
-        // Bulk insert/update for assets_v3
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "INSERT INTO assets_v3 (
-            ast_pubkey,
-            ast_specification_version,
-            ast_specification_asset_class,
-            ast_royalty_target_type,
-            ast_royalty_amount,
-            ast_slot_created,
-            ast_owner_type,
-            ast_owner,
-            ast_delegate,
-            ast_authority,
-            ast_collection,
-            ast_is_collection_verified,
-            ast_is_burnt,
-            ast_is_compressible,
-            ast_is_compressed,
-            ast_is_frozen,
-            ast_supply,
-            ast_metadata_url_id,
-            ast_slot_updated) ",
-        );
-        query_builder.push_values(asset_indexes, |mut builder, asset_index| {
-            let metadata_id = asset_index.metadata_url.map(|u| u.get_metadata_id());
-            builder
-                .push_bind(asset_index.pubkey.to_bytes().to_vec())
-                .push_bind(SpecificationVersions::from(
-                    asset_index.specification_version,
-                ))
-                .push_bind(SpecificationAssetClass::from(
-                    asset_index.specification_asset_class,
-                ))
-                .push_bind(RoyaltyTargetType::from(asset_index.royalty_target_type))
-                .push_bind(asset_index.royalty_amount)
-                .push_bind(asset_index.slot_created)
-                .push_bind(asset_index.owner_type.map(OwnerType::from))
-                .push_bind(asset_index.owner.map(|owner| owner.to_bytes().to_vec()))
-                .push_bind(asset_index.delegate.map(|k| k.to_bytes().to_vec()))
-                .push_bind(asset_index.authority.map(|k| k.to_bytes().to_vec()))
-                .push_bind(asset_index.collection.map(|k| k.to_bytes().to_vec()))
-                .push_bind(asset_index.is_collection_verified)
-                .push_bind(asset_index.is_burnt)
-                .push_bind(asset_index.is_compressible)
-                .push_bind(asset_index.is_compressed)
-                .push_bind(asset_index.is_frozen)
-                .push_bind(asset_index.supply)
-                .push_bind(metadata_id)
-                .push_bind(asset_index.slot_updated);
-        });
-        query_builder.push(" ON CONFLICT (ast_pubkey) 
-        DO UPDATE SET 
-            ast_specification_version = EXCLUDED.ast_specification_version,
-            ast_specification_asset_class = EXCLUDED.ast_specification_asset_class,
-            ast_royalty_target_type = EXCLUDED.ast_royalty_target_type,
-            ast_royalty_amount = EXCLUDED.ast_royalty_amount,
-            ast_slot_created = EXCLUDED.ast_slot_created,
-            ast_owner_type = EXCLUDED.ast_owner_type,
-            ast_owner = EXCLUDED.ast_owner,
-            ast_delegate = EXCLUDED.ast_delegate,
-            ast_authority = EXCLUDED.ast_authority,
-            ast_collection = EXCLUDED.ast_collection,
-            ast_is_collection_verified = EXCLUDED.ast_is_collection_verified,
-            ast_is_burnt = EXCLUDED.ast_is_burnt,
-            ast_is_compressible = EXCLUDED.ast_is_compressible,
-            ast_is_compressed = EXCLUDED.ast_is_compressed,
-            ast_is_frozen = EXCLUDED.ast_is_frozen,
-            ast_supply = EXCLUDED.ast_supply,
-            ast_metadata_url_id = EXCLUDED.ast_metadata_url_id,
-            ast_slot_updated = EXCLUDED.ast_slot_updated
-            WHERE assets_v3.ast_slot_updated <= EXCLUDED.ast_slot_updated OR assets_v3.ast_slot_updated IS NULL;");
+        let mut transaction = self.start_transaction().await?;
 
-        self.execute_query_with_metrics(
-            &mut transaction,
-            &mut query_builder,
-            BATCH_UPSERT_ACTION,
-            "assets_v3",
-        )
-        .await?;
+        for chunk in
+            metadata_urls.chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_TASK_PARAMETERS_COUNT)
+        {
+            self.insert_tasks(&mut transaction, chunk).await?;
+        }
+
+        // Bulk insert/update for assets_v3
+        for chunk in
+            asset_indexes.chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_ASSET_PARAMETERS_COUNT)
+        {
+            self.insert_assets(&mut transaction, chunk).await?;
+        }
 
         // Asset creators will be updated in 2 steps:
         // 1. Delete creators for the assets that are being updated and don't exist anymore
         // 2. Upsert creators for the assets
         // Delete creators for the assets that are being updated and don't exist anymore
-        let existing_creators = self
-            .batch_get_creators(&mut transaction, updated_keys.clone())
-            .await?;
+        let mut existing_creators: Vec<(Pubkey, Creator)> = vec![];
+
+        for chunk in updated_keys.chunks(POSTGRES_PARAMETERS_COUNT_LIMIT) {
+            let creators = self.batch_get_creators(&mut transaction, chunk).await?;
+            existing_creators.extend(creators);
+        }
+
         let creator_updates = Self::diff(all_creators.clone(), existing_creators);
 
-        if !creator_updates.to_remove.is_empty() {
-            let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-                "DELETE FROM asset_creators_v3 WHERE (asc_creator, asc_pubkey) IN ",
-            );
-
-            query_builder.push_tuples(
-                creator_updates.to_remove,
-                |mut builder, (pubkey, creator)| {
-                    builder
-                        .push_bind(creator.creator.to_bytes())
-                        .push_bind(pubkey.to_bytes());
-                },
-            );
-            self.execute_query_with_metrics(
-                &mut transaction,
-                &mut query_builder,
-                BATCH_DELETE_ACTION,
-                "asset_creators_v3",
-            )
-            .await?;
+        for chunk in creator_updates
+            .to_remove
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / DELETE_ASSET_CREATOR_PARAMETERS_COUNT)
+        {
+            self.delete_creators(&mut transaction, chunk).await?;
         }
 
         // Bulk upsert for asset_creators_v3
-        if !creator_updates.new_or_updated.is_empty() {
-            let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-                "INSERT INTO asset_creators_v3 (asc_pubkey, asc_creator, asc_verified, asc_slot_updated) ",
-            );
-            query_builder.push_values(
-                creator_updates.new_or_updated.iter(),
-                |mut builder, (pubkey, creator, slot_updated)| {
-                    builder
-                        .push_bind(pubkey.to_bytes().to_vec())
-                        .push_bind(creator.creator.to_bytes().to_vec())
-                        .push_bind(creator.creator_verified)
-                        .push_bind(slot_updated);
-                },
-            );
-            query_builder.push(" ON CONFLICT (asc_creator, asc_pubkey) DO UPDATE SET asc_verified = EXCLUDED.asc_verified WHERE asset_creators_v3.asc_slot_updated <= EXCLUDED.asc_slot_updated;");
-
-            self.execute_query_with_metrics(
-                &mut transaction,
-                &mut query_builder,
-                BATCH_UPSERT_ACTION,
-                "asset_creators_v3",
-            )
-            .await?;
+        for chunk in creator_updates
+            .new_or_updated
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_ASSET_CREATOR_PARAMETERS_COUNT)
+        {
+            self.insert_creators(&mut transaction, chunk).await?;
         }
 
         self.update_last_synced_key(last_key, &mut transaction)
@@ -295,11 +202,162 @@ pub struct CreatorsUpdates {
 }
 
 impl PgClient {
+    async fn insert_creators(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        creators: &[(Pubkey, Creator, i64)],
+    ) -> Result<(), String> {
+        if creators.is_empty() {
+            return Ok(());
+        }
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "INSERT INTO asset_creators_v3 (asc_pubkey, asc_creator, asc_verified, asc_slot_updated) ",
+        );
+        query_builder.push_values(creators, |mut builder, (pubkey, creator, slot_updated)| {
+            builder
+                .push_bind(pubkey.to_bytes().to_vec())
+                .push_bind(creator.creator.to_bytes().to_vec())
+                .push_bind(creator.creator_verified)
+                .push_bind(slot_updated);
+        });
+        query_builder.push(" ON CONFLICT (asc_creator, asc_pubkey) DO UPDATE SET asc_verified = EXCLUDED.asc_verified WHERE asset_creators_v3.asc_slot_updated <= EXCLUDED.asc_slot_updated;");
+
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            BATCH_UPSERT_ACTION,
+            "asset_creators_v3",
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn delete_creators(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        removed_creators: &[(Pubkey, Creator)],
+    ) -> Result<(), String> {
+        if removed_creators.is_empty() {
+            return Ok(());
+        }
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("DELETE FROM asset_creators_v3 WHERE (asc_creator, asc_pubkey) IN ");
+
+        query_builder.push_tuples(removed_creators, |mut builder, (pubkey, creator)| {
+            builder
+                .push_bind(creator.creator.to_bytes())
+                .push_bind(pubkey.to_bytes());
+        });
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            BATCH_DELETE_ACTION,
+            "asset_creators_v3",
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn insert_assets(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        asset_indexes: &[AssetIndex],
+    ) -> Result<(), String> {
+        if asset_indexes.is_empty() {
+            return Ok(());
+        }
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "INSERT INTO assets_v3 (
+            ast_pubkey,
+            ast_specification_version,
+            ast_specification_asset_class,
+            ast_royalty_target_type,
+            ast_royalty_amount,
+            ast_slot_created,
+            ast_owner_type,
+            ast_owner,
+            ast_delegate,
+            ast_authority,
+            ast_collection,
+            ast_is_collection_verified,
+            ast_is_burnt,
+            ast_is_compressible,
+            ast_is_compressed,
+            ast_is_frozen,
+            ast_supply,
+            ast_metadata_url_id,
+            ast_slot_updated) ",
+        );
+        query_builder.push_values(asset_indexes, |mut builder, asset_index| {
+            let metadata_id = asset_index
+                .metadata_url
+                .as_ref()
+                .map(|u| u.get_metadata_id());
+            builder
+                .push_bind(asset_index.pubkey.to_bytes().to_vec())
+                .push_bind(SpecificationVersions::from(
+                    asset_index.specification_version,
+                ))
+                .push_bind(SpecificationAssetClass::from(
+                    asset_index.specification_asset_class,
+                ))
+                .push_bind(RoyaltyTargetType::from(asset_index.royalty_target_type))
+                .push_bind(asset_index.royalty_amount)
+                .push_bind(asset_index.slot_created)
+                .push_bind(asset_index.owner_type.map(OwnerType::from))
+                .push_bind(asset_index.owner.map(|owner| owner.to_bytes().to_vec()))
+                .push_bind(asset_index.delegate.map(|k| k.to_bytes().to_vec()))
+                .push_bind(asset_index.authority.map(|k| k.to_bytes().to_vec()))
+                .push_bind(asset_index.collection.map(|k| k.to_bytes().to_vec()))
+                .push_bind(asset_index.is_collection_verified)
+                .push_bind(asset_index.is_burnt)
+                .push_bind(asset_index.is_compressible)
+                .push_bind(asset_index.is_compressed)
+                .push_bind(asset_index.is_frozen)
+                .push_bind(asset_index.supply)
+                .push_bind(metadata_id)
+                .push_bind(asset_index.slot_updated);
+        });
+        query_builder.push(" ON CONFLICT (ast_pubkey) 
+        DO UPDATE SET 
+            ast_specification_version = EXCLUDED.ast_specification_version,
+            ast_specification_asset_class = EXCLUDED.ast_specification_asset_class,
+            ast_royalty_target_type = EXCLUDED.ast_royalty_target_type,
+            ast_royalty_amount = EXCLUDED.ast_royalty_amount,
+            ast_slot_created = EXCLUDED.ast_slot_created,
+            ast_owner_type = EXCLUDED.ast_owner_type,
+            ast_owner = EXCLUDED.ast_owner,
+            ast_delegate = EXCLUDED.ast_delegate,
+            ast_authority = EXCLUDED.ast_authority,
+            ast_collection = EXCLUDED.ast_collection,
+            ast_is_collection_verified = EXCLUDED.ast_is_collection_verified,
+            ast_is_burnt = EXCLUDED.ast_is_burnt,
+            ast_is_compressible = EXCLUDED.ast_is_compressible,
+            ast_is_compressed = EXCLUDED.ast_is_compressed,
+            ast_is_frozen = EXCLUDED.ast_is_frozen,
+            ast_supply = EXCLUDED.ast_supply,
+            ast_metadata_url_id = EXCLUDED.ast_metadata_url_id,
+            ast_slot_updated = EXCLUDED.ast_slot_updated
+            WHERE assets_v3.ast_slot_updated <= EXCLUDED.ast_slot_updated OR assets_v3.ast_slot_updated IS NULL;");
+
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            BATCH_UPSERT_ACTION,
+            "assets_v3",
+        )
+        .await?;
+        Ok(())
+    }
+
     async fn batch_get_creators(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
-        pubkeys: Vec<Vec<u8>>,
+        pubkeys: &[Vec<u8>],
     ) -> Result<Vec<(Pubkey, Creator)>, String> {
+        if pubkeys.is_empty() {
+            return Ok(vec![]);
+        }
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("SELECT asc_pubkey, asc_creator, asc_verified FROM asset_creators_v3 WHERE asc_pubkey in (");
         let pubkey_len = pubkeys.len();

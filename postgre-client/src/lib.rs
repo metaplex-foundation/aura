@@ -28,6 +28,9 @@ pub const TRUNCATE_ACTION: &str = "truncate";
 pub const DROP_ACTION: &str = "drop";
 pub const ALTER_ACTION: &str = "alter";
 pub const CREATE_ACTION: &str = "create";
+pub const POSTGRES_PARAMETERS_COUNT_LIMIT: usize = 65535;
+pub const INSERT_TASK_PARAMETERS_COUNT: usize = 3;
+
 #[derive(Clone)]
 pub struct PgClient {
     pub pool: PgPool,
@@ -60,7 +63,7 @@ impl PgClient {
     pub async fn insert_tasks(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
-        metadata_urls: Vec<UrlWithStatus>,
+        metadata_urls: &[UrlWithStatus],
     ) -> Result<(), String> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("INSERT INTO tasks (tsk_id, tsk_metadata_url, tsk_status) ");

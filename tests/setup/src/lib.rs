@@ -9,7 +9,7 @@ pub struct TestEnvironment<'a> {
     pub rocks_env: rocks::RocksTestEnvironment,
     pub pg_env: pg::TestEnvironment<'a>,
 }
-const BATCH_SIZE: usize = 1000;
+const BATCH_SIZE: usize = 200_000;
 impl<'a> TestEnvironment<'a> {
     pub async fn create(
         cli: &'a Cli,
@@ -28,7 +28,6 @@ impl<'a> TestEnvironment<'a> {
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             BATCH_SIZE,
-            200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
         );

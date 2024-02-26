@@ -19,7 +19,6 @@ where
 {
     primary_storage: Arc<T>,
     index_storage: Arc<U>,
-    batch_size: usize,
     dump_synchronizer_batch_size: usize,
     dump_path: String,
     metrics: Arc<SynchronizerMetricsConfig>,
@@ -33,7 +32,6 @@ where
     pub fn new(
         primary_storage: Arc<T>,
         index_storage: Arc<U>,
-        batch_size: usize,
         dump_synchronizer_batch_size: usize,
         dump_path: String,
         metrics: Arc<SynchronizerMetricsConfig>,
@@ -41,7 +39,6 @@ where
         Synchronizer {
             primary_storage,
             index_storage,
-            batch_size,
             dump_synchronizer_batch_size,
             dump_path,
             metrics,
@@ -117,7 +114,7 @@ where
             let (updated_keys, last_included_key) = self.primary_storage.fetch_asset_updated_keys(
                 starting_key,
                 last_key,
-                self.batch_size,
+                self.dump_synchronizer_batch_size,
                 Some(processed_keys.clone()),
             )?;
             if updated_keys.is_empty() || last_included_key.is_none() {
@@ -154,7 +151,7 @@ where
                 updated_keys_refs.len() as u64,
             );
 
-            if updated_keys.len() < self.batch_size {
+            if updated_keys.len() < self.dump_synchronizer_batch_size {
                 break;
             }
             // add the processed keys to the set
@@ -254,7 +251,6 @@ mod tests {
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
             Arc::new(index_storage),
-            1000,
             200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
@@ -316,7 +312,6 @@ mod tests {
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
             Arc::new(index_storage),
-            1000,
             200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
@@ -389,7 +384,6 @@ mod tests {
             Arc::new(primary_storage),
             Arc::new(index_storage),
             1,
-            200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
         ); // Small batch size
@@ -500,7 +494,6 @@ mod tests {
             Arc::new(primary_storage),
             Arc::new(index_storage),
             2,
-            200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
         );
@@ -546,7 +539,6 @@ mod tests {
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
             Arc::new(index_storage),
-            1000,
             200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
