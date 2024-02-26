@@ -139,6 +139,7 @@ mod tests {
             delegated_amount: 0,
             slot_updated: nft_created_slot,
             amount: 1,
+            write_version: 1,
         };
 
         let mint_acc = Mint {
@@ -150,6 +151,7 @@ mod tests {
                 Pubkey::from_str("ywx1vh2bG1brfX8SqWMxGiivNTZjMHf9vuKrXKt4pNT").unwrap(),
             ),
             freeze_authority: None,
+            write_version: 1,
         };
 
         spl_token_accs_parser

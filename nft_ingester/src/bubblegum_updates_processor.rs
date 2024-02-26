@@ -11,7 +11,7 @@ use entities::enums::{
     ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard,
     UseMethod,
 };
-use entities::models::{BufferedTransaction, SignatureWithSlot, Updated};
+use entities::models::{BufferedTransaction, SignatureWithSlot, UpdateVersion, Updated};
 use entities::models::{ChainDataV1, Creator, Uses};
 use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
@@ -329,10 +329,22 @@ impl BubblegumTxProcessor {
                     });
                     let owner = AssetOwner {
                         pubkey: id,
-                        owner: Updated::new(bundle.slot, Some(cl.seq), owner),
+                        owner: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            owner,
+                        ),
                         delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
-                        owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
-                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
+                        owner_type: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            OwnerType::Single,
+                        ),
+                        owner_delegate_seq: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            Some(cl.seq),
+                        ),
                     };
                     let asset_update = AssetUpdateEvent {
                         update: Some(AssetDynamicUpdate {
@@ -377,10 +389,26 @@ impl BubblegumTxProcessor {
                     leaf: None,
                     dynamic_data: Some(AssetDynamicDetails {
                         pubkey: asset_id,
-                        supply: Some(Updated::new(bundle.slot, Some(cl.seq), 0)),
-                        is_burnt: Updated::new(bundle.slot, Some(cl.seq), true),
-                        seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
-                        is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
+                        supply: Some(Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            0,
+                        )),
+                        is_burnt: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            true,
+                        ),
+                        seq: Some(Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            cl.seq,
+                        )),
+                        is_compressed: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            true,
+                        ),
                         ..Default::default()
                     }),
                 }),
@@ -488,25 +516,49 @@ impl BubblegumTxProcessor {
                         }),
                         dynamic_data: Some(AssetDynamicDetails {
                             pubkey: id,
-                            is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
-                            is_compressible: Updated::new(bundle.slot, Some(cl.seq), false),
-                            supply: Some(Updated::new(bundle.slot, Some(cl.seq), 1)),
-                            seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
+                            is_compressed: Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                true,
+                            ),
+                            is_compressible: Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                false,
+                            ),
+                            supply: Some(Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                1,
+                            )),
+                            seq: Some(Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                cl.seq,
+                            )),
                             onchain_data: Some(Updated::new(
                                 bundle.slot,
-                                Some(cl.seq),
+                                Some(UpdateVersion::Sequence(cl.seq)),
                                 chain_data.to_string(),
                             )),
-                            creators: Updated::new(bundle.slot, Some(cl.seq), creators),
+                            creators: Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                creators,
+                            ),
                             royalty_amount: Updated::new(
                                 bundle.slot,
-                                Some(cl.seq),
+                                Some(UpdateVersion::Sequence(cl.seq)),
                                 args.seller_fee_basis_points,
                             ),
-                            url: Updated::new(bundle.slot, Some(cl.seq), uri.clone()),
+                            url: Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                uri.clone(),
+                            ),
                             chain_mutability: Some(Updated::new(
                                 bundle.slot,
-                                Some(cl.seq),
+                                Some(UpdateVersion::Sequence(cl.seq)),
                                 chain_mutability,
                             )),
                             ..Default::default()
@@ -517,6 +569,7 @@ impl BubblegumTxProcessor {
                         pubkey: id,
                         authority,
                         slot_updated: bundle.slot,
+                        write_version: None,
                     };
                     asset_update.authority_update = Some(AssetUpdate {
                         pk: id,
@@ -524,10 +577,22 @@ impl BubblegumTxProcessor {
                     });
                     let owner = AssetOwner {
                         pubkey: id,
-                        owner: Updated::new(bundle.slot, Some(cl.seq), owner),
+                        owner: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            owner,
+                        ),
                         delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
-                        owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
-                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
+                        owner_type: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            OwnerType::Single,
+                        ),
+                        owner_delegate_seq: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            Some(cl.seq),
+                        ),
                     };
                     asset_update.owner_update = Some(AssetUpdate {
                         pk: id,
@@ -541,6 +606,7 @@ impl BubblegumTxProcessor {
                             is_collection_verified: collection.verified,
                             collection_seq: Some(cl.seq),
                             slot_updated: bundle.slot,
+                            write_version: None,
                         };
                         asset_update.collection_update = Some(AssetUpdate {
                             pk: id,
@@ -692,20 +758,48 @@ impl BubblegumTxProcessor {
                         }),
                         dynamic_data: Some(AssetDynamicDetails {
                             pubkey: id,
-                            is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
-                            supply: Some(Updated::new(bundle.slot, Some(cl.seq), 1)),
-                            seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
-                            creators: Updated::new(bundle.slot, Some(cl.seq), updated_creators),
+                            is_compressed: Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                true,
+                            ),
+                            supply: Some(Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                1,
+                            )),
+                            seq: Some(Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                cl.seq,
+                            )),
+                            creators: Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                updated_creators,
+                            ),
                             ..Default::default()
                         }),
                     });
 
                     let owner = AssetOwner {
                         pubkey: id,
-                        owner: Updated::new(bundle.slot, Some(cl.seq), owner),
+                        owner: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            owner,
+                        ),
                         delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
-                        owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
-                        owner_delegate_seq: Updated::new(bundle.slot, Some(cl.seq), Some(cl.seq)),
+                        owner_type: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            OwnerType::Single,
+                        ),
+                        owner_delegate_seq: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            Some(cl.seq),
+                        ),
                     };
                     asset_update.owner_update = Some(AssetUpdate {
                         pk: id,
@@ -769,6 +863,7 @@ impl BubblegumTxProcessor {
                         is_collection_verified: verify,
                         collection_seq: Some(cl.seq),
                         slot_updated: bundle.slot,
+                        write_version: None,
                     };
 
                     asset_update.collection_update = Some(AssetUpdate {
@@ -912,29 +1007,29 @@ impl BubblegumTxProcessor {
                         }),
                         dynamic_data: Some(AssetDynamicDetails {
                             pubkey: id,
-                            onchain_data: Some(Updated {
-                                slot_updated: bundle.slot,
-                                seq: Some(cl.seq),
-                                value: chain_data_json.to_string(),
-                            }),
-                            url: Updated {
-                                slot_updated: bundle.slot,
-                                seq: Some(cl.seq),
-                                value: uri.clone(),
-                            },
-                            creators: Updated {
-                                slot_updated: bundle.slot,
-                                seq: Some(cl.seq),
-                                value: creators,
-                            },
+                            onchain_data: Some(Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                chain_data_json.to_string(),
+                            )),
+                            url: Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                uri.clone(),
+                            ),
+                            creators: Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                creators,
+                            ),
                             royalty_amount: Updated::new(
                                 bundle.slot,
-                                Some(cl.seq),
+                                Some(UpdateVersion::Sequence(cl.seq)),
                                 seller_fee_basis_points,
                             ),
                             chain_mutability: Some(Updated::new(
                                 bundle.slot,
-                                Some(cl.seq),
+                                Some(UpdateVersion::Sequence(cl.seq)),
                                 chain_mutability,
                             )),
                             ..Default::default()
@@ -980,5 +1075,5 @@ fn get_delegate(delegate: Pubkey, owner: Pubkey, slot: u64, seq: u64) -> Updated
         Some(delegate)
     };
 
-    Updated::new(slot, Some(seq), delegate)
+    Updated::new(slot, Some(UpdateVersion::Sequence(seq)), delegate)
 }

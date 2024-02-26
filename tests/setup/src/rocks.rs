@@ -174,6 +174,7 @@ pub fn generate_test_authority(pubkey: Pubkey) -> AssetAuthority {
         pubkey,
         authority: Pubkey::new_unique(),
         slot_updated: rand::thread_rng().gen_range(0..100),
+        write_version: None,
     }
 }
 
@@ -198,5 +199,6 @@ fn generate_test_collection(pubkey: Pubkey) -> AssetCollection {
         slot_updated: rand::thread_rng().gen_range(0..100),
         is_collection_verified: random(),
         collection_seq: random(),
+        write_version: None,
     }
 }

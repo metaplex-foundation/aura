@@ -5,6 +5,7 @@ use crate::enums::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
+use std::cmp::Ordering;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Eq, Hash)]
 pub struct UrlWithStatus {
@@ -177,19 +178,54 @@ pub struct ClLeaf {
     pub cli_node_idx: u64,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum UpdateVersion {
+    Sequence(u64),
+    WriteVersion(u64),
+}
+
+impl PartialOrd for UpdateVersion {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (UpdateVersion::Sequence(x), UpdateVersion::Sequence(y)) => x.partial_cmp(y),
+            (UpdateVersion::WriteVersion(x), UpdateVersion::WriteVersion(y)) => x.partial_cmp(y),
+            // this is asset decompress case. Update with write version field is always most recent
+            (UpdateVersion::Sequence(_), UpdateVersion::WriteVersion(_)) => Some(Ordering::Less),
+            (UpdateVersion::WriteVersion(_), UpdateVersion::Sequence(_)) => None,
+        }
+    }
+}
+
+impl UpdateVersion {
+    pub fn get_seq(&self) -> Option<u64> {
+        match self {
+            Self::Sequence(seq) => Some(*seq),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Updated<T> {
     pub slot_updated: u64,
-    pub seq: Option<u64>,
+    pub update_version: Option<UpdateVersion>,
     pub value: T,
 }
 
 impl<T> Updated<T> {
-    pub fn new(slot_updated: u64, seq: Option<u64>, value: T) -> Self {
+    pub fn new(slot_updated: u64, update_version: Option<UpdateVersion>, value: T) -> Self {
         Self {
             slot_updated,
-            seq,
+            update_version,
             value,
+        }
+    }
+
+    pub fn get_upd_ver_seq(&self) -> Option<u64> {
+        if let Some(upd_ver) = &self.update_version {
+            upd_ver.get_seq()
+        } else {
+            None
         }
     }
 }

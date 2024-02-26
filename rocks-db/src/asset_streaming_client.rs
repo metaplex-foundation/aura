@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use entities::models::{CompleteAssetDetails, Updated};
+use entities::models::{CompleteAssetDetails, UpdateVersion, Updated};
 use interface::asset_streaming_and_discovery::{
     AssetDetailsStream, AssetDetailsStreamer, AsyncError,
 };
@@ -119,7 +119,11 @@ async fn get_complete_asset_details(
         Some(onchain_data) => {
             let v = serde_json::from_str(&onchain_data.value)
                 .map_err(|e| StorageError::Common(e.to_string()))?;
-            Some(Updated::new(onchain_data.slot_updated, onchain_data.seq, v))
+            Some(Updated::new(
+                onchain_data.slot_updated,
+                onchain_data.update_version,
+                v,
+            ))
         }
     };
 
@@ -191,19 +195,20 @@ async fn get_complete_asset_details(
         lamports: dynamic_data.lamports,
         executable: dynamic_data.executable,
         metadata_owner: dynamic_data.metadata_owner,
-        authority: Updated::new(
-            authority.slot_updated,
-            None, //todo: where do we get seq?
-            authority.authority,
-        ),
+        authority: Updated::new(authority.slot_updated, None, authority.authority),
         owner: owner.owner,
         delegate: owner.delegate,
         owner_type: owner.owner_type,
         owner_delegate_seq: owner.owner_delegate_seq,
         collection: collection.map(|collection| {
+            let update_version = if let Some(seq) = collection.collection_seq {
+                Some(UpdateVersion::Sequence(seq))
+            } else {
+                collection.write_version.map(UpdateVersion::WriteVersion)
+            };
             Updated::new(
                 collection.slot_updated,
-                None, //todo: where do we get seq?
+                update_version,
                 entities::models::AssetCollection {
                     collection: collection.collection,
                     is_collection_verified: collection.is_collection_verified,

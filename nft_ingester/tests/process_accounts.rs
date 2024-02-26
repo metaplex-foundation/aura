@@ -63,6 +63,7 @@ mod tests {
             decimals: 0,
             mint_authority: None,
             freeze_authority: None,
+            write_version: 1,
         };
         let second_mint_to_save = Mint {
             pubkey: second_mint,
@@ -71,6 +72,7 @@ mod tests {
             decimals: 0,
             mint_authority: None,
             freeze_authority: None,
+            write_version: 1,
         };
         let first_token_account_to_save = TokenAccount {
             pubkey: first_token_account,
@@ -81,6 +83,7 @@ mod tests {
             delegated_amount: 0,
             slot_updated: 1,
             amount: 0,
+            write_version: 1,
         };
         let second_token_account_to_save = TokenAccount {
             pubkey: second_token_account,
@@ -91,6 +94,7 @@ mod tests {
             delegated_amount: 0,
             slot_updated: 1,
             amount: 0,
+            write_version: 1,
         };
 
         let buffer = Arc::new(Buffer::new());

@@ -4,7 +4,7 @@ mod tests {
     use std::sync::Arc;
 
     use entities::enums::OwnerType;
-    use entities::models::Updated;
+    use entities::models::{UpdateVersion, Updated};
     use solana_sdk::pubkey::Pubkey;
     use tempfile::TempDir;
 
@@ -384,7 +384,7 @@ mod tests {
 
         let new_data = AssetDynamicDetails {
             pubkey: pk,
-            is_compressible: Updated::new(5, Some(1), false),
+            is_compressible: Updated::new(5, Some(UpdateVersion::Sequence(1)), false),
             ..Default::default()
         };
         storage
@@ -407,10 +407,10 @@ mod tests {
 
         let asset_owner_data = AssetOwner {
             pubkey: pk,
-            owner: Updated::new(1, Some(1), owner),
-            delegate: Updated::new(1, Some(1), Some(owner)),
-            owner_type: Updated::new(1, Some(1), OwnerType::Single),
-            owner_delegate_seq: Updated::new(1, Some(1), Some(1)),
+            owner: Updated::new(1, Some(UpdateVersion::Sequence(1)), owner),
+            delegate: Updated::new(1, Some(UpdateVersion::Sequence(1)), Some(owner)),
+            owner_type: Updated::new(1, Some(UpdateVersion::Sequence(1)), OwnerType::Single),
+            owner_delegate_seq: Updated::new(1, Some(UpdateVersion::Sequence(1)), Some(1)),
         };
 
         storage
@@ -427,10 +427,10 @@ mod tests {
 
         let updated_owner_data = AssetOwner {
             pubkey: pk,
-            owner: Updated::new(2, Some(2), new_owner),
-            delegate: Updated::new(2, Some(2), None),
-            owner_type: Updated::new(2, Some(2), OwnerType::Single),
-            owner_delegate_seq: Updated::new(2, Some(2), Some(2)),
+            owner: Updated::new(2, Some(UpdateVersion::Sequence(2)), new_owner),
+            delegate: Updated::new(2, Some(UpdateVersion::Sequence(2)), None),
+            owner_type: Updated::new(2, Some(UpdateVersion::Sequence(2)), OwnerType::Single),
+            owner_delegate_seq: Updated::new(2, Some(UpdateVersion::Sequence(2)), Some(2)),
         };
 
         storage

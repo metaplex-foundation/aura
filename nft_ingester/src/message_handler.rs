@@ -179,46 +179,38 @@ impl MessageHandler {
 
                 let frozen = matches!(ta.state, spl_token::state::AccountState::Frozen);
 
-                let token_acc_model = TokenAccount {
-                    pubkey: Pubkey::try_from(key_bytes.clone()).unwrap(),
-                    mint: ta.mint,
-                    delegate: ta.delegate.into(),
-                    owner: ta.owner,
-                    frozen,
-                    delegated_amount: ta.delegated_amount as i64,
-                    slot_updated: account_update.slot() as i64,
-                    amount: ta.amount as i64,
-                };
-
-                let mut token_accounts = self.buffer.token_accs.lock().await;
-
-                if let Some(existing_model) = token_accounts.get(key_bytes.as_slice()) {
-                    if token_acc_model.slot_updated > existing_model.slot_updated {
-                        token_accounts.insert(key_bytes, token_acc_model);
-                    }
-                } else {
-                    token_accounts.insert(key_bytes, token_acc_model);
-                }
+                update_or_insert!(
+                    self.buffer.token_accs,
+                    key_bytes.clone(),
+                    TokenAccount {
+                        pubkey: Pubkey::try_from(key_bytes).unwrap(),
+                        mint: ta.mint,
+                        delegate: ta.delegate.into(),
+                        owner: ta.owner,
+                        frozen,
+                        delegated_amount: ta.delegated_amount as i64,
+                        slot_updated: account_update.slot() as i64,
+                        amount: ta.amount as i64,
+                        write_version: account_update.write_version(),
+                    },
+                    account_update.write_version()
+                );
             }
             TokenProgramAccount::Mint(m) => {
-                let mint_acc_model = Mint {
-                    pubkey: Pubkey::try_from(key_bytes.clone()).unwrap_or_default(),
-                    slot_updated: account_update.slot() as i64,
-                    supply: m.supply as i64,
-                    decimals: m.decimals as i32,
-                    mint_authority: m.mint_authority.into(),
-                    freeze_authority: m.freeze_authority.into(),
-                };
-
-                let mut mints = self.buffer.mints.lock().await;
-
-                if let Some(existing_model) = mints.get(key_bytes.as_slice()) {
-                    if mint_acc_model.slot_updated > existing_model.slot_updated {
-                        mints.insert(key_bytes, mint_acc_model);
-                    }
-                } else {
-                    mints.insert(key_bytes, mint_acc_model);
-                }
+                update_or_insert!(
+                    self.buffer.mints,
+                    key_bytes.clone(),
+                    Mint {
+                        pubkey: Pubkey::try_from(key_bytes).unwrap_or_default(),
+                        slot_updated: account_update.slot() as i64,
+                        supply: m.supply as i64,
+                        decimals: m.decimals as i32,
+                        mint_authority: m.mint_authority.into(),
+                        freeze_authority: m.freeze_authority.into(),
+                        write_version: account_update.write_version(),
+                    },
+                    account_update.write_version()
+                );
             }
             _ => debug!("Not implemented"),
         };
