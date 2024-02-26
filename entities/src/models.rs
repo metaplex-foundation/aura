@@ -189,7 +189,8 @@ impl PartialOrd for UpdateVersion {
         match (self, other) {
             (UpdateVersion::Sequence(x), UpdateVersion::Sequence(y)) => x.partial_cmp(y),
             (UpdateVersion::WriteVersion(x), UpdateVersion::WriteVersion(y)) => x.partial_cmp(y),
-            (UpdateVersion::Sequence(_), UpdateVersion::WriteVersion(_)) => None,
+            // this is asset decompress case. Update with write version field is always most recent
+            (UpdateVersion::Sequence(_), UpdateVersion::WriteVersion(_)) => Some(Ordering::Less),
             (UpdateVersion::WriteVersion(_), UpdateVersion::Sequence(_)) => None,
         }
     }
