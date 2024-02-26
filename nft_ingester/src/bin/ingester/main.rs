@@ -523,24 +523,25 @@ pub async fn main() -> Result<(), IngesterError> {
         };
     }
 
-    let cloned_keep_running = keep_running.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        while cloned_keep_running.load(Ordering::SeqCst) {
-            let res = synchronizer
-                .synchronize_asset_indexes(cloned_keep_running.clone())
-                .await;
-            match res {
-                Ok(_) => {
-                    info!("Synchronization finished successfully");
+    if !config.disable_synchronizer {
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            while cloned_keep_running.load(Ordering::SeqCst) {
+                let res = synchronizer
+                    .synchronize_asset_indexes(cloned_keep_running.clone())
+                    .await;
+                match res {
+                    Ok(_) => {
+                        info!("Synchronization finished successfully");
+                    }
+                    Err(e) => {
+                        error!("Synchronization failed: {:?}", e);
+                    }
                 }
-                Err(e) => {
-                    error!("Synchronization failed: {:?}", e);
-                }
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             }
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-        }
-    }));
-
+        }));
+    }
     // setup dependencies for grpc server
     let uc = usecase::asset_streamer::AssetStreamer::new(
         config.peer_grpc_max_gap_slots,
