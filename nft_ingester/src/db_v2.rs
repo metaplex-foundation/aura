@@ -1,4 +1,4 @@
-use entities::enums::TaskStatus;
+use entities::{enums::TaskStatus, models::UrlWithStatus};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions, Postgres},
     ConnectOptions, PgPool, QueryBuilder, Row,
@@ -133,6 +133,7 @@ impl DBClient {
 
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
             "INSERT INTO tasks (
+                tsk_id,
                 tsk_metadata_url,
                 tsk_locked_until,
                 tsk_attempts,
@@ -143,6 +144,8 @@ impl DBClient {
         );
 
         query_builder.push_values(data, |mut b, off_d| {
+            let tsk = UrlWithStatus::new(off_d.ofd_metadata_url.as_str(), false);
+            b.push_bind(tsk.get_metadata_id());
             b.push_bind(off_d.ofd_metadata_url.clone());
             b.push_bind(off_d.ofd_locked_until);
             b.push_bind(off_d.ofd_attempts);
