@@ -120,7 +120,6 @@ pub async fn main() -> Result<(), IngesterError> {
     let synchronizer = Synchronizer::new(
         rocks_storage.clone(),
         index_storage.clone(),
-        config.synchronizer_batch_size,
         config.dump_synchronizer_batch_size,
         config.dump_path.to_string(),
         metrics_state.synchronizer_metrics.clone(),
