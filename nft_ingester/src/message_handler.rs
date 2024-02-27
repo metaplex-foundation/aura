@@ -321,6 +321,7 @@ impl MessageHandler {
             }
             Err(e) => match e {
                 BlockbusterError::AccountTypeNotImplemented => {}
+                BlockbusterError::UninitializedAccount => {} // acc with data - [0]
                 _ => account_parsing_error(e, account_info),
             },
         }
