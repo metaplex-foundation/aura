@@ -363,6 +363,17 @@ where
             .iterator_cf(&self.handle(), rocksdb::IteratorMode::Start)
     }
 
+    pub fn iterator_cbor(&self) -> impl Iterator<Item = (C::KeyType, C::ValueType)> + '_ {
+        self.iter_start()
+            .filter_map(|k| k.ok())
+            .filter_map(|(key, value)| {
+                let key = C::decode_key(key.to_vec()).ok()?;
+                serde_cbor::from_slice::<C::ValueType>(value.as_ref())
+                    .ok()
+                    .map(|value: <C as TypedColumn>::ValueType| (key, value))
+            })
+    }
+
     // Method to get an iterator starting from the end of the column
     pub fn iter_end(&self) -> DBIteratorWithThreadMode<'_, DB> {
         self.backend

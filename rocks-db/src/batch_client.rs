@@ -404,7 +404,7 @@ impl Storage {
         Ok(())
     }
 
-    fn url_with_status_for(&self, dynamic_info: &AssetDynamicDetails) -> Option<UrlWithStatus> {
+    pub (crate) fn url_with_status_for(&self, dynamic_info: &AssetDynamicDetails) -> Option<UrlWithStatus> {
         if dynamic_info.url.value.trim().is_empty() {
             None
         } else {

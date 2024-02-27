@@ -39,6 +39,30 @@ pub struct AssetStaticDetails {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CompleteAssetDetails {
+    pub pubkey: Pubkey,
+    pub static_details: Option<AssetStaticDetails>,
+    pub dynamic_details: Option<AssetDynamicDetails>,
+    pub authority: Option<AssetAuthority>,
+    pub owner: Option<AssetOwner>,
+    pub collection: Option<AssetCollection>,
+}
+
+impl TypedColumn for CompleteAssetDetails {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    // The value type is the Asset struct itself
+    const NAME: &'static str = "ASSET_STATIC"; // Name of the column family
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AssetStaticDetailsDeprecated {
     pub pubkey: Pubkey,
     pub specification_asset_class: SpecificationAssetClass,

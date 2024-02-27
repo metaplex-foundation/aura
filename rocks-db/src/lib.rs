@@ -11,6 +11,7 @@ use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
 use crate::editions::TokenMetadataEdition;
 pub use asset::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
+    CompleteAssetDetails,
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
@@ -48,31 +49,40 @@ pub mod tree_seq;
 pub type Result<T> = std::result::Result<T, StorageError>;
 
 pub struct Storage {
+    //data columns
+    pub complete_asset_details: Column<CompleteAssetDetails>,
     pub asset_static_data: Column<AssetStaticDetails>,
-    pub asset_static_data_deprecated: Column<AssetStaticDetailsDeprecated>,
     pub asset_dynamic_data: Column<AssetDynamicDetails>,
-    pub asset_dynamic_data_deprecated: Column<AssetDynamicDetailsDeprecated>,
-    pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_authority_data: Column<AssetAuthority>,
-    pub asset_authority_deprecated: Column<AssetAuthorityDeprecated>,
-    pub asset_owner_data_deprecated: Column<AssetOwnerDeprecated>,
     pub asset_owner_data: Column<AssetOwner>,
-    pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_collection_data: Column<asset::AssetCollection>,
-    pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
     pub asset_offchain_data: Column<offchain_data::OffChainData>,
+
+    pub token_metadata_edition_cbor: Column<TokenMetadataEdition>,
+    pub asset_leaf_data: Column<asset::AssetLeaf>,
+    pub metadata_mint_map: Column<MetadataMintMap>,
     pub cl_items: Column<cl_items::ClItem>,
     pub cl_leafs: Column<cl_items::ClLeaf>,
+    // ingestion related columns
     pub bubblegum_slots: Column<bubblegum_slots::BubblegumSlots>,
     pub ingestable_slots: Column<bubblegum_slots::IngestableSlots>,
     pub force_reingestable_slots: Column<bubblegum_slots::ForceReingestableSlots>,
     pub raw_blocks_cbor: Column<raw_block::RawBlock>,
-    pub db: Arc<DB>,
+    pub trees_gaps: Column<TreesGaps>,
+
+    // index columns
     pub assets_update_idx: Column<AssetsUpdateIdx>,
     pub slot_asset_idx: Column<SlotAssetIdx>,
     pub tree_seq_idx: Column<TreeSeqIdx>,
-    pub trees_gaps: Column<TreesGaps>,
-    pub token_metadata_edition_cbor: Column<TokenMetadataEdition>,
+
+    // deprecated columns
+    pub asset_static_data_deprecated: Column<AssetStaticDetailsDeprecated>,
+    pub asset_dynamic_data_deprecated: Column<AssetDynamicDetailsDeprecated>,
+    pub asset_authority_deprecated: Column<AssetAuthorityDeprecated>,
+    pub asset_owner_data_deprecated: Column<AssetOwnerDeprecated>,
+    pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
+
+    pub db: Arc<DB>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -96,6 +106,7 @@ impl Storage {
         let asset_collection_data = Self::column(db.clone());
         let asset_collection_data_deprecated = Self::column(db.clone());
         let asset_offchain_data = Self::column(db.clone());
+        let complete_asset_details = Self::column(db.clone());
 
         let cl_items = Self::column(db.clone());
         let cl_leafs = Self::column(db.clone());
@@ -112,6 +123,7 @@ impl Storage {
         let asset_static_data_deprecated = Self::column(db.clone());
 
         Self {
+            complete_asset_details,
             asset_static_data,
             asset_dynamic_data,
             asset_dynamic_data_deprecated,
@@ -175,6 +187,7 @@ impl Storage {
 
     fn create_cf_descriptors() -> Vec<ColumnFamilyDescriptor> {
         vec![
+            Self::new_cf_descriptor::<CompleteAssetDetails>(),
             Self::new_cf_descriptor::<offchain_data::OffChainData>(),
             Self::new_cf_descriptor::<AssetStaticDetails>(),
             Self::new_cf_descriptor::<AssetDynamicDetails>(),
