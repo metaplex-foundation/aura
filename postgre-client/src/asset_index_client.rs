@@ -48,6 +48,7 @@ impl AssetIndexStorage for PgClient {
 
         if !metadata_urls.is_empty() {
             metadata_urls.sort_by(|a, b| a.metadata_url.cmp(&b.metadata_url));
+            tracing::info!("Inserting metadata urls: {:?}", metadata_urls);
             self.insert_tasks(&mut transaction, metadata_urls.clone())
                 .await?;
         }
@@ -78,7 +79,7 @@ impl AssetIndexStorage for PgClient {
             .iter()
             .map(|asset_index| asset_index.pubkey.to_bytes().to_vec())
             .collect::<Vec<Vec<u8>>>();
-
+        tracing::info!("Inserting asset indexes: {:?}", asset_indexes);
         // Bulk insert/update for assets_v3
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
             "INSERT INTO assets_v3 (

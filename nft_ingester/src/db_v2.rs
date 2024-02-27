@@ -146,7 +146,7 @@ impl DBClient {
         query_builder.push_values(data, |mut b, off_d| {
             let tsk = UrlWithStatus::new(off_d.ofd_metadata_url.as_str(), false);
             b.push_bind(tsk.get_metadata_id());
-            b.push_bind(off_d.ofd_metadata_url.clone());
+            b.push_bind(off_d.ofd_metadata_url.trim().to_owned());
             b.push_bind(off_d.ofd_locked_until);
             b.push_bind(off_d.ofd_attempts);
             b.push_bind(off_d.ofd_max_attempts);

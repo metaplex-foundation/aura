@@ -72,7 +72,7 @@ impl PgClient {
                 false => TaskStatus::Pending,
             });
         });
-        query_builder.push(" ON CONFLICT (tsk_metadata_url) DO NOTHING;");
+        query_builder.push(" ON CONFLICT (tsk_id) DO NOTHING;");
 
         self.execute_query_with_metrics(
             transaction,
