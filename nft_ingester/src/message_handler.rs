@@ -320,7 +320,8 @@ impl MessageHandler {
                 };
             }
             Err(e) => match e {
-                BlockbusterError::AccountTypeNotImplemented => {}
+                BlockbusterError::AccountTypeNotImplemented
+                | BlockbusterError::UninitializedAccount => {}
                 _ => account_parsing_error(e, account_info),
             },
         }
