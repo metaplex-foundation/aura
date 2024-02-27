@@ -16,7 +16,10 @@ async fn setup_environment<'a>(
 }
 
 async fn bench_synchronize(env: Arc<TestEnvironment<'_>>, batch_size: usize) {
-    sqlx::query("update last_synced_key set last_synced_asset_update_key = null where id = 1;").execute(&env.pg_env.pool).await.unwrap();
+    sqlx::query("update last_synced_key set last_synced_asset_update_key = null where id = 1;")
+        .execute(&env.pg_env.pool)
+        .await
+        .unwrap();
     let metrics = Arc::new(SynchronizerMetricsConfig::new());
     let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
         env.rocks_env.storage.clone(),
@@ -47,13 +50,14 @@ fn sync_benchmark(c: &mut Criterion) {
     });
     group.bench_function("10k batch size", |b| {
         b.iter(|| rt.block_on(bench_synchronize(env.clone(), 10_000)))
-    });group.bench_function("small batches of 1000 records, as before", |b| {
+    });
+    group.bench_function("small batches of 1000 records, as before", |b| {
         b.iter(|| rt.block_on(bench_synchronize(env.clone(), 1000)))
     });
     group.bench_function("100k batch size", |b| {
         b.iter(|| rt.block_on(bench_synchronize(env.clone(), 100_000)))
     });
-    
+
     rt.block_on(env.teardown());
 }
 
