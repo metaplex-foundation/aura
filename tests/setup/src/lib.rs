@@ -38,7 +38,7 @@ impl<'a> TestEnvironment<'a> {
         (env, generated_data)
     }
 
-    pub async fn teardown(self) {
+    pub async fn teardown(&self) {
         self.pg_env.teardown().await;
     }
 }

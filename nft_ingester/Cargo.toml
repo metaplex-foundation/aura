@@ -83,6 +83,10 @@ harness = false
 name = "ingester_benchmark"
 harness = false
 
+[[bench]]
+name = "synchronizer_benchmark"
+harness = false
+
 [features]
 rpc_tests = []
 integration_tests = []
