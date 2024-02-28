@@ -12,9 +12,7 @@ use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::SynchronizerMetricsConfig;
-use rocks_db::column::TypedColumn;
-use rocks_db::key_encoders::decode_u64x2_pubkey;
-use rocks_db::{AssetsUpdateIdx, Storage};
+use rocks_db::Storage;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 
@@ -90,20 +88,6 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
-
-    for item in rocks_storage.assets_update_idx.iter_end() {
-        let (idx_key, _) = item.unwrap();
-        let key = AssetsUpdateIdx::decode_key(idx_key.to_vec())?;
-        let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
-        let (seq, slot, pubkey) = (decoded_key.0, decoded_key.1, decoded_key.2);
-        if slot >= 250868000 {
-            continue;
-        }
-        tracing::info!("Assuming the last key has seq {} slot {} pubkey {}", seq, slot, pubkey);
-        return Ok(());
-    }
-    tracing::error!("No keys found in the database");
-    return Ok(());
     let cloned_tasks = mutexed_tasks.clone();
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
