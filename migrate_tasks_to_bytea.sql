@@ -1,4 +1,4 @@
-ALTER TYPE specification_asset_class  ADD VALUE 'programmable_nft';
+ALTER TYPE specification_asset_class ADD VALUE 'programmable_nft';
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 DROP TABLE assets_v3;
@@ -75,3 +75,5 @@ CREATE INDEX assets_v3_is_frozen ON assets_v3(ast_is_frozen) WHERE ast_is_frozen
 
 CREATE INDEX assets_v3_supply ON assets_v3(ast_supply) WHERE ast_supply IS NOT NULL;
 CREATE INDEX assets_v3_slot_updated ON assets_v3(ast_slot_updated);
+
+UPDATE last_synced_key SET last_synced_asset_update_key = null WHERE id = 1;
