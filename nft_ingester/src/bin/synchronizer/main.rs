@@ -118,22 +118,21 @@ pub async fn main() -> Result<(), IngesterError> {
             .unwrap();
         tracing::info!("Dump synchronizer finished");
     }
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        while shutdown_rx.is_empty() {
-            let res = synchronizer.synchronize_asset_indexes(&shutdown_rx).await;
-            match res {
-                Ok(_) => {
-                    tracing::info!("Synchronization finished successfully");
-                }
-                Err(e) => {
-                    tracing::error!("Synchronization failed: {:?}", e);
-                }
+    
+    while shutdown_rx.is_empty() {
+        let res = synchronizer.synchronize_asset_indexes(&shutdown_rx).await;
+        match res {
+            Ok(_) => {
+                tracing::info!("Synchronization finished successfully");
             }
-            tokio::time::sleep(tokio::time::Duration::from_secs(
-                config.timeout_between_syncs_sec,
-            ))
-            .await;
+            Err(e) => {
+                tracing::error!("Synchronization failed: {:?}", e);
+            }
         }
-    }));
+        tokio::time::sleep(tokio::time::Duration::from_secs(
+            config.timeout_between_syncs_sec,
+        ))
+        .await;
+    }
     Ok(())
 }
