@@ -227,6 +227,10 @@ pub struct SynchronizerConfig {
     pub dump_synchronizer_batch_size: usize,
     #[serde(default = "default_dump_path")]
     pub dump_path: String,
+    #[serde(default)]
+    pub run_dump_synchronize_on_start: bool,
+    #[serde(default)]
+    pub timeout_between_syncs_sec: u64,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]

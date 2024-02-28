@@ -110,12 +110,30 @@ pub async fn main() -> Result<(), IngesterError> {
         config.dump_path.to_string(),
         metrics.clone(),
     );
-    tracing::info!("Running dump synchronizer on start");
-    synchronizer
-        .full_syncronize(shutdown_rx.resubscribe())
-        .await
-        .unwrap();
-    tracing::info!("Dump synchronizer finished");
-
+    if config.run_dump_synchronize_on_start {
+        tracing::info!("Running dump synchronizer on start");
+        synchronizer
+            .full_syncronize(shutdown_rx.resubscribe())
+            .await
+            .unwrap();
+        tracing::info!("Dump synchronizer finished");
+    }
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        while shutdown_rx.is_empty() {
+            let res = synchronizer.synchronize_asset_indexes(&shutdown_rx).await;
+            match res {
+                Ok(_) => {
+                    tracing::info!("Synchronization finished successfully");
+                }
+                Err(e) => {
+                    tracing::error!("Synchronization failed: {:?}", e);
+                }
+            }
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                config.timeout_between_syncs_sec,
+            ))
+            .await;
+        }
+    }));
     Ok(())
 }

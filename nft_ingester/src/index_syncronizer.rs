@@ -7,7 +7,6 @@ use rocks_db::{
     storage_traits::AssetIndexStorage as AssetIndexSourceStorage,
 };
 use solana_sdk::pubkey::Pubkey;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::HashSet, sync::Arc};
 
 use crate::error::IngesterError;
@@ -47,7 +46,7 @@ where
 
     pub async fn synchronize_asset_indexes(
         &self,
-        keep_running: Arc<AtomicBool>,
+        rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), IngesterError> {
         // Retrieve the last synced ID from the secondary storage
         let last_indexed_key = self.index_storage.fetch_last_synced_id().await?;
@@ -70,7 +69,7 @@ where
         }
         self.metrics
             .set_last_synchronized_slot("last_known_updated_seq", last_key.unwrap().0 as i64);
-        self.regular_syncronize(keep_running, last_indexed_key, last_key)
+        self.regular_syncronize(rx, last_indexed_key, last_key)
             .await
     }
 
@@ -103,14 +102,14 @@ where
 
     async fn regular_syncronize(
         &self,
-        keep_running: Arc<AtomicBool>,
+        rx: &tokio::sync::broadcast::Receiver<()>,
         last_indexed_key: Option<(u64, u64, Pubkey)>,
         last_key: Option<(u64, u64, Pubkey)>,
     ) -> Result<(), IngesterError> {
         let mut starting_key = last_indexed_key;
         let mut processed_keys = HashSet::<Pubkey>::new();
         // Loop until no more new keys are returned
-        while keep_running.load(Ordering::SeqCst) {
+        while rx.is_empty() {
             let (updated_keys, last_included_key) = self.primary_storage.fetch_asset_updated_keys(
                 starting_key,
                 last_key,
@@ -255,9 +254,9 @@ mod tests {
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
         );
-        let keep_running = Arc::new(AtomicBool::new(true));
+        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
-            .synchronize_asset_indexes(keep_running)
+            .synchronize_asset_indexes(&rx)
             .await
             .unwrap();
     }
@@ -316,9 +315,9 @@ mod tests {
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
         );
-        let keep_running = Arc::new(AtomicBool::new(true));
+        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
-            .synchronize_asset_indexes(keep_running)
+            .synchronize_asset_indexes(&rx)
             .await
             .unwrap();
     }
@@ -387,9 +386,9 @@ mod tests {
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
         ); // Small batch size
-        let keep_running = Arc::new(AtomicBool::new(true));
+        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
-            .synchronize_asset_indexes(keep_running)
+            .synchronize_asset_indexes(&rx)
             .await
             .unwrap();
     }
@@ -497,9 +496,9 @@ mod tests {
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
         );
-        let keep_running = Arc::new(AtomicBool::new(true));
+        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
-            .synchronize_asset_indexes(keep_running)
+            .synchronize_asset_indexes(&rx)
             .await
             .unwrap();
     }
@@ -543,9 +542,9 @@ mod tests {
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
         );
-        let keep_running = Arc::new(AtomicBool::new(true));
+        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
-            .synchronize_asset_indexes(keep_running)
+            .synchronize_asset_indexes(&rx)
             .await
             .unwrap();
     }

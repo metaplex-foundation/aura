@@ -523,12 +523,10 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     if !config.disable_synchronizer {
-        let cloned_keep_running = keep_running.clone();
+        let rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-            while cloned_keep_running.load(Ordering::SeqCst) {
-                let res = synchronizer
-                    .synchronize_asset_indexes(cloned_keep_running.clone())
-                    .await;
+            while rx.is_empty() {
+                let res = synchronizer.synchronize_asset_indexes(&rx).await;
                 match res {
                     Ok(_) => {
                         info!("Synchronization finished successfully");
