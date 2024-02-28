@@ -91,6 +91,19 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rocks_storage = Arc::new(storage);
 
+    for item in rocks_storage.assets_update_idx.iter_end() {
+        let (idx_key, _) = item.unwrap();
+        let key = AssetsUpdateIdx::decode_key(idx_key.to_vec())?;
+        let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
+        let (seq, slot, pubkey) = (decoded_key.0, decoded_key.1, decoded_key.2);
+        if slot >= 250868000 {
+            continue;
+        }
+        tracing::info!("Assuming the last key has seq {} slot {} pubkey {}", seq, slot, pubkey);
+        return Ok(());
+    }
+    tracing::error!("No keys found in the database");
+    return Ok(());
     let cloned_tasks = mutexed_tasks.clone();
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
@@ -113,33 +126,6 @@ pub async fn main() -> Result<(), IngesterError> {
         config.dump_path.to_string(),
         metrics.clone(),
     );
-
-    for item in rocks_storage.assets_update_idx.iter_end() {
-        let (idx_key, _) = item.unwrap();
-        let key = AssetsUpdateIdx::decode_key(idx_key.to_vec())?;
-        let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
-        let (seq, slot, pubkey) = (decoded_key.0, decoded_key.1, decoded_key.2);
-        if slot >= 250868000 {
-            continue;
-        }
-        tracing::info!(
-            "Assuming the last key has seq {} slot {} pubkey {}",
-            seq,
-            slot,
-            pubkey
-        );
-        tracing::info!("Running write dump on start");
-
-        synchronizer
-            .write_dump_to_index_storage(decoded_key)
-            .await
-            .unwrap();
-        tracing::info!("Dump synchronizer finished");
-        return Ok(());
-    }
-    tracing::error!("No keys found in the database");
-    return Ok(());
-
     tracing::info!("Running dump synchronizer on start");
     synchronizer
         .full_syncronize(shutdown_rx.resubscribe())
