@@ -6,7 +6,6 @@ use rocks_db::{
     key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey},
     storage_traits::AssetIndexStorage as AssetIndexSourceStorage,
 };
-use solana_program::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::HashSet, sync::Arc};
