@@ -134,45 +134,47 @@ impl Storage {
                 if !metadata_key_set.contains(metadata_key) {
                     metadata_key_set.insert(metadata_key.clone());
                     metadata_writer
-                        .serialize((hex::encode(metadata_key), url.to_string(), "pending"))
+                        .serialize((Self::encode(metadata_key), url.to_string(), "pending"))
                         .map_err(|e| e.to_string())?;
                 }
             }
             for creator in index.creators {
                 creators_writer
                     .serialize((
-                        hex::encode(key.to_bytes()),
-                        hex::encode(creator.creator),
+                        Self::encode(key.to_bytes()),
+                        Self::encode(creator.creator),
                         creator.creator_verified,
                         index.slot_updated,
                     ))
                     .map_err(|e| e.to_string())?;
             }
             let record = AssetRecord {
-                ast_pubkey: hex::encode(key.to_bytes()),
+                ast_pubkey: Self::encode(key.to_bytes()),
                 ast_specification_version: index.specification_version,
                 ast_specification_asset_class: index.specification_asset_class,
                 ast_royalty_target_type: index.royalty_target_type,
                 ast_royalty_amount: index.royalty_amount,
                 ast_slot_created: index.slot_created,
                 ast_owner_type: index.owner_type,
-                ast_owner: index.owner.map(hex::encode),
-                ast_delegate: index.delegate.map(hex::encode),
-                ast_authority: index.authority.map(hex::encode),
-                ast_collection: index.collection.map(hex::encode),
+                ast_owner: index.owner.map(Self::encode),
+                ast_delegate: index.delegate.map(Self::encode),
+                ast_authority: index.authority.map(Self::encode),
+                ast_collection: index.collection.map(Self::encode),
                 ast_is_collection_verified: index.is_collection_verified,
                 ast_is_burnt: index.is_burnt,
                 ast_is_compressible: index.is_compressible,
                 ast_is_compressed: index.is_compressed,
                 ast_is_frozen: index.is_frozen,
                 ast_supply: index.supply,
-                ast_metadata_url_id: metadata_url.map(|(k, _)| k).map(hex::encode),
+                ast_metadata_url_id: metadata_url.map(|(k, _)| k).map(Self::encode),
                 ast_slot_updated: index.slot_updated,
             };
             assets_writer.serialize(record).map_err(|e| e.to_string())?;
         }
-
         Ok(())
+    }
+    fn encode<T: AsRef<[u8]>>(v: T) -> String {
+        format!("\\x{}", hex::encode(v))
     }
 }
 
