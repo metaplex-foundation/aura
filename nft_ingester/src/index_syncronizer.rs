@@ -255,10 +255,7 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer
-            .synchronize_asset_indexes(&rx)
-            .await
-            .unwrap();
+        synchronizer.synchronize_asset_indexes(&rx).await.unwrap();
     }
 
     #[tokio::test]
@@ -316,10 +313,7 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer
-            .synchronize_asset_indexes(&rx)
-            .await
-            .unwrap();
+        synchronizer.synchronize_asset_indexes(&rx).await.unwrap();
     }
 
     #[tokio::test]
@@ -387,10 +381,7 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
         ); // Small batch size
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer
-            .synchronize_asset_indexes(&rx)
-            .await
-            .unwrap();
+        synchronizer.synchronize_asset_indexes(&rx).await.unwrap();
     }
 
     #[tokio::test]
@@ -497,10 +488,7 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer
-            .synchronize_asset_indexes(&rx)
-            .await
-            .unwrap();
+        synchronizer.synchronize_asset_indexes(&rx).await.unwrap();
     }
 
     #[tokio::test]
@@ -543,9 +531,6 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer
-            .synchronize_asset_indexes(&rx)
-            .await
-            .unwrap();
+        synchronizer.synchronize_asset_indexes(&rx).await.unwrap();
     }
 }
