@@ -118,7 +118,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .unwrap();
         tracing::info!("Dump synchronizer finished");
     }
-    
+
     while shutdown_rx.is_empty() {
         let res = synchronizer.synchronize_asset_indexes(&shutdown_rx).await;
         match res {
