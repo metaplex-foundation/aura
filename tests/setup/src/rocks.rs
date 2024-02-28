@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use entities::models::Updated;
 use rand::{random, Rng};
@@ -8,7 +8,7 @@ use tempfile::TempDir;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::{
     asset::AssetCollection, offchain_data::OffChainData, AssetAuthority, AssetDynamicDetails,
-    AssetOwner, AssetStaticDetails, Storage,
+    AssetOwner, AssetStaticDetails, CompleteAssetDetails, Storage,
 };
 use tokio::{sync::Mutex, task::JoinSet};
 
@@ -45,6 +45,36 @@ impl RocksTestEnvironment {
             storage: Arc::new(storage),
             _temp_dir: temp_dir,
         }
+    }
+
+    pub async fn generate_complete_assets(
+        &self,
+        cnt: usize,
+        slot: u64,
+    ) -> HashMap<Pubkey, CompleteAssetDetails> {
+        let pubkeys = (0..cnt).map(|_| Pubkey::new_unique()).collect::<Vec<_>>();
+        let url = "http://example.com";
+        let assets = pubkeys
+            .iter()
+            .map(|pk| {
+                self.storage.asset_updated(slot, *pk).unwrap();
+                let asset = CompleteAssetDetails {
+                    pubkey: *pk,
+                    static_details: Some(generate_test_static_data(*pk, slot)),
+                    authority: Some(generate_test_authority(*pk)),
+                    owner: Some(generate_test_owner(*pk)),
+                    dynamic_details: Some(create_test_dynamic_data(*pk, slot, url.to_string())),
+                    collection: Some(generate_test_collection(*pk)),
+                };
+                (*pk, asset)
+            })
+            .collect::<HashMap<_, _>>();
+        self.storage
+            .complete_asset_details
+            .put_batch_cbor(assets.clone())
+            .await
+            .unwrap();
+        assets
     }
 
     pub fn generate_assets(&self, cnt: usize, slot: u64) -> GeneratedAssets {
