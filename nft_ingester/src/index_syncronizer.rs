@@ -6,6 +6,7 @@ use rocks_db::{
     key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey},
     storage_traits::AssetIndexStorage as AssetIndexSourceStorage,
 };
+use solana_program::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::HashSet, sync::Arc};
@@ -72,6 +73,20 @@ where
             .set_last_synchronized_slot("last_known_updated_seq", last_key.unwrap().0 as i64);
         self.regular_syncronize(keep_running, last_indexed_key, last_key)
             .await
+    }
+
+    pub async fn write_dump_to_index_storage(
+        &self,
+        (seq, slot, pubkey): (u64, u64, Pubkey),
+    ) -> Result<(), IngesterError> {
+        tracing::info!("Loading the dump into the index storage");
+        let last_included_rocks_key = encode_u64x2_pubkey(seq, slot, pubkey);
+        let path = std::path::Path::new(self.dump_path.as_str());
+        self.index_storage
+            .load_from_dump(path, last_included_rocks_key.as_slice())
+            .await?;
+        tracing::info!("Dump is loaded into the index storage");
+        Ok(())
     }
 
     pub async fn full_syncronize(
