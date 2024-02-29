@@ -363,12 +363,22 @@ where
             .iterator_cf(&self.handle(), rocksdb::IteratorMode::Start)
     }
 
-    pub fn iterator_cbor(&self) -> impl Iterator<Item = (C::KeyType, C::ValueType)> + '_ {
+    pub fn iterator(&self) -> impl Iterator<Item = (C::KeyType, C::ValueType)> + '_ {
+        self.iterator_generic(|bytes| deserialize::<C::ValueType>(bytes).map_err(|e| e.to_string()))
+    }
+
+    fn iterator_generic<F>(
+        &self,
+        deserialize_fn: F,
+    ) -> impl Iterator<Item = (C::KeyType, C::ValueType)> + '_
+    where
+        F: Fn(&[u8]) -> core::result::Result<C::ValueType, String> + Copy + Send + 'static,
+    {
         self.iter_start()
             .filter_map(|k| k.ok())
-            .filter_map(|(key, value)| {
+            .filter_map(move |(key, value)| {
                 let key = C::decode_key(key.to_vec()).ok()?;
-                serde_cbor::from_slice::<C::ValueType>(value.as_ref())
+                deserialize_fn(value.as_ref())
                     .ok()
                     .map(|value: <C as TypedColumn>::ValueType| (key, value))
             })

@@ -71,7 +71,7 @@ impl RocksTestEnvironment {
             .collect::<HashMap<_, _>>();
         self.storage
             .complete_asset_details
-            .put_batch_cbor(assets.clone())
+            .put_batch(assets.clone())
             .await
             .unwrap();
         assets
