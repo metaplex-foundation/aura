@@ -59,8 +59,8 @@ async fn bench_dump_on_complete(storage: Arc<Storage>, batch_size: usize) {
 fn dump_benchmark_on_complete_data(c: &mut Criterion) {
     let env = setup::rocks::RocksTestEnvironment::new(&[]);
     let cnt = 1_000_000;
-    _ = env.generate_complete_assets(cnt, 25);
     let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(env.generate_complete_assets(cnt, 25));
     let mut group = c.benchmark_group("Dumping Group with complete data");
     group.sample_size(10);
     group.measurement_time(std::time::Duration::from_secs(60));
