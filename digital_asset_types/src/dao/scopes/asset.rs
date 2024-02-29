@@ -554,9 +554,9 @@ struct AssetWithURL {
 // Use macros to reduce code duplications
 #[macro_export]
 macro_rules! fetch_asset_data {
-    ($db:expr, $field:ident, $asset_ids:expr) => {{
+    ($db:expr, $field:ident, $asset_ids:expr, $metrics:expr) => {{
         $db.$field
-            .batch_get($asset_ids.clone())
+            .batch_get($asset_ids.clone(), $metrics.clone())
             .await
             .map_err(|e| DbErr::Custom(e.to_string()))?
             .into_iter()

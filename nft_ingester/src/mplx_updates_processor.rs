@@ -509,7 +509,10 @@ impl MplxAccsProcessor {
         let mtd_mint_map: Vec<MetadataMintMap> = self
             .rocks_db
             .metadata_mint_map
-            .batch_get(metadata_slot_burnt.keys().cloned().collect())
+            .batch_get(
+                metadata_slot_burnt.keys().cloned().collect(),
+                self.rocks_db.red_metrics.clone(),
+            )
             .await?
             .into_iter()
             .flatten()

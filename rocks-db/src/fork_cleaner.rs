@@ -1,16 +1,13 @@
-use crate::Storage;
+use crate::{
+    Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION, RAW_BLOCKS_CBOR_ENDPOINT,
+    ROCKS_COMPONENT,
+};
 use async_trait::async_trait;
 use entities::models::{ClItem, ForkedItem};
 use interface::fork_cleaner::{ClItemsManager, ForkChecker};
 use std::collections::HashSet;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
-
-const ROCKS_COMPONENT: &str = "rocks_db";
-const DROP_ACTION: &str = "drop";
-const RAW_BLOCKS_CBOR_ENDPOINT: &str = "raw_blocks_cbor";
-const FULL_ITERATION_ACTION: &str = "full_iteration";
-const ITERATOR_TOP_ACTION: &str = "iterator_top";
 
 #[async_trait]
 impl ClItemsManager for Storage {

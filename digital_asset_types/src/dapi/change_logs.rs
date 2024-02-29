@@ -35,15 +35,20 @@ pub async fn get_proof_for_assets(
     let mut results: HashMap<String, Option<AssetProof>> =
         asset_ids.iter().map(|id| (id.to_string(), None)).collect();
 
-    let tree_ids = fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids)
-        .values()
-        .map(|asset| {
-            (
-                asset.tree_id,
-                (asset.pubkey, asset.nonce.unwrap_or_default()),
-            )
-        })
-        .collect::<HashMap<_, _>>();
+    let tree_ids = fetch_asset_data!(
+        rocks_db,
+        asset_leaf_data,
+        asset_ids,
+        rocks_db.red_metrics.clone()
+    )
+    .values()
+    .map(|asset| {
+        (
+            asset.tree_id,
+            (asset.pubkey, asset.nonce.unwrap_or_default()),
+        )
+    })
+    .collect::<HashMap<_, _>>();
     let keys = rocks_db
         .cl_leafs
         .batch_get(
@@ -52,6 +57,7 @@ pub async fn get_proof_for_assets(
                 .into_iter()
                 .map(|(tree, (_, nonce))| (nonce, tree))
                 .collect::<Vec<_>>(),
+            rocks_db.red_metrics.clone(),
         )
         .await
         .map_err(|e| DbErr::Custom(e.to_string()))?
@@ -60,7 +66,7 @@ pub async fn get_proof_for_assets(
         .collect::<Vec<_>>();
     let cl_items_first_leaf = rocks_db
         .cl_items
-        .batch_get(keys.clone())
+        .batch_get(keys.clone(), rocks_db.red_metrics.clone())
         .await
         .map_err(|e| DbErr::Custom(e.to_string()))?;
 
@@ -103,7 +109,7 @@ pub async fn get_proof_for_assets(
         .collect();
     let all_nodes = rocks_db
         .cl_items
-        .batch_get(all_req_keys)
+        .batch_get(all_req_keys, rocks_db.red_metrics.clone())
         .await
         .map_err(|e| DbErr::Custom(e.to_string()))?
         .into_iter()

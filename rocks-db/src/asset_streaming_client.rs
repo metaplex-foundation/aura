@@ -5,6 +5,7 @@ use entities::models::{CompleteAssetDetails, UpdateVersion, Updated};
 use interface::asset_streaming_and_discovery::{
     AssetDetailsStream, AssetDetailsStreamer, AsyncError,
 };
+use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::DB;
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
@@ -27,9 +28,16 @@ impl AssetDetailsStreamer for Storage {
     ) -> Result<AssetDetailsStream, AsyncError> {
         let (tx, rx) = tokio::sync::mpsc::channel(32);
         let backend = self.slot_asset_idx.backend.clone();
-
+        let metrics = self.red_metrics.clone();
         self.join_set.lock().await.spawn(tokio::spawn(async move {
-            let _ = process_asset_details_range(backend, start_slot, end_slot, tx.clone()).await;
+            let _ = process_asset_details_range(
+                backend,
+                start_slot,
+                end_slot,
+                metrics.clone(),
+                tx.clone(),
+            )
+            .await;
         }));
 
         Ok(Box::pin(ReceiverStream::new(rx)) as AssetDetailsStream)
@@ -40,6 +48,7 @@ async fn process_asset_details_range(
     backend: Arc<DB>,
     start_slot: u64,
     end_slot: u64,
+    metrics: Arc<RequestErrorDurationMetrics>,
     tx: tokio::sync::mpsc::Sender<Result<CompleteAssetDetails, AsyncError>>,
 ) -> Result<(), AsyncError> {
     let slot_asset_idx = Storage::column::<SlotAssetIdx>(backend.clone());
@@ -53,7 +62,7 @@ async fn process_asset_details_range(
             break;
         }
 
-        let details = get_complete_asset_details(backend.clone(), pubkey).await;
+        let details = get_complete_asset_details(backend.clone(), pubkey, metrics.clone()).await;
         match details {
             Err(e) => {
                 if tx.send(Err(Box::new(e) as AsyncError)).await.is_err() {
@@ -74,6 +83,7 @@ async fn process_asset_details_range(
 async fn get_complete_asset_details(
     backend: Arc<DB>,
     pubkey: Pubkey,
+    metrics: Arc<RequestErrorDurationMetrics>,
 ) -> crate::Result<CompleteAssetDetails> {
     let static_data = Storage::column::<AssetStaticDetails>(backend.clone()).get(pubkey)?;
     let static_data = match static_data {
@@ -142,6 +152,7 @@ async fn get_complete_asset_details(
                         .into_iter()
                         .map(move |node| (node as u64, leaf.cli_tree_key))
                         .collect::<Vec<_>>(),
+                    metrics,
                 )
                 .await?
         }

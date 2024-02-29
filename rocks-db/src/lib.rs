@@ -47,6 +47,14 @@ pub mod transaction_client;
 pub mod tree_seq;
 pub type Result<T> = std::result::Result<T, StorageError>;
 
+const ROCKS_COMPONENT: &str = "rocks_db";
+const DROP_ACTION: &str = "drop";
+const RAW_BLOCKS_CBOR_ENDPOINT: &str = "raw_blocks_cbor";
+const FULL_ITERATION_ACTION: &str = "full_iteration";
+const BATCH_ITERATION_ACTION: &str = "batch_iteration";
+const BATCH_GET_ACTION: &str = "batch_get";
+const ITERATOR_TOP_ACTION: &str = "iterator_top";
+
 pub struct Storage {
     pub asset_static_data: Column<AssetStaticDetails>,
     pub asset_static_data_deprecated: Column<AssetStaticDetailsDeprecated>,
@@ -75,7 +83,7 @@ pub struct Storage {
     pub token_metadata_edition_cbor: Column<TokenMetadataEdition>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
-    red_metrics: Arc<RequestErrorDurationMetrics>,
+    pub red_metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl Storage {

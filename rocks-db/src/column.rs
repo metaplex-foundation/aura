@@ -2,11 +2,12 @@ use std::{collections::HashMap, marker::PhantomData, sync::Arc, vec};
 
 use bincode::{deserialize, serialize};
 use log::error;
+use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
 use serde::{de::DeserializeOwned, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
-use crate::{Result, StorageError};
+use crate::{Result, StorageError, BATCH_GET_ACTION, ROCKS_COMPONENT};
 pub trait TypedColumn {
     type KeyType: Sync + Clone + Send;
     type ValueType: Sync + Serialize + DeserializeOwned + Send;
@@ -292,15 +293,28 @@ where
         &self,
         keys: Vec<C::KeyType>,
         deserialize_fn: F,
+        metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Vec<Option<C::ValueType>>>
     where
         F: Fn(&[u8]) -> Result<C::ValueType> + Copy + Send + 'static,
     {
+        let start_time = chrono::Utc::now();
         let db = self.backend.clone();
         let keys = keys.clone();
-        tokio::task::spawn_blocking(move || Self::batch_get_sync_generic(db, keys, deserialize_fn))
-            .await
-            .map_err(|e| StorageError::Common(e.to_string()))?
+        match tokio::task::spawn_blocking(move || {
+            Self::batch_get_sync_generic(db, keys, deserialize_fn)
+        })
+        .await
+        {
+            Ok(res) => {
+                metrics.observe_request(ROCKS_COMPONENT, BATCH_GET_ACTION, C::NAME, start_time);
+                res
+            }
+            Err(e) => {
+                metrics.observe_error(ROCKS_COMPONENT, BATCH_GET_ACTION, C::NAME);
+                Err(StorageError::Common(e.to_string()))
+            }
+        }
     }
 
     fn batch_get_sync_generic<F>(
@@ -327,17 +341,29 @@ where
             .collect()
     }
 
-    pub async fn batch_get(&self, keys: Vec<C::KeyType>) -> Result<Vec<Option<C::ValueType>>> {
-        self.batch_get_generic(keys, |bytes| {
-            deserialize::<C::ValueType>(bytes).map_err(StorageError::from)
-        })
+    pub async fn batch_get(
+        &self,
+        keys: Vec<C::KeyType>,
+        metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Vec<Option<C::ValueType>>> {
+        self.batch_get_generic(
+            keys,
+            |bytes| deserialize::<C::ValueType>(bytes).map_err(StorageError::from),
+            metrics,
+        )
         .await
     }
 
-    pub async fn batch_get_cbor(&self, keys: Vec<C::KeyType>) -> Result<Vec<Option<C::ValueType>>> {
-        self.batch_get_generic(keys, |bytes| {
-            serde_cbor::from_slice(bytes).map_err(|e| StorageError::Common(e.to_string()))
-        })
+    pub async fn batch_get_cbor(
+        &self,
+        keys: Vec<C::KeyType>,
+        metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Vec<Option<C::ValueType>>> {
+        self.batch_get_generic(
+            keys,
+            |bytes| serde_cbor::from_slice(bytes).map_err(|e| StorageError::Common(e.to_string())),
+            metrics,
+        )
         .await
     }
 
