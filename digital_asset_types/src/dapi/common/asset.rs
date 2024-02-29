@@ -16,7 +16,7 @@ use crate::dao::sea_orm_active_enums::SpecificationVersions;
 use crate::dao::FullAsset;
 use crate::dao::Pagination;
 use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_grouping};
-use crate::rpc::response::{AssetError, AssetList};
+use crate::rpc::response::{AssetError, AssetList, SignatureItem, TransactionSignatureList};
 use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
     MetadataMap, Ownership, Royalty, Scope, Supply, Uses,
@@ -407,6 +407,24 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         executable: data.executable,
         metadata_owner: data.metadata_owner,
     }))
+}
+
+pub fn build_transaction_signatures_response(
+    items: Vec<SignatureItem>,
+    limit: u64,
+    page: Option<u64>,
+    before: Option<String>,
+    after: Option<String>,
+) -> TransactionSignatureList {
+    let total = items.len() as u32;
+    TransactionSignatureList {
+        total,
+        limit: limit as u32,
+        page: page.map(|x| x as u32),
+        before,
+        after,
+        items,
+    }
 }
 
 pub fn asset_list_to_rpc(asset_list: Vec<FullAsset>) -> (Vec<RpcAsset>, Vec<AssetError>) {

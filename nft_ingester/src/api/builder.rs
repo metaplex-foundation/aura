@@ -114,8 +114,9 @@ impl RpcApiBuilder {
         });
         module.add_alias("getGrouping", "get_grouping");
 
+        let cloned_api = api.clone();
         module.add_method("search_assets", move |rpc_params: Params| {
-            let api = api.clone();
+            let api = cloned_api.clone();
             async move {
                 api.search_assets(rpc_params.parse()?)
                     .await
@@ -123,6 +124,16 @@ impl RpcApiBuilder {
             }
         });
         module.add_alias("searchAssets", "search_assets");
+
+        module.add_method("get_signatures_for_asset", move |rpc_params: Params| {
+            let api = api.clone();
+            async move {
+                api.get_asset_signatures(rpc_params.parse()?)
+                    .await
+                    .map_err(Into::into)
+            }
+        });
+        module.add_alias("getSignaturesForAsset", "get_signatures_for_asset");
 
         Ok(module)
     }

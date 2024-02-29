@@ -255,6 +255,8 @@ impl BubblegumTxProcessor {
                 seq: cl.seq,
                 slot: bundle.slot,
                 event: cl.into(),
+                instruction: ix_str.to_string(),
+                tx: bundle.txn_id.to_string(),
             });
         };
         let instruction: Result<InstructionResult, IngesterError> = match ix_type {

@@ -33,6 +33,8 @@ pub enum DasApiError {
     Usecase(String),
     #[error("ProofNotFound")]
     ProofNotFound,
+    #[error("Validation: {0}")]
+    Validation(String),
 }
 
 impl From<DasApiError> for jsonrpc_core::Error {
@@ -75,6 +77,11 @@ impl From<DasApiError> for jsonrpc_core::Error {
             DasApiError::ProofNotFound => jsonrpc_core::Error {
                 code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
                 message: "Database Error: RecordNotFound Error: Asset Proof Not Found".to_string(),
+                data: None,
+            },
+            DasApiError::Validation { 0: msg } => jsonrpc_core::Error {
+                code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
+                message: format!("Validation Error: {}", msg),
                 data: None,
             },
             _ => jsonrpc_core::Error::new(ErrorCode::InternalError),

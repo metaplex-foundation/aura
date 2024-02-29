@@ -3,6 +3,9 @@ use std::str::FromStr;
 use std::string::ToString;
 use std::sync::Arc;
 
+use entities::api_req_params::AssetSortDirection;
+use entities::models::AssetSignatureWithPagination;
+use interface::asset_sigratures::AssetSignaturesGetter;
 use log::error;
 use sea_orm::prelude::Json;
 use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult, Order};
@@ -651,4 +654,60 @@ pub async fn get_by_ids(
     }
 
     Ok(results)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn get_asset_signatures(
+    storage: Arc<Storage>,
+    asset_id: Option<Pubkey>,
+    tree_id: Option<Pubkey>,
+    leaf_idx: Option<u64>,
+    page: Option<u64>,
+    before: &Option<String>,
+    after: &Option<String>,
+    limit: u64,
+    sort_direction: Option<AssetSortDirection>,
+) -> Result<AssetSignatureWithPagination, DbErr> {
+    // if tree_id and leaf_idx are provided, use them directly to fetch transactions
+    if let (Some(tree_id), Some(leaf_idx)) = (tree_id, leaf_idx) {
+        return Ok(storage.get_asset_signatures(
+            tree_id,
+            leaf_idx,
+            before
+                .as_ref()
+                .and_then(|before| before.parse::<u64>().ok()),
+            after.as_ref().and_then(|after| after.parse::<u64>().ok()),
+            page,
+            sort_direction.unwrap_or(AssetSortDirection::Desc),
+            limit,
+        ));
+    }
+    let Some(asset_id) = asset_id else {
+        return Err(DbErr::Custom(
+            "Either 'id' or both 'tree' and 'leafIndex' must be provided".to_string(),
+        ));
+    };
+    // if only asset_id is provided, fetch the latest tree and leaf_idx (asset.nonce) for the asset
+    // and use them to fetch transactions
+    let asset_leaf = storage
+        .asset_leaf_data
+        .get(asset_id)
+        .map_err(|e| DbErr::Custom(e.to_string()))?;
+    if let Some(asset_leaf) = asset_leaf {
+        return Ok(storage.get_asset_signatures(
+            asset_leaf.tree_id,
+            asset_leaf
+                .nonce
+                .ok_or(DbErr::RecordNotFound("Leaf ID does not exist".to_string()))?,
+            before
+                .as_ref()
+                .and_then(|before| before.parse::<u64>().ok()),
+            after.as_ref().and_then(|after| after.parse::<u64>().ok()),
+            page,
+            sort_direction.unwrap_or(AssetSortDirection::Desc),
+            limit,
+        ));
+    }
+
+    Ok(AssetSignatureWithPagination::default())
 }

@@ -50,6 +50,8 @@ pub struct TreeUpdate {
     pub seq: u64,
     pub slot: u64,
     pub event: CopyableChangeLogEventV1,
+    pub instruction: String,
+    pub tx: String,
 }
 
 #[derive(Clone, Default)]
