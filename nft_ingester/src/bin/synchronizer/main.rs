@@ -120,6 +120,9 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     while shutdown_rx.is_empty() {
+        if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
+            tracing::error!("Sync rocksdb error: {}", e);
+        }
         let res = synchronizer.synchronize_asset_indexes(&shutdown_rx).await;
         match res {
             Ok(_) => {
