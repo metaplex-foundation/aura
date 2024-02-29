@@ -32,7 +32,7 @@ pub async fn get_asset_signatures(
             .collect(),
         limit,
         page,
-        Some(signatures.before.to_string()),
-        Some(signatures.after.to_string()),
+        signatures.before.map(|before| before.to_string()),
+        signatures.after.map(|after| after.to_string()),
     ))
 }

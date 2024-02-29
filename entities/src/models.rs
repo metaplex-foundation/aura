@@ -305,8 +305,8 @@ pub struct AssetSignature {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AssetSignatureWithPagination {
     pub asset_signatures: Vec<AssetSignature>,
-    pub before: u64,
-    pub after: u64,
+    pub before: Option<u64>,
+    pub after: Option<u64>,
 }
 
 #[cfg(test)]

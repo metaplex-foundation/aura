@@ -47,7 +47,7 @@ impl AssetSignaturesGetter for Storage {
         };
 
         iter.skip(
-            page.and_then(|page| page.checked_mul(limit))
+            page.and_then(|page| page.saturating_sub(1).checked_mul(limit))
                 .unwrap_or_default() as usize,
         )
         .filter_map(std::result::Result::ok)
@@ -75,17 +75,17 @@ impl AssetSignaturesGetter for Storage {
                 || key.tree != tree
                 || before
                     .map(|before| {
-                        before >= key.seq && matches!(direction, AssetSortDirection::Asc)
-                            || before <= key.seq && matches!(direction, AssetSortDirection::Desc)
+                        before <= key.seq && matches!(direction, AssetSortDirection::Asc)
+                            || before >= key.seq && matches!(direction, AssetSortDirection::Desc)
                     })
                     .unwrap_or_default()
             {
                 break;
             }
             res.asset_signatures.push(value);
-            res.after = key.seq;
+            res.after = Some(key.seq);
             if first_iter {
-                res.before = key.seq;
+                res.before = Some(key.seq);
                 first_iter = false;
             }
         }

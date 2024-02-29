@@ -101,7 +101,7 @@ pub fn decode_asset_signature_key(bytes: Vec<u8>) -> Result<AssetSignatureKey> {
         return Err(crate::StorageError::InvalidKeyLength);
     }
     let tree = Pubkey::try_from(&bytes[..pubkey_size])?;
-    let leaf = u64::from_be_bytes(bytes[pubkey_size..u64_size].try_into()?);
+    let leaf = u64::from_be_bytes(bytes[pubkey_size..pubkey_size + u64_size].try_into()?);
     let seq = u64::from_be_bytes(bytes[pubkey_size + u64_size..].try_into()?);
     Ok(AssetSignatureKey {
         tree,
