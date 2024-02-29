@@ -416,9 +416,8 @@ pub fn build_transaction_signatures_response(
     before: Option<String>,
     after: Option<String>,
 ) -> TransactionSignatureList {
-    let total = items.len() as u32;
     TransactionSignatureList {
-        total,
+        total: items.len() as u32,
         limit: limit as u32,
         page: page.map(|x| x as u32),
         before,

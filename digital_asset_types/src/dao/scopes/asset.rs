@@ -657,7 +657,6 @@ pub async fn get_by_ids(
 }
 
 #[allow(clippy::too_many_arguments)]
-
 pub async fn get_asset_signatures(
     storage: Arc<Storage>,
     asset_id: Option<Pubkey>,
@@ -681,28 +680,32 @@ pub async fn get_asset_signatures(
         }
     }
     let sort_direction = sort_direction.unwrap_or(AssetSortDirection::Desc);
-    let (tree_id, leaf_idx) = if let (Some(tree_id), Some(leaf_idx)) = (tree_id, leaf_idx) {
-        // Directly use tree_id and leaf_idx if both are provided
-        (tree_id, leaf_idx)
-    } else if let Some(asset_id) = asset_id {
-        // if only asset_id is provided, fetch the latest tree and leaf_idx (asset.nonce) for the asset
-        // and use them to fetch transactions
-        let asset_leaf = storage
-            .asset_leaf_data
-            .get(asset_id)
-            .map_err(|e| DbErr::Custom(e.to_string()))?
-            .ok_or_else(|| DbErr::RecordNotFound("Leaf ID does not exist".to_string()))?;
-        (
-            asset_leaf.tree_id,
-            asset_leaf
-                .nonce
-                .ok_or_else(|| DbErr::RecordNotFound("Leaf ID does not exist".to_string()))?,
-        )
-    } else {
-        // If neither set of parameters is provided, return an error
-        return Err(DbErr::Custom(
-            "Either 'id' or both 'tree' and 'leafIndex' must be provided".to_string(),
-        ));
+    let (tree_id, leaf_idx) = match (tree_id, leaf_idx, asset_id) {
+        (Some(tree_id), Some(leaf_idx), None) => {
+            // Directly use tree_id and leaf_idx if both are provided
+            (tree_id, leaf_idx)
+        }
+        (None, None, Some(asset_id)) => {
+            // if only asset_id is provided, fetch the latest tree and leaf_idx (asset.nonce) for the asset
+            // and use them to fetch transactions
+            let asset_leaf = storage
+                .asset_leaf_data
+                .get(asset_id)
+                .map_err(|e| DbErr::Custom(e.to_string()))?
+                .ok_or_else(|| DbErr::RecordNotFound("Leaf ID does not exist".to_string()))?;
+            (
+                asset_leaf.tree_id,
+                asset_leaf
+                    .nonce
+                    .ok_or_else(|| DbErr::RecordNotFound("Leaf ID does not exist".to_string()))?,
+            )
+        }
+        _ => {
+            // If neither set of parameters is provided, return an error
+            return Err(DbErr::Custom(
+                "Either 'id' or both 'tree' and 'leafIndex' must be provided".to_string(),
+            ));
+        }
     };
 
     Ok(storage.get_asset_signatures(
@@ -715,71 +718,3 @@ pub async fn get_asset_signatures(
         limit,
     ))
 }
-
-// pub async fn get_asset_signatures(
-//     storage: Arc<Storage>,
-//     asset_id: Option<Pubkey>,
-//     tree_id: Option<Pubkey>,
-//     leaf_idx: Option<u64>,
-//     page: Option<u64>,
-//     before: &Option<String>,
-//     after: &Option<String>,
-//     limit: u64,
-//     sort_direction: Option<AssetSortDirection>,
-// ) -> Result<AssetSignatureWithPagination, DbErr> {
-//     let before = before
-//         .as_ref()
-//         .and_then(|before| before.parse::<u64>().ok());
-//     let after = after.as_ref().and_then(|after| after.parse::<u64>().ok());
-//     match (before, after, &sort_direction) {
-//         (Some(before), Some(after), &Some(AssetSortDirection::Desc) | None) => {
-//             if before >= after {
-//                 return Ok(AssetSignatureWithPagination::default());
-//             }
-//         }
-//         (Some(before), Some(after), &Some(AssetSortDirection::Asc)) => {
-//             if before <= after {
-//                 return Ok(AssetSignatureWithPagination::default());
-//             }
-//         }
-//         _ => {}
-//     }
-//     // if tree_id and leaf_idx are provided, use them directly to fetch transactions
-//     if let (Some(tree_id), Some(leaf_idx)) = (tree_id, leaf_idx) {
-//         return Ok(storage.get_asset_signatures(
-//             tree_id,
-//             leaf_idx,
-//             before,
-//             after,
-//             page,
-//             sort_direction.unwrap_or(AssetSortDirection::Desc),
-//             limit,
-//         ));
-//     }
-//     let Some(asset_id) = asset_id else {
-//         return Err(DbErr::Custom(
-//             "Either 'id' or both 'tree' and 'leafIndex' must be provided".to_string(),
-//         ));
-//     };
-//     // if only asset_id is provided, fetch the latest tree and leaf_idx (asset.nonce) for the asset
-//     // and use them to fetch transactions
-//     let asset_leaf = storage
-//         .asset_leaf_data
-//         .get(asset_id)
-//         .map_err(|e| DbErr::Custom(e.to_string()))?;
-//     if let Some(asset_leaf) = asset_leaf {
-//         return Ok(storage.get_asset_signatures(
-//             asset_leaf.tree_id,
-//             asset_leaf
-//                 .nonce
-//                 .ok_or(DbErr::RecordNotFound("Leaf ID does not exist".to_string()))?,
-//             before,
-//             after,
-//             page,
-//             sort_direction.unwrap_or(AssetSortDirection::Desc),
-//             limit,
-//         ));
-//     }
-//
-//     Ok(AssetSignatureWithPagination::default())
-// }
