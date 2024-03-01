@@ -105,9 +105,9 @@ pub async fn get_by_creator(
 pub async fn get_grouping(
     conn: &impl ConnectionTrait,
     group_key: String,
-    group_value: String,
+    group_value: &[u8],
 ) -> Result<GroupingSize, DbErr> {
-    if group_value != COLLECTION_GROUP_KEY {
+    if group_key != COLLECTION_GROUP_KEY {
         return Ok(GroupingSize { size: 0 });
     }
 
@@ -117,12 +117,9 @@ pub async fn get_grouping(
         .query_one(Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
             query,
-            [Set(bs58::decode(group_key)
-                .into_vec()
-                .map_err(|e| DbErr::Custom(e.to_string()))?
-                .as_slice())
-            .into_value()
-            .ok_or(DbErr::Custom("cannot get rows count".to_string()))?],
+            [Set(group_value)
+                .into_value()
+                .ok_or(DbErr::Custom("cannot get rows count".to_string()))?],
         ))
         .await?
         .map(|res| res.try_get::<i64>("", "count").unwrap_or_default())

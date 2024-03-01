@@ -473,7 +473,13 @@ where
             group_key,
             group_value,
         } = payload;
-        let gs = get_grouping(&self.db_connection, group_key.clone(), group_value.clone()).await?;
+        let group_value_pubkey = validate_pubkey(group_value.clone())?;
+        let gs = get_grouping(
+            &self.db_connection,
+            group_key.clone(),
+            group_value_pubkey.to_bytes().as_slice(),
+        )
+        .await?;
         let res = GetGroupingResponse {
             group_key,
             group_name: group_value,
