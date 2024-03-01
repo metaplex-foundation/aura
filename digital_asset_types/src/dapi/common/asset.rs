@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use entities::api_req_params::{AssetSortBy, AssetSortDirection, AssetSorting};
+use entities::models::AssetSignatureWithPagination;
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
@@ -16,7 +17,7 @@ use crate::dao::sea_orm_active_enums::SpecificationVersions;
 use crate::dao::FullAsset;
 use crate::dao::Pagination;
 use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_grouping};
-use crate::rpc::response::{AssetError, AssetList, SignatureItem, TransactionSignatureList};
+use crate::rpc::response::{AssetError, AssetList, TransactionSignatureList};
 use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
     MetadataMap, Ownership, Royalty, Scope, Supply, Uses,
@@ -410,18 +411,21 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
 }
 
 pub fn build_transaction_signatures_response(
-    items: Vec<SignatureItem>,
+    signatures: AssetSignatureWithPagination,
     limit: u64,
     page: Option<u64>,
-    before: Option<String>,
-    after: Option<String>,
 ) -> TransactionSignatureList {
+    let items = signatures
+        .asset_signatures
+        .into_iter()
+        .map(|sig| sig.into())
+        .collect::<Vec<_>>();
     TransactionSignatureList {
         total: items.len() as u32,
         limit: limit as u32,
         page: page.map(|x| x as u32),
-        before,
-        after,
+        before: signatures.before.map(|before| before.to_string()),
+        after: signatures.after.map(|after| after.to_string()),
         items,
     }
 }

@@ -66,3 +66,34 @@ pub struct TransactionSignatureList {
     pub after: Option<String>,
     pub items: Vec<SignatureItem>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
+#[serde(default)]
+pub struct TransactionSignatureListDeprecated {
+    pub total: u32,
+    pub limit: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    pub items: Vec<(String, String)>,
+}
+
+impl From<TransactionSignatureList> for TransactionSignatureListDeprecated {
+    fn from(value: TransactionSignatureList) -> Self {
+        Self {
+            total: value.total,
+            limit: value.limit,
+            page: value.page,
+            before: value.before,
+            after: value.after,
+            items: value
+                .items
+                .into_iter()
+                .map(|items| (items.signature, items.instruction))
+                .collect(),
+        }
+    }
+}

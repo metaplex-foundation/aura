@@ -23,16 +23,7 @@ pub async fn get_asset_signatures(
         rocks_db, id, tree, leaf_idx, page, &before, &after, limit, sort_by,
     )
     .await?;
-
     Ok(build_transaction_signatures_response(
-        signatures
-            .asset_signatures
-            .into_iter()
-            .map(|sig| sig.into())
-            .collect(),
-        limit,
-        page,
-        signatures.before.map(|before| before.to_string()),
-        signatures.after.map(|after| after.to_string()),
+        signatures, limit, page,
     ))
 }

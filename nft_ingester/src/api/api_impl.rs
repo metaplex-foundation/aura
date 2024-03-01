@@ -11,6 +11,7 @@ use std::{sync::Arc, time::Instant};
 
 use crate::api::config::Config;
 use digital_asset_types::dapi::get_asset_signatures::get_asset_signatures;
+use digital_asset_types::rpc::response::TransactionSignatureListDeprecated;
 use digital_asset_types::rpc::Asset;
 use entities::api_req_params::{
     GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
@@ -469,6 +470,7 @@ where
     pub async fn get_asset_signatures(
         &self,
         payload: GetAssetSignatures,
+        is_deprecated: bool,
     ) -> Result<Value, DasApiError> {
         let label = "get_signatures_for_asset";
         self.metrics.inc_requests(label);
@@ -507,12 +509,15 @@ where
             before,
             after,
         )
-        .await;
+        .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
-        Ok(json!(res?))
+        if is_deprecated {
+            return Ok(json!(TransactionSignatureListDeprecated::from(res)));
+        }
+        Ok(json!(res))
     }
 
     pub async fn get_grouping(&self, payload: GetGrouping) -> Result<Value, DasApiError> {
