@@ -243,10 +243,7 @@ async fn get_by_related_condition(
     pagination: &Pagination,
     limit: u64,
 ) -> Result<Vec<FullAsset>, DbErr> {
-    let condition = &format!(
-        "{} AND ast_supply > 0 AND tsk_status = 'success' ",
-        condition
-    );
+    let condition = &format!("{} AND ast_supply > 0 ", condition);
     let (mut condition, values, offset) = paginate(pagination, limit, condition, values)?;
 
     condition = format!("{} LIMIT {}", condition, limit);
