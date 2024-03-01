@@ -24,22 +24,25 @@ impl PgClient {
         before: Option<String>,
         after: Option<String>,
     ) -> (QueryBuilder<'a, Postgres>, bool) {
-        // todo: remove the inner join with tasks and only perform it if the metadata_url_id is present in the filter
         let mut query_builder = QueryBuilder::new(
-            "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 INNER JOIN tasks ON ast_metadata_url_id = tsk_id",
+            "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 ",
         );
+        let mut group_clause_required = false;
 
         if filter.creator_address.is_some()
             || filter.creator_verified.is_some()
             || filter.royalty_target.is_some()
         {
             query_builder.push(" INNER JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey ");
+            group_clause_required = true;
+        }
+        if filter.json_uri.is_some() {
+            query_builder.push(" INNER JOIN tasks ON ast_metadata_url_id = tsk_id ");
+            group_clause_required = true;
         }
 
         // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
         query_builder.push(" WHERE TRUE ");
-
-        query_builder.push(" AND tsk_status = 'success' ");
         if let Some(spec_version) = &filter.specification_version {
             query_builder.push(" AND assets_v3.ast_specification_version = ");
             query_builder.push_bind(spec_version);
@@ -186,7 +189,10 @@ impl PgClient {
             }
         }
 
-        query_builder.push(" GROUP BY assets_v3.ast_pubkey, assets_v3.ast_slot_created, assets_v3.ast_slot_updated ");
+        // Add GROUP BY clause if necessary
+        if group_clause_required {
+            query_builder.push(" GROUP BY assets_v3.ast_pubkey, assets_v3.ast_slot_created, assets_v3.ast_slot_updated ");
+        }
 
         // Add ORDER BY clause
         let direction = match (&order.sort_direction, order_reversed) {
