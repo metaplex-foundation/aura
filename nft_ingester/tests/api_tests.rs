@@ -1102,7 +1102,7 @@ mod tests {
             leaf_index: Some(first_leaf_idx),
             sort_direction: None,
         };
-        let response = api.get_asset_signatures(payload).await.unwrap();
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
         let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
 
         assert_eq!(parsed_response.after, Some("50".to_string()));
@@ -1119,7 +1119,7 @@ mod tests {
             leaf_index: Some(first_leaf_idx),
             sort_direction: None,
         };
-        let response = api.get_asset_signatures(payload).await.unwrap();
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
         let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
 
         assert_eq!(parsed_response.after, Some("0".to_string()));
@@ -1136,7 +1136,7 @@ mod tests {
             leaf_index: Some(first_leaf_idx),
             sort_direction: Some(AssetSortDirection::Asc),
         };
-        let response = api.get_asset_signatures(payload).await.unwrap();
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
         let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
 
         assert_eq!(parsed_response.after, Some("99".to_string()));
@@ -1153,7 +1153,7 @@ mod tests {
             leaf_index: Some(first_leaf_idx),
             sort_direction: Some(AssetSortDirection::Desc),
         };
-        let response = api.get_asset_signatures(payload).await.unwrap();
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
         let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
 
         assert_eq!(parsed_response.after, Some("40".to_string()));
@@ -1170,7 +1170,7 @@ mod tests {
             leaf_index: Some(first_leaf_idx),
             sort_direction: Some(AssetSortDirection::Asc),
         };
-        let response = api.get_asset_signatures(payload).await.unwrap();
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
         let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
 
         assert_eq!(parsed_response.after, None);
@@ -1187,7 +1187,7 @@ mod tests {
             leaf_index: Some(first_leaf_idx),
             sort_direction: Some(AssetSortDirection::Desc),
         };
-        let response = api.get_asset_signatures(payload).await.unwrap();
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
         let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
 
         assert_eq!(parsed_response.after, Some("50".to_string()));
