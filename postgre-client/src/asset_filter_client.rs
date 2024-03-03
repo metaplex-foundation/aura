@@ -150,20 +150,15 @@ impl PgClient {
                 if let Some(before) = before {
                     let res = AssetRawResponse::decode_sorting_key(before.as_str());
                     if let Ok((slot, pubkey)) = res {
-                        query_builder.push(" AND (");
-                        query_builder.push(order_field);
                         let comparison = match order.sort_direction {
                             AssetSortDirection::Asc => " < ",
                             AssetSortDirection::Desc => " > ",
                         };
-                        query_builder.push(comparison);
+                        query_builder.push(format!(" AND ({}{}", order_field, comparison));
                         query_builder.push_bind(slot);
-                        query_builder.push(" OR (");
-                        query_builder.push(order_field);
-                        query_builder.push(" = ");
+                        query_builder.push(format!(" OR ({} = ", order_field));
                         query_builder.push_bind(slot);
-                        query_builder.push(" AND ast_pubkey ");
-                        query_builder.push(comparison);
+                        query_builder.push(format!(" AND ast_pubkey {}", comparison));
                         query_builder.push_bind(pubkey);
                         query_builder.push("))");
                     }
@@ -172,20 +167,15 @@ impl PgClient {
                 if let Some(after) = after {
                     let res = AssetRawResponse::decode_sorting_key(&after);
                     if let Ok((slot, pubkey)) = res {
-                        query_builder.push(" AND (");
-                        query_builder.push(order_field);
                         let comparison = match order.sort_direction {
                             AssetSortDirection::Asc => " > ",
                             AssetSortDirection::Desc => " < ",
                         };
-                        query_builder.push(comparison);
+                        query_builder.push(format!(" AND ({}{}", order_field, comparison));
                         query_builder.push_bind(slot);
-                        query_builder.push(" OR (");
-                        query_builder.push(order_field);
-                        query_builder.push(" = ");
+                        query_builder.push(format!(" OR ({} = ", order_field));
                         query_builder.push_bind(slot);
-                        query_builder.push(" AND ast_pubkey ");
-                        query_builder.push(comparison);
+                        query_builder.push(format!(" AND ast_pubkey {}", comparison));
                         query_builder.push_bind(pubkey);
                         query_builder.push("))");
                     }
@@ -196,26 +186,22 @@ impl PgClient {
 
                 if let Some(before) = before {
                     let before = Pubkey::from_str(before.as_ref()).unwrap();
-                    query_builder.push(" AND (");
-                    query_builder.push(order_field);
                     let comparison = match order.sort_direction {
                         AssetSortDirection::Asc => " < ",
                         AssetSortDirection::Desc => " > ",
                     };
-                    query_builder.push(comparison);
+                    query_builder.push(format!(" AND ({}{}", order_field, comparison));
                     query_builder.push_bind(before.to_bytes());
                     query_builder.push(")");
                 }
 
                 if let Some(after) = after {
                     let after = Pubkey::from_str(after.as_ref()).unwrap();
-                    query_builder.push(" AND (");
-                    query_builder.push(order_field);
                     let comparison = match order.sort_direction {
                         AssetSortDirection::Asc => " > ",
                         AssetSortDirection::Desc => " < ",
                     };
-                    query_builder.push(comparison);
+                    query_builder.push(format!(" AND ({}{}", order_field, comparison));
                     query_builder.push_bind(after.to_bytes());
                     query_builder.push(")");
                 }
