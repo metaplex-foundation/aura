@@ -16,7 +16,7 @@ use crate::dao::sea_orm_active_enums::SpecificationVersions;
 use crate::dao::FullAsset;
 use crate::dao::Pagination;
 use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_grouping};
-use crate::rpc::response::{AssetError, AssetList};
+use crate::rpc::response::AssetError;
 use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
     MetadataMap, Ownership, Royalty, Scope, Supply, Uses,
@@ -47,39 +47,13 @@ pub fn file_from_str(str: String) -> File {
     }
 }
 
-pub fn build_asset_response(
-    assets: Vec<FullAsset>,
-    limit: u64,
-    pagination: &Pagination,
-) -> AssetList {
-    let (page, before, after) = match pagination {
-        Pagination::Keyset { before, after } => {
-            let bef = before.clone().and_then(|x| String::from_utf8(x).ok());
-            let aft = after.clone().and_then(|x| String::from_utf8(x).ok());
-            (None, bef, aft)
-        }
-        Pagination::Page { page } => (Some(*page), None, None),
-    };
-    let (items, errors) = asset_list_to_rpc(assets);
-    let total = items.len() as u32;
-
-    AssetList {
-        total,
-        limit: limit as u32,
-        page: page.map(|x| x as u32),
-        before,
-        after,
-        items,
-        errors,
-    }
-}
-
 pub fn create_sorting(sorting: AssetSorting) -> (sea_orm::query::Order, Option<asset::Column>) {
     let sort_column = match sorting.sort_by {
         AssetSortBy::Created => Some(asset::Column::CreatedAt),
         AssetSortBy::Updated => Some(asset::Column::SlotUpdated),
         AssetSortBy::RecentAction => Some(asset::Column::SlotUpdated),
-        AssetSortBy::None => None,
+        AssetSortBy::Key => Some(asset::Column::Id),
+        AssetSortBy::None => Some(asset::Column::SlotUpdated),
     };
     let sort_direction = match sorting.sort_direction.unwrap_or_default() {
         AssetSortDirection::Desc => sea_orm::query::Order::Desc,
@@ -89,8 +63,8 @@ pub fn create_sorting(sorting: AssetSorting) -> (sea_orm::query::Order, Option<a
 }
 
 pub fn create_pagination(
-    before: Option<Vec<u8>>,
-    after: Option<Vec<u8>>,
+    before: Option<String>,
+    after: Option<String>,
     page: Option<u64>,
 ) -> Result<Pagination, DbErr> {
     match (&before, &after, &page) {

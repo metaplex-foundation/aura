@@ -64,8 +64,7 @@ mod tests {
             let res = api.search_assets(payload).await.unwrap();
             assert!(res.is_object());
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
-            before = res_obj.before;
-            after = res_obj.after;
+            after = res_obj.cursor.clone();
             assert_eq!(res_obj.total, limit, "total should match the limit");
             assert_eq!(
                 res_obj.limit, limit,
@@ -84,6 +83,10 @@ mod tests {
                     "asset should match the pubkey"
                 );
             }
+
+            // by default API uses cursor so the first returned element in this request is 'before'
+            // note: sorting wasn't pointed so cursor is just a pubkey
+            before = Some(res_obj.items[0].id.as_str().to_string());
         }
         // test limit and 1st page being the same as the 0
         {

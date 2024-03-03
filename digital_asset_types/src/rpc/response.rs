@@ -33,4 +33,6 @@ pub struct AssetList {
     pub items: Vec<Asset>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub errors: Vec<AssetError>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
 }

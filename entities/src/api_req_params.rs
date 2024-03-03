@@ -12,7 +12,7 @@ pub struct AssetSorting {
 impl Default for AssetSorting {
     fn default() -> AssetSorting {
         AssetSorting {
-            sort_by: AssetSortBy::Created,
+            sort_by: AssetSortBy::Key,
             sort_direction: Some(AssetSortDirection::default()),
         }
     }
@@ -26,6 +26,8 @@ pub enum AssetSortBy {
     Updated,
     #[serde(rename = "recent_action")]
     RecentAction,
+    #[serde(rename = "key")]
+    Key,
     #[serde(rename = "none")]
     None,
 }
@@ -57,6 +59,7 @@ pub struct GetAssetsByGroup {
     pub page: Option<u32>,
     pub before: Option<String>,
     pub after: Option<String>,
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -68,6 +71,7 @@ pub struct GetAssetsByOwner {
     pub page: Option<u32>,
     pub before: Option<String>,
     pub after: Option<String>,
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -104,6 +108,7 @@ pub struct GetAssetsByCreator {
     pub page: Option<u32>,
     pub before: Option<String>,
     pub after: Option<String>,
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -115,6 +120,7 @@ pub struct GetAssetsByAuthority {
     pub page: Option<u32>,
     pub before: Option<String>,
     pub after: Option<String>,
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

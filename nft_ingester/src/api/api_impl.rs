@@ -1,9 +1,6 @@
 use digital_asset_types::dao::scopes::asset::get_grouping;
 use digital_asset_types::dao::SearchAssetsQuery;
-use digital_asset_types::dapi::{
-    get_asset, get_asset_batch, get_assets_by_authority, get_assets_by_creator,
-    get_assets_by_group, get_assets_by_owner, get_proof_for_assets, search_assets,
-};
+use digital_asset_types::dapi::{get_asset, get_asset_batch, get_proof_for_assets, search_assets};
 use interface::proofs::ProofChecker;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
@@ -83,28 +80,6 @@ where
             proof_checker,
         })
     }
-
-    fn validate_pagination(
-        &self,
-        limit: &Option<u32>,
-        page: &Option<u32>,
-        before: &Option<String>,
-        after: &Option<String>,
-    ) -> Result<(), DasApiError> {
-        if page.is_none() && before.is_none() && after.is_none() {
-            return Err(DasApiError::PaginationEmptyError);
-        }
-
-        validate_basic_pagination(limit, page, before, after)?;
-        if let Some(before) = before {
-            validate_pubkey(before.clone())?;
-        }
-
-        if let Some(after) = after {
-            validate_pubkey(after.clone())?;
-        }
-        Ok(())
-    }
 }
 
 pub fn validate_basic_pagination(
@@ -112,6 +87,7 @@ pub fn validate_basic_pagination(
     page: &Option<u32>,
     before: &Option<String>,
     after: &Option<String>,
+    cursor: &Option<String>,
 ) -> Result<(), DasApiError> {
     if let Some(limit) = limit {
         // make config item
@@ -119,12 +95,15 @@ pub fn validate_basic_pagination(
             return Err(DasApiError::PaginationError);
         }
     }
+    if (before.is_some() || after.is_some()) && cursor.is_some() {
+        return Err(DasApiError::PaginationError);
+    }
     if let Some(page) = page {
         if *page == 0 {
             return Err(DasApiError::PaginationEmptyError);
         }
         // make config item
-        if before.is_some() || after.is_some() {
+        if before.is_some() || after.is_some() || cursor.is_some() {
             return Err(DasApiError::PaginationError);
         }
     }
@@ -274,31 +253,27 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let GetAssetsByOwner {
-            owner_address,
-            sort_by,
-            limit,
-            page,
+        let limit = payload.limit;
+        let page = payload.page;
+        let before = payload.before.clone();
+        let after = payload.after.clone();
+        let cursor = payload.cursor.clone();
+        validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
+
+        let query: SearchAssetsQuery = payload.clone().try_into()?;
+
+        let res = search_assets(
+            self.pg_client.clone(),
+            self.rocks_db.clone(),
+            query,
+            payload.sort_by.unwrap_or_default(),
+            limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
+            page.map(|p| p as u64),
             before,
             after,
-        } = payload;
-        let before: Option<String> = before.filter(|before| !before.is_empty());
-        let after: Option<String> = after.filter(|after| !after.is_empty());
-        let owner_address = validate_pubkey(owner_address.clone())?;
-        let sort_by = sort_by.unwrap_or_default();
-        self.validate_pagination(&limit, &page, &before, &after)?;
-        let res = get_assets_by_owner(
-            &self.db_connection,
-            self.rocks_db.clone(),
-            owner_address,
-            sort_by,
-            limit.map(|x| x as u64).unwrap_or(DEFAULT_LIMIT as u64),
-            page.map(|x| x as u64),
-            before.map(|x| bs58::decode(x).into_vec().unwrap_or_default()),
-            after.map(|x| bs58::decode(x).into_vec().unwrap_or_default()),
+            cursor,
         )
-        .await
-        .map_err(Into::<DasApiError>::into);
+        .await;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -314,33 +289,27 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let GetAssetsByGroup {
-            group_key,
-            group_value,
-            sort_by,
-            limit,
-            page,
+        let limit = payload.limit;
+        let page = payload.page;
+        let before = payload.before.clone();
+        let after = payload.after.clone();
+        let cursor = payload.cursor.clone();
+        validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
+
+        let query: SearchAssetsQuery = payload.clone().try_into()?;
+
+        let res = search_assets(
+            self.pg_client.clone(),
+            self.rocks_db.clone(),
+            query,
+            payload.sort_by.unwrap_or_default(),
+            limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
+            page.map(|p| p as u64),
             before,
             after,
-        } = payload;
-        let before: Option<String> = before.filter(|before| !before.is_empty());
-        let after: Option<String> = after.filter(|after| !after.is_empty());
-        let sort_by = sort_by.unwrap_or_default();
-        self.validate_pagination(&limit, &page, &before, &after)?;
-        let group_value = validate_pubkey(group_value.clone())?;
-        let res = get_assets_by_group(
-            &self.db_connection,
-            self.rocks_db.clone(),
-            group_value.to_bytes().as_slice().to_vec(),
-            group_key,
-            sort_by,
-            limit.map(|x| x as u64).unwrap_or(DEFAULT_LIMIT as u64),
-            page.map(|x| x as u64),
-            before.map(|x| bs58::decode(x).into_vec().unwrap_or_default()),
-            after.map(|x| bs58::decode(x).into_vec().unwrap_or_default()),
+            cursor,
         )
-        .await
-        .map_err(Into::<DasApiError>::into);
+        .await;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -356,34 +325,27 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let GetAssetsByCreator {
-            creator_address,
-            only_verified,
-            sort_by,
-            limit,
-            page,
+        let limit = payload.limit;
+        let page = payload.page;
+        let before = payload.before.clone();
+        let after = payload.after.clone();
+        let cursor = payload.cursor.clone();
+        validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
+
+        let query: SearchAssetsQuery = payload.clone().try_into()?;
+
+        let res = search_assets(
+            self.pg_client.clone(),
+            self.rocks_db.clone(),
+            query,
+            payload.sort_by.unwrap_or_default(),
+            limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
+            page.map(|p| p as u64),
             before,
             after,
-        } = payload;
-        let creator_address = validate_pubkey(creator_address.clone())?;
-        let creator_address_bytes = creator_address.to_bytes().to_vec();
-
-        self.validate_pagination(&limit, &page, &before, &after)?;
-        let sort_by = sort_by.unwrap_or_default();
-        let only_verified = only_verified.unwrap_or_default();
-        let res = get_assets_by_creator(
-            &self.db_connection,
-            self.rocks_db.clone(),
-            creator_address_bytes,
-            only_verified,
-            sort_by,
-            limit.map(|x| x as u64).unwrap_or(DEFAULT_LIMIT as u64),
-            page.map(|x| x as u64),
-            before.map(|x| bs58::decode(x).into_vec().unwrap_or_default()),
-            after.map(|x| bs58::decode(x).into_vec().unwrap_or_default()),
+            cursor,
         )
-        .await
-        .map_err(Into::<DasApiError>::into);
+        .await;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -399,28 +361,25 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let GetAssetsByAuthority {
-            authority_address,
-            sort_by,
-            limit,
-            page,
+        let limit = payload.limit;
+        let page = payload.page;
+        let before = payload.before.clone();
+        let after = payload.after.clone();
+        let cursor = payload.cursor.clone();
+        validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
+
+        let query: SearchAssetsQuery = payload.clone().try_into()?;
+
+        let res = search_assets(
+            self.pg_client.clone(),
+            self.rocks_db.clone(),
+            query,
+            payload.sort_by.unwrap_or_default(),
+            limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
+            page.map(|p| p as u64),
             before,
             after,
-        } = payload;
-        let sort_by = sort_by.unwrap_or_default();
-        let authority_address = validate_pubkey(authority_address.clone())?;
-        let authority_address_bytes = authority_address.to_bytes().to_vec();
-
-        self.validate_pagination(&limit, &page, &before, &after)?;
-        let res = get_assets_by_authority(
-            &self.db_connection,
-            self.rocks_db.clone(),
-            authority_address_bytes,
-            sort_by,
-            limit.map(|x| x as u64).unwrap_or(DEFAULT_LIMIT as u64),
-            page.map(|x| x as u64),
-            before.map(|x| bs58::decode(x).into_vec().unwrap_or_default()),
-            after.map(|x| bs58::decode(x).into_vec().unwrap_or_default()),
+            cursor,
         )
         .await;
 
@@ -440,7 +399,8 @@ where
         let page = payload.page;
         let before = payload.before.clone();
         let after = payload.after.clone();
-        validate_basic_pagination(&limit, &page, &before, &after)?;
+        let cursor = payload.cursor.clone();
+        validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
 
         let query: SearchAssetsQuery = payload.clone().try_into()?;
 
@@ -453,6 +413,7 @@ where
             page.map(|p| p as u64),
             before,
             after,
+            cursor,
         )
         .await;
 

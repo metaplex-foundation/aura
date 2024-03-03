@@ -35,7 +35,7 @@ mod tests {
             json_uri: Some("https://www.google.com".to_string()),
         };
         let order = AssetSorting {
-            sort_by: AssetSortBy::SlotCreated,
+            sort_by: AssetSortBy::SlotCreated("ast_slot_created".to_string()),
             sort_direction: AssetSortDirection::Asc,
         };
         let limit = 10;
@@ -93,7 +93,7 @@ mod tests {
                 .map(|url_with_status| url_with_status.metadata_url),
         };
         let order: AssetSorting = AssetSorting {
-            sort_by: AssetSortBy::SlotUpdated,
+            sort_by: AssetSortBy::SlotUpdated("ast_slot_updated".to_string()),
             sort_direction: AssetSortDirection::Asc,
         };
         let limit = 10;
@@ -216,7 +216,7 @@ mod tests {
             .await
             .unwrap();
         let order = AssetSorting {
-            sort_by: AssetSortBy::SlotCreated,
+            sort_by: AssetSortBy::SlotCreated("ast_slot_created".to_string()),
             sort_direction: AssetSortDirection::Asc,
         };
 

@@ -10,7 +10,9 @@ mod full_asset;
 mod generated;
 pub mod scopes;
 pub use converters::*;
-use entities::api_req_params::SearchAssets;
+use entities::api_req_params::{
+    GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, SearchAssets,
+};
 use interface::error::UsecaseError;
 use usecase::validation::{validate_opt_pubkey, validate_pubkey};
 
@@ -20,8 +22,8 @@ pub struct GroupingSize {
 
 pub enum Pagination {
     Keyset {
-        before: Option<Vec<u8>>,
-        after: Option<Vec<u8>>,
+        before: Option<String>,
+        after: Option<String>,
     },
     Page {
         page: u64,
@@ -105,6 +107,61 @@ impl TryFrom<SearchAssets> for SearchAssetsQuery {
                 .interface
                 .map(|s| (&crate::rpc::Interface::from(s)).into())
                 .filter(|v| v != &SpecificationAssetClass::Unknown),
+        })
+    }
+}
+
+impl TryFrom<GetAssetsByAuthority> for SearchAssetsQuery {
+    type Error = UsecaseError;
+    fn try_from(asset_authority: GetAssetsByAuthority) -> Result<Self, Self::Error> {
+        Ok(SearchAssetsQuery {
+            authority_address: Some(
+                validate_pubkey(asset_authority.authority_address)
+                    .map(|k| k.to_bytes().to_vec())?,
+            ),
+            ..Default::default()
+        })
+    }
+}
+
+impl TryFrom<GetAssetsByCreator> for SearchAssetsQuery {
+    type Error = UsecaseError;
+    fn try_from(asset_creator: GetAssetsByCreator) -> Result<Self, Self::Error> {
+        Ok(SearchAssetsQuery {
+            creator_address: Some(
+                validate_pubkey(asset_creator.creator_address).map(|k| k.to_bytes().to_vec())?,
+            ),
+            creator_verified: asset_creator.only_verified,
+            ..Default::default()
+        })
+    }
+}
+
+impl TryFrom<GetAssetsByGroup> for SearchAssetsQuery {
+    type Error = UsecaseError;
+    fn try_from(asset_group: GetAssetsByGroup) -> Result<Self, Self::Error> {
+        if asset_group.group_key != "collection" {
+            return Err(UsecaseError::InvalidGroupingKey(asset_group.group_key));
+        }
+
+        Ok(SearchAssetsQuery {
+            grouping: Some((
+                asset_group.group_key,
+                validate_pubkey(asset_group.group_value).map(|k| k.to_bytes().to_vec())?,
+            )),
+            ..Default::default()
+        })
+    }
+}
+
+impl TryFrom<GetAssetsByOwner> for SearchAssetsQuery {
+    type Error = UsecaseError;
+    fn try_from(asset_owner: GetAssetsByOwner) -> Result<Self, Self::Error> {
+        Ok(SearchAssetsQuery {
+            creator_address: Some(
+                validate_pubkey(asset_owner.owner_address).map(|k| k.to_bytes().to_vec())?,
+            ),
+            ..Default::default()
         })
     }
 }
