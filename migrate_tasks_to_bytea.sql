@@ -1,3 +1,4 @@
+ALTER TYPE specification_asset_class  ADD VALUE 'programmable_nft';
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 DROP TABLE assets_v3;
@@ -13,6 +14,7 @@ SET tsk_id_hash = digest(tsk_metadata_url, 'sha256');
 -- Ensure there are no null hashes
 ALTER TABLE tasks ALTER COLUMN tsk_id_hash SET NOT NULL;
 
+ALTER TABLE tasks DROP CONSTRAINT tasks_pk;
 -- Add the primary key
 ALTER TABLE tasks ADD CONSTRAINT tsk_id_hash_pkey PRIMARY KEY (tsk_id_hash);
 
