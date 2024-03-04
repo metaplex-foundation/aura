@@ -1,8 +1,11 @@
 pub use full_asset::*;
 pub use generated::*;
 
-use self::sea_orm_active_enums::{
-    OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
+use self::{
+    scopes::asset::COLLECTION_GROUP_KEY,
+    sea_orm_active_enums::{
+        OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
+    },
 };
 
 mod converters;
@@ -134,11 +137,17 @@ impl TryFrom<GetAssetsByAuthority> for SearchAssetsQuery {
 impl TryFrom<GetAssetsByCreator> for SearchAssetsQuery {
     type Error = UsecaseError;
     fn try_from(asset_creator: GetAssetsByCreator) -> Result<Self, Self::Error> {
+        let creator_verified = if let Some(false) = asset_creator.only_verified {
+            None
+        } else {
+            asset_creator.only_verified
+        };
+
         Ok(SearchAssetsQuery {
             creator_address: Some(
                 validate_pubkey(asset_creator.creator_address).map(|k| k.to_bytes().to_vec())?,
             ),
-            creator_verified: asset_creator.only_verified,
+            creator_verified,
             supply: Some(AssetSupply::Greater(0)),
             ..Default::default()
         })
@@ -148,7 +157,7 @@ impl TryFrom<GetAssetsByCreator> for SearchAssetsQuery {
 impl TryFrom<GetAssetsByGroup> for SearchAssetsQuery {
     type Error = UsecaseError;
     fn try_from(asset_group: GetAssetsByGroup) -> Result<Self, Self::Error> {
-        if asset_group.group_key != "collection" {
+        if asset_group.group_key != COLLECTION_GROUP_KEY {
             return Err(UsecaseError::InvalidGroupingKey(asset_group.group_key));
         }
 

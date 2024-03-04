@@ -25,7 +25,7 @@ use crate::dao::{
 };
 
 pub const PROCESSING_METADATA_STATE: &str = "processing";
-const COLLECTION_GROUP_KEY: &str = "collection";
+pub const COLLECTION_GROUP_KEY: &str = "collection";
 
 pub async fn get_grouping(
     conn: &impl ConnectionTrait,

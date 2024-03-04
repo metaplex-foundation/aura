@@ -257,14 +257,14 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
+        let query: SearchAssetsQuery = payload.clone().try_into()?;
+
         let limit = payload.limit;
         let page = payload.page;
-        let before = payload.before.clone();
-        let after = payload.after.clone();
-        let cursor = payload.cursor.clone();
+        let before = payload.before;
+        let after = payload.after;
+        let cursor = payload.cursor;
         validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
-
-        let query: SearchAssetsQuery = payload.clone().try_into()?;
 
         let res = search_assets(
             self.pg_client.clone(),
@@ -293,14 +293,14 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
+        let query: SearchAssetsQuery = payload.clone().try_into()?;
+
         let limit = payload.limit;
         let page = payload.page;
-        let before = payload.before.clone();
-        let after = payload.after.clone();
-        let cursor = payload.cursor.clone();
+        let before = payload.before;
+        let after = payload.after;
+        let cursor = payload.cursor;
         validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
-
-        let query: SearchAssetsQuery = payload.clone().try_into()?;
 
         let res = search_assets(
             self.pg_client.clone(),
@@ -329,14 +329,14 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
+        let query: SearchAssetsQuery = payload.clone().try_into()?;
+
         let limit = payload.limit;
         let page = payload.page;
-        let before = payload.before.clone();
-        let after = payload.after.clone();
-        let cursor = payload.cursor.clone();
+        let before = payload.before;
+        let after = payload.after;
+        let cursor = payload.cursor;
         validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
-
-        let query: SearchAssetsQuery = payload.clone().try_into()?;
 
         let res = search_assets(
             self.pg_client.clone(),
@@ -365,14 +365,15 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
+        let query: SearchAssetsQuery = payload.clone().try_into()?;
+
         let limit = payload.limit;
         let page = payload.page;
-        let before = payload.before.clone();
-        let after = payload.after.clone();
-        let cursor = payload.cursor.clone();
-        validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
+        let before = payload.before;
+        let after = payload.after;
+        let cursor = payload.cursor;
 
-        let query: SearchAssetsQuery = payload.clone().try_into()?;
+        validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
 
         let res = search_assets(
             self.pg_client.clone(),
@@ -399,14 +400,14 @@ where
         self.metrics.inc_search_asset_requests(&label);
         let latency_timer = Instant::now();
 
+        let query: SearchAssetsQuery = payload.clone().try_into()?;
+
         let limit = payload.limit;
         let page = payload.page;
-        let before = payload.before.clone();
-        let after = payload.after.clone();
-        let cursor = payload.cursor.clone();
+        let before = payload.before;
+        let after = payload.after;
+        let cursor = payload.cursor;
         validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
-
-        let query: SearchAssetsQuery = payload.clone().try_into()?;
 
         let res = search_assets(
             self.pg_client.clone(),
