@@ -25,6 +25,7 @@ use {
 
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
+const MAX_PAGE_LIMIT: usize = 50;
 
 pub struct DasApi<PC>
 where
@@ -101,6 +102,9 @@ pub fn validate_basic_pagination(
     if let Some(page) = page {
         if *page == 0 {
             return Err(DasApiError::PaginationEmptyError);
+        }
+        if *page > MAX_PAGE_LIMIT as u32 {
+            return Err(DasApiError::PaginationError);
         }
         // make config item
         if before.is_some() || after.is_some() || cursor.is_some() {
