@@ -158,7 +158,7 @@ impl TryFrom<GetAssetsByOwner> for SearchAssetsQuery {
     type Error = UsecaseError;
     fn try_from(asset_owner: GetAssetsByOwner) -> Result<Self, Self::Error> {
         Ok(SearchAssetsQuery {
-            creator_address: Some(
+            owner_address: Some(
                 validate_pubkey(asset_owner.owner_address).map(|k| k.to_bytes().to_vec())?,
             ),
             ..Default::default()
