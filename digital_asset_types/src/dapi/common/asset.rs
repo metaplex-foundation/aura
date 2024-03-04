@@ -2,7 +2,6 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 
-use entities::api_req_params::{AssetSortBy, AssetSortDirection, AssetSorting};
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
@@ -14,7 +13,6 @@ use url::Url;
 use crate::dao::sea_orm_active_enums::SpecificationAssetClass;
 use crate::dao::sea_orm_active_enums::SpecificationVersions;
 use crate::dao::FullAsset;
-use crate::dao::Pagination;
 use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_grouping};
 use crate::rpc::response::AssetError;
 use crate::rpc::{
@@ -44,33 +42,6 @@ pub fn file_from_str(str: String) -> File {
         mime: Some(mime),
         quality: None,
         contexts: None,
-    }
-}
-
-pub fn create_sorting(sorting: AssetSorting) -> (sea_orm::query::Order, Option<asset::Column>) {
-    let sort_column = match sorting.sort_by {
-        AssetSortBy::Created => Some(asset::Column::CreatedAt),
-        AssetSortBy::Updated => Some(asset::Column::SlotUpdated),
-        AssetSortBy::RecentAction => Some(asset::Column::SlotUpdated),
-        AssetSortBy::Key => Some(asset::Column::Id),
-        AssetSortBy::None => Some(asset::Column::SlotUpdated),
-    };
-    let sort_direction = match sorting.sort_direction.unwrap_or_default() {
-        AssetSortDirection::Desc => sea_orm::query::Order::Desc,
-        AssetSortDirection::Asc => sea_orm::query::Order::Asc,
-    };
-    (sort_direction, sort_column)
-}
-
-pub fn create_pagination(
-    before: Option<String>,
-    after: Option<String>,
-    page: Option<u64>,
-) -> Result<Pagination, DbErr> {
-    match (&before, &after, &page) {
-        (_, _, None) => Ok(Pagination::Keyset { before, after }),
-        (None, None, Some(p)) => Ok(Pagination::Page { page: *p }),
-        _ => Err(DbErr::Custom("Invalid Pagination".to_string())),
     }
 }
 

@@ -6,7 +6,10 @@ use solana_sdk::{bs58, pubkey::Pubkey};
 use sqlx::{Postgres, QueryBuilder};
 
 use crate::{
-    model::{AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, SearchAssetsFilter},
+    model::{
+        AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, AssetSupply,
+        SearchAssetsFilter,
+    },
     storage_traits::AssetPubkeyFilteredFetcher,
     PgClient, SELECT_ACTION, SQL_COMPONENT,
 };
@@ -93,9 +96,17 @@ impl PgClient {
             query_builder.push_bind(frozen);
         }
 
-        if let Some(supply) = filter.supply {
-            query_builder.push(" AND assets_v3.ast_supply = ");
-            query_builder.push_bind(supply as i64);
+        if let Some(supply) = &filter.supply {
+            match supply {
+                AssetSupply::Equal(s) => {
+                    query_builder.push(" AND assets_v3.ast_supply = ");
+                    query_builder.push_bind(*s as i64);
+                }
+                AssetSupply::Greater(s) => {
+                    query_builder.push(" AND assets_v3.ast_supply > ");
+                    query_builder.push_bind(*s as i64);
+                }
+            }
         }
 
         // supply_mint is identical to pubkey

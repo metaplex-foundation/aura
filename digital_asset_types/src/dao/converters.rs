@@ -5,7 +5,7 @@ use super::{
     sea_orm_active_enums::{
         OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
     },
-    ConditionType, SearchAssetsQuery,
+    AssetSupply, ConditionType, SearchAssetsQuery,
 };
 
 #[derive(Error, Debug)]
@@ -38,7 +38,7 @@ impl TryFrom<SearchAssetsQuery> for postgre_client::model::SearchAssetsFilter {
             collection,
             delegate: query.delegate,
             frozen: query.frozen,
-            supply: query.supply,
+            supply: query.supply.map(|s| s.into()),
             supply_mint: query.supply_mint,
             compressed: query.compressed,
             compressible: query.compressible,
@@ -48,6 +48,15 @@ impl TryFrom<SearchAssetsQuery> for postgre_client::model::SearchAssetsFilter {
             burnt: query.burnt,
             json_uri: query.json_uri,
         })
+    }
+}
+
+impl From<AssetSupply> for postgre_client::model::AssetSupply {
+    fn from(supply: AssetSupply) -> Self {
+        match supply {
+            AssetSupply::Equal(s) => Self::Equal(s),
+            AssetSupply::Greater(s) => Self::Greater(s),
+        }
     }
 }
 

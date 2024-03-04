@@ -67,7 +67,7 @@ pub struct SearchAssetsFilter {
     pub collection: Option<Vec<u8>>,
     pub delegate: Option<Vec<u8>>,
     pub frozen: Option<bool>,
-    pub supply: Option<u64>,
+    pub supply: Option<AssetSupply>,
     pub supply_mint: Option<Vec<u8>>,
     pub compressed: Option<bool>,
     pub compressible: Option<bool>,
@@ -76,6 +76,11 @@ pub struct SearchAssetsFilter {
     pub royalty_amount: Option<u32>,
     pub burnt: Option<bool>,
     pub json_uri: Option<String>,
+}
+
+pub enum AssetSupply {
+    Greater(u64),
+    Equal(u64),
 }
 
 pub struct AssetSorting {

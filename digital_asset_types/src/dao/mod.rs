@@ -52,7 +52,7 @@ pub struct SearchAssetsQuery {
     pub grouping: Option<(String, Vec<u8>)>,
     pub delegate: Option<Vec<u8>>,
     pub frozen: Option<bool>,
-    pub supply: Option<u64>,
+    pub supply: Option<AssetSupply>,
     pub supply_mint: Option<Vec<u8>>,
     pub compressed: Option<bool>,
     pub compressible: Option<bool>,
@@ -61,6 +61,12 @@ pub struct SearchAssetsQuery {
     pub royalty_amount: Option<u32>,
     pub burnt: Option<bool>,
     pub json_uri: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AssetSupply {
+    Greater(u64),
+    Equal(u64),
 }
 
 impl TryFrom<SearchAssets> for SearchAssetsQuery {
@@ -88,7 +94,7 @@ impl TryFrom<SearchAssets> for SearchAssetsQuery {
             grouping,
             delegate: validate_opt_pubkey(&search_assets.delegate)?,
             frozen: search_assets.frozen,
-            supply: search_assets.supply,
+            supply: search_assets.supply.map(AssetSupply::Equal),
             supply_mint: validate_opt_pubkey(&search_assets.supply_mint)?,
             compressed: search_assets.compressed,
             compressible: search_assets.compressible,
@@ -119,6 +125,7 @@ impl TryFrom<GetAssetsByAuthority> for SearchAssetsQuery {
                 validate_pubkey(asset_authority.authority_address)
                     .map(|k| k.to_bytes().to_vec())?,
             ),
+            supply: Some(AssetSupply::Greater(0)),
             ..Default::default()
         })
     }
@@ -132,6 +139,7 @@ impl TryFrom<GetAssetsByCreator> for SearchAssetsQuery {
                 validate_pubkey(asset_creator.creator_address).map(|k| k.to_bytes().to_vec())?,
             ),
             creator_verified: asset_creator.only_verified,
+            supply: Some(AssetSupply::Greater(0)),
             ..Default::default()
         })
     }
@@ -149,6 +157,7 @@ impl TryFrom<GetAssetsByGroup> for SearchAssetsQuery {
                 asset_group.group_key,
                 validate_pubkey(asset_group.group_value).map(|k| k.to_bytes().to_vec())?,
             )),
+            supply: Some(AssetSupply::Greater(0)),
             ..Default::default()
         })
     }
@@ -161,6 +170,7 @@ impl TryFrom<GetAssetsByOwner> for SearchAssetsQuery {
             owner_address: Some(
                 validate_pubkey(asset_owner.owner_address).map(|k| k.to_bytes().to_vec())?,
             ),
+            supply: Some(AssetSupply::Greater(0)),
             ..Default::default()
         })
     }
