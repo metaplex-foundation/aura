@@ -58,7 +58,7 @@ mod tests {
             .get_asset_pubkeys_filtered(
                 &SearchAssetsFilter::default(),
                 &AssetSorting {
-                    sort_by: AssetSortBy::SlotCreated("ast_slot_created".to_string()),
+                    sort_by: AssetSortBy::SlotCreated,
                     sort_direction: AssetSortDirection::Asc,
                 },
                 100,
