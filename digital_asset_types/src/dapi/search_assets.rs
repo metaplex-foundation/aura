@@ -59,27 +59,18 @@ pub async fn search_assets(
     let (items, errors) = asset_list_to_rpc(assets);
     let total = items.len() as u32;
 
-    let before;
-    let after;
-    let cursor;
-    let page_res;
-
-    if cursor_enabled {
-        before = None;
-        after = None;
-        cursor = keys.last().map(|k| k.sorting_id.clone());
-        page_res = None;
-    } else if page.is_some() {
-        before = None;
-        after = None;
-        cursor = None;
-        page_res = page.map(|x| x as u32);
+    let (before, after, cursor, page_res) = if cursor_enabled {
+        (None, None, keys.last().map(|k| k.sorting_id.clone()), None)
+    } else if let Some(page) = page {
+        (None, None, None, Some(page as u32))
     } else {
-        before = keys.first().map(|k| k.sorting_id.clone());
-        after = keys.last().map(|k| k.sorting_id.clone());
-        cursor = None;
-        page_res = None;
-    }
+        (
+            keys.first().map(|k| k.sorting_id.clone()),
+            keys.last().map(|k| k.sorting_id.clone()),
+            None,
+            None,
+        )
+    };
 
     let resp = AssetList {
         total,
