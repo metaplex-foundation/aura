@@ -1,12 +1,20 @@
 use std::{collections::HashMap, marker::PhantomData, sync::Arc, vec};
 
 use bincode::{deserialize, serialize};
+use entities::models::{
+    TokenAccountMintIdxKey, TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey,
+};
 use log::error;
 use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
 use serde::{de::DeserializeOwned, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
+use crate::key_encoders::{
+    decode_pubkey_u64_pubkey, decode_pubkeyx2_u64_pubkey, encode_pubkey_u64_pubkey,
+    encode_pubkeyx2_u64_pubkey,
+};
 use crate::{Result, StorageError};
+
 pub trait TypedColumn {
     type KeyType: Sync + Clone + Send;
     type ValueType: Sync + Serialize + DeserializeOwned + Send;
@@ -460,6 +468,76 @@ pub mod columns {
         pub freeze_authority: Option<Pubkey>,
         pub write_version: u64,
     }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct TokenAccountOwnerIdx {}
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct TokenAccountMintIdx {}
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct TokenAccountMintOwnerIdx {}
+}
+
+impl TypedColumn for columns::TokenAccountOwnerIdx {
+    type KeyType = TokenAccountOwnerIdxKey;
+
+    type ValueType = Self;
+    const NAME: &'static str = "TOKEN_ACCOUNTS_OWNER_IDX";
+
+    fn encode_key(key: TokenAccountOwnerIdxKey) -> Vec<u8> {
+        encode_pubkey_u64_pubkey((key.owner, key.slot, key.token_account))
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        let (owner, slot, token_account) = decode_pubkey_u64_pubkey(bytes)?;
+        Ok(TokenAccountOwnerIdxKey {
+            owner,
+            slot,
+            token_account,
+        })
+    }
+}
+
+impl TypedColumn for columns::TokenAccountMintIdx {
+    type KeyType = TokenAccountMintIdxKey;
+
+    type ValueType = Self;
+    const NAME: &'static str = "TOKEN_ACCOUNTS_MINT_IDX";
+
+    fn encode_key(key: TokenAccountMintIdxKey) -> Vec<u8> {
+        encode_pubkey_u64_pubkey((key.mint, key.slot, key.token_account))
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        let (mint, slot, token_account) = decode_pubkey_u64_pubkey(bytes)?;
+        Ok(TokenAccountMintIdxKey {
+            mint,
+            slot,
+            token_account,
+        })
+    }
+}
+
+impl TypedColumn for columns::TokenAccountMintOwnerIdx {
+    type KeyType = TokenAccountMintOwnerIdxKey;
+
+    type ValueType = Self;
+    const NAME: &'static str = "TOKEN_ACCOUNTS_MINT_OWNER_IDX";
+
+    fn encode_key(key: TokenAccountMintOwnerIdxKey) -> Vec<u8> {
+        encode_pubkeyx2_u64_pubkey((key.mint, key.owner, key.slot, key.token_account))
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        let (mint, owner, slot, token_account) = decode_pubkeyx2_u64_pubkey(bytes)?;
+        Ok(TokenAccountMintOwnerIdxKey {
+            mint,
+            owner,
+            slot,
+            token_account,
+        })
+    }
 }
 
 impl TypedColumn for columns::TokenAccount {
@@ -485,11 +563,11 @@ impl columns::TokenAccount {
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
         let mut result = vec![];
-        let mut slot = 0;
+        let mut write_version = 0;
         if let Some(existing_val) = existing_val {
             match deserialize::<columns::TokenAccount>(existing_val) {
                 Ok(value) => {
-                    slot = value.slot_updated;
+                    write_version = value.write_version;
                     result = existing_val.to_vec();
                 }
                 Err(e) => {
@@ -501,8 +579,8 @@ impl columns::TokenAccount {
         for op in operands {
             match deserialize::<columns::TokenAccount>(op) {
                 Ok(new_val) => {
-                    if new_val.slot_updated > slot {
-                        slot = new_val.slot_updated;
+                    if new_val.write_version > write_version {
+                        write_version = new_val.write_version;
                         result = op.to_vec();
                     }
                 }

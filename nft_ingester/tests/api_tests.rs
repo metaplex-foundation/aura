@@ -675,7 +675,7 @@ mod tests {
             .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
         token_updates_processor
-            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_acc)].into_iter().collect())
+            .transform_and_save_token_accs(&[(token_acc.pubkey, token_acc)].into_iter().collect())
             .await;
 
         mplx_updates_processor
@@ -845,7 +845,7 @@ mod tests {
             .transform_and_save_token_accs(
                 &token_accs
                     .into_iter()
-                    .map(|token_acc| (token_acc.pubkey.to_bytes().to_vec(), token_acc))
+                    .map(|token_acc| (token_acc.pubkey, token_acc))
                     .collect(),
             )
             .await;
@@ -1015,7 +1015,7 @@ mod tests {
             .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
         token_updates_processor
-            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_acc)].into_iter().collect())
+            .transform_and_save_token_accs(&[(token_acc.pubkey, token_acc)].into_iter().collect())
             .await;
 
         let payload = GetAsset {

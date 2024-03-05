@@ -7,13 +7,16 @@ use digital_asset_types::dapi::{
 use interface::proofs::ProofChecker;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
+use std::str::FromStr;
 use std::{sync::Arc, time::Instant};
 
 use crate::api::config::Config;
+use digital_asset_types::dapi::get_token_accounts::get_token_accounts;
 use digital_asset_types::rpc::Asset;
 use entities::api_req_params::{
     GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetsByAuthority,
-    GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetGrouping, SearchAssets,
+    GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetGrouping, GetTokenAccounts,
+    SearchAssets,
 };
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
@@ -428,6 +431,53 @@ where
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
+    }
+
+    pub async fn get_token_accounts(
+        &self,
+        payload: GetTokenAccounts,
+    ) -> Result<Value, DasApiError> {
+        let label = "get_token_accounts";
+        self.metrics.inc_requests(label);
+        let latency_timer = Instant::now();
+
+        let GetTokenAccounts {
+            limit,
+            page,
+            before,
+            after,
+            owner,
+            mint,
+            options,
+        } = payload;
+
+        // TODO: change after GetSignaturesForAssets merge
+        let owner = owner
+            .map(|owner| Pubkey::from_str(&owner))
+            .transpose()
+            .unwrap();
+        let mint = mint
+            .map(|mint| Pubkey::from_str(&mint))
+            .transpose()
+            .unwrap();
+        validate_basic_pagination(&limit, &page, &before, &after)?;
+
+        let res = get_token_accounts(
+            self.rocks_db.clone(),
+            owner,
+            mint,
+            limit.unwrap_or(DEFAULT_LIMIT as u32).into(),
+            page.map(|page| page as u64),
+            before,
+            after,
+            options.map(|op| op.show_zero_balance).unwrap_or_default(),
+        )
+        .await?;
+
+        self.metrics
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+
+        Ok(json!(res))
     }
 
     pub async fn search_assets(&self, payload: SearchAssets) -> Result<Value, DasApiError> {

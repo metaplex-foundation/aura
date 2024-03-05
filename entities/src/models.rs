@@ -2,6 +2,7 @@ use crate::enums::{
     ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
     TokenStandard, UseMethod,
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
@@ -287,6 +288,47 @@ pub struct ForkedItem {
     pub seq: u64,
     pub node_idx: u64,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
+pub struct TokenAccountOwnerIdxKey {
+    pub owner: Pubkey,
+    pub slot: u64,
+    pub token_account: Pubkey,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
+pub struct TokenAccountMintIdxKey {
+    pub mint: Pubkey,
+    pub slot: u64,
+    pub token_account: Pubkey,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
+pub struct TokenAccountMintOwnerIdxKey {
+    pub mint: Pubkey,
+    pub owner: Pubkey,
+    pub slot: u64,
+    pub token_account: Pubkey,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
+#[serde(default)]
+pub struct TokenAccount {
+    pub address: String,
+    pub mint: String,
+    pub owner: String,
+    pub amount: u64,
+    pub delegated_amount: u64,
+    pub frozen: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct TokenAccountsWithPagination {
+    pub asset_signatures: Vec<TokenAccount>,
+    pub before: Option<u64>,
+    pub after: Option<u64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

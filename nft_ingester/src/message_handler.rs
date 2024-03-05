@@ -181,9 +181,9 @@ impl MessageHandler {
 
                 update_or_insert!(
                     self.buffer.token_accs,
-                    key_bytes.clone(),
+                    Pubkey::from(key.0),
                     TokenAccount {
-                        pubkey: Pubkey::try_from(key_bytes).unwrap(),
+                        pubkey: Pubkey::from(key.0),
                         mint: ta.mint,
                         delegate: ta.delegate.into(),
                         owner: ta.owner,
@@ -201,7 +201,7 @@ impl MessageHandler {
                     self.buffer.mints,
                     key_bytes.clone(),
                     Mint {
-                        pubkey: Pubkey::try_from(key_bytes).unwrap_or_default(),
+                        pubkey: Pubkey::from(key.0),
                         slot_updated: account_update.slot() as i64,
                         supply: m.supply as i64,
                         decimals: m.decimals as i32,

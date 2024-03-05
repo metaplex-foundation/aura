@@ -7,3 +7,4 @@ pub mod signature_persistence;
 pub mod slot_getter;
 pub mod slots_dumper;
 pub mod solana_rpc;
+pub mod token_accounts;

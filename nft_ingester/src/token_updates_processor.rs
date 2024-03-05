@@ -2,12 +2,17 @@ use crate::buffer::Buffer;
 use crate::mplx_updates_processor::result_to_metrics;
 use crate::process_accounts;
 use entities::enums::OwnerType;
-use entities::models::{PubkeyWithSlot, UpdateVersion, Updated};
+use entities::models::{
+    PubkeyWithSlot, TokenAccountMintIdxKey, TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey,
+    UpdateVersion, Updated,
+};
 use futures::future;
 use log::error;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
-use rocks_db::columns::{Mint, TokenAccount};
+use rocks_db::columns::{
+    Mint, TokenAccount, TokenAccountMintIdx, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx,
+};
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
 use solana_program::pubkey::Pubkey;
@@ -105,7 +110,7 @@ impl TokenAccsProcessor {
 
     pub async fn transform_and_save_token_accs(
         &self,
-        accs_to_save: &HashMap<Vec<u8>, TokenAccount>,
+        accs_to_save: &HashMap<Pubkey, TokenAccount>,
     ) {
         let dynamic_and_asset_owner_details = accs_to_save.clone().into_values().fold(
             DynamicAndAssetOwnerDetails::default(),
@@ -151,13 +156,64 @@ impl TokenAccsProcessor {
         );
 
         self.finalize_processing(
-            future::try_join(
+            future::try_join5(
+                future::try_join(
+                    self.rocks_db
+                        .asset_owner_data
+                        .merge_batch(dynamic_and_asset_owner_details.asset_owner_details),
+                    self.rocks_db
+                        .asset_dynamic_data
+                        .merge_batch(dynamic_and_asset_owner_details.asset_dynamic_details),
+                ),
                 self.rocks_db
-                    .asset_owner_data
-                    .merge_batch(dynamic_and_asset_owner_details.asset_owner_details),
-                self.rocks_db
-                    .asset_dynamic_data
-                    .merge_batch(dynamic_and_asset_owner_details.asset_dynamic_details),
+                    .token_accounts
+                    .merge_batch(accs_to_save.clone()),
+                self.rocks_db.token_account_mint_idx.put_batch(
+                    accs_to_save
+                        .iter()
+                        .map(|(_, ta)| {
+                            (
+                                TokenAccountMintIdxKey {
+                                    mint: ta.mint,
+                                    slot: ta.slot_updated as u64,
+                                    token_account: ta.pubkey,
+                                },
+                                TokenAccountMintIdx {},
+                            )
+                        })
+                        .collect::<HashMap<_, _>>(),
+                ),
+                self.rocks_db.token_account_owner_idx.put_batch(
+                    accs_to_save
+                        .iter()
+                        .map(|(_, ta)| {
+                            (
+                                TokenAccountOwnerIdxKey {
+                                    owner: ta.owner,
+                                    slot: ta.slot_updated as u64,
+                                    token_account: ta.pubkey,
+                                },
+                                TokenAccountOwnerIdx {},
+                            )
+                        })
+                        .collect::<HashMap<_, _>>(),
+                ),
+                self.rocks_db.token_account_mint_owner_idx.put_batch(
+                    accs_to_save
+                        .iter()
+                        .map(|(_, ta)| {
+                            (
+                                TokenAccountMintOwnerIdxKey {
+                                    mint: ta.mint,
+                                    owner: ta.owner,
+                                    slot: ta.slot_updated as u64,
+                                    token_account: ta.pubkey,
+                                },
+                                TokenAccountMintOwnerIdx {},
+                            )
+                        })
+                        .collect::<HashMap<_, _>>(),
+                ),
             ),
             accs_to_save
                 .values()

@@ -93,6 +93,52 @@ pub fn decode_u64(bytes: Vec<u8>) -> Result<u64> {
     Ok(slot)
 }
 
+pub fn decode_pubkey_u64_pubkey(bytes: Vec<u8>) -> Result<(Pubkey, u64, Pubkey)> {
+    let u64_size = std::mem::size_of::<u64>();
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    if bytes.len() != u64_size + pubkey_size * 2 {
+        return Err(crate::StorageError::InvalidKeyLength);
+    }
+    let pk1 = Pubkey::try_from(&bytes[..pubkey_size])?;
+    let slot = u64::from_be_bytes(bytes[pubkey_size..pubkey_size + u64_size].try_into()?);
+    let pk2 = Pubkey::try_from(&bytes[pubkey_size + u64_size..])?;
+    Ok((pk1, slot, pk2))
+}
+
+pub fn encode_pubkey_u64_pubkey(ask: (Pubkey, u64, Pubkey)) -> Vec<u8> {
+    let u64_size = std::mem::size_of::<u64>();
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    let mut key = Vec::with_capacity(u64_size + pubkey_size * 2);
+    key.extend_from_slice(&ask.0.to_bytes());
+    key.extend_from_slice(&ask.1.to_be_bytes());
+    key.extend_from_slice(&ask.2.to_bytes());
+    key
+}
+
+pub fn decode_pubkeyx2_u64_pubkey(bytes: Vec<u8>) -> Result<(Pubkey, Pubkey, u64, Pubkey)> {
+    let u64_size = std::mem::size_of::<u64>();
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    if bytes.len() != u64_size + pubkey_size * 3 {
+        return Err(crate::StorageError::InvalidKeyLength);
+    }
+    let pk1 = Pubkey::try_from(&bytes[..pubkey_size])?;
+    let pk2 = Pubkey::try_from(&bytes[pubkey_size..pubkey_size * 2])?;
+    let slot = u64::from_be_bytes(bytes[pubkey_size * 2..pubkey_size * 2 + u64_size].try_into()?);
+    let pk3 = Pubkey::try_from(&bytes[pubkey_size * 2 + u64_size..])?;
+    Ok((pk1, pk2, slot, pk3))
+}
+
+pub fn encode_pubkeyx2_u64_pubkey(ask: (Pubkey, Pubkey, u64, Pubkey)) -> Vec<u8> {
+    let u64_size = std::mem::size_of::<u64>();
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    let mut key = Vec::with_capacity(u64_size + pubkey_size * 3);
+    key.extend_from_slice(&ask.0.to_bytes());
+    key.extend_from_slice(&ask.1.to_bytes());
+    key.extend_from_slice(&ask.2.to_be_bytes());
+    key.extend_from_slice(&ask.3.to_bytes());
+    key
+}
+
 #[cfg(test)]
 mod tests {
     use solana_sdk::pubkey::Pubkey;
@@ -146,6 +192,36 @@ mod tests {
 
         assert_eq!(decoded.0, pubkey);
         assert_eq!(decoded.1, slot);
+    }
+
+    #[test]
+    fn test_pubkey_u64_pubkey() {
+        let pk1 = Pubkey::new_unique(); // or some other way to create a Pubkey
+        let slot = 12345u64;
+        let pk2 = Pubkey::new_unique(); // or some other way to create a Pubkey
+
+        let encoded = encode_pubkey_u64_pubkey((pk1, slot, pk2));
+        let decoded = decode_pubkey_u64_pubkey(encoded).unwrap();
+
+        assert_eq!(decoded.0, pk1);
+        assert_eq!(decoded.1, slot);
+        assert_eq!(decoded.2, pk2);
+    }
+
+    #[test]
+    fn test_pubkeyx2_u64_pubkey() {
+        let pk1 = Pubkey::new_unique(); // or some other way to create a Pubkey
+        let pk2 = Pubkey::new_unique(); // or some other way to create a Pubkey
+        let slot = 12345u64;
+        let pk3 = Pubkey::new_unique(); // or some other way to create a Pubkey
+
+        let encoded = encode_pubkeyx2_u64_pubkey((pk1, pk2, slot, pk3));
+        let decoded = decode_pubkeyx2_u64_pubkey(encoded).unwrap();
+
+        assert_eq!(decoded.0, pk1);
+        assert_eq!(decoded.1, pk2);
+        assert_eq!(decoded.2, slot);
+        assert_eq!(decoded.3, pk3);
     }
 
     // Add more tests as needed...
