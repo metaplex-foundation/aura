@@ -1,22 +1,26 @@
 use digital_asset_types::dao::scopes::asset::get_grouping;
 use digital_asset_types::dao::SearchAssetsQuery;
 use digital_asset_types::dapi::{get_asset, get_asset_batch, get_proof_for_assets, search_assets};
+use digital_asset_types::rpc::response::AssetList;
+use interface::error::UsecaseError;
 use interface::proofs::ProofChecker;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
 
+use self::util::RequestWithPagination;
 use crate::api::config::Config;
 use digital_asset_types::rpc::Asset;
 use entities::api_req_params::{
     GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetsByAuthority,
-    GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetGrouping, SearchAssets,
+    GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetGrouping, Pagination, SearchAssets,
 };
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
 use usecase::validation::validate_pubkey;
+
 use {
     crate::api::*,
     sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, SqlxPostgresConnector, Statement},
@@ -83,31 +87,26 @@ where
     }
 }
 
-pub fn validate_basic_pagination(
-    limit: &Option<u32>,
-    page: &Option<u32>,
-    before: &Option<String>,
-    after: &Option<String>,
-    cursor: &Option<String>,
-) -> Result<(), DasApiError> {
-    if let Some(limit) = limit {
+pub fn validate_basic_pagination(parameters: &Pagination) -> Result<(), DasApiError> {
+    if let Some(limit) = parameters.limit {
         // make config item
-        if *limit > MAX_ITEMS_IN_BATCH_REQ as u32 {
+        if limit > MAX_ITEMS_IN_BATCH_REQ as u32 {
             return Err(DasApiError::PaginationError);
         }
     }
-    if (before.is_some() || after.is_some()) && cursor.is_some() {
+    if (parameters.before.is_some() || parameters.after.is_some()) && parameters.cursor.is_some() {
         return Err(DasApiError::PaginationError);
     }
-    if let Some(page) = page {
-        if *page == 0 {
+    if let Some(page) = parameters.page {
+        if page == 0 {
             return Err(DasApiError::PaginationEmptyError);
         }
-        if *page > MAX_PAGE_LIMIT as u32 {
+        if page > MAX_PAGE_LIMIT as u32 {
             return Err(DasApiError::PaginationError);
         }
         // make config item
-        if before.is_some() || after.is_some() || cursor.is_some() {
+        if parameters.before.is_some() || parameters.after.is_some() || parameters.cursor.is_some()
+        {
             return Err(DasApiError::PaginationError);
         }
     }
@@ -257,32 +256,12 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let query: SearchAssetsQuery = payload.clone().try_into()?;
-
-        let limit = payload.limit;
-        let page = payload.page;
-        let before = payload.before;
-        let after = payload.after;
-        let cursor = payload.cursor;
-        validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
-
-        let res = search_assets(
-            self.pg_client.clone(),
-            self.rocks_db.clone(),
-            query,
-            payload.sort_by.unwrap_or_default(),
-            limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
-            page.map(|p| p as u64),
-            before,
-            after,
-            cursor,
-        )
-        .await;
+        let res = process_request(self.pg_client.clone(), self.rocks_db.clone(), payload).await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
-        Ok(json!(res?))
+        Ok(json!(res))
     }
 
     pub async fn get_assets_by_group(
@@ -293,32 +272,12 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let query: SearchAssetsQuery = payload.clone().try_into()?;
-
-        let limit = payload.limit;
-        let page = payload.page;
-        let before = payload.before;
-        let after = payload.after;
-        let cursor = payload.cursor;
-        validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
-
-        let res = search_assets(
-            self.pg_client.clone(),
-            self.rocks_db.clone(),
-            query,
-            payload.sort_by.unwrap_or_default(),
-            limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
-            page.map(|p| p as u64),
-            before,
-            after,
-            cursor,
-        )
-        .await;
+        let res = process_request(self.pg_client.clone(), self.rocks_db.clone(), payload).await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
-        Ok(json!(res?))
+        Ok(json!(res))
     }
 
     pub async fn get_assets_by_creator(
@@ -329,32 +288,12 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let query: SearchAssetsQuery = payload.clone().try_into()?;
-
-        let limit = payload.limit;
-        let page = payload.page;
-        let before = payload.before;
-        let after = payload.after;
-        let cursor = payload.cursor;
-        validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
-
-        let res = search_assets(
-            self.pg_client.clone(),
-            self.rocks_db.clone(),
-            query,
-            payload.sort_by.unwrap_or_default(),
-            limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
-            page.map(|p| p as u64),
-            before,
-            after,
-            cursor,
-        )
-        .await;
+        let res = process_request(self.pg_client.clone(), self.rocks_db.clone(), payload).await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
-        Ok(json!(res?))
+        Ok(json!(res))
     }
 
     pub async fn get_assets_by_authority(
@@ -365,33 +304,12 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let query: SearchAssetsQuery = payload.clone().try_into()?;
-
-        let limit = payload.limit;
-        let page = payload.page;
-        let before = payload.before;
-        let after = payload.after;
-        let cursor = payload.cursor;
-
-        validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
-
-        let res = search_assets(
-            self.pg_client.clone(),
-            self.rocks_db.clone(),
-            query,
-            payload.sort_by.unwrap_or_default(),
-            limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
-            page.map(|p| p as u64),
-            before,
-            after,
-            cursor,
-        )
-        .await;
+        let res = process_request(self.pg_client.clone(), self.rocks_db.clone(), payload).await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
-        Ok(json!(res?))
+        Ok(json!(res))
     }
 
     pub async fn search_assets(&self, payload: SearchAssets) -> Result<Value, DasApiError> {
@@ -400,34 +318,14 @@ where
         self.metrics.inc_search_asset_requests(&label);
         let latency_timer = Instant::now();
 
-        let query: SearchAssetsQuery = payload.clone().try_into()?;
-
-        let limit = payload.limit;
-        let page = payload.page;
-        let before = payload.before;
-        let after = payload.after;
-        let cursor = payload.cursor;
-        validate_basic_pagination(&limit, &page, &before, &after, &cursor)?;
-
-        let res = search_assets(
-            self.pg_client.clone(),
-            self.rocks_db.clone(),
-            query,
-            payload.sort_by.unwrap_or_default(),
-            limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
-            page.map(|p| p as u64),
-            before,
-            after,
-            cursor,
-        )
-        .await;
+        let res = process_request(self.pg_client.clone(), self.rocks_db.clone(), payload).await?;
 
         self.metrics
             .set_search_asset_latency(&label, latency_timer.elapsed().as_millis() as f64);
         self.metrics
             .set_latency("search_asset", latency_timer.elapsed().as_millis() as f64);
 
-        Ok(json!(res?))
+        Ok(json!(res))
     }
 
     pub async fn get_grouping(&self, payload: GetGrouping) -> Result<Value, DasApiError> {
@@ -451,4 +349,39 @@ where
 
         Ok(json!(res))
     }
+}
+
+async fn process_request<T>(
+    pg_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
+    rocks_db: Arc<Storage>,
+    payload: T,
+) -> Result<AssetList, DasApiError>
+where
+    T: TryInto<SearchAssetsQuery>,
+    T: RequestWithPagination,
+    T::Error: Into<UsecaseError>,
+{
+    let pagination = payload.get_all_pagination_parameters();
+    let sort_by = payload.get_sort_parameter().unwrap_or_default();
+
+    let query: SearchAssetsQuery = payload
+        .try_into()
+        .map_err(|e| DasApiError::from(e.into()))?;
+
+    validate_basic_pagination(&pagination)?;
+
+    let res = search_assets(
+        pg_client,
+        rocks_db,
+        query,
+        sort_by,
+        pagination.limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
+        pagination.page.map(|p| p as u64),
+        pagination.before,
+        pagination.after,
+        pagination.cursor,
+    )
+    .await?;
+
+    Ok(res)
 }

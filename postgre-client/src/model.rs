@@ -90,9 +90,19 @@ pub struct AssetSorting {
 
 // As a value for enum variants DB column used
 pub enum AssetSortBy {
-    SlotCreated(String),
-    SlotUpdated(String),
-    Key(String),
+    SlotCreated,
+    SlotUpdated,
+    Key,
+}
+
+impl Display for AssetSortBy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AssetSortBy::SlotCreated => write!(f, "ast_slot_created"),
+            AssetSortBy::SlotUpdated => write!(f, "ast_slot_updated"),
+            AssetSortBy::Key => write!(f, "ast_pubkey"),
+        }
+    }
 }
 
 pub enum AssetSortDirection {
@@ -114,14 +124,10 @@ impl From<entities::api_req_params::AssetSorting> for AssetSorting {
 impl From<entities::api_req_params::AssetSortBy> for AssetSortBy {
     fn from(sort_by: entities::api_req_params::AssetSortBy) -> Self {
         match sort_by {
-            entities::api_req_params::AssetSortBy::Created => {
-                Self::SlotCreated("ast_slot_created".to_string())
-            }
+            entities::api_req_params::AssetSortBy::Created => Self::SlotCreated,
             entities::api_req_params::AssetSortBy::RecentAction
-            | entities::api_req_params::AssetSortBy::Updated => {
-                Self::SlotUpdated("ast_slot_updated".to_string())
-            }
-            _ => Self::Key("ast_pubkey".to_string()),
+            | entities::api_req_params::AssetSortBy::Updated => Self::SlotUpdated,
+            _ => Self::Key,
         }
     }
 }

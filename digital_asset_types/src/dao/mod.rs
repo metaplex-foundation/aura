@@ -23,16 +23,6 @@ pub struct GroupingSize {
     pub size: u64,
 }
 
-pub enum Pagination {
-    Keyset {
-        before: Option<String>,
-        after: Option<String>,
-    },
-    Page {
-        page: u64,
-    },
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConditionType {
     Any,

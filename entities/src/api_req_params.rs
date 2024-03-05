@@ -18,6 +18,14 @@ impl Default for AssetSorting {
     }
 }
 
+pub struct Pagination {
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub cursor: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 pub enum AssetSortBy {
     #[serde(rename = "created")]
