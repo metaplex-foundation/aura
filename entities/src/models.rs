@@ -292,23 +292,24 @@ pub struct ForkedItem {
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TokenAccountOwnerIdxKey {
     pub owner: Pubkey,
-    pub slot: u64,
     pub token_account: Pubkey,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
-pub struct TokenAccountMintIdxKey {
-    pub mint: Pubkey,
-    pub slot: u64,
-    pub token_account: Pubkey,
+    pub is_zero_balance: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TokenAccountMintOwnerIdxKey {
     pub mint: Pubkey,
     pub owner: Pubkey,
-    pub slot: u64,
     pub token_account: Pubkey,
+    pub is_zero_balance: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct TokenAccountIterableIdx {
+    pub mint: Option<Pubkey>,
+    pub owner: Pubkey,
+    pub token_account: Pubkey,
+    pub is_zero_balance: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
@@ -320,13 +321,6 @@ pub struct TokenAccount {
     pub amount: u64,
     pub delegated_amount: u64,
     pub frozen: bool,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct TokenAccountsWithPagination {
-    pub asset_signatures: Vec<TokenAccount>,
-    pub before: Option<u64>,
-    pub after: Option<u64>,
 }
 
 #[cfg(test)]

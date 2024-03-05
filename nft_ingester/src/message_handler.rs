@@ -170,15 +170,7 @@ impl MessageHandler {
         let key_bytes = key.0.to_vec();
         match &parsing_result {
             TokenProgramAccount::TokenAccount(ta) => {
-                // geyser can send us old accounts with zero token balances for some reason
-                // we should not process it
-                // asset supply we track at mint update
-                if ta.amount == 0 {
-                    return;
-                }
-
                 let frozen = matches!(ta.state, spl_token::state::AccountState::Frozen);
-
                 update_or_insert!(
                     self.buffer.token_accs,
                     Pubkey::from(key.0),

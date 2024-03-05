@@ -444,8 +444,6 @@ where
         let GetTokenAccounts {
             limit,
             page,
-            before,
-            after,
             owner,
             mint,
             options,
@@ -460,16 +458,14 @@ where
             .map(|mint| Pubkey::from_str(&mint))
             .transpose()
             .unwrap();
-        validate_basic_pagination(&limit, &page, &before, &after)?;
 
+        validate_basic_pagination(&limit, &page, &None, &None)?;
         let res = get_token_accounts(
             self.rocks_db.clone(),
             owner,
             mint,
             limit.unwrap_or(DEFAULT_LIMIT as u32).into(),
             page.map(|page| page as u64),
-            before,
-            after,
             options.map(|op| op.show_zero_balance).unwrap_or_default(),
         )
         .await?;

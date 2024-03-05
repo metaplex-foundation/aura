@@ -135,8 +135,6 @@ pub struct DisplayOptions {
 pub struct GetTokenAccounts {
     pub limit: Option<u32>,
     pub page: Option<u32>,
-    pub before: Option<String>,
-    pub after: Option<String>,
     pub owner: Option<String>,
     pub mint: Option<String>,
     #[serde(default, alias = "displayOptions")]

@@ -93,49 +93,49 @@ pub fn decode_u64(bytes: Vec<u8>) -> Result<u64> {
     Ok(slot)
 }
 
-pub fn decode_pubkey_u64_pubkey(bytes: Vec<u8>) -> Result<(Pubkey, u64, Pubkey)> {
-    let u64_size = std::mem::size_of::<u64>();
+pub fn decode_pubkeyx2_bool(bytes: Vec<u8>) -> Result<(Pubkey, Pubkey, bool)> {
+    let u8_size = std::mem::size_of::<u8>();
     let pubkey_size = std::mem::size_of::<Pubkey>();
-    if bytes.len() != u64_size + pubkey_size * 2 {
-        return Err(crate::StorageError::InvalidKeyLength);
-    }
-    let pk1 = Pubkey::try_from(&bytes[..pubkey_size])?;
-    let slot = u64::from_be_bytes(bytes[pubkey_size..pubkey_size + u64_size].try_into()?);
-    let pk2 = Pubkey::try_from(&bytes[pubkey_size + u64_size..])?;
-    Ok((pk1, slot, pk2))
-}
-
-pub fn encode_pubkey_u64_pubkey(ask: (Pubkey, u64, Pubkey)) -> Vec<u8> {
-    let u64_size = std::mem::size_of::<u64>();
-    let pubkey_size = std::mem::size_of::<Pubkey>();
-    let mut key = Vec::with_capacity(u64_size + pubkey_size * 2);
-    key.extend_from_slice(&ask.0.to_bytes());
-    key.extend_from_slice(&ask.1.to_be_bytes());
-    key.extend_from_slice(&ask.2.to_bytes());
-    key
-}
-
-pub fn decode_pubkeyx2_u64_pubkey(bytes: Vec<u8>) -> Result<(Pubkey, Pubkey, u64, Pubkey)> {
-    let u64_size = std::mem::size_of::<u64>();
-    let pubkey_size = std::mem::size_of::<Pubkey>();
-    if bytes.len() != u64_size + pubkey_size * 3 {
+    if bytes.len() != pubkey_size * 2 + u8_size {
         return Err(crate::StorageError::InvalidKeyLength);
     }
     let pk1 = Pubkey::try_from(&bytes[..pubkey_size])?;
     let pk2 = Pubkey::try_from(&bytes[pubkey_size..pubkey_size * 2])?;
-    let slot = u64::from_be_bytes(bytes[pubkey_size * 2..pubkey_size * 2 + u64_size].try_into()?);
-    let pk3 = Pubkey::try_from(&bytes[pubkey_size * 2 + u64_size..])?;
-    Ok((pk1, pk2, slot, pk3))
+    let bool_val = u8::from_be_bytes(bytes[pubkey_size * 2..].try_into()?) != 0;
+    Ok((pk1, pk2, bool_val))
 }
 
-pub fn encode_pubkeyx2_u64_pubkey(ask: (Pubkey, Pubkey, u64, Pubkey)) -> Vec<u8> {
-    let u64_size = std::mem::size_of::<u64>();
+pub fn encode_pubkeyx2_bool(ask: (Pubkey, Pubkey, bool)) -> Vec<u8> {
+    let u8_size = std::mem::size_of::<u8>();
     let pubkey_size = std::mem::size_of::<Pubkey>();
-    let mut key = Vec::with_capacity(u64_size + pubkey_size * 3);
+    let mut key = Vec::with_capacity(pubkey_size * 2 + u8_size);
     key.extend_from_slice(&ask.0.to_bytes());
     key.extend_from_slice(&ask.1.to_bytes());
-    key.extend_from_slice(&ask.2.to_be_bytes());
-    key.extend_from_slice(&ask.3.to_bytes());
+    key.extend_from_slice((ask.2 as u8).to_be_bytes().as_slice());
+    key
+}
+
+pub fn decode_pubkeyx3_bool(bytes: Vec<u8>) -> Result<(Pubkey, Pubkey, Pubkey, bool)> {
+    let u8_size = std::mem::size_of::<u8>();
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    if bytes.len() != pubkey_size * 3 + u8_size {
+        return Err(crate::StorageError::InvalidKeyLength);
+    }
+    let pk1 = Pubkey::try_from(&bytes[..pubkey_size])?;
+    let pk2 = Pubkey::try_from(&bytes[pubkey_size..pubkey_size * 2])?;
+    let pk3 = Pubkey::try_from(&bytes[pubkey_size * 2..pubkey_size * 3])?;
+    let bool_val = u8::from_be_bytes(bytes[pubkey_size * 3..].try_into()?) != 0;
+    Ok((pk1, pk2, pk3, bool_val))
+}
+
+pub fn encode_pubkeyx3_bool(ask: (Pubkey, Pubkey, Pubkey, bool)) -> Vec<u8> {
+    let bool_size = std::mem::size_of::<bool>();
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    let mut key = Vec::with_capacity(pubkey_size * 3 + bool_size);
+    key.extend_from_slice(&ask.0.to_bytes());
+    key.extend_from_slice(&ask.1.to_bytes());
+    key.extend_from_slice(&ask.2.to_bytes());
+    key.extend_from_slice((ask.3 as u8).to_be_bytes().as_slice());
     key
 }
 
@@ -195,33 +195,33 @@ mod tests {
     }
 
     #[test]
-    fn test_pubkey_u64_pubkey() {
-        let pk1 = Pubkey::new_unique(); // or some other way to create a Pubkey
-        let slot = 12345u64;
-        let pk2 = Pubkey::new_unique(); // or some other way to create a Pubkey
-
-        let encoded = encode_pubkey_u64_pubkey((pk1, slot, pk2));
-        let decoded = decode_pubkey_u64_pubkey(encoded).unwrap();
-
-        assert_eq!(decoded.0, pk1);
-        assert_eq!(decoded.1, slot);
-        assert_eq!(decoded.2, pk2);
-    }
-
-    #[test]
-    fn test_pubkeyx2_u64_pubkey() {
+    fn test_pubkey2_bool() {
         let pk1 = Pubkey::new_unique(); // or some other way to create a Pubkey
         let pk2 = Pubkey::new_unique(); // or some other way to create a Pubkey
-        let slot = 12345u64;
-        let pk3 = Pubkey::new_unique(); // or some other way to create a Pubkey
+        let bool_val = true;
 
-        let encoded = encode_pubkeyx2_u64_pubkey((pk1, pk2, slot, pk3));
-        let decoded = decode_pubkeyx2_u64_pubkey(encoded).unwrap();
+        let encoded = encode_pubkeyx2_bool((pk1, pk2, bool_val));
+        let decoded = decode_pubkeyx2_bool(encoded).unwrap();
 
         assert_eq!(decoded.0, pk1);
         assert_eq!(decoded.1, pk2);
-        assert_eq!(decoded.2, slot);
-        assert_eq!(decoded.3, pk3);
+        assert_eq!(decoded.2, bool_val);
+    }
+
+    #[test]
+    fn test_pubkeyx3_bool() {
+        let pk1 = Pubkey::new_unique(); // or some other way to create a Pubkey
+        let pk2 = Pubkey::new_unique(); // or some other way to create a Pubkey
+        let pk3 = Pubkey::new_unique(); // or some other way to create a Pubkey
+        let bool_val = false;
+
+        let encoded = encode_pubkeyx3_bool((pk1, pk2, pk3, bool_val));
+        let decoded = decode_pubkeyx3_bool(encoded).unwrap();
+
+        assert_eq!(decoded.0, pk1);
+        assert_eq!(decoded.1, pk2);
+        assert_eq!(decoded.2, pk3);
+        assert_eq!(decoded.3, bool_val);
     }
 
     // Add more tests as needed...

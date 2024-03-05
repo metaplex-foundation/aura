@@ -26,6 +26,8 @@ pub enum UsecaseError {
     InvalidGroupingKey(String),
     #[error("Bigtable: {0}")]
     Bigtable(String),
+    #[error("InvalidParameters: {0}")]
+    InvalidParameters(String),
 }
 
 impl From<ClientError> for UsecaseError {

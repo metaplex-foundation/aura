@@ -8,9 +8,7 @@ use asset::{
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
-use crate::columns::{
-    TokenAccount, TokenAccountMintIdx, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx,
-};
+use crate::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::editions::TokenMetadataEdition;
 pub use asset::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
@@ -80,7 +78,6 @@ pub struct Storage {
     pub token_metadata_edition_cbor: Column<TokenMetadataEdition>,
     pub token_accounts: Column<TokenAccount>,
     pub token_account_owner_idx: Column<TokenAccountOwnerIdx>,
-    pub token_account_mint_idx: Column<TokenAccountMintIdx>,
     pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
@@ -121,7 +118,6 @@ impl Storage {
         let asset_static_data_deprecated = Self::column(db.clone());
         let token_accounts = Self::column(db.clone());
         let token_account_owner_idx = Self::column(db.clone());
-        let token_account_mint_idx = Self::column(db.clone());
         let token_account_mint_owner_idx = Self::column(db.clone());
 
         Self {
@@ -153,7 +149,6 @@ impl Storage {
             token_metadata_edition_cbor,
             token_accounts,
             token_account_owner_idx,
-            token_account_mint_idx,
             asset_static_data_deprecated,
             red_metrics,
             token_account_mint_owner_idx,
@@ -220,7 +215,6 @@ impl Storage {
             Self::new_cf_descriptor::<AssetStaticDetailsDeprecated>(),
             Self::new_cf_descriptor::<TokenAccount>(),
             Self::new_cf_descriptor::<TokenAccountOwnerIdx>(),
-            Self::new_cf_descriptor::<TokenAccountMintIdx>(),
             Self::new_cf_descriptor::<TokenAccountMintOwnerIdx>(),
         ]
     }
@@ -450,12 +444,6 @@ impl Storage {
             TokenAccountOwnerIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_accounts_owner_idx",
-                    asset::AssetStaticDetails::merge_keep_existing,
-                );
-            }
-            TokenAccountMintIdx::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_token_accounts_mint_idx",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }

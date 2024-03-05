@@ -1,17 +1,14 @@
 use std::{collections::HashMap, marker::PhantomData, sync::Arc, vec};
 
 use bincode::{deserialize, serialize};
-use entities::models::{
-    TokenAccountMintIdxKey, TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey,
-};
+use entities::models::{TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey};
 use log::error;
 use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
 use serde::{de::DeserializeOwned, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
 use crate::key_encoders::{
-    decode_pubkey_u64_pubkey, decode_pubkeyx2_u64_pubkey, encode_pubkey_u64_pubkey,
-    encode_pubkeyx2_u64_pubkey,
+    decode_pubkeyx2_bool, decode_pubkeyx3_bool, encode_pubkeyx2_bool, encode_pubkeyx3_bool,
 };
 use crate::{Result, StorageError};
 
@@ -473,9 +470,6 @@ pub mod columns {
     pub struct TokenAccountOwnerIdx {}
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct TokenAccountMintIdx {}
-
-    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct TokenAccountMintOwnerIdx {}
 }
 
@@ -486,35 +480,15 @@ impl TypedColumn for columns::TokenAccountOwnerIdx {
     const NAME: &'static str = "TOKEN_ACCOUNTS_OWNER_IDX";
 
     fn encode_key(key: TokenAccountOwnerIdxKey) -> Vec<u8> {
-        encode_pubkey_u64_pubkey((key.owner, key.slot, key.token_account))
+        encode_pubkeyx2_bool((key.owner, key.token_account, key.is_zero_balance))
     }
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        let (owner, slot, token_account) = decode_pubkey_u64_pubkey(bytes)?;
+        let (owner, token_account, is_zero_balance) = decode_pubkeyx2_bool(bytes)?;
         Ok(TokenAccountOwnerIdxKey {
             owner,
-            slot,
             token_account,
-        })
-    }
-}
-
-impl TypedColumn for columns::TokenAccountMintIdx {
-    type KeyType = TokenAccountMintIdxKey;
-
-    type ValueType = Self;
-    const NAME: &'static str = "TOKEN_ACCOUNTS_MINT_IDX";
-
-    fn encode_key(key: TokenAccountMintIdxKey) -> Vec<u8> {
-        encode_pubkey_u64_pubkey((key.mint, key.slot, key.token_account))
-    }
-
-    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        let (mint, slot, token_account) = decode_pubkey_u64_pubkey(bytes)?;
-        Ok(TokenAccountMintIdxKey {
-            mint,
-            slot,
-            token_account,
+            is_zero_balance,
         })
     }
 }
@@ -526,16 +500,16 @@ impl TypedColumn for columns::TokenAccountMintOwnerIdx {
     const NAME: &'static str = "TOKEN_ACCOUNTS_MINT_OWNER_IDX";
 
     fn encode_key(key: TokenAccountMintOwnerIdxKey) -> Vec<u8> {
-        encode_pubkeyx2_u64_pubkey((key.mint, key.owner, key.slot, key.token_account))
+        encode_pubkeyx3_bool((key.mint, key.owner, key.token_account, key.is_zero_balance))
     }
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        let (mint, owner, slot, token_account) = decode_pubkeyx2_u64_pubkey(bytes)?;
+        let (mint, owner, token_account, is_zero_balance) = decode_pubkeyx3_bool(bytes)?;
         Ok(TokenAccountMintOwnerIdxKey {
             mint,
             owner,
-            slot,
             token_account,
+            is_zero_balance,
         })
     }
 }

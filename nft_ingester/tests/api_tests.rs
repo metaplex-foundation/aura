@@ -12,7 +12,8 @@ mod tests {
     use blockbuster::token_metadata::state::{
         Data, Key, Metadata, TokenStandard as BLKTokenStandard,
     };
-    use digital_asset_types::rpc::response::AssetList;
+    use digital_asset_types::rpc::response::{AssetList, TokenAccountsList};
+    use entities::api_req_params::{DisplayOptions, GetTokenAccounts};
     use entities::{
         api_req_params::{AssetSortBy, AssetSortDirection, AssetSorting, GetAsset, SearchAssets},
         enums::{
@@ -1029,6 +1030,191 @@ mod tests {
         assert_eq!(response["burnt"], true);
 
         keep_running.store(false, Ordering::SeqCst);
+
+        env.teardown().await;
+    }
+
+    #[tokio::test]
+    async fn test_token_accounts() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+        );
+
+        let buffer = Arc::new(Buffer::new());
+        let token_updates_processor = TokenAccsProcessor::new(
+            env.rocks_env.storage.clone(),
+            buffer.clone(),
+            Arc::new(IngesterMetricsConfig::new()),
+            1,
+        );
+
+        let mut token_accounts = HashMap::new();
+        let first_owner = Pubkey::new_unique();
+        let second_owner = Pubkey::new_unique();
+        let first_mint = Pubkey::new_unique();
+        let second_mint = Pubkey::new_unique();
+        for _ in 0..1000 {
+            let pk = Pubkey::new_unique();
+            token_accounts.insert(
+                pk,
+                TokenAccount {
+                    pubkey: pk,
+                    mint: Pubkey::new_unique(),
+                    delegate: None,
+                    owner: first_owner,
+                    frozen: false,
+                    delegated_amount: 0,
+                    slot_updated: 10,
+                    amount: 1050,
+                    write_version: 10,
+                },
+            );
+            let pk = Pubkey::new_unique();
+            token_accounts.insert(
+                pk,
+                TokenAccount {
+                    pubkey: pk,
+                    mint: Pubkey::new_unique(),
+                    delegate: None,
+                    owner: second_owner,
+                    frozen: false,
+                    delegated_amount: 0,
+                    slot_updated: 10,
+                    amount: 1050,
+                    write_version: 10,
+                },
+            );
+        }
+        // Insert zero amounts
+        for _ in 0..10 {
+            let pk = Pubkey::new_unique();
+            token_accounts.insert(
+                pk,
+                TokenAccount {
+                    pubkey: pk,
+                    mint: Pubkey::new_unique(),
+                    delegate: None,
+                    owner: first_owner,
+                    frozen: false,
+                    delegated_amount: 0,
+                    slot_updated: 10,
+                    amount: 0,
+                    write_version: 10,
+                },
+            );
+            let pk = Pubkey::new_unique();
+            token_accounts.insert(
+                pk,
+                TokenAccount {
+                    pubkey: pk,
+                    mint: Pubkey::new_unique(),
+                    delegate: None,
+                    owner: second_owner,
+                    frozen: false,
+                    delegated_amount: 0,
+                    slot_updated: 10,
+                    amount: 0,
+                    write_version: 10,
+                },
+            );
+        }
+        let first_owner_with_mint_count = 143;
+        for _ in 0..first_owner_with_mint_count {
+            let pk = Pubkey::new_unique();
+            token_accounts.insert(
+                pk,
+                TokenAccount {
+                    pubkey: pk,
+                    mint: second_mint,
+                    delegate: None,
+                    owner: second_owner,
+                    frozen: false,
+                    delegated_amount: 0,
+                    slot_updated: 10,
+                    amount: 140,
+                    write_version: 10,
+                },
+            );
+        }
+
+        token_updates_processor
+            .transform_and_save_token_accs(&token_accounts)
+            .await;
+
+        let payload = GetTokenAccounts {
+            limit: Some(10),
+            page: None,
+            owner: Some(first_owner.to_string()),
+            mint: None,
+            options: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(parsed_response.token_accounts.len(), 10);
+
+        let payload = GetTokenAccounts {
+            limit: Some(1000),
+            page: Some(2),
+            owner: Some(first_owner.to_string()),
+            mint: None,
+            options: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(parsed_response.token_accounts.len(), 0);
+
+        let payload = GetTokenAccounts {
+            limit: Some(1000),
+            page: Some(2),
+            owner: Some(first_owner.to_string()),
+            mint: None,
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(parsed_response.token_accounts.len(), 10);
+
+        let payload = GetTokenAccounts {
+            limit: Some(1000),
+            page: Some(1),
+            owner: Some(second_owner.to_string()),
+            mint: Some(second_mint.to_string()),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(
+            parsed_response.token_accounts.len(),
+            first_owner_with_mint_count
+        );
+
+        let payload = GetTokenAccounts {
+            limit: None,
+            page: None,
+            owner: Some(second_owner.to_string()),
+            mint: Some(first_mint.to_string()),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(parsed_response.token_accounts.len(), 0);
 
         env.teardown().await;
     }
