@@ -240,66 +240,46 @@ impl TokenAccsProcessor {
         &self,
         accs_to_save: &HashMap<Pubkey, TokenAccount>,
     ) {
-        let generate_keys = |ta: &TokenAccount, is_zero_balance: bool| {
-            (
-                TokenAccountOwnerIdxKey {
-                    owner: ta.owner,
-                    token_account: ta.pubkey,
-                    is_zero_balance,
-                },
-                TokenAccountMintOwnerIdxKey {
-                    mint: ta.mint,
-                    owner: ta.owner,
-                    token_account: ta.pubkey,
-                    is_zero_balance,
-                },
-            )
-        };
-
-        let (delete_keys_owner, delete_keys_mint_owner): (Vec<_>, Vec<_>) = accs_to_save
-            .values()
-            .map(|ta| generate_keys(ta, !ta.amount.is_zero()))
-            .unzip();
-
-        self.finalize_processing(
-            future::try_join(
-                self.rocks_db
-                    .token_account_owner_idx
-                    .delete_batch(delete_keys_owner),
-                self.rocks_db
-                    .token_account_mint_owner_idx
-                    .delete_batch(delete_keys_mint_owner),
-            ),
-            accs_to_save
-                .values()
-                .map(|a| (a.slot_updated as u64, a.mint))
-                .collect::<Vec<_>>(),
-            "token_accounts_idx_delete",
-        )
-        .await;
-
-        let (put_batch_owner, put_batch_mint_owner): (HashMap<_, _>, HashMap<_, _>) = accs_to_save
-            .values()
-            .map(|ta| generate_keys(ta, ta.amount.is_zero()))
-            .map(|(owner_key, mint_owner_key)| {
-                (
-                    (owner_key, TokenAccountOwnerIdx {}),
-                    (mint_owner_key, TokenAccountMintOwnerIdx {}),
-                )
-            })
-            .unzip();
-
         self.finalize_processing(
             future::try_join3(
                 self.rocks_db
                     .token_accounts
                     .merge_batch(accs_to_save.clone()),
-                self.rocks_db
-                    .token_account_owner_idx
-                    .put_batch(put_batch_owner),
-                self.rocks_db
-                    .token_account_mint_owner_idx
-                    .put_batch(put_batch_mint_owner),
+                self.rocks_db.token_account_owner_idx.merge_batch(
+                    accs_to_save
+                        .values()
+                        .map(|ta| {
+                            (
+                                TokenAccountOwnerIdxKey {
+                                    owner: ta.owner,
+                                    token_account: ta.pubkey,
+                                },
+                                TokenAccountOwnerIdx {
+                                    is_zero_balance: ta.amount.is_zero(),
+                                    write_version: ta.write_version,
+                                },
+                            )
+                        })
+                        .collect(),
+                ),
+                self.rocks_db.token_account_mint_owner_idx.merge_batch(
+                    accs_to_save
+                        .values()
+                        .map(|ta| {
+                            (
+                                TokenAccountMintOwnerIdxKey {
+                                    mint: ta.mint,
+                                    owner: ta.owner,
+                                    token_account: ta.pubkey,
+                                },
+                                TokenAccountMintOwnerIdx {
+                                    is_zero_balance: ta.amount.is_zero(),
+                                    write_version: ta.write_version,
+                                },
+                            )
+                        })
+                        .collect(),
+                ),
             ),
             accs_to_save
                 .values()

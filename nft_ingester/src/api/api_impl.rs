@@ -7,7 +7,6 @@ use digital_asset_types::dapi::{
 use interface::proofs::ProofChecker;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
-use std::str::FromStr;
 use std::{sync::Arc, time::Instant};
 
 use crate::api::config::Config;
@@ -451,16 +450,8 @@ where
             options,
         } = payload;
 
-        // TODO: change after GetSignaturesForAssets merge
-        let owner = owner
-            .map(|owner| Pubkey::from_str(&owner))
-            .transpose()
-            .unwrap();
-        let mint = mint
-            .map(|mint| Pubkey::from_str(&mint))
-            .transpose()
-            .unwrap();
-
+        let owner = validate_opt_pubkey(&owner)?;
+        let mint = validate_opt_pubkey(&mint)?;
         validate_basic_pagination(&limit, &page, &None, &None)?;
         let res = get_token_accounts(
             self.rocks_db.clone(),

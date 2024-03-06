@@ -120,49 +120,41 @@ pub fn encode_asset_signature_key(ask: AssetSignatureKey) -> Vec<u8> {
     key
 }
 
-pub fn decode_pubkeyx2_bool(bytes: Vec<u8>) -> Result<(Pubkey, Pubkey, bool)> {
-    let u8_size = std::mem::size_of::<u8>();
+pub fn decode_pubkeyx2(bytes: Vec<u8>) -> Result<(Pubkey, Pubkey)> {
     let pubkey_size = std::mem::size_of::<Pubkey>();
-    if bytes.len() != pubkey_size * 2 + u8_size {
+    if bytes.len() != pubkey_size * 2 {
         return Err(crate::StorageError::InvalidKeyLength);
     }
     let pk1 = Pubkey::try_from(&bytes[..pubkey_size])?;
-    let pk2 = Pubkey::try_from(&bytes[pubkey_size..pubkey_size * 2])?;
-    let bool_val = u8::from_be_bytes(bytes[pubkey_size * 2..].try_into()?) != 0;
-    Ok((pk1, pk2, bool_val))
+    let pk2 = Pubkey::try_from(&bytes[pubkey_size..])?;
+    Ok((pk1, pk2))
 }
 
-pub fn encode_pubkeyx2_bool(ask: (Pubkey, Pubkey, bool)) -> Vec<u8> {
-    let u8_size = std::mem::size_of::<u8>();
+pub fn encode_pubkeyx2(ask: (Pubkey, Pubkey)) -> Vec<u8> {
     let pubkey_size = std::mem::size_of::<Pubkey>();
-    let mut key = Vec::with_capacity(pubkey_size * 2 + u8_size);
+    let mut key = Vec::with_capacity(pubkey_size * 2);
     key.extend_from_slice(&ask.0.to_bytes());
     key.extend_from_slice(&ask.1.to_bytes());
-    key.extend_from_slice((ask.2 as u8).to_be_bytes().as_slice());
     key
 }
 
-pub fn decode_pubkeyx3_bool(bytes: Vec<u8>) -> Result<(Pubkey, Pubkey, Pubkey, bool)> {
-    let u8_size = std::mem::size_of::<u8>();
+pub fn decode_pubkeyx3(bytes: Vec<u8>) -> Result<(Pubkey, Pubkey, Pubkey)> {
     let pubkey_size = std::mem::size_of::<Pubkey>();
-    if bytes.len() != pubkey_size * 3 + u8_size {
+    if bytes.len() != pubkey_size * 3 {
         return Err(crate::StorageError::InvalidKeyLength);
     }
     let pk1 = Pubkey::try_from(&bytes[..pubkey_size])?;
     let pk2 = Pubkey::try_from(&bytes[pubkey_size..pubkey_size * 2])?;
-    let pk3 = Pubkey::try_from(&bytes[pubkey_size * 2..pubkey_size * 3])?;
-    let bool_val = u8::from_be_bytes(bytes[pubkey_size * 3..].try_into()?) != 0;
-    Ok((pk1, pk2, pk3, bool_val))
+    let pk3 = Pubkey::try_from(&bytes[pubkey_size * 2..])?;
+    Ok((pk1, pk2, pk3))
 }
 
-pub fn encode_pubkeyx3_bool(ask: (Pubkey, Pubkey, Pubkey, bool)) -> Vec<u8> {
-    let bool_size = std::mem::size_of::<bool>();
+pub fn encode_pubkeyx3(ask: (Pubkey, Pubkey, Pubkey)) -> Vec<u8> {
     let pubkey_size = std::mem::size_of::<Pubkey>();
-    let mut key = Vec::with_capacity(pubkey_size * 3 + bool_size);
+    let mut key = Vec::with_capacity(pubkey_size * 3);
     key.extend_from_slice(&ask.0.to_bytes());
     key.extend_from_slice(&ask.1.to_bytes());
     key.extend_from_slice(&ask.2.to_bytes());
-    key.extend_from_slice((ask.3 as u8).to_be_bytes().as_slice());
     key
 }
 
@@ -222,33 +214,29 @@ mod tests {
     }
 
     #[test]
-    fn test_pubkey2_bool() {
+    fn test_pubkey2() {
         let pk1 = Pubkey::new_unique(); // or some other way to create a Pubkey
         let pk2 = Pubkey::new_unique(); // or some other way to create a Pubkey
-        let bool_val = true;
 
-        let encoded = encode_pubkeyx2_bool((pk1, pk2, bool_val));
-        let decoded = decode_pubkeyx2_bool(encoded).unwrap();
+        let encoded = encode_pubkeyx2((pk1, pk2));
+        let decoded = decode_pubkeyx2(encoded).unwrap();
 
         assert_eq!(decoded.0, pk1);
         assert_eq!(decoded.1, pk2);
-        assert_eq!(decoded.2, bool_val);
     }
 
     #[test]
-    fn test_pubkeyx3_bool() {
+    fn test_pubkeyx3() {
         let pk1 = Pubkey::new_unique(); // or some other way to create a Pubkey
         let pk2 = Pubkey::new_unique(); // or some other way to create a Pubkey
         let pk3 = Pubkey::new_unique(); // or some other way to create a Pubkey
-        let bool_val = false;
 
-        let encoded = encode_pubkeyx3_bool((pk1, pk2, pk3, bool_val));
+        let encoded = encode_pubkeyx3((pk1, pk2, pk3));
         let decoded = decode_pubkeyx3_bool(encoded).unwrap();
 
         assert_eq!(decoded.0, pk1);
         assert_eq!(decoded.1, pk2);
         assert_eq!(decoded.2, pk3);
-        assert_eq!(decoded.3, bool_val);
     }
 
     #[test]

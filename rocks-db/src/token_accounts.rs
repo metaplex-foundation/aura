@@ -1,3 +1,4 @@
+use crate::columns::TokenAccountMintOwnerIdx;
 use crate::Storage;
 use async_trait::async_trait;
 use entities::models::{
@@ -28,14 +29,12 @@ impl TokenAccountsGetter for Storage {
                     mint,
                     owner: owner.unwrap_or_default(),
                     token_account: Pubkey::default(),
-                    is_zero_balance: false,
                 }),
             None => {
                 self.token_account_owner_idx.iter(TokenAccountOwnerIdxKey {
                     // We have check above, so this is safe
                     owner: owner.expect("Expected owner when mint is None"),
                     token_account: Pubkey::default(),
-                    is_zero_balance: false,
                 })
             }
         };
@@ -46,28 +45,36 @@ impl TokenAccountsGetter for Storage {
                     .unwrap_or_default() as usize,
             )
             .filter_map(std::result::Result::ok)
-            .flat_map(move |(key, _)| match mint {
-                Some(_) => {
-                    let key = self
-                        .token_account_mint_owner_idx
-                        .decode_key(key.to_vec())
-                        .ok()?;
-                    Some(TokenAccountIterableIdx {
-                        mint: Some(key.mint),
-                        owner: key.owner,
-                        token_account: key.token_account,
-                        is_zero_balance: key.is_zero_balance,
-                    })
-                }
-                None => {
-                    let key = self.token_account_owner_idx.decode_key(key.to_vec()).ok()?;
-                    Some(TokenAccountIterableIdx {
-                        mint: None,
-                        owner: key.owner,
-                        token_account: key.token_account,
-                        is_zero_balance: key.is_zero_balance,
-                    })
-                }
+            .flat_map(move |(key, value)| {
+                let mut res = match mint {
+                    Some(_) => {
+                        let key = self
+                            .token_account_mint_owner_idx
+                            .decode_key(key.to_vec())
+                            .ok()?;
+                        TokenAccountIterableIdx {
+                            mint: Some(key.mint),
+                            owner: key.owner,
+                            token_account: key.token_account,
+                            is_zero_balance: false,
+                        }
+                    }
+                    None => {
+                        let key = self.token_account_owner_idx.decode_key(key.to_vec()).ok()?;
+                        TokenAccountIterableIdx {
+                            mint: None,
+                            owner: key.owner,
+                            token_account: key.token_account,
+                            is_zero_balance: false,
+                        }
+                    }
+                };
+                // TokenAccountMintOwnerIdx and TokenAccountOwnerIdx have the same data struct
+                let value: TokenAccountMintOwnerIdx =
+                    bincode::deserialize(value.to_vec().as_slice()).ok()?;
+                res.is_zero_balance = value.is_zero_balance;
+
+                Some(res)
             }))
     }
 

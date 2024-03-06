@@ -450,19 +450,19 @@ impl Storage {
             TokenAccount::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_accounts",
-                    TokenAccount::merge_accounts,
+                    TokenAccount::merge_values,
                 );
             }
             TokenAccountOwnerIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_accounts_owner_idx",
-                    asset::AssetStaticDetails::merge_keep_existing,
+                    TokenAccountOwnerIdx::merge_values,
                 );
             }
             TokenAccountMintOwnerIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_accounts_mint_owner_idx",
-                    asset::AssetStaticDetails::merge_keep_existing,
+                    TokenAccountMintOwnerIdx::merge_values,
                 );
             }
             _ => {}

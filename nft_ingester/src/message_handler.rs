@@ -167,15 +167,15 @@ impl MessageHandler {
         parsing_result: &'b TokenProgramAccount,
     ) {
         let key = *account_update.pubkey().unwrap();
-        let key_bytes = key.0.to_vec();
+        let key_bytes = key.0;
         match &parsing_result {
             TokenProgramAccount::TokenAccount(ta) => {
                 let frozen = matches!(ta.state, spl_token::state::AccountState::Frozen);
                 update_or_insert!(
                     self.buffer.token_accs,
-                    Pubkey::from(key.0),
+                    Pubkey::from(key_bytes),
                     TokenAccount {
-                        pubkey: Pubkey::from(key.0),
+                        pubkey: Pubkey::from(key_bytes),
                         mint: ta.mint,
                         delegate: ta.delegate.into(),
                         owner: ta.owner,
@@ -191,9 +191,9 @@ impl MessageHandler {
             TokenProgramAccount::Mint(m) => {
                 update_or_insert!(
                     self.buffer.mints,
-                    key_bytes.clone(),
+                    key_bytes.to_vec(),
                     Mint {
-                        pubkey: Pubkey::from(key.0),
+                        pubkey: Pubkey::from(key_bytes),
                         slot_updated: account_update.slot() as i64,
                         supply: m.supply as i64,
                         decimals: m.decimals as i32,

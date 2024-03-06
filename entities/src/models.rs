@@ -314,7 +314,6 @@ pub struct AssetSignatureWithPagination {
 pub struct TokenAccountOwnerIdxKey {
     pub owner: Pubkey,
     pub token_account: Pubkey,
-    pub is_zero_balance: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
@@ -322,7 +321,6 @@ pub struct TokenAccountMintOwnerIdxKey {
     pub mint: Pubkey,
     pub owner: Pubkey,
     pub token_account: Pubkey,
-    pub is_zero_balance: bool,
 }
 
 #[derive(Debug, Clone)]

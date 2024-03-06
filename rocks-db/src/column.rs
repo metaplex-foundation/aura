@@ -7,9 +7,7 @@ use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
 use serde::{de::DeserializeOwned, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
-use crate::key_encoders::{
-    decode_pubkeyx2_bool, decode_pubkeyx3_bool, encode_pubkeyx2_bool, encode_pubkeyx3_bool,
-};
+use crate::key_encoders::{decode_pubkeyx2, decode_pubkeyx3, encode_pubkeyx2, encode_pubkeyx3};
 use crate::{Result, StorageError};
 
 pub trait TypedColumn {
@@ -475,10 +473,16 @@ pub mod columns {
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct TokenAccountOwnerIdx {}
+    pub struct TokenAccountOwnerIdx {
+        pub is_zero_balance: bool,
+        pub write_version: u64,
+    }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct TokenAccountMintOwnerIdx {}
+    pub struct TokenAccountMintOwnerIdx {
+        pub is_zero_balance: bool,
+        pub write_version: u64,
+    }
 }
 
 impl TypedColumn for columns::TokenAccountOwnerIdx {
@@ -488,15 +492,14 @@ impl TypedColumn for columns::TokenAccountOwnerIdx {
     const NAME: &'static str = "TOKEN_ACCOUNTS_OWNER_IDX";
 
     fn encode_key(key: TokenAccountOwnerIdxKey) -> Vec<u8> {
-        encode_pubkeyx2_bool((key.owner, key.token_account, key.is_zero_balance))
+        encode_pubkeyx2((key.owner, key.token_account))
     }
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        let (owner, token_account, is_zero_balance) = decode_pubkeyx2_bool(bytes)?;
+        let (owner, token_account) = decode_pubkeyx2(bytes)?;
         Ok(TokenAccountOwnerIdxKey {
             owner,
             token_account,
-            is_zero_balance,
         })
     }
 }
@@ -508,16 +511,15 @@ impl TypedColumn for columns::TokenAccountMintOwnerIdx {
     const NAME: &'static str = "TOKEN_ACCOUNTS_MINT_OWNER_IDX";
 
     fn encode_key(key: TokenAccountMintOwnerIdxKey) -> Vec<u8> {
-        encode_pubkeyx3_bool((key.mint, key.owner, key.token_account, key.is_zero_balance))
+        encode_pubkeyx3((key.mint, key.owner, key.token_account))
     }
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        let (mint, owner, token_account, is_zero_balance) = decode_pubkeyx3_bool(bytes)?;
+        let (mint, owner, token_account) = decode_pubkeyx3(bytes)?;
         Ok(TokenAccountMintOwnerIdxKey {
             mint,
             owner,
             token_account,
-            is_zero_balance,
         })
     }
 }
@@ -538,40 +540,52 @@ impl TypedColumn for columns::TokenAccount {
     }
 }
 
-impl columns::TokenAccount {
-    pub fn merge_accounts(
-        _new_key: &[u8],
-        existing_val: Option<&[u8]>,
-        operands: &MergeOperands,
-    ) -> Option<Vec<u8>> {
-        let mut result = vec![];
-        let mut write_version = 0;
-        if let Some(existing_val) = existing_val {
-            match deserialize::<columns::TokenAccount>(existing_val) {
-                Ok(value) => {
-                    write_version = value.write_version;
-                    result = existing_val.to_vec();
-                }
-                Err(e) => {
-                    error!("RocksDB: TokenAccount deserialize existing_val: {}", e)
-                }
-            }
-        }
-
-        for op in operands {
-            match deserialize::<columns::TokenAccount>(op) {
-                Ok(new_val) => {
-                    if new_val.write_version > write_version {
-                        write_version = new_val.write_version;
-                        result = op.to_vec();
+macro_rules! impl_merge_values {
+    ($ty:ty) => {
+        impl $ty {
+            pub fn merge_values(
+                _new_key: &[u8],
+                existing_val: Option<&[u8]>,
+                operands: &MergeOperands,
+            ) -> Option<Vec<u8>> {
+                let mut result = vec![];
+                let mut write_version = 0;
+                if let Some(existing_val) = existing_val {
+                    match deserialize::<Self>(existing_val) {
+                        Ok(value) => {
+                            write_version = value.write_version;
+                            result = existing_val.to_vec();
+                        }
+                        Err(e) => {
+                            error!(
+                                "RocksDB: {} deserialize existing_val: {}",
+                                stringify!($ty),
+                                e
+                            )
+                        }
                     }
                 }
-                Err(e) => {
-                    error!("RocksDB: TokenAccount deserialize new_val: {}", e)
+
+                for op in operands {
+                    match deserialize::<Self>(op) {
+                        Ok(new_val) => {
+                            if new_val.write_version > write_version {
+                                write_version = new_val.write_version;
+                                result = op.to_vec();
+                            }
+                        }
+                        Err(e) => {
+                            error!("RocksDB: {} deserialize new_val: {}", stringify!($ty), e)
+                        }
+                    }
                 }
+
+                Some(result)
             }
         }
-
-        Some(result)
-    }
+    };
 }
+
+impl_merge_values!(columns::TokenAccount);
+impl_merge_values!(columns::TokenAccountOwnerIdx);
+impl_merge_values!(columns::TokenAccountMintOwnerIdx);
