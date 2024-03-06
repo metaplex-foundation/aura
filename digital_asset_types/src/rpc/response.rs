@@ -1,4 +1,4 @@
-use entities::models::{TokenAccount, AssetSignature};
+use entities::models::{AssetSignature, TokenAccount};
 use schemars::JsonSchema;
 use {
     crate::rpc::Asset,

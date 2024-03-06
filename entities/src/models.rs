@@ -310,7 +310,6 @@ pub struct AssetSignatureWithPagination {
     pub after: Option<u64>,
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TokenAccountOwnerIdxKey {
     pub owner: Pubkey,

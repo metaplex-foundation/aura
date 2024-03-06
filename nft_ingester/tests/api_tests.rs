@@ -12,8 +12,10 @@ mod tests {
     use blockbuster::token_metadata::state::{
         Data, Key, Metadata, TokenStandard as BLKTokenStandard,
     };
-    use digital_asset_types::rpc::response::{AssetList, TransactionSignatureList, TokenAccountsList};
-    use entities::api_req_params::{GetAssetSignatures, DisplayOptions, GetTokenAccounts};
+    use digital_asset_types::rpc::response::{
+        AssetList, TokenAccountsList, TransactionSignatureList,
+    };
+    use entities::api_req_params::{DisplayOptions, GetAssetSignatures, GetTokenAccounts};
     use entities::models::{AssetSignature, AssetSignatureKey};
     use entities::{
         api_req_params::{AssetSortBy, AssetSortDirection, AssetSorting, GetAsset, SearchAssets},
