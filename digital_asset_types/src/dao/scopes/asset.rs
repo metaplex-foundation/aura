@@ -3,6 +3,9 @@ use std::str::FromStr;
 use std::string::ToString;
 use std::sync::Arc;
 
+use entities::api_req_params::AssetSortDirection;
+use entities::models::AssetSignatureWithPagination;
+use interface::asset_sigratures::AssetSignaturesGetter;
 use log::error;
 use sea_orm::prelude::Json;
 use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult};
@@ -416,4 +419,67 @@ pub async fn get_by_ids(
     }
 
     Ok(results)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn get_asset_signatures(
+    storage: Arc<Storage>,
+    asset_id: Option<Pubkey>,
+    tree_id: Option<Pubkey>,
+    leaf_idx: Option<u64>,
+    page: Option<u64>,
+    before: &Option<String>,
+    after: &Option<String>,
+    limit: u64,
+    sort_direction: Option<AssetSortDirection>,
+) -> Result<AssetSignatureWithPagination, DbErr> {
+    let before_sequence = before.as_ref().and_then(|b| b.parse::<u64>().ok());
+    let after_sequence = after.as_ref().and_then(|a| a.parse::<u64>().ok());
+    if let (Some(before_sequence), Some(after_sequence)) = (before_sequence, after_sequence) {
+        let invalid_range = match sort_direction {
+            Some(AssetSortDirection::Asc) => before_sequence <= after_sequence,
+            _ => before_sequence >= after_sequence,
+        };
+        if invalid_range {
+            return Ok(AssetSignatureWithPagination::default());
+        }
+    }
+    let sort_direction = sort_direction.unwrap_or(AssetSortDirection::Desc);
+    let (tree_id, leaf_idx) = match (tree_id, leaf_idx, asset_id) {
+        (Some(tree_id), Some(leaf_idx), None) => {
+            // Directly use tree_id and leaf_idx if both are provided
+            (tree_id, leaf_idx)
+        }
+        (None, None, Some(asset_id)) => {
+            // if only asset_id is provided, fetch the latest tree and leaf_idx (asset.nonce) for the asset
+            // and use them to fetch transactions
+            let asset_leaf = storage
+                .asset_leaf_data
+                .get(asset_id)
+                .map_err(|e| DbErr::Custom(e.to_string()))?
+                .ok_or_else(|| DbErr::RecordNotFound("Leaf ID does not exist".to_string()))?;
+            (
+                asset_leaf.tree_id,
+                asset_leaf.nonce.ok_or_else(|| {
+                    DbErr::RecordNotFound("Leaf nonce does not exist".to_string())
+                })?,
+            )
+        }
+        _ => {
+            // If neither set of parameters is provided, return an error
+            return Err(DbErr::Custom(
+                "Either 'id' or both 'tree' and 'leafIndex' must be provided".to_string(),
+            ));
+        }
+    };
+
+    Ok(storage.get_asset_signatures(
+        tree_id,
+        leaf_idx,
+        before_sequence,
+        after_sequence,
+        page,
+        sort_direction,
+        limit,
+    ))
 }

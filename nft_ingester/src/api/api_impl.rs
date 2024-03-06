@@ -10,17 +10,19 @@ use std::{sync::Arc, time::Instant};
 
 use self::util::RequestWithPagination;
 use crate::api::config::Config;
+use digital_asset_types::dapi::get_asset_signatures::get_asset_signatures;
+use digital_asset_types::rpc::response::TransactionSignatureListDeprecated;
 use digital_asset_types::rpc::Asset;
 use entities::api_req_params::{
-    GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetsByAuthority,
-    GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetGrouping, Pagination, SearchAssets,
+    GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
+    GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetGrouping,
+    Pagination, SearchAssets,
 };
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
-use usecase::validation::validate_pubkey;
-
+use usecase::validation::{validate_opt_pubkey, validate_pubkey};
 use {
     crate::api::*,
     sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, SqlxPostgresConnector, Statement},
@@ -325,6 +327,69 @@ where
         self.metrics
             .set_latency("search_asset", latency_timer.elapsed().as_millis() as f64);
 
+        Ok(json!(res))
+    }
+
+    pub async fn get_asset_signatures(
+        &self,
+        payload: GetAssetSignatures,
+        is_deprecated: bool,
+    ) -> Result<Value, DasApiError> {
+        let label = "get_signatures_for_asset";
+        self.metrics.inc_requests(label);
+        let latency_timer = Instant::now();
+
+        let GetAssetSignatures {
+            id,
+            limit,
+            page,
+            before,
+            after,
+            tree,
+            leaf_index,
+            sort_direction,
+            cursor,
+        } = payload;
+
+        if !((id.is_some() && tree.is_none() && leaf_index.is_none())
+            || (id.is_none() && tree.is_some() && leaf_index.is_some()))
+        {
+            return Err(DasApiError::Validation(
+                "Must provide either 'id' or both 'tree' and 'leafIndex'".to_string(),
+            ));
+        }
+        let id = validate_opt_pubkey(&id)?;
+        let tree = validate_opt_pubkey(&tree)?;
+
+        let pagination = Pagination {
+            limit,
+            page,
+            before: before.clone(),
+            after: after.clone(),
+            cursor: cursor.clone(),
+        };
+
+        validate_basic_pagination(&pagination)?;
+
+        let res = get_asset_signatures(
+            self.rocks_db.clone(),
+            id,
+            tree,
+            leaf_index,
+            sort_direction,
+            limit.unwrap_or(DEFAULT_LIMIT as u32).into(),
+            page.map(|page| page as u64),
+            before,
+            if cursor.is_some() { cursor } else { after },
+        )
+        .await?;
+
+        self.metrics
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+
+        if is_deprecated {
+            return Ok(json!(TransactionSignatureListDeprecated::from(res)));
+        }
         Ok(json!(res))
     }
 
