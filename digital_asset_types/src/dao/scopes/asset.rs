@@ -668,12 +668,12 @@ pub async fn get_asset_signatures(
     limit: u64,
     sort_direction: Option<AssetSortDirection>,
 ) -> Result<AssetSignatureWithPagination, DbErr> {
-    let before = before.as_ref().and_then(|b| b.parse::<u64>().ok());
-    let after = after.as_ref().and_then(|a| a.parse::<u64>().ok());
-    if let (Some(before), Some(after)) = (before, after) {
+    let before_sequence = before.as_ref().and_then(|b| b.parse::<u64>().ok());
+    let after_sequence = after.as_ref().and_then(|a| a.parse::<u64>().ok());
+    if let (Some(before_sequence), Some(after_sequence)) = (before_sequence, after_sequence) {
         let invalid_range = match sort_direction {
-            Some(AssetSortDirection::Asc) => before <= after,
-            _ => before >= after,
+            Some(AssetSortDirection::Asc) => before_sequence <= after_sequence,
+            _ => before_sequence >= after_sequence,
         };
         if invalid_range {
             return Ok(AssetSignatureWithPagination::default());
@@ -695,9 +695,9 @@ pub async fn get_asset_signatures(
                 .ok_or_else(|| DbErr::RecordNotFound("Leaf ID does not exist".to_string()))?;
             (
                 asset_leaf.tree_id,
-                asset_leaf
-                    .nonce
-                    .ok_or_else(|| DbErr::RecordNotFound("Leaf ID does not exist".to_string()))?,
+                asset_leaf.nonce.ok_or_else(|| {
+                    DbErr::RecordNotFound("Leaf nonce does not exist".to_string())
+                })?,
             )
         }
         _ => {
@@ -711,8 +711,8 @@ pub async fn get_asset_signatures(
     Ok(storage.get_asset_signatures(
         tree_id,
         leaf_idx,
-        before,
-        after,
+        before_sequence,
+        after_sequence,
         page,
         sort_direction,
         limit,

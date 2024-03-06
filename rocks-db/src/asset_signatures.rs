@@ -27,7 +27,7 @@ impl AssetSignaturesGetter for Storage {
         tree: Pubkey,
         leaf_idx: u64,
         page: Option<u64>,
-        after: Option<u64>,
+        after_sequence: Option<u64>,
         direction: &AssetSortDirection,
         limit: u64,
     ) -> impl Iterator<Item = (AssetSignatureKey, AssetSignature)> {
@@ -36,13 +36,17 @@ impl AssetSignaturesGetter for Storage {
                 tree,
                 leaf_idx,
                 // Skip first elem if after is_some
-                seq: after.map(|seq| seq.saturating_add(1)).unwrap_or_default(),
+                seq: after_sequence
+                    .map(|seq| seq.saturating_add(1))
+                    .unwrap_or_default(),
             }),
             AssetSortDirection::Desc => self.asset_signature.iter_reverse(AssetSignatureKey {
                 tree,
                 leaf_idx,
                 // Skip first elem if after is_some
-                seq: after.map(|seq| seq.saturating_sub(1)).unwrap_or(u64::MAX),
+                seq: after_sequence
+                    .map(|seq| seq.saturating_sub(1))
+                    .unwrap_or(u64::MAX),
             }),
         };
 
@@ -62,21 +66,24 @@ impl AssetSignaturesGetter for Storage {
         &self,
         tree: Pubkey,
         leaf_idx: u64,
-        before: Option<u64>,
-        after: Option<u64>,
+        before_sequence: Option<u64>,
+        after_sequence: Option<u64>,
         page: Option<u64>,
         direction: AssetSortDirection,
         limit: u64,
     ) -> AssetSignatureWithPagination {
         let mut res = AssetSignatureWithPagination::default();
         let mut first_iter = true;
-        for (key, value) in self.signatures_iter(tree, leaf_idx, page, after, &direction, limit) {
+        for (key, value) in
+            self.signatures_iter(tree, leaf_idx, page, after_sequence, &direction, limit)
+        {
             if res.asset_signatures.len() >= limit as usize
                 || key.tree != tree
-                || before
-                    .map(|before| {
-                        before <= key.seq && matches!(direction, AssetSortDirection::Asc)
-                            || before >= key.seq && matches!(direction, AssetSortDirection::Desc)
+                || before_sequence
+                    .map(|before_sequence| {
+                        before_sequence <= key.seq && matches!(direction, AssetSortDirection::Asc)
+                            || before_sequence >= key.seq
+                                && matches!(direction, AssetSortDirection::Desc)
                     })
                     .unwrap_or_default()
             {

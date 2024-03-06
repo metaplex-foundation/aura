@@ -130,6 +130,8 @@ pub struct GetAssetSignatures {
     pub id: Option<String>,
     pub limit: Option<u32>,
     pub page: Option<u32>,
+    // before and after params for this method
+    // represented as sequence numbers
     pub before: Option<String>,
     pub after: Option<String>,
     pub tree: Option<String>,
