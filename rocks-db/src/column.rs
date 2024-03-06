@@ -357,6 +357,14 @@ where
 
         index_iterator
     }
+    pub fn iter_reverse(&self, key: C::KeyType) -> DBIteratorWithThreadMode<'_, DB> {
+        let index_iterator = self.backend.iterator_cf(
+            &self.handle(),
+            rocksdb::IteratorMode::From(&C::encode_key(key), rocksdb::Direction::Reverse),
+        );
+
+        index_iterator
+    }
     // Method to get an iterator starting from the beginning of the column
     pub fn iter_start(&self) -> DBIteratorWithThreadMode<'_, DB> {
         self.backend

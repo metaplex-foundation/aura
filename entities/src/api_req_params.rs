@@ -124,6 +124,22 @@ pub struct GetGrouping {
     pub group_value: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetAssetSignatures {
+    pub id: Option<String>,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    // before and after params for this method
+    // represented as sequence numbers
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub tree: Option<String>,
+    pub leaf_index: Option<u64>,
+    #[serde(default)]
+    pub sort_direction: Option<AssetSortDirection>,
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SearchAssets {

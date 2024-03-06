@@ -1,3 +1,4 @@
+use entities::models::AssetSignatureKey;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::Result;
@@ -93,6 +94,32 @@ pub fn decode_u64(bytes: Vec<u8>) -> Result<u64> {
     Ok(slot)
 }
 
+pub fn decode_asset_signature_key(bytes: Vec<u8>) -> Result<AssetSignatureKey> {
+    let u64_size = std::mem::size_of::<u64>();
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    if bytes.len() != u64_size * 2 + pubkey_size {
+        return Err(crate::StorageError::InvalidKeyLength);
+    }
+    let tree = Pubkey::try_from(&bytes[..pubkey_size])?;
+    let leaf = u64::from_be_bytes(bytes[pubkey_size..pubkey_size + u64_size].try_into()?);
+    let seq = u64::from_be_bytes(bytes[pubkey_size + u64_size..].try_into()?);
+    Ok(AssetSignatureKey {
+        tree,
+        leaf_idx: leaf,
+        seq,
+    })
+}
+
+pub fn encode_asset_signature_key(ask: AssetSignatureKey) -> Vec<u8> {
+    let u64_size = std::mem::size_of::<u64>();
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    let mut key = Vec::with_capacity(u64_size * 2 + pubkey_size);
+    key.extend_from_slice(&ask.tree.to_bytes());
+    key.extend_from_slice(&ask.leaf_idx.to_be_bytes());
+    key.extend_from_slice(&ask.seq.to_be_bytes());
+    key
+}
+
 #[cfg(test)]
 mod tests {
     use solana_sdk::pubkey::Pubkey;
@@ -146,6 +173,24 @@ mod tests {
 
         assert_eq!(decoded.0, pubkey);
         assert_eq!(decoded.1, slot);
+    }
+
+    #[test]
+    fn test_encode_decode_asset_signature_key() {
+        let seq = 4321u64;
+        let leaf = 12345u64;
+        let tree = Pubkey::new_unique(); // or some other way to create a Pubkey
+
+        let encoded = encode_asset_signature_key(AssetSignatureKey {
+            tree,
+            leaf_idx: leaf,
+            seq,
+        });
+        let decoded = decode_asset_signature_key(encoded).unwrap();
+
+        assert_eq!(decoded.tree, tree);
+        assert_eq!(decoded.leaf_idx, leaf);
+        assert_eq!(decoded.seq, seq);
     }
 
     // Add more tests as needed...
