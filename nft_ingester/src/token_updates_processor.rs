@@ -110,51 +110,7 @@ impl TokenAccsProcessor {
         &self,
         accs_to_save: &HashMap<Pubkey, TokenAccount>,
     ) {
-        self.finalize_processing(
-            future::try_join3(
-                self.rocks_db
-                    .token_accounts
-                    .merge_batch(accs_to_save.clone()),
-                self.rocks_db.token_account_owner_idx.put_batch(
-                    accs_to_save
-                        .iter()
-                        .map(|(_, ta)| {
-                            (
-                                TokenAccountOwnerIdxKey {
-                                    owner: ta.owner,
-                                    token_account: ta.pubkey,
-                                    is_zero_balance: ta.amount.is_zero(),
-                                },
-                                TokenAccountOwnerIdx {},
-                            )
-                        })
-                        .collect::<HashMap<_, _>>(),
-                ),
-                self.rocks_db.token_account_mint_owner_idx.put_batch(
-                    accs_to_save
-                        .iter()
-                        .map(|(_, ta)| {
-                            (
-                                TokenAccountMintOwnerIdxKey {
-                                    mint: ta.mint,
-                                    owner: ta.owner,
-                                    token_account: ta.pubkey,
-                                    is_zero_balance: ta.amount.is_zero(),
-                                },
-                                TokenAccountMintOwnerIdx {},
-                            )
-                        })
-                        .collect::<HashMap<_, _>>(),
-                ),
-            ),
-            accs_to_save
-                .values()
-                .map(|a| (a.slot_updated as u64, a.mint))
-                .collect::<Vec<_>>(),
-            "token_accounts_saving",
-        )
-        .await;
-
+        self.save_token_accounts_with_idxs(accs_to_save).await;
         let dynamic_and_asset_owner_details = accs_to_save.clone().into_values().fold(
             DynamicAndAssetOwnerDetails::default(),
             |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, token_account| {
@@ -278,5 +234,87 @@ impl TokenAccsProcessor {
             "mint_accounts_saving",
         )
         .await
+    }
+
+    pub async fn save_token_accounts_with_idxs(
+        &self,
+        accs_to_save: &HashMap<Pubkey, TokenAccount>,
+    ) {
+        self.finalize_processing(
+            future::try_join(
+                self.rocks_db.token_account_owner_idx.delete_batch(
+                    accs_to_save
+                        .values()
+                        .map(|ta| TokenAccountOwnerIdxKey {
+                            owner: ta.owner,
+                            token_account: ta.pubkey,
+                            is_zero_balance: !ta.amount.is_zero(),
+                        })
+                        .collect::<Vec<_>>(),
+                ),
+                self.rocks_db.token_account_mint_owner_idx.delete_batch(
+                    accs_to_save
+                        .values()
+                        .map(|ta| TokenAccountMintOwnerIdxKey {
+                            mint: ta.mint,
+                            owner: ta.owner,
+                            token_account: ta.pubkey,
+                            is_zero_balance: !ta.amount.is_zero(),
+                        })
+                        .collect::<Vec<_>>(),
+                ),
+            ),
+            accs_to_save
+                .values()
+                .map(|a| (a.slot_updated as u64, a.mint))
+                .collect::<Vec<_>>(),
+            "token_accounts_idx_delete",
+        )
+        .await;
+
+        self.finalize_processing(
+            future::try_join3(
+                self.rocks_db
+                    .token_accounts
+                    .merge_batch(accs_to_save.clone()),
+                self.rocks_db.token_account_owner_idx.put_batch(
+                    accs_to_save
+                        .values()
+                        .map(|ta| {
+                            (
+                                TokenAccountOwnerIdxKey {
+                                    owner: ta.owner,
+                                    token_account: ta.pubkey,
+                                    is_zero_balance: ta.amount.is_zero(),
+                                },
+                                TokenAccountOwnerIdx {},
+                            )
+                        })
+                        .collect::<HashMap<_, _>>(),
+                ),
+                self.rocks_db.token_account_mint_owner_idx.put_batch(
+                    accs_to_save
+                        .values()
+                        .map(|ta| {
+                            (
+                                TokenAccountMintOwnerIdxKey {
+                                    mint: ta.mint,
+                                    owner: ta.owner,
+                                    token_account: ta.pubkey,
+                                    is_zero_balance: ta.amount.is_zero(),
+                                },
+                                TokenAccountMintOwnerIdx {},
+                            )
+                        })
+                        .collect::<HashMap<_, _>>(),
+                ),
+            ),
+            accs_to_save
+                .values()
+                .map(|a| (a.slot_updated as u64, a.mint))
+                .collect::<Vec<_>>(),
+            "token_accounts_saving",
+        )
+        .await;
     }
 }
