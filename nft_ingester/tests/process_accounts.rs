@@ -82,7 +82,7 @@ mod tests {
             frozen: false,
             delegated_amount: 0,
             slot_updated: 1,
-            amount: 0,
+            amount: 1,
             write_version: 1,
         };
         let second_token_account_to_save = TokenAccount {
@@ -93,7 +93,7 @@ mod tests {
             frozen: false,
             delegated_amount: 0,
             slot_updated: 1,
-            amount: 0,
+            amount: 1,
             write_version: 1,
         };
 
