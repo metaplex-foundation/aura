@@ -232,7 +232,7 @@ mod tests {
         let pk3 = Pubkey::new_unique(); // or some other way to create a Pubkey
 
         let encoded = encode_pubkeyx3((pk1, pk2, pk3));
-        let decoded = decode_pubkeyx3_bool(encoded).unwrap();
+        let decoded = decode_pubkeyx3(encoded).unwrap();
 
         assert_eq!(decoded.0, pk1);
         assert_eq!(decoded.1, pk2);
