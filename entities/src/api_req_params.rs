@@ -152,6 +152,7 @@ pub struct GetAssetSignatures {
     pub leaf_index: Option<u64>,
     #[serde(default)]
     pub sort_direction: Option<AssetSortDirection>,
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
