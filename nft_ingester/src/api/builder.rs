@@ -125,6 +125,28 @@ impl RpcApiBuilder {
         });
         module.add_alias("searchAssets", "search_assets");
 
+        let cloned_api = api.clone();
+        module.add_method("get_signatures_for_asset", move |rpc_params: Params| {
+            let api = cloned_api.clone();
+            async move {
+                api.get_asset_signatures(rpc_params.parse()?, true)
+                    .await
+                    .map_err(Into::into)
+            }
+        });
+        module.add_alias("getSignaturesForAsset", "get_signatures_for_asset");
+
+        let cloned_api = api.clone();
+        module.add_method("get_signatures_for_asset_v2", move |rpc_params: Params| {
+            let api = cloned_api.clone();
+            async move {
+                api.get_asset_signatures(rpc_params.parse()?, false)
+                    .await
+                    .map_err(Into::into)
+            }
+        });
+        module.add_alias("getSignaturesForAssetV2", "get_signatures_for_asset_v2");
+
         module.add_method("get_token_accounts", move |rpc_params: Params| {
             let api = api.clone();
             async move {

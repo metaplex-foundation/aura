@@ -289,6 +289,28 @@ pub struct ForkedItem {
     pub node_idx: u64,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AssetSignatureKey {
+    pub tree: Pubkey,
+    pub leaf_idx: u64,
+    pub seq: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AssetSignature {
+    pub tx: String,
+    pub instruction: String,
+    pub slot: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AssetSignatureWithPagination {
+    pub asset_signatures: Vec<AssetSignature>,
+    pub before: Option<u64>,
+    pub after: Option<u64>,
+}
+
+
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TokenAccountOwnerIdxKey {
     pub owner: Pubkey,

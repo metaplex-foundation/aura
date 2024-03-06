@@ -15,6 +15,7 @@ pub use asset::{
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
+use entities::models::AssetSignature;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -25,6 +26,7 @@ use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
 pub mod asset;
 mod asset_client;
+pub mod asset_signatures;
 pub mod asset_streaming_client;
 pub mod backup_service;
 mod batch_client;
@@ -79,6 +81,7 @@ pub struct Storage {
     pub token_accounts: Column<TokenAccount>,
     pub token_account_owner_idx: Column<TokenAccountOwnerIdx>,
     pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
+    pub asset_signature: Column<AssetSignature>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -119,6 +122,7 @@ impl Storage {
         let token_accounts = Self::column(db.clone());
         let token_account_owner_idx = Self::column(db.clone());
         let token_account_mint_owner_idx = Self::column(db.clone());
+        let asset_signature = Self::column(db.clone());
 
         Self {
             asset_static_data,
@@ -151,6 +155,7 @@ impl Storage {
             token_account_owner_idx,
             asset_static_data_deprecated,
             red_metrics,
+            asset_signature,
             token_account_mint_owner_idx,
         }
     }
@@ -213,6 +218,7 @@ impl Storage {
             Self::new_cf_descriptor::<TreesGaps>(),
             Self::new_cf_descriptor::<TokenMetadataEdition>(),
             Self::new_cf_descriptor::<AssetStaticDetailsDeprecated>(),
+            Self::new_cf_descriptor::<AssetSignature>(),
             Self::new_cf_descriptor::<TokenAccount>(),
             Self::new_cf_descriptor::<TokenAccountOwnerIdx>(),
             Self::new_cf_descriptor::<TokenAccountMintOwnerIdx>(),
@@ -432,6 +438,12 @@ impl Storage {
             AssetStaticDetailsDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_asset_static_deprecated_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            AssetSignature::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_asset_signature_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }

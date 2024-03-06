@@ -6,6 +6,7 @@ mod change_logs;
 pub mod common;
 mod get_asset;
 mod get_asset_batch;
+pub mod get_asset_signatures;
 pub mod get_token_accounts;
 mod search_assets;
 
