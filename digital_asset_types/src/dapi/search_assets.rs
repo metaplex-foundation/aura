@@ -1,6 +1,6 @@
 use crate::dao::{scopes, ConversionError, SearchAssetsQuery};
 use crate::rpc::response::AssetList;
-use entities::api_req_params::AssetSorting;
+use entities::api_req_params::{AssetSorting, Options};
 use rocks_db::Storage;
 use sea_orm::DbErr;
 use solana_sdk::pubkey::Pubkey;
@@ -19,6 +19,7 @@ pub async fn search_assets(
     before: Option<String>,
     after: Option<String>,
     cursor: Option<String>,
+    options: Options,
 ) -> Result<AssetList, DbErr> {
     let filter_result: &Result<postgre_client::model::SearchAssetsFilter, ConversionError> =
         &filter.try_into();
@@ -46,7 +47,15 @@ pub async fn search_assets(
     };
 
     let keys = index_client
-        .get_asset_pubkeys_filtered(filter, &sort_by.into(), limit, page, before, after)
+        .get_asset_pubkeys_filtered(
+            filter,
+            &sort_by.into(),
+            limit,
+            page,
+            before,
+            after,
+            &options,
+        )
         .await
         .map_err(DbErr::Custom)?;
     let asset_ids = keys
@@ -54,7 +63,7 @@ pub async fn search_assets(
         .filter_map(|k| Pubkey::try_from(k.pubkey.clone()).ok())
         .collect::<Vec<Pubkey>>();
     //todo: there is an additional round trip to the db here, this should be optimized
-    let assets = scopes::asset::get_by_ids(rocks_db, asset_ids).await?;
+    let assets = scopes::asset::get_by_ids(rocks_db, asset_ids, options).await?;
     let assets = assets.into_iter().flatten().collect::<Vec<_>>();
     let (items, errors) = asset_list_to_rpc(assets);
     let total = items.len() as u32;

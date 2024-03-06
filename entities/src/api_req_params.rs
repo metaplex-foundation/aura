@@ -49,6 +49,13 @@ pub enum AssetSortDirection {
     Desc,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Options {
+    #[serde(default)]
+    pub show_unverified_collections: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
 pub enum SearchConditionType {
     #[serde(rename = "all")]
@@ -68,6 +75,7 @@ pub struct GetAssetsByGroup {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
+    pub options: Option<Options>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -80,18 +88,21 @@ pub struct GetAssetsByOwner {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
+    pub options: Option<Options>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetAsset {
     pub id: String,
+    pub options: Option<Options>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetAssetBatch {
     pub ids: Vec<String>,
+    pub options: Option<Options>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -117,6 +128,7 @@ pub struct GetAssetsByCreator {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
+    pub options: Option<Options>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -129,6 +141,7 @@ pub struct GetAssetsByAuthority {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
+    pub options: Option<Options>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -193,6 +206,7 @@ pub struct SearchAssets {
     pub cursor: Option<String>,
     #[serde(default)]
     pub name: Option<String>,
+    pub options: Option<Options>,
 }
 
 impl SearchAssets {

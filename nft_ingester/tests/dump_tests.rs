@@ -3,7 +3,7 @@
 mod tests {
     use std::sync::Arc;
 
-    use entities::models::UrlWithStatus;
+    use entities::{api_req_params::Options, models::UrlWithStatus};
     use metrics_utils::SynchronizerMetricsConfig;
     use nft_ingester::index_syncronizer::Synchronizer;
     use postgre_client::{
@@ -65,6 +65,9 @@ mod tests {
                 None,
                 None,
                 None,
+                &Options {
+                    show_unverified_collections: true,
+                },
             )
             .await
             .unwrap();

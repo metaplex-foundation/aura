@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use entities::api_req_params::{GetAsset, GetAssetProof};
+    use entities::api_req_params::{GetAsset, GetAssetProof, Options};
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::{
@@ -251,6 +251,9 @@ mod tests {
         for asset in assets_to_test_proof_for.iter() {
             let payload = GetAsset {
                 id: asset.to_string(),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
             };
             let asset_info = api.get_asset(payload).await.unwrap();
 

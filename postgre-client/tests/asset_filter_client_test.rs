@@ -1,6 +1,7 @@
 #[cfg(feature = "integration_tests")]
 #[cfg(test)]
 mod tests {
+    use entities::api_req_params::Options;
     use postgre_client::model::*;
     use postgre_client::storage_traits::{AssetIndexStorage, AssetPubkeyFilteredFetcher};
     use setup::pg::*;
@@ -43,7 +44,17 @@ mod tests {
         let before = Some("nonb64string".to_string());
         let after = Some("other_nonb64string".to_string());
         let res = asset_filter_storage
-            .get_asset_pubkeys_filtered(&filter, &order, limit, page, before, after)
+            .get_asset_pubkeys_filtered(
+                &filter,
+                &order,
+                limit,
+                page,
+                before,
+                after,
+                &Options {
+                    show_unverified_collections: true,
+                },
+            )
             .await
             .unwrap();
         assert_eq!(res.len(), 0);
@@ -100,7 +111,17 @@ mod tests {
         let page = Some(0);
 
         let res = asset_filter_storage
-            .get_asset_pubkeys_filtered(&filter, &order, limit, page, None, None)
+            .get_asset_pubkeys_filtered(
+                &filter,
+                &order,
+                limit,
+                page,
+                None,
+                None,
+                &Options {
+                    show_unverified_collections: true,
+                },
+            )
             .await
             .unwrap();
         assert_eq!(res.len(), 1);
@@ -114,7 +135,17 @@ mod tests {
         for i in 0..20usize {
             let page = Some((i + 1) as u64);
             let res = asset_filter_storage
-                .get_asset_pubkeys_filtered(&filter, &order, limit, page, None, None)
+                .get_asset_pubkeys_filtered(
+                    &filter,
+                    &order,
+                    limit,
+                    page,
+                    None,
+                    None,
+                    &Options {
+                        show_unverified_collections: true,
+                    },
+                )
                 .await
                 .unwrap();
             assert_eq!(res.len(), 5);
@@ -133,7 +164,17 @@ mod tests {
         let page = None;
         for i in 0..20usize {
             let res = asset_filter_storage
-                .get_asset_pubkeys_filtered(&filter, &order, limit, page, None, after)
+                .get_asset_pubkeys_filtered(
+                    &filter,
+                    &order,
+                    limit,
+                    page,
+                    None,
+                    after,
+                    &Options {
+                        show_unverified_collections: true,
+                    },
+                )
                 .await
                 .unwrap();
             assert_eq!(res.len(), 5);
@@ -147,7 +188,17 @@ mod tests {
         let mut before = last_before.clone();
         for i in (0..19usize).rev() {
             let res = asset_filter_storage
-                .get_asset_pubkeys_filtered(&filter, &order, limit, page, before, None)
+                .get_asset_pubkeys_filtered(
+                    &filter,
+                    &order,
+                    limit,
+                    page,
+                    before,
+                    None,
+                    &Options {
+                        show_unverified_collections: true,
+                    },
+                )
                 .await
                 .unwrap();
             assert_eq!(res.len(), 5);
@@ -164,7 +215,17 @@ mod tests {
             before = Some(b);
         }
         let res = asset_filter_storage
-            .get_asset_pubkeys_filtered(&Default::default(), &order, limit, None, None, None)
+            .get_asset_pubkeys_filtered(
+                &Default::default(),
+                &order,
+                limit,
+                None,
+                None,
+                None,
+                &Options {
+                    show_unverified_collections: true,
+                },
+            )
             .await
             .unwrap();
         assert_eq!(res.len(), limit as usize);
@@ -183,6 +244,9 @@ mod tests {
                 None,
                 None,
                 None,
+                &Options {
+                    show_unverified_collections: true,
+                },
             )
             .await
             .unwrap();
@@ -234,6 +298,9 @@ mod tests {
                 None,
                 None,
                 None,
+                &Options {
+                    show_unverified_collections: true,
+                },
             )
             .await
             .unwrap();
