@@ -155,7 +155,7 @@ mod tests {
         };
 
         spl_token_accs_parser
-            .transform_and_save_token_accs(&[(Vec::<u8>::new(), token_acc)].into_iter().collect())
+            .transform_and_save_token_accs(&[(token_acc.pubkey, token_acc)].into_iter().collect())
             .await;
 
         spl_token_accs_parser

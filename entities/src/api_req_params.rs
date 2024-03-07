@@ -140,6 +140,23 @@ pub struct GetAssetSignatures {
     pub sort_direction: Option<AssetSortDirection>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DisplayOptions {
+    pub show_zero_balance: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetTokenAccounts {
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub owner: Option<String>,
+    pub mint: Option<String>,
+    #[serde(default, alias = "displayOptions")]
+    pub options: Option<DisplayOptions>,
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SearchAssets {

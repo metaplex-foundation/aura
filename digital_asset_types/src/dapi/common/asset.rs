@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use entities::api_req_params::{AssetSortBy, AssetSortDirection, AssetSorting};
-use entities::models::AssetSignatureWithPagination;
+use entities::models::{AssetSignatureWithPagination, TokenAccount};
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
@@ -17,7 +17,7 @@ use crate::dao::sea_orm_active_enums::SpecificationVersions;
 use crate::dao::FullAsset;
 use crate::dao::Pagination;
 use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_grouping};
-use crate::rpc::response::{AssetError, AssetList, TransactionSignatureList};
+use crate::rpc::response::{AssetError, AssetList, TokenAccountsList, TransactionSignatureList};
 use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
     MetadataMap, Ownership, Royalty, Scope, Supply, Uses,
@@ -446,4 +446,17 @@ pub fn asset_list_to_rpc(asset_list: Vec<FullAsset>) -> (Vec<RpcAsset>, Vec<Asse
             }
             (assets, errors)
         })
+}
+
+pub fn build_token_accounts_response(
+    token_accounts: Vec<TokenAccount>,
+    limit: u64,
+    page: Option<u64>,
+) -> TokenAccountsList {
+    TokenAccountsList {
+        total: token_accounts.len() as u32,
+        limit: limit as u32,
+        page: page.map(|x| x as u32),
+        token_accounts,
+    }
 }
