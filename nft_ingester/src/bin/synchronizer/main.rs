@@ -27,15 +27,16 @@ pub async fn main() -> Result<(), IngesterError> {
     init_logger(config.log_level.as_str());
     tracing::info!("Starting Synchronizer server...");
 
-    let mut guard = None;
-    if config.run_profiling {
-        guard = Some(
+    let guard = if config.run_profiling {
+        Some(
             pprof::ProfilerGuardBuilder::default()
                 .frequency(100)
                 .build()
                 .unwrap(),
-        );
-    }
+        )
+    } else {
+        None
+    };
 
     let max_postgre_connections = config
         .database_config

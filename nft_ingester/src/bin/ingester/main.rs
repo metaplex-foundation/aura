@@ -66,15 +66,16 @@ pub async fn main() -> Result<(), IngesterError> {
     let config: IngesterConfig = setup_config(INGESTER_CONFIG_PREFIX);
     init_logger(&config.get_log_level());
 
-    let mut guard = None;
-    if config.get_is_run_profiling() {
-        guard = Some(
+    let guard = if config.get_is_run_profiling() {
+        Some(
             pprof::ProfilerGuardBuilder::default()
                 .frequency(100)
                 .build()
                 .unwrap(),
-        );
-    }
+        )
+    } else {
+        None
+    };
 
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
