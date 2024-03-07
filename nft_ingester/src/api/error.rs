@@ -35,6 +35,8 @@ pub enum DasApiError {
     ProofNotFound,
     #[error("Validation: {0}")]
     Validation(String),
+    #[error("Page is too big, please use different pagination(before/after/cursor).")]
+    PageTooBig,
 }
 
 impl From<DasApiError> for jsonrpc_core::Error {

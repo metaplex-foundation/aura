@@ -51,11 +51,12 @@ pub async fn start_api_v2(
     metrics: Arc<ApiMetricsConfig>,
     port: u16,
     proof_checker: Option<Arc<MaybeProofChecker>>,
+    max_page_limit: Option<usize>,
 ) -> Result<(), DasApiError> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     // todo: setup middleware, looks like too many shit related to backups are there
     // let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
-    let api = DasApi::new(pg_client, rocks_db, metrics, proof_checker);
+    let api = DasApi::new(pg_client, rocks_db, metrics, proof_checker, max_page_limit);
 
     run_api(api, None, addr, keep_running).await
 }

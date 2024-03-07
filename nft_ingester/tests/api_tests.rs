@@ -57,6 +57,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            None,
         );
         let limit = 10;
         let before: Option<String>;
@@ -359,6 +360,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            None,
         );
 
         let pb = Pubkey::new_unique();
@@ -485,6 +487,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            None,
         );
 
         let pb = Pubkey::new_unique();
@@ -588,6 +591,7 @@ mod tests {
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
             None,
         );
 
@@ -736,6 +740,7 @@ mod tests {
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
             None,
         );
 
@@ -892,6 +897,7 @@ mod tests {
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
             None,
         );
 
@@ -1051,6 +1057,7 @@ mod tests {
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
             None,
         );
 
@@ -1220,6 +1227,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            None,
         );
 
         let ref_value = generated_assets.owners[8].clone();
@@ -1254,6 +1262,7 @@ mod tests {
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
             None,
         );
 
@@ -1291,6 +1300,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            None,
         );
 
         let ref_value = generated_assets.dynamic_details[5].clone();
@@ -1326,6 +1336,7 @@ mod tests {
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
             None,
         );
 

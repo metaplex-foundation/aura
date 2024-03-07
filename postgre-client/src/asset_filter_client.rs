@@ -15,7 +15,7 @@ use crate::{
 };
 
 #[derive(sqlx::FromRow, Debug)]
-pub struct AssetRawResponse {
+struct AssetRawResponse {
     pub pubkey: Vec<u8>,
     pub slot_created: i64,
     pub slot_updated: i64,
