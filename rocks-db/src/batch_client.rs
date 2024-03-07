@@ -104,21 +104,11 @@ impl AssetIndexReader for Storage {
     async fn get_asset_indexes(&self, keys: &[Pubkey]) -> Result<HashMap<Pubkey, AssetIndex>> {
         let mut asset_indexes = HashMap::new();
         let start_time = chrono::Utc::now();
-        let assets_static_fut = self
-            .asset_static_data
-            .batch_get(keys.to_vec(), self.red_metrics.clone());
-        let assets_dynamic_fut = self
-            .asset_dynamic_data
-            .batch_get(keys.to_vec(), self.red_metrics.clone());
-        let assets_authority_fut = self
-            .asset_authority_data
-            .batch_get(keys.to_vec(), self.red_metrics.clone());
-        let assets_owner_fut = self
-            .asset_owner_data
-            .batch_get(keys.to_vec(), self.red_metrics.clone());
-        let assets_collection_fut = self
-            .asset_collection_data
-            .batch_get(keys.to_vec(), self.red_metrics.clone());
+        let assets_static_fut = self.asset_static_data.batch_get(keys.to_vec());
+        let assets_dynamic_fut = self.asset_dynamic_data.batch_get(keys.to_vec());
+        let assets_authority_fut = self.asset_authority_data.batch_get(keys.to_vec());
+        let assets_owner_fut = self.asset_owner_data.batch_get(keys.to_vec());
+        let assets_collection_fut = self.asset_collection_data.batch_get(keys.to_vec());
 
         let (
             asset_static_details,

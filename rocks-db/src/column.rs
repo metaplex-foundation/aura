@@ -33,6 +33,7 @@ where
 {
     pub backend: Arc<DB>,
     pub column: PhantomData<C>,
+    pub red_metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl<C> Column<C>
@@ -293,7 +294,6 @@ where
         &self,
         keys: Vec<C::KeyType>,
         deserialize_fn: F,
-        metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Vec<Option<C::ValueType>>>
     where
         F: Fn(&[u8]) -> Result<C::ValueType> + Copy + Send + 'static,
@@ -307,11 +307,17 @@ where
         .await
         {
             Ok(res) => {
-                metrics.observe_request(ROCKS_COMPONENT, BATCH_GET_ACTION, C::NAME, start_time);
+                self.red_metrics.observe_request(
+                    ROCKS_COMPONENT,
+                    BATCH_GET_ACTION,
+                    C::NAME,
+                    start_time,
+                );
                 res
             }
             Err(e) => {
-                metrics.observe_error(ROCKS_COMPONENT, BATCH_GET_ACTION, C::NAME);
+                self.red_metrics
+                    .observe_error(ROCKS_COMPONENT, BATCH_GET_ACTION, C::NAME);
                 Err(StorageError::Common(e.to_string()))
             }
         }
@@ -341,29 +347,17 @@ where
             .collect()
     }
 
-    pub async fn batch_get(
-        &self,
-        keys: Vec<C::KeyType>,
-        metrics: Arc<RequestErrorDurationMetrics>,
-    ) -> Result<Vec<Option<C::ValueType>>> {
-        self.batch_get_generic(
-            keys,
-            |bytes| deserialize::<C::ValueType>(bytes).map_err(StorageError::from),
-            metrics,
-        )
+    pub async fn batch_get(&self, keys: Vec<C::KeyType>) -> Result<Vec<Option<C::ValueType>>> {
+        self.batch_get_generic(keys, |bytes| {
+            deserialize::<C::ValueType>(bytes).map_err(StorageError::from)
+        })
         .await
     }
 
-    pub async fn batch_get_cbor(
-        &self,
-        keys: Vec<C::KeyType>,
-        metrics: Arc<RequestErrorDurationMetrics>,
-    ) -> Result<Vec<Option<C::ValueType>>> {
-        self.batch_get_generic(
-            keys,
-            |bytes| serde_cbor::from_slice(bytes).map_err(|e| StorageError::Common(e.to_string())),
-            metrics,
-        )
+    pub async fn batch_get_cbor(&self, keys: Vec<C::KeyType>) -> Result<Vec<Option<C::ValueType>>> {
+        self.batch_get_generic(keys, |bytes| {
+            serde_cbor::from_slice(bytes).map_err(|e| StorageError::Common(e.to_string()))
+        })
         .await
     }
 

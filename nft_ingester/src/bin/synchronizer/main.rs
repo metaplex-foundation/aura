@@ -23,10 +23,10 @@ pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
-    tracing::info!("Starting Synchronizer server...");
-
     let config: SynchronizerConfig = setup_config(SYNCHRONIZER_CONFIG_PREFIX);
     init_logger(config.log_level.as_str());
+    tracing::info!("Starting Synchronizer server...");
+
     let mut guard = None;
     if config.run_profiling {
         guard = Some(

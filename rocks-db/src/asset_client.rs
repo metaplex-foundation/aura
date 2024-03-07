@@ -87,34 +87,21 @@ impl Storage {
         &self,
         asset_ids: Vec<Pubkey>,
     ) -> Result<AssetSelectedMaps> {
-        let assets_dynamic_fut = self
-            .asset_dynamic_data
-            .batch_get(asset_ids.clone(), self.red_metrics.clone());
-        let assets_static_fut = self
-            .asset_static_data
-            .batch_get(asset_ids.clone(), self.red_metrics.clone());
-        let assets_authority_fut = self
-            .asset_authority_data
-            .batch_get(asset_ids.clone(), self.red_metrics.clone());
-        let assets_collection_fut = self
-            .asset_collection_data
-            .batch_get(asset_ids.clone(), self.red_metrics.clone());
-        let assets_owner_fut = self
-            .asset_owner_data
-            .batch_get(asset_ids.clone(), self.red_metrics.clone());
-        let assets_leaf_fut = self
-            .asset_leaf_data
-            .batch_get(asset_ids.clone(), self.red_metrics.clone());
+        let assets_dynamic_fut = self.asset_dynamic_data.batch_get(asset_ids.clone());
+        let assets_static_fut = self.asset_static_data.batch_get(asset_ids.clone());
+        let assets_authority_fut = self.asset_authority_data.batch_get(asset_ids.clone());
+        let assets_collection_fut = self.asset_collection_data.batch_get(asset_ids.clone());
+        let assets_owner_fut = self.asset_owner_data.batch_get(asset_ids.clone());
+        let assets_leaf_fut = self.asset_leaf_data.batch_get(asset_ids.clone());
 
         let assets_dynamic = to_map!(assets_dynamic_fut.await);
         let urls: HashMap<_, _> = assets_dynamic
             .iter()
             .map(|(key, asset)| (key.to_string(), asset.url.value.clone()))
             .collect();
-        let offchain_data_fut = self.asset_offchain_data.batch_get(
-            urls.clone().into_values().collect::<Vec<_>>(),
-            self.red_metrics.clone(),
-        );
+        let offchain_data_fut = self
+            .asset_offchain_data
+            .batch_get(urls.clone().into_values().collect::<Vec<_>>());
 
         let (
             assets_static,
@@ -163,7 +150,7 @@ impl Storage {
     ) -> Result<HashMap<Pubkey, EditionData>> {
         let first_batch = self
             .token_metadata_edition_cbor
-            .batch_get_cbor(edition_keys, self.red_metrics.clone())
+            .batch_get_cbor(edition_keys)
             .await?;
         let mut edition_data_list = Vec::new();
         let mut parent_keys = Vec::new();
@@ -188,7 +175,7 @@ impl Storage {
         if !parent_keys.is_empty() {
             let master_edition_map = self
                 .token_metadata_edition_cbor
-                .batch_get_cbor(parent_keys, self.red_metrics.clone())
+                .batch_get_cbor(parent_keys)
                 .await?
                 .into_iter()
                 .filter_map(|e| {
