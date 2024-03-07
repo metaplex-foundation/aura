@@ -120,6 +120,44 @@ pub fn encode_asset_signature_key(ask: AssetSignatureKey) -> Vec<u8> {
     key
 }
 
+pub fn decode_pubkeyx2(bytes: Vec<u8>) -> Result<(Pubkey, Pubkey)> {
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    if bytes.len() != pubkey_size * 2 {
+        return Err(crate::StorageError::InvalidKeyLength);
+    }
+    let pk1 = Pubkey::try_from(&bytes[..pubkey_size])?;
+    let pk2 = Pubkey::try_from(&bytes[pubkey_size..])?;
+    Ok((pk1, pk2))
+}
+
+pub fn encode_pubkeyx2(ask: (Pubkey, Pubkey)) -> Vec<u8> {
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    let mut key = Vec::with_capacity(pubkey_size * 2);
+    key.extend_from_slice(&ask.0.to_bytes());
+    key.extend_from_slice(&ask.1.to_bytes());
+    key
+}
+
+pub fn decode_pubkeyx3(bytes: Vec<u8>) -> Result<(Pubkey, Pubkey, Pubkey)> {
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    if bytes.len() != pubkey_size * 3 {
+        return Err(crate::StorageError::InvalidKeyLength);
+    }
+    let pk1 = Pubkey::try_from(&bytes[..pubkey_size])?;
+    let pk2 = Pubkey::try_from(&bytes[pubkey_size..pubkey_size * 2])?;
+    let pk3 = Pubkey::try_from(&bytes[pubkey_size * 2..])?;
+    Ok((pk1, pk2, pk3))
+}
+
+pub fn encode_pubkeyx3(ask: (Pubkey, Pubkey, Pubkey)) -> Vec<u8> {
+    let pubkey_size = std::mem::size_of::<Pubkey>();
+    let mut key = Vec::with_capacity(pubkey_size * 3);
+    key.extend_from_slice(&ask.0.to_bytes());
+    key.extend_from_slice(&ask.1.to_bytes());
+    key.extend_from_slice(&ask.2.to_bytes());
+    key
+}
+
 #[cfg(test)]
 mod tests {
     use solana_sdk::pubkey::Pubkey;
@@ -173,6 +211,32 @@ mod tests {
 
         assert_eq!(decoded.0, pubkey);
         assert_eq!(decoded.1, slot);
+    }
+
+    #[test]
+    fn test_pubkey2() {
+        let pk1 = Pubkey::new_unique(); // or some other way to create a Pubkey
+        let pk2 = Pubkey::new_unique(); // or some other way to create a Pubkey
+
+        let encoded = encode_pubkeyx2((pk1, pk2));
+        let decoded = decode_pubkeyx2(encoded).unwrap();
+
+        assert_eq!(decoded.0, pk1);
+        assert_eq!(decoded.1, pk2);
+    }
+
+    #[test]
+    fn test_pubkeyx3() {
+        let pk1 = Pubkey::new_unique(); // or some other way to create a Pubkey
+        let pk2 = Pubkey::new_unique(); // or some other way to create a Pubkey
+        let pk3 = Pubkey::new_unique(); // or some other way to create a Pubkey
+
+        let encoded = encode_pubkeyx3((pk1, pk2, pk3));
+        let decoded = decode_pubkeyx3(encoded).unwrap();
+
+        assert_eq!(decoded.0, pk1);
+        assert_eq!(decoded.1, pk2);
+        assert_eq!(decoded.2, pk3);
     }
 
     #[test]

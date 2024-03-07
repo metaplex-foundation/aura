@@ -11,12 +11,13 @@ use std::{sync::Arc, time::Instant};
 
 use crate::api::config::Config;
 use digital_asset_types::dapi::get_asset_signatures::get_asset_signatures;
+use digital_asset_types::dapi::get_token_accounts::get_token_accounts;
 use digital_asset_types::rpc::response::TransactionSignatureListDeprecated;
 use digital_asset_types::rpc::Asset;
 use entities::api_req_params::{
     GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
     GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetGrouping,
-    SearchAssets,
+    GetTokenAccounts, SearchAssets,
 };
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
@@ -431,6 +432,47 @@ where
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
+    }
+
+    pub async fn get_token_accounts(
+        &self,
+        payload: GetTokenAccounts,
+    ) -> Result<Value, DasApiError> {
+        let label = "get_token_accounts";
+        self.metrics.inc_requests(label);
+        let latency_timer = Instant::now();
+
+        let GetTokenAccounts {
+            limit,
+            page,
+            owner,
+            mint,
+            options,
+        } = payload;
+
+        let owner = validate_opt_pubkey(&owner)?;
+        let mint = validate_opt_pubkey(&mint)?;
+        validate_basic_pagination(&limit, &page, &None, &None)?;
+        if owner.is_none() && mint.is_none() {
+            return Err(DasApiError::Validation(
+                "Must provide either 'owner' or 'mint'".to_string(),
+            ));
+        }
+
+        let res = get_token_accounts(
+            self.rocks_db.clone(),
+            owner,
+            mint,
+            limit.unwrap_or(DEFAULT_LIMIT as u32).into(),
+            page.map(|page| page as u64),
+            options.map(|op| op.show_zero_balance).unwrap_or_default(),
+        )
+        .await?;
+
+        self.metrics
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+
+        Ok(json!(res))
     }
 
     pub async fn search_assets(&self, payload: SearchAssets) -> Result<Value, DasApiError> {

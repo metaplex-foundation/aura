@@ -8,6 +8,7 @@ use asset::{
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
+use crate::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::editions::TokenMetadataEdition;
 pub use asset::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
@@ -44,9 +45,11 @@ pub mod sequence_consistent;
 pub mod signature_client;
 pub mod slots_dumper;
 pub mod storage_traits;
+pub mod token_accounts;
 pub mod transaction;
 pub mod transaction_client;
 pub mod tree_seq;
+
 pub type Result<T> = std::result::Result<T, StorageError>;
 
 const ROCKS_COMPONENT: &str = "rocks_db";
@@ -83,6 +86,9 @@ pub struct Storage {
     pub tree_seq_idx: Column<TreeSeqIdx>,
     pub trees_gaps: Column<TreesGaps>,
     pub token_metadata_edition_cbor: Column<TokenMetadataEdition>,
+    pub token_accounts: Column<TokenAccount>,
+    pub token_account_owner_idx: Column<TokenAccountOwnerIdx>,
+    pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
     pub asset_signature: Column<AssetSignature>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
@@ -122,6 +128,9 @@ impl Storage {
         let token_metadata_edition_cbor = Self::column(db.clone(), red_metrics.clone());
         let asset_static_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_signature = Self::column(db.clone(), red_metrics.clone());
+        let token_accounts = Self::column(db.clone(), red_metrics.clone());
+        let token_account_owner_idx = Self::column(db.clone(), red_metrics.clone());
+        let token_account_mint_owner_idx = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -150,9 +159,12 @@ impl Storage {
             tree_seq_idx,
             trees_gaps,
             token_metadata_edition_cbor,
+            token_accounts,
+            token_account_owner_idx,
             asset_static_data_deprecated,
             red_metrics,
             asset_signature,
+            token_account_mint_owner_idx,
         }
     }
 
@@ -215,6 +227,9 @@ impl Storage {
             Self::new_cf_descriptor::<TokenMetadataEdition>(),
             Self::new_cf_descriptor::<AssetStaticDetailsDeprecated>(),
             Self::new_cf_descriptor::<AssetSignature>(),
+            Self::new_cf_descriptor::<TokenAccount>(),
+            Self::new_cf_descriptor::<TokenAccountOwnerIdx>(),
+            Self::new_cf_descriptor::<TokenAccountMintOwnerIdx>(),
         ]
     }
 
@@ -439,6 +454,24 @@ impl Storage {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_asset_signature_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            TokenAccount::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_token_accounts",
+                    TokenAccount::merge_values,
+                );
+            }
+            TokenAccountOwnerIdx::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_token_accounts_owner_idx",
+                    TokenAccountOwnerIdx::merge_values,
+                );
+            }
+            TokenAccountMintOwnerIdx::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_token_accounts_mint_owner_idx",
+                    TokenAccountMintOwnerIdx::merge_values,
                 );
             }
             _ => {}
