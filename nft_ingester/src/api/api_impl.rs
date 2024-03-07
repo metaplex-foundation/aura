@@ -31,7 +31,6 @@ use {
 
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
-const DEFAULT_MAX_PAGE_LIMIT: usize = 50;
 
 pub struct DasApi<PC>
 where
@@ -54,7 +53,7 @@ where
         rocks_db: Arc<Storage>,
         metrics: Arc<ApiMetricsConfig>,
         proof_checker: Option<Arc<PC>>,
-        max_page_limit: Option<usize>,
+        max_page_limit: usize,
     ) -> Self {
         let db_connection = SqlxPostgresConnector::from_sqlx_postgres_pool(pg_client.pool.clone());
 
@@ -64,7 +63,7 @@ where
             rocks_db,
             metrics,
             proof_checker,
-            max_page_limit: max_page_limit.unwrap_or(DEFAULT_MAX_PAGE_LIMIT),
+            max_page_limit,
         }
     }
 
@@ -88,7 +87,7 @@ where
             rocks_db,
             metrics,
             proof_checker,
-            max_page_limit: config.max_page_limit.unwrap_or(DEFAULT_MAX_PAGE_LIMIT),
+            max_page_limit: config.max_page_limit,
         })
     }
 }
@@ -136,7 +135,7 @@ where
                 return Err(DasApiError::PaginationEmptyError);
             }
             if page > self.max_page_limit as u32 {
-                return Err(DasApiError::PageTooBig);
+                return Err(DasApiError::PageTooBig(self.max_page_limit));
             }
             // make config item
             if parameters.before.is_some()

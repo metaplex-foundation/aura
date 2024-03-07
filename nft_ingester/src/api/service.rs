@@ -51,7 +51,7 @@ pub async fn start_api_v2(
     metrics: Arc<ApiMetricsConfig>,
     port: u16,
     proof_checker: Option<Arc<MaybeProofChecker>>,
-    max_page_limit: Option<usize>,
+    max_page_limit: usize,
 ) -> Result<(), DasApiError> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     // todo: setup middleware, looks like too many shit related to backups are there

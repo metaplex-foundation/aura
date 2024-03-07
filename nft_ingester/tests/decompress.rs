@@ -249,7 +249,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
-            None,
+            50,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -322,7 +322,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
-            None,
+            50,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -395,7 +395,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
-            None,
+            50,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -468,7 +468,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
-            None,
+            50,
         );
 
         let buffer = Arc::new(Buffer::new());
