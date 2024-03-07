@@ -28,6 +28,8 @@ pub enum UsecaseError {
     Bigtable(String),
     #[error("InvalidParameters: {0}")]
     InvalidParameters(String),
+    #[error("Storage: {0}")]
+    Storage(String),
 }
 
 impl From<ClientError> for UsecaseError {

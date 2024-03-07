@@ -104,7 +104,7 @@ impl TokenAccountsGetter for Storage {
             .token_accounts
             .batch_get(pubkeys)
             .await
-            .map_err(|e| UsecaseError::InvalidParameters(e.to_string()))?
+            .map_err(|e| UsecaseError::Storage(e.to_string()))?
             .into_iter()
             .flat_map(|ta| {
                 ta.map(|ta| TokenAccount {

@@ -453,6 +453,12 @@ where
         let owner = validate_opt_pubkey(&owner)?;
         let mint = validate_opt_pubkey(&mint)?;
         validate_basic_pagination(&limit, &page, &None, &None)?;
+        if owner.is_none() && mint.is_none() {
+            return Err(DasApiError::Validation(
+                "Must provide either 'owner' or 'mint'".to_string(),
+            ));
+        }
+
         let res = get_token_accounts(
             self.rocks_db.clone(),
             owner,
