@@ -12,7 +12,9 @@ mod tests {
     use blockbuster::token_metadata::state::{
         Data, Key, Metadata, TokenStandard as BLKTokenStandard,
     };
-    use digital_asset_types::rpc::response::AssetList;
+    use digital_asset_types::rpc::response::{AssetList, TransactionSignatureList};
+    use entities::api_req_params::GetAssetSignatures;
+    use entities::models::{AssetSignature, AssetSignatureKey};
     use entities::{
         api_req_params::{AssetSortBy, AssetSortDirection, AssetSorting, GetAsset, SearchAssets},
         enums::{
@@ -36,6 +38,7 @@ mod tests {
     };
     use serde_json::{json, Value};
     use solana_program::pubkey::Pubkey;
+    use solana_sdk::signature::Signature;
     use testcontainers::clients::Cli;
     use usecase::proofs::MaybeProofChecker;
 
@@ -1003,7 +1006,7 @@ mod tests {
                 .await;
         });
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
 
         env.rocks_env
             .storage
@@ -1029,6 +1032,167 @@ mod tests {
         assert_eq!(response["burnt"], true);
 
         keep_running.store(false, Ordering::SeqCst);
+
+        env.teardown().await;
+    }
+
+    #[tokio::test]
+    async fn test_asset_signatures() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+        );
+
+        let first_tree = Pubkey::new_unique();
+        let second_tree = Pubkey::new_unique();
+        let first_leaf_idx = 100;
+        let second_leaf_idx = 200;
+
+        for seq in 0..100 {
+            let signature = Signature::new_unique();
+            env.rocks_env
+                .storage
+                .asset_signature
+                .put(
+                    AssetSignatureKey {
+                        tree: first_tree,
+                        leaf_idx: first_leaf_idx,
+                        seq,
+                    },
+                    AssetSignature {
+                        tx: signature.to_string(),
+                        instruction: "TestInstruction".to_string(),
+                        slot: seq * 2,
+                    },
+                )
+                .unwrap();
+        }
+        for seq in 0..100 {
+            let signature = Signature::new_unique();
+            env.rocks_env
+                .storage
+                .asset_signature
+                .put(
+                    AssetSignatureKey {
+                        tree: second_tree,
+                        leaf_idx: second_leaf_idx,
+                        seq,
+                    },
+                    AssetSignature {
+                        tx: signature.to_string(),
+                        instruction: "TestInstruction".to_string(),
+                        slot: seq * 2,
+                    },
+                )
+                .unwrap();
+        }
+
+        let payload = GetAssetSignatures {
+            id: None,
+            limit: Some(50),
+            page: Some(1),
+            before: None,
+            after: None,
+            tree: Some(first_tree.to_string()),
+            leaf_index: Some(first_leaf_idx),
+            sort_direction: None,
+        };
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
+        let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(parsed_response.after, Some("50".to_string()));
+        assert_eq!(parsed_response.before, Some("99".to_string()));
+        assert_eq!(parsed_response.items.len(), 50);
+
+        let payload = GetAssetSignatures {
+            id: None,
+            limit: Some(50),
+            page: None,
+            before: None,
+            after: parsed_response.after,
+            tree: Some(first_tree.to_string()),
+            leaf_index: Some(first_leaf_idx),
+            sort_direction: None,
+        };
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
+        let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(parsed_response.after, Some("0".to_string()));
+        assert_eq!(parsed_response.before, Some("49".to_string()));
+        assert_eq!(parsed_response.items.len(), 50);
+
+        let payload = GetAssetSignatures {
+            id: None,
+            limit: Some(30),
+            page: Some(4),
+            before: None,
+            after: None,
+            tree: Some(first_tree.to_string()),
+            leaf_index: Some(first_leaf_idx),
+            sort_direction: Some(AssetSortDirection::Asc),
+        };
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
+        let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(parsed_response.after, Some("99".to_string()));
+        assert_eq!(parsed_response.before, Some("90".to_string()));
+        assert_eq!(parsed_response.items.len(), 10);
+
+        let payload = GetAssetSignatures {
+            id: None,
+            limit: Some(30),
+            page: Some(2),
+            before: None,
+            after: None,
+            tree: Some(first_tree.to_string()),
+            leaf_index: Some(first_leaf_idx),
+            sort_direction: Some(AssetSortDirection::Desc),
+        };
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
+        let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(parsed_response.after, Some("40".to_string()));
+        assert_eq!(parsed_response.before, Some("69".to_string()));
+        assert_eq!(parsed_response.items.len(), 30);
+
+        let payload = GetAssetSignatures {
+            id: None,
+            limit: Some(30),
+            page: None,
+            before: Some("49".to_string()),
+            after: Some("51".to_string()),
+            tree: Some(first_tree.to_string()),
+            leaf_index: Some(first_leaf_idx),
+            sort_direction: Some(AssetSortDirection::Asc),
+        };
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
+        let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(parsed_response.after, None);
+        assert_eq!(parsed_response.before, None);
+        assert_eq!(parsed_response.items.len(), 0);
+
+        let payload = GetAssetSignatures {
+            id: None,
+            limit: Some(30),
+            page: None,
+            before: Some("49".to_string()),
+            after: Some("51".to_string()),
+            tree: Some(first_tree.to_string()),
+            leaf_index: Some(first_leaf_idx),
+            sort_direction: Some(AssetSortDirection::Desc),
+        };
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
+        let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(parsed_response.after, Some("50".to_string()));
+        assert_eq!(parsed_response.before, Some("50".to_string()));
+        assert_eq!(parsed_response.items.len(), 1);
 
         env.teardown().await;
     }

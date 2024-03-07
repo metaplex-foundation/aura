@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use bincode::deserialize;
+use entities::models::{AssetSignature, AssetSignatureKey};
 use log::error;
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
@@ -158,7 +159,7 @@ impl Storage {
         }
     }
 
-    pub(crate) fn save_tree_with_batch(&self, batch: &mut rocksdb::WriteBatch, tree: TreeUpdate) {
+    pub(crate) fn save_tree_with_batch(&self, batch: &mut rocksdb::WriteBatch, tree: &TreeUpdate) {
         if let Err(e) = self.tree_seq_idx.put_with_batch(
             batch,
             (tree.tree, tree.seq),
@@ -225,6 +226,28 @@ impl Storage {
                 }
             }
         }
+    }
+
+    pub(crate) fn save_asset_signature_with_batch(
+        &self,
+        batch: &mut rocksdb::WriteBatch,
+        tree: &TreeUpdate,
+    ) {
+        if let Err(e) = self.asset_signature.put_with_batch(
+            batch,
+            AssetSignatureKey {
+                tree: tree.tree,
+                leaf_idx: tree.event.index as u64,
+                seq: tree.seq,
+            },
+            &AssetSignature {
+                tx: tree.tx.clone(),
+                instruction: tree.instruction.clone(),
+                slot: tree.slot,
+            },
+        ) {
+            error!("Error while saving tree update: {}", e);
+        };
     }
 
     pub(crate) fn save_tx_data_and_asset_updated_with_batch(

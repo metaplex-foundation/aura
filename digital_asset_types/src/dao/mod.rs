@@ -12,7 +12,7 @@ pub mod scopes;
 pub use converters::*;
 use entities::api_req_params::SearchAssets;
 use interface::error::UsecaseError;
-use usecase::validation::{validate_opt_pubkey, validate_pubkey};
+use usecase::validation::{validate_opt_pubkey_vec, validate_pubkey};
 
 pub struct GroupingSize {
     pub size: u64,
@@ -76,24 +76,24 @@ impl TryFrom<SearchAssets> for SearchAssetsQuery {
         Ok(SearchAssetsQuery {
             negate: search_assets.negate,
             condition_type: search_assets.condition_type.map(|s| s.into()),
-            owner_address: validate_opt_pubkey(&search_assets.owner_address)?,
+            owner_address: validate_opt_pubkey_vec(&search_assets.owner_address)?,
             owner_type: search_assets
                 .owner_type
                 .map(|s| crate::rpc::OwnershipModel::from(s).into()),
-            creator_address: validate_opt_pubkey(&search_assets.creator_address)?,
+            creator_address: validate_opt_pubkey_vec(&search_assets.creator_address)?,
             creator_verified: search_assets.creator_verified,
-            authority_address: validate_opt_pubkey(&search_assets.authority_address)?,
+            authority_address: validate_opt_pubkey_vec(&search_assets.authority_address)?,
             grouping,
-            delegate: validate_opt_pubkey(&search_assets.delegate)?,
+            delegate: validate_opt_pubkey_vec(&search_assets.delegate)?,
             frozen: search_assets.frozen,
             supply: search_assets.supply,
-            supply_mint: validate_opt_pubkey(&search_assets.supply_mint)?,
+            supply_mint: validate_opt_pubkey_vec(&search_assets.supply_mint)?,
             compressed: search_assets.compressed,
             compressible: search_assets.compressible,
             royalty_target_type: search_assets
                 .royalty_target_type
                 .map(|s| crate::rpc::RoyaltyModel::from(s).into()),
-            royalty_target: validate_opt_pubkey(&search_assets.royalty_target)?,
+            royalty_target: validate_opt_pubkey_vec(&search_assets.royalty_target)?,
             royalty_amount: search_assets.royalty_amount,
             burnt: search_assets.burnt,
             json_uri: search_assets.json_uri,
