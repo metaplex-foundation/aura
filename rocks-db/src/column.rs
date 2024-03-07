@@ -3,13 +3,13 @@ use std::{collections::HashMap, marker::PhantomData, sync::Arc, vec};
 use bincode::{deserialize, serialize};
 use entities::models::{TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey};
 use log::error;
+use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
 use serde::{de::DeserializeOwned, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
 use crate::key_encoders::{decode_pubkeyx2, decode_pubkeyx3, encode_pubkeyx2, encode_pubkeyx3};
-use crate::{Result, StorageError};
-
+use crate::{Result, StorageError, BATCH_GET_ACTION, ROCKS_COMPONENT};
 pub trait TypedColumn {
     type KeyType: Sync + Clone + Send;
     type ValueType: Sync + Serialize + DeserializeOwned + Send;
@@ -35,6 +35,7 @@ where
 {
     pub backend: Arc<DB>,
     pub column: PhantomData<C>,
+    pub red_metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl<C> Column<C>
@@ -299,11 +300,29 @@ where
     where
         F: Fn(&[u8]) -> Result<C::ValueType> + Copy + Send + 'static,
     {
+        let start_time = chrono::Utc::now();
         let db = self.backend.clone();
         let keys = keys.clone();
-        tokio::task::spawn_blocking(move || Self::batch_get_sync_generic(db, keys, deserialize_fn))
-            .await
-            .map_err(|e| StorageError::Common(e.to_string()))?
+        match tokio::task::spawn_blocking(move || {
+            Self::batch_get_sync_generic(db, keys, deserialize_fn)
+        })
+        .await
+        {
+            Ok(res) => {
+                self.red_metrics.observe_request(
+                    ROCKS_COMPONENT,
+                    BATCH_GET_ACTION,
+                    C::NAME,
+                    start_time,
+                );
+                res
+            }
+            Err(e) => {
+                self.red_metrics
+                    .observe_error(ROCKS_COMPONENT, BATCH_GET_ACTION, C::NAME);
+                Err(StorageError::Common(e.to_string()))
+            }
+        }
     }
 
     fn batch_get_sync_generic<F>(

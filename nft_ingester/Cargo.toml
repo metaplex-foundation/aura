@@ -104,3 +104,5 @@ name = "migrator"
 [[bin]]
 name = "raw_backfiller"
 
+[[bin]]
+name = "synchronizer"

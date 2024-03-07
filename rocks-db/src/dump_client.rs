@@ -12,8 +12,13 @@ use hex;
 use inflector::Inflector;
 use serde::{Serialize, Serializer};
 use solana_sdk::pubkey::Pubkey;
-use std::{collections::HashSet, fs::File, io::Write};
+use std::{
+    collections::HashSet,
+    fs::File,
+    io::{BufWriter, Write},
+};
 
+const ONE_G: usize = 1024 * 1024 * 1024;
 fn serialize_as_snake_case<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -208,15 +213,19 @@ impl Dumper for Storage {
         let metadata_file = File::create(metadata_path.unwrap()).unwrap();
         let assets_file = File::create(assets_path.unwrap()).unwrap();
         let creators_file = File::create(creators_path.unwrap()).unwrap();
+        // Wrap each file in a BufWriter
+        let metadata_buf_writer = BufWriter::with_capacity(ONE_G, metadata_file);
+        let assets_buf_writer = BufWriter::with_capacity(ONE_G, assets_file);
+        let creators_buf_writer = BufWriter::with_capacity(ONE_G, creators_file);
         let mut metadata_writer = WriterBuilder::new()
             .has_headers(false)
-            .from_writer(metadata_file);
+            .from_writer(metadata_buf_writer);
         let mut assets_writer = WriterBuilder::new()
             .has_headers(false)
-            .from_writer(assets_file);
+            .from_writer(assets_buf_writer);
         let mut creators_writer = WriterBuilder::new()
             .has_headers(false)
-            .from_writer(creators_file);
+            .from_writer(creators_buf_writer);
 
         self.dump_csv(
             &mut metadata_writer,

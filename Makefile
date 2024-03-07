@@ -8,6 +8,9 @@ build:
 start:
 	@docker compose -f docker-compose.yaml up -d ingester-first-consumer
 
+start-synchronizer:
+	@docker compose -f docker-compose.yaml up -d synchronizer
+
 build-integrity-verification:
 	@docker compose -f docker-compose.yaml build integrity-verification
 

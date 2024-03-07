@@ -29,15 +29,16 @@ pub async fn main() -> Result<(), IngesterError> {
     let config: ApiConfig = setup_config("API_");
     init_logger(&config.get_log_level());
 
-    let mut guard = None;
-    if config.run_profiling {
-        guard = Some(
+    let guard = if config.run_profiling {
+        Some(
             pprof::ProfilerGuardBuilder::default()
                 .frequency(100)
                 .build()
                 .unwrap(),
-        );
-    }
+        )
+    } else {
+        None
+    };
 
     let mut registry = Registry::default();
     let metrics = Arc::new(ApiMetricsConfig::new());

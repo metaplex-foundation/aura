@@ -283,6 +283,19 @@ impl SynchronizerMetricsConfig {
             })
             .set(slot)
     }
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "synchronizer_number_of_records_synchronized",
+            "Count of records, synchronized by synchronizer",
+            self.number_of_records_synchronized.clone(),
+        );
+
+        registry.register(
+            "synchronizer_last_synchronized_slot",
+            "The last synchronized slot by synchronizer",
+            self.last_synchronized_slot.clone(),
+        );
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -435,20 +448,7 @@ impl MetricsTrait for MetricState {
             self.rpc_backfiller_metrics.run_fetch_signatures.clone(),
         );
 
-        self.registry.register(
-            "synchronizer_number_of_records_synchronized",
-            "Count of records, synchronized by synchronizer",
-            self.synchronizer_metrics
-                .number_of_records_synchronized
-                .clone(),
-        );
-
-        self.registry.register(
-            "synchronizer_last_synchronized_slot",
-            "The last synchronized slot by synchronizer",
-            self.synchronizer_metrics.last_synchronized_slot.clone(),
-        );
-
+        self.synchronizer_metrics.register(&mut self.registry);
         self.json_migrator_metrics.register(&mut self.registry);
         self.sequence_consistent_gapfill_metrics
             .register(&mut self.registry);

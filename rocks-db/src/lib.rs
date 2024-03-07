@@ -52,6 +52,14 @@ pub mod tree_seq;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
+const ROCKS_COMPONENT: &str = "rocks_db";
+const DROP_ACTION: &str = "drop";
+const RAW_BLOCKS_CBOR_ENDPOINT: &str = "raw_blocks_cbor";
+const FULL_ITERATION_ACTION: &str = "full_iteration";
+const BATCH_ITERATION_ACTION: &str = "batch_iteration";
+const BATCH_GET_ACTION: &str = "batch_get";
+const ITERATOR_TOP_ACTION: &str = "iterator_top";
+
 pub struct Storage {
     pub asset_static_data: Column<AssetStaticDetails>,
     pub asset_static_data_deprecated: Column<AssetStaticDetailsDeprecated>,
@@ -93,36 +101,36 @@ impl Storage {
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Self {
-        let asset_static_data = Self::column(db.clone());
-        let asset_dynamic_data = Self::column(db.clone());
-        let asset_dynamic_data_deprecated = Self::column(db.clone());
-        let metadata_mint_map = Self::column(db.clone());
-        let asset_authority_data = Self::column(db.clone());
-        let asset_authority_deprecated = Self::column(db.clone());
-        let asset_owner_data = Self::column(db.clone());
-        let asset_owner_data_deprecated = Self::column(db.clone());
-        let asset_leaf_data = Self::column(db.clone());
-        let asset_collection_data = Self::column(db.clone());
-        let asset_collection_data_deprecated = Self::column(db.clone());
-        let asset_offchain_data = Self::column(db.clone());
+        let asset_static_data = Self::column(db.clone(), red_metrics.clone());
+        let asset_dynamic_data = Self::column(db.clone(), red_metrics.clone());
+        let asset_dynamic_data_deprecated = Self::column(db.clone(), red_metrics.clone());
+        let metadata_mint_map = Self::column(db.clone(), red_metrics.clone());
+        let asset_authority_data = Self::column(db.clone(), red_metrics.clone());
+        let asset_authority_deprecated = Self::column(db.clone(), red_metrics.clone());
+        let asset_owner_data = Self::column(db.clone(), red_metrics.clone());
+        let asset_owner_data_deprecated = Self::column(db.clone(), red_metrics.clone());
+        let asset_leaf_data = Self::column(db.clone(), red_metrics.clone());
+        let asset_collection_data = Self::column(db.clone(), red_metrics.clone());
+        let asset_collection_data_deprecated = Self::column(db.clone(), red_metrics.clone());
+        let asset_offchain_data = Self::column(db.clone(), red_metrics.clone());
 
-        let cl_items = Self::column(db.clone());
-        let cl_leafs = Self::column(db.clone());
+        let cl_items = Self::column(db.clone(), red_metrics.clone());
+        let cl_leafs = Self::column(db.clone(), red_metrics.clone());
 
-        let bubblegum_slots = Self::column(db.clone());
-        let ingestable_slots = Self::column(db.clone());
-        let force_reingestable_slots = Self::column(db.clone());
-        let raw_blocks = Self::column(db.clone());
-        let assets_update_idx = Self::column(db.clone());
-        let slot_asset_idx = Self::column(db.clone());
-        let tree_seq_idx = Self::column(db.clone());
-        let trees_gaps = Self::column(db.clone());
-        let token_metadata_edition_cbor = Self::column(db.clone());
-        let asset_static_data_deprecated = Self::column(db.clone());
-        let token_accounts = Self::column(db.clone());
-        let token_account_owner_idx = Self::column(db.clone());
-        let token_account_mint_owner_idx = Self::column(db.clone());
-        let asset_signature = Self::column(db.clone());
+        let bubblegum_slots = Self::column(db.clone(), red_metrics.clone());
+        let ingestable_slots = Self::column(db.clone(), red_metrics.clone());
+        let force_reingestable_slots = Self::column(db.clone(), red_metrics.clone());
+        let raw_blocks = Self::column(db.clone(), red_metrics.clone());
+        let assets_update_idx = Self::column(db.clone(), red_metrics.clone());
+        let slot_asset_idx = Self::column(db.clone(), red_metrics.clone());
+        let tree_seq_idx = Self::column(db.clone(), red_metrics.clone());
+        let trees_gaps = Self::column(db.clone(), red_metrics.clone());
+        let token_metadata_edition_cbor = Self::column(db.clone(), red_metrics.clone());
+        let asset_static_data_deprecated = Self::column(db.clone(), red_metrics.clone());
+        let asset_signature = Self::column(db.clone(), red_metrics.clone());
+        let token_accounts = Self::column(db.clone(), red_metrics.clone());
+        let token_account_owner_idx = Self::column(db.clone(), red_metrics.clone());
+        let token_account_mint_owner_idx = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -229,7 +237,7 @@ impl Storage {
         ColumnFamilyDescriptor::new(C::NAME, Self::get_cf_options::<C>())
     }
 
-    pub fn column<C>(backend: Arc<DB>) -> Column<C>
+    pub fn column<C>(backend: Arc<DB>, red_metrics: Arc<RequestErrorDurationMetrics>) -> Column<C>
     where
         C: TypedColumn,
         <C as TypedColumn>::ValueType: 'static,
@@ -239,6 +247,7 @@ impl Storage {
         Column {
             backend,
             column: PhantomData,
+            red_metrics,
         }
     }
 

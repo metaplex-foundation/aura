@@ -12,16 +12,26 @@ use crate::editions::TokenMetadataEdition;
 use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
 use crate::storage_traits::{AssetIndexReader, AssetSlotStorage, AssetUpdateIndexStorage};
-use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage};
+use crate::{
+    AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
+    BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
+};
 use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, UrlWithStatus};
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<(u64, u64, Pubkey)>> {
+        let start_time = chrono::Utc::now();
         let mut iter = self.assets_update_idx.iter_end();
         if let Some(pair) = iter.next() {
             let (last_key, _) = pair?;
             let key = AssetsUpdateIdx::decode_key(last_key.to_vec())?;
             let decoded_key = decode_u64x2_pubkey(key).unwrap();
+            self.red_metrics.observe_request(
+                ROCKS_COMPONENT,
+                ITERATOR_TOP_ACTION,
+                AssetsUpdateIdx::NAME,
+                start_time,
+            );
             Ok(Some(decoded_key))
         } else {
             Ok(None)
@@ -41,6 +51,7 @@ impl AssetUpdateIndexStorage for Storage {
         if limit == 0 {
             return Ok((unique_pubkeys, last_key));
         }
+        let start_time = chrono::Utc::now();
 
         let iterator = match last_key {
             Some(key) => {
@@ -78,7 +89,12 @@ impl AssetUpdateIndexStorage for Storage {
                 break;
             }
         }
-
+        self.red_metrics.observe_request(
+            ROCKS_COMPONENT,
+            BATCH_ITERATION_ACTION,
+            AssetsUpdateIdx::NAME,
+            start_time,
+        );
         Ok((unique_pubkeys, last_key))
     }
 }
@@ -87,7 +103,7 @@ impl AssetUpdateIndexStorage for Storage {
 impl AssetIndexReader for Storage {
     async fn get_asset_indexes(&self, keys: &[Pubkey]) -> Result<HashMap<Pubkey, AssetIndex>> {
         let mut asset_indexes = HashMap::new();
-
+        let start_time = chrono::Utc::now();
         let assets_static_fut = self.asset_static_data.batch_get(keys.to_vec());
         let assets_dynamic_fut = self.asset_dynamic_data.batch_get(keys.to_vec());
         let assets_authority_fut = self.asset_authority_data.batch_get(keys.to_vec());
@@ -216,7 +232,12 @@ impl AssetIndexReader for Storage {
                 asset_indexes.insert(asset_index.pubkey, asset_index);
             }
         }
-
+        self.red_metrics.observe_request(
+            ROCKS_COMPONENT,
+            BATCH_ITERATION_ACTION,
+            "collect_asset_indexes",
+            start_time,
+        );
         Ok(asset_indexes)
     }
 }
