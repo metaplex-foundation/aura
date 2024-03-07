@@ -970,6 +970,7 @@ dependencies = [
  "solana-transaction-status",
  "tokio",
  "tracing",
+ "usecase",
 ]
 
 [[package]]

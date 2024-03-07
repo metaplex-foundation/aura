@@ -24,7 +24,7 @@ use tokio::sync::broadcast::Receiver;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tokio::time::Duration;
-use usecase::bigtable::BigTableClient;
+use usecase::bigtable::{is_bubblegum_transaction_encoded, BigTableClient};
 use usecase::slots_collector::SlotsCollector;
 
 const BBG_PREFIX: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY/";
@@ -643,41 +643,6 @@ pub async fn connect_new_bigtable_from_config(
     BigTableClient::connect_new_with(big_table_creds, big_table_timeout)
         .await
         .map_err(Into::into)
-}
-
-fn is_bubblegum_transaction_encoded(tx: &EncodedTransactionWithStatusMeta) -> bool {
-    let meta = if let Some(meta) = tx.meta.clone() {
-        if let Err(_err) = meta.status {
-            return false;
-        }
-        meta
-    } else {
-        error!("Unexpected, EncodedTransactionWithStatusMeta struct has no metadata");
-        return false;
-    };
-    let decoded_tx = tx.transaction.decode();
-    if decoded_tx.is_none() {
-        return false;
-    }
-    let decoded_tx = decoded_tx.unwrap();
-    let msg = decoded_tx.message;
-    let atl_keys = msg.address_table_lookups();
-
-    let lookup_key = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
-    if msg.static_account_keys().iter().any(|k| *k == lookup_key) {
-        return true;
-    }
-
-    if atl_keys.is_some() {
-        let lookup_key = lookup_key.to_string();
-        if let solana_transaction_status::option_serializer::OptionSerializer::Some(ad) =
-            meta.loaded_addresses
-        {
-            return ad.writable.iter().any(|k| *k == lookup_key)
-                || ad.readonly.iter().any(|k| *k == lookup_key);
-        }
-    }
-    false
 }
 
 pub struct ForceReingestableSlotGetter<T, P>
