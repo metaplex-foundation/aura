@@ -43,5 +43,6 @@ RUN groupadd $APP_USER && useradd -g $APP_USER $APP_USER && mkdir -p ${APP}
 COPY --from=builder /rust/target/release/ingester ${APP}/ingester
 COPY --from=builder /rust/target/release/raw_backfiller ${APP}/raw_backfiller
 COPY --from=builder /rust/target/release/api ${APP}/api
+COPY --from=builder /rust/target/release/synchronizer ${APP}/synchronizer
 WORKDIR ${APP}
 STOPSIGNAL SIGINT
