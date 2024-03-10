@@ -6,12 +6,12 @@ use metrics_utils::SequenceConsistentGapfillMetricsConfig;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
 use tracing::{info, warn};
-use usecase::slots_collector::{RowKeysGetter, SlotsCollector};
+use usecase::slots_collector::{SlotsCollector, SlotsGetter};
 
 pub struct SequenceConsistentGapfiller<T, R, S, F>
 where
     T: SlotsDumper + Sync + Send + 'static,
-    R: RowKeysGetter + Sync + Send + 'static,
+    R: SlotsGetter + Sync + Send + 'static,
     S: SequenceConsistentManager,
     F: FinalizedSlotGetter,
 {
@@ -24,7 +24,7 @@ where
 impl<T, R, S, F> SequenceConsistentGapfiller<T, R, S, F>
 where
     T: SlotsDumper + Sync + Send + 'static,
-    R: RowKeysGetter + Sync + Send + 'static,
+    R: SlotsGetter + Sync + Send + 'static,
     S: SequenceConsistentManager,
     F: FinalizedSlotGetter,
 {
@@ -73,7 +73,7 @@ where
                 let slots_collector = self.slots_collector.clone();
                 slots_collector
                     .collect_slots(
-                        &format!("{}/", current_state.tree),
+                        &current_state.tree,
                         current_state.slot,
                         prev_state.slot,
                         &rx,

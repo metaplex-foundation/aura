@@ -16,36 +16,59 @@ pub const GET_SIGNATURES_LIMIT: i64 = 2000;
 
 #[automock]
 #[async_trait]
-pub trait RowKeysGetter {
-    async fn get_row_keys(
+pub trait SlotsGetter {
+    async fn get_slots(
         &self,
-        table_name: &str,
-        start_at: Option<String>,
-        end_at: Option<String>,
+        collected_key: &solana_program::pubkey::Pubkey,
+        start_at: u64,
+        end_at: u64,
         rows_limit: i64,
-    ) -> Result<Vec<String>, UsecaseError>;
+    ) -> Result<Vec<u64>, UsecaseError>;
 }
 
 #[async_trait]
-impl RowKeysGetter for BigTableConnection {
-    async fn get_row_keys(
+impl SlotsGetter for BigTableConnection {
+    async fn get_slots(
         &self,
-        table_name: &str,
-        start_at: Option<String>,
-        end_at: Option<String>,
+        collected_key: &solana_program::pubkey::Pubkey,
+        start_at: u64,
+        _end_at: u64,
         rows_limit: i64,
-    ) -> Result<Vec<String>, UsecaseError> {
+    ) -> Result<Vec<u64>, UsecaseError> {
+        let key = format!("{}/", collected_key);
         self.client()
-            .get_row_keys(table_name, start_at, end_at, rows_limit)
+            .get_row_keys(
+                "tx-by-addr",
+                Some(slot_to_row(&key, start_at)),
+                Some(slot_to_row(&key, Slot::MIN)),
+                rows_limit,
+            )
             .await
             .map_err(|e| UsecaseError::Bigtable(e.to_string()))
+            .and_then(|bg_slots| {
+                bg_slots
+                    .iter()
+                    .map(|slot| {
+                        row_to_slot(&key, slot).map_err(|e| UsecaseError::Bigtable(e.to_string()))
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            })
     }
+}
+
+fn slot_to_row(prefix: &str, slot: Slot) -> String {
+    let slot = !slot;
+    format!("{}{slot:016x}", prefix)
+}
+
+fn row_to_slot(prefix: &str, key: &str) -> Result<Slot, ParseIntError> {
+    Slot::from_str_radix(&key[prefix.len()..], 16).map(|s| !s)
 }
 
 pub struct SlotsCollector<T, R>
 where
     T: SlotsDumper + Sync + Send,
-    R: RowKeysGetter + Sync + Send,
+    R: SlotsGetter + Sync + Send,
 {
     slots_dumper: Arc<T>,
     row_keys_getter: Arc<R>,
@@ -55,7 +78,7 @@ where
 impl<T, R> SlotsCollector<T, R>
 where
     T: SlotsDumper + Sync + Send,
-    R: RowKeysGetter + Sync + Send,
+    R: SlotsGetter + Sync + Send,
 {
     pub fn new(
         slots_dumper: Arc<T>,
@@ -71,7 +94,7 @@ where
 
     pub async fn collect_slots(
         &self,
-        collected_pubkey: &str,
+        collected_pubkey: &solana_program::pubkey::Pubkey,
         slot_start_from: u64,
         slot_parse_until: u64,
         rx: &Receiver<()>,
@@ -89,38 +112,27 @@ where
             }
             let slots = self
                 .row_keys_getter
-                .get_row_keys(
-                    "tx-by-addr",
-                    Some(self.slot_to_row(collected_pubkey, start_at_slot)),
-                    Some(self.slot_to_row(collected_pubkey, Slot::MIN)),
+                .get_slots(
+                    collected_pubkey,
+                    slot_start_from,
+                    slot_parse_until,
                     GET_SIGNATURES_LIMIT,
                 )
                 .await;
             match slots {
-                Ok(bg_slots) => {
+                Ok(s) => {
                     self.metrics
                         .inc_slots_collected("backfiller_slots_collected", MetricStatus::SUCCESS);
 
                     let mut slots = Vec::new();
-                    for slot in bg_slots.iter() {
-                        let slot_value = self.row_to_slot(collected_pubkey, slot);
-                        match slot_value {
-                            Ok(slot) => {
-                                slots.push(slot);
+                    for slot in s.into_iter() {
+                        slots.push(slot);
 
-                                if top_slot_collected.is_none() {
-                                    top_slot_collected = Some(slot);
-                                }
-                                if slot <= slot_parse_until {
-                                    break;
-                                }
-                            }
-                            Err(err) => {
-                                error!(
-                                    "Error while converting key received from BigTable to slot: {}",
-                                    err
-                                );
-                            }
+                        if top_slot_collected.is_none() {
+                            top_slot_collected = Some(slot);
+                        }
+                        if slot <= slot_parse_until {
+                            break;
                         }
                     }
 
@@ -155,14 +167,5 @@ where
             }
         }
         top_slot_collected
-    }
-
-    fn slot_to_row(&self, prefix: &str, slot: Slot) -> String {
-        let slot = !slot;
-        format!("{}{slot:016x}", prefix)
-    }
-
-    fn row_to_slot(&self, prefix: &str, key: &str) -> Result<Slot, ParseIntError> {
-        Slot::from_str_radix(&key[prefix.len()..], 16).map(|s| !s)
     }
 }

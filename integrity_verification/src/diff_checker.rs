@@ -442,9 +442,11 @@ where
                 return;
             }
         };
-        collect_tools
-            .collect_slots(asset_id, tree_id, slot, rx)
-            .await;
+        if let Ok(tree_id) = Pubkey::from_str(tree_id) {
+            collect_tools
+                .collect_slots(asset_id, tree_id, slot, rx)
+                .await
+        }
     }
 
     async fn get_slot(&self) -> Result<u64, IntegrityVerificationError> {
@@ -495,17 +497,17 @@ where
 }
 
 impl CollectSlotsTools {
-    async fn collect_slots(&self, asset: &str, tree_key: &str, slot: u64, rx: &Receiver<()>) {
+    async fn collect_slots(&self, asset: &str, tree_key: Pubkey, slot: u64, rx: &Receiver<()>) {
         let slots_collector = SlotsCollector::new(
-            Arc::new(FileSlotsDumper::new(self.format_filename(tree_key, asset))),
+            Arc::new(FileSlotsDumper::new(
+                self.format_filename(&tree_key.to_string(), asset),
+            )),
             self.bigtable_client.big_table_inner_client.clone(),
             self.metrics.clone(),
         );
 
         info!("Start collecting slots for {}", tree_key);
-        slots_collector
-            .collect_slots(&format!("{}/", tree_key), slot, 0, rx)
-            .await;
+        slots_collector.collect_slots(&tree_key, slot, 0, rx).await;
         info!("Collected slots for {}", tree_key);
     }
 
@@ -523,7 +525,9 @@ mod tests {
     use metrics_utils::{IntegrityVerificationMetrics, MetricsTrait};
     use regex::Regex;
     use serde_json::json;
+    use solana_program::pubkey::Pubkey;
     use solana_sdk::commitment_config::CommitmentLevel;
+    use std::str::FromStr;
 
     // this function used only inside tests under rpc_tests and bigtable_tests features, that do not running in our CI
     #[allow(dead_code)]
@@ -565,7 +569,7 @@ mod tests {
             .unwrap()
             .collect_slots(
                 "BAtEs7TuGm2hP2owc9cTit2TNfVzpPFyQAAvkDWs6tDm",
-                "4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE",
+                Pubkey::from_str("4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE").unwrap(),
                 244259062,
                 &rx,
             )

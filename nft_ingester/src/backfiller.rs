@@ -7,6 +7,7 @@ use futures::future::join_all;
 use interface::signature_persistence::{BlockConsumer, BlockProducer};
 use interface::slot_getter::FinalizedSlotGetter;
 use interface::slots_dumper::{SlotGetter, SlotsDumper};
+use lazy_static::lazy_static;
 use log::{error, info, warn};
 use metrics_utils::BackfillerMetricsConfig;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
@@ -14,10 +15,12 @@ use rocks_db::bubblegum_slots::{BubblegumSlotGetter, ForceReingestableSlots};
 use rocks_db::column::TypedColumn;
 use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
 use rocks_db::Storage;
+use solana_program::pubkey::Pubkey;
 use solana_transaction_status::{
     EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta,
 };
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
@@ -26,14 +29,16 @@ use tokio::task::{JoinError, JoinSet};
 use tokio::time::Duration;
 use usecase::bigtable::BigTableClient;
 use usecase::slots_collector::SlotsCollector;
-
-const BBG_PREFIX: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY/";
 pub const GET_SIGNATURES_LIMIT: usize = 2000;
 pub const GET_SLOT_RETRIES: u32 = 3;
 pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 10;
 pub const GET_DATA_FROM_BG_RETRIES: u32 = 5;
 pub const SECONDS_TO_RETRY_ROCKSDB_OPERATION: u64 = 5;
 pub const DELETE_SLOT_RETRIES: u32 = 5;
+lazy_static! {
+    static ref BGG_PUBKEY: Pubkey =
+        Pubkey::from_str("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY").unwrap();
+}
 
 #[derive(Clone)]
 pub struct Backfiller {
@@ -87,7 +92,7 @@ impl Backfiller {
         loop {
             let finalized_slot = finalized_slot_getter.get_finalized_slot().await?;
             let top_collected_slot = slots_collector
-                .collect_slots(BBG_PREFIX, finalized_slot, parse_until, &rx)
+                .collect_slots(&BGG_PUBKEY, finalized_slot, parse_until, &rx)
                 .await;
             if let Some(slot) = top_collected_slot {
                 parse_until = slot;
@@ -177,7 +182,7 @@ impl Backfiller {
         tasks.lock().await.spawn(tokio::spawn(async move {
             info!("Running slots parser...");
             slots_collector
-                .collect_slots(BBG_PREFIX, start_from, parse_until, &rx1)
+                .collect_slots(&BGG_PUBKEY, start_from, parse_until, &rx1)
                 .await;
         }));
 
