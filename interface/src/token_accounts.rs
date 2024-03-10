@@ -11,6 +11,7 @@ pub trait TokenAccountsGetter {
         mint: Option<Pubkey>,
         page: Option<u64>,
         limit: u64,
+        show_zero_balance: bool,
     ) -> Result<impl Iterator<Item = TokenAccountIterableIdx>, UsecaseError>;
     #[allow(clippy::too_many_arguments)]
     async fn get_token_accounts(

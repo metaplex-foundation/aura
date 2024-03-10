@@ -16,6 +16,7 @@ impl TokenAccountsGetter for Storage {
         mint: Option<Pubkey>,
         page: Option<u64>,
         limit: u64,
+        show_zero_balance: bool,
     ) -> Result<impl Iterator<Item = TokenAccountIterableIdx>, UsecaseError> {
         if owner.is_none() && mint.is_none() {
             return Err(UsecaseError::InvalidParameters(
@@ -40,10 +41,6 @@ impl TokenAccountsGetter for Storage {
         };
 
         Ok(iter
-            .skip(
-                page.and_then(|page| page.saturating_sub(1).checked_mul(limit))
-                    .unwrap_or_default() as usize,
-            )
             .filter_map(std::result::Result::ok)
             .flat_map(move |(key, value)| {
                 let mut res = match mint {
@@ -75,7 +72,17 @@ impl TokenAccountsGetter for Storage {
                 res.is_zero_balance = value.is_zero_balance;
 
                 Some(res)
-            }))
+            })
+            .filter_map(move |iterable_token_account| {
+                if !show_zero_balance && iterable_token_account.is_zero_balance {
+                    return None;
+                }
+                Some(iterable_token_account)
+            })
+            .skip(
+                page.and_then(|page| page.saturating_sub(1).checked_mul(limit))
+                    .unwrap_or_default() as usize,
+            ))
     }
 
     async fn get_token_accounts(
@@ -87,15 +94,12 @@ impl TokenAccountsGetter for Storage {
         show_zero_balance: bool,
     ) -> Result<Vec<TokenAccount>, UsecaseError> {
         let mut pubkeys = Vec::new();
-        for key in self.token_accounts_pubkeys_iter(owner, mint, page, limit)? {
+        for key in self.token_accounts_pubkeys_iter(owner, mint, page, limit, show_zero_balance)? {
             if (pubkeys.len() >= limit as usize)
                 || owner.map(|owner| owner != key.owner).unwrap_or_default()
                 || mint != key.mint
             {
                 break;
-            }
-            if !show_zero_balance && key.is_zero_balance {
-                continue;
             }
             pubkeys.push(key.token_account);
         }
