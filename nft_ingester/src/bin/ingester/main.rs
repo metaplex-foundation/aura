@@ -66,15 +66,16 @@ pub async fn main() -> Result<(), IngesterError> {
     let config: IngesterConfig = setup_config(INGESTER_CONFIG_PREFIX);
     init_logger(&config.get_log_level());
 
-    let mut guard = None;
-    if config.get_is_run_profiling() {
-        guard = Some(
+    let guard = if config.get_is_run_profiling() {
+        Some(
             pprof::ProfilerGuardBuilder::default()
                 .frequency(100)
                 .build()
                 .unwrap(),
-        );
-    }
+        )
+    } else {
+        None
+    };
 
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
@@ -523,12 +524,10 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     if !config.disable_synchronizer {
-        let cloned_keep_running = keep_running.clone();
+        let rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-            while cloned_keep_running.load(Ordering::SeqCst) {
-                let res = synchronizer
-                    .synchronize_asset_indexes(cloned_keep_running.clone())
-                    .await;
+            while rx.is_empty() {
+                let res = synchronizer.synchronize_asset_indexes(&rx).await;
                 match res {
                     Ok(_) => {
                         info!("Synchronization finished successfully");

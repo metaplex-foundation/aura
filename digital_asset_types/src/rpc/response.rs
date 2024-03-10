@@ -1,4 +1,4 @@
-use entities::models::AssetSignature;
+use entities::models::{AssetSignature, TokenAccount};
 use schemars::JsonSchema;
 use {
     crate::rpc::Asset,
@@ -98,4 +98,14 @@ impl From<TransactionSignatureList> for TransactionSignatureListDeprecated {
                 .collect(),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
+#[serde(default)]
+pub struct TokenAccountsList {
+    pub total: u32,
+    pub limit: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<u32>,
+    pub token_accounts: Vec<TokenAccount>,
 }

@@ -2,12 +2,15 @@ use crate::buffer::Buffer;
 use crate::mplx_updates_processor::result_to_metrics;
 use crate::process_accounts;
 use entities::enums::OwnerType;
-use entities::models::{PubkeyWithSlot, UpdateVersion, Updated};
+use entities::models::{
+    PubkeyWithSlot, TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey, UpdateVersion, Updated,
+};
 use futures::future;
 use log::error;
 use metrics_utils::IngesterMetricsConfig;
+use num_traits::Zero;
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
-use rocks_db::columns::{Mint, TokenAccount};
+use rocks_db::columns::{Mint, TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
 use solana_program::pubkey::Pubkey;
@@ -105,11 +108,18 @@ impl TokenAccsProcessor {
 
     pub async fn transform_and_save_token_accs(
         &self,
-        accs_to_save: &HashMap<Vec<u8>, TokenAccount>,
+        accs_to_save: &HashMap<Pubkey, TokenAccount>,
     ) {
+        self.save_token_accounts_with_idxs(accs_to_save).await;
         let dynamic_and_asset_owner_details = accs_to_save.clone().into_values().fold(
             DynamicAndAssetOwnerDetails::default(),
             |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, token_account| {
+                // geyser can send us old accounts with zero token balances for some reason
+                // we should not process it
+                // asset supply we track at mint update
+                if token_account.amount.is_zero() {
+                    return accumulated_asset_info;
+                }
                 accumulated_asset_info.asset_owner_details.insert(
                     token_account.mint,
                     AssetOwner {
@@ -163,7 +173,7 @@ impl TokenAccsProcessor {
                 .values()
                 .map(|a| (a.slot_updated as u64, a.mint))
                 .collect::<Vec<_>>(),
-            "token_accounts_saving",
+            "token_accounts_asset_saving",
         )
         .await
     }
@@ -224,5 +234,59 @@ impl TokenAccsProcessor {
             "mint_accounts_saving",
         )
         .await
+    }
+
+    pub async fn save_token_accounts_with_idxs(
+        &self,
+        accs_to_save: &HashMap<Pubkey, TokenAccount>,
+    ) {
+        self.finalize_processing(
+            future::try_join3(
+                self.rocks_db
+                    .token_accounts
+                    .merge_batch(accs_to_save.clone()),
+                self.rocks_db.token_account_owner_idx.merge_batch(
+                    accs_to_save
+                        .values()
+                        .map(|ta| {
+                            (
+                                TokenAccountOwnerIdxKey {
+                                    owner: ta.owner,
+                                    token_account: ta.pubkey,
+                                },
+                                TokenAccountOwnerIdx {
+                                    is_zero_balance: ta.amount.is_zero(),
+                                    write_version: ta.write_version,
+                                },
+                            )
+                        })
+                        .collect(),
+                ),
+                self.rocks_db.token_account_mint_owner_idx.merge_batch(
+                    accs_to_save
+                        .values()
+                        .map(|ta| {
+                            (
+                                TokenAccountMintOwnerIdxKey {
+                                    mint: ta.mint,
+                                    owner: ta.owner,
+                                    token_account: ta.pubkey,
+                                },
+                                TokenAccountMintOwnerIdx {
+                                    is_zero_balance: ta.amount.is_zero(),
+                                    write_version: ta.write_version,
+                                },
+                            )
+                        })
+                        .collect(),
+                ),
+            ),
+            accs_to_save
+                .values()
+                .map(|a| (a.slot_updated as u64, a.mint))
+                .collect::<Vec<_>>(),
+            "token_accounts_saving",
+        )
+        .await;
     }
 }

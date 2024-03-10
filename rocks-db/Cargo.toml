@@ -51,5 +51,9 @@ integration_tests = []
 name = "misc_benchmark"
 harness = false
 
+[[bench]]
+name = "dump_benchmark"
+harness = false
+
 [[bin]]
 name = "column_remover"

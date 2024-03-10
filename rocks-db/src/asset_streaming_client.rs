@@ -5,6 +5,7 @@ use entities::models::{CompleteAssetDetails, UpdateVersion, Updated};
 use interface::asset_streaming_and_discovery::{
     AssetDetailsStream, AssetDetailsStreamer, AsyncError,
 };
+use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::DB;
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
@@ -27,9 +28,16 @@ impl AssetDetailsStreamer for Storage {
     ) -> Result<AssetDetailsStream, AsyncError> {
         let (tx, rx) = tokio::sync::mpsc::channel(32);
         let backend = self.slot_asset_idx.backend.clone();
-
+        let metrics = self.red_metrics.clone();
         self.join_set.lock().await.spawn(tokio::spawn(async move {
-            let _ = process_asset_details_range(backend, start_slot, end_slot, tx.clone()).await;
+            let _ = process_asset_details_range(
+                backend,
+                start_slot,
+                end_slot,
+                metrics.clone(),
+                tx.clone(),
+            )
+            .await;
         }));
 
         Ok(Box::pin(ReceiverStream::new(rx)) as AssetDetailsStream)
@@ -40,9 +48,10 @@ async fn process_asset_details_range(
     backend: Arc<DB>,
     start_slot: u64,
     end_slot: u64,
+    metrics: Arc<RequestErrorDurationMetrics>,
     tx: tokio::sync::mpsc::Sender<Result<CompleteAssetDetails, AsyncError>>,
 ) -> Result<(), AsyncError> {
-    let slot_asset_idx = Storage::column::<SlotAssetIdx>(backend.clone());
+    let slot_asset_idx = Storage::column::<SlotAssetIdx>(backend.clone(), metrics.clone());
     let iterator = slot_asset_idx.iter((start_slot, solana_sdk::pubkey::Pubkey::default()));
 
     for pair in iterator {
@@ -53,7 +62,7 @@ async fn process_asset_details_range(
             break;
         }
 
-        let details = get_complete_asset_details(backend.clone(), pubkey).await;
+        let details = get_complete_asset_details(backend.clone(), pubkey, metrics.clone()).await;
         match details {
             Err(e) => {
                 if tx.send(Err(Box::new(e) as AsyncError)).await.is_err() {
@@ -74,8 +83,10 @@ async fn process_asset_details_range(
 async fn get_complete_asset_details(
     backend: Arc<DB>,
     pubkey: Pubkey,
+    metrics: Arc<RequestErrorDurationMetrics>,
 ) -> crate::Result<CompleteAssetDetails> {
-    let static_data = Storage::column::<AssetStaticDetails>(backend.clone()).get(pubkey)?;
+    let static_data =
+        Storage::column::<AssetStaticDetails>(backend.clone(), metrics.clone()).get(pubkey)?;
     let static_data = match static_data {
         None => {
             return Err(StorageError::Common(
@@ -85,7 +96,8 @@ async fn get_complete_asset_details(
         Some(static_data) => static_data,
     };
 
-    let dynamic_data = Storage::column::<AssetDynamicDetails>(backend.clone()).get(pubkey)?;
+    let dynamic_data =
+        Storage::column::<AssetDynamicDetails>(backend.clone(), metrics.clone()).get(pubkey)?;
     let dynamic_data = match dynamic_data {
         None => {
             return Err(StorageError::Common(
@@ -94,7 +106,8 @@ async fn get_complete_asset_details(
         }
         Some(dynamic_data) => dynamic_data,
     };
-    let authority = Storage::column::<AssetAuthority>(backend.clone()).get(pubkey)?;
+    let authority =
+        Storage::column::<AssetAuthority>(backend.clone(), metrics.clone()).get(pubkey)?;
     let authority = match authority {
         None => {
             return Err(StorageError::Common(
@@ -103,7 +116,7 @@ async fn get_complete_asset_details(
         }
         Some(authority) => authority,
     };
-    let owner = Storage::column::<AssetOwner>(backend.clone()).get(pubkey)?;
+    let owner = Storage::column::<AssetOwner>(backend.clone(), metrics.clone()).get(pubkey)?;
     let owner = match owner {
         None => {
             return Err(StorageError::Common("Asset owner not found".to_string()));
@@ -111,8 +124,9 @@ async fn get_complete_asset_details(
         Some(owner) => owner,
     };
 
-    let asset_leaf = Storage::column::<AssetLeaf>(backend.clone()).get(pubkey)?;
-    let collection = Storage::column::<AssetCollection>(backend.clone()).get(pubkey)?;
+    let asset_leaf = Storage::column::<AssetLeaf>(backend.clone(), metrics.clone()).get(pubkey)?;
+    let collection =
+        Storage::column::<AssetCollection>(backend.clone(), metrics.clone()).get(pubkey)?;
 
     let onchain_data = match dynamic_data.onchain_data {
         None => None,
@@ -129,14 +143,14 @@ async fn get_complete_asset_details(
 
     let cl_leaf = match asset_leaf {
         None => None,
-        Some(ref leaf) => Storage::column::<ClLeaf>(backend.clone())
+        Some(ref leaf) => Storage::column::<ClLeaf>(backend.clone(), metrics.clone())
             .get((leaf.nonce.unwrap_or_default(), leaf.tree_id))?,
     };
 
     let cl_items = match cl_leaf {
         None => vec![],
         Some(ref leaf) => {
-            Storage::column::<ClItem>(backend.clone())
+            Storage::column::<ClItem>(backend.clone(), metrics.clone())
                 .batch_get(
                     get_required_nodes_for_proof(leaf.cli_node_idx as i64)
                         .into_iter()
@@ -151,7 +165,7 @@ async fn get_complete_asset_details(
     .collect::<Vec<_>>();
 
     let token_metadata_edition = if let Some(edition_address) = static_data.edition_address {
-        Storage::column::<TokenMetadataEdition>(backend.clone())
+        Storage::column::<TokenMetadataEdition>(backend.clone(), metrics.clone())
             .get_cbor_encoded(edition_address)
             .await?
     } else {
@@ -161,7 +175,7 @@ async fn get_complete_asset_details(
         None => (None, None),
         Some(TokenMetadataEdition::MasterEdition(master_edition)) => (None, Some(master_edition)),
         Some(TokenMetadataEdition::EditionV1(edition)) => {
-            let parent = Storage::column::<TokenMetadataEdition>(backend.clone())
+            let parent = Storage::column::<TokenMetadataEdition>(backend.clone(), metrics.clone())
                 .get_cbor_encoded(edition.parent)
                 .await?;
             let master_edition =
