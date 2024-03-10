@@ -5,7 +5,7 @@ use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
 };
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tracing::log::LevelFilter;
 
 pub mod asset_filter_client;
@@ -46,6 +46,7 @@ impl PgClient {
     ) -> Result<Self, Error> {
         let mut options: PgConnectOptions = url.parse().unwrap();
         options.log_statements(LevelFilter::Off);
+        options.log_slow_statements(LevelFilter::Info, Duration::from_secs(2));
 
         let pool = PgPoolOptions::new()
             .min_connections(min_connections)

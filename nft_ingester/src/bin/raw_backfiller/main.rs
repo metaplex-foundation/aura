@@ -32,15 +32,16 @@ pub async fn main() -> Result<(), IngesterError> {
     let config: RawBackfillConfig = setup_config(INGESTER_CONFIG_PREFIX);
     init_logger(&config.log_level);
 
-    let mut guard = None;
-    if config.run_profiling {
-        guard = Some(
+    let guard = if config.run_profiling {
+        Some(
             pprof::ProfilerGuardBuilder::default()
                 .frequency(100)
                 .build()
                 .unwrap(),
-        );
-    }
+        )
+    } else {
+        None
+    };
 
     let mut registry = Registry::default();
     let metrics = Arc::new(BackfillerMetricsConfig::new());

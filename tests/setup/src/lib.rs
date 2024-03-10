@@ -2,7 +2,6 @@ pub mod pg;
 pub mod rocks;
 
 use metrics_utils::MetricsTrait;
-use std::sync::{atomic::AtomicBool, Arc};
 use testcontainers::clients::Cli;
 
 pub struct TestEnvironment<'a> {
@@ -31,10 +30,8 @@ impl<'a> TestEnvironment<'a> {
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
         );
-        syncronizer
-            .synchronize_asset_indexes(Arc::new(AtomicBool::new(true)))
-            .await
-            .unwrap();
+        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
+        syncronizer.synchronize_asset_indexes(&rx).await.unwrap();
         (env, generated_data)
     }
 

@@ -82,7 +82,7 @@ mod tests {
             frozen: false,
             delegated_amount: 0,
             slot_updated: 1,
-            amount: 0,
+            amount: 1,
             write_version: 1,
         };
         let second_token_account_to_save = TokenAccount {
@@ -93,7 +93,7 @@ mod tests {
             frozen: false,
             delegated_amount: 0,
             slot_updated: 1,
-            amount: 0,
+            amount: 1,
             write_version: 1,
         };
 
@@ -108,14 +108,16 @@ mod tests {
             .lock()
             .await
             .insert(second_mint.to_bytes().to_vec(), second_mint_to_save);
-        buffer.token_accs.lock().await.insert(
-            first_token_account.to_bytes().to_vec(),
-            first_token_account_to_save,
-        );
-        buffer.token_accs.lock().await.insert(
-            second_token_account.to_bytes().to_vec(),
-            second_token_account_to_save,
-        );
+        buffer
+            .token_accs
+            .lock()
+            .await
+            .insert(first_token_account, first_token_account_to_save);
+        buffer
+            .token_accs
+            .lock()
+            .await
+            .insert(second_token_account, second_token_account_to_save);
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;

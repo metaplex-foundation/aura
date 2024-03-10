@@ -16,6 +16,7 @@ const INGESTER_CONSUMERS_COUNT: usize = 2;
 pub const INGESTER_BACKUP_NAME: &str = "snapshot.tar.lz4";
 
 pub const INGESTER_CONFIG_PREFIX: &str = "INGESTER_";
+pub const SYNCHRONIZER_CONFIG_PREFIX: &str = "SYNCHRONIZER_";
 pub const JSON_MIGRATOR_CONFIG_PREFIX: &str = "JSON_MIGRATOR_";
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
@@ -209,6 +210,27 @@ impl JsonMigratorConfig {
 
 fn default_log_level() -> String {
     "warn".to_string()
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct SynchronizerConfig {
+    pub database_config: DatabaseConfig,
+    pub rocks_db_path_container: Option<String>,
+    pub rocks_db_secondary_path_container: Option<String>,
+    pub metrics_port: Option<u16>,
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+    #[serde(default)]
+    pub run_profiling: bool,
+    pub profiling_file_path_container: Option<String>,
+    #[serde(default = "default_dump_synchronizer_batch_size")]
+    pub dump_synchronizer_batch_size: usize,
+    #[serde(default = "default_dump_path")]
+    pub dump_path: String,
+    #[serde(default)]
+    pub run_dump_synchronize_on_start: bool,
+    #[serde(default)]
+    pub timeout_between_syncs_sec: u64,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
