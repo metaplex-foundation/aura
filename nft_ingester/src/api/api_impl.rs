@@ -32,7 +32,6 @@ use {
 
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
-const MAX_PAGE_LIMIT: usize = 50;
 
 pub struct DasApi<PC>
 where
@@ -43,6 +42,7 @@ where
     rocks_db: Arc<Storage>,
     metrics: Arc<ApiMetricsConfig>,
     proof_checker: Option<Arc<PC>>,
+    max_page_limit: usize,
 }
 
 impl<PC> DasApi<PC>
@@ -54,6 +54,7 @@ where
         rocks_db: Arc<Storage>,
         metrics: Arc<ApiMetricsConfig>,
         proof_checker: Option<Arc<PC>>,
+        max_page_limit: usize,
     ) -> Self {
         let db_connection = SqlxPostgresConnector::from_sqlx_postgres_pool(pg_client.pool.clone());
 
@@ -63,6 +64,7 @@ where
             rocks_db,
             metrics,
             proof_checker,
+            max_page_limit,
         }
     }
 
@@ -86,34 +88,9 @@ where
             rocks_db,
             metrics,
             proof_checker,
+            max_page_limit: config.max_page_limit,
         })
     }
-}
-
-pub fn validate_basic_pagination(parameters: &Pagination) -> Result<(), DasApiError> {
-    if let Some(limit) = parameters.limit {
-        // make config item
-        if limit > MAX_ITEMS_IN_BATCH_REQ as u32 {
-            return Err(DasApiError::PaginationError);
-        }
-    }
-    if (parameters.before.is_some() || parameters.after.is_some()) && parameters.cursor.is_some() {
-        return Err(DasApiError::PaginationError);
-    }
-    if let Some(page) = parameters.page {
-        if page == 0 {
-            return Err(DasApiError::PaginationEmptyError);
-        }
-        if page > MAX_PAGE_LIMIT as u32 {
-            return Err(DasApiError::PaginationError);
-        }
-        // make config item
-        if parameters.before.is_some() || parameters.after.is_some() || parameters.cursor.is_some()
-        {
-            return Err(DasApiError::PaginationError);
-        }
-    }
-    Ok(())
 }
 
 pub fn not_found() -> DasApiError {
@@ -140,6 +117,36 @@ where
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!("ok"))
+    }
+
+    pub fn validate_basic_pagination(&self, parameters: &Pagination) -> Result<(), DasApiError> {
+        if let Some(limit) = parameters.limit {
+            // make config item
+            if limit > MAX_ITEMS_IN_BATCH_REQ as u32 {
+                return Err(DasApiError::PaginationError);
+            }
+        }
+        if (parameters.before.is_some() || parameters.after.is_some())
+            && parameters.cursor.is_some()
+        {
+            return Err(DasApiError::PaginationError);
+        }
+        if let Some(page) = parameters.page {
+            if page == 0 {
+                return Err(DasApiError::PaginationEmptyError);
+            }
+            if page > self.max_page_limit as u32 {
+                return Err(DasApiError::PageTooBig(self.max_page_limit));
+            }
+            // make config item
+            if parameters.before.is_some()
+                || parameters.after.is_some()
+                || parameters.cursor.is_some()
+            {
+                return Err(DasApiError::PaginationError);
+            }
+        }
+        Ok(())
     }
 
     pub async fn get_asset_proof(&self, payload: GetAssetProof) -> Result<Value, DasApiError> {
@@ -262,7 +269,9 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let res = process_request(self.pg_client.clone(), self.rocks_db.clone(), payload).await?;
+        let res = self
+            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
+            .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -278,7 +287,9 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let res = process_request(self.pg_client.clone(), self.rocks_db.clone(), payload).await?;
+        let res = self
+            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
+            .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -294,7 +305,9 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let res = process_request(self.pg_client.clone(), self.rocks_db.clone(), payload).await?;
+        let res = self
+            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
+            .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -310,7 +323,9 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let res = process_request(self.pg_client.clone(), self.rocks_db.clone(), payload).await?;
+        let res = self
+            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
+            .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -334,9 +349,6 @@ where
             options,
         } = payload;
 
-        let owner = validate_opt_pubkey(&owner)?;
-        let mint = validate_opt_pubkey(&mint)?;
-
         let pagination = Pagination {
             limit,
             page,
@@ -345,7 +357,10 @@ where
             cursor: None,
         };
 
-        validate_basic_pagination(&pagination)?;
+        let owner = validate_opt_pubkey(&owner)?;
+        let mint = validate_opt_pubkey(&mint)?;
+
+        self.validate_basic_pagination(&pagination)?;
         if owner.is_none() && mint.is_none() {
             return Err(DasApiError::Validation(
                 "Must provide either 'owner' or 'mint'".to_string(),
@@ -374,7 +389,9 @@ where
         self.metrics.inc_search_asset_requests(&label);
         let latency_timer = Instant::now();
 
-        let res = process_request(self.pg_client.clone(), self.rocks_db.clone(), payload).await?;
+        let res = self
+            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
+            .await?;
 
         self.metrics
             .set_search_asset_latency(&label, latency_timer.elapsed().as_millis() as f64);
@@ -423,7 +440,7 @@ where
             cursor: cursor.clone(),
         };
 
-        validate_basic_pagination(&pagination)?;
+        self.validate_basic_pagination(&pagination)?;
 
         let res = get_asset_signatures(
             self.rocks_db.clone(),
@@ -468,41 +485,42 @@ where
 
         Ok(json!(res))
     }
-}
 
-async fn process_request<T>(
-    pg_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
-    rocks_db: Arc<Storage>,
-    payload: T,
-) -> Result<AssetList, DasApiError>
-where
-    T: TryInto<SearchAssetsQuery>,
-    T: ApiRequest,
-    T::Error: Into<UsecaseError>,
-{
-    let pagination = payload.get_all_pagination_parameters();
-    let sort_by = payload.get_sort_parameter().unwrap_or_default();
-    let options = payload.get_options().unwrap_or_default();
+    async fn process_request<T>(
+        &self,
+        pg_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
+        rocks_db: Arc<Storage>,
+        payload: T,
+    ) -> Result<AssetList, DasApiError>
+    where
+        T: TryInto<SearchAssetsQuery>,
+        T: ApiRequest,
+        T::Error: Into<UsecaseError>,
+    {
+        let pagination = payload.get_all_pagination_parameters();
+        let sort_by = payload.get_sort_parameter().unwrap_or_default();
+        let options = payload.get_options().unwrap_or_default();
 
-    let query: SearchAssetsQuery = payload
-        .try_into()
-        .map_err(|e| DasApiError::from(e.into()))?;
+        let query: SearchAssetsQuery = payload
+            .try_into()
+            .map_err(|e| DasApiError::from(e.into()))?;
 
-    validate_basic_pagination(&pagination)?;
+        self.validate_basic_pagination(&pagination)?;
 
-    let res = search_assets(
-        pg_client,
-        rocks_db,
-        query,
-        sort_by,
-        pagination.limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
-        pagination.page.map(|p| p as u64),
-        pagination.before,
-        pagination.after,
-        pagination.cursor,
-        options,
-    )
-    .await?;
+        let res = search_assets(
+            pg_client,
+            rocks_db,
+            query,
+            sort_by,
+            pagination.limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
+            pagination.page.map(|p| p as u64),
+            pagination.before,
+            pagination.after,
+            pagination.cursor,
+            options,
+        )
+        .await?;
 
-    Ok(res)
+        Ok(res)
+    }
 }
