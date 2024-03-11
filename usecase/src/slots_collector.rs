@@ -21,7 +21,6 @@ pub trait SlotsGetter {
         &self,
         collected_key: &solana_program::pubkey::Pubkey,
         start_at: u64,
-        end_at: u64,
         rows_limit: i64,
     ) -> Result<Vec<u64>, UsecaseError>;
 }
@@ -32,7 +31,6 @@ impl SlotsGetter for BigTableConnection {
         &self,
         collected_key: &solana_program::pubkey::Pubkey,
         start_at: u64,
-        _end_at: u64,
         rows_limit: i64,
     ) -> Result<Vec<u64>, UsecaseError> {
         let key = format!("{}/", collected_key);
@@ -112,12 +110,7 @@ where
             }
             let slots = self
                 .row_keys_getter
-                .get_slots(
-                    collected_pubkey,
-                    slot_start_from,
-                    slot_parse_until,
-                    GET_SIGNATURES_LIMIT,
-                )
+                .get_slots(collected_pubkey, start_at_slot, GET_SIGNATURES_LIMIT)
                 .await;
             match slots {
                 Ok(s) => {

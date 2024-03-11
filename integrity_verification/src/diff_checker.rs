@@ -525,9 +525,7 @@ mod tests {
     use metrics_utils::{IntegrityVerificationMetrics, MetricsTrait};
     use regex::Regex;
     use serde_json::json;
-    use solana_program::pubkey::Pubkey;
     use solana_sdk::commitment_config::CommitmentLevel;
-    use std::str::FromStr;
 
     // this function used only inside tests under rpc_tests and bigtable_tests features, that do not running in our CI
     #[allow(dead_code)]
@@ -562,6 +560,9 @@ mod tests {
     #[cfg(feature = "bigtable_tests")]
     #[tokio::test]
     async fn test_save_slots_to_file() {
+        use solana_program::pubkey::Pubkey;
+        use std::str::FromStr;
+
         let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
         create_test_diff_checker()
             .await
