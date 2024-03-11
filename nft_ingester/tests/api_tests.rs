@@ -15,7 +15,7 @@ mod tests {
     use digital_asset_types::rpc::response::{
         AssetList, TokenAccountsList, TransactionSignatureList,
     };
-    use entities::api_req_params::{DisplayOptions, GetAssetSignatures, GetTokenAccounts};
+    use entities::api_req_params::{DisplayOptions, GetAssetSignatures, GetTokenAccounts, Options};
     use entities::models::{AssetSignature, AssetSignatureKey};
     use entities::{
         api_req_params::{
@@ -68,6 +68,9 @@ mod tests {
         {
             let payload = SearchAssets {
                 limit: Some(limit),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -102,6 +105,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 page: Some(1),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -119,6 +125,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 page: Some(2),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -136,6 +145,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 page: Some(3),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -147,6 +159,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 after: after,
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -164,6 +179,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 before: before,
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -188,6 +206,9 @@ mod tests {
                     sort_by: AssetSortBy::Created,
                     sort_direction: Some(AssetSortDirection::Desc),
                 }),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -206,6 +227,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 owner_address: Some(ref_value.owner.value.to_string()),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -224,6 +248,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 creator_address: Some(ref_value.creators.value[0].creator.to_string()),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -242,6 +269,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 creator_verified: Some(true),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -261,6 +291,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 authority_address: Some(ref_value.authority.to_string()),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -279,6 +312,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 grouping: Some(("collection".to_string(), ref_value.collection.to_string())),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -297,6 +333,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 delegate: Some(ref_value.delegate.value.unwrap().to_string()),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -315,6 +354,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 supply_mint: Some(ref_value.pubkey.to_string()),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -335,6 +377,9 @@ mod tests {
                 royalty_target: Some(ref_value.creators.value[0].creator.to_string()),
                 royalty_target_type: Some(RoyaltyModel::Creators),
                 royalty_amount: Some(ref_value.royalty_amount.value as u32),
+                options: Some(Options {
+                    show_unverified_collections: true,
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -466,7 +511,12 @@ mod tests {
             .put(pb, owner)
             .unwrap();
 
-        let payload = GetAsset { id: pb.to_string() };
+        let payload = GetAsset {
+            id: pb.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
+        };
         let response = api.get_asset(payload).await.unwrap();
 
         assert_eq!(response["grouping"], Value::Array(vec![]));
@@ -569,7 +619,12 @@ mod tests {
             .put(pb, owner)
             .unwrap();
 
-        let payload = GetAsset { id: pb.to_string() };
+        let payload = GetAsset {
+            id: pb.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
+        };
         let response = api.get_asset(payload).await.unwrap();
 
         assert_eq!(response["id"], pb.to_string());
@@ -699,6 +754,9 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_key.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let response = api.get_asset(payload).await.unwrap();
 
@@ -722,6 +780,9 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_key.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let response = api.get_asset(payload).await.unwrap();
 
@@ -872,6 +933,9 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_accs[0].pubkey.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let response = api.get_asset(payload).await.unwrap();
 
@@ -880,6 +944,9 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_accs[1].pubkey.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let response = api.get_asset(payload).await.unwrap();
 
@@ -1037,6 +1104,9 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_key.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let response = api.get_asset(payload).await.unwrap();
 
@@ -1427,6 +1497,9 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let res = api.get_assets_by_owner(payload).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
@@ -1464,6 +1537,9 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let res = api.get_assets_by_group(payload).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
@@ -1501,6 +1577,9 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let res = api.get_assets_by_creator(payload).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
@@ -1537,6 +1616,9 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let res = api.get_assets_by_authority(payload).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();

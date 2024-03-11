@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
+use entities::api_req_params::Options;
 use solana_sdk::{bs58, pubkey::Pubkey};
 use sqlx::{Postgres, QueryBuilder};
 
@@ -29,6 +30,7 @@ impl PgClient {
         page: Option<u64>,
         before: Option<String>,
         after: Option<String>,
+        options: &'a Options,
     ) -> Result<(QueryBuilder<'a, Postgres>, bool), String> {
         // todo: remove the inner join with tasks and only perform it if the metadata_url_id is present in the filter
         let mut query_builder = QueryBuilder::new(
@@ -88,6 +90,10 @@ impl PgClient {
         if let Some(collection) = &filter.collection {
             query_builder.push(" AND assets_v3.ast_collection = ");
             query_builder.push_bind(collection);
+        }
+
+        if !options.show_unverified_collections {
+            query_builder.push(" AND assets_v3.ast_is_collection_verified = true");
         }
 
         if let Some(delegate) = &filter.delegate {
@@ -296,9 +302,10 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         page: Option<u64>,
         before: Option<String>,
         after: Option<String>,
+        options: &Options,
     ) -> Result<Vec<AssetSortedIndex>, String> {
         let (mut query_builder, order_reversed) =
-            Self::build_search_query(filter, order, limit, page, before, after)?;
+            Self::build_search_query(filter, order, limit, page, before, after, options)?;
         let query = query_builder.build_query_as::<AssetRawResponse>();
         let start_time = chrono::Utc::now();
         let result = query

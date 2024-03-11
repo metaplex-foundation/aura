@@ -8,7 +8,7 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
 
-use self::util::RequestWithPagination;
+use self::util::ApiRequest;
 use crate::api::config::Config;
 use digital_asset_types::dapi::get_asset_signatures::get_asset_signatures;
 use digital_asset_types::dapi::get_token_accounts::get_token_accounts;
@@ -216,7 +216,9 @@ where
         let latency_timer = Instant::now();
 
         let id = validate_pubkey(payload.id.clone())?;
-        let res = get_asset(self.rocks_db.clone(), id)
+        let options = payload.options.unwrap_or_default();
+
+        let res = get_asset(self.rocks_db.clone(), id, options)
             .await
             .map_err(Into::<DasApiError>::into)?;
 
@@ -247,8 +249,9 @@ where
             .into_iter()
             .map(validate_pubkey)
             .collect::<Result<Vec<_>, _>>()?;
+        let options = payload.options.unwrap_or_default();
 
-        let res = get_asset_batch(self.rocks_db.clone(), ids)
+        let res = get_asset_batch(self.rocks_db.clone(), ids, options)
             .await
             .map_err(Into::<DasApiError>::into)?;
 
@@ -356,6 +359,7 @@ where
 
         let owner = validate_opt_pubkey(&owner)?;
         let mint = validate_opt_pubkey(&mint)?;
+
         self.validate_basic_pagination(&pagination)?;
         if owner.is_none() && mint.is_none() {
             return Err(DasApiError::Validation(
@@ -490,11 +494,12 @@ where
     ) -> Result<AssetList, DasApiError>
     where
         T: TryInto<SearchAssetsQuery>,
-        T: RequestWithPagination,
+        T: ApiRequest,
         T::Error: Into<UsecaseError>,
     {
         let pagination = payload.get_all_pagination_parameters();
         let sort_by = payload.get_sort_parameter().unwrap_or_default();
+        let options = payload.get_options().unwrap_or_default();
 
         let query: SearchAssetsQuery = payload
             .try_into()
@@ -512,6 +517,7 @@ where
             pagination.before,
             pagination.after,
             pagination.cursor,
+            options,
         )
         .await?;
 

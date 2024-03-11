@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::string::ToString;
 use std::sync::Arc;
 
-use entities::api_req_params::AssetSortDirection;
+use entities::api_req_params::{AssetSortDirection, Options};
 use entities::models::AssetSignatureWithPagination;
 use interface::asset_sigratures::AssetSignaturesGetter;
 use log::error;
@@ -339,7 +339,19 @@ macro_rules! fetch_asset_data {
 fn asset_selected_maps_into_full_asset(
     id: &Pubkey,
     asset_selected_maps: &AssetSelectedMaps,
+    options: &Options,
 ) -> Option<FullAsset> {
+    if !options.show_unverified_collections {
+        if let Some(collection_data) = asset_selected_maps.assets_collection.get(id) {
+            if !collection_data.is_collection_verified {
+                return None;
+            }
+        } else {
+            // don't have collection data == collection unverified
+            return None;
+        }
+    }
+
     let offchain_data = asset_selected_maps
         .urls
         .get(&id.to_string())
@@ -387,6 +399,7 @@ fn asset_selected_maps_into_full_asset(
 pub async fn get_by_ids(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
+    options: Options,
 ) -> Result<Vec<Option<FullAsset>>, DbErr> {
     if asset_ids.is_empty() {
         return Ok(vec![]);
@@ -409,7 +422,7 @@ pub async fn get_by_ids(
 
     let mut results = vec![None; asset_ids.len()];
     for id in unique_asset_ids {
-        let res = asset_selected_maps_into_full_asset(&id, &asset_selected_maps);
+        let res = asset_selected_maps_into_full_asset(&id, &asset_selected_maps, &options);
 
         if let Some(indexes) = unique_asset_ids_map.get(&id) {
             for &index in indexes {

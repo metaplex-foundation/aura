@@ -1,5 +1,6 @@
 use crate::model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter};
 use async_trait::async_trait;
+use entities::api_req_params::Options;
 use entities::models::AssetIndex;
 use mockall::automock;
 use std::collections::HashSet;
@@ -24,6 +25,7 @@ pub trait AssetIndexStorage {
 #[automock]
 #[async_trait]
 pub trait AssetPubkeyFilteredFetcher {
+    #[allow(clippy::too_many_arguments)]
     async fn get_asset_pubkeys_filtered(
         &self,
         filter: &SearchAssetsFilter,
@@ -32,6 +34,7 @@ pub trait AssetPubkeyFilteredFetcher {
         page: Option<u64>,
         before: Option<String>,
         after: Option<String>,
+        options: &Options,
     ) -> Result<Vec<AssetSortedIndex>, String>;
 }
 

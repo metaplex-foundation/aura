@@ -66,6 +66,7 @@ pub fn generate_get_assets_by_group_params(
         before,
         after,
         cursor: None,
+        options: None,
     }
 }
 
@@ -87,6 +88,7 @@ pub fn generate_get_assets_by_owner_params(
         before,
         after,
         cursor: None,
+        options: None,
     }
 }
 
@@ -110,6 +112,7 @@ pub fn generate_get_assets_by_creator_params(
         before,
         after,
         cursor: None,
+        options: None,
     }
 }
 
@@ -131,11 +134,12 @@ pub fn generate_get_assets_by_authority_params(
         before,
         after,
         cursor: None,
+        options: None,
     }
 }
 
 pub fn generate_get_asset_params(id: String) -> GetAsset {
-    GetAsset { id }
+    GetAsset { id, options: None }
 }
 
 pub fn generate_get_asset_proof_params(id: String) -> GetAssetProof {

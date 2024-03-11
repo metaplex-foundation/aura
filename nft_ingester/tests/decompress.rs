@@ -2,7 +2,7 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use blockbuster::token_metadata::state::{Collection, Creator, Data, Key, Metadata};
-    use entities::api_req_params::GetAsset;
+    use entities::api_req_params::{GetAsset, Options};
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::{
@@ -282,6 +282,9 @@ mod tests {
 
         let payload = GetAsset {
             id: mint.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let asset_info = api.get_asset(payload).await.unwrap();
 
@@ -355,6 +358,9 @@ mod tests {
 
         let payload = GetAsset {
             id: mint.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let asset_info = api.get_asset(payload).await.unwrap();
 
@@ -428,6 +434,9 @@ mod tests {
 
         let payload = GetAsset {
             id: mint.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let asset_info = api.get_asset(payload).await.unwrap();
 
@@ -501,6 +510,9 @@ mod tests {
 
         let payload = GetAsset {
             id: mint.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         };
         let asset_info = api.get_asset(payload).await.unwrap();
 
