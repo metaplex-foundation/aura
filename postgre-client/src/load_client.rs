@@ -1,7 +1,8 @@
 use sqlx::{Execute, Postgres, QueryBuilder, Transaction};
 
 use crate::{
-    PgClient, ALTER_ACTION, COPY_ACTION, CREATE_ACTION, DROP_ACTION, SQL_COMPONENT, TRUNCATE_ACTION,
+    PgClient, ALTER_ACTION, COPY_ACTION, CREATE_ACTION, DROP_ACTION, INSERT_ACTION, SQL_COMPONENT,
+    TEMP_TABLE_PREFIX, TRUNCATE_ACTION,
 };
 
 impl PgClient {
@@ -23,6 +24,24 @@ impl PgClient {
             .await?;
         Ok(())
     }
+
+    async fn insert_from_temp_table(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        table: &str,
+    ) -> Result<(), String> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
+        query_builder.push(table);
+        query_builder.push(" SELECT * FROM ");
+        query_builder.push(TEMP_TABLE_PREFIX);
+        query_builder.push(table);
+        query_builder.push(" ON CONFLICT DO NOTHING;");
+        self.execute_query_with_metrics(transaction, &mut query_builder, INSERT_ACTION, table)
+            .await?;
+
+        Ok(())
+    }
+
     async fn truncate_table(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
@@ -151,6 +170,24 @@ impl PgClient {
         Ok(())
     }
 
+    pub async fn create_temp_tables(
+        &self,
+        main_table: &str,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), String> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("CREATE TEMP TABLE ");
+        query_builder.push(TEMP_TABLE_PREFIX);
+        query_builder.push(main_table);
+        query_builder.push(" (LIKE ");
+        query_builder.push(main_table);
+        query_builder.push(" INCLUDING DEFAULTS) ON COMMIT DROP;");
+
+        self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, main_table)
+            .await?;
+
+        Ok(())
+    }
+
     pub(crate) async fn copy_all(
         &self,
         matadata_copy_path: String,
@@ -176,7 +213,9 @@ impl PgClient {
                 "ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_authority, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated",
             ),
         ] {
-            self.copy_table_from(transaction, path, table, columns).await?;
+            self.create_temp_tables(table, transaction).await?;
+            self.copy_table_from(transaction, path, format!("{}{}", TEMP_TABLE_PREFIX, table).as_ref(), columns).await?;
+            self.insert_from_temp_table(transaction, table).await?;
         }
         self.recreate_indexes(transaction).await?;
         Ok(())

@@ -18,6 +18,7 @@ pub mod storage_traits;
 
 pub const SQL_COMPONENT: &str = "sql";
 pub const SELECT_ACTION: &str = "select";
+pub const INSERT_ACTION: &str = "insert";
 pub const UPDATE_ACTION: &str = "update";
 pub const BATCH_SELECT_ACTION: &str = "batch_select";
 pub const BATCH_UPSERT_ACTION: &str = "batch_upsert";
@@ -30,6 +31,7 @@ pub const ALTER_ACTION: &str = "alter";
 pub const CREATE_ACTION: &str = "create";
 pub const POSTGRES_PARAMETERS_COUNT_LIMIT: usize = 65535;
 pub const INSERT_TASK_PARAMETERS_COUNT: usize = 3;
+pub const TEMP_TABLE_PREFIX: &str = "temp_";
 
 #[derive(Clone)]
 pub struct PgClient {
