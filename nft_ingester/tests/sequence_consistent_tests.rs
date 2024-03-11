@@ -132,11 +132,11 @@ mod tests {
         row_keys_getter
             .expect_get_slots()
             .times(1)
-            .return_once(move |_, _, _, _| Ok(vec![206, 204, 203]));
+            .return_once(move |_, _, _| Ok(vec![206, 204, 203]));
         row_keys_getter
             .expect_get_slots()
             .times(1)
-            .return_once(move |_, _, _, _| Ok(vec![209, 208]));
+            .return_once(move |_, _, _| Ok(vec![209, 208]));
         let row_keys_getter_arc = Arc::new(row_keys_getter);
         let mut metrics_state = MetricState::new();
         metrics_state.register_metrics();
