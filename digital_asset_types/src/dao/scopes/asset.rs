@@ -8,7 +8,7 @@ use entities::models::AssetSignatureWithPagination;
 use interface::asset_sigratures::AssetSignaturesGetter;
 use log::error;
 use sea_orm::prelude::Json;
-use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult, Order};
+use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult};
 use solana_sdk::pubkey::Pubkey;
 
 use rocks_db::asset::{
@@ -18,92 +18,17 @@ use rocks_db::asset::{
 use rocks_db::offchain_data::OffChainData;
 use rocks_db::Storage;
 
-use crate::dao::asset::Column;
 use crate::dao::sea_orm_active_enums::{
     ChainMutability, Mutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
     SpecificationVersions,
 };
 use crate::dao::{
     asset, asset_authority, asset_creators, asset_data, asset_grouping, AssetDataModel, FullAsset,
-    GroupingSize, Pagination,
+    GroupingSize,
 };
 
 pub const PROCESSING_METADATA_STATE: &str = "processing";
-const COLLECTION_GROUP_KEY: &str = "collection";
-
-pub fn paginate(
-    pagination: &Pagination,
-    limit: u64,
-    condition: &str,
-    values: Vec<Value>,
-) -> Result<(String, Vec<Value>, Option<u64>), DbErr> {
-    let mut condition = condition.to_string();
-    let mut values = values;
-    let mut offset = None;
-    match pagination {
-        Pagination::Keyset { before, after } => {
-            if let Some(b) = before {
-                values.push(Set(b.as_slice()).into_value().ok_or(DbErr::Custom(format!(
-                    "cannot get value from before: {:?}",
-                    b
-                )))?);
-                condition = format!("{} AND ast_pubkey < ${}", condition, values.len());
-            }
-            if let Some(a) = after {
-                values.push(Set(a.as_slice()).into_value().ok_or(DbErr::Custom(format!(
-                    "cannot get value from after: {:?}",
-                    a
-                )))?);
-                condition = format!("{} AND ast_pubkey > ${}", condition, values.len());
-            }
-        }
-        Pagination::Page { page } => {
-            if *page > 0 {
-                offset = Some((page - 1) * limit);
-            }
-        }
-    }
-
-    Ok((condition, values, offset))
-}
-
-#[allow(clippy::too_many_arguments)]
-pub async fn get_by_creator(
-    conn: &impl ConnectionTrait,
-    rocks_db: Arc<Storage>,
-    creator: Vec<u8>,
-    only_verified: bool,
-    sort_by: Option<Column>,
-    sort_direction: Order,
-    pagination: &Pagination,
-    limit: u64,
-) -> Result<Vec<FullAsset>, DbErr> {
-    let mut condition =
-        "SELECT ast_pubkey FROM assets_v3 LEFT JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey
-     LEFT JOIN tasks ON ast_metadata_url_id = tsk_id WHERE asc_creator = $1"
-            .to_string();
-    if only_verified {
-        condition = format!("{} AND asc_verified = true", condition);
-    }
-    let values = vec![Set(creator.as_slice())
-        .into_value()
-        .ok_or(DbErr::Custom(format!(
-            "cannot get value from creator: {:?}",
-            creator
-        )))?];
-
-    get_by_related_condition(
-        conn,
-        rocks_db,
-        &condition,
-        values,
-        sort_by,
-        sort_direction,
-        pagination,
-        limit,
-    )
-    .await
-}
+pub const COLLECTION_GROUP_KEY: &str = "collection";
 
 pub async fn get_grouping(
     conn: &impl ConnectionTrait,
@@ -134,171 +59,14 @@ pub async fn get_grouping(
     Ok(GroupingSize { size: size as u64 })
 }
 
-#[allow(clippy::too_many_arguments)]
-pub async fn get_by_grouping(
-    conn: &impl ConnectionTrait,
-    rocks_db: Arc<Storage>,
-    group_value: Vec<u8>,
-    group_key: String,
-    sort_by: Option<Column>,
-    sort_direction: Order,
-    pagination: &Pagination,
-    limit: u64,
-) -> Result<Vec<FullAsset>, DbErr> {
-    if group_key != COLLECTION_GROUP_KEY {
-        return Ok(vec![]);
-    }
-
-    let condition = "SELECT ast_pubkey FROM assets_v3 LEFT JOIN tasks ON ast_metadata_url_id = tsk_id WHERE ast_collection = $1 AND ast_is_collection_verified = true";
-    let values = vec![Set(group_value.clone())
-        .into_value()
-        .ok_or(DbErr::Custom(format!(
-            "cannot get value from group_key: {:?}",
-            group_value
-        )))?];
-
-    get_by_related_condition(
-        conn,
-        rocks_db,
-        condition,
-        values,
-        sort_by,
-        sort_direction,
-        pagination,
-        limit,
-    )
-    .await
-}
-
 #[derive(FromQueryResult, Debug, Clone, PartialEq)]
 struct AssetID {
     ast_pubkey: Vec<u8>,
 }
 
-pub async fn get_assets_by_owner(
-    conn: &impl ConnectionTrait,
-    rocks_db: Arc<Storage>,
-    owner: Pubkey,
-    sort_by: Option<Column>,
-    sort_direction: Order,
-    pagination: &Pagination,
-    limit: u64,
-) -> Result<Vec<FullAsset>, DbErr> {
-    let condition = "SELECT ast_pubkey FROM assets_v3 LEFT JOIN tasks ON ast_metadata_url_id = tsk_id WHERE ast_owner = $1";
-    let values = vec![Set(owner.to_bytes().to_vec().as_slice())
-        .into_value()
-        .ok_or(DbErr::Custom(format!(
-            "cannot get value from owner: {:?}",
-            owner
-        )))?];
-
-    get_by_related_condition(
-        conn,
-        rocks_db,
-        condition,
-        values,
-        sort_by,
-        sort_direction,
-        pagination,
-        limit,
-    )
-    .await
-}
-
-pub async fn get_by_authority(
-    conn: &impl ConnectionTrait,
-    rocks_db: Arc<Storage>,
-    authority: Vec<u8>,
-    sort_by: Option<asset::Column>,
-    sort_direction: Order,
-    pagination: &Pagination,
-    limit: u64,
-) -> Result<Vec<FullAsset>, DbErr> {
-    let condition = "SELECT ast_pubkey FROM assets_v3 LEFT JOIN tasks ON ast_metadata_url_id = tsk_id WHERE ast_authority = $1";
-    let values = vec![Set(authority.as_slice())
-        .into_value()
-        .ok_or(DbErr::Custom(format!(
-            "cannot get value from authority: {:?}",
-            authority
-        )))?];
-
-    get_by_related_condition(
-        conn,
-        rocks_db,
-        condition,
-        values,
-        sort_by,
-        sort_direction,
-        pagination,
-        limit,
-    )
-    .await
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn get_by_related_condition(
-    conn: &impl ConnectionTrait,
-    rocks_db: Arc<Storage>,
-    condition: &str,
-    values: Vec<Value>,
-    _sort_by: Option<Column>,
-    _sort_direction: Order,
-    pagination: &Pagination,
-    limit: u64,
-) -> Result<Vec<FullAsset>, DbErr> {
-    let condition = &format!("{} AND ast_supply > 0 ", condition);
-    let (mut condition, values, offset) = paginate(pagination, limit, condition, values)?;
-
-    condition = format!("{} LIMIT {}", condition, limit);
-    if let Some(offset) = offset {
-        condition = format!("{} OFFSET {}", condition, offset);
-    }
-
-    get_related_for_assets(
-        conn,
-        rocks_db,
-        Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, &condition, values),
-    )
-    .await
-}
-
 #[derive(FromQueryResult, Debug, Clone, PartialEq)]
 struct AssetPubkey {
     ast_pubkey: Vec<u8>,
-}
-
-pub async fn get_related_for_assets(
-    conn: &impl ConnectionTrait,
-    rocks_db: Arc<Storage>,
-    statement: Statement,
-) -> Result<Vec<FullAsset>, DbErr> {
-    let pubkeys = conn
-        .query_all(statement)
-        .await?
-        .iter()
-        .map(|q| AssetPubkey::from_query_result(q, "").unwrap())
-        .collect::<Vec<_>>();
-
-    if pubkeys.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let converted_pubkeys = pubkeys
-        .iter()
-        .map(|asset| Pubkey::try_from(asset.ast_pubkey.clone()).unwrap_or_default())
-        .collect::<Vec<_>>();
-
-    let asset_selected_maps = rocks_db
-        .get_asset_selected_maps_async(converted_pubkeys.clone())
-        .await
-        .map_err(|e| DbErr::Custom(e.to_string()))?;
-
-    let assets = converted_pubkeys
-        .into_iter()
-        .filter_map(|id| asset_selected_maps_into_full_asset(&id, &asset_selected_maps))
-        .collect::<Vec<_>>();
-
-    Ok(assets)
 }
 
 fn convert_rocks_offchain_data(

@@ -18,7 +18,10 @@ mod tests {
     use entities::api_req_params::{DisplayOptions, GetAssetSignatures, GetTokenAccounts};
     use entities::models::{AssetSignature, AssetSignatureKey};
     use entities::{
-        api_req_params::{AssetSortBy, AssetSortDirection, AssetSorting, GetAsset, SearchAssets},
+        api_req_params::{
+            AssetSortBy, AssetSortDirection, AssetSorting, GetAsset, GetAssetsByAuthority,
+            GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, SearchAssets,
+        },
         enums::{
             ChainMutability, Interface, OwnerType, OwnershipModel, RoyaltyModel, RoyaltyTargetType,
             SpecificationAssetClass, TokenStandard,
@@ -56,6 +59,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            50,
         );
         let limit = 10;
         let before: Option<String>;
@@ -69,8 +73,7 @@ mod tests {
             let res = api.search_assets(payload).await.unwrap();
             assert!(res.is_object());
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
-            before = res_obj.before;
-            after = res_obj.after;
+            after = res_obj.cursor.clone();
             assert_eq!(res_obj.total, limit, "total should match the limit");
             assert_eq!(
                 res_obj.limit, limit,
@@ -89,6 +92,10 @@ mod tests {
                     "asset should match the pubkey"
                 );
             }
+
+            // by default API uses cursor so the first returned element in this request is 'before'
+            // note: sorting wasn't pointed so cursor is just a pubkey
+            before = Some(res_obj.items[0].id.as_str().to_string());
         }
         // test limit and 1st page being the same as the 0
         {
@@ -355,6 +362,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            50,
         );
 
         let pb = Pubkey::new_unique();
@@ -481,6 +489,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            50,
         );
 
         let pb = Pubkey::new_unique();
@@ -585,6 +594,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            50,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -733,6 +743,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            50,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -889,6 +900,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            50,
         );
 
         let keep_running = Arc::new(AtomicBool::new(true));
@@ -1048,6 +1060,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            50,
         );
 
         let first_tree = Pubkey::new_unique();
@@ -1103,6 +1116,7 @@ mod tests {
             tree: Some(first_tree.to_string()),
             leaf_index: Some(first_leaf_idx),
             sort_direction: None,
+            cursor: None,
         };
         let response = api.get_asset_signatures(payload, false).await.unwrap();
         let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
@@ -1120,6 +1134,7 @@ mod tests {
             tree: Some(first_tree.to_string()),
             leaf_index: Some(first_leaf_idx),
             sort_direction: None,
+            cursor: None,
         };
         let response = api.get_asset_signatures(payload, false).await.unwrap();
         let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
@@ -1137,6 +1152,7 @@ mod tests {
             tree: Some(first_tree.to_string()),
             leaf_index: Some(first_leaf_idx),
             sort_direction: Some(AssetSortDirection::Asc),
+            cursor: None,
         };
         let response = api.get_asset_signatures(payload, false).await.unwrap();
         let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
@@ -1154,6 +1170,7 @@ mod tests {
             tree: Some(first_tree.to_string()),
             leaf_index: Some(first_leaf_idx),
             sort_direction: Some(AssetSortDirection::Desc),
+            cursor: None,
         };
         let response = api.get_asset_signatures(payload, false).await.unwrap();
         let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
@@ -1171,6 +1188,7 @@ mod tests {
             tree: Some(first_tree.to_string()),
             leaf_index: Some(first_leaf_idx),
             sort_direction: Some(AssetSortDirection::Asc),
+            cursor: None,
         };
         let response = api.get_asset_signatures(payload, false).await.unwrap();
         let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
@@ -1188,6 +1206,7 @@ mod tests {
             tree: Some(first_tree.to_string()),
             leaf_index: Some(first_leaf_idx),
             sort_direction: Some(AssetSortDirection::Desc),
+            cursor: None,
         };
         let response = api.get_asset_signatures(payload, false).await.unwrap();
         let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
@@ -1209,6 +1228,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
+            50,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -1382,5 +1402,151 @@ mod tests {
         assert_eq!(parsed_response.token_accounts.len(), 0);
 
         env.teardown().await;
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_get_assets_by_owner() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+        );
+
+        let ref_value = generated_assets.owners[8].clone();
+        let payload = GetAssetsByOwner {
+            owner_address: ref_value.owner.value.to_string(),
+            sort_by: None,
+            limit: None,
+            page: None,
+            before: None,
+            after: None,
+            cursor: None,
+        };
+        let res = api.get_assets_by_owner(payload).await.unwrap();
+        let res_obj: AssetList = serde_json::from_value(res).unwrap();
+
+        assert_eq!(res_obj.total, 1, "total should be 1");
+        assert_eq!(res_obj.items.len(), 1, "items length should be 1");
+        assert_eq!(
+            res_obj.items[0].id,
+            ref_value.pubkey.to_string(),
+            "asset should match the pubkey"
+        );
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_get_assets_by_group() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+        );
+
+        let ref_value = generated_assets.collections[12].clone();
+        let payload = GetAssetsByGroup {
+            group_key: "collection".to_string(),
+            group_value: ref_value.collection.to_string(),
+            sort_by: None,
+            limit: None,
+            page: None,
+            before: None,
+            after: None,
+            cursor: None,
+        };
+        let res = api.get_assets_by_group(payload).await.unwrap();
+        let res_obj: AssetList = serde_json::from_value(res).unwrap();
+
+        assert_eq!(res_obj.total, 1, "total should be 1");
+        assert_eq!(res_obj.items.len(), 1, "items length should be 1");
+        assert_eq!(
+            res_obj.items[0].id,
+            ref_value.pubkey.to_string(),
+            "asset should match the pubkey"
+        );
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_get_assets_by_creator() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+        );
+
+        let ref_value = generated_assets.dynamic_details[5].clone();
+        let payload = GetAssetsByCreator {
+            creator_address: ref_value.creators.value[0].creator.to_string(),
+            only_verified: Some(true),
+            sort_by: None,
+            limit: None,
+            page: None,
+            before: None,
+            after: None,
+            cursor: None,
+        };
+        let res = api.get_assets_by_creator(payload).await.unwrap();
+        let res_obj: AssetList = serde_json::from_value(res).unwrap();
+
+        assert_eq!(res_obj.total, 1, "total should be 1");
+        assert_eq!(res_obj.items.len(), 1, "items length should be 1");
+        assert_eq!(
+            res_obj.items[0].id,
+            ref_value.pubkey.to_string(),
+            "asset should match the pubkey"
+        );
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_get_assets_by_authority() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+        );
+
+        let ref_value = generated_assets.authorities[9].clone();
+        let payload = GetAssetsByAuthority {
+            authority_address: ref_value.authority.to_string(),
+            sort_by: None,
+            limit: None,
+            page: None,
+            before: None,
+            after: None,
+            cursor: None,
+        };
+        let res = api.get_assets_by_authority(payload).await.unwrap();
+        let res_obj: AssetList = serde_json::from_value(res).unwrap();
+
+        assert_eq!(res_obj.total, 1, "total should be 1");
+        assert_eq!(res_obj.items.len(), 1, "items length should be 1");
+        assert_eq!(
+            res_obj.items[0].id,
+            ref_value.pubkey.to_string(),
+            "asset should match the pubkey"
+        );
     }
 }

@@ -65,6 +65,7 @@ pub fn generate_get_assets_by_group_params(
         page,
         before,
         after,
+        cursor: None,
     }
 }
 
@@ -85,6 +86,7 @@ pub fn generate_get_assets_by_owner_params(
         page,
         before,
         after,
+        cursor: None,
     }
 }
 
@@ -107,6 +109,7 @@ pub fn generate_get_assets_by_creator_params(
         page,
         before,
         after,
+        cursor: None,
     }
 }
 
@@ -127,6 +130,7 @@ pub fn generate_get_assets_by_authority_params(
         page,
         before,
         after,
+        cursor: None,
     }
 }
 

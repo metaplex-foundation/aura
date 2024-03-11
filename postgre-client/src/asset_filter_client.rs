@@ -1,18 +1,24 @@
+use std::str::FromStr;
+
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
+use solana_sdk::{bs58, pubkey::Pubkey};
 use sqlx::{Postgres, QueryBuilder};
 
 use crate::{
-    model::{AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, SearchAssetsFilter},
+    model::{
+        AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, AssetSupply,
+        SearchAssetsFilter,
+    },
     storage_traits::AssetPubkeyFilteredFetcher,
     PgClient, SELECT_ACTION, SQL_COMPONENT,
 };
 
 #[derive(sqlx::FromRow, Debug)]
 struct AssetRawResponse {
-    pub(crate) pubkey: Vec<u8>,
-    pub(crate) slot_created: i64,
-    pub(crate) slot_updated: i64,
+    pub pubkey: Vec<u8>,
+    pub slot_created: i64,
+    pub slot_updated: i64,
 }
 
 impl PgClient {
@@ -23,7 +29,8 @@ impl PgClient {
         page: Option<u64>,
         before: Option<String>,
         after: Option<String>,
-    ) -> (QueryBuilder<'a, Postgres>, bool) {
+    ) -> Result<(QueryBuilder<'a, Postgres>, bool), String> {
+        // todo: remove the inner join with tasks and only perform it if the metadata_url_id is present in the filter
         let mut query_builder = QueryBuilder::new(
             "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 ",
         );
@@ -93,9 +100,17 @@ impl PgClient {
             query_builder.push_bind(frozen);
         }
 
-        if let Some(supply) = filter.supply {
-            query_builder.push(" AND assets_v3.ast_supply = ");
-            query_builder.push_bind(supply as i64);
+        if let Some(supply) = &filter.supply {
+            match supply {
+                AssetSupply::Equal(s) => {
+                    query_builder.push(" AND assets_v3.ast_supply = ");
+                    query_builder.push_bind(*s as i64);
+                }
+                AssetSupply::Greater(s) => {
+                    query_builder.push(" AND assets_v3.ast_supply > ");
+                    query_builder.push_bind(*s as i64);
+                }
+            }
         }
 
         // supply_mint is identical to pubkey
@@ -139,53 +154,66 @@ impl PgClient {
             query_builder.push_bind(json_uri);
         }
 
-        let order_field = match order.sort_by {
-            AssetSortBy::SlotCreated => "ast_slot_created",
-            AssetSortBy::SlotUpdated => "ast_slot_updated",
-        };
         let order_reversed = before.is_some() && after.is_none();
 
-        if let Some(before) = before {
-            let res = AssetRawResponse::decode_sorting_key(before.as_str());
-            if let Ok((slot, pubkey)) = res {
-                query_builder.push(" AND (");
-                query_builder.push(order_field);
-                let comparison = match order.sort_direction {
-                    AssetSortDirection::Asc => " < ",
-                    AssetSortDirection::Desc => " > ",
-                };
-                query_builder.push(comparison);
-                query_builder.push_bind(slot);
-                query_builder.push(" OR (");
-                query_builder.push(order_field);
-                query_builder.push(" = ");
-                query_builder.push_bind(slot);
-                query_builder.push(" AND ast_pubkey ");
-                query_builder.push(comparison);
-                query_builder.push_bind(pubkey);
-                query_builder.push("))");
-            }
-        }
+        match &order.sort_by {
+            AssetSortBy::SlotCreated | AssetSortBy::SlotUpdated => {
+                if let Some(before) = before {
+                    let comparison = match order.sort_direction {
+                        AssetSortDirection::Asc => " < ",
+                        AssetSortDirection::Desc => " > ",
+                    };
 
-        if let Some(after) = after {
-            let res = AssetRawResponse::decode_sorting_key(&after);
-            if let Ok((slot, pubkey)) = res {
-                query_builder.push(" AND (");
-                query_builder.push(order_field);
-                let comparison = match order.sort_direction {
-                    AssetSortDirection::Asc => " > ",
-                    AssetSortDirection::Desc => " < ",
-                };
-                query_builder.push(comparison);
-                query_builder.push_bind(slot);
-                query_builder.push(" OR (");
-                query_builder.push(order_field);
-                query_builder.push(" = ");
-                query_builder.push_bind(slot);
-                query_builder.push(" AND ast_pubkey ");
-                query_builder.push(comparison);
-                query_builder.push_bind(pubkey);
-                query_builder.push("))");
+                    add_slot_and_key_comparison(
+                        before.as_ref(),
+                        comparison,
+                        &order.sort_by,
+                        &mut query_builder,
+                    )?;
+                }
+
+                if let Some(after) = after {
+                    let comparison = match order.sort_direction {
+                        AssetSortDirection::Asc => " > ",
+                        AssetSortDirection::Desc => " < ",
+                    };
+
+                    add_slot_and_key_comparison(
+                        after.as_ref(),
+                        comparison,
+                        &order.sort_by,
+                        &mut query_builder,
+                    )?;
+                }
+            }
+            AssetSortBy::Key => {
+                if let Some(before) = before {
+                    let comparison = match order.sort_direction {
+                        AssetSortDirection::Asc => " < ",
+                        AssetSortDirection::Desc => " > ",
+                    };
+
+                    add_key_comparison(
+                        before.as_ref(),
+                        comparison,
+                        &order.sort_by,
+                        &mut query_builder,
+                    )?;
+                }
+
+                if let Some(after) = after {
+                    let comparison = match order.sort_direction {
+                        AssetSortDirection::Asc => " > ",
+                        AssetSortDirection::Desc => " < ",
+                    };
+
+                    add_key_comparison(
+                        after.as_ref(),
+                        comparison,
+                        &order.sort_by,
+                        &mut query_builder,
+                    )?;
+                }
             }
         }
 
@@ -201,7 +229,7 @@ impl PgClient {
         };
 
         query_builder.push(" ORDER BY ");
-        query_builder.push(order_field);
+        query_builder.push(order.sort_by.to_string());
         query_builder.push(direction);
         query_builder.push(", ast_pubkey ");
         query_builder.push(direction);
@@ -217,8 +245,45 @@ impl PgClient {
                 query_builder.push_bind(offset as i64);
             }
         }
-        (query_builder, order_reversed)
+        Ok((query_builder, order_reversed))
     }
+}
+
+fn add_slot_and_key_comparison(
+    key: &str,
+    comparison: &str,
+    order_field: &AssetSortBy,
+    query_builder: &mut QueryBuilder<'_, Postgres>,
+) -> Result<(), String> {
+    let res = AssetRawResponse::decode_sorting_key(key);
+    if let Ok((slot, pubkey)) = res {
+        let order_field = order_field.to_string();
+
+        query_builder.push(format!(" AND ({}{}", order_field, comparison));
+        query_builder.push_bind(slot);
+        query_builder.push(format!(" OR ({} = ", order_field));
+        query_builder.push_bind(slot);
+        query_builder.push(format!(" AND ast_pubkey {}", comparison));
+        query_builder.push_bind(pubkey);
+        query_builder.push("))");
+    }
+
+    Ok(())
+}
+
+fn add_key_comparison(
+    key: &str,
+    comparison: &str,
+    order_field: &AssetSortBy,
+    query_builder: &mut QueryBuilder<'_, Postgres>,
+) -> Result<(), String> {
+    let after = Pubkey::from_str(key).map_err(|e| e.to_string())?;
+
+    query_builder.push(format!(" AND ({}{}", order_field, comparison));
+    query_builder.push_bind(after.to_bytes());
+    query_builder.push(")");
+
+    Ok(())
 }
 
 #[async_trait]
@@ -233,7 +298,7 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         after: Option<String>,
     ) -> Result<Vec<AssetSortedIndex>, String> {
         let (mut query_builder, order_reversed) =
-            Self::build_search_query(filter, order, limit, page, before, after);
+            Self::build_search_query(filter, order, limit, page, before, after)?;
         let query = query_builder.build_query_as::<AssetRawResponse>();
         let start_time = chrono::Utc::now();
         let result = query
@@ -258,16 +323,23 @@ impl AssetPubkeyFilteredFetcher for PgClient {
 }
 
 impl AssetRawResponse {
-    fn encode_sorting_key(&self, sort_by: &AssetSortBy) -> String {
-        let mut key = match sort_by {
-            AssetSortBy::SlotCreated => self.slot_created.to_be_bytes().to_vec(),
-            AssetSortBy::SlotUpdated => self.slot_updated.to_be_bytes().to_vec(),
-        };
-        key.extend_from_slice(&self.pubkey);
-        general_purpose::STANDARD_NO_PAD.encode(key)
+    pub fn encode_sorting_key(&self, sort_by: &AssetSortBy) -> String {
+        match sort_by {
+            AssetSortBy::SlotCreated => {
+                let mut key = self.slot_created.to_be_bytes().to_vec();
+                key.extend_from_slice(&self.pubkey);
+                general_purpose::STANDARD_NO_PAD.encode(key)
+            }
+            AssetSortBy::SlotUpdated => {
+                let mut key = self.slot_updated.to_be_bytes().to_vec();
+                key.extend_from_slice(&self.pubkey);
+                general_purpose::STANDARD_NO_PAD.encode(key)
+            }
+            AssetSortBy::Key => bs58::encode(&self.pubkey).into_string(),
+        }
     }
 
-    fn decode_sorting_key(encoded_key: &str) -> Result<(i64, Vec<u8>), String> {
+    pub fn decode_sorting_key(encoded_key: &str) -> Result<(i64, Vec<u8>), String> {
         let key = match general_purpose::STANDARD_NO_PAD.decode(encoded_key) {
             Ok(k) => k,
             Err(_) => return Err("Failed to decode Base64".to_string()),

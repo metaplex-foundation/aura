@@ -110,6 +110,7 @@ pub async fn main() -> Result<(), IngesterError> {
             metrics.clone(),
             config.server_port,
             proof_checker,
+            config.max_page_limit,
         )
         .await
         {

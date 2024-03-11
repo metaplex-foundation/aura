@@ -252,6 +252,8 @@ pub struct ApiConfig {
     pub check_proofs_probability: f64,
     #[serde(default = "default_check_proofs_commitment")]
     pub check_proofs_commitment: CommitmentLevel,
+    #[serde(default = "default_max_page_limit")]
+    pub max_page_limit: usize,
 }
 
 const fn default_check_proofs_probability() -> f64 {
@@ -260,6 +262,10 @@ const fn default_check_proofs_probability() -> f64 {
 
 const fn default_check_proofs_commitment() -> CommitmentLevel {
     CommitmentLevel::Finalized
+}
+
+pub const fn default_max_page_limit() -> usize {
+    50
 }
 
 impl ApiConfig {
