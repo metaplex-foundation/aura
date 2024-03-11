@@ -83,7 +83,7 @@ impl TransactionsGetter for BackfillRPC {
                                 RpcTransactionConfig {
                                     encoding: Some(UiTransactionEncoding::Base64),
                                     commitment: Some(CommitmentConfig {
-                                        commitment: CommitmentLevel::Finalized,
+                                        commitment: CommitmentLevel::Confirmed,
                                     }),
                                     max_supported_transaction_version: Some(0),
                                 },
@@ -137,7 +137,7 @@ impl BackfillRPC {
                 GetConfirmedSignaturesForAddress2Config {
                     until,
                     commitment: Some(CommitmentConfig {
-                        commitment: CommitmentLevel::Finalized,
+                        commitment: CommitmentLevel::Confirmed,
                     }),
                     before,
                     ..Default::default()
