@@ -25,7 +25,7 @@ use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tokio::time::Duration;
 use usecase::bigtable::{is_bubblegum_transaction_encoded, BigTableClient};
-use usecase::slots_collector::SlotsCollector;
+use usecase::slots_collector::{SlotsCollector, SlotsGetter};
 pub const GET_SIGNATURES_LIMIT: usize = 2000;
 pub const GET_SLOT_RETRIES: u32 = 3;
 pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 10;
@@ -33,25 +33,24 @@ pub const GET_DATA_FROM_BG_RETRIES: u32 = 5;
 pub const SECONDS_TO_RETRY_ROCKSDB_OPERATION: u64 = 5;
 pub const DELETE_SLOT_RETRIES: u32 = 5;
 
-#[derive(Clone)]
-pub struct Backfiller {
+pub struct Backfiller<T: SlotsGetter + Send + Sync + 'static> {
     rocks_client: Arc<rocks_db::Storage>,
-    big_table_client: Arc<BigTableClient>,
+    slots_getter: Arc<T>,
     slot_start_from: u64,
     slot_parse_until: u64,
     workers_count: usize,
     chunk_size: usize,
 }
 
-impl Backfiller {
+impl<T: SlotsGetter + Send + Sync + 'static> Backfiller<T> {
     pub fn new(
         rocks_client: Arc<rocks_db::Storage>,
-        big_table_client: Arc<BigTableClient>,
+        slots_getter: Arc<T>,
         config: BackfillerConfig,
-    ) -> Backfiller {
+    ) -> Backfiller<T> {
         Backfiller {
             rocks_client,
-            big_table_client,
+            slots_getter,
             slot_start_from: config.slot_start_from,
             slot_parse_until: config.get_slot_until(),
             workers_count: config.workers_count,
@@ -70,7 +69,7 @@ impl Backfiller {
 
         let slots_collector = SlotsCollector::new(
             self.rocks_client.clone(),
-            self.big_table_client.big_table_inner_client.clone(),
+            self.slots_getter.clone(),
             metrics.clone(),
         );
 
@@ -170,7 +169,7 @@ impl Backfiller {
 
         let slots_collector = SlotsCollector::new(
             self.rocks_client.clone(),
-            self.big_table_client.big_table_inner_client.clone(),
+            self.slots_getter.clone(),
             metrics.clone(),
         );
         let start_from = self.slot_start_from;

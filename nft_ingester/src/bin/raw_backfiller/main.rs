@@ -90,7 +90,7 @@ pub async fn main() -> Result<(), IngesterError> {
     );
     let backfiller = Backfiller::new(
         rocks_storage.clone(),
-        big_table_client.clone(),
+        big_table_client.big_table_inner_client.clone(),
         backfiller_config.clone(),
     );
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
