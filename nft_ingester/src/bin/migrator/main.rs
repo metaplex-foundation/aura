@@ -269,7 +269,7 @@ impl JsonMigrator {
                             }
 
                             let mut task = Task {
-                                ofd_metadata_url: data.url.value.clone(),
+                                ofd_metadata_url: data.url.value.trim().replace('\0', "").clone(),
                                 ofd_locked_until: None,
                                 ofd_attempts: 0,
                                 ofd_max_attempts: 10,
