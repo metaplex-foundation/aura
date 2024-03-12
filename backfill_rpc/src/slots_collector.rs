@@ -23,7 +23,7 @@ impl SlotsGetter for BackfillRPC {
         let signature = fetch_related_signature(collected_key, block_with_start_signature);
         let mut slots = HashSet::new();
         let mut before = signature.and_then(|s| Signature::from_str(&s).ok());
-        loop {
+        'out: loop {
             let signatures = self
                 .get_signatures_by_address(None, before, collected_key)
                 .await?;
@@ -32,15 +32,15 @@ impl SlotsGetter for BackfillRPC {
             }
             let last = signatures.last().unwrap();
 
-            signatures.iter().for_each(|sig| {
+            for sig in signatures.iter() {
                 if sig.slot <= start_at {
                     slots.insert(sig.slot);
                 }
-            });
-            before = Some(last.signature);
-            if slots.len() >= rows_limit as usize {
-                break;
+                if slots.len() >= rows_limit as usize {
+                    break 'out;
+                }
             }
+            before = Some(last.signature);
         }
 
         Ok(Vec::from_iter(slots))
