@@ -2,6 +2,8 @@
 #[cfg(test)]
 #[cfg(feature = "big_table_tests")]
 mod tests {
+    use solana_program::pubkey::Pubkey;
+    use std::str::FromStr;
     use std::sync::Arc;
 
     use interface::{
@@ -64,9 +66,13 @@ mod tests {
             big_table_client.big_table_inner_client.clone(),
             metrics.clone(),
         );
-        const BBG_PREFIX: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY/";
         slots_collector
-            .collect_slots(BBG_PREFIX, 160_000_000, 130_000_000, &mut rx)
+            .collect_slots(
+                &blockbuster::programs::bubblegum::ID,
+                160_000_000,
+                130_000_000,
+                &mut rx,
+            )
             .await;
     }
 
@@ -87,10 +93,14 @@ mod tests {
             metrics.clone(),
         );
 
-        const BBG_PREFIX: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY/";
         let some_unreached_slot = 300_000_000_000;
         slots_collector
-            .collect_slots(BBG_PREFIX, u64::MAX, some_unreached_slot, &mut rx)
+            .collect_slots(
+                &blockbuster::programs::bubblegum::ID,
+                u64::MAX,
+                some_unreached_slot,
+                &mut rx,
+            )
             .await;
         let slot_getter = BubblegumSlotGetter::new(storage.clone());
         let mut iter = slot_getter.get_unprocessed_slots_iter();

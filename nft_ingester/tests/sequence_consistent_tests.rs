@@ -12,7 +12,7 @@ mod tests {
     use std::str::FromStr;
     use std::sync::Arc;
     use tokio::sync::broadcast;
-    use usecase::slots_collector::{MockRowKeysGetter, SlotsCollector};
+    use usecase::slots_collector::{MockSlotsGetter, SlotsCollector};
 
     #[tracing_test::traced_test]
     #[tokio::test]
@@ -128,26 +128,15 @@ mod tests {
             .await
             .unwrap();
 
-        let mut row_keys_getter = MockRowKeysGetter::new();
+        let mut row_keys_getter = MockSlotsGetter::new();
         row_keys_getter
-            .expect_get_row_keys()
+            .expect_get_slots()
             .times(1)
-            .return_once(move |_, _, _, _| {
-                Ok(vec![
-                    format!("{}/{:016x}", first_tree_key, !206u64),
-                    format!("{}/{:016x}", first_tree_key, !204u64),
-                    format!("{}/{:016x}", first_tree_key, !203u64),
-                ])
-            });
+            .return_once(move |_, _, _| Ok(vec![206, 204, 203]));
         row_keys_getter
-            .expect_get_row_keys()
+            .expect_get_slots()
             .times(1)
-            .return_once(move |_, _, _, _| {
-                Ok(vec![
-                    format!("{}/{:016x}", first_tree_key, !209u64),
-                    format!("{}/{:016x}", first_tree_key, !208u64),
-                ])
-            });
+            .return_once(move |_, _, _| Ok(vec![209, 208]));
         let row_keys_getter_arc = Arc::new(row_keys_getter);
         let mut metrics_state = MetricState::new();
         metrics_state.register_metrics();

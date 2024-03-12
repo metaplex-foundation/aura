@@ -43,7 +43,7 @@ impl TransactionsGetter for BackfillRPC {
         let last_finalized_slot = self.get_finalized_slot().await?;
         loop {
             let signatures = self
-                .get_signatures_by_address(until.signature, before, address)
+                .get_signatures_by_address(Some(until.signature), before, &address)
                 .await?;
             if signatures.is_empty() {
                 break;
@@ -83,7 +83,7 @@ impl TransactionsGetter for BackfillRPC {
                                 RpcTransactionConfig {
                                     encoding: Some(UiTransactionEncoding::Base64),
                                     commitment: Some(CommitmentConfig {
-                                        commitment: CommitmentLevel::Finalized,
+                                        commitment: CommitmentLevel::Confirmed,
                                     }),
                                     max_supported_transaction_version: Some(0),
                                 },
@@ -125,19 +125,19 @@ impl TransactionsGetter for BackfillRPC {
 }
 
 impl BackfillRPC {
-    async fn get_signatures_by_address(
+    pub(crate) async fn get_signatures_by_address(
         &self,
-        until: Signature,
+        until: Option<Signature>,
         before: Option<Signature>,
-        address: Pubkey,
+        address: &Pubkey,
     ) -> Result<Vec<SignatureWithSlot>, UsecaseError> {
         self.client
             .get_signatures_for_address_with_config(
-                &address,
+                address,
                 GetConfirmedSignaturesForAddress2Config {
-                    until: Some(until),
+                    until,
                     commitment: Some(CommitmentConfig {
-                        commitment: CommitmentLevel::Finalized,
+                        commitment: CommitmentLevel::Confirmed,
                     }),
                     before,
                     ..Default::default()
@@ -184,9 +184,9 @@ async fn test_rpc_get_signatures_by_address() {
     let client = BackfillRPC::connect("https://api.mainnet-beta.solana.com".to_string());
     let signatures = client
         .get_signatures_by_address(
-            Signature::default(),
+            Some(Signature::default()),
             None,
-            Pubkey::from_str("Vote111111111111111111111111111111111111111").unwrap(),
+            &Pubkey::from_str("Vote111111111111111111111111111111111111111").unwrap(),
         )
         .await
         .unwrap();

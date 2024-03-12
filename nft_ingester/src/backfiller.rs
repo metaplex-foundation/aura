@@ -26,8 +26,6 @@ use tokio::task::{JoinError, JoinSet};
 use tokio::time::Duration;
 use usecase::bigtable::{is_bubblegum_transaction_encoded, BigTableClient};
 use usecase::slots_collector::SlotsCollector;
-
-const BBG_PREFIX: &str = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY/";
 pub const GET_SIGNATURES_LIMIT: usize = 2000;
 pub const GET_SLOT_RETRIES: u32 = 3;
 pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 10;
@@ -87,7 +85,12 @@ impl Backfiller {
         loop {
             let finalized_slot = finalized_slot_getter.get_finalized_slot().await?;
             let top_collected_slot = slots_collector
-                .collect_slots(BBG_PREFIX, finalized_slot, parse_until, &rx)
+                .collect_slots(
+                    &blockbuster::programs::bubblegum::ID,
+                    finalized_slot,
+                    parse_until,
+                    &rx,
+                )
                 .await;
             if let Some(slot) = top_collected_slot {
                 parse_until = slot;
@@ -177,7 +180,12 @@ impl Backfiller {
         tasks.lock().await.spawn(tokio::spawn(async move {
             info!("Running slots parser...");
             slots_collector
-                .collect_slots(BBG_PREFIX, start_from, parse_until, &rx1)
+                .collect_slots(
+                    &blockbuster::programs::bubblegum::ID,
+                    start_from,
+                    parse_until,
+                    &rx1,
+                )
                 .await;
         }));
 
