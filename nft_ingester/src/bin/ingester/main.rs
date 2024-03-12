@@ -64,28 +64,22 @@ struct Args {
     restore_rocks_db: bool,
 }
 
-struct BackfillSource {
-    bigtable: Option<Arc<BigTableClient>>,
-    rpc: Option<Arc<BackfillRPC>>,
+enum BackfillSource {
+    Bigtable(Arc<BigTableClient>),
+    Rpc(Arc<BackfillRPC>),
 }
 
 impl BackfillSource {
     async fn new(ingester_config: &IngesterConfig, backfiller_config: &BackfillerConfig) -> Self {
         match ingester_config.backfiller_source_mode {
-            BackfillerSourceMode::Bigtable => Self {
-                bigtable: Some(Arc::new(
-                    connect_new_bigtable_from_config(backfiller_config.clone())
-                        .await
-                        .unwrap(),
-                )),
-                rpc: None,
-            },
-            BackfillerSourceMode::RPC => Self {
-                bigtable: None,
-                rpc: Some(Arc::new(BackfillRPC::connect(
-                    ingester_config.backfill_rpc_address.clone(),
-                ))),
-            },
+            BackfillerSourceMode::Bigtable => Self::Bigtable(Arc::new(
+                connect_new_bigtable_from_config(backfiller_config.clone())
+                    .await
+                    .unwrap(),
+            )),
+            BackfillerSourceMode::RPC => Self::Rpc(Arc::new(BackfillRPC::connect(
+                ingester_config.backfill_rpc_address.clone(),
+            ))),
         }
     }
 }
@@ -98,25 +92,25 @@ impl SlotsGetter for BackfillSource {
         start_at: u64,
         rows_limit: i64,
     ) -> Result<Vec<u64>, UsecaseError> {
-        if let Some(ref rpc) = self.rpc {
-            return rpc.get_slots(collected_key, start_at, rows_limit).await;
+        match self {
+            BackfillSource::Bigtable(bigtable) => {
+                bigtable
+                    .big_table_inner_client
+                    .get_slots(collected_key, start_at, rows_limit)
+                    .await
+            }
+            BackfillSource::Rpc(rpc) => rpc.get_slots(collected_key, start_at, rows_limit).await,
         }
-        self.bigtable
-            .clone()
-            .unwrap()
-            .big_table_inner_client
-            .get_slots(collected_key, start_at, rows_limit)
-            .await
     }
 }
 
 #[async_trait]
 impl BlockProducer for BackfillSource {
     async fn get_block(&self, slot: u64) -> Result<UiConfirmedBlock, StorageError> {
-        if let Some(ref rpc) = self.rpc {
-            return rpc.get_block(slot).await;
+        match self {
+            BackfillSource::Bigtable(bigtable) => bigtable.get_block(slot).await,
+            BackfillSource::Rpc(rpc) => rpc.get_block(slot).await,
         }
-        self.bigtable.clone().unwrap().get_block(slot).await
     }
 }
 
