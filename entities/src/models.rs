@@ -16,7 +16,7 @@ pub struct UrlWithStatus {
 impl UrlWithStatus {
     pub fn new(metadata_url: &str, is_downloaded: bool) -> Self {
         Self {
-            metadata_url: metadata_url.trim().to_string(),
+            metadata_url: metadata_url.trim().replace('\0', "").to_string(),
             is_downloaded,
         }
     }
