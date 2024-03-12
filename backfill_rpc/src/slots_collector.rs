@@ -53,6 +53,9 @@ fn fetch_related_signature(
         return None;
     };
     for tx in txs {
+        if tx.meta.and_then(|meta| meta.err).is_some() {
+            continue;
+        }
         if let EncodedTransaction::Accounts(accounts_list) = tx.transaction {
             if accounts_list
                 .account_keys
