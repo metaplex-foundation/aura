@@ -58,14 +58,14 @@ fn fetch_related_signature(
         if tx.meta.and_then(|meta| meta.err).is_some() {
             continue;
         }
-        if let EncodedTransaction::Accounts(accounts_list) = tx.transaction {
-            if accounts_list
+        if let EncodedTransaction::Accounts(tx) = tx.transaction {
+            if tx
                 .account_keys
                 .iter()
                 .any(|a| a.pubkey == collected_key.to_string())
-                && !accounts_list.signatures.is_empty()
+                && !tx.signatures.is_empty()
             {
-                return Some(accounts_list.signatures[0].clone());
+                return Some(tx.signatures[0].clone());
             }
         }
     }
@@ -74,6 +74,7 @@ fn fetch_related_signature(
 
 impl BackfillRPC {
     async fn try_get_block(&self, start_at: u64) -> Option<UiConfirmedBlock> {
+        // Block could be forked, so trying to get neighbors ones
         for slot in (start_at - TRY_SKIPPED_BLOCKS_COUNT..start_at).rev() {
             if let Ok(block) = self
                 .client
