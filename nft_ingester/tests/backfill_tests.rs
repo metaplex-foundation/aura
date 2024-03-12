@@ -66,9 +66,13 @@ mod tests {
             big_table_client.big_table_inner_client.clone(),
             metrics.clone(),
         );
-        let bgg_pubkey = Pubkey::from_str("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY").unwrap();
         slots_collector
-            .collect_slots(&bgg_pubkey, 160_000_000, 130_000_000, &mut rx)
+            .collect_slots(
+                &blockbuster::programs::bubblegum::ID,
+                160_000_000,
+                130_000_000,
+                &mut rx,
+            )
             .await;
     }
 
@@ -89,10 +93,14 @@ mod tests {
             metrics.clone(),
         );
 
-        let bgg_pubkey = Pubkey::from_str("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY").unwrap();
         let some_unreached_slot = 300_000_000_000;
         slots_collector
-            .collect_slots(&bgg_pubkey, u64::MAX, some_unreached_slot, &mut rx)
+            .collect_slots(
+                &blockbuster::programs::bubblegum::ID,
+                u64::MAX,
+                some_unreached_slot,
+                &mut rx,
+            )
             .await;
         let slot_getter = BubblegumSlotGetter::new(storage.clone());
         let mut iter = slot_getter.get_unprocessed_slots_iter();
