@@ -19,7 +19,7 @@ impl SlotsGetter for BackfillRPC {
         start_at: u64,
         rows_limit: i64,
     ) -> Result<Vec<u64>, UsecaseError> {
-        let block_with_start_signature = self.try_get_block(start_at).await?;
+        let block_with_start_signature = self.try_get_block(start_at).await;
         let signature = fetch_related_signature(collected_key, block_with_start_signature);
         let mut slots = HashSet::new();
         let mut before = signature.and_then(|s| Signature::from_str(&s).ok());
@@ -33,7 +33,9 @@ impl SlotsGetter for BackfillRPC {
             let last = signatures.last().unwrap();
 
             signatures.iter().for_each(|sig| {
-                slots.insert(sig.slot);
+                if sig.slot <= start_at {
+                    slots.insert(sig.slot);
+                }
             });
             before = Some(last.signature);
             if slots.len() >= rows_limit as usize {
@@ -47,9 +49,9 @@ impl SlotsGetter for BackfillRPC {
 
 fn fetch_related_signature(
     collected_key: &solana_program::pubkey::Pubkey,
-    block_with_start_signature: UiConfirmedBlock,
+    block_with_start_signature: Option<UiConfirmedBlock>,
 ) -> Option<String> {
-    let Some(txs) = block_with_start_signature.transactions else {
+    let Some(txs) = block_with_start_signature.and_then(|block| block.transactions) else {
         return None;
     };
     for tx in txs {
@@ -71,12 +73,12 @@ fn fetch_related_signature(
 }
 
 impl BackfillRPC {
-    async fn try_get_block(&self, start_at: u64) -> Result<UiConfirmedBlock, UsecaseError> {
-        for _ in (start_at - TRY_SKIPPED_BLOCKS_COUNT..start_at).rev() {
+    async fn try_get_block(&self, start_at: u64) -> Option<UiConfirmedBlock> {
+        for slot in (start_at - TRY_SKIPPED_BLOCKS_COUNT..start_at).rev() {
             if let Ok(block) = self
                 .client
                 .get_block_with_config(
-                    start_at,
+                    slot,
                     RpcBlockConfig {
                         encoding: None,
                         transaction_details: Some(TransactionDetails::Accounts),
@@ -89,11 +91,10 @@ impl BackfillRPC {
                 )
                 .await
             {
-                return Ok(block);
+                return Some(block);
             }
         }
-
-        Err(UsecaseError::SolanaRPC("Block not found".to_string()))
+        None
     }
 }
 
