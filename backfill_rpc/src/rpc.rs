@@ -18,9 +18,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 const MAX_SIGNATURES_LIMIT: usize = 50_000_000;
-const GET_TX_RETRIES: usize = 7;
+pub(crate) const GET_TX_RETRIES: usize = 7;
 pub struct BackfillRPC {
-    client: Arc<RpcClient>,
+    pub(crate) client: Arc<RpcClient>,
 }
 
 impl BackfillRPC {

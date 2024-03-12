@@ -18,6 +18,7 @@ tokio = { version = "1.26.0", features = ["full"] }
 plerkle_serialization = "1.5.2"
 flatbuffers = "23.1.21"
 tracing = "0.1.40"
+usecase = { path = "../usecase" }
 
 [features]
 rpc_tests = []
