@@ -102,7 +102,7 @@ pub enum BackfillerMode {
 }
 
 #[derive(Deserialize, Default, PartialEq, Debug, Clone, Copy)]
-pub enum BackfillerSourseMode {
+pub enum BackfillerSourceMode {
     Bigtable,
     #[default]
     RPC,
@@ -174,7 +174,7 @@ pub struct IngesterConfig {
     #[serde(default = "default_check_proofs_commitment")]
     pub check_proofs_commitment: CommitmentLevel,
     #[serde(default)]
-    pub backfiller_sourse_mode: BackfillerSourseMode,
+    pub backfiller_source_mode: BackfillerSourceMode,
 }
 
 fn default_dump_path() -> String {
