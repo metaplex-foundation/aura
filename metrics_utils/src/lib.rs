@@ -115,6 +115,13 @@ pub struct MetricLabelWithStatus {
     pub status: MetricStatus,
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub struct MetricLabelWithCodeAndStatus {
+    pub storage: String,
+    pub code: u16,
+    pub status: MetricStatus,
+}
+
 #[derive(Debug, Clone)]
 pub struct BackfillerMetricsConfig {
     slots_collected: Family<MetricLabelWithStatus, Counter>,
@@ -805,6 +812,7 @@ pub struct JsonDownloaderMetricsConfig {
     latency_task_executed: Family<MetricLabel, Histogram>,
     tasks: Family<MetricLabelWithStatus, Counter>,
     tasks_to_execute: Gauge,
+    storages: Family<MetricLabelWithCodeAndStatus, Counter>,
 }
 
 impl JsonDownloaderMetricsConfig {
@@ -814,8 +822,9 @@ impl JsonDownloaderMetricsConfig {
             start_time: Default::default(),
             tasks_to_execute: Default::default(),
             latency_task_executed: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new([100.0, 500.0, 1000.0, 2000.0].into_iter())
+                Histogram::new([100.0, 500.0, 1000.0, 2000.0, 3000.0, 4000.0].into_iter())
             }),
+            storages: Family::<MetricLabelWithCodeAndStatus, Counter>::default(),
         }
     }
 
@@ -844,6 +853,16 @@ impl JsonDownloaderMetricsConfig {
             .observe(duration);
     }
 
+    pub fn inc_storages(&self, storage: &str, code: u16, status: MetricStatus) -> u64 {
+        self.storages
+            .get_or_create(&MetricLabelWithCodeAndStatus {
+                storage: storage.to_string(),
+                code,
+                status,
+            })
+            .inc()
+    }
+
     pub fn register(&self, registry: &mut Registry) {
         self.start_time();
 
@@ -869,6 +888,12 @@ impl JsonDownloaderMetricsConfig {
             "json_downloader_start_time",
             "Binary start time",
             self.start_time.clone(),
+        );
+
+        registry.register(
+            "json_downloader_storages_count",
+            "The total number of links with certain storage",
+            self.storages.clone(),
         );
     }
 }

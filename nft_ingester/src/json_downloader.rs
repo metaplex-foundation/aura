@@ -72,6 +72,16 @@ impl JsonDownloader {
                                 begin_processing.elapsed().as_millis() as f64,
                             );
 
+                            let storage = {
+                                if task.metadata_url.contains("ipfs") {
+                                    "ipfs"
+                                } else if task.metadata_url.contains("arweave") {
+                                    "arweave"
+                                } else {
+                                    "other"
+                                }
+                            };
+
                             match response {
                                 Ok(response) => {
                                     if let Some(content_header) =
@@ -101,6 +111,8 @@ impl JsonDownloader {
                                                             },
                                                         )
                                                         .unwrap();
+
+                                                    cloned_metrics.inc_storages(storage, 200, MetricStatus::SUCCESS);
 
                                                     cloned_metrics
                                                         .inc_tasks("media", MetricStatus::SUCCESS);
@@ -135,8 +147,12 @@ impl JsonDownloader {
                                             .await
                                             .unwrap();
 
+                                        cloned_metrics.inc_storages(storage, response.status().as_u16(), MetricStatus::FAILURE);
                                         cloned_metrics.inc_tasks("json", MetricStatus::FAILURE);
                                     } else {
+                                        // we downloaded data so this metric we mark as success
+                                        cloned_metrics.inc_storages(storage, response.status().as_u16(), MetricStatus::SUCCESS);
+
                                         let metadata_body = response.text().await;
                                         if let Ok(metadata) = metadata_body {
                                             cloned_rocks
