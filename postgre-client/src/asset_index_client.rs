@@ -129,6 +129,7 @@ impl AssetIndexStorage for PgClient {
         self.commit_transaction(transaction).await
     }
 
+     // todo: load from dump will not work with other sql bases
     async fn load_from_dump(
         &self,
         base_path: &std::path::Path,

@@ -1,5 +1,4 @@
-use entities::enums::TaskStatus;
-use entities::models::UrlWithStatus;
+use entities::{enums::TaskStatus, models::UrlWithStatus};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -15,6 +14,7 @@ pub mod integrity_verification_client;
 pub mod load_client;
 pub mod model;
 pub mod storage_traits;
+pub mod sqlite_client;
 
 pub const SQL_COMPONENT: &str = "sql";
 pub const SELECT_ACTION: &str = "select";

@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use std::sync::Arc;
+    use std::{fs, path::{Path, PathBuf}, sync::Arc};
 
     use entities::models::UrlWithStatus;
     use metrics_utils::SynchronizerMetricsConfig;
@@ -74,5 +74,30 @@ mod tests {
         });
         pg_env.teardown().await;
         temp_dir.close().unwrap();
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_csv_import_into_pg() {
+        let data_path = PathBuf::from("../rocks-db/tests/data");
+        // we need a canonical path to mount the volume
+        let path = fs::canonicalize(&data_path).unwrap().to_str().unwrap().to_owned();
+        let path = path.as_str();
+        let cli: Cli = Cli::default();
+        let pg_env = setup::pg::TestEnvironment::new_with_mount(&cli, path).await;
+        let client = pg_env.client.clone();
+        let path = Path::new(path);
+        client.load_from_dump(path, &[]).await.unwrap();
+        let number_of_assets = 1_000_000;
+        assert_eq!(pg_env.count_rows_in_metadata().await.unwrap(), 1);
+        assert_eq!(
+            pg_env.count_rows_in_creators().await.unwrap(),
+            number_of_assets as i64
+        );
+        assert_eq!(
+            pg_env.count_rows_in_assets().await.unwrap(),
+            number_of_assets as i64
+        );
+        pg_env.teardown().await;
     }
 }

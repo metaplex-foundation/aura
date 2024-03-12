@@ -117,6 +117,7 @@ impl PgClient {
         self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, name)
             .await
     }
+    // todo: index creation is postgres specific
     pub async fn recreate_indexes(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
