@@ -243,7 +243,7 @@ impl Storage {
         mut metadata_key_set: HashSet<Vec<u8>>,
         rx: tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), String> {
-        let iter = self.complete_asset_details.iterator_cbor();
+        let iter = self.complete_asset_details.iterator();
         // collect batch of keys
         let mut batch = Vec::with_capacity(batch_size);
         for (_, details) in iter {
