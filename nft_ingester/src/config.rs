@@ -141,6 +141,8 @@ pub struct IngesterConfig {
     pub dump_synchronizer_batch_size: usize,
     #[serde(default = "default_dump_path")]
     pub dump_path: String,
+    #[serde(default = "default_dump_sync_threshold")]
+    pub dump_sync_threshold: i64,
     #[serde(default)]
     pub run_dump_synchronize_on_start: bool,
     #[serde(default)]
@@ -168,6 +170,9 @@ pub struct IngesterConfig {
     pub check_proofs_commitment: CommitmentLevel,
 }
 
+fn default_dump_sync_threshold() -> i64 {
+    100_000_000
+}
 fn default_dump_path() -> String {
     "/tmp/sync_dump".to_string()
 }
@@ -227,8 +232,8 @@ pub struct SynchronizerConfig {
     pub dump_synchronizer_batch_size: usize,
     #[serde(default = "default_dump_path")]
     pub dump_path: String,
-    #[serde(default)]
-    pub run_dump_synchronize_on_start: bool,
+    #[serde(default = "default_dump_sync_threshold")]
+    pub dump_sync_threshold: i64,
     #[serde(default)]
     pub timeout_between_syncs_sec: u64,
 }

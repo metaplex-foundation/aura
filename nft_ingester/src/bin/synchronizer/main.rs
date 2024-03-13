@@ -111,20 +111,14 @@ pub async fn main() -> Result<(), IngesterError> {
         config.dump_path.to_string(),
         metrics.clone(),
     );
-    if config.run_dump_synchronize_on_start {
-        tracing::info!("Running dump synchronizer on start");
-        synchronizer
-            .full_syncronize(shutdown_rx.resubscribe())
-            .await
-            .unwrap();
-        tracing::info!("Dump synchronizer finished");
-    }
 
     while shutdown_rx.is_empty() {
         if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
             tracing::error!("Sync rocksdb error: {}", e);
         }
-        let res = synchronizer.synchronize_asset_indexes(&shutdown_rx).await;
+        let res = synchronizer
+            .synchronize_asset_indexes(&shutdown_rx, config.dump_sync_threshold)
+            .await;
         match res {
             Ok(_) => {
                 tracing::info!("Synchronization finished successfully");

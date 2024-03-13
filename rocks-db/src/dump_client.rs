@@ -78,7 +78,7 @@ impl Storage {
         assets_writer: &mut Writer<W>,
         batch_size: usize,
         mut metadata_key_set: HashSet<Vec<u8>>,
-        rx: tokio::sync::broadcast::Receiver<()>,
+        rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), String> {
         let iter = self.asset_static_data.iter_start();
         // collect batch of keys
@@ -190,7 +190,7 @@ impl Dumper for Storage {
         base_path: &std::path::Path,
         metadata_key_set: HashSet<Vec<u8>>,
         batch_size: usize,
-        rx: tokio::sync::broadcast::Receiver<()>,
+        rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), String> {
         let metadata_path = base_path.join("metadata.csv").to_str().map(str::to_owned);
         if metadata_path.is_none() {

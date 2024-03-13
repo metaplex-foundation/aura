@@ -31,7 +31,7 @@ impl<'a> TestEnvironment<'a> {
             metrics_state.synchronizer_metrics.clone(),
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        syncronizer.synchronize_asset_indexes(&rx).await.unwrap();
+        syncronizer.synchronize_asset_indexes(&rx, 0).await.unwrap();
         (env, generated_data)
     }
 

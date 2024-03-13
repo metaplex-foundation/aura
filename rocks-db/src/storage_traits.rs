@@ -35,7 +35,7 @@ pub trait Dumper {
         base_path: &std::path::Path,
         metadata_key_set: HashSet<Vec<u8>>,
         batch_size: usize,
-        rx: tokio::sync::broadcast::Receiver<()>,
+        rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> core::result::Result<(), String>;
 }
 
@@ -90,7 +90,7 @@ impl Dumper for MockAssetIndexStorage {
         base_path: &std::path::Path,
         metadata_key_set: HashSet<Vec<u8>>,
         batch_size: usize,
-        rx: tokio::sync::broadcast::Receiver<()>,
+        rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> core::result::Result<(), String> {
         self.mock_dumper
             .dump_db(base_path, metadata_key_set, batch_size, rx)
