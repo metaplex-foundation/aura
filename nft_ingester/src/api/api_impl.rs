@@ -42,7 +42,7 @@ where
     rocks_db: Arc<Storage>,
     metrics: Arc<ApiMetricsConfig>,
     proof_checker: Option<Arc<PC>>,
-    max_page_limit: usize,
+    max_page_limit: u32,
 }
 
 impl<PC> DasApi<PC>
@@ -64,7 +64,7 @@ where
             rocks_db,
             metrics,
             proof_checker,
-            max_page_limit,
+            max_page_limit: max_page_limit as u32,
         }
     }
 
@@ -88,7 +88,7 @@ where
             rocks_db,
             metrics,
             proof_checker,
-            max_page_limit: config.max_page_limit,
+            max_page_limit: config.max_page_limit as u32,
         })
     }
 }
@@ -119,7 +119,10 @@ where
         Ok(json!("ok"))
     }
 
-    pub fn validate_basic_pagination(&self, parameters: &Pagination) -> Result<(), DasApiError> {
+    pub fn validate_basic_pagination(
+        parameters: &Pagination,
+        max_page_limit: u32,
+    ) -> Result<(), DasApiError> {
         if let Some(limit) = parameters.limit {
             // make config item
             if limit > MAX_ITEMS_IN_BATCH_REQ as u32 {
@@ -135,8 +138,8 @@ where
             if page == 0 {
                 return Err(DasApiError::PaginationEmptyError);
             }
-            if page > self.max_page_limit as u32 {
-                return Err(DasApiError::PageTooBig(self.max_page_limit));
+            if page > max_page_limit {
+                return Err(DasApiError::PageTooBig(max_page_limit as usize));
             }
             // make config item
             if parameters.before.is_some()
@@ -360,7 +363,8 @@ where
         let owner = validate_opt_pubkey(&owner)?;
         let mint = validate_opt_pubkey(&mint)?;
 
-        self.validate_basic_pagination(&pagination)?;
+        // todo: a hack to return more pages where the before/after pagination is not implemented
+        Self::validate_basic_pagination(&pagination, self.max_page_limit * 10)?;
         if owner.is_none() && mint.is_none() {
             return Err(DasApiError::Validation(
                 "Must provide either 'owner' or 'mint'".to_string(),
@@ -440,7 +444,7 @@ where
             cursor: cursor.clone(),
         };
 
-        self.validate_basic_pagination(&pagination)?;
+        Self::validate_basic_pagination(&pagination, self.max_page_limit)?;
 
         let res = get_asset_signatures(
             self.rocks_db.clone(),
@@ -505,7 +509,7 @@ where
             .try_into()
             .map_err(|e| DasApiError::from(e.into()))?;
 
-        self.validate_basic_pagination(&pagination)?;
+        Self::validate_basic_pagination(&pagination, self.max_page_limit)?;
 
         let res = search_assets(
             pg_client,
