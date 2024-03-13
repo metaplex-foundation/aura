@@ -186,7 +186,7 @@ pub async fn main() -> Result<(), IngesterError> {
     if config.run_dump_synchronize_on_start {
         tracing::info!("Running dump synchronizer on start");
         synchronizer
-            .full_syncronize(shutdown_rx.resubscribe())
+            .full_syncronize(&shutdown_rx.resubscribe())
             .await
             .unwrap();
     }
@@ -579,7 +579,9 @@ pub async fn main() -> Result<(), IngesterError> {
         let rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
             while rx.is_empty() {
-                let res = synchronizer.synchronize_asset_indexes(&rx).await;
+                let res = synchronizer
+                    .synchronize_asset_indexes(&rx, config.dump_sync_threshold)
+                    .await;
                 match res {
                     Ok(_) => {
                         info!("Synchronization finished successfully");

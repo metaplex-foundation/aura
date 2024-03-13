@@ -47,6 +47,7 @@ where
     pub async fn synchronize_asset_indexes(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
+        run_full_sync_threshold: i64,
     ) -> Result<(), IngesterError> {
         // Retrieve the last synced ID from the secondary storage
         let last_indexed_key = self.index_storage.fetch_last_synced_id().await?;
@@ -60,22 +61,31 @@ where
         };
 
         // Fetch the last known key from the primary storage
-        let last_key = self.primary_storage.last_known_asset_updated_key()?;
-        if last_key.is_none() {
+        let Some(last_key) = self.primary_storage.last_known_asset_updated_key()? else {
             return Ok(());
-        }
-        if last_indexed_key.is_some() && last_indexed_key.unwrap() >= last_key.unwrap() {
-            return Ok(());
-        }
+        };
+        let last_known_seq = last_key.0 as i64;
         self.metrics
-            .set_last_synchronized_slot("last_known_updated_seq", last_key.unwrap().0 as i64);
-        self.regular_syncronize(rx, last_indexed_key, last_key)
+            .set_last_synchronized_slot("last_known_updated_seq", last_known_seq);
+        if let Some(last_indexed_key) = last_indexed_key {
+            if last_indexed_key >= last_key {
+                return Ok(());
+            }
+            let last_indexed_seq = last_indexed_key.0 as i64;
+            if run_full_sync_threshold > 0
+                && last_known_seq - last_indexed_seq > run_full_sync_threshold
+            {
+                tracing::info!("Running dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {}, Last known: {}", last_indexed_seq, last_known_seq);
+                return self.full_syncronize(rx).await;
+            }
+        }
+        self.regular_syncronize(rx, last_indexed_key, Some(last_key))
             .await
     }
 
     pub async fn full_syncronize(
         &self,
-        rx: tokio::sync::broadcast::Receiver<()>,
+        rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), IngesterError> {
         let Some((seq, slot, pubkey)) = self.primary_storage.last_known_asset_updated_key()? else {
             return Ok(());
@@ -255,7 +265,10 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer.synchronize_asset_indexes(&rx).await.unwrap();
+        synchronizer
+            .synchronize_asset_indexes(&rx, 0)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -313,7 +326,10 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer.synchronize_asset_indexes(&rx).await.unwrap();
+        synchronizer
+            .synchronize_asset_indexes(&rx, 0)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -381,7 +397,10 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
         ); // Small batch size
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer.synchronize_asset_indexes(&rx).await.unwrap();
+        synchronizer
+            .synchronize_asset_indexes(&rx, 0)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -488,7 +507,10 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer.synchronize_asset_indexes(&rx).await.unwrap();
+        synchronizer
+            .synchronize_asset_indexes(&rx, 0)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -531,6 +553,9 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer.synchronize_asset_indexes(&rx).await.unwrap();
+        synchronizer
+            .synchronize_asset_indexes(&rx, 0)
+            .await
+            .unwrap();
     }
 }
