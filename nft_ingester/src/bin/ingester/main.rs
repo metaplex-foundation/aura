@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,19 +10,23 @@ use log::{error, info, warn};
 use nft_ingester::{backfiller, config, transaction_ingester};
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_program::pubkey::Pubkey;
+use solana_transaction_status::UiConfirmedBlock;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 
 use backfill_rpc::rpc::BackfillRPC;
-use interface::signature_persistence::ProcessingDataGetter;
+use interface::error::{StorageError, UsecaseError};
+use interface::signature_persistence::{BlockProducer, ProcessingDataGetter};
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait};
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
-    setup_config, BackfillerConfig, IngesterConfig, INGESTER_BACKUP_NAME, INGESTER_CONFIG_PREFIX,
+    setup_config, BackfillerConfig, BackfillerSourceMode, IngesterConfig, INGESTER_BACKUP_NAME,
+    INGESTER_CONFIG_PREFIX,
 };
 use nft_ingester::db_v2::DBClient as DBClientV2;
 use nft_ingester::index_syncronizer::Synchronizer;
@@ -45,8 +50,9 @@ use nft_ingester::backfiller::{
 };
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
+use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
-use usecase::slots_collector::SlotsCollector;
+use usecase::slots_collector::{SlotsCollector, SlotsGetter};
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
@@ -56,6 +62,56 @@ pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 struct Args {
     #[arg(short, long)]
     restore_rocks_db: bool,
+}
+
+enum BackfillSource {
+    Bigtable(Arc<BigTableClient>),
+    Rpc(Arc<BackfillRPC>),
+}
+
+impl BackfillSource {
+    async fn new(ingester_config: &IngesterConfig, backfiller_config: &BackfillerConfig) -> Self {
+        match ingester_config.backfiller_source_mode {
+            BackfillerSourceMode::Bigtable => Self::Bigtable(Arc::new(
+                connect_new_bigtable_from_config(backfiller_config.clone())
+                    .await
+                    .unwrap(),
+            )),
+            BackfillerSourceMode::RPC => Self::Rpc(Arc::new(BackfillRPC::connect(
+                ingester_config.backfill_rpc_address.clone(),
+            ))),
+        }
+    }
+}
+
+#[async_trait]
+impl SlotsGetter for BackfillSource {
+    async fn get_slots(
+        &self,
+        collected_key: &Pubkey,
+        start_at: u64,
+        rows_limit: i64,
+    ) -> Result<Vec<u64>, UsecaseError> {
+        match self {
+            BackfillSource::Bigtable(bigtable) => {
+                bigtable
+                    .big_table_inner_client
+                    .get_slots(collected_key, start_at, rows_limit)
+                    .await
+            }
+            BackfillSource::Rpc(rpc) => rpc.get_slots(collected_key, start_at, rows_limit).await,
+        }
+    }
+}
+
+#[async_trait]
+impl BlockProducer for BackfillSource {
+    async fn get_block(&self, slot: u64) -> Result<UiConfirmedBlock, StorageError> {
+        match self {
+            BackfillSource::Bigtable(bigtable) => bigtable.get_block(slot).await,
+            BackfillSource::Rpc(rpc) => rpc.get_block(slot).await,
+        }
+    }
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -354,16 +410,12 @@ pub async fn main() -> Result<(), IngesterError> {
         backfill_bubblegum_updates_processor.clone(),
     ));
     let backfiller_config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
-    let big_table_client = Arc::new(
-        connect_new_bigtable_from_config(backfiller_config.clone())
-            .await
-            .unwrap(),
-    );
-    let backfiller = backfiller::Backfiller::new(
+    let backfiller_source = Arc::new(BackfillSource::new(&config, &backfiller_config).await);
+    let backfiller = Arc::new(backfiller::Backfiller::new(
         rocks_storage.clone(),
-        big_table_client.clone(),
+        backfiller_source.clone(),
         backfiller_config.clone(),
-    );
+    ));
 
     let rpc_backfiller = Arc::new(BackfillRPC::connect(config.backfill_rpc_address.clone()));
     if config.run_bubblegum_backfiller {
@@ -387,7 +439,7 @@ pub async fn main() -> Result<(), IngesterError> {
                         shutdown_rx.resubscribe(),
                         metrics_state.backfiller_metrics.clone(),
                         consumer,
-                        big_table_client.clone(),
+                        backfiller_source.clone(),
                     )
                     .await
                     .unwrap();
@@ -401,7 +453,7 @@ pub async fn main() -> Result<(), IngesterError> {
                         shutdown_rx.resubscribe(),
                         metrics_state.backfiller_metrics.clone(),
                         consumer,
-                        big_table_client.clone(),
+                        backfiller_source.clone(),
                     )
                     .await
                     .unwrap();
@@ -465,7 +517,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 // run perpetual slot persister
                 let rx = shutdown_rx.resubscribe();
                 let consumer = rocks_storage.clone();
-                let producer = big_table_client.clone();
+                let producer = backfiller_source.clone();
                 let metrics = Arc::new(BackfillerMetricsConfig::new());
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_persister_");
                 let slot_getter = Arc::new(BubblegumSlotGetter::new(rocks_storage.clone()));
@@ -610,7 +662,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
         let slots_collector = SlotsCollector::new(
             force_reingestable_slot_processor.clone(),
-            big_table_client.big_table_inner_client.clone(),
+            backfiller_source.clone(),
             metrics_state.backfiller_metrics.clone(),
         );
         let sequence_consistent_gapfiller = SequenceConsistentGapfiller::new(
@@ -642,7 +694,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
         // run an additional direct slot persister
         let rx = shutdown_rx.resubscribe();
-        let producer = big_table_client.clone();
+        let producer = backfiller_source.clone();
         let metrics = Arc::new(BackfillerMetricsConfig::new());
         metrics.register_with_prefix(&mut metrics_state.registry, "force_slot_persister_");
 

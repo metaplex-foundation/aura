@@ -101,6 +101,13 @@ pub enum BackfillerMode {
     IngestDirectly,
 }
 
+#[derive(Deserialize, Default, PartialEq, Debug, Clone, Copy)]
+pub enum BackfillerSourceMode {
+    Bigtable,
+    #[default]
+    RPC,
+}
+
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct RawBackfillConfig {
     #[serde(default = "default_log_level")]
@@ -166,6 +173,8 @@ pub struct IngesterConfig {
     pub check_proofs_probability: f64,
     #[serde(default = "default_check_proofs_commitment")]
     pub check_proofs_commitment: CommitmentLevel,
+    #[serde(default)]
+    pub backfiller_source_mode: BackfillerSourceMode,
 }
 
 fn default_dump_path() -> String {
