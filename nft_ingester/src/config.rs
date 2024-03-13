@@ -170,7 +170,7 @@ pub struct IngesterConfig {
     pub check_proofs_commitment: CommitmentLevel,
 }
 
-fn default_dump_sync_threshold() -> i64 {
+const fn default_dump_sync_threshold() -> i64 {
     100_000_000
 }
 fn default_dump_path() -> String {
