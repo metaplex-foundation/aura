@@ -188,7 +188,6 @@ impl PgClient {
         }
         query_builder.push(";");
 
-
         self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, main_table)
             .await?;
 

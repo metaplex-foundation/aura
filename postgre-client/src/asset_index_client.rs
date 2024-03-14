@@ -1,10 +1,14 @@
 use std::{
-    collections::{HashMap, HashSet}, fmt::Error, ops::DerefMut, sync::Arc, vec
+    collections::{HashMap, HashSet},
+    fmt::Error,
+    sync::Arc,
+    vec,
 };
 
 use async_trait::async_trait;
 use solana_sdk::pubkey::Pubkey;
 use sqlx::{pool::PoolConnection, Connection, Executor, Postgres, QueryBuilder, Transaction};
+use tokio::sync::Mutex;
 
 use crate::{
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
@@ -21,26 +25,22 @@ pub const INSERT_ASSET_CREATOR_PARAMETERS_COUNT: usize = 4;
 
 pub const TEMP_INDEXING_TABLE_PREFIX: &str = "indexing_temp_";
 pub struct TempClient {
-    pooled_connection: PoolConnection<Postgres>,
+    pooled_connection: Arc<Mutex<PoolConnection<Postgres>>>,
     pg_client: Arc<PgClient>,
 }
 
 impl TempClient {
     pub async fn create_new(pg_client: Arc<PgClient>) -> Result<Self, sqlx::Error> {
-        let pooled_connection = pg_client.pool.acquire().await?;
+        let pooled_connection = Arc::new(Mutex::new(pg_client.pool.acquire().await?));
         Ok(Self {
             pooled_connection,
             pg_client,
         })
     }
 
-    pub async fn initialize(&mut self) -> Result<(), String> {
-        let mut tx = self
-            .pooled_connection
-            .deref_mut()
-            .begin()
-            .await
-            .map_err(|e| e.to_string())?;
+    pub async fn initialize(&self) -> Result<(), String> {
+        let mut c = self.pooled_connection.lock().await;
+        let mut tx = c.begin().await.map_err(|e| e.to_string())?;
         for table in ["tasks", "asset_creators_v3", "assets_v3", "last_synced_key"] {
             self.pg_client
                 .create_temp_tables(table, &mut tx, false, TEMP_INDEXING_TABLE_PREFIX)
@@ -71,19 +71,14 @@ impl TempClient {
 #[async_trait]
 impl AssetIndexStorage for TempClient {
     async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, String> {
-        // let mut transaction = self
-        //     .pooled_connection
-        //     .begin()
-        //     .await
-        //     .map_err(|e| e.to_string())?;
-
-        // self.pg_client
-        //     .fetch_last_synced_id_impl(
-        //         format!("{}last_synced_key", TEMP_INDEXING_TABLE_PREFIX).as_str(),
-        //         &mut transaction,
-        //     )
-        //     .await
-        Err("".to_string())
+        let mut c = self.pooled_connection.lock().await;
+        let mut tx = c.begin().await.map_err(|e| e.to_string())?;
+        self.pg_client
+            .fetch_last_synced_id_impl(
+                format!("{}last_synced_key", TEMP_INDEXING_TABLE_PREFIX).as_str(),
+                &mut tx,
+            )
+            .await
     }
 
     async fn update_asset_indexes_batch(
@@ -92,11 +87,8 @@ impl AssetIndexStorage for TempClient {
         last_key: &[u8],
     ) -> Result<(), String> {
         let updated_components = split_assets_into_components(asset_indexes);
-        let mut transaction = self
-            .pooled_connection
-            .begin()
-            .await
-            .map_err(|e| e.to_string())?;
+        let mut c = self.pooled_connection.lock().await;
+        let mut transaction = c.begin().await.map_err(|e| e.to_string())?;
         let table_names = TableNames {
             metadata_table: format!("{}tasks", TEMP_INDEXING_TABLE_PREFIX),
             assets_table: format!("{}assets_v3", TEMP_INDEXING_TABLE_PREFIX),

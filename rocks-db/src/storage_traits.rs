@@ -90,9 +90,7 @@ impl Dumper for MockAssetIndexStorage {
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> core::result::Result<(), String> {
-        self.mock_dumper
-            .dump_db(base_path, batch_size, rx)
-            .await
+        self.mock_dumper.dump_db(base_path, batch_size, rx).await
     }
 }
 

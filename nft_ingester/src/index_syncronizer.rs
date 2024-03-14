@@ -92,7 +92,6 @@ where
         };
         // start a regular synchronization into a temporary storage to catch up on it while the dump is being created and loaded, as it takes a long time
 
-        
         let path = std::path::Path::new(self.dump_path.as_str());
         tracing::info!("Dumping the primary storage to {}", self.dump_path);
         self.primary_storage

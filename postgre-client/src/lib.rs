@@ -2,7 +2,8 @@ use entities::enums::TaskStatus;
 use entities::models::UrlWithStatus;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use sqlx::{
-    postgres::{PgConnectOptions, PgPoolOptions}, Acquire, ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction
+    postgres::{PgConnectOptions, PgPoolOptions},
+    Acquire, ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
 };
 use std::{sync::Arc, time::Duration};
 use tracing::log::LevelFilter;
@@ -81,13 +82,8 @@ impl PgClient {
         });
         query_builder.push(" ON CONFLICT (tsk_id) DO NOTHING;");
 
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            BATCH_UPSERT_ACTION,
-            table,
-        )
-        .await
+        self.execute_query_with_metrics(transaction, &mut query_builder, BATCH_UPSERT_ACTION, table)
+            .await
     }
 
     async fn start_transaction(&self) -> Result<Transaction<'_, Postgres>, String> {
