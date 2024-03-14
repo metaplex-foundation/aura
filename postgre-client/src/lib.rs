@@ -2,8 +2,7 @@ use entities::enums::TaskStatus;
 use entities::models::UrlWithStatus;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use sqlx::{
-    postgres::{PgConnectOptions, PgPoolOptions},
-    ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
+    postgres::{PgConnectOptions, PgPoolOptions}, Acquire, ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction
 };
 use std::{sync::Arc, time::Duration};
 use tracing::log::LevelFilter;
@@ -63,13 +62,15 @@ impl PgClient {
         Self { pool, metrics }
     }
 
-    pub async fn insert_tasks(
+    pub(crate) async fn insert_tasks(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         metadata_urls: &[UrlWithStatus],
+        table: &str,
     ) -> Result<(), String> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("INSERT INTO tasks (tsk_id, tsk_metadata_url, tsk_status) ");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
+        query_builder.push(table);
+        query_builder.push(" (tsk_id, tsk_metadata_url, tsk_status) ");
         query_builder.push_values(metadata_urls.iter(), |mut builder, metadata_url| {
             builder.push_bind(metadata_url.get_metadata_id());
             builder.push_bind(metadata_url.metadata_url.trim().to_owned());
@@ -84,7 +85,7 @@ impl PgClient {
             transaction,
             &mut query_builder,
             BATCH_UPSERT_ACTION,
-            "tasks",
+            table,
         )
         .await
     }
@@ -96,6 +97,7 @@ impl PgClient {
                 .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "begin");
             e.to_string()
         })?;
+        self.pool.acquire().await.unwrap().begin();
         self.metrics
             .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "begin", start_time);
         Ok(transaction)

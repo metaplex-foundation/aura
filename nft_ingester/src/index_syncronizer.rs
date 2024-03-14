@@ -90,15 +90,13 @@ where
         let Some((seq, slot, pubkey)) = self.primary_storage.last_known_asset_updated_key()? else {
             return Ok(());
         };
-        let metadata_keys = self.index_storage.get_existing_metadata_keys().await?;
-        tracing::debug!(
-            "Prepared the existing {} metadata keys to skip those from dump",
-            metadata_keys.len()
-        );
+        // start a regular synchronization into a temporary storage to catch up on it while the dump is being created and loaded, as it takes a long time
+
+        
         let path = std::path::Path::new(self.dump_path.as_str());
         tracing::info!("Dumping the primary storage to {}", self.dump_path);
         self.primary_storage
-            .dump_db(path, metadata_keys, self.dump_synchronizer_batch_size, rx)
+            .dump_db(path, self.dump_synchronizer_batch_size, rx)
             .await?;
         tracing::info!("Dump is complete. Loading the dump into the index storage");
         let last_included_rocks_key = encode_u64x2_pubkey(seq, slot, pubkey);

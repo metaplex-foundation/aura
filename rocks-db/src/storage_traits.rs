@@ -33,7 +33,6 @@ pub trait Dumper {
     async fn dump_db(
         &self,
         base_path: &std::path::Path,
-        metadata_key_set: HashSet<Vec<u8>>,
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> core::result::Result<(), String>;
@@ -88,12 +87,11 @@ impl Dumper for MockAssetIndexStorage {
     async fn dump_db(
         &self,
         base_path: &std::path::Path,
-        metadata_key_set: HashSet<Vec<u8>>,
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> core::result::Result<(), String> {
         self.mock_dumper
-            .dump_db(base_path, metadata_key_set, batch_size, rx)
+            .dump_db(base_path, batch_size, rx)
             .await
     }
 }

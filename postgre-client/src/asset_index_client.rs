@@ -1,18 +1,17 @@
 use std::{
-    collections::{HashMap, HashSet},
-    vec,
+    collections::{HashMap, HashSet}, fmt::Error, ops::DerefMut, sync::Arc, vec
 };
 
 use async_trait::async_trait;
 use solana_sdk::pubkey::Pubkey;
-use sqlx::{Postgres, QueryBuilder, Transaction};
+use sqlx::{pool::PoolConnection, Connection, Executor, Postgres, QueryBuilder, Transaction};
 
 use crate::{
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
     storage_traits::AssetIndexStorage,
     PgClient, BATCH_DELETE_ACTION, BATCH_SELECT_ACTION, BATCH_UPSERT_ACTION, CREATE_ACTION,
-    DROP_ACTION, INSERT_TASK_PARAMETERS_COUNT, POSTGRES_PARAMETERS_COUNT_LIMIT, SELECT_ACTION,
-    SQL_COMPONENT, UPDATE_ACTION,
+    DROP_ACTION, INSERT_ACTION, INSERT_TASK_PARAMETERS_COUNT, POSTGRES_PARAMETERS_COUNT_LIMIT,
+    SELECT_ACTION, SQL_COMPONENT, UPDATE_ACTION,
 };
 use entities::models::{AssetIndex, Creator, UrlWithStatus};
 
@@ -20,22 +19,71 @@ pub const INSERT_ASSET_PARAMETERS_COUNT: usize = 19;
 pub const DELETE_ASSET_CREATOR_PARAMETERS_COUNT: usize = 2;
 pub const INSERT_ASSET_CREATOR_PARAMETERS_COUNT: usize = 4;
 
+pub const TEMP_INDEXING_TABLE_PREFIX: &str = "indexing_temp_";
+pub struct TempClient {
+    pooled_connection: PoolConnection<Postgres>,
+    pg_client: Arc<PgClient>,
+}
+
+impl TempClient {
+    pub async fn create_new(pg_client: Arc<PgClient>) -> Result<Self, sqlx::Error> {
+        let pooled_connection = pg_client.pool.acquire().await?;
+        Ok(Self {
+            pooled_connection,
+            pg_client,
+        })
+    }
+
+    pub async fn initialize(&mut self) -> Result<(), String> {
+        let mut tx = self
+            .pooled_connection
+            .deref_mut()
+            .begin()
+            .await
+            .map_err(|e| e.to_string())?;
+        for table in ["tasks", "asset_creators_v3", "assets_v3", "last_synced_key"] {
+            self.pg_client
+                .create_temp_tables(table, &mut tx, false, TEMP_INDEXING_TABLE_PREFIX)
+                .await?;
+        }
+
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
+            "INSERT INTO {}last_synced_key (id, last_synced_asset_update_key) VALUES (1, null);",
+            TEMP_INDEXING_TABLE_PREFIX
+        ));
+        self.pg_client
+            .execute_query_with_metrics(
+                &mut tx,
+                &mut query_builder,
+                INSERT_ACTION,
+                format!("{}last_synced_key", TEMP_INDEXING_TABLE_PREFIX).as_str(),
+            )
+            .await?;
+
+        self.pg_client
+            .commit_transaction(tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
 #[async_trait]
-impl AssetIndexStorage for PgClient {
+impl AssetIndexStorage for TempClient {
     async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, String> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "SELECT last_synced_asset_update_key FROM last_synced_key WHERE id = 1",
-        );
-        let start_time = chrono::Utc::now();
-        let query = query_builder.build_query_as::<(Option<Vec<u8>>,)>();
-        let result = query.fetch_one(&self.pool).await.map_err(|e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, SELECT_ACTION, "last_synced_key");
-            e.to_string()
-        })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, SELECT_ACTION, "last_synced_key", start_time);
-        Ok(result.0)
+        // let mut transaction = self
+        //     .pooled_connection
+        //     .begin()
+        //     .await
+        //     .map_err(|e| e.to_string())?;
+
+        // self.pg_client
+        //     .fetch_last_synced_id_impl(
+        //         format!("{}last_synced_key", TEMP_INDEXING_TABLE_PREFIX).as_str(),
+        //         &mut transaction,
+        //     )
+        //     .await
+        Err("".to_string())
     }
 
     async fn update_asset_indexes_batch(
@@ -43,89 +91,191 @@ impl AssetIndexStorage for PgClient {
         asset_indexes: &[AssetIndex],
         last_key: &[u8],
     ) -> Result<(), String> {
-        // First we need to bulk upsert metadata_url into metadata and get back ids for each metadata_url to upsert into assets_v3
-        let mut metadata_urls: Vec<_> = asset_indexes
-            .iter()
-            .filter_map(|asset_index| asset_index.metadata_url.clone())
-            .collect::<HashSet<_>>()
-            .iter()
-            .map(|url| UrlWithStatus::new(url.metadata_url.as_str(), url.is_downloaded))
-            .collect();
-        metadata_urls.sort_by(|a, b| a.metadata_url.cmp(&b.metadata_url));
+        let updated_components = split_assets_into_components(asset_indexes);
+        let mut transaction = self
+            .pooled_connection
+            .begin()
+            .await
+            .map_err(|e| e.to_string())?;
+        let table_names = TableNames {
+            metadata_table: format!("{}tasks", TEMP_INDEXING_TABLE_PREFIX),
+            assets_table: format!("{}assets_v3", TEMP_INDEXING_TABLE_PREFIX),
+            creators_table: format!("{}asset_creators_v3", TEMP_INDEXING_TABLE_PREFIX),
+            last_synced_key_table: format!("{}last_synced_key", TEMP_INDEXING_TABLE_PREFIX),
+        };
+        self.pg_client
+            .upsert_batched(&mut transaction, table_names, updated_components, last_key)
+            .await?;
+        self.pg_client.commit_transaction(transaction).await
+    }
 
-        let mut asset_indexes = asset_indexes.to_vec();
-        asset_indexes.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
+    async fn load_from_dump(
+        &self,
+        _base_path: &std::path::Path,
+        _last_key: &[u8],
+    ) -> Result<(), String> {
+        Err("Temporary client does not support batch load from file".to_string())
+    }
+}
 
-        // Collect all creators from all assets
-        let mut all_creators: Vec<(Pubkey, Creator, i64)> = asset_indexes
-            .iter()
-            .flat_map(|asset_index| {
-                asset_index.creators.iter().map(move |creator| {
-                    (
-                        asset_index.pubkey,
-                        creator.clone(),
-                        asset_index.slot_updated,
-                    )
-                })
-            })
-            .collect();
-
-        all_creators.sort_by(|a, b| match a.0.cmp(&b.0) {
-            std::cmp::Ordering::Equal => a.1.creator.cmp(&b.1.creator),
-            other => other,
-        });
-
-        let updated_keys: Vec<Vec<u8>> = asset_indexes
-            .iter()
-            .map(|asset_index| asset_index.pubkey.to_bytes().to_vec())
-            .collect::<Vec<Vec<u8>>>();
-
-        let mut transaction = self.start_transaction().await?;
-
-        for chunk in
-            metadata_urls.chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_TASK_PARAMETERS_COUNT)
+impl PgClient {
+    pub(crate) async fn fetch_last_synced_id_impl(
+        &self,
+        table_name: &str,
+        executor: impl Executor<'_, Database = Postgres>,
+    ) -> Result<Option<Vec<u8>>, String> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("SELECT last_synced_asset_update_key FROM ");
+        query_builder.push(table_name);
+        query_builder.push(" WHERE id = 1");
+        let start_time = chrono::Utc::now();
+        let query = query_builder.build_query_as::<(Option<Vec<u8>>,)>();
+        let result = query.fetch_one(executor).await.map_err(|e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, SELECT_ACTION, table_name);
+            e.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, SELECT_ACTION, table_name, start_time);
+        Ok(result.0)
+    }
+    async fn upsert_batched(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        table_names: TableNames,
+        updated_components: AssetComponenents,
+        last_key: &[u8],
+    ) -> Result<(), String> {
+        for chunk in updated_components
+            .metadata_urls
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_TASK_PARAMETERS_COUNT)
         {
-            self.insert_tasks(&mut transaction, chunk).await?;
+            self.insert_tasks(transaction, chunk, table_names.metadata_table.as_str())
+                .await?;
         }
-
-        // Bulk insert/update for assets_v3
-        for chunk in
-            asset_indexes.chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_ASSET_PARAMETERS_COUNT)
+        for chunk in updated_components
+            .asset_indexes
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_ASSET_PARAMETERS_COUNT)
         {
-            self.insert_assets(&mut transaction, chunk).await?;
+            self.insert_assets(transaction, chunk, table_names.assets_table.as_str())
+                .await?;
         }
-
-        // Asset creators will be updated in 2 steps:
-        // 1. Delete creators for the assets that are being updated and don't exist anymore
-        // 2. Upsert creators for the assets
-        // Delete creators for the assets that are being updated and don't exist anymore
         let mut existing_creators: Vec<(Pubkey, Creator)> = vec![];
-
-        for chunk in updated_keys.chunks(POSTGRES_PARAMETERS_COUNT_LIMIT) {
-            let creators = self.batch_get_creators(&mut transaction, chunk).await?;
+        for chunk in updated_components
+            .updated_keys
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT)
+        {
+            let creators = self
+                .batch_get_creators(transaction, chunk, table_names.creators_table.as_str())
+                .await?;
             existing_creators.extend(creators);
         }
-
-        let creator_updates = Self::diff(all_creators.clone(), existing_creators);
-
+        let creator_updates =
+            Self::diff(updated_components.all_creators.clone(), existing_creators);
         for chunk in creator_updates
             .to_remove
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / DELETE_ASSET_CREATOR_PARAMETERS_COUNT)
         {
-            self.delete_creators(&mut transaction, chunk).await?;
+            self.delete_creators(transaction, chunk, table_names.creators_table.as_str())
+                .await?;
         }
-
-        // Bulk upsert for asset_creators_v3
         for chunk in creator_updates
             .new_or_updated
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_ASSET_CREATOR_PARAMETERS_COUNT)
         {
-            self.insert_creators(&mut transaction, chunk).await?;
+            self.insert_creators(transaction, chunk, table_names.creators_table.as_str())
+                .await?;
         }
+        self.update_last_synced_key(
+            last_key,
+            transaction,
+            table_names.last_synced_key_table.as_str(),
+        )
+        .await?;
+        Ok(())
+    }
+}
 
-        self.update_last_synced_key(last_key, &mut transaction)
+struct AssetComponenents {
+    metadata_urls: Vec<UrlWithStatus>,
+    asset_indexes: Vec<AssetIndex>,
+    all_creators: Vec<(Pubkey, Creator, i64)>,
+    updated_keys: Vec<Vec<u8>>,
+}
+struct TableNames {
+    metadata_table: String,
+    assets_table: String,
+    creators_table: String,
+    last_synced_key_table: String,
+}
+
+fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> AssetComponenents {
+    // First we need to bulk upsert metadata_url into metadata and get back ids for each metadata_url to upsert into assets_v3
+    let mut metadata_urls: Vec<_> = asset_indexes
+        .iter()
+        .filter_map(|asset_index| asset_index.metadata_url.clone())
+        .collect::<HashSet<_>>()
+        .iter()
+        .map(|url| UrlWithStatus::new(url.metadata_url.as_str(), url.is_downloaded))
+        .collect();
+    metadata_urls.sort_by(|a, b| a.metadata_url.cmp(&b.metadata_url));
+
+    let mut asset_indexes = asset_indexes.to_vec();
+    asset_indexes.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
+
+    // Collect all creators from all assets
+    let mut all_creators: Vec<(Pubkey, Creator, i64)> = asset_indexes
+        .iter()
+        .flat_map(|asset_index: &AssetIndex| {
+            asset_index.creators.iter().map(move |creator| {
+                (
+                    asset_index.pubkey,
+                    creator.clone(),
+                    asset_index.slot_updated,
+                )
+            })
+        })
+        .collect();
+
+    all_creators.sort_by(|a, b| match a.0.cmp(&b.0) {
+        std::cmp::Ordering::Equal => a.1.creator.cmp(&b.1.creator),
+        other => other,
+    });
+
+    let updated_keys: Vec<Vec<u8>> = asset_indexes
+        .iter()
+        .map(|asset_index| asset_index.pubkey.to_bytes().to_vec())
+        .collect::<Vec<Vec<u8>>>();
+    AssetComponenents {
+        metadata_urls,
+        asset_indexes,
+        all_creators,
+        updated_keys,
+    }
+}
+
+#[async_trait]
+impl AssetIndexStorage for PgClient {
+    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, String> {
+        self.fetch_last_synced_id_impl("last_synced_key", &self.pool)
+            .await
+    }
+
+    async fn update_asset_indexes_batch(
+        &self,
+        asset_indexes: &[AssetIndex],
+        last_key: &[u8],
+    ) -> Result<(), String> {
+        let updated_components = split_assets_into_components(asset_indexes);
+        let mut transaction = self.start_transaction().await?;
+        let table_names = TableNames {
+            metadata_table: "tasks".to_string(),
+            assets_table: "assets_v3".to_string(),
+            creators_table: "asset_creators_v3".to_string(),
+            last_synced_key_table: "last_synced_key".to_string(),
+        };
+        self.upsert_batched(&mut transaction, table_names, updated_components, last_key)
             .await?;
-        // Update last_synced_key
         self.commit_transaction(transaction).await
     }
 
@@ -147,13 +297,31 @@ impl AssetIndexStorage for PgClient {
 
         self.copy_all(metadata_path, creators_path, assets_path, &mut transaction)
             .await?;
-        self.update_last_synced_key(last_key, &mut transaction)
+        self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
             .await?;
         self.commit_transaction(transaction).await?;
         Ok(())
     }
+}
 
-    async fn get_existing_metadata_keys(&self) -> Result<HashSet<Vec<u8>>, String> {
+#[derive(sqlx::FromRow, Debug)]
+struct TaskIdRawResponse {
+    pub(crate) tsk_id: Vec<u8>,
+}
+
+#[derive(sqlx::FromRow, Debug)]
+struct CreatorRawResponse {
+    pub(crate) asc_pubkey: Vec<u8>,
+    pub(crate) asc_creator: Vec<u8>,
+    pub(crate) asc_verified: bool,
+}
+pub struct CreatorsUpdates {
+    pub new_or_updated: Vec<(Pubkey, Creator, i64)>,
+    pub to_remove: Vec<(Pubkey, Creator)>,
+}
+
+impl PgClient {
+    pub async fn get_existing_metadata_keys(&self) -> Result<HashSet<Vec<u8>>, String> {
         let mut set = HashSet::new();
         let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
@@ -183,36 +351,19 @@ impl AssetIndexStorage for PgClient {
         self.rollback_transaction(tx).await?;
         Ok(set)
     }
-}
 
-#[derive(sqlx::FromRow, Debug)]
-struct TaskIdRawResponse {
-    pub(crate) tsk_id: Vec<u8>,
-}
-
-#[derive(sqlx::FromRow, Debug)]
-struct CreatorRawResponse {
-    pub(crate) asc_pubkey: Vec<u8>,
-    pub(crate) asc_creator: Vec<u8>,
-    pub(crate) asc_verified: bool,
-}
-pub struct CreatorsUpdates {
-    pub new_or_updated: Vec<(Pubkey, Creator, i64)>,
-    pub to_remove: Vec<(Pubkey, Creator)>,
-}
-
-impl PgClient {
     async fn insert_creators(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         creators: &[(Pubkey, Creator, i64)],
+        table: &str,
     ) -> Result<(), String> {
         if creators.is_empty() {
             return Ok(());
         }
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "INSERT INTO asset_creators_v3 (asc_pubkey, asc_creator, asc_verified, asc_slot_updated) ",
-        );
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
+        query_builder.push(table);
+        query_builder.push(" (asc_pubkey, asc_creator, asc_verified, asc_slot_updated) ");
         query_builder.push_values(creators, |mut builder, (pubkey, creator, slot_updated)| {
             builder
                 .push_bind(pubkey.to_bytes().to_vec())
@@ -220,13 +371,15 @@ impl PgClient {
                 .push_bind(creator.creator_verified)
                 .push_bind(slot_updated);
         });
-        query_builder.push(" ON CONFLICT (asc_creator, asc_pubkey) DO UPDATE SET asc_verified = EXCLUDED.asc_verified WHERE asset_creators_v3.asc_slot_updated <= EXCLUDED.asc_slot_updated;");
+        query_builder.push(" ON CONFLICT (asc_creator, asc_pubkey) DO UPDATE SET asc_verified = EXCLUDED.asc_verified WHERE ");
+        query_builder.push(table);
+        query_builder.push(".asc_slot_updated <= EXCLUDED.asc_slot_updated;");
 
         self.execute_query_with_metrics(
             transaction,
             &mut query_builder,
             BATCH_UPSERT_ACTION,
-            "asset_creators_v3",
+            table,
         )
         .await?;
         Ok(())
@@ -236,12 +389,14 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         removed_creators: &[(Pubkey, Creator)],
+        table: &str,
     ) -> Result<(), String> {
         if removed_creators.is_empty() {
             return Ok(());
         }
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("DELETE FROM asset_creators_v3 WHERE (asc_creator, asc_pubkey) IN ");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("DELETE FROM ");
+        query_builder.push(table);
+        query_builder.push(" WHERE (asc_creator, asc_pubkey) IN ");
 
         query_builder.push_tuples(removed_creators, |mut builder, (pubkey, creator)| {
             builder
@@ -252,7 +407,7 @@ impl PgClient {
             transaction,
             &mut query_builder,
             BATCH_DELETE_ACTION,
-            "asset_creators_v3",
+            table,
         )
         .await?;
         Ok(())
@@ -262,12 +417,15 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         asset_indexes: &[AssetIndex],
+        table: &str,
     ) -> Result<(), String> {
         if asset_indexes.is_empty() {
             return Ok(());
         }
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "INSERT INTO assets_v3 (
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
+        query_builder.push(table);
+        query_builder.push(
+            " (
             ast_pubkey,
             ast_specification_version,
             ast_specification_asset_class,
@@ -318,7 +476,8 @@ impl PgClient {
                 .push_bind(metadata_id)
                 .push_bind(asset_index.slot_updated);
         });
-        query_builder.push(" ON CONFLICT (ast_pubkey) 
+        query_builder.push(
+            " ON CONFLICT (ast_pubkey) 
         DO UPDATE SET 
             ast_specification_version = EXCLUDED.ast_specification_version,
             ast_specification_asset_class = EXCLUDED.ast_specification_asset_class,
@@ -338,13 +497,18 @@ impl PgClient {
             ast_supply = EXCLUDED.ast_supply,
             ast_metadata_url_id = EXCLUDED.ast_metadata_url_id,
             ast_slot_updated = EXCLUDED.ast_slot_updated
-            WHERE assets_v3.ast_slot_updated <= EXCLUDED.ast_slot_updated OR assets_v3.ast_slot_updated IS NULL;");
+            WHERE ",
+        );
+        query_builder.push(table);
+        query_builder.push(".ast_slot_updated <= EXCLUDED.ast_slot_updated OR ");
+        query_builder.push(table);
+        query_builder.push(".ast_slot_updated IS NULL;");
 
         self.execute_query_with_metrics(
             transaction,
             &mut query_builder,
             BATCH_UPSERT_ACTION,
-            "assets_v3",
+            table,
         )
         .await?;
         Ok(())
@@ -354,12 +518,15 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         pubkeys: &[Vec<u8>],
+        table: &str,
     ) -> Result<Vec<(Pubkey, Creator)>, String> {
         if pubkeys.is_empty() {
             return Ok(vec![]);
         }
         let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("SELECT asc_pubkey, asc_creator, asc_verified FROM asset_creators_v3 WHERE asc_pubkey in (");
+            QueryBuilder::new("SELECT asc_pubkey, asc_creator, asc_verified FROM ");
+        query_builder.push(table);
+        query_builder.push(" WHERE asc_pubkey in (");
         let pubkey_len = pubkeys.len();
         for (i, k) in pubkeys.iter().enumerate() {
             query_builder.push_bind(k);
@@ -372,15 +539,11 @@ impl PgClient {
         let start_time = chrono::Utc::now();
         let creators_result = query.fetch_all(transaction).await.map_err(|err| {
             self.metrics
-                .observe_error(SQL_COMPONENT, BATCH_SELECT_ACTION, "asset_creators_v3");
+                .observe_error(SQL_COMPONENT, BATCH_SELECT_ACTION, table);
             err.to_string()
         })?;
-        self.metrics.observe_request(
-            SQL_COMPONENT,
-            BATCH_SELECT_ACTION,
-            "asset_creators_v3",
-            start_time,
-        );
+        self.metrics
+            .observe_request(SQL_COMPONENT, BATCH_SELECT_ACTION, table, start_time);
         Ok(creators_result
             .iter()
             .map(|c| {
@@ -443,17 +606,14 @@ impl PgClient {
         &self,
         last_key: &[u8],
         transaction: &mut Transaction<'_, Postgres>,
+        table: &str,
     ) -> Result<(), String> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("UPDATE last_synced_key SET last_synced_asset_update_key = ");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("UPDATE ");
+        query_builder.push(table);
+        query_builder.push(" SET last_synced_asset_update_key = ");
         query_builder.push_bind(last_key).push(" WHERE id = 1");
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            UPDATE_ACTION,
-            "last_synced_key",
-        )
-        .await?;
+        self.execute_query_with_metrics(transaction, &mut query_builder, UPDATE_ACTION, table)
+            .await?;
         Ok(())
     }
 }

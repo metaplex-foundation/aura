@@ -3,7 +3,6 @@ use async_trait::async_trait;
 use entities::api_req_params::Options;
 use entities::models::AssetIndex;
 use mockall::automock;
-use std::collections::HashSet;
 
 #[automock]
 #[async_trait]
@@ -19,7 +18,6 @@ pub trait AssetIndexStorage {
         base_path: &std::path::Path,
         last_key: &[u8],
     ) -> Result<(), String>;
-    async fn get_existing_metadata_keys(&self) -> Result<HashSet<Vec<u8>>, String>;
 }
 
 #[automock]

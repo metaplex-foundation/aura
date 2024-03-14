@@ -77,11 +77,11 @@ impl Storage {
         creators_writer: &mut Writer<W>,
         assets_writer: &mut Writer<W>,
         batch_size: usize,
-        mut metadata_key_set: HashSet<Vec<u8>>,
         rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), String> {
         let iter = self.asset_static_data.iter_start();
         // collect batch of keys
+        let mut metadata_key_set = HashSet::new();
         let mut batch = Vec::with_capacity(batch_size);
         for k in iter
             .filter_map(|k| k.ok())
@@ -188,7 +188,6 @@ impl Dumper for Storage {
     async fn dump_db(
         &self,
         base_path: &std::path::Path,
-        metadata_key_set: HashSet<Vec<u8>>,
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), String> {
@@ -232,7 +231,6 @@ impl Dumper for Storage {
             &mut creators_writer,
             &mut assets_writer,
             batch_size,
-            metadata_key_set,
             rx,
         )
         .await?;
