@@ -49,5 +49,5 @@ pub trait IntegrityVerificationKeysFetcher {
 
 #[async_trait]
 pub trait TempClientProvider {
-    async fn create_temp_client(self) -> Result<TempClient, String>;
+    async fn create_temp_client(&self) -> Result<TempClient, String>;
 }

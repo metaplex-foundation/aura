@@ -6,15 +6,14 @@ use std::{
 
 use async_trait::async_trait;
 use solana_sdk::pubkey::Pubkey;
-use sqlx::{pool::PoolConnection, Connection, Executor, Postgres, QueryBuilder, Transaction};
-use tokio::sync::Mutex;
+use sqlx::{Executor, Postgres, QueryBuilder, Transaction};
 
 use crate::{
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
     storage_traits::AssetIndexStorage,
     PgClient, BATCH_DELETE_ACTION, BATCH_SELECT_ACTION, BATCH_UPSERT_ACTION, CREATE_ACTION,
-    DROP_ACTION, INSERT_ACTION, INSERT_TASK_PARAMETERS_COUNT, POSTGRES_PARAMETERS_COUNT_LIMIT,
-    SELECT_ACTION, SQL_COMPONENT, UPDATE_ACTION,
+    DROP_ACTION, INSERT_TASK_PARAMETERS_COUNT, POSTGRES_PARAMETERS_COUNT_LIMIT, SELECT_ACTION,
+    SQL_COMPONENT, UPDATE_ACTION,
 };
 use entities::models::{AssetIndex, Creator, UrlWithStatus};
 
@@ -43,7 +42,7 @@ impl PgClient {
             .observe_request(SQL_COMPONENT, SELECT_ACTION, table_name, start_time);
         Ok(result.0)
     }
-    pub (crate) async fn upsert_batched(
+    pub(crate) async fn upsert_batched(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         table_names: TableNames,
@@ -100,20 +99,20 @@ impl PgClient {
     }
 }
 
-pub (crate) struct AssetComponenents {
+pub(crate) struct AssetComponenents {
     pub metadata_urls: Vec<UrlWithStatus>,
     pub asset_indexes: Vec<AssetIndex>,
     pub all_creators: Vec<(Pubkey, Creator, i64)>,
     pub updated_keys: Vec<Vec<u8>>,
 }
-pub (crate) struct TableNames {
+pub(crate) struct TableNames {
     pub metadata_table: String,
     pub assets_table: String,
     pub creators_table: String,
     pub last_synced_key_table: String,
 }
 
-pub (crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> AssetComponenents {
+pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> AssetComponenents {
     // First we need to bulk upsert metadata_url into metadata and get back ids for each metadata_url to upsert into assets_v3
     let mut metadata_urls: Vec<_> = asset_indexes
         .iter()
@@ -159,7 +158,7 @@ pub (crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Ass
 }
 
 #[async_trait]
-impl AssetIndexStorage for PgClient {
+impl AssetIndexStorage for Arc<PgClient> {
     async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, String> {
         self.fetch_last_synced_id_impl("last_synced_key", &self.pool)
             .await

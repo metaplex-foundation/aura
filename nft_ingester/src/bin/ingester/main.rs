@@ -579,7 +579,13 @@ pub async fn main() -> Result<(), IngesterError> {
     if !config.disable_synchronizer {
         let rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-            synchronizer.run(&rx, config.dump_sync_threshold, tokio::time::Duration::from_secs(5)).await;
+            synchronizer
+                .run(
+                    &rx,
+                    config.dump_sync_threshold,
+                    tokio::time::Duration::from_secs(5),
+                )
+                .await;
         }));
     }
     // setup dependencies for grpc server

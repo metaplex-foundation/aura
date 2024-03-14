@@ -104,7 +104,9 @@ impl AssetIndexStorage for Arc<TempClient> {
 
 #[async_trait]
 impl TempClientProvider for Arc<PgClient> {
-    async fn create_temp_client(self) -> Result<TempClient, String>{
-        TempClient::create_new(self).await.map_err(|e|e.to_string())
+    async fn create_temp_client(&self) -> Result<TempClient, String> {
+        TempClient::create_new(self.clone())
+            .await
+            .map_err(|e| e.to_string())
     }
 }
