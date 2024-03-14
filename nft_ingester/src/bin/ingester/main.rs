@@ -177,6 +177,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let synchronizer = Synchronizer::new(
         rocks_storage.clone(),
         index_storage.clone(),
+        index_storage.clone(),
         config.dump_synchronizer_batch_size,
         config.dump_path.to_string(),
         metrics_state.synchronizer_metrics.clone(),
@@ -578,20 +579,7 @@ pub async fn main() -> Result<(), IngesterError> {
     if !config.disable_synchronizer {
         let rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-            while rx.is_empty() {
-                let res = synchronizer
-                    .synchronize_asset_indexes(&rx, config.dump_sync_threshold)
-                    .await;
-                match res {
-                    Ok(_) => {
-                        info!("Synchronization finished successfully");
-                    }
-                    Err(e) => {
-                        error!("Synchronization failed: {:?}", e);
-                    }
-                }
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-            }
+            synchronizer.run(&rx, config.dump_sync_threshold, tokio::time::Duration::from_secs(5)).await;
         }));
     }
     // setup dependencies for grpc server

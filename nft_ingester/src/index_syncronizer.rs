@@ -1,56 +1,107 @@
 use entities::models::AssetIndex;
 use log::warn;
 use metrics_utils::SynchronizerMetricsConfig;
-use postgre_client::storage_traits::AssetIndexStorage;
+use postgre_client::storage_traits::{AssetIndexStorage, TempClientProvider};
 use rocks_db::{
     key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey},
-    storage_traits::AssetIndexStorage as AssetIndexSourceStorage,
+    storage_traits::{AssetIndexReader, AssetIndexStorage as AssetIndexSourceStorage, AssetUpdateIndexStorage, Dumper},
 };
 use solana_sdk::pubkey::Pubkey;
 use std::{collections::HashSet, sync::Arc};
+use tokio::task::JoinSet;
 
 use crate::error::IngesterError;
 
-pub struct Synchronizer<T, U>
-where
-    T: AssetIndexSourceStorage,
-    U: AssetIndexStorage,
-{
-    primary_storage: Arc<T>,
-    index_storage: Arc<U>,
+pub struct Synchronizer{
+    primary_storage: Arc<rocks_db::Storage>,
+    temp_client_provider: Arc<postgre_client::PgClient>,
     dump_synchronizer_batch_size: usize,
     dump_path: String,
     metrics: Arc<SynchronizerMetricsConfig>,
 }
 
-impl<T, U> Synchronizer<T, U>
-where
-    T: AssetIndexSourceStorage,
-    U: AssetIndexStorage,
-{
+impl Synchronizer{
     pub fn new(
-        primary_storage: Arc<T>,
-        index_storage: Arc<U>,
+        primary_storage: Arc<rocks_db::Storage>,
+        temp_client_provider: Arc<postgre_client::PgClient>,
         dump_synchronizer_batch_size: usize,
         dump_path: String,
         metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Self {
         Synchronizer {
             primary_storage,
-            index_storage,
+            temp_client_provider,
             dump_synchronizer_batch_size,
             dump_path,
             metrics,
         }
     }
 
+    pub async fn run(
+        &self,
+        rx: &tokio::sync::broadcast::Receiver<()>,
+        run_full_sync_threshold: i64,
+        timeout_duration: tokio::time::Duration,
+        index_storage: impl AssetIndexStorage
+    ) {
+        while rx.is_empty() {
+            let res = self
+                .synchronize_asset_indexes(&rx, run_full_sync_threshold, index_storage.clone())
+                .await;
+            match res {
+                Ok(_) => {
+                    tracing::info!("Synchronization finished successfully");
+                }
+                Err(e) => {
+                    tracing::error!("Synchronization failed: {:?}", e);
+                }
+            }
+            if rx.is_empty() {
+                tokio::time::sleep(timeout_duration).await;
+            }
+        }
+    }
+
+    pub async fn should_run_full_sync(&self, run_full_sync_threshold: i64, index_storage: impl AssetIndexStorage) -> Result<bool, IngesterError> {
+        let last_indexed_key = index_storage.fetch_last_synced_id().await?;
+        let last_indexed_key = match last_indexed_key {
+            Some(bytes) => {
+                // let decoded_key = AssetsUpdateIdx::decode_key(bytes)?;
+                let decoded_key = decode_u64x2_pubkey(bytes).unwrap();
+                Some(decoded_key)
+            }
+            None => None,
+        };
+
+        // Fetch the last known key from the primary storage
+        let Some(last_key) = self.primary_storage.last_known_asset_updated_key()? else {
+            return Ok(false);
+        };
+        let last_known_seq = last_key.0 as i64;
+        self.metrics
+            .set_last_synchronized_slot("last_known_updated_seq", last_known_seq);
+        if let Some(last_indexed_key) = last_indexed_key {
+            if last_indexed_key >= last_key {
+                return Ok(false);
+            }
+            let last_indexed_seq = last_indexed_key.0 as i64;
+            if run_full_sync_threshold > 0
+                && last_known_seq - last_indexed_seq > run_full_sync_threshold
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     pub async fn synchronize_asset_indexes(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
+        index_storage: impl AssetIndexStorage
     ) -> Result<(), IngesterError> {
         // Retrieve the last synced ID from the secondary storage
-        let last_indexed_key = self.index_storage.fetch_last_synced_id().await?;
+        let last_indexed_key = index_storage.fetch_last_synced_id().await?;
         let last_indexed_key = match last_indexed_key {
             Some(bytes) => {
                 // let decoded_key = AssetsUpdateIdx::decode_key(bytes)?;
@@ -75,22 +126,43 @@ where
             if run_full_sync_threshold > 0
                 && last_known_seq - last_indexed_seq > run_full_sync_threshold
             {
-                tracing::info!("Running dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {}, Last known: {}", last_indexed_seq, last_known_seq);
-                return self.full_syncronize(rx).await;
+                tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {}, Last known: {}", last_indexed_seq, last_known_seq);
+                // return self.full_syncronize(rx, index_storage).await;
             }
         }
-        self.regular_syncronize(rx, last_indexed_key, Some(last_key))
+        self.regular_syncronize(rx, last_indexed_key, Some(last_key), index_storage)
             .await
     }
 
     pub async fn full_syncronize(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
+        index_storage: impl AssetIndexStorage
     ) -> Result<(), IngesterError> {
         let Some((seq, slot, pubkey)) = self.primary_storage.last_known_asset_updated_key()? else {
             return Ok(());
         };
-        // start a regular synchronization into a temporary storage to catch up on it while the dump is being created and loaded, as it takes a long time
+        let last_included_rocks_key = encode_u64x2_pubkey(seq, slot, pubkey);
+        // start a regular synchronization into a temporary storage to catch up on it while the dump is being created and loaded, as it takes a loooong time
+        let (tx, local_rx) = tokio::sync::broadcast::channel::<()>(1);
+        let temp_storage = Arc::new(self.temp_client_provider.clone().create_temp_client().await?);
+        temp_storage
+            .initialize(last_included_rocks_key.as_slice())
+            .await?;
+        let temp_syncronizer = Arc::new(Synchronizer::new(
+            self.primary_storage.clone(),
+            self.temp_client_provider.clone(),
+            self.dump_synchronizer_batch_size,
+            "not used".to_string(),
+            self.metrics.clone(),
+        ));
+        let task = tokio::spawn(async move {
+            temp_syncronizer
+                .run(&local_rx, -1, tokio::time::Duration::from_millis(100),temp_storage)
+                .await;
+            ()
+        });
+
 
         let path = std::path::Path::new(self.dump_path.as_str());
         tracing::info!("Dumping the primary storage to {}", self.dump_path);
@@ -98,12 +170,14 @@ where
             .dump_db(path, self.dump_synchronizer_batch_size, rx)
             .await?;
         tracing::info!("Dump is complete. Loading the dump into the index storage");
-        let last_included_rocks_key = encode_u64x2_pubkey(seq, slot, pubkey);
 
-        self.index_storage
+        index_storage
             .load_from_dump(path, last_included_rocks_key.as_slice())
             .await?;
         tracing::info!("Dump is loaded into the index storage");
+        tx.send(()).map_err(|e|e.to_string())?;
+        task.await.map_err(|e|e.to_string())?;
+        // now we can copy temp storage to the main storage
         Ok(())
     }
 
@@ -112,6 +186,7 @@ where
         rx: &tokio::sync::broadcast::Receiver<()>,
         last_indexed_key: Option<(u64, u64, Pubkey)>,
         last_key: Option<(u64, u64, Pubkey)>,
+        index_storage: impl AssetIndexStorage
     ) -> Result<(), IngesterError> {
         let mut starting_key = last_indexed_key;
         let mut processed_keys = HashSet::<Pubkey>::new();
@@ -141,7 +216,7 @@ where
             );
             Self::syncronize_batch(
                 self.primary_storage.clone(),
-                self.index_storage.clone(),
+                index_storage.clone(),
                 updated_keys_refs.as_slice(),
                 last_included_rocks_key,
             )
@@ -169,8 +244,8 @@ where
     }
 
     pub async fn syncronize_batch(
-        primary_storage: Arc<T>,
-        index_storage: Arc<U>,
+        primary_storage: Arc<rocks_db::Storage>,
+        index_storage: impl AssetIndexStorage,
         updated_keys_refs: &[Pubkey],
         last_included_rocks_key: Vec<u8>,
     ) -> Result<(), IngesterError> {
