@@ -29,7 +29,7 @@ where
 impl<T, U, P> Synchronizer<T, U, P>
 where
     T: AssetIndexSourceStorage + Send + Sync + 'static,
-    U: AssetIndexStorage,
+    U: AssetIndexStorage + Clone,
     P: TempClientProvider + Send + Sync + 'static + Clone,
 {
     pub fn new(
@@ -288,7 +288,7 @@ mod tests {
     use entities::models::{AssetIndex, UrlWithStatus};
     use metrics_utils::{MetricState, MetricsTrait};
     use mockall;
-    use postgre_client::storage_traits::MockAssetIndexStorage as MockIndexStorage;
+    use postgre_client::storage_traits::{MockAssetIndexStorageMock, MockTempClientProviderMock};
     use rocks_db::storage_traits::MockAssetIndexStorage as MockPrimaryStorage;
     use std::collections::HashMap;
     use tokio;
@@ -328,8 +328,9 @@ mod tests {
     #[tokio::test]
     async fn test_synchronizer_over_2_empty_storages() {
         let mut primary_storage = MockPrimaryStorage::new();
-        let mut index_storage = MockIndexStorage::new();
+        let mut index_storage = MockAssetIndexStorageMock::new();
         let mut metrics_state = MetricState::new();
+        let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
 
         index_storage
@@ -343,7 +344,8 @@ mod tests {
             .return_once(|| Ok(None));
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
-            Arc::new(index_storage),
+            index_storage,
+            temp_client_provider,
             200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
@@ -358,8 +360,9 @@ mod tests {
     #[tokio::test]
     async fn test_synchronizer_with_records_in_primary_storage() {
         let mut primary_storage = MockPrimaryStorage::new();
-        let mut index_storage = MockIndexStorage::new();
+        let mut index_storage = MockAssetIndexStorageMock::new();
         let mut metrics_state = MetricState::new();
+        let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
 
         // Index storage starts empty
@@ -404,7 +407,8 @@ mod tests {
             .return_once(|_, _| Ok(()));
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
-            Arc::new(index_storage),
+            index_storage,
+            temp_client_provider,
             200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
@@ -419,8 +423,9 @@ mod tests {
     #[tokio::test]
     async fn test_synchronizer_with_small_batch_size() {
         let mut primary_storage = MockPrimaryStorage::new();
-        let mut index_storage = MockIndexStorage::new();
+        let mut index_storage = MockAssetIndexStorageMock::new();
         let mut metrics_state = MetricState::new();
+        let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
 
         // Index storage starts empty
@@ -475,7 +480,8 @@ mod tests {
 
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
-            Arc::new(index_storage),
+            index_storage,
+            temp_client_provider,
             1,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
@@ -490,8 +496,9 @@ mod tests {
     #[tokio::test]
     async fn test_synchronizer_with_existing_index_data() {
         let mut primary_storage = MockPrimaryStorage::new();
-        let mut index_storage = MockIndexStorage::new();
+        let mut index_storage = MockAssetIndexStorageMock::new();
         let mut metrics_state = MetricState::new();
+        let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
 
         let index_key = (95, 2, Pubkey::new_unique());
@@ -585,7 +592,8 @@ mod tests {
 
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
-            Arc::new(index_storage),
+            index_storage,
+            temp_client_provider,
             2,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
@@ -600,8 +608,9 @@ mod tests {
     #[tokio::test]
     async fn test_synchronizer_with_synced_databases() {
         let mut primary_storage = MockPrimaryStorage::new();
-        let mut index_storage = MockIndexStorage::new();
+        let mut index_storage = MockAssetIndexStorageMock::new();
         let mut metrics_state = MetricState::new();
+        let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
 
         let key = Pubkey::new_unique();
@@ -631,7 +640,8 @@ mod tests {
 
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
-            Arc::new(index_storage),
+            index_storage,
+            temp_client_provider,
             200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),

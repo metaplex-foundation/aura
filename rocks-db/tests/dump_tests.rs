@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fs::File};
+use std::fs::File;
 
 use csv::WriterBuilder;
 use setup::rocks::*;
@@ -35,7 +35,7 @@ async fn test_scv_export_from_rocks() {
             &mut creators_writer,
             &mut assets_writer,
             155,
-            rx,
+            &rx,
         )
         .await
         .unwrap();

@@ -8,7 +8,7 @@ mod tests {
     use nft_ingester::index_syncronizer::Synchronizer;
     use postgre_client::{
         model::{AssetSortBy, AssetSortDirection, AssetSorting, SearchAssetsFilter},
-        storage_traits::{AssetIndexStorage, AssetPubkeyFilteredFetcher},
+        storage_traits::AssetPubkeyFilteredFetcher,
     };
     use setup::rocks::*;
     use solana_program::pubkey::Pubkey;
@@ -33,11 +33,12 @@ mod tests {
         let syncronizer = Synchronizer::new(
             storage,
             client.clone(),
+            client.clone(),
             2000,
             temp_dir_path.to_string(),
             Arc::new(SynchronizerMetricsConfig::new()),
         );
-        syncronizer.full_syncronize(rx).await.unwrap();
+        syncronizer.full_syncronize(&rx).await.unwrap();
         assert_eq!(pg_env.count_rows_in_metadata().await.unwrap(), 1);
         assert_eq!(
             pg_env.count_rows_in_creators().await.unwrap(),
