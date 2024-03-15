@@ -157,7 +157,7 @@ impl TempClient {
 }
 
 #[async_trait]
-impl AssetIndexStorage for Arc<TempClient> {
+impl AssetIndexStorage for TempClient {
     async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, String> {
         let mut c = self.pooled_connection.lock().await;
         let mut tx = c.begin().await.map_err(|e| e.to_string())?;

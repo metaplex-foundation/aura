@@ -16,10 +16,10 @@ where
     T: AssetIndexSourceStorage,
 
     U: AssetIndexStorage,
-    P: TempClientProvider + Send + Sync + 'static,
+    P: TempClientProvider + Send + Sync + 'static + Clone,
 {
     primary_storage: Arc<T>,
-    index_storage: U,
+    index_storage: Arc<U>,
     temp_client_provider: P,
     dump_synchronizer_batch_size: usize,
     dump_path: String,
@@ -34,7 +34,7 @@ where
 {
     pub fn new(
         primary_storage: Arc<T>,
-        index_storage: U,
+        index_storage: Arc<U>,
         temp_client_provider: P,
         dump_synchronizer_batch_size: usize,
         dump_path: String,
@@ -258,7 +258,7 @@ where
 
     pub async fn syncronize_batch(
         primary_storage: Arc<T>,
-        index_storage: U,
+        index_storage: Arc<U>,
         updated_keys_refs: &[Pubkey],
         last_included_rocks_key: Vec<u8>,
     ) -> Result<(), IngesterError> {
@@ -345,7 +345,7 @@ mod tests {
             .return_once(|| Ok(None));
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
-            index_storage,
+            Arc::new(index_storage),
             temp_client_provider,
             200_000,
             "".to_string(),
@@ -408,7 +408,7 @@ mod tests {
             .return_once(|_, _| Ok(()));
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
-            index_storage,
+            Arc::new(index_storage),
             temp_client_provider,
             200_000,
             "".to_string(),
@@ -481,7 +481,7 @@ mod tests {
 
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
-            index_storage,
+            Arc::new(index_storage),
             temp_client_provider,
             1,
             "".to_string(),
@@ -593,7 +593,7 @@ mod tests {
 
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
-            index_storage,
+            Arc::new(index_storage),
             temp_client_provider,
             2,
             "".to_string(),
@@ -641,7 +641,7 @@ mod tests {
 
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
-            index_storage,
+            Arc::new(index_storage),
             temp_client_provider,
             200_000,
             "".to_string(),

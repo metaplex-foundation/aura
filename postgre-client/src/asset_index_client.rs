@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
     vec,
 };
 
@@ -158,7 +157,7 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
 }
 
 #[async_trait]
-impl AssetIndexStorage for Arc<PgClient> {
+impl AssetIndexStorage for PgClient {
     async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, String> {
         self.fetch_last_synced_id_impl("last_synced_key", &self.pool)
             .await
