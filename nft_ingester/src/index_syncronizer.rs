@@ -165,7 +165,7 @@ where
             .await?;
         let temp_syncronizer = Arc::new(Synchronizer::new(
             self.primary_storage.clone(),
-            temp_storage,
+            temp_storage.clone(),
             self.temp_client_provider.clone(),
             self.dump_synchronizer_batch_size,
             "not used".to_string(),
@@ -191,6 +191,7 @@ where
         tx.send(()).map_err(|e| e.to_string())?;
         task.await.map_err(|e| e.to_string())?;
         // now we can copy temp storage to the main storage
+        temp_storage.copy_to_main().await?;
         Ok(())
     }
 
