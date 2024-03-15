@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use crate::{
     asset_index_client::{split_assets_into_components, TableNames},
     storage_traits::{AssetIndexStorage, TempClientProvider},
-    PgClient, INSERT_ACTION,
+    PgClient, BATCH_DELETE_ACTION, BATCH_UPSERT_ACTION, INSERT_ACTION, UPDATE_ACTION,
 };
 use entities::models::AssetIndex;
 
@@ -57,6 +57,102 @@ impl TempClient {
             .await
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    pub async fn copy_to_main(&self) -> Result<(), String> {
+        let mut c = self.pooled_connection.lock().await;
+        let mut tx = c.begin().await.map_err(|e| e.to_string())?;
+
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("INSERT INTO tasks SELECT * FROM ");
+        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
+        query_builder.push("tasks ON CONFLICT DO NOTHING;");
+        self.pg_client
+            .execute_query_with_metrics(&mut tx, &mut query_builder, BATCH_UPSERT_ACTION, "tasks")
+            .await?;
+
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("INSERT INTO assets_v3 SELECT * FROM ");
+        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
+        query_builder.push("assets_v3 ON CONFLICT (ast_pubkey) 
+        DO UPDATE SET 
+            ast_specification_version = EXCLUDED.ast_specification_version,
+            ast_specification_asset_class = EXCLUDED.ast_specification_asset_class,
+            ast_royalty_target_type = EXCLUDED.ast_royalty_target_type,
+            ast_royalty_amount = EXCLUDED.ast_royalty_amount,
+            ast_slot_created = EXCLUDED.ast_slot_created,
+            ast_owner_type = EXCLUDED.ast_owner_type,
+            ast_owner = EXCLUDED.ast_owner,
+            ast_delegate = EXCLUDED.ast_delegate,
+            ast_authority = EXCLUDED.ast_authority,
+            ast_collection = EXCLUDED.ast_collection,
+            ast_is_collection_verified = EXCLUDED.ast_is_collection_verified,
+            ast_is_burnt = EXCLUDED.ast_is_burnt,
+            ast_is_compressible = EXCLUDED.ast_is_compressible,
+            ast_is_compressed = EXCLUDED.ast_is_compressed,
+            ast_is_frozen = EXCLUDED.ast_is_frozen,
+            ast_supply = EXCLUDED.ast_supply,
+            ast_metadata_url_id = EXCLUDED.ast_metadata_url_id,
+            ast_slot_updated = EXCLUDED.ast_slot_updated
+            WHERE assets_v3.ast_slot_updated <= EXCLUDED.ast_slot_updated OR assets_v3.ast_slot_updated IS NULL;");
+
+        self.pg_client
+            .execute_query_with_metrics(
+                &mut tx,
+                &mut query_builder,
+                BATCH_UPSERT_ACTION,
+                "assets_v3",
+            )
+            .await?;
+
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("INSERT INTO asset_creators_v3 SELECT * FROM ");
+        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
+        query_builder.push(
+            "asset_creators_v3 
+        ON CONFLICT (asc_creator, asc_pubkey) 
+        DO UPDATE SET asc_verified = EXCLUDED.asc_verified 
+        WHERE asset_creators_v3.asc_slot_updated <= EXCLUDED.asc_slot_updated;",
+        );
+
+        self.pg_client
+            .execute_query_with_metrics(
+                &mut tx,
+                &mut query_builder,
+                BATCH_UPSERT_ACTION,
+                "asset_creators_v3",
+            )
+            .await?;
+
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "DELETE FROM asset_creators_v3 WHERE asc_pubkey IN (SELECT distinct asc_pubkey FROM ",
+        );
+        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
+        query_builder.push("asset_creators_v3) AND (asc_creator, asc_pubkey) NOT IN (SELECT asc_creator, asc_pubkey FROM ");
+        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
+        query_builder.push("asset_creators_v3);");
+        self.pg_client
+            .execute_query_with_metrics(
+                &mut tx,
+                &mut query_builder,
+                BATCH_DELETE_ACTION,
+                "asset_creators_v3",
+            )
+            .await?;
+
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("UPDATE last_synced_key SET last_synced_asset_update_key = (SELECT last_synced_asset_update_key FROM ");
+        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
+        query_builder.push("last_synced_key WHERE id = 1) WHERE id = 1;");
+        self.pg_client
+            .execute_query_with_metrics(
+                &mut tx,
+                &mut query_builder,
+                UPDATE_ACTION,
+                "last_synced_key",
+            )
+            .await?;
+        self.pg_client.commit_transaction(tx).await
     }
 }
 
