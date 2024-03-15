@@ -49,6 +49,7 @@ use nft_ingester::backfiller::{
     TransactionsParser,
 };
 use nft_ingester::fork_cleaner::ForkCleaner;
+use nft_ingester::mpl_core_processor::MplCoreProcessor;
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
@@ -265,6 +266,13 @@ pub async fn main() -> Result<(), IngesterError> {
         metrics_state.ingester_metrics.clone(),
         config.spl_buffer_size,
     );
+    let mpl_core_parser = MplCoreProcessor::new(
+        rocks_storage.clone(),
+        db_client_v2.clone(),
+        buffer.clone(),
+        metrics_state.ingester_metrics.clone(),
+        config.mplx_buffer_size,
+    );
 
     for _ in 0..config.mplx_workers {
         let mut cloned_mplx_parser = mplx_accs_parser.clone();
@@ -306,6 +314,22 @@ pub async fn main() -> Result<(), IngesterError> {
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
             cloned_mplx_parser
                 .process_edition_accs(cloned_keep_running)
+                .await;
+        }));
+
+        let mut cloned_core_parser = mpl_core_parser.clone();
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            cloned_core_parser
+                .process_mpl_assets(cloned_keep_running)
+                .await;
+        }));
+
+        let mut cloned_core_parser = mpl_core_parser.clone();
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            cloned_core_parser
+                .process_mpl_asset_burn(cloned_keep_running)
                 .await;
         }));
     }

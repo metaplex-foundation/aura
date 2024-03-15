@@ -4,7 +4,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use blockbuster::token_metadata::state::{Metadata, TokenStandard};
+use blockbuster::programs::mpl_core_program::MplCoreAccountData;
+use blockbuster::token_metadata::accounts::Metadata;
+use blockbuster::token_metadata::types::TokenStandard;
 use log::error;
 use mpl_token_metadata::accounts::MasterEdition;
 use serde_json::json;
@@ -20,10 +22,10 @@ use rocks_db::asset::{
 };
 use rocks_db::editions::TokenMetadataEdition;
 use rocks_db::errors::StorageError;
-use rocks_db::Storage;
+use rocks_db::{AssetOwner, Storage};
 
 use crate::buffer::Buffer;
-use crate::db_v2::{DBClient as DBClientV2, Task};
+use crate::db_v2::{DBClient, Task};
 
 // arbitrary number, should be enough to not overflow batch insert command at Postgre
 pub const MAX_BUFFERED_TASKS_TO_TAKE: usize = 5000;
@@ -33,6 +35,7 @@ pub struct RocksMetadataModels {
     pub asset_static: Vec<AssetStaticDetails>,
     pub asset_dynamic: Vec<AssetDynamicDetails>,
     pub asset_authority: Vec<AssetAuthority>,
+    pub asset_owner: Vec<AssetOwner>,
     pub asset_collection: Vec<AssetCollection>,
     pub tasks: Vec<Task>,
     pub metadata_mint: Vec<MetadataMintMap>,
@@ -65,9 +68,18 @@ pub struct BurntMetadataSlot {
 }
 
 #[derive(Clone)]
+pub struct CompressedProofWithWriteVersion {
+    pub proof: MplCoreAccountData,
+    pub lamports: u64,
+    pub executable: bool,
+    pub slot_updated: u64,
+    pub write_version: u64,
+}
+
+#[derive(Clone)]
 pub struct MplxAccsProcessor {
     pub batch_size: usize,
-    pub db_client_v2: Arc<DBClientV2>,
+    pub db_client: Arc<DBClient>,
     pub rocks_db: Arc<Storage>,
     pub buffer: Arc<Buffer>,
     pub metrics: Arc<IngesterMetricsConfig>,
@@ -76,6 +88,129 @@ pub struct MplxAccsProcessor {
     last_received_burnt_asset_at: Option<SystemTime>,
 }
 
+#[macro_export]
+macro_rules! save_rocks_models {
+    () => {
+        async fn store_static(
+            &self,
+            asset_static: Vec<AssetStaticDetails>,
+        ) -> Result<(), StorageError> {
+            store_assets!(
+                self,
+                asset_static,
+                asset_static_data,
+                "accounts_saving_static"
+            )
+        }
+
+        async fn store_owner(&self, asset_owner: Vec<AssetOwner>) -> Result<(), StorageError> {
+            store_assets!(self, asset_owner, asset_owner_data, "accounts_saving_owner")
+        }
+
+        async fn store_dynamic(
+            &self,
+            asset_dynamic: Vec<AssetDynamicDetails>,
+        ) -> Result<(), StorageError> {
+            store_assets!(
+                self,
+                asset_dynamic,
+                asset_dynamic_data,
+                "accounts_saving_dynamic"
+            )
+        }
+
+        async fn store_authority(
+            &self,
+            asset_authority: Vec<AssetAuthority>,
+        ) -> Result<(), StorageError> {
+            store_assets!(
+                self,
+                asset_authority,
+                asset_authority_data,
+                "accounts_saving_authority"
+            )
+        }
+
+        async fn store_collection(
+            &self,
+            asset_collection: Vec<AssetCollection>,
+        ) -> Result<(), StorageError> {
+            store_assets!(
+                self,
+                asset_collection,
+                asset_collection_data,
+                "accounts_saving_collection"
+            )
+        }
+
+        async fn store_metadata_mint(
+            &self,
+            metadata_mint_map: Vec<MetadataMintMap>,
+        ) -> Result<(), StorageError> {
+            store_assets!(
+                self,
+                metadata_mint_map,
+                metadata_mint_map,
+                "metadata_mint_map"
+            )
+        }
+
+        pub async fn store_metadata_models(&self, metadata_models: &RocksMetadataModels) {
+            let _ = tokio::join!(
+                self.store_static(metadata_models.asset_static.clone()),
+                self.store_dynamic(metadata_models.asset_dynamic.clone()),
+                self.store_authority(metadata_models.asset_authority.clone()),
+                self.store_collection(metadata_models.asset_collection.clone()),
+                self.store_tasks(metadata_models.tasks.clone()),
+                self.store_metadata_mint(metadata_models.metadata_mint.clone()),
+                self.store_owner(metadata_models.asset_owner.clone())
+            );
+
+            if let Err(e) = self.rocks_db.asset_updated_batch(
+                metadata_models
+                    .asset_dynamic
+                    .iter()
+                    .map(|asset| PubkeyWithSlot {
+                        slot: asset.get_slot_updated(),
+                        pubkey: asset.pubkey,
+                    })
+                    .collect(),
+            ) {
+                error!("Error while updating assets update idx: {}", e);
+            }
+        }
+
+        async fn store_tasks(&self, tasks: Vec<Task>) {
+            let mut tasks_to_insert = tasks.clone();
+
+            // scope crated to unlock mutex before insert_tasks func, which can be time consuming
+            let tasks = {
+                let mut tasks_buffer = self.buffer.json_tasks.lock().await;
+
+                let number_of_tasks = {
+                    if tasks_buffer.len() + tasks.len() > MAX_BUFFERED_TASKS_TO_TAKE {
+                        MAX_BUFFERED_TASKS_TO_TAKE.saturating_sub(tasks.len())
+                    } else {
+                        tasks_buffer.len()
+                    }
+                };
+
+                tasks_buffer
+                    .drain(0..number_of_tasks)
+                    .collect::<Vec<Task>>()
+            };
+
+            tasks_to_insert.extend(tasks);
+
+            if !tasks_to_insert.is_empty() {
+                let res = self.db_client.insert_tasks(&mut tasks_to_insert).await;
+                result_to_metrics(self.metrics.clone(), &res, "accounts_saving_tasks");
+            }
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! store_assets {
     ($self:expr, $assets:expr, $db_field:ident, $metric_name:expr) => {{
         let save_values =
@@ -145,14 +280,14 @@ impl MplxAccsProcessor {
     pub fn new(
         batch_size: usize,
         buffer: Arc<Buffer>,
-        db_client_v2: Arc<DBClientV2>,
+        db_client: Arc<DBClient>,
         rocks_db: Arc<Storage>,
         metrics: Arc<IngesterMetricsConfig>,
     ) -> Self {
         Self {
             batch_size,
             buffer,
-            db_client_v2,
+            db_client,
             rocks_db,
             metrics,
             last_received_metadata_at: None,
@@ -246,30 +381,6 @@ impl MplxAccsProcessor {
         );
     }
 
-    pub async fn store_metadata_models(&self, metadata_models: &RocksMetadataModels) {
-        let _ = tokio::join!(
-            self.store_static(metadata_models.asset_static.clone()),
-            self.store_dynamic(metadata_models.asset_dynamic.clone()),
-            self.store_authority(metadata_models.asset_authority.clone()),
-            self.store_collection(metadata_models.asset_collection.clone()),
-            self.store_tasks(metadata_models.tasks.clone()),
-            self.store_metadata_mint(metadata_models.metadata_mint.clone())
-        );
-
-        if let Err(e) = self.rocks_db.asset_updated_batch(
-            metadata_models
-                .asset_dynamic
-                .iter()
-                .map(|asset| PubkeyWithSlot {
-                    slot: asset.get_slot_updated(),
-                    pubkey: asset.pubkey,
-                })
-                .collect(),
-        ) {
-            error!("Error while updating assets update idx: {}", e);
-        }
-    }
-
     pub async fn create_rocks_metadata_models(
         &self,
         metadatas: &HashMap<Vec<u8>, MetadataInfo>,
@@ -291,7 +402,7 @@ impl MplxAccsProcessor {
                 });
             }
 
-            let data = metadata.data;
+            let data = metadata.clone();
             let authority = metadata.update_authority;
             let uri = data.uri.trim().replace('\0', "");
             let class = match metadata.token_standard {
@@ -442,66 +553,6 @@ impl MplxAccsProcessor {
         models
     }
 
-    async fn store_static(
-        &self,
-        asset_static: Vec<AssetStaticDetails>,
-    ) -> Result<(), StorageError> {
-        store_assets!(
-            self,
-            asset_static,
-            asset_static_data,
-            "accounts_saving_static"
-        )
-    }
-
-    async fn store_dynamic(
-        &self,
-        asset_dynamic: Vec<AssetDynamicDetails>,
-    ) -> Result<(), StorageError> {
-        store_assets!(
-            self,
-            asset_dynamic,
-            asset_dynamic_data,
-            "accounts_saving_dynamic"
-        )
-    }
-
-    async fn store_authority(
-        &self,
-        asset_authority: Vec<AssetAuthority>,
-    ) -> Result<(), StorageError> {
-        store_assets!(
-            self,
-            asset_authority,
-            asset_authority_data,
-            "accounts_saving_authority"
-        )
-    }
-
-    async fn store_collection(
-        &self,
-        asset_collection: Vec<AssetCollection>,
-    ) -> Result<(), StorageError> {
-        store_assets!(
-            self,
-            asset_collection,
-            asset_collection_data,
-            "accounts_saving_collection"
-        )
-    }
-
-    async fn store_metadata_mint(
-        &self,
-        metadata_mint_map: Vec<MetadataMintMap>,
-    ) -> Result<(), StorageError> {
-        store_assets!(
-            self,
-            metadata_mint_map,
-            metadata_mint_map,
-            "metadata_mint_map"
-        )
-    }
-
     async fn mark_metadata_as_burnt(
         &self,
         metadata_slot_burnt: &HashMap<Pubkey, BurntMetadataSlot>,
@@ -536,33 +587,7 @@ impl MplxAccsProcessor {
         )
     }
 
-    async fn store_tasks(&self, tasks: Vec<Task>) {
-        let mut tasks_to_insert = tasks.clone();
-
-        // scope crated to unlock mutex before insert_tasks func, which can be time consuming
-        let tasks = {
-            let mut tasks_buffer = self.buffer.json_tasks.lock().await;
-
-            let number_of_tasks = {
-                if tasks_buffer.len() + tasks.len() > MAX_BUFFERED_TASKS_TO_TAKE {
-                    MAX_BUFFERED_TASKS_TO_TAKE.saturating_sub(tasks.len())
-                } else {
-                    tasks_buffer.len()
-                }
-            };
-
-            tasks_buffer
-                .drain(0..number_of_tasks)
-                .collect::<Vec<Task>>()
-        };
-
-        tasks_to_insert.extend(tasks);
-
-        if !tasks_to_insert.is_empty() {
-            let res = self.db_client_v2.insert_tasks(&mut tasks_to_insert).await;
-            result_to_metrics(self.metrics.clone(), &res, "accounts_saving_tasks");
-        }
-    }
+    save_rocks_models!();
 }
 
 pub fn result_to_metrics<T, E: Display>(

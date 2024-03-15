@@ -334,7 +334,7 @@ impl BubblegumTxProcessor {
                         owner: Updated::new(
                             bundle.slot,
                             Some(UpdateVersion::Sequence(cl.seq)),
-                            owner,
+                            Some(owner),
                         ),
                         delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
                         owner_type: Updated::new(
@@ -582,7 +582,7 @@ impl BubblegumTxProcessor {
                         owner: Updated::new(
                             bundle.slot,
                             Some(UpdateVersion::Sequence(cl.seq)),
-                            owner,
+                            Some(owner),
                         ),
                         delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
                         owner_type: Updated::new(
@@ -789,7 +789,7 @@ impl BubblegumTxProcessor {
                         owner: Updated::new(
                             bundle.slot,
                             Some(UpdateVersion::Sequence(cl.seq)),
-                            owner,
+                            Some(owner),
                         ),
                         delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
                         owner_type: Updated::new(

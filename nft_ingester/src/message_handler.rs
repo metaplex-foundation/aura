@@ -1,6 +1,9 @@
 use std::{str::FromStr, sync::Arc};
 
 use blockbuster::error::BlockbusterError;
+use blockbuster::programs::mpl_core_program::{
+    MplCoreAccountData, MplCoreAccountState, MplCoreParser,
+};
 use blockbuster::programs::token_account::TokenProgramAccount;
 use blockbuster::{
     program_handler::ProgramParser,
@@ -25,7 +28,9 @@ use rocks_db::editions::TokenMetadataEdition;
 use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
-use crate::mplx_updates_processor::{BurntMetadataSlot, MetadataInfo, TokenMetadata};
+use crate::mplx_updates_processor::{
+    BurntMetadataSlot, CompressedProofWithWriteVersion, MetadataInfo, TokenMetadata,
+};
 use entities::models::{EditionV1, MasterEdition};
 
 const BYTE_PREFIX_TX_SIMPLE_FINALIZED: u8 = 22;
@@ -38,6 +43,7 @@ pub struct MessageHandler {
     buffer: Arc<Buffer>,
     token_acc_parser: Arc<TokenAccountParser>,
     mplx_acc_parser: Arc<TokenMetadataParser>,
+    mpl_core_parser: Arc<MplCoreParser>,
 }
 
 macro_rules! update_or_insert {
@@ -61,11 +67,13 @@ impl MessageHandler {
     pub fn new(buffer: Arc<Buffer>) -> Self {
         let token_acc_parser = Arc::new(TokenAccountParser {});
         let mplx_acc_parser = Arc::new(TokenMetadataParser {});
+        let mpl_core_parser = Arc::new(MplCoreParser {});
 
         Self {
             buffer,
             token_acc_parser,
             mplx_acc_parser,
+            mpl_core_parser,
         }
     }
 
@@ -121,6 +129,8 @@ impl MessageHandler {
             == blockbuster::programs::token_metadata::token_metadata_id().to_bytes()
         {
             self.handle_token_metadata_account(&account_info).await?;
+        } else if account_owner.0 == self.mpl_core_parser.key().to_bytes() {
+            self.handle_mpl_core_account(&account_info).await;
         }
 
         Ok(())
@@ -319,6 +329,61 @@ impl MessageHandler {
         }
 
         Ok(())
+    }
+
+    async fn handle_mpl_core_account<'a>(&self, account_info: &'a AccountInfo<'a>) {
+        let acc_parse_result = self.mpl_core_parser.handle_account(account_info);
+        match acc_parse_result {
+            Ok(acc_parsed) => {
+                let concrete = acc_parsed.result_type();
+                match concrete {
+                    ProgramParseResult::MplCore(parsing_result) => {
+                        self.write_mpl_core_accounts_to_buffer(account_info, parsing_result)
+                            .await
+                    }
+                    _ => debug!("\nUnexpected message\n"),
+                };
+            }
+            Err(e) => {
+                account_parsing_error(e, account_info);
+            }
+        }
+    }
+
+    async fn write_mpl_core_accounts_to_buffer<'a, 'b>(
+        &self,
+        account_update: &'a AccountInfo<'a>,
+        parsing_result: &'b MplCoreAccountState,
+    ) {
+        let key = *account_update.pubkey().unwrap();
+        let key_bytes = key.0;
+        match &parsing_result.data {
+            MplCoreAccountData::EmptyAccount => {
+                let mut buff = self.buffer.burnt_mpl_core_at_slot.lock().await;
+
+                buff.insert(
+                    Pubkey::from(key.0),
+                    BurntMetadataSlot {
+                        slot_updated: account_update.slot(),
+                    },
+                );
+            }
+            MplCoreAccountData::FullAsset(_) | MplCoreAccountData::Collection(_) => {
+                update_or_insert!(
+                    self.buffer.mpl_core_compressed_proofs,
+                    Pubkey::from(key_bytes),
+                    CompressedProofWithWriteVersion {
+                        proof: parsing_result.data.clone(),
+                        slot_updated: account_update.slot(),
+                        write_version: account_update.write_version(),
+                        lamports: account_update.lamports(),
+                        executable: account_update.executable(),
+                    },
+                    account_update.write_version()
+                );
+            }
+            _ => debug!("Not implemented"),
+        };
     }
 }
 

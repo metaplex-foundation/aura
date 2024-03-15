@@ -64,6 +64,11 @@ pub struct AssetDynamicDetails {
     pub lamports: Option<Updated<u64>>,
     pub executable: Option<Updated<bool>>,
     pub metadata_owner: Option<Updated<String>>,
+    pub raw_name: Option<Updated<String>>,
+    pub transfer_delegate: Option<Updated<Pubkey>>,
+    pub freeze_delegate: Option<Updated<Pubkey>>,
+    pub update_delegate: Option<Updated<Pubkey>>,
+    pub plugins: Option<Updated<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -108,7 +113,7 @@ pub struct AssetAuthorityDeprecated {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AssetOwner {
     pub pubkey: Pubkey,
-    pub owner: Updated<Pubkey>,
+    pub owner: Updated<Option<Pubkey>>,
     pub delegate: Updated<Option<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
     pub owner_delegate_seq: Updated<Option<u64>>,
@@ -380,6 +385,20 @@ impl AssetDynamicDetails {
                             &mut current_val.metadata_owner,
                             &new_val.metadata_owner,
                         );
+                        update_optional_field(&mut current_val.raw_name, &new_val.raw_name);
+                        update_optional_field(
+                            &mut current_val.transfer_delegate,
+                            &new_val.transfer_delegate,
+                        );
+                        update_optional_field(
+                            &mut current_val.freeze_delegate,
+                            &new_val.freeze_delegate,
+                        );
+                        update_optional_field(
+                            &mut current_val.update_delegate,
+                            &new_val.update_delegate,
+                        );
+                        update_optional_field(&mut current_val.plugins, &new_val.plugins);
 
                         current_val
                     } else {

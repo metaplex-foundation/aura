@@ -11,7 +11,9 @@ use tonic::async_trait;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::columns::{Mint, TokenAccount};
 
-use crate::mplx_updates_processor::{BurntMetadataSlot, TokenMetadata};
+use crate::mplx_updates_processor::{
+    BurntMetadataSlot, CompressedProofWithWriteVersion, TokenMetadata,
+};
 use crate::{db_v2::Task, mplx_updates_processor::MetadataInfo};
 
 #[derive(Default)]
@@ -23,6 +25,8 @@ pub struct Buffer {
     pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
     pub token_metadata_editions: Mutex<HashMap<Pubkey, TokenMetadata>>,
     pub burnt_metadata_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
+    pub burnt_mpl_core_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
+    pub mpl_core_compressed_proofs: Mutex<HashMap<Pubkey, CompressedProofWithWriteVersion>>,
 }
 
 impl Buffer {
@@ -35,6 +39,8 @@ impl Buffer {
             json_tasks: Arc::new(Mutex::new(VecDeque::<Task>::new())),
             token_metadata_editions: Mutex::new(HashMap::new()),
             burnt_metadata_at_slot: Mutex::new(HashMap::new()),
+            burnt_mpl_core_at_slot: Mutex::new(HashMap::new()),
+            mpl_core_compressed_proofs: Mutex::new(HashMap::new()),
         }
     }
 

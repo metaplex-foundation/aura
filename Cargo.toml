@@ -13,6 +13,8 @@ members = [
   "tests/setup",
   "backfill_rpc",
   "integrity_verification",
+  "blockbuster",
+  "mpl_core"
 ]
 
 [profile.release]

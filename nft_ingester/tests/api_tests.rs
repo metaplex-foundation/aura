@@ -9,9 +9,10 @@ mod tests {
         },
     };
 
-    use blockbuster::token_metadata::state::{
-        Data, Key, Metadata, TokenStandard as BLKTokenStandard,
+    use blockbuster::token_metadata::types::{
+        Key, TokenStandard as BLKTokenStandard,
     };
+    use blockbuster::token_metadata::accounts::Metadata;
     use digital_asset_types::rpc::response::{
         AssetList, TokenAccountsList, TransactionSignatureList,
     };
@@ -226,7 +227,7 @@ mod tests {
             let ref_value = generated_assets.owners[8].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
-                owner_address: Some(ref_value.owner.value.to_string()),
+                owner_address: ref_value.owner.value.map(|owner| owner.to_string()),
                 options: Some(Options {
                     show_unverified_collections: true,
                 }),
@@ -474,7 +475,7 @@ mod tests {
 
         let owner = AssetOwner {
             pubkey: pb,
-            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), authority),
+            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(authority)),
             delegate: Updated::new(12, Some(UpdateVersion::Sequence(12)), None),
             owner_type: Updated::new(12, Some(UpdateVersion::Sequence(12)), OwnerType::Single),
             owner_delegate_seq: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(12)),
@@ -592,7 +593,7 @@ mod tests {
 
         let owner = AssetOwner {
             pubkey: pb,
-            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), authority),
+            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(authority)),
             delegate: Updated::new(12, Some(UpdateVersion::Sequence(12)), None),
             owner_type: Updated::new(12, Some(UpdateVersion::Sequence(12)), OwnerType::Single),
             owner_delegate_seq: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(12)),
@@ -639,7 +640,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[tracing_test::traced_test]
+    // #[tracing_test::traced_test]
     async fn test_fungible_asset() {
         let cnt = 20;
         let cli = Cli::default();
@@ -705,13 +706,18 @@ mod tests {
                 key: Key::MetadataV1,
                 update_authority: Pubkey::new_unique(),
                 mint: mint_key,
-                data: Data {
-                    name: "name".to_string(),
-                    symbol: "symbol".to_string(),
-                    uri: "https://ping-pong".to_string(),
-                    seller_fee_basis_points: 10,
-                    creators: None,
-                },
+                // data: Data {
+                //     name: "name".to_string(),
+                //     symbol: "symbol".to_string(),
+                //     uri: "https://ping-pong".to_string(),
+                //     seller_fee_basis_points: 10,
+                //     creators: None,
+                // },
+                name: "".to_string(),
+                symbol: "".to_string(),
+                uri: "".to_string(),
+                seller_fee_basis_points: 0,
+                creators: None,
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: None,
@@ -870,13 +876,18 @@ mod tests {
                     key: Key::MetadataV1,
                     update_authority: Pubkey::new_unique(),
                     mint: mint_key,
-                    data: Data {
-                        name: "name".to_string(),
-                        symbol: "symbol".to_string(),
-                        uri: "https://ping-pong".to_string(),
-                        seller_fee_basis_points: 10,
-                        creators: None,
-                    },
+                    // data: Data {
+                    //     name: "name".to_string(),
+                    //     symbol: "symbol".to_string(),
+                    //     uri: "https://ping-pong".to_string(),
+                    //     seller_fee_basis_points: 10,
+                    //     creators: None,
+                    // },
+                    creators: None,
+                    name: "".to_string(),
+                    symbol: "".to_string(),
+                    uri: "".to_string(),
+                    seller_fee_basis_points: 0,
                     primary_sale_happened: false,
                     is_mutable: true,
                     edition_nonce: None,
@@ -1025,13 +1036,18 @@ mod tests {
                 key: Key::MetadataV1,
                 update_authority: Pubkey::new_unique(),
                 mint: mint_key,
-                data: Data {
-                    name: "name".to_string(),
-                    symbol: "symbol".to_string(),
-                    uri: "https://ping-pong".to_string(),
-                    seller_fee_basis_points: 10,
-                    creators: None,
-                },
+                // data: Data {
+                //     name: "name".to_string(),
+                //     symbol: "symbol".to_string(),
+                //     uri: "https://ping-pong".to_string(),
+                //     seller_fee_basis_points: 10,
+                //     creators: None,
+                // },
+                creators: None,
+                name: "".to_string(),
+                symbol: "".to_string(),
+                uri: "".to_string(),
+                seller_fee_basis_points: 0,
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: None,
@@ -1490,7 +1506,7 @@ mod tests {
 
         let ref_value = generated_assets.owners[8].clone();
         let payload = GetAssetsByOwner {
-            owner_address: ref_value.owner.value.to_string(),
+            owner_address: ref_value.owner.value.map(|owner| owner.to_string()).unwrap_or_default(),
             sort_by: None,
             limit: None,
             page: None,

@@ -14,6 +14,11 @@ impl From<CompleteAssetDetails> for AssetDetails {
             slot_updated: value.delegate.slot_updated,
             seq_updated: value.delegate.get_upd_ver_seq(),
         });
+        let owner = value.owner.value.map(|key| DynamicBytesField {
+            value: key.to_bytes().to_vec(),
+            slot_updated: value.owner.slot_updated,
+            seq_updated: value.owner.get_upd_ver_seq(),
+        });
 
         let owner_delegate_seq = value
             .owner_delegate_seq
@@ -43,7 +48,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
             creators: Some(value.creators.into()),
             royalty_amount: Some(value.royalty_amount.into()),
             authority: Some(value.authority.into()),
-            owner: Some(value.owner.into()),
+            owner,
             delegate,
             owner_type: Some(value.owner_type.into()),
             owner_delegate_seq,

@@ -127,7 +127,7 @@ impl TokenAccsProcessor {
                         owner: Updated::new(
                             token_account.slot_updated as u64,
                             Some(UpdateVersion::WriteVersion(token_account.write_version)),
-                            token_account.owner,
+                            Some(token_account.owner),
                         ),
                         delegate: Updated::new(
                             token_account.slot_updated as u64,

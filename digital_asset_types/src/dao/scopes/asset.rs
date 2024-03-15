@@ -168,7 +168,7 @@ fn convert_rocks_asset_model(
         alt_id: None,
         specification_version: Some(SpecificationVersions::V1),
         specification_asset_class: Some(static_data.specification_asset_class.into()),
-        owner: Some(owner.owner.value.to_bytes().to_vec()),
+        owner: owner.owner.value.map(|owner| owner.to_bytes().to_vec()),
         owner_type: owner.owner_type.value.into(),
         delegate: owner.delegate.value.map(|k| k.to_bytes().to_vec()),
         frozen: dynamic_data.is_frozen.value,

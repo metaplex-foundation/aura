@@ -96,7 +96,7 @@ pub struct CompleteAssetDetails {
     pub authority: Updated<Pubkey>,
 
     // From AssetOwner as Tuples
-    pub owner: Updated<Pubkey>,
+    pub owner: Updated<Option<Pubkey>>,
     pub delegate: Updated<Option<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
     pub owner_delegate_seq: Updated<Option<u64>>,

@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use blockbuster::token_metadata::state::{Data, Key, Metadata, TokenStandard};
+    use blockbuster::token_metadata::types::{Key, TokenStandard};
     use entities::models::{EditionV1, MasterEdition};
     use metrics_utils::IngesterMetricsConfig;
     use nft_ingester::buffer::Buffer;
@@ -15,6 +15,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use testcontainers::clients::Cli;
+    use blockbuster::token_metadata::accounts::Metadata;
 
     pub fn generate_metadata(mint_key: Pubkey) -> MetadataInfo {
         MetadataInfo {
@@ -22,13 +23,17 @@ mod tests {
                 key: Key::MetadataV1,
                 update_authority: Pubkey::new_unique(),
                 mint: mint_key,
-                data: Data {
-                    name: "name".to_string(),
-                    symbol: "symbol".to_string(),
-                    uri: "https://ping-pong".to_string(),
-                    seller_fee_basis_points: 10,
-                    creators: None,
-                },
+                name: "".to_string(),
+                symbol: "".to_string(),
+                uri: "".to_string(),
+                seller_fee_basis_points: 0,
+                // data: Data {
+                //     name: "name".to_string(),
+                //     symbol: "symbol".to_string(),
+                //     uri: "https://ping-pong".to_string(),
+                //     seller_fee_basis_points: 10,
+                //     creators: None,
+                // },
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: None,
@@ -37,6 +42,7 @@ mod tests {
                 uses: None,
                 collection_details: None,
                 programmable_config: None,
+                creators: None,
             },
             slot_updated: 1,
             write_version: 1,
@@ -159,8 +165,8 @@ mod tests {
             .get(second_mint)
             .unwrap()
             .unwrap();
-        assert_eq!(first_owner_from_db.owner.value, first_owner);
-        assert_eq!(second_owner_from_db.owner.value, second_owner);
+        assert_eq!(first_owner_from_db.owner.value.unwrap(), first_owner);
+        assert_eq!(second_owner_from_db.owner.value.unwrap(), second_owner);
 
         let first_dynamic_from_db = env
             .rocks_env

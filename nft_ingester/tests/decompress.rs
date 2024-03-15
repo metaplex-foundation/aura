@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use blockbuster::token_metadata::state::{Collection, Creator, Data, Key, Metadata};
+    use blockbuster::token_metadata::types::{Collection, Key};
     use entities::api_req_params::{GetAsset, Options};
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
@@ -33,6 +33,7 @@ mod tests {
     use tokio::sync::broadcast;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
+    use blockbuster::token_metadata::accounts::Metadata;
     use usecase::proofs::MaybeProofChecker;
 
     // 242856151 slot when decompress happened
@@ -168,36 +169,40 @@ mod tests {
                 update_authority: Pubkey::from_str("ywx1vh2bG1brfX8SqWMxGiivNTZjMHf9vuKrXKt4pNT")
                     .unwrap(),
                 mint: *mint,
-                data: Data {
-                    name: "Mufacka name".to_string(),
-                    symbol: "SSNC".to_string(),
-                    uri: "https://arweave.net/nbCWy-OEu7MG5ORuJMurP5A-65qO811R-vL_8l_JHQM"
-                        .to_string(),
-                    seller_fee_basis_points: 100,
-                    creators: Some(vec![
-                        Creator {
-                            address: Pubkey::from_str(
-                                "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
-                            )
-                            .unwrap(),
-                            verified: true,
-                            share: 99,
-                        },
-                        Creator {
-                            address: Pubkey::from_str(
-                                "5zgWmEx4ppdh6LfaPUmfJG2gBAK8bC2gBv7zshD6N1hG",
-                            )
-                            .unwrap(),
-                            verified: false,
-                            share: 1,
-                        },
-                    ]),
-                },
+                name: "".to_string(),
+                symbol: "".to_string(),
+                uri: "".to_string(),
+                seller_fee_basis_points: 0,
+                // data: Data {
+                //     name: "Mufacka name".to_string(),
+                //     symbol: "SSNC".to_string(),
+                //     uri: "https://arweave.net/nbCWy-OEu7MG5ORuJMurP5A-65qO811R-vL_8l_JHQM"
+                //         .to_string(),
+                //     seller_fee_basis_points: 100,
+                //     creators: Some(vec![
+                //         Creator {
+                //             address: Pubkey::from_str(
+                //                 "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+                //             )
+                //             .unwrap(),
+                //             verified: true,
+                //             share: 99,
+                //         },
+                //         Creator {
+                //             address: Pubkey::from_str(
+                //                 "5zgWmEx4ppdh6LfaPUmfJG2gBAK8bC2gBv7zshD6N1hG",
+                //             )
+                //             .unwrap(),
+                //             verified: false,
+                //             share: 1,
+                //         },
+                //     ]),
+                // },
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: Some(255),
                 token_standard: Some(
-                    blockbuster::token_metadata::state::TokenStandard::NonFungible,
+                    blockbuster::token_metadata::types::TokenStandard::NonFungible,
                 ),
                 collection: Some(Collection {
                     verified: false,
@@ -206,6 +211,7 @@ mod tests {
                 uses: None,
                 collection_details: None,
                 programmable_config: None,
+                creators: None,
             },
             slot_updated: nft_created_slot as u64,
             lamports: 1,
