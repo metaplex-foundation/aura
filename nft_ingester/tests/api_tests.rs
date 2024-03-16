@@ -9,10 +9,8 @@ mod tests {
         },
     };
 
-    use blockbuster::token_metadata::types::{
-        Key, TokenStandard as BLKTokenStandard,
-    };
     use blockbuster::token_metadata::accounts::Metadata;
+    use blockbuster::token_metadata::types::{Key, TokenStandard as BLKTokenStandard};
     use digital_asset_types::rpc::response::{
         AssetList, TokenAccountsList, TransactionSignatureList,
     };
@@ -1506,7 +1504,11 @@ mod tests {
 
         let ref_value = generated_assets.owners[8].clone();
         let payload = GetAssetsByOwner {
-            owner_address: ref_value.owner.value.map(|owner| owner.to_string()).unwrap_or_default(),
+            owner_address: ref_value
+                .owner
+                .value
+                .map(|owner| owner.to_string())
+                .unwrap_or_default(),
             sort_by: None,
             limit: None,
             page: None,

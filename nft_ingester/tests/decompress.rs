@@ -1,6 +1,7 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
+    use blockbuster::token_metadata::accounts::Metadata;
     use blockbuster::token_metadata::types::{Collection, Key};
     use entities::api_req_params::{GetAsset, Options};
     use metrics_utils::red::RequestErrorDurationMetrics;
@@ -33,7 +34,6 @@ mod tests {
     use tokio::sync::broadcast;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
-    use blockbuster::token_metadata::accounts::Metadata;
     use usecase::proofs::MaybeProofChecker;
 
     // 242856151 slot when decompress happened

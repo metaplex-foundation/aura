@@ -1,6 +1,7 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
+    use blockbuster::token_metadata::accounts::Metadata;
     use blockbuster::token_metadata::types::{Key, TokenStandard};
     use entities::models::{EditionV1, MasterEdition};
     use metrics_utils::IngesterMetricsConfig;
@@ -15,7 +16,6 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use testcontainers::clients::Cli;
-    use blockbuster::token_metadata::accounts::Metadata;
 
     pub fn generate_metadata(mint_key: Pubkey) -> MetadataInfo {
         MetadataInfo {
