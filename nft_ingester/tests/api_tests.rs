@@ -1015,7 +1015,7 @@ mod tests {
             frozen: false,
             delegated_amount: 0,
             slot_updated: 1,
-            amount: 1,
+            amount: 0,
             write_version: 1,
         };
 
