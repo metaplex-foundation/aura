@@ -85,8 +85,12 @@ impl MplCoreProcessor {
         &self,
         metadata_info: &HashMap<Pubkey, CompressedProofWithWriteVersion>,
     ) {
-        let Ok(metadata_models) = self.create_mpl_asset_models(metadata_info).await else {
-            return;
+        let metadata_models = match self.create_mpl_asset_models(metadata_info).await {
+            Ok(metadata_models) => metadata_models,
+            Err(e) => {
+                error!("create_mpl_asset_models: {}", e);
+                return;
+            }
         };
 
         let begin_processing = Instant::now();
