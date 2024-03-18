@@ -360,6 +360,7 @@ pub enum SpecificationAssetClass {
     TransferRestrictedNft = 7,
     NonTransferableNft = 8,
     IdentityNft = 9,
+    Core = 10,
 }
 impl SpecificationAssetClass {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -384,6 +385,7 @@ impl SpecificationAssetClass {
                 "SPECIFICATION_ASSET_CLASS_NON_TRANSFERABLE_NFT"
             }
             SpecificationAssetClass::IdentityNft => "SPECIFICATION_ASSET_CLASS_IDENTITY_NFT",
+            SpecificationAssetClass::Core => "SPECIFICATION_ASSET_CLASS_CORE",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -401,6 +403,7 @@ impl SpecificationAssetClass {
             }
             "SPECIFICATION_ASSET_CLASS_NON_TRANSFERABLE_NFT" => Some(Self::NonTransferableNft),
             "SPECIFICATION_ASSET_CLASS_IDENTITY_NFT" => Some(Self::IdentityNft),
+            "SPECIFICATION_ASSET_CLASS_CORE" => Some(Self::Core),
             _ => None,
         }
     }

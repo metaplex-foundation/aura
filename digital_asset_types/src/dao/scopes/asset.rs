@@ -243,6 +243,7 @@ impl From<entities::enums::SpecificationAssetClass> for SpecificationAssetClass 
                 SpecificationAssetClass::TransferRestrictedNft
             }
             entities::enums::SpecificationAssetClass::Unknown => SpecificationAssetClass::Unknown,
+            entities::enums::SpecificationAssetClass::Core => SpecificationAssetClass::Core,
         }
     }
 }

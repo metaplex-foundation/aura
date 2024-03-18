@@ -45,6 +45,8 @@ pub enum Interface {
     Executable,
     #[serde(rename = "ProgrammableNFT")]
     ProgrammableNFT,
+    #[serde(rename = "MplCore")]
+    MplCore,
 }
 
 impl From<entities::enums::Interface> for Interface {
@@ -74,6 +76,7 @@ impl From<(&SpecificationVersions, &SpecificationAssetClass)> for Interface {
             }
             (_, SpecificationAssetClass::FungibleAsset) => Interface::FungibleAsset,
             (_, SpecificationAssetClass::FungibleToken) => Interface::FungibleToken,
+            (_, SpecificationAssetClass::Core) => Interface::MplCore,
             _ => Interface::Custom,
         }
     }
@@ -93,6 +96,7 @@ impl From<Interface> for (SpecificationVersions, SpecificationAssetClass) {
                 SpecificationVersions::V1,
                 SpecificationAssetClass::FungibleAsset,
             ),
+            Interface::MplCore => (SpecificationVersions::V1, SpecificationAssetClass::Core),
             _ => (SpecificationVersions::V1, SpecificationAssetClass::Unknown),
         }
     }

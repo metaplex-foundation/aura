@@ -33,6 +33,7 @@ pub enum SpecificationAssetClass {
     TransferRestrictedNft,
     NonTransferableNft,
     IdentityNft,
+    Core,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Default)]

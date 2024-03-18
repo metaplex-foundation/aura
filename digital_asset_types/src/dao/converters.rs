@@ -84,6 +84,7 @@ impl From<SpecificationAssetClass> for postgre_client::model::SpecificationAsset
             SpecificationAssetClass::PrintableNft => Self::PrintableNft,
             SpecificationAssetClass::ProgrammableNft => Self::ProgrammableNft,
             SpecificationAssetClass::TransferRestrictedNft => Self::TransferRestrictedNft,
+            SpecificationAssetClass::Core => Self::Core,
         }
     }
 }
@@ -139,6 +140,7 @@ impl From<&crate::rpc::Interface> for SpecificationAssetClass {
             crate::rpc::Interface::V1PRINT => Self::Print,
             crate::rpc::Interface::ProgrammableNFT => Self::ProgrammableNft,
             crate::rpc::Interface::Custom | crate::rpc::Interface::Executable => Self::Unknown,
+            crate::rpc::Interface::MplCore => Self::Core,
         }
     }
 }

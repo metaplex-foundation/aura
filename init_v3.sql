@@ -24,7 +24,8 @@ CREATE TYPE specification_asset_class AS ENUM (
     'transfer_restricted_nft',
     'non_transferable_nft',
     'identity_nft',
-    'programmable_nft'
+    'programmable_nft',
+    'core'
 );
 CREATE TYPE owner_type AS ENUM (
     'unknown',

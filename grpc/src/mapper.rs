@@ -293,7 +293,8 @@ impl_from_enum!(
     Print,
     TransferRestrictedNft,
     NonTransferableNft,
-    IdentityNft
+    IdentityNft,
+    Core
 );
 impl_from_enum!(
     entities::enums::RoyaltyTargetType,

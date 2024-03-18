@@ -157,7 +157,7 @@ impl MplCoreProcessor {
             };
 
             let ownership_type = OwnerType::Single;
-            let class = SpecificationAssetClass::Nft;
+            let class = SpecificationAssetClass::Core;
 
             // Get seller fee basis points from Royalties plugin if available.
             let royalty_amount = full_asset
