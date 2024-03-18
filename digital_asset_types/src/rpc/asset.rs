@@ -2,6 +2,7 @@
 use std::collections::BTreeMap;
 
 use schemars::JsonSchema;
+use serde_json::Value;
 
 use {
     serde::{Deserialize, Serialize},
@@ -222,6 +223,8 @@ pub type GroupValue = String;
 pub struct Group {
     pub group_key: String,
     pub group_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verified: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
@@ -333,6 +336,9 @@ pub struct Ownership {
     pub delegate: Option<String>,
     pub ownership_model: OwnershipModel,
     pub owner: String,
+    pub transfer_delegate: Option<String>,
+    pub freeze_delegate: Option<String>,
+    pub update_delegate: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -409,4 +415,5 @@ pub struct Asset {
     pub executable: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata_owner: Option<String>,
+    pub plugins: Option<Value>,
 }
