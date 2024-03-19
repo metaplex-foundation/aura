@@ -50,6 +50,25 @@ where
         }
     }
 
+    pub async fn maybe_run_full_sync(
+        &self,
+        rx: &tokio::sync::broadcast::Receiver<()>,
+        run_full_sync_threshold: i64,
+    ) {
+        let should_run_full_sync = self.should_run_full_sync(run_full_sync_threshold).await;
+        if let Ok(true) = should_run_full_sync {
+            let res = self.full_syncronize(rx).await;
+            match res {
+                Ok(_) => {
+                    tracing::info!("Full synchronization finished successfully");
+                }
+                Err(e) => {
+                    tracing::error!("Full synchronization failed: {:?}", e);
+                }
+            }
+        }
+    }
+
     pub async fn run(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
@@ -77,9 +96,8 @@ where
     pub async fn should_run_full_sync(
         &self,
         run_full_sync_threshold: i64,
-        index_storage: impl AssetIndexStorage,
     ) -> Result<bool, IngesterError> {
-        let last_indexed_key = index_storage.fetch_last_synced_id().await?;
+        let last_indexed_key = self.index_storage.fetch_last_synced_id().await?;
         let last_indexed_key = match last_indexed_key {
             Some(bytes) => {
                 // let decoded_key = AssetsUpdateIdx::decode_key(bytes)?;
