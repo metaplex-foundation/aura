@@ -271,7 +271,7 @@ pub async fn main() -> Result<(), IngesterError> {
         db_client_v2.clone(),
         buffer.clone(),
         metrics_state.ingester_metrics.clone(),
-        config.mplx_buffer_size,
+        config.mpl_core_buffer_size,
     );
 
     for _ in 0..config.mplx_workers {

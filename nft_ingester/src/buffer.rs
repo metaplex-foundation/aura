@@ -46,7 +46,7 @@ impl Buffer {
 
     pub async fn debug(&self) {
         println!(
-            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\nToken Metadata Editions buffer: {}\nBurnt Metadata buffer: {}\n",
+            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\nToken Metadata Editions buffer: {}\nBurnt Metadata buffer: {}\nMpl Core full assets buffer: {}\nBurnt Mpl Core buffer: {}\n",
             self.mplx_metadata_info.lock().await.len(),
             self.transactions.lock().await.len(),
             self.token_accs.lock().await.len(),
@@ -54,6 +54,8 @@ impl Buffer {
             self.json_tasks.lock().await.len(),
             self.token_metadata_editions.lock().await.len(),
             self.burnt_metadata_at_slot.lock().await.len(),
+            self.mpl_core_compressed_proofs.lock().await.len(),
+            self.burnt_mpl_core_at_slot.lock().await.len(),
         );
     }
 
@@ -69,6 +71,10 @@ impl Buffer {
         metrics.set_buffer(
             "buffer_editions",
             self.token_metadata_editions.lock().await.len() as i64,
+        );
+        metrics.set_buffer(
+            "mpl_core",
+            self.mpl_core_compressed_proofs.lock().await.len() as i64,
         );
     }
 
