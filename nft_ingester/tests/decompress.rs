@@ -173,31 +173,6 @@ mod tests {
                 symbol: "".to_string(),
                 uri: "".to_string(),
                 seller_fee_basis_points: 0,
-                // data: Data {
-                //     name: "Mufacka name".to_string(),
-                //     symbol: "SSNC".to_string(),
-                //     uri: "https://arweave.net/nbCWy-OEu7MG5ORuJMurP5A-65qO811R-vL_8l_JHQM"
-                //         .to_string(),
-                //     seller_fee_basis_points: 100,
-                //     creators: Some(vec![
-                //         Creator {
-                //             address: Pubkey::from_str(
-                //                 "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
-                //             )
-                //             .unwrap(),
-                //             verified: true,
-                //             share: 99,
-                //         },
-                //         Creator {
-                //             address: Pubkey::from_str(
-                //                 "5zgWmEx4ppdh6LfaPUmfJG2gBAK8bC2gBv7zshD6N1hG",
-                //             )
-                //             .unwrap(),
-                //             verified: false,
-                //             share: 1,
-                //         },
-                //     ]),
-                // },
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: Some(255),

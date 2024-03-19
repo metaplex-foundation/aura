@@ -35,13 +35,6 @@ mod tests {
                 symbol: "".to_string(),
                 uri: "".to_string(),
                 seller_fee_basis_points: 0,
-                // data: Data {
-                //     name: "name".to_string(),
-                //     symbol: "symbol".to_string(),
-                //     uri: "https://ping-pong".to_string(),
-                //     seller_fee_basis_points: 10,
-                //     creators: None,
-                // },
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: None,
