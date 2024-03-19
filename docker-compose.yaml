@@ -26,6 +26,26 @@ services:
       options:
         max-size: "2048m"
 
+  das-api:
+    container_name: das-api
+    restart: always
+    entrypoint: "./api"
+    env_file:
+      - .env
+    network_mode: host
+    volumes:
+      - ${API_ROCKS_DB_PATH_CONTAINER}:${API_ROCKS_DB_PATH_CONTAINER}:ro
+      - ${API_ROCKS_DB_SECONDARY_PATH_CONTAINER}:${API_ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
+    depends_on:
+      - db
+    build:
+      context: .
+      dockerfile: ingester.Dockerfile
+    stop_grace_period: 20s
+    logging:
+      options:
+        max-size: "2048m"
+
   synchronizer:
     container_name: synchronizer
     restart: always
