@@ -68,6 +68,7 @@ pub struct AssetDynamicDetails {
     pub transfer_delegate: Option<Updated<Pubkey>>,
     pub freeze_delegate: Option<Updated<Pubkey>>,
     pub update_delegate: Option<Updated<Pubkey>>,
+    pub rent_epoch: Option<Updated<u64>>,
     pub plugins: Option<Updated<String>>,
 }
 
@@ -399,6 +400,7 @@ impl AssetDynamicDetails {
                             &new_val.update_delegate,
                         );
                         update_optional_field(&mut current_val.plugins, &new_val.plugins);
+                        update_optional_field(&mut current_val.rent_epoch, &new_val.rent_epoch);
 
                         current_val
                     } else {

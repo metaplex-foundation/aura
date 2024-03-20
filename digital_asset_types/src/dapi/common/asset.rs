@@ -356,6 +356,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         lamports: data.lamports,
         executable: data.executable,
         metadata_owner: data.metadata_owner,
+        rent_epoch: data.rent_epoch,
         plugins: asset.plugins,
     }))
 }

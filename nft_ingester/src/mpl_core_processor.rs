@@ -397,6 +397,11 @@ impl MplCoreProcessor {
                     Some(UpdateVersion::WriteVersion(account_data.write_version)),
                     plugins_json.to_string(),
                 )),
+                rent_epoch: Some(Updated::new(
+                    account_data.slot_updated,
+                    Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                    account_data.rent_epoch,
+                )),
             })
         }
 

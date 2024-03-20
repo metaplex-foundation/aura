@@ -253,6 +253,7 @@ impl MessageHandler {
                                         write_version: account_info.write_version(),
                                         lamports: account_info.lamports(),
                                         executable: account_info.executable(),
+                                        rent_epoch: account_info.rent_epoch(),
                                         metadata_owner: account_info
                                             .owner()
                                             .map(|o| Pubkey::from(o.0).to_string()),
@@ -378,6 +379,7 @@ impl MessageHandler {
                         write_version: account_update.write_version(),
                         lamports: account_update.lamports(),
                         executable: account_update.executable(),
+                        rent_epoch: account_update.rent_epoch(),
                     },
                     account_update.write_version()
                 );
