@@ -70,30 +70,44 @@ impl PgClient {
             let creators = self
                 .batch_get_creators(transaction, chunk, table_names.creators_table.as_str())
                 .await?;
-            existing_creators.extend(creators);
+            existing_creators.extend(creators.iter().map(|(pk, c, _)| (*pk, c.clone())));
         }
         let creator_updates =
             Self::diff(updated_components.all_creators.clone(), existing_creators);
-        for chunk in creator_updates
-            .to_remove
-            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / DELETE_ASSET_CREATOR_PARAMETERS_COUNT)
-        {
-            self.delete_creators(transaction, chunk, table_names.creators_table.as_str())
-                .await?;
-        }
-        for chunk in creator_updates
-            .new_or_updated
-            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_ASSET_CREATOR_PARAMETERS_COUNT)
-        {
-            self.insert_creators(transaction, chunk, table_names.creators_table.as_str())
-                .await?;
-        }
+        self.update_creators(
+            transaction,
+            creator_updates,
+            table_names.creators_table.as_str(),
+        )
+        .await?;
+
         self.update_last_synced_key(
             last_key,
             transaction,
             table_names.last_synced_key_table.as_str(),
         )
         .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn update_creators(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        creator_updates: CreatorsUpdates,
+        table_name: &str,
+    ) -> Result<(), String> {
+        for chunk in creator_updates
+            .to_remove
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / DELETE_ASSET_CREATOR_PARAMETERS_COUNT)
+        {
+            self.delete_creators(transaction, chunk, table_name).await?;
+        }
+        for chunk in creator_updates
+            .new_or_updated
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_ASSET_CREATOR_PARAMETERS_COUNT)
+        {
+            self.insert_creators(transaction, chunk, table_name).await?;
+        }
         Ok(())
     }
 }
@@ -216,6 +230,7 @@ struct CreatorRawResponse {
     pub(crate) asc_pubkey: Vec<u8>,
     pub(crate) asc_creator: Vec<u8>,
     pub(crate) asc_verified: bool,
+    pub(crate) asc_slot_updated: i64,
 }
 pub struct CreatorsUpdates {
     pub new_or_updated: Vec<(Pubkey, Creator, i64)>,
@@ -416,17 +431,18 @@ impl PgClient {
         Ok(())
     }
 
-    async fn batch_get_creators(
+    pub(crate) async fn batch_get_creators(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         pubkeys: &[Vec<u8>],
         table: &str,
-    ) -> Result<Vec<(Pubkey, Creator)>, String> {
+    ) -> Result<Vec<(Pubkey, Creator, i64)>, String> {
         if pubkeys.is_empty() {
             return Ok(vec![]);
         }
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("SELECT asc_pubkey, asc_creator, asc_verified FROM ");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "SELECT asc_pubkey, asc_creator, asc_verified, asc_slot_updated FROM ",
+        );
         query_builder.push(table);
         query_builder.push(" WHERE asc_pubkey in (");
         let pubkey_len = pubkeys.len();
@@ -456,6 +472,7 @@ impl PgClient {
                         creator_verified: c.asc_verified,
                         creator_share: 0,
                     },
+                    c.asc_slot_updated,
                 )
             })
             .collect())

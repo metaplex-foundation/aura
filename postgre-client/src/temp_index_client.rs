@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, vec};
 
 use async_trait::async_trait;
 use sqlx::{pool::PoolConnection, Connection, Postgres, QueryBuilder};
@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use crate::{
     asset_index_client::{split_assets_into_components, TableNames},
     storage_traits::{AssetIndexStorage, TempClientProvider},
-    PgClient, BATCH_DELETE_ACTION, BATCH_UPSERT_ACTION, INSERT_ACTION, UPDATE_ACTION,
+    PgClient, BATCH_UPSERT_ACTION, CREATE_ACTION, DROP_ACTION, INSERT_ACTION, UPDATE_ACTION,
 };
 use entities::models::AssetIndex;
 
@@ -16,6 +16,11 @@ pub const TEMP_INDEXING_TABLE_PREFIX: &str = "indexing_temp_";
 pub struct TempClient {
     pooled_connection: Arc<Mutex<PoolConnection<Postgres>>>,
     pg_client: Arc<PgClient>,
+}
+
+#[derive(sqlx::FromRow, Debug)]
+struct AssetPubkeyRawResponse {
+    pub(crate) ast_pubkey: Vec<u8>,
 }
 
 impl TempClient {
@@ -106,38 +111,57 @@ impl TempClient {
             .await?;
 
         let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("INSERT INTO asset_creators_v3 SELECT * FROM ");
+            QueryBuilder::new("DECLARE all_updated_assets CURSOR FOR SELECT ast_pubkey FROM ");
         query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
-        query_builder.push(
-            "asset_creators_v3 
-        ON CONFLICT (asc_creator, asc_pubkey) 
-        DO UPDATE SET asc_verified = EXCLUDED.asc_verified 
-        WHERE asset_creators_v3.asc_slot_updated <= EXCLUDED.asc_slot_updated;",
-        );
-
+        query_builder.push("assets_v3");
         self.pg_client
-            .execute_query_with_metrics(
-                &mut tx,
-                &mut query_builder,
-                BATCH_UPSERT_ACTION,
-                "asset_creators_v3",
-            )
+            .execute_query_with_metrics(&mut tx, &mut query_builder, CREATE_ACTION, "cursor")
+            .await?;
+        let mut new_creators = vec![];
+        let mut old_creators = vec![];
+        loop {
+            let mut query_builder: QueryBuilder<'_, Postgres> =
+                QueryBuilder::new("FETCH 10000 FROM all_updated_assets");
+            // Fetch a batch of rows from the cursor
+            let query: sqlx::query::QueryAs<'_, Postgres, _, sqlx::postgres::PgArguments> =
+                query_builder.build_query_as::<AssetPubkeyRawResponse>();
+            let rows = query.fetch_all(&mut tx).await.map_err(|e| e.to_string())?;
+
+            // If no rows were fetched, we are done
+            if rows.is_empty() {
+                break;
+            }
+            let keys = rows
+                .iter()
+                .map(|r| r.ast_pubkey.clone())
+                .collect::<Vec<_>>();
+            new_creators.extend(
+                self.pg_client
+                    .batch_get_creators(
+                        &mut tx,
+                        &keys,
+                        format!("{}asset_creators_v3", TEMP_INDEXING_TABLE_PREFIX).as_str(),
+                    )
+                    .await?,
+            );
+            old_creators.extend(
+                self.pg_client
+                    .batch_get_creators(&mut tx, &keys, "asset_creators_v3")
+                    .await?
+                    .iter()
+                    .map(|(pk, c, _)| (*pk, c.clone())),
+            );
+        }
+
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("CLOSE all_updated_assets");
+        self.pg_client
+            .execute_query_with_metrics(&mut tx, &mut query_builder, DROP_ACTION, "cursor")
             .await?;
 
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "DELETE FROM asset_creators_v3 WHERE asc_pubkey IN (SELECT distinct asc_pubkey FROM ",
-        );
-        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
-        query_builder.push("asset_creators_v3) AND (asc_creator, asc_pubkey) NOT IN (SELECT asc_creator, asc_pubkey FROM ");
-        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
-        query_builder.push("asset_creators_v3);");
+        let creator_updates = PgClient::diff(new_creators, old_creators);
         self.pg_client
-            .execute_query_with_metrics(
-                &mut tx,
-                &mut query_builder,
-                BATCH_DELETE_ACTION,
-                "asset_creators_v3",
-            )
+            .update_creators(&mut tx, creator_updates, "asset_creators_v3")
             .await?;
 
         let mut query_builder: QueryBuilder<'_, Postgres> =
