@@ -20,6 +20,7 @@ use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated,
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<(u64, u64, Pubkey)>> {
+        _ = self.db.try_catch_up_with_primary();
         let start_time = chrono::Utc::now();
         let mut iter = self.assets_update_idx.iter_end();
         if let Some(pair) = iter.next() {
