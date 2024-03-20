@@ -182,7 +182,7 @@ impl PgClient {
         query_builder.push(main_table);
         query_builder.push(" (LIKE ");
         query_builder.push(main_table);
-        query_builder.push(" INCLUDING DEFAULTS INCLUDING CONSTRAINTS)");
+        query_builder.push(" INCLUDING ALL)");
         if drop_on_commit {
             query_builder.push(" ON COMMIT DROP");
         }
