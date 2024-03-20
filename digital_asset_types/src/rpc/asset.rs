@@ -61,6 +61,7 @@ impl From<entities::enums::Interface> for Interface {
             entities::enums::Interface::Identity => Interface::Identity,
             entities::enums::Interface::Executable => Interface::Executable,
             entities::enums::Interface::ProgrammableNFT => Interface::ProgrammableNFT,
+            entities::enums::Interface::MplCore => Interface::MplCore,
         }
     }
 }
