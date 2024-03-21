@@ -8,13 +8,13 @@ use rocks_db::{
 };
 use solana_sdk::pubkey::Pubkey;
 use std::{collections::HashSet, sync::Arc};
+use tokio::task::JoinSet;
 
 use crate::error::IngesterError;
 
 pub struct Synchronizer<T, U, P>
 where
     T: AssetIndexSourceStorage,
-
     U: AssetIndexStorage,
     P: TempClientProvider + Send + Sync + 'static + Clone,
 {
@@ -24,12 +24,13 @@ where
     dump_synchronizer_batch_size: usize,
     dump_path: String,
     metrics: Arc<SynchronizerMetricsConfig>,
+    parallel_tasks: usize,
 }
 
 impl<T, U, P> Synchronizer<T, U, P>
 where
     T: AssetIndexSourceStorage + Send + Sync + 'static,
-    U: AssetIndexStorage + Clone,
+    U: AssetIndexStorage + Clone + Send + Sync + 'static,
     P: TempClientProvider + Send + Sync + 'static + Clone,
 {
     pub fn new(
@@ -39,6 +40,7 @@ where
         dump_synchronizer_batch_size: usize,
         dump_path: String,
         metrics: Arc<SynchronizerMetricsConfig>,
+        parallel_tasks: usize,
     ) -> Self {
         Synchronizer {
             primary_storage,
@@ -47,6 +49,7 @@ where
             dump_synchronizer_batch_size,
             dump_path,
             metrics,
+            parallel_tasks,
         }
     }
 
@@ -188,6 +191,7 @@ where
             self.dump_synchronizer_batch_size,
             "not used".to_string(),
             self.metrics.clone(),
+            1,
         ));
         let task = tokio::spawn(async move {
             temp_syncronizer
@@ -223,51 +227,72 @@ where
         let mut processed_keys = HashSet::<Pubkey>::new();
         // Loop until no more new keys are returned
         while rx.is_empty() {
-            let (updated_keys, last_included_key) = self.primary_storage.fetch_asset_updated_keys(
-                starting_key,
-                last_key,
-                self.dump_synchronizer_batch_size,
-                Some(processed_keys.clone()),
-            )?;
-            if updated_keys.is_empty() || last_included_key.is_none() {
-                break;
+            let mut tasks = JoinSet::new();
+            let mut last_included_rocks_key = None;
+            for _ in 0..self.parallel_tasks {
+                if !rx.is_empty() {
+                    break;
+                }
+                let (updated_keys, last_included_key) =
+                    self.primary_storage.fetch_asset_updated_keys(
+                        starting_key,
+                        last_key,
+                        self.dump_synchronizer_batch_size,
+                        Some(processed_keys.clone()),
+                    )?;
+                if updated_keys.is_empty() || last_included_key.is_none() {
+                    break;
+                }
+                // add the processed keys to the set
+                processed_keys.extend(updated_keys.clone());
+
+                starting_key = last_included_key;
+                let last_included_key = last_included_key.unwrap();
+                // fetch the asset indexes from the primary storage
+                let updated_keys_refs: Vec<Pubkey> = updated_keys.iter().copied().collect();
+
+                // Update the asset indexes in the index storage
+                // let last_included_key = AssetsUpdateIdx::encode_key(last_included_key);
+                last_included_rocks_key = Some(last_included_key);
+                let primary_storage = self.primary_storage.clone();
+                let index_storage = self.index_storage.clone();
+                let metrics = self.metrics.clone();
+                tasks.spawn(tokio::spawn(async move {
+                    Self::syncronize_batch(
+                        primary_storage.clone(),
+                        index_storage.clone(),
+                        updated_keys_refs.as_slice(),
+                        metrics,
+                    )
+                    .await
+                }));
             }
 
-            starting_key = last_included_key;
-            let last_included_key = last_included_key.unwrap();
-            // fetch the asset indexes from the primary storage
-            let updated_keys_refs: Vec<Pubkey> = updated_keys.iter().copied().collect();
+            while let Some(task) = tasks.join_next().await {
+                task.map_err(|e| e.to_string())?
+                    .map_err(|e| e.to_string())??;
+            }
+            if let Some(last_included_rocks_key) = last_included_rocks_key {
+                self.metrics.set_last_synchronized_slot(
+                    "last_synchronized_slot",
+                    last_included_rocks_key.1 as i64,
+                );
+                self.metrics.set_last_synchronized_slot(
+                    "last_synchronized_seq",
+                    last_included_rocks_key.0 as i64,
+                );
 
-            // Update the asset indexes in the index storage
-            // let last_included_key = AssetsUpdateIdx::encode_key(last_included_key);
-            let last_included_rocks_key = encode_u64x2_pubkey(
-                last_included_key.0,
-                last_included_key.1,
-                last_included_key.2,
-            );
-            Self::syncronize_batch(
-                self.primary_storage.clone(),
-                self.index_storage.clone(),
-                updated_keys_refs.as_slice(),
-                last_included_rocks_key,
-            )
-            .await?;
-
-            self.metrics
-                .set_last_synchronized_slot("last_synchronized_slot", last_included_key.1 as i64);
-            self.metrics
-                .set_last_synchronized_slot("last_synchronized_seq", last_included_key.0 as i64);
-
-            self.metrics.inc_number_of_records_synchronized(
-                "synchronized_records",
-                updated_keys_refs.len() as u64,
-            );
-
-            if updated_keys.len() < self.dump_synchronizer_batch_size {
+                let last_included_rocks_key = encode_u64x2_pubkey(
+                    last_included_rocks_key.0,
+                    last_included_rocks_key.1,
+                    last_included_rocks_key.2,
+                );
+                self.index_storage
+                    .update_last_synced_key(&last_included_rocks_key)
+                    .await?;
+            } else {
                 break;
             }
-            // add the processed keys to the set
-            processed_keys.extend(updated_keys);
         }
         self.metrics
             .inc_number_of_records_synchronized("synchronization_runs", 1);
@@ -278,7 +303,7 @@ where
         primary_storage: Arc<T>,
         index_storage: Arc<U>,
         updated_keys_refs: &[Pubkey],
-        last_included_rocks_key: Vec<u8>,
+        metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), IngesterError> {
         let asset_indexes = primary_storage.get_asset_indexes(updated_keys_refs).await?;
 
@@ -294,9 +319,12 @@ where
                     .cloned()
                     .collect::<Vec<AssetIndex>>()
                     .as_slice(),
-                last_included_rocks_key.as_slice(),
             )
             .await?;
+        metrics.inc_number_of_records_synchronized(
+            "synchronized_records",
+            updated_keys_refs.len() as u64,
+        );
         Ok(())
     }
 }
@@ -368,6 +396,7 @@ mod tests {
             200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
+            1,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
@@ -418,12 +447,14 @@ mod tests {
 
         index_storage
             .expect_update_asset_indexes_batch()
-            .with(
-                mockall::predicate::eq(expected_indexes.clone()),
-                mockall::predicate::eq(binary_key),
-            )
+            .with(mockall::predicate::eq(expected_indexes.clone()))
             .once()
-            .return_once(|_, _| Ok(()));
+            .return_once(|_| Ok(()));
+        index_storage
+            .expect_update_last_synced_key()
+            .with(mockall::predicate::eq(binary_key))
+            .once()
+            .return_once(|_| Ok(()));
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
             Arc::new(index_storage),
@@ -431,6 +462,7 @@ mod tests {
             200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
+            1,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
@@ -490,12 +522,14 @@ mod tests {
 
         index_storage
             .expect_update_asset_indexes_batch()
-            .with(
-                mockall::predicate::eq(expected_indexes.clone()),
-                mockall::predicate::eq(binary_key),
-            )
+            .with(mockall::predicate::eq(expected_indexes.clone()))
             .once()
-            .return_once(|_, _| Ok(()));
+            .return_once(|_| Ok(()));
+        index_storage
+            .expect_update_last_synced_key()
+            .with(mockall::predicate::eq(binary_key))
+            .once()
+            .return_once(|_| Ok(()));
 
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
@@ -504,6 +538,7 @@ mod tests {
             1,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
+            1,
         ); // Small batch size
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
@@ -594,20 +629,27 @@ mod tests {
 
         index_storage
             .expect_update_asset_indexes_batch()
-            .with(
-                mockall::predicate::eq(expected_indexes_first_batch.clone()),
-                mockall::predicate::eq(binary_key_first_batch),
-            )
+            .with(mockall::predicate::eq(expected_indexes_first_batch.clone()))
             .once()
-            .return_once(|_, _| Ok(()));
+            .return_once(|_| Ok(()));
+        index_storage
+            .expect_update_last_synced_key()
+            .with(mockall::predicate::eq(binary_key_first_batch))
+            .once()
+            .return_once(|_| Ok(()));
+
         index_storage
             .expect_update_asset_indexes_batch()
-            .with(
-                mockall::predicate::eq(expected_indexes_second_batch.clone()),
-                mockall::predicate::eq(binary_key_second_batch),
-            )
+            .with(mockall::predicate::eq(
+                expected_indexes_second_batch.clone(),
+            ))
             .once()
-            .return_once(|_, _| Ok(()));
+            .return_once(|_| Ok(()));
+        index_storage
+            .expect_update_last_synced_key()
+            .with(mockall::predicate::eq(binary_key_second_batch))
+            .once()
+            .return_once(|_| Ok(()));
 
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
@@ -616,6 +658,7 @@ mod tests {
             2,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
+            1,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
@@ -664,6 +707,7 @@ mod tests {
             200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
+            1,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer

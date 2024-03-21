@@ -46,7 +46,6 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         table_names: TableNames,
         updated_components: AssetComponenents,
-        last_key: &[u8],
     ) -> Result<(), String> {
         for chunk in updated_components
             .metadata_urls
@@ -81,12 +80,6 @@ impl PgClient {
         )
         .await?;
 
-        self.update_last_synced_key(
-            last_key,
-            transaction,
-            table_names.last_synced_key_table.as_str(),
-        )
-        .await?;
         Ok(())
     }
 
@@ -122,7 +115,6 @@ pub(crate) struct TableNames {
     pub metadata_table: String,
     pub assets_table: String,
     pub creators_table: String,
-    pub last_synced_key_table: String,
 }
 
 pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> AssetComponenents {
@@ -177,20 +169,15 @@ impl AssetIndexStorage for PgClient {
             .await
     }
 
-    async fn update_asset_indexes_batch(
-        &self,
-        asset_indexes: &[AssetIndex],
-        last_key: &[u8],
-    ) -> Result<(), String> {
+    async fn update_asset_indexes_batch(&self, asset_indexes: &[AssetIndex]) -> Result<(), String> {
         let updated_components = split_assets_into_components(asset_indexes);
         let mut transaction = self.start_transaction().await?;
         let table_names = TableNames {
             metadata_table: "tasks".to_string(),
             assets_table: "assets_v3".to_string(),
             creators_table: "asset_creators_v3".to_string(),
-            last_synced_key_table: "last_synced_key".to_string(),
         };
-        self.upsert_batched(&mut transaction, table_names, updated_components, last_key)
+        self.upsert_batched(&mut transaction, table_names, updated_components)
             .await?;
         self.commit_transaction(transaction).await
     }
@@ -217,6 +204,13 @@ impl AssetIndexStorage for PgClient {
             .await?;
         self.commit_transaction(transaction).await?;
         Ok(())
+    }
+
+    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), String> {
+        let mut transaction = self.start_transaction().await?;
+        self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
+            .await?;
+        self.commit_transaction(transaction).await
     }
 }
 

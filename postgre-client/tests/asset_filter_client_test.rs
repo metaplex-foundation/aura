@@ -74,10 +74,13 @@ mod tests {
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_filter_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice(), &last_known_key)
+            .update_asset_indexes_batch(asset_indexes.as_slice())
             .await
             .unwrap();
-
+        asset_filter_storage
+            .update_last_synced_key(&last_known_key)
+            .await
+            .unwrap();
         let ref_value = &asset_indexes[asset_indexes.len() - 1];
         let filter = SearchAssetsFilter {
             specification_version: Some(ref_value.specification_version.into()),
@@ -268,7 +271,11 @@ mod tests {
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_filter_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice(), &last_known_key)
+            .update_asset_indexes_batch(asset_indexes.as_slice())
+            .await
+            .unwrap();
+        asset_filter_storage
+            .update_last_synced_key(&last_known_key)
             .await
             .unwrap();
         let asset_indexes = generate_asset_index_records(100);
@@ -276,7 +283,11 @@ mod tests {
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_filter_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice(), &last_known_key)
+            .update_asset_indexes_batch(asset_indexes.as_slice())
+            .await
+            .unwrap();
+        asset_filter_storage
+            .update_last_synced_key(&last_known_key)
             .await
             .unwrap();
         let order = AssetSorting {

@@ -193,11 +193,7 @@ impl AssetIndexStorage for TempClient {
             .await
     }
 
-    async fn update_asset_indexes_batch(
-        &self,
-        asset_indexes: &[AssetIndex],
-        last_key: &[u8],
-    ) -> Result<(), String> {
+    async fn update_asset_indexes_batch(&self, asset_indexes: &[AssetIndex]) -> Result<(), String> {
         let updated_components = split_assets_into_components(asset_indexes);
         let mut c = self.pooled_connection.lock().await;
         let mut transaction = c.begin().await.map_err(|e| e.to_string())?;
@@ -205,10 +201,22 @@ impl AssetIndexStorage for TempClient {
             metadata_table: format!("{}tasks", TEMP_INDEXING_TABLE_PREFIX),
             assets_table: format!("{}assets_v3", TEMP_INDEXING_TABLE_PREFIX),
             creators_table: format!("{}asset_creators_v3", TEMP_INDEXING_TABLE_PREFIX),
-            last_synced_key_table: format!("{}last_synced_key", TEMP_INDEXING_TABLE_PREFIX),
         };
         self.pg_client
-            .upsert_batched(&mut transaction, table_names, updated_components, last_key)
+            .upsert_batched(&mut transaction, table_names, updated_components)
+            .await?;
+        self.pg_client.commit_transaction(transaction).await
+    }
+
+    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), String> {
+        let mut c = self.pooled_connection.lock().await;
+        let mut transaction = c.begin().await.map_err(|e| e.to_string())?;
+        self.pg_client
+            .update_last_synced_key(
+                last_key,
+                &mut transaction,
+                format!("{}last_synced_key", TEMP_INDEXING_TABLE_PREFIX).as_str(),
+            )
             .await?;
         self.pg_client.commit_transaction(transaction).await
     }

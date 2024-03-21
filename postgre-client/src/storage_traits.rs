@@ -8,11 +8,8 @@ use mockall::{automock, mock};
 #[async_trait]
 pub trait AssetIndexStorage {
     async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, String>;
-    async fn update_asset_indexes_batch(
-        &self,
-        asset_indexes: &[AssetIndex],
-        last_key: &[u8],
-    ) -> Result<(), String>;
+    async fn update_asset_indexes_batch(&self, asset_indexes: &[AssetIndex]) -> Result<(), String>;
+    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), String>;
     async fn load_from_dump(
         &self,
         base_path: &std::path::Path,
@@ -28,13 +25,13 @@ mock!(
         async fn update_asset_indexes_batch(
             &self,
             asset_indexes: &[AssetIndex],
-            last_key: &[u8],
         ) -> Result<(), String>;
         async fn load_from_dump(
             &self,
             base_path: &std::path::Path,
             last_key: &[u8],
         ) -> Result<(), String>;
+        async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), String>;
     }
 
     impl Clone for AssetIndexStorageMock {

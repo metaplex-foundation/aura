@@ -111,6 +111,7 @@ pub async fn main() -> Result<(), IngesterError> {
         config.dump_synchronizer_batch_size,
         config.dump_path.to_string(),
         metrics.clone(),
+        1,
     );
 
     if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
