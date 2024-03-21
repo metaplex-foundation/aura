@@ -18,7 +18,7 @@ use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_group
 use crate::rpc::response::{AssetError, TokenAccountsList, TransactionSignatureList};
 use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
-    MetadataMap, Ownership, Royalty, Scope, Supply, Uses,
+    MetadataMap, MplCoreCollectionInfo, Ownership, Royalty, Scope, Supply, Uses,
 };
 
 pub fn to_uri(uri: String) -> Option<Url> {
@@ -285,6 +285,14 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         .unwrap_or(false);
     let edition_nonce =
         safe_select(chain_data_selector, "$.edition_nonce").and_then(|v| v.as_u64());
+    let mpl_core_collection_info = match interface {
+        Interface::MplCoreCollection => Some(MplCoreCollectionInfo {
+            num_minted: asset.num_minted.unwrap_or(0),
+            current_supply: asset.current_supply.unwrap_or(0),
+        }),
+        _ => None,
+    };
+
     Ok(Some(RpcAsset {
         interface: interface.clone(),
         id: bs58::encode(asset.id).into_string(),
@@ -329,9 +337,6 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
             delegate: asset.delegate.map(|s| bs58::encode(s).into_string()),
             ownership_model: asset.owner_type.into(),
             owner,
-            transfer_delegate: asset.transfer_delegate,
-            freeze_delegate: asset.freeze_delegate,
-            update_delegate: asset.update_delegate,
         },
         supply: match interface {
             Interface::V1NFT => edition_data.map(|e| Supply {
@@ -358,6 +363,8 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         metadata_owner: data.metadata_owner,
         rent_epoch: data.rent_epoch,
         plugins: asset.plugins,
+        unknown_plugins: asset.unknown_plugins,
+        mpl_core_collection_info,
     }))
 }
 

@@ -45,8 +45,10 @@ pub enum Interface {
     Executable,
     #[serde(rename = "ProgrammableNFT")]
     ProgrammableNFT,
-    #[serde(rename = "MplCore")]
-    MplCore,
+    #[serde(rename = "MplCoreAsset")]
+    MplCoreAsset,
+    #[serde(rename = "MplCoreCollection")]
+    MplCoreCollection,
 }
 
 impl From<entities::enums::Interface> for Interface {
@@ -61,7 +63,8 @@ impl From<entities::enums::Interface> for Interface {
             entities::enums::Interface::Identity => Interface::Identity,
             entities::enums::Interface::Executable => Interface::Executable,
             entities::enums::Interface::ProgrammableNFT => Interface::ProgrammableNFT,
-            entities::enums::Interface::MplCore => Interface::MplCore,
+            entities::enums::Interface::MplCoreAsset => Interface::MplCoreAsset,
+            entities::enums::Interface::MplCoreCollection => Interface::MplCoreCollection,
         }
     }
 }
@@ -77,7 +80,8 @@ impl From<(&SpecificationVersions, &SpecificationAssetClass)> for Interface {
             }
             (_, SpecificationAssetClass::FungibleAsset) => Interface::FungibleAsset,
             (_, SpecificationAssetClass::FungibleToken) => Interface::FungibleToken,
-            (_, SpecificationAssetClass::Core) => Interface::MplCore,
+            (_, SpecificationAssetClass::MplCoreAsset) => Interface::MplCoreAsset,
+            (_, SpecificationAssetClass::MplCoreCollection) => Interface::MplCoreCollection,
             _ => Interface::Custom,
         }
     }
@@ -97,7 +101,14 @@ impl From<Interface> for (SpecificationVersions, SpecificationAssetClass) {
                 SpecificationVersions::V1,
                 SpecificationAssetClass::FungibleAsset,
             ),
-            Interface::MplCore => (SpecificationVersions::V1, SpecificationAssetClass::Core),
+            Interface::MplCoreAsset => (
+                SpecificationVersions::V1,
+                SpecificationAssetClass::MplCoreAsset,
+            ),
+            Interface::MplCoreCollection => (
+                SpecificationVersions::V1,
+                SpecificationAssetClass::MplCoreCollection,
+            ),
             _ => (SpecificationVersions::V1, SpecificationAssetClass::Unknown),
         }
     }
@@ -341,9 +352,6 @@ pub struct Ownership {
     pub delegate: Option<String>,
     pub ownership_model: OwnershipModel,
     pub owner: String,
-    pub transfer_delegate: Option<String>,
-    pub freeze_delegate: Option<String>,
-    pub update_delegate: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -393,6 +401,12 @@ pub struct Supply {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct MplCoreCollectionInfo {
+    pub num_minted: u32,
+    pub current_supply: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Asset {
     pub interface: Interface,
     pub id: String,
@@ -423,4 +437,6 @@ pub struct Asset {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rent_epoch: Option<u64>,
     pub plugins: Option<Value>,
+    pub unknown_plugins: Option<Value>,
+    pub mpl_core_collection_info: Option<MplCoreCollectionInfo>,
 }

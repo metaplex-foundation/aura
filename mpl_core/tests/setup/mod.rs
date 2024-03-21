@@ -1,5 +1,5 @@
 use mpl_core::{
-    instructions::CreateBuilder,
+    instructions::CreateV1Builder,
     types::{DataState, Key, Plugin, PluginAuthorityPair, UpdateAuthority},
     Asset,
 };
@@ -16,6 +16,7 @@ pub fn program_test() -> ProgramTest {
 const DEFAULT_ASSET_NAME: &str = "Test Asset";
 const DEFAULT_ASSET_URI: &str = "https://example.com/asset";
 
+#[derive(Debug)]
 pub struct CreateAssetHelperArgs<'a> {
     pub owner: Option<Pubkey>,
     pub payer: Option<&'a Keypair>,
@@ -35,12 +36,12 @@ pub async fn create_asset<'a>(
     input: CreateAssetHelperArgs<'a>,
 ) -> Result<(), BanksClientError> {
     let payer = input.payer.unwrap_or(&context.payer);
-    let create_ix = CreateBuilder::new()
+    let create_ix = CreateV1Builder::new()
         .asset(input.asset.pubkey())
         .collection(input.collection)
         .authority(input.authority)
         .payer(payer.pubkey())
-        .owner(input.owner)
+        .owner(Some(input.owner.unwrap_or(payer.pubkey())))
         .update_authority(input.update_authority)
         .system_program(system_program::ID)
         .data_state(input.data_state.unwrap_or(DataState::AccountState))
@@ -83,7 +84,7 @@ pub async fn assert_asset(context: &mut ProgramTestContext, input: AssertAssetHe
         .expect("asset account not found");
 
     let asset = Asset::from_bytes(&asset_account.data).unwrap();
-    assert_eq!(asset.base.key, Key::Asset);
+    assert_eq!(asset.base.key, Key::AssetV1);
     assert_eq!(
         asset.base.name,
         input.name.unwrap_or(DEFAULT_ASSET_NAME.to_owned())
@@ -100,14 +101,14 @@ pub async fn assert_asset(context: &mut ProgramTestContext, input: AssertAssetHe
     for plugin in input.plugins {
         match plugin {
             PluginAuthorityPair {
-                plugin: Plugin::Freeze(freeze),
+                plugin: Plugin::FreezeDelegate(freeze),
                 authority,
             } => {
-                let plugin = asset.plugin_list.freeze.clone().unwrap();
+                let plugin = asset.plugin_list.freeze_delegate.clone().unwrap();
                 if let Some(authority) = authority {
                     assert_eq!(plugin.base.authority, authority.into());
                 }
-                assert_eq!(plugin.freeze, freeze);
+                assert_eq!(plugin.freeze_delegate, freeze);
             }
             _ => panic!("unsupported plugin type"),
         }

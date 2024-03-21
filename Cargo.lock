@@ -1040,6 +1040,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c79fed4cdb43e993fcdadc7e58a09fd0e3e649c4436fa11da71c9f1f3ee7feb9"
 
 [[package]]
+name = "base64"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9475866fec1451be56a3c2400fd081ff546538961565ccb5b7142cbd22bc7a51"
+
+[[package]]
 name = "base64ct"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3967,6 +3973,7 @@ name = "mpl-core"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "base64 0.22.0",
  "borsh 0.10.3",
  "num-derive 0.3.3",
  "num-traits",

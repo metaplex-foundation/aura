@@ -40,10 +40,10 @@ pub struct Model {
     pub owner_delegate_seq: Option<i64>,
     pub was_decompressed: bool,
     pub leaf_seq: Option<i64>,
-    pub transfer_delegate: Option<String>,
-    pub freeze_delegate: Option<String>,
-    pub update_delegate: Option<String>,
     pub plugins: Option<serde_json::Value>,
+    pub unknown_plugins: Option<serde_json::Value>,
+    pub num_minted: Option<u32>,
+    pub current_supply: Option<u32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]

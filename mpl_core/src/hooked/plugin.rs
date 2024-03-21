@@ -2,24 +2,25 @@ use borsh::BorshDeserialize;
 use solana_program::account_info::AccountInfo;
 
 use crate::{
-    accounts::{BaseAsset, PluginHeader, PluginRegistry},
+    accounts::{BaseAssetV1, PluginHeaderV1, PluginRegistryV1},
     errors::MplCoreError,
-    types::{Authority, Plugin, PluginType, RegistryRecord},
-    AttributesPlugin, BaseAuthority, BasePlugin, BurnPlugin, DataBlob, FreezePlugin,
-    PermanentFreezePlugin, PluginsList, RoyaltiesPlugin, SolanaAccount, TransferPlugin,
-    UpdateDelegatePlugin,
+    types::{Plugin, PluginAuthority, PluginType, RegistryRecord},
+    AttributesPlugin, BaseAuthority, BasePlugin, BurnDelegatePlugin, DataBlob,
+    FreezeDelegatePlugin, PermanentBurnDelegatePlugin, PermanentFreezeDelegatePlugin,
+    PermanentTransferDelegatePlugin, PluginsList, RoyaltiesPlugin, SolanaAccount,
+    TransferDelegatePlugin, UpdateDelegatePlugin,
 };
 
 /// Fetch the plugin from the registry.
 pub fn fetch_plugin<T: DataBlob + SolanaAccount, U: BorshDeserialize>(
     account: &AccountInfo,
     plugin_type: PluginType,
-) -> Result<(Authority, U, usize), std::io::Error> {
+) -> Result<(PluginAuthority, U, usize), std::io::Error> {
     let asset = T::load(account, 0)?;
 
-    let header = PluginHeader::load(account, asset.get_size())?;
-    let PluginRegistry { registry, .. } =
-        PluginRegistry::load(account, header.plugin_registry_offset as usize)?;
+    let header = PluginHeaderV1::load(account, asset.get_size())?;
+    let PluginRegistryV1 { registry, .. } =
+        PluginRegistryV1::load(account, header.plugin_registry_offset as usize)?;
 
     // Find the plugin in the registry.
     let registry_record = registry
@@ -50,7 +51,7 @@ pub fn fetch_plugin<T: DataBlob + SolanaAccount, U: BorshDeserialize>(
         )? as usize..],
     )?;
 
-    // Return the plugin and its authorities.
+    // Return the plugin and its authority.
     Ok((
         registry_record.authority.clone(),
         inner,
@@ -60,22 +61,22 @@ pub fn fetch_plugin<T: DataBlob + SolanaAccount, U: BorshDeserialize>(
 
 /// Fetch the plugin registry.
 pub fn fetch_plugins(account: &[u8]) -> Result<Vec<RegistryRecord>, std::io::Error> {
-    let asset = BaseAsset::from_bytes(account)?;
+    let asset = BaseAssetV1::from_bytes(account)?;
 
-    let header = PluginHeader::from_bytes(&account[asset.get_size()..])?;
-    let PluginRegistry { registry, .. } =
-        PluginRegistry::from_bytes(&account[(header.plugin_registry_offset as usize)..])?;
+    let header = PluginHeaderV1::from_bytes(&account[asset.get_size()..])?;
+    let PluginRegistryV1 { registry, .. } =
+        PluginRegistryV1::from_bytes(&account[(header.plugin_registry_offset as usize)..])?;
 
     Ok(registry)
 }
 
 /// Create plugin header and registry if it doesn't exist
 pub fn list_plugins(account: &[u8]) -> Result<Vec<PluginType>, std::io::Error> {
-    let asset = BaseAsset::from_bytes(account)?;
+    let asset = BaseAssetV1::from_bytes(account)?;
 
-    let header = PluginHeader::from_bytes(&account[asset.get_size()..])?;
-    let PluginRegistry { registry, .. } =
-        PluginRegistry::from_bytes(&account[(header.plugin_registry_offset as usize)..])?;
+    let header = PluginHeaderV1::from_bytes(&account[asset.get_size()..])?;
+    let PluginRegistryV1 { registry, .. } =
+        PluginRegistryV1::from_bytes(&account[(header.plugin_registry_offset as usize)..])?;
 
     Ok(registry
         .iter()
@@ -98,18 +99,26 @@ pub fn registry_records_to_plugin_list(
             let plugin = Plugin::deserialize(&mut &account_data[record.offset as usize..])?;
 
             match plugin {
-                Plugin::Reserved => (),
                 Plugin::Royalties(royalties) => {
                     acc.royalties = Some(RoyaltiesPlugin { base, royalties });
                 }
-                Plugin::Freeze(freeze) => {
-                    acc.freeze = Some(FreezePlugin { base, freeze });
+                Plugin::FreezeDelegate(freeze_delegate) => {
+                    acc.freeze_delegate = Some(FreezeDelegatePlugin {
+                        base,
+                        freeze_delegate,
+                    });
                 }
-                Plugin::Burn(burn) => {
-                    acc.burn = Some(BurnPlugin { base, burn });
+                Plugin::BurnDelegate(burn_delegate) => {
+                    acc.burn_delegate = Some(BurnDelegatePlugin {
+                        base,
+                        burn_delegate,
+                    });
                 }
-                Plugin::Transfer(transfer) => {
-                    acc.transfer = Some(TransferPlugin { base, transfer });
+                Plugin::TransferDelegate(transfer_delegate) => {
+                    acc.transfer_delegate = Some(TransferDelegatePlugin {
+                        base,
+                        transfer_delegate,
+                    });
                 }
                 Plugin::UpdateDelegate(update_delegate) => {
                     acc.update_delegate = Some(UpdateDelegatePlugin {
@@ -117,14 +126,26 @@ pub fn registry_records_to_plugin_list(
                         update_delegate,
                     });
                 }
-                Plugin::PermanentFreeze(permanent_freeze) => {
-                    acc.permanent_freeze = Some(PermanentFreezePlugin {
+                Plugin::PermanentFreezeDelegate(permanent_freeze_delegate) => {
+                    acc.permanent_freeze_delegate = Some(PermanentFreezeDelegatePlugin {
                         base,
-                        permanent_freeze,
+                        permanent_freeze_delegate,
                     });
                 }
                 Plugin::Attributes(attributes) => {
                     acc.attributes = Some(AttributesPlugin { base, attributes });
+                }
+                Plugin::PermanentTransferDelegate(permanent_transfer_delegate) => {
+                    acc.permanent_transfer_delegate = Some(PermanentTransferDelegatePlugin {
+                        base,
+                        permanent_transfer_delegate,
+                    })
+                }
+                Plugin::PermanentBurnDelegate(permanent_burn_delegate) => {
+                    acc.permanent_burn_delegate = Some(PermanentBurnDelegatePlugin {
+                        base,
+                        permanent_burn_delegate,
+                    })
                 }
             };
 

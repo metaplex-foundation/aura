@@ -24,7 +24,8 @@ pub enum SpecificationAssetClass {
     TransferRestrictedNft,
     NonTransferableNft,
     IdentityNft,
-    Core,
+    MplCoreAsset,
+    MplCoreCollection,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, sqlx::Type)]
