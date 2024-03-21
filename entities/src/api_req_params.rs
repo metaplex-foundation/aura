@@ -336,7 +336,9 @@ impl From<SearchAssetsV0> for SearchAssets {
             json_uri: value.json_uri,
             cursor: None,
             name: None,
-            options: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         }
     }
 }
@@ -351,7 +353,9 @@ impl From<GetAssetV0> for GetAsset {
     fn from(value: GetAssetV0) -> Self {
         Self {
             id: value.id,
-            options: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         }
     }
 }
@@ -366,7 +370,9 @@ impl From<GetAssetBatchV0> for GetAssetBatch {
     fn from(value: GetAssetBatchV0) -> Self {
         Self {
             ids: value.ids,
-            options: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         }
     }
 }
@@ -392,7 +398,9 @@ impl From<GetAssetsByAuthorityV0> for GetAssetsByAuthority {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         }
     }
 }
@@ -420,7 +428,9 @@ impl From<GetAssetsByCreatorV0> for GetAssetsByCreator {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         }
     }
 }
@@ -446,7 +456,9 @@ impl From<GetAssetsByOwnerV0> for GetAssetsByOwner {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
         }
     }
 }
