@@ -364,6 +364,20 @@ impl MplCoreProcessor {
                     Some(UpdateVersion::WriteVersion(account_data.write_version)),
                     unknown_plugins_json.to_string(),
                 )),
+                num_minted: asset.num_minted.map(|num_minted| {
+                    Updated::new(
+                        account_data.slot_updated,
+                        Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                        num_minted,
+                    )
+                }),
+                current_size: asset.current_size.map(|current_size| {
+                    Updated::new(
+                        account_data.slot_updated,
+                        Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                        current_size,
+                    )
+                }),
             })
         }
 

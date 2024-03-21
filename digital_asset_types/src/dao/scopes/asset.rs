@@ -200,6 +200,18 @@ fn convert_rocks_asset_model(
             .plugins
             .clone()
             .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
+        unknown_plugins: dynamic_data
+            .unknown_plugins
+            .clone()
+            .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
+        num_minted: dynamic_data
+            .num_minted
+            .clone()
+            .map(|num_minted| num_minted.value),
+        current_supply: dynamic_data
+            .current_size
+            .clone()
+            .map(|current_size| current_size.value),
     })
 }
 

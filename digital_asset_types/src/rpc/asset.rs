@@ -401,6 +401,12 @@ pub struct Supply {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct MplCoreCollectionInfo {
+    pub num_minted: u32,
+    pub current_supply: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Asset {
     pub interface: Interface,
     pub id: String,
@@ -429,4 +435,6 @@ pub struct Asset {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata_owner: Option<String>,
     pub plugins: Option<Value>,
+    pub unknown_plugins: Option<Value>,
+    pub mpl_core_collection_info: Option<MplCoreCollectionInfo>,
 }
