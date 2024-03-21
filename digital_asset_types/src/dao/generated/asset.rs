@@ -40,9 +40,6 @@ pub struct Model {
     pub owner_delegate_seq: Option<i64>,
     pub was_decompressed: bool,
     pub leaf_seq: Option<i64>,
-    pub transfer_delegate: Option<String>,
-    pub freeze_delegate: Option<String>,
-    pub update_delegate: Option<String>,
     pub plugins: Option<serde_json::Value>,
 }
 

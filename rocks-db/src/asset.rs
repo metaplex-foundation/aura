@@ -65,10 +65,8 @@ pub struct AssetDynamicDetails {
     pub executable: Option<Updated<bool>>,
     pub metadata_owner: Option<Updated<String>>,
     pub raw_name: Option<Updated<String>>,
-    pub transfer_delegate: Option<Updated<Pubkey>>,
-    pub freeze_delegate: Option<Updated<Pubkey>>,
-    pub update_delegate: Option<Updated<Pubkey>>,
     pub plugins: Option<Updated<String>>,
+    pub unknown_plugins: Option<Updated<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -386,19 +384,11 @@ impl AssetDynamicDetails {
                             &new_val.metadata_owner,
                         );
                         update_optional_field(&mut current_val.raw_name, &new_val.raw_name);
-                        update_optional_field(
-                            &mut current_val.transfer_delegate,
-                            &new_val.transfer_delegate,
-                        );
-                        update_optional_field(
-                            &mut current_val.freeze_delegate,
-                            &new_val.freeze_delegate,
-                        );
-                        update_optional_field(
-                            &mut current_val.update_delegate,
-                            &new_val.update_delegate,
-                        );
                         update_optional_field(&mut current_val.plugins, &new_val.plugins);
+                        update_optional_field(
+                            &mut current_val.unknown_plugins,
+                            &new_val.unknown_plugins,
+                        );
 
                         current_val
                     } else {

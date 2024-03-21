@@ -368,7 +368,7 @@ impl MessageHandler {
                     },
                 );
             }
-            MplCoreAccountData::FullAsset(_) | MplCoreAccountData::Collection(_) => {
+            MplCoreAccountData::Asset(_) | MplCoreAccountData::Collection(_) => {
                 update_or_insert!(
                     self.buffer.mpl_core_compressed_proofs,
                     Pubkey::from(key_bytes),

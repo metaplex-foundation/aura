@@ -84,8 +84,10 @@ pub enum SpecificationAssetClass {
     ProgrammableNft,
     #[sea_orm(string_value = "transfer_restricted_nft")]
     TransferRestrictedNft,
-    #[sea_orm(string_value = "core")]
-    Core,
+    #[sea_orm(string_value = "mpl_core_asset")]
+    MplCoreAsset,
+    #[sea_orm(string_value = "mpl_core_collection")]
+    MplCoreCollection,
     #[sea_orm(string_value = "unknown")]
     Unknown,
 }

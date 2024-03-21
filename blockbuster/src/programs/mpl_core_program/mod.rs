@@ -4,11 +4,7 @@ use crate::{
     programs::ProgramParseResult,
 };
 use borsh::BorshDeserialize;
-use mpl_core::{
-    accounts::HashedAsset,
-    fetch_asset_compression_proof, fetch_collection_compression_proof,
-    types::{CompressionProof, Key},
-};
+use mpl_core::{types::Key, IndexableAsset};
 use plerkle_serialization::AccountInfo;
 use solana_sdk::{pubkey::Pubkey, pubkeys};
 
@@ -16,9 +12,9 @@ pubkeys!(mpl_core_id, "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d");
 
 #[derive(Clone)]
 pub enum MplCoreAccountData {
-    FullAsset(CompressionProof),
-    Collection(CompressionProof),
-    HashedAsset(HashedAsset),
+    Asset(IndexableAsset),
+    Collection(IndexableAsset),
+    HashedAsset,
     EmptyAccount,
 }
 
@@ -79,20 +75,18 @@ impl ProgramParser for MplCoreParser {
         }
         let key = Key::try_from_slice(&account_data[0..1])?;
         let token_metadata_account_state = match key {
-            Key::Asset => {
-                let compression_proof = fetch_asset_compression_proof(&account_data)?;
-
+            Key::AssetV1 => {
+                let indexable_asset = IndexableAsset::fetch(key, &account_data)?;
                 MplCoreAccountState {
                     key,
-                    data: MplCoreAccountData::FullAsset(compression_proof),
+                    data: MplCoreAccountData::Asset(indexable_asset),
                 }
             }
-            Key::Collection => {
-                let compression_proof = fetch_collection_compression_proof(&account_data)?;
-
+            Key::CollectionV1 => {
+                let indexable_asset = IndexableAsset::fetch(key, &account_data)?;
                 MplCoreAccountState {
                     key,
-                    data: MplCoreAccountData::Collection(compression_proof),
+                    data: MplCoreAccountData::Collection(indexable_asset),
                 }
             }
             Key::Uninitialized => MplCoreAccountState {

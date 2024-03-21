@@ -33,7 +33,8 @@ pub enum SpecificationAssetClass {
     TransferRestrictedNft,
     NonTransferableNft,
     IdentityNft,
-    Core,
+    MplCoreAsset,
+    MplCoreCollection,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Default)]
@@ -127,8 +128,10 @@ pub enum Interface {
     Executable,
     #[serde(rename = "ProgrammableNFT")]
     ProgrammableNFT,
-    #[serde(rename = "MplCore")]
-    MplCore,
+    #[serde(rename = "MplCoreAsset")]
+    MplCoreAsset,
+    #[serde(rename = "MplCoreCollection")]
+    MplCoreCollection,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]

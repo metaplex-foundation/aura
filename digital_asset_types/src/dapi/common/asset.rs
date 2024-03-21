@@ -329,9 +329,6 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
             delegate: asset.delegate.map(|s| bs58::encode(s).into_string()),
             ownership_model: asset.owner_type.into(),
             owner,
-            transfer_delegate: asset.transfer_delegate,
-            freeze_delegate: asset.freeze_delegate,
-            update_delegate: asset.update_delegate,
         },
         supply: match interface {
             Interface::V1NFT => edition_data.map(|e| Supply {

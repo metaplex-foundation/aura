@@ -196,18 +196,6 @@ fn convert_rocks_asset_model(
         owner_delegate_seq: owner.owner_delegate_seq.value.map(|s| s as i64),
         was_decompressed: dynamic_data.was_decompressed.value,
         leaf_seq: leaf.leaf_seq.map(|seq| seq as i64),
-        transfer_delegate: dynamic_data
-            .transfer_delegate
-            .clone()
-            .map(|transfer_delegate| transfer_delegate.value.to_string()),
-        freeze_delegate: dynamic_data
-            .freeze_delegate
-            .clone()
-            .map(|freeze_delegate| freeze_delegate.value.to_string()),
-        update_delegate: dynamic_data
-            .update_delegate
-            .clone()
-            .map(|update_delegate| update_delegate.value.to_string()),
         plugins: dynamic_data
             .plugins
             .clone()
@@ -243,7 +231,12 @@ impl From<entities::enums::SpecificationAssetClass> for SpecificationAssetClass 
                 SpecificationAssetClass::TransferRestrictedNft
             }
             entities::enums::SpecificationAssetClass::Unknown => SpecificationAssetClass::Unknown,
-            entities::enums::SpecificationAssetClass::Core => SpecificationAssetClass::Core,
+            entities::enums::SpecificationAssetClass::MplCoreAsset => {
+                SpecificationAssetClass::MplCoreAsset
+            }
+            entities::enums::SpecificationAssetClass::MplCoreCollection => {
+                SpecificationAssetClass::MplCoreCollection
+            }
         }
     }
 }

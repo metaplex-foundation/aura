@@ -6,7 +6,7 @@ use crate::mplx_updates_processor::{
     MAX_BUFFERED_TASKS_TO_TAKE,
 };
 use crate::{process_accounts, save_rocks_models, store_assets};
-use blockbuster::mpl_core::types::{Authority, Plugin, UpdateAuthority};
+use blockbuster::mpl_core::types::{Plugin, PluginAuthority, PluginType, UpdateAuthority};
 use blockbuster::programs::mpl_core_program::MplCoreAccountData;
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::PubkeyWithSlot;
@@ -16,7 +16,7 @@ use rocks_db::asset::AssetCollection;
 use rocks_db::asset::MetadataMintMap;
 use rocks_db::errors::StorageError;
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
-use serde_json::json;
+use serde_json::{json, Value};
 use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
@@ -111,25 +111,27 @@ impl MplCoreProcessor {
             // The address of the Core asset is used for Core Asset ID.  There are no token or mint accounts.
             // There are no `MasterEdition` or `Edition` accounts associated with Core assets.
 
-            // Note: This now indexes both Core assets and Core collections.  Long term I don't think
-            // we will necessarily use this `CompressionProof` type as input to DAS but we are still
-            // working out how to index plugins properly.
-            let (full_asset, owner) = match account_data.proof.clone() {
-                MplCoreAccountData::FullAsset(compression_proof) => {
-                    (compression_proof.clone(), Some(compression_proof.owner))
-                }
-                MplCoreAccountData::Collection(compression_proof) => (compression_proof, None),
-                _ => return Err(IngesterError::NotImplemented),
+            // Note: This indexes both Core Assets and Core Collections.
+            let asset = match account_data.proof.clone() {
+                MplCoreAccountData::Asset(indexable_asset) => indexable_asset,
+                MplCoreAccountData::Collection(indexable_asset) => indexable_asset,
+                _ => continue,
             };
 
-            let update_authority = match full_asset.update_authority {
+            let update_authority = match asset.update_authority {
                 UpdateAuthority::Address(address) => address,
-                UpdateAuthority::Collection(address) => address,
+                UpdateAuthority::Collection(address) => self
+                    .rocks_db
+                    .asset_authority_data
+                    .get(address)
+                    .unwrap_or(None)
+                    .map(|authority| authority.authority)
+                    .unwrap_or_default(),
                 UpdateAuthority::None => Pubkey::default(),
             };
 
-            let name = full_asset.name.clone();
-            let uri = full_asset.uri.trim().replace('\0', "");
+            let name = asset.name.clone();
+            let uri = asset.uri.trim().replace('\0', "");
 
             // Notes:
             // There is no symbol for a Core asset.
@@ -137,7 +139,7 @@ impl MplCoreProcessor {
             // There is no primary sale concept for Core Assets, hardcoded to `false`.
             // Token standard is hardcoded to `None`.
             let mut chain_data = ChainDataV1 {
-                name: full_asset.name.clone(),
+                name: asset.name.clone(),
                 symbol: "".to_string(),
                 edition_nonce: None,
                 primary_sale_happened: false,
@@ -151,74 +153,66 @@ impl MplCoreProcessor {
             // Note:
             // Mutability set based on core asset data having an update authority.
             // Individual plugins could have some or no authority giving them individual mutability status.
-            let chain_mutability = match full_asset.update_authority {
+            let chain_mutability = match asset.update_authority {
                 UpdateAuthority::None => ChainMutability::Immutable,
                 _ => ChainMutability::Mutable,
             };
 
             let ownership_type = OwnerType::Single;
-            let class = SpecificationAssetClass::Core;
+            let (owner, class) = match account_data.proof.clone() {
+                MplCoreAccountData::Asset(_) => {
+                    (asset.owner, SpecificationAssetClass::MplCoreAsset)
+                }
+                MplCoreAccountData::Collection(_) => (
+                    Some(update_authority),
+                    SpecificationAssetClass::MplCoreCollection,
+                ),
+                _ => continue,
+            };
 
-            // Get seller fee basis points from Royalties plugin if available.
-            let royalty_amount = full_asset
+            // Get royalty amount and creators from `Royalties` plugin if available.
+            let default_creators = Vec::new();
+            let (royalty_amount, creators) = asset
                 .plugins
-                .iter()
-                .find_map(|hashable_plugin| match &hashable_plugin.plugin {
-                    Plugin::Royalties(royalties) => Some(royalties.basis_points as i32),
-                    _ => None,
+                .get(&PluginType::Royalties.to_string())
+                .and_then(|plugin_schema| {
+                    if let Plugin::Royalties(royalties) = &plugin_schema.data {
+                        Some((royalties.basis_points, &royalties.creators))
+                    } else {
+                        None
+                    }
                 })
-                .unwrap_or(0);
+                .unwrap_or((0, &default_creators));
 
-            let plugins_json = json!(full_asset.plugins);
+            let plugins_json = remove_plugins_nesting(json!(asset.plugins));
             let supply = 1;
+            let unknown_plugins_json = json!(asset.unknown_plugins);
 
-            // Get transfer delegate from transfer plugin if available.
-            let transfer_delegate = full_asset
+            // Get transfer delegate from `TransferDelegate` plugin if available.
+            let transfer_delegate = asset
                 .plugins
-                .iter()
-                .find_map(|hashable_plugin| match &hashable_plugin.plugin {
-                    Plugin::Transfer(_) => Some(&hashable_plugin.authority),
-                    _ => None,
-                })
-                .and_then(|authority| match authority {
-                    Authority::Owner => owner,
-                    Authority::UpdateAuthority => Some(update_authority),
-                    Authority::Pubkey { address } => Some(*address),
-                    Authority::None => None,
+                .get(&PluginType::TransferDelegate.to_string())
+                .and_then(|plugin_schema| match &plugin_schema.authority {
+                    PluginAuthority::Owner => owner,
+                    PluginAuthority::UpdateAuthority => Some(update_authority),
+                    PluginAuthority::Pubkey { address } => Some(*address),
+                    PluginAuthority::None => None,
                 });
 
-            // Get freeze delegate and frozen status from transfer plugin if available.
-            let (freeze_delegate, frozen) = full_asset
+            // Get frozen status from `FreezeDelegate` plugin if available.
+            let frozen = asset
                 .plugins
-                .iter()
-                .find_map(|hashable_plugin| match &hashable_plugin.plugin {
-                    Plugin::Freeze(freeze) => Some((&hashable_plugin.authority, freeze.frozen)),
-                    _ => None,
+                .get(&PluginType::FreezeDelegate.to_string())
+                .and_then(|plugin_schema| {
+                    if let Plugin::FreezeDelegate(freeze_delegate) = &plugin_schema.data {
+                        Some(freeze_delegate.frozen)
+                    } else {
+                        None
+                    }
                 })
-                .map(|(authority, frozen)| match authority {
-                    Authority::Owner => (owner, frozen),
-                    Authority::UpdateAuthority => (Some(update_authority), frozen),
-                    Authority::Pubkey { address } => (Some(*address), frozen),
-                    Authority::None => (None, false),
-                })
-                .unwrap_or_else(|| (None, false));
+                .unwrap_or(false);
 
-            // Get update delegate from transfer plugin if available.
-            let update_delegate = full_asset
-                .plugins
-                .iter()
-                .find_map(|hashable_plugin| match &hashable_plugin.plugin {
-                    Plugin::UpdateDelegate(_) => Some(&hashable_plugin.authority),
-                    _ => None,
-                })
-                .and_then(|authority| match authority {
-                    Authority::Owner => owner,
-                    Authority::UpdateAuthority => Some(update_authority),
-                    Authority::Pubkey { address } => Some(*address),
-                    Authority::None => None,
-                });
-
-            if let UpdateAuthority::Collection(address) = full_asset.update_authority {
+            if let UpdateAuthority::Collection(address) = asset.update_authority {
                 models.asset_collection.push(AssetCollection {
                     pubkey: *asset_key,
                     collection: address,
@@ -229,29 +223,18 @@ impl MplCoreProcessor {
                 });
             }
 
-            let creators = full_asset.plugins.iter().find_map(|hashable_plugin| {
-                match &hashable_plugin.plugin {
-                    Plugin::Royalties(royalties) => Some(&royalties.creators),
-                    _ => None,
-                }
-            });
-            let updated_creators = if let Some(creators) = creators {
-                let parsed = creators
+            let updated_creators = Updated::new(
+                account_data.slot_updated,
+                Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                creators
                     .iter()
                     .map(|creator| entities::models::Creator {
                         creator: creator.address,
                         creator_verified: true,
                         creator_share: creator.percentage,
                     })
-                    .collect::<Vec<_>>();
-                Updated::new(
-                    account_data.slot_updated,
-                    Some(UpdateVersion::WriteVersion(account_data.write_version)),
-                    parsed,
-                )
-            } else {
-                Updated::default()
-            };
+                    .collect::<Vec<_>>(),
+            );
 
             models.asset_static.push(AssetStaticDetails {
                 pubkey: *asset_key,
@@ -343,7 +326,7 @@ impl MplCoreProcessor {
                 royalty_amount: Updated::new(
                     account_data.slot_updated,
                     Some(UpdateVersion::WriteVersion(account_data.write_version)),
-                    royalty_amount as u16,
+                    royalty_amount,
                 ),
                 url: Updated::new(
                     account_data.slot_updated,
@@ -371,31 +354,15 @@ impl MplCoreProcessor {
                     Some(UpdateVersion::WriteVersion(account_data.write_version)),
                     name,
                 )),
-                transfer_delegate: transfer_delegate.map(|transfer_delegate| {
-                    Updated::new(
-                        account_data.slot_updated,
-                        Some(UpdateVersion::WriteVersion(account_data.write_version)),
-                        transfer_delegate,
-                    )
-                }),
-                freeze_delegate: freeze_delegate.map(|freeze_delegate| {
-                    Updated::new(
-                        account_data.slot_updated,
-                        Some(UpdateVersion::WriteVersion(account_data.write_version)),
-                        freeze_delegate,
-                    )
-                }),
-                update_delegate: update_delegate.map(|update_delegate| {
-                    Updated::new(
-                        account_data.slot_updated,
-                        Some(UpdateVersion::WriteVersion(account_data.write_version)),
-                        update_delegate,
-                    )
-                }),
                 plugins: Some(Updated::new(
                     account_data.slot_updated,
                     Some(UpdateVersion::WriteVersion(account_data.write_version)),
                     plugins_json.to_string(),
+                )),
+                unknown_plugins: Some(Updated::new(
+                    account_data.slot_updated,
+                    Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                    unknown_plugins_json.to_string(),
                 )),
             })
         }
@@ -443,4 +410,39 @@ impl MplCoreProcessor {
     }
 
     save_rocks_models!();
+}
+
+// Modify the JSON structure to remove the Plugin name and just display its data.
+// For example, this will transform `FreezeDelegate` JSON from:
+// {"data": {"freeze_delegate": {"frozen": false}}}
+// to:
+// {"data": {"frozen": false}}
+//
+// Also replaces "authority": {"Pubkey": ...} with "authority": {"pubkey": ...}
+fn remove_plugins_nesting(mut parsed_json: Value) -> Value {
+    if let Some(plugins) = parsed_json.as_object_mut() {
+        for (_, plugin) in plugins.iter_mut() {
+            // Convert "Pubkey" key to "pubkey" under "authority".
+            if let Some(Value::Object(authority)) = plugin.get_mut("authority") {
+                if let Some(pubkey_value) = authority.remove("Pubkey") {
+                    authority.insert("pubkey".to_string(), pubkey_value);
+                }
+            }
+            if let Some(Value::Object(data)) = plugin.get_mut("data") {
+                // Extract the plugin data and remove it.
+                if let Some((_, inner_plugin_data)) = data.iter().next() {
+                    let inner_plugin_data_clone = inner_plugin_data.clone();
+                    // Clear the "data" object.
+                    data.clear();
+                    // Move the plugin data fields to the top level of "data".
+                    if let Value::Object(inner_plugin_data) = inner_plugin_data_clone {
+                        for (field_name, field_value) in inner_plugin_data.iter() {
+                            data.insert(field_name.clone(), field_value.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    parsed_json
 }

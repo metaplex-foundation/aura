@@ -294,7 +294,8 @@ impl_from_enum!(
     TransferRestrictedNft,
     NonTransferableNft,
     IdentityNft,
-    Core
+    MplCoreAsset,
+    MplCoreCollection
 );
 impl_from_enum!(
     entities::enums::RoyaltyTargetType,
