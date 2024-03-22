@@ -401,9 +401,10 @@ pub struct Supply {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct MplCoreCollectionInfo {
-    pub num_minted: u32,
-    pub current_supply: u32,
+pub struct MplCoreInfo {
+    pub num_minted: Option<u32>,
+    pub current_supply: Option<u32>,
+    pub plugins_json_version: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -438,5 +439,5 @@ pub struct Asset {
     pub rent_epoch: Option<u64>,
     pub plugins: Option<Value>,
     pub unknown_plugins: Option<Value>,
-    pub mpl_core_collection_info: Option<MplCoreCollectionInfo>,
+    pub mpl_core_info: Option<MplCoreInfo>,
 }
