@@ -3,7 +3,7 @@ use entities::models::UrlWithStatus;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
-    Acquire, ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
+    ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
 };
 use std::{sync::Arc, time::Duration};
 use tracing::log::LevelFilter;
@@ -94,7 +94,6 @@ impl PgClient {
                 .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "begin");
             e.to_string()
         })?;
-        self.pool.acquire().await.unwrap().begin();
         self.metrics
             .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "begin", start_time);
         Ok(transaction)

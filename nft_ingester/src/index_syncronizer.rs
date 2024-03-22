@@ -4,13 +4,23 @@ use metrics_utils::SynchronizerMetricsConfig;
 use postgre_client::storage_traits::{AssetIndexStorage, TempClientProvider};
 use rocks_db::{
     key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey},
-    storage_traits::AssetIndexStorage as AssetIndexSourceStorage,
+    storage_traits::{AssetIndexStorage as AssetIndexSourceStorage, AssetUpdatedKey},
 };
 use solana_sdk::pubkey::Pubkey;
 use std::{collections::HashSet, sync::Arc};
 use tokio::task::JoinSet;
 
 use crate::error::IngesterError;
+
+pub struct SyncState {
+    last_indexed_key: Option<AssetUpdatedKey>,
+    last_known_key: AssetUpdatedKey,
+}
+pub enum SyncStatus {
+    FullSyncRequired(SyncState),
+    RegularSyncRequired(SyncState),
+    NoSyncRequired,
+}
 
 pub struct Synchronizer<T, U, P>
 where
@@ -58,8 +68,9 @@ where
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
     ) {
-        let should_run_full_sync = self.should_run_full_sync(run_full_sync_threshold).await;
-        if let Ok(true) = should_run_full_sync {
+        if let Ok(SyncStatus::FullSyncRequired(_)) =
+            self.get_sync_state(run_full_sync_threshold).await
+        {
             let res = self.full_syncronize(rx).await;
             match res {
                 Ok(_) => {
@@ -96,15 +107,14 @@ where
         }
     }
 
-    pub async fn should_run_full_sync(
+    async fn get_sync_state(
         &self,
         run_full_sync_threshold: i64,
-    ) -> Result<bool, IngesterError> {
+    ) -> Result<SyncStatus, IngesterError> {
         let last_indexed_key = self.index_storage.fetch_last_synced_id().await?;
         let last_indexed_key = match last_indexed_key {
             Some(bytes) => {
-                // let decoded_key = AssetsUpdateIdx::decode_key(bytes)?;
-                let decoded_key = decode_u64x2_pubkey(bytes).unwrap();
+                let decoded_key = decode_u64x2_pubkey(bytes)?;
                 Some(decoded_key)
             }
             None => None,
@@ -112,23 +122,29 @@ where
 
         // Fetch the last known key from the primary storage
         let Some(last_key) = self.primary_storage.last_known_asset_updated_key()? else {
-            return Ok(false);
+            return Ok(SyncStatus::NoSyncRequired);
         };
-        let last_known_seq = last_key.0 as i64;
+        let last_known_seq = last_key.seq as i64;
         self.metrics
             .set_last_synchronized_slot("last_known_updated_seq", last_known_seq);
-        if let Some(last_indexed_key) = last_indexed_key {
-            if last_indexed_key >= last_key {
-                return Ok(false);
+        if let Some(last_indexed_key) = &last_indexed_key {
+            if last_indexed_key.seq >= last_key.seq {
+                return Ok(SyncStatus::NoSyncRequired);
             }
-            let last_indexed_seq = last_indexed_key.0 as i64;
+            let last_indexed_seq = last_indexed_key.seq as i64;
             if run_full_sync_threshold > 0
                 && last_known_seq - last_indexed_seq > run_full_sync_threshold
             {
-                return Ok(true);
+                return Ok(SyncStatus::FullSyncRequired(SyncState {
+                    last_indexed_key: Some(last_indexed_key.clone()),
+                    last_known_key: last_key,
+                }));
             }
         }
-        Ok(false)
+        Ok(SyncStatus::RegularSyncRequired(SyncState {
+            last_indexed_key,
+            last_known_key: last_key,
+        }))
     }
 
     pub async fn synchronize_asset_indexes(
@@ -136,48 +152,32 @@ where
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
     ) -> Result<(), IngesterError> {
-        // Retrieve the last synced ID from the secondary storage
-        let last_indexed_key = self.index_storage.fetch_last_synced_id().await?;
-        let last_indexed_key = match last_indexed_key {
-            Some(bytes) => {
-                // let decoded_key = AssetsUpdateIdx::decode_key(bytes)?;
-                let decoded_key = decode_u64x2_pubkey(bytes).unwrap();
-                Some(decoded_key)
+        match self.get_sync_state(run_full_sync_threshold).await? {
+            SyncStatus::FullSyncRequired(state) => {
+                tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
+                self.regular_syncronize(rx, state.last_indexed_key, state.last_known_key)
+                    .await
             }
-            None => None,
-        };
-
-        // Fetch the last known key from the primary storage
-        let Some(last_key) = self.primary_storage.last_known_asset_updated_key()? else {
-            return Ok(());
-        };
-        let last_known_seq = last_key.0 as i64;
-        self.metrics
-            .set_last_synchronized_slot("last_known_updated_seq", last_known_seq);
-        if let Some(last_indexed_key) = last_indexed_key {
-            if last_indexed_key >= last_key {
-                return Ok(());
+            SyncStatus::RegularSyncRequired(state) => {
+                self.regular_syncronize(rx, state.last_indexed_key, state.last_known_key)
+                    .await
             }
-            let last_indexed_seq = last_indexed_key.0 as i64;
-            if run_full_sync_threshold > 0
-                && last_known_seq - last_indexed_seq > run_full_sync_threshold
-            {
-                tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {}, Last known: {}", last_indexed_seq, last_known_seq);
-                // return self.full_syncronize(rx, index_storage).await;
-            }
+            SyncStatus::NoSyncRequired => Ok(()),
         }
-        self.regular_syncronize(rx, last_indexed_key, Some(last_key))
-            .await
     }
 
     pub async fn full_syncronize(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), IngesterError> {
-        let Some((seq, slot, pubkey)) = self.primary_storage.last_known_asset_updated_key()? else {
+        let Some(last_known_key) = self.primary_storage.last_known_asset_updated_key()? else {
             return Ok(());
         };
-        let last_included_rocks_key = encode_u64x2_pubkey(seq, slot, pubkey);
+        let last_included_rocks_key = encode_u64x2_pubkey(
+            last_known_key.seq,
+            last_known_key.slot,
+            last_known_key.pubkey,
+        );
         // start a regular synchronization into a temporary storage to catch up on it while the dump is being created and loaded, as it takes a loooong time
         let (tx, local_rx) = tokio::sync::broadcast::channel::<()>(1);
         let temp_storage = Arc::new(self.temp_client_provider.create_temp_client().await?);
@@ -220,8 +220,8 @@ where
     async fn regular_syncronize(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
-        last_indexed_key: Option<(u64, u64, Pubkey)>,
-        last_key: Option<(u64, u64, Pubkey)>,
+        last_indexed_key: Option<AssetUpdatedKey>,
+        last_key: AssetUpdatedKey,
     ) -> Result<(), IngesterError> {
         let mut starting_key = last_indexed_key;
         let mut processed_keys = HashSet::<Pubkey>::new();
@@ -235,8 +235,8 @@ where
                 }
                 let (updated_keys, last_included_key) =
                     self.primary_storage.fetch_asset_updated_keys(
-                        starting_key,
-                        last_key,
+                        starting_key.clone(),
+                        Some(last_key.clone()),
                         self.dump_synchronizer_batch_size,
                         Some(processed_keys.clone()),
                     )?;
@@ -246,7 +246,7 @@ where
                 // add the processed keys to the set
                 processed_keys.extend(updated_keys.clone());
 
-                starting_key = last_included_key;
+                starting_key = last_included_key.clone();
                 let last_included_key = last_included_key.unwrap();
                 // fetch the asset indexes from the primary storage
                 let updated_keys_refs: Vec<Pubkey> = updated_keys.iter().copied().collect();
@@ -275,17 +275,17 @@ where
             if let Some(last_included_rocks_key) = last_included_rocks_key {
                 self.metrics.set_last_synchronized_slot(
                     "last_synchronized_slot",
-                    last_included_rocks_key.1 as i64,
+                    last_included_rocks_key.slot as i64,
                 );
                 self.metrics.set_last_synchronized_slot(
                     "last_synchronized_seq",
-                    last_included_rocks_key.0 as i64,
+                    last_included_rocks_key.seq as i64,
                 );
 
                 let last_included_rocks_key = encode_u64x2_pubkey(
-                    last_included_rocks_key.0,
-                    last_included_rocks_key.1,
-                    last_included_rocks_key.2,
+                    last_included_rocks_key.seq,
+                    last_included_rocks_key.slot,
+                    last_included_rocks_key.pubkey,
                 );
                 self.index_storage
                     .update_last_synced_key(&last_included_rocks_key)
@@ -420,21 +420,24 @@ mod tests {
             .return_once(|| Ok(None));
 
         let key = Pubkey::new_from_array([1u8; 32]);
-        let index_key = (100, 2, key.clone());
-        let binary_key = encode_u64x2_pubkey(index_key.0, index_key.1, index_key.2.clone());
+        let index_key = AssetUpdatedKey::new(100, 2, key.clone());
+        let binary_key =
+            encode_u64x2_pubkey(index_key.seq, index_key.slot, index_key.pubkey.clone());
         // Primary storage has some records
+        let index_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
             .expect_last_known_asset_updated_key()
             .once()
-            .return_once(move || Ok(Some(index_key.clone())));
+            .return_once(move || Ok(Some(index_clone)));
 
         let updated_keys = HashSet::from([key.clone()]);
+        let index_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
             .expect_fetch_asset_updated_keys()
             .once()
-            .return_once(move |_, _, _, _| Ok((updated_keys.clone(), Some(index_key.clone()))));
+            .return_once(move |_, _, _, _| Ok((updated_keys.clone(), Some(index_clone))));
 
         let mut map_of_asset_indexes = HashMap::<Pubkey, AssetIndex>::new();
         map_of_asset_indexes.insert(key.clone(), create_test_asset_index(&key));
@@ -486,15 +489,18 @@ mod tests {
             .return_once(|| Ok(None));
 
         let key = Pubkey::new_from_array([1u8; 32]);
-        let index_key = (100, 2, key.clone());
-        let binary_key = encode_u64x2_pubkey(index_key.0, index_key.1, index_key.2.clone());
+        let index_key = AssetUpdatedKey::new(100, 2, key.clone());
+        let binary_key =
+            encode_u64x2_pubkey(index_key.seq, index_key.slot, index_key.pubkey.clone());
+        let index_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
             .expect_last_known_asset_updated_key()
             .once()
-            .return_once(move || Ok(Some(index_key.clone())));
+            .return_once(move || Ok(Some(index_clone)));
 
         let updated_keys = HashSet::from([key.clone()]);
+        let index_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
             .expect_fetch_asset_updated_keys()
@@ -504,9 +510,9 @@ mod tests {
                 unsafe {
                     CALL_COUNT += 1;
                     if CALL_COUNT == 1 {
-                        Ok((updated_keys.clone(), Some(index_key.clone())))
+                        Ok((updated_keys.clone(), Some(index_clone.clone())))
                     } else {
-                        Ok((HashSet::new(), Some(index_key.clone())))
+                        Ok((HashSet::new(), Some(index_clone.clone())))
                     }
                 }
             });
@@ -555,9 +561,9 @@ mod tests {
         let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
 
-        let index_key = (95, 2, Pubkey::new_unique());
+        let index_key = AssetUpdatedKey::new(95, 2, Pubkey::new_unique());
         let last_synced_binary_key =
-            encode_u64x2_pubkey(index_key.0, index_key.1, index_key.2.clone());
+            encode_u64x2_pubkey(index_key.seq, index_key.slot, index_key.pubkey.clone());
 
         index_storage
             .expect_fetch_last_synced_id()
@@ -565,27 +571,29 @@ mod tests {
             .return_once(|| Ok(Some(last_synced_binary_key)));
 
         let key = Pubkey::new_from_array([1u8; 32]);
-        let index_key_first_batch = (100, 2, key.clone());
-        let index_key_second_batch = (120, 3, key.clone());
+        let index_key_first_batch = AssetUpdatedKey::new(100, 2, key.clone());
+        let index_key_second_batch = AssetUpdatedKey::new(120, 3, key.clone());
         let binary_key_first_batch = encode_u64x2_pubkey(
-            index_key_first_batch.0,
-            index_key_first_batch.1,
-            index_key_first_batch.2.clone(),
+            index_key_first_batch.seq,
+            index_key_first_batch.slot,
+            index_key_first_batch.pubkey.clone(),
         );
         let binary_key_second_batch = encode_u64x2_pubkey(
-            index_key_second_batch.0,
-            index_key_second_batch.1,
-            index_key_second_batch.2.clone(),
+            index_key_second_batch.seq,
+            index_key_second_batch.slot,
+            index_key_second_batch.pubkey.clone(),
         );
+        let index_key_second_batch_clone = index_key_second_batch.clone();
         primary_storage
             .mock_update_index_storage
             .expect_last_known_asset_updated_key()
             .once()
-            .return_once(move || Ok(Some(index_key_second_batch.clone())));
+            .return_once(move || Ok(Some(index_key_second_batch_clone)));
 
         let mut call_count = 0;
         let updated_keys_first_call = HashSet::from([key.clone(), Pubkey::new_unique()]);
         let updated_keys_second_call = HashSet::from([Pubkey::new_unique()]);
+        let index_key_second_batch_clone = index_key_second_batch.clone();
         primary_storage
             .mock_update_index_storage
             .expect_fetch_asset_updated_keys()
@@ -600,7 +608,7 @@ mod tests {
                 } else {
                     Ok((
                         updated_keys_second_call.clone(),
-                        Some(index_key_second_batch.clone()),
+                        Some(index_key_second_batch_clone.clone()),
                     ))
                 }
             });
@@ -676,21 +684,22 @@ mod tests {
         metrics_state.register_metrics();
 
         let key = Pubkey::new_unique();
-        let index_key = (100, 2, key);
-
+        let index_key = AssetUpdatedKey::new(100, 2, key);
+        let index_key_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
             .expect_last_known_asset_updated_key()
             .once()
-            .return_once(move || Ok(Some(index_key)));
+            .return_once(move || Ok(Some(index_key_clone)));
+        let index_key_clone = index_key.clone();
         index_storage
             .expect_fetch_last_synced_id()
             .once()
             .return_once(move || {
                 Ok(Some(encode_u64x2_pubkey(
-                    index_key.0,
-                    index_key.1,
-                    index_key.2.clone(),
+                    index_key_clone.seq,
+                    index_key_clone.slot,
+                    index_key_clone.pubkey.clone(),
                 )))
             });
 
