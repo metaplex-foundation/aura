@@ -61,11 +61,11 @@ impl ClItem {
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
         let mut result = vec![];
-        let mut cli_seq = 0;
+        let mut cli_seq = -1;
         if let Some(existing_val) = existing_val {
             match deserialize::<ClItem>(existing_val) {
                 Ok(value) => {
-                    cli_seq = value.cli_seq;
+                    cli_seq = value.cli_seq as i64;
                     result = existing_val.to_vec();
                 }
                 Err(e) => {
@@ -77,8 +77,8 @@ impl ClItem {
         for op in operands {
             match deserialize::<ClItem>(op) {
                 Ok(new_val) => {
-                    if new_val.cli_seq > cli_seq {
-                        cli_seq = new_val.cli_seq;
+                    if new_val.cli_seq as i64 > cli_seq {
+                        cli_seq = new_val.cli_seq as i64;
                         result = op.to_vec();
                     }
                 }
