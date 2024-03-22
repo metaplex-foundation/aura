@@ -11,9 +11,7 @@ mod tests {
     use rocks_db::columns::{Mint, TokenAccount};
     use rocks_db::editions::TokenMetadataEdition;
     use solana_program::pubkey::Pubkey;
-    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
-    use std::time::Duration;
     use testcontainers::clients::Cli;
 
     pub fn generate_metadata(mint_key: Pubkey) -> MetadataInfo {
@@ -50,8 +48,6 @@ mod tests {
     #[tokio::test]
     async fn token_update_process() {
         use std::collections::HashMap;
-
-        use solana_sdk::blake3::Hash;
 
         let first_mint = Pubkey::new_unique();
         let second_mint = Pubkey::new_unique();
