@@ -229,7 +229,8 @@ where
         while rx.is_empty() {
             let mut tasks = JoinSet::new();
             let mut last_included_rocks_key = None;
-            for _ in 0..self.parallel_tasks {
+            let mut end_reached = false;
+            for _ in 0..self.parallel_tasks-1 {
                 if !rx.is_empty() {
                     break;
                 }
@@ -241,6 +242,7 @@ where
                         Some(processed_keys.clone()),
                     )?;
                 if updated_keys.is_empty() || last_included_key.is_none() {
+                    end_reached = true;
                     break;
                 }
                 // add the processed keys to the set
@@ -266,6 +268,10 @@ where
                     )
                     .await
                 }));
+                if updated_keys.len() < self.dump_synchronizer_batch_size{
+                    end_reached = true;
+                    break;
+                }
             }
 
             while let Some(task) = tasks.join_next().await {
@@ -291,6 +297,9 @@ where
                     .update_last_synced_key(&last_included_rocks_key)
                     .await?;
             } else {
+                break;
+            }
+            if end_reached {
                 break;
             }
         }
