@@ -1061,34 +1061,18 @@ mod tests {
             ],
             &blockbuster::programs::token_metadata::token_metadata_id(),
         );
+        let mut mplx_metadata_info: HashMap<Vec<u8>, MetadataInfo> = HashMap::new();
+        mplx_metadata_info.insert(metadata_key.to_bytes().to_vec(), metadata);
 
-        let mut mtd_buff = buffer.mplx_metadata_info.lock().await;
-
-        mtd_buff.insert(metadata_key.to_bytes().to_vec(), metadata);
-        drop(mtd_buff);
-
-        let mut burnt_buff = buffer.burnt_metadata_at_slot.lock().await;
-
+        let mut burnt_buff: HashMap<Pubkey, BurntMetadataSlot> = HashMap::new();
         burnt_buff.insert(metadata_key, BurntMetadataSlot { slot_updated: 2 });
-        drop(burnt_buff);
 
-        let mut mplx_updates_processor_clone = mplx_updates_processor.clone();
-        let cloned_keep_running = keep_running.clone();
-        tokio::spawn(async move {
-            mplx_updates_processor_clone
-                .process_metadata_accs(cloned_keep_running)
-                .await;
-        });
-        let mut mplx_updates_processor_clone = mplx_updates_processor.clone();
-        let cloned_keep_running = keep_running.clone();
-        tokio::spawn(async move {
-            mplx_updates_processor_clone
-                .process_burnt_accs(cloned_keep_running)
-                .await;
-        });
-
-        tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
-
+        mplx_updates_processor
+            .transform_and_store_metadata_accs(&mplx_metadata_info)
+            .await;
+        mplx_updates_processor
+            .transform_and_store_burnt_metadata(&burnt_buff)
+            .await;
         env.rocks_env
             .storage
             .asset_offchain_data
