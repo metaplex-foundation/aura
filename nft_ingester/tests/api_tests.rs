@@ -1554,7 +1554,7 @@ mod tests {
         let ref_value = generated_assets.dynamic_details[5].clone();
         let payload = GetAssetsByCreator {
             creator_address: ref_value.creators.value[0].creator.to_string(),
-            only_verified: Some(true),
+            only_verified: None, // as the test env randomly generates verified and unverified creators we're not passing in this filter
             sort_by: None,
             limit: None,
             page: None,
