@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bincode::deserialize;
 use entities::models::{AssetSignature, AssetSignatureKey};
-use log::error;
+use log::{debug, error};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
@@ -74,7 +74,9 @@ impl ClItem {
             }
         }
 
-        for op in operands {
+        let len = operands.len();
+
+        for (i, op) in operands.iter().enumerate() {
             match deserialize::<ClItem>(op) {
                 Ok(new_val) => {
                     if new_val.cli_seq as i64 > cli_seq {
@@ -83,7 +85,11 @@ impl ClItem {
                     }
                 }
                 Err(e) => {
-                    error!("RocksDB: ClItem deserialize new_val: {}", e)
+                    if i == len - 1 && result.is_empty() {
+                        error!("RocksDB: last operand in ClItem new_val could not be deserialized. Empty array will be saved: {}", e)
+                    } else {
+                        debug!("RocksDB: ClItem deserialize new_val: {}", e);
+                    }
                 }
             }
         }
