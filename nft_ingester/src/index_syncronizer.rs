@@ -12,10 +12,12 @@ use tokio::task::JoinSet;
 
 use crate::error::IngesterError;
 
+#[derive(Debug)]
 pub struct SyncState {
     last_indexed_key: Option<AssetUpdatedKey>,
     last_known_key: AssetUpdatedKey,
 }
+#[derive(Debug)]
 pub enum SyncStatus {
     FullSyncRequired(SyncState),
     RegularSyncRequired(SyncState),
@@ -152,7 +154,8 @@ where
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
     ) -> Result<(), IngesterError> {
-        match self.get_sync_state(run_full_sync_threshold).await? {
+        let state = self.get_sync_state(run_full_sync_threshold).await?;
+        match state {
             SyncStatus::FullSyncRequired(state) => {
                 tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
                 self.regular_syncronize(rx, state.last_indexed_key, state.last_known_key)
@@ -230,7 +233,7 @@ where
             let mut tasks = JoinSet::new();
             let mut last_included_rocks_key = None;
             let mut end_reached = false;
-            for _ in 0..self.parallel_tasks-1 {
+            for _ in 0..self.parallel_tasks {
                 if !rx.is_empty() {
                     break;
                 }
