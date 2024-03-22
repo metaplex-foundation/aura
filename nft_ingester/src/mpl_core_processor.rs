@@ -11,6 +11,7 @@ use blockbuster::programs::mpl_core_program::MplCoreAccountData;
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::PubkeyWithSlot;
 use entities::models::{ChainDataV1, UpdateVersion, Updated};
+use heck::ToSnakeCase;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::asset::AssetCollection;
 use rocks_db::asset::MetadataMintMap;
@@ -118,6 +119,8 @@ impl MplCoreProcessor {
                 _ => continue,
             };
 
+            // If it is an `Address` type, use the value directly.  If it is a `Collection`, search for and
+            // use the collection's authority.
             let update_authority = match asset.update_authority {
                 UpdateAuthority::Address(address) => address,
                 UpdateAuthority::Collection(address) => self
@@ -174,7 +177,7 @@ impl MplCoreProcessor {
             let default_creators = Vec::new();
             let (royalty_amount, creators) = asset
                 .plugins
-                .get(&PluginType::Royalties.to_string())
+                .get(&PluginType::Royalties)
                 .and_then(|plugin_schema| {
                     if let Plugin::Royalties(royalties) = &plugin_schema.data {
                         Some((royalties.basis_points, &royalties.creators))
@@ -184,25 +187,33 @@ impl MplCoreProcessor {
                 })
                 .unwrap_or((0, &default_creators));
 
-            let plugins_json = remove_plugins_nesting(json!(asset.plugins));
+            let mut plugins_json = json!(asset.plugins);
+
+            remove_plugins_nesting(&mut plugins_json);
+            transform_plugins_authority(&mut plugins_json);
+            convert_keys_to_snake_case(&mut plugins_json);
+
             let supply = 1;
-            let unknown_plugins_json = json!(asset.unknown_plugins);
+            let mut unknown_plugins_json = json!(asset.unknown_plugins);
+            transform_plugins_authority(&mut unknown_plugins_json);
+            convert_keys_to_snake_case(&mut unknown_plugins_json);
 
             // Get transfer delegate from `TransferDelegate` plugin if available.
-            let transfer_delegate = asset
-                .plugins
-                .get(&PluginType::TransferDelegate.to_string())
-                .and_then(|plugin_schema| match &plugin_schema.authority {
-                    PluginAuthority::Owner => owner,
-                    PluginAuthority::UpdateAuthority => Some(update_authority),
-                    PluginAuthority::Pubkey { address } => Some(*address),
-                    PluginAuthority::None => None,
-                });
+            let transfer_delegate =
+                asset
+                    .plugins
+                    .get(&PluginType::TransferDelegate)
+                    .and_then(|plugin_schema| match &plugin_schema.authority {
+                        PluginAuthority::Owner => owner,
+                        PluginAuthority::UpdateAuthority => Some(update_authority),
+                        PluginAuthority::Address { address } => Some(*address),
+                        PluginAuthority::None => None,
+                    });
 
             // Get frozen status from `FreezeDelegate` plugin if available.
             let frozen = asset
                 .plugins
-                .get(&PluginType::FreezeDelegate.to_string())
+                .get(&PluginType::FreezeDelegate)
                 .and_then(|plugin_schema| {
                     if let Plugin::FreezeDelegate(freeze_delegate) = &plugin_schema.data {
                         Some(freeze_delegate.frozen)
@@ -378,6 +389,11 @@ impl MplCoreProcessor {
                         current_size,
                     )
                 }),
+                plugins_json_version: Some(Updated::new(
+                    account_data.slot_updated,
+                    Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                    1,
+                )),
             })
         }
 
@@ -426,22 +442,14 @@ impl MplCoreProcessor {
     save_rocks_models!();
 }
 
-// Modify the JSON structure to remove the Plugin name and just display its data.
+// Modify the JSON structure to remove the `Plugin`` name and just display its data.
 // For example, this will transform `FreezeDelegate` JSON from:
-// {"data": {"freeze_delegate": {"frozen": false}}}
+// "data":{"freeze_delegate":{"frozen":false}}}
 // to:
-// {"data": {"frozen": false}}
-//
-// Also replaces "authority": {"Pubkey": ...} with "authority": {"pubkey": ...}
-fn remove_plugins_nesting(mut parsed_json: Value) -> Value {
-    if let Some(plugins) = parsed_json.as_object_mut() {
+// "data":{"frozen":false}
+fn remove_plugins_nesting(plugins_json: &mut Value) {
+    if let Some(plugins) = plugins_json.as_object_mut() {
         for (_, plugin) in plugins.iter_mut() {
-            // Convert "Pubkey" key to "pubkey" under "authority".
-            if let Some(Value::Object(authority)) = plugin.get_mut("authority") {
-                if let Some(pubkey_value) = authority.remove("Pubkey") {
-                    authority.insert("pubkey".to_string(), pubkey_value);
-                }
-            }
             if let Some(Value::Object(data)) = plugin.get_mut("data") {
                 // Extract the plugin data and remove it.
                 if let Some((_, inner_plugin_data)) = data.iter().next() {
@@ -458,5 +466,63 @@ fn remove_plugins_nesting(mut parsed_json: Value) -> Value {
             }
         }
     }
-    parsed_json
+}
+
+use serde_json::Map;
+
+// Modify the JSON for `PluginAuthority`` to have consistent output no matter the enum type.
+// For example, from:
+// "authority":{"Address":{"address":"D7whDWAP5gN9x4Ff6T9MyQEkotyzmNWtfYhCEWjbUDBM"}}
+// to:
+// "authority":{"address":"4dGxsCAwSCopxjEYY7sFShFUkfKC6vzsNEXJDzFYYFXh","type":"Address"}
+// and from:
+// "authority":"UpdateAuthority"
+// to:
+// "authority":{"address":null,"type":"UpdateAuthority"}
+fn transform_plugins_authority(plugins_json: &mut Value) {
+    if let Some(plugins) = plugins_json.as_object_mut() {
+        for (_, plugin) in plugins.iter_mut() {
+            if let Some(Value::Object(authority)) = plugin.get_mut("authority") {
+                // Replace the nested JSON objects with desired format.
+                if let Some(Value::Object(pubkey_value)) = authority.remove("Address") {
+                    authority.insert("type".to_string(), Value::from("Address"));
+                    authority.extend(pubkey_value);
+                }
+            } else if let Some(Value::String(authority_type)) = plugin.get("authority") {
+                // Create new object in desired format.
+                let mut authority_obj = Map::new();
+                authority_obj.insert("type".to_string(), Value::from(authority_type.clone()));
+                authority_obj.insert("address".to_string(), Value::Null);
+
+                // Replace existing string value with new object.
+                if let Some(plugin) = plugin.as_object_mut() {
+                    plugin.insert("authority".to_string(), Value::Object(authority_obj));
+                }
+            }
+        }
+    }
+}
+
+// Convert all keys to snake case.  Ignore values that aren't JSON objects themselves.
+fn convert_keys_to_snake_case(plugins_json: &mut Value) {
+    match plugins_json {
+        Value::Object(obj) => {
+            let keys = obj.keys().cloned().collect::<Vec<String>>();
+            for key in keys {
+                let snake_case_key = key.to_snake_case();
+                if let Some(val) = obj.remove(&key) {
+                    obj.insert(snake_case_key, val);
+                }
+            }
+            for (_, val) in obj.iter_mut() {
+                convert_keys_to_snake_case(val);
+            }
+        }
+        Value::Array(arr) => {
+            for val in arr {
+                convert_keys_to_snake_case(val);
+            }
+        }
+        _ => {}
+    }
 }

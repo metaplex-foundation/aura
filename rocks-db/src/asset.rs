@@ -69,6 +69,7 @@ pub struct AssetDynamicDetails {
     pub unknown_plugins: Option<Updated<String>>,
     pub num_minted: Option<Updated<u32>>,
     pub current_size: Option<Updated<u32>>,
+    pub plugins_json_version: Option<Updated<u32>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -393,6 +394,10 @@ impl AssetDynamicDetails {
                         );
                         update_optional_field(&mut current_val.num_minted, &new_val.num_minted);
                         update_optional_field(&mut current_val.current_size, &new_val.current_size);
+                        update_optional_field(
+                            &mut current_val.plugins_json_version,
+                            &new_val.plugins_json_version,
+                        );
 
                         current_val
                     } else {

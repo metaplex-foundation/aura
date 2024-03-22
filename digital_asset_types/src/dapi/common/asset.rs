@@ -18,7 +18,7 @@ use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_group
 use crate::rpc::response::{AssetError, TokenAccountsList, TransactionSignatureList};
 use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
-    MetadataMap, MplCoreCollectionInfo, Ownership, Royalty, Scope, Supply, Uses,
+    MetadataMap, MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
 };
 
 pub fn to_uri(uri: String) -> Option<Url> {
@@ -285,10 +285,11 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         .unwrap_or(false);
     let edition_nonce =
         safe_select(chain_data_selector, "$.edition_nonce").and_then(|v| v.as_u64());
-    let mpl_core_collection_info = match interface {
-        Interface::MplCoreCollection => Some(MplCoreCollectionInfo {
-            num_minted: asset.num_minted.unwrap_or(0),
-            current_supply: asset.current_supply.unwrap_or(0),
+    let mpl_core_info = match interface {
+        Interface::MplCoreAsset | Interface::MplCoreCollection => Some(MplCoreInfo {
+            num_minted: asset.num_minted,
+            current_supply: asset.current_supply,
+            plugins_json_version: asset.plugins_json_version,
         }),
         _ => None,
     };
@@ -363,7 +364,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         metadata_owner: data.metadata_owner,
         plugins: asset.plugins,
         unknown_plugins: asset.unknown_plugins,
-        mpl_core_collection_info,
+        mpl_core_info,
     }))
 }
 

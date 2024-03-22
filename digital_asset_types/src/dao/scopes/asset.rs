@@ -212,6 +212,10 @@ fn convert_rocks_asset_model(
             .current_size
             .clone()
             .map(|current_size| current_size.value),
+        plugins_json_version: dynamic_data
+            .plugins_json_version
+            .clone()
+            .map(|plugins_json_version| plugins_json_version.value),
     })
 }
 
