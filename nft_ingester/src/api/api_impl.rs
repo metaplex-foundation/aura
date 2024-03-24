@@ -1,4 +1,3 @@
-use digital_asset_types::dao::scopes::asset::get_grouping;
 use digital_asset_types::dao::SearchAssetsQuery;
 use digital_asset_types::dapi::{get_asset, get_asset_batch, get_proof_for_assets, search_assets};
 use digital_asset_types::rpc::response::AssetList;
@@ -24,11 +23,7 @@ use rocks_db::Storage;
 use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
 use usecase::validation::{validate_opt_pubkey, validate_pubkey};
-use {
-    crate::api::*,
-    sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, SqlxPostgresConnector, Statement},
-    sqlx::postgres::PgPoolOptions,
-};
+use {crate::api::*, sqlx::postgres::PgPoolOptions};
 
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
@@ -37,7 +32,6 @@ pub struct DasApi<PC>
 where
     PC: ProofChecker + Sync + Send + 'static,
 {
-    db_connection: DatabaseConnection,
     pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
     metrics: Arc<ApiMetricsConfig>,
@@ -56,10 +50,7 @@ where
         proof_checker: Option<Arc<PC>>,
         max_page_limit: usize,
     ) -> Self {
-        let db_connection = SqlxPostgresConnector::from_sqlx_postgres_pool(pg_client.pool.clone());
-
         DasApi {
-            db_connection,
             pg_client,
             rocks_db,
             metrics,
@@ -80,10 +71,8 @@ where
             .connect(&config.database_url)
             .await?;
 
-        let conn = SqlxPostgresConnector::from_sqlx_postgres_pool(pool.clone());
         let pg_client = PgClient::new_with_pool(pool, red_metrics);
         Ok(DasApi {
-            db_connection: conn,
             pg_client: Arc::new(pg_client),
             rocks_db,
             metrics,
@@ -106,12 +95,10 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        self.db_connection
-            .execute(Statement::from_string(
-                DbBackend::Postgres,
-                "SELECT 1".to_string(),
-            ))
-            .await?;
+        self.pg_client
+            .check_health()
+            .await
+            .map_err(|_| DasApiError::InternalDdError)?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -478,16 +465,17 @@ where
             group_value,
         } = payload;
         let group_value_pubkey = validate_pubkey(group_value.clone())?;
-        let gs = get_grouping(
-            &self.db_connection,
-            group_key.clone(),
-            group_value_pubkey.to_bytes().as_slice(),
-        )
-        .await?;
+
+        let gs = self
+            .pg_client
+            .get_collection_size(group_value_pubkey.to_bytes().as_slice())
+            .await
+            .map_err(|_| DasApiError::InternalDdError)?;
+
         let res = GetGroupingResponse {
             group_key,
             group_name: group_value,
-            group_size: gs.size,
+            group_size: gs,
         };
 
         self.metrics
