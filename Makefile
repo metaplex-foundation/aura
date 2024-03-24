@@ -3,13 +3,19 @@
 SHELL := /bin/bash
 
 build:
-	@docker compose -f docker-compose.yaml build ingester-first-consumer raw-backfiller
+	@docker compose -f docker-compose.yaml build ingester-first-consumer raw-backfiller das-api synchronizer
 
 start:
 	@docker compose -f docker-compose.yaml up -d ingester-first-consumer
 
 start-synchronizer:
 	@docker compose -f docker-compose.yaml up -d synchronizer
+
+start-api:
+	@docker compose -f docker-compose.yaml up -d das-api
+
+stop-api:
+	@docker stop --time 20 das-api
 
 build-integrity-verification:
 	@docker compose -f docker-compose.yaml build integrity-verification
