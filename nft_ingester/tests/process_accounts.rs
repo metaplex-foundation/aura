@@ -2,8 +2,7 @@
 //#[cfg(feature = "integration_tests")]
 mod tests {
     use blockbuster::mpl_core::types::{
-        CompressionProof, HashablePluginSchema, Plugin,
-        UpdateAuthority,
+        CompressionProof, HashablePluginSchema, Plugin, UpdateAuthority,
     };
     use blockbuster::programs::mpl_core_program::MplCoreAccountData;
     use blockbuster::token_metadata::accounts::Metadata;

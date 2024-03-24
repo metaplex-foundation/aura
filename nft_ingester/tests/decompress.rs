@@ -2,7 +2,7 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use blockbuster::token_metadata::accounts::Metadata;
-    use blockbuster::token_metadata::types::{Collection, Key};
+    use blockbuster::token_metadata::types::{Collection, Creator, Key};
     use entities::api_req_params::{GetAsset, Options};
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
@@ -14,6 +14,7 @@ mod tests {
         token_updates_processor::TokenAccsProcessor,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
+    use postgre_client::PgClient;
     use rocks_db::{
         bubblegum_slots::BubblegumSlotGetter,
         columns::{Mint, TokenAccount},
@@ -32,7 +33,6 @@ mod tests {
     use tokio::sync::broadcast;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
-    use postgre_client::PgClient;
     use usecase::proofs::MaybeProofChecker;
 
     // 242856151 slot when decompress happened
@@ -107,7 +107,7 @@ mod tests {
     async fn process_accounts(
         pg_client: Arc<PgClient>,
         buffer: Arc<Buffer>,
-        env_rocks: Arc<rocks_db::Storage>,
+        env_rocks: Arc<Storage>,
         nft_created_slot: i64,
         mint: &Pubkey,
     ) {
@@ -166,10 +166,10 @@ mod tests {
                 update_authority: Pubkey::from_str("ywx1vh2bG1brfX8SqWMxGiivNTZjMHf9vuKrXKt4pNT")
                     .unwrap(),
                 mint: *mint,
-                name: "".to_string(),
-                symbol: "".to_string(),
-                uri: "".to_string(),
-                seller_fee_basis_points: 0,
+                name: "Mufacka name".to_string(),
+                symbol: "SSNC".to_string(),
+                uri: "https://arweave.net/nbCWy-OEu7MG5ORuJMurP5A-65qO811R-vL_8l_JHQM".to_string(),
+                seller_fee_basis_points: 100,
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: Some(255),
@@ -183,7 +183,20 @@ mod tests {
                 uses: None,
                 collection_details: None,
                 programmable_config: None,
-                creators: None,
+                creators: Some(vec![
+                    Creator {
+                        address: Pubkey::from_str("3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM")
+                            .unwrap(),
+                        verified: true,
+                        share: 99,
+                    },
+                    Creator {
+                        address: Pubkey::from_str("5zgWmEx4ppdh6LfaPUmfJG2gBAK8bC2gBv7zshD6N1hG")
+                            .unwrap(),
+                        verified: false,
+                        share: 1,
+                    },
+                ]),
             },
             slot_updated: nft_created_slot as u64,
             lamports: 1,
@@ -195,7 +208,9 @@ mod tests {
         let mut map = HashMap::new();
         map.insert(mint.to_bytes().to_vec(), decompressed_token_data);
 
-        mplx_accs_parser.transform_and_store_metadata_accs(&map).await;
+        mplx_accs_parser
+            .transform_and_store_metadata_accs(&map)
+            .await;
     }
 
     #[tokio::test]
