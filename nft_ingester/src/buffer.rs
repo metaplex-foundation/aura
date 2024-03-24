@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use entities::models::BufferedTransaction;
+use entities::models::{BufferedTransaction, Task};
 use interface::signature_persistence::ProcessingDataGetter;
 use tokio::sync::Mutex;
 use tonic::async_trait;
@@ -11,10 +11,10 @@ use tonic::async_trait;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::columns::{Mint, TokenAccount};
 
+use crate::mplx_updates_processor::MetadataInfo;
 use crate::mplx_updates_processor::{
-    BurntMetadataSlot, CompressedProofWithWriteVersion, TokenMetadata,
+    BurntMetadataSlot, IndexableAssetWithWriteVersion, TokenMetadata,
 };
-use crate::{db_v2::Task, mplx_updates_processor::MetadataInfo};
 
 #[derive(Default)]
 pub struct Buffer {
@@ -26,7 +26,7 @@ pub struct Buffer {
     pub token_metadata_editions: Mutex<HashMap<Pubkey, TokenMetadata>>,
     pub burnt_metadata_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub burnt_mpl_core_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
-    pub mpl_core_compressed_proofs: Mutex<HashMap<Pubkey, CompressedProofWithWriteVersion>>,
+    pub mpl_core_compressed_proofs: Mutex<HashMap<Pubkey, IndexableAssetWithWriteVersion>>,
 }
 
 impl Buffer {

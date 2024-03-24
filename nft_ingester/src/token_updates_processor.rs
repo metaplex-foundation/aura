@@ -1,5 +1,4 @@
 use crate::buffer::Buffer;
-use crate::mplx_updates_processor::result_to_metrics;
 use crate::process_accounts;
 use entities::enums::OwnerType;
 use entities::models::{
@@ -20,6 +19,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::time::Instant;
+use usecase::save_metrics::result_to_metrics;
 
 #[derive(Clone)]
 pub struct TokenAccsProcessor {
