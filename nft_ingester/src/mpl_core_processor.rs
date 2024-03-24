@@ -1,22 +1,22 @@
 use crate::buffer::Buffer;
-use crate::db_v2::{DBClient, Task};
 use crate::error::IngesterError;
-use crate::mplx_updates_processor::{
-    result_to_metrics, BurntMetadataSlot, CompressedProofWithWriteVersion, RocksMetadataModels,
-    MAX_BUFFERED_TASKS_TO_TAKE,
-};
-use crate::{process_accounts, save_rocks_models, store_assets};
+use crate::mplx_updates_processor::{BurntMetadataSlot, IndexableAssetWithWriteVersion};
+use crate::process_accounts;
 use blockbuster::mpl_core::types::{Plugin, PluginAuthority, PluginType, UpdateAuthority};
 use blockbuster::programs::mpl_core_program::MplCoreAccountData;
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::PubkeyWithSlot;
+use entities::models::Task;
 use entities::models::{ChainDataV1, UpdateVersion, Updated};
 use heck::ToSnakeCase;
 use metrics_utils::IngesterMetricsConfig;
+use postgre_client::PgClient;
 use rocks_db::asset::AssetCollection;
-use rocks_db::asset::MetadataMintMap;
+use rocks_db::batch_savers::MetadataModels;
 use rocks_db::errors::StorageError;
-use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
+use rocks_db::{
+    store_assets, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage,
+};
+use serde_json::Map;
 use serde_json::{json, Value};
 use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
@@ -24,11 +24,12 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 use tracing::error;
+use usecase::save_metrics::result_to_metrics;
 
 #[derive(Clone)]
 pub struct MplCoreProcessor {
     pub rocks_db: Arc<Storage>,
-    pub db_client: Arc<DBClient>,
+    pub pg_client: Arc<PgClient>,
     pub batch_size: usize,
 
     pub buffer: Arc<Buffer>,
@@ -40,14 +41,14 @@ pub struct MplCoreProcessor {
 impl MplCoreProcessor {
     pub fn new(
         rocks_db: Arc<Storage>,
-        db_client: Arc<DBClient>,
+        pg_client: Arc<PgClient>,
         buffer: Arc<Buffer>,
         metrics: Arc<IngesterMetricsConfig>,
         batch_size: usize,
     ) -> Self {
         Self {
             rocks_db,
-            db_client,
+            pg_client,
             buffer,
             metrics,
             batch_size,
@@ -75,7 +76,7 @@ impl MplCoreProcessor {
             keep_running,
             self.buffer.mpl_core_compressed_proofs,
             self.batch_size,
-            |s: CompressedProofWithWriteVersion| s,
+            |s: IndexableAssetWithWriteVersion| s,
             self.last_received_mpl_asset_at,
             Self::transform_and_store_mpl_assets,
             "mpl_core_asset"
@@ -84,7 +85,7 @@ impl MplCoreProcessor {
 
     pub async fn transform_and_store_mpl_assets(
         &self,
-        metadata_info: &HashMap<Pubkey, CompressedProofWithWriteVersion>,
+        metadata_info: &HashMap<Pubkey, IndexableAssetWithWriteVersion>,
     ) {
         let metadata_models = match self.create_mpl_asset_models(metadata_info).await {
             Ok(metadata_models) => metadata_models,
@@ -95,7 +96,15 @@ impl MplCoreProcessor {
         };
 
         let begin_processing = Instant::now();
-        self.store_metadata_models(&metadata_models).await;
+        let _ = tokio::join!(
+            self.rocks_db
+                .store_metadata_models(&metadata_models, self.metrics.clone()),
+            self.pg_client.store_tasks(
+                self.buffer.json_tasks.clone(),
+                &metadata_models.tasks,
+                self.metrics.clone()
+            )
+        );
         self.metrics.set_latency(
             "mpl_core_asset",
             begin_processing.elapsed().as_millis() as f64,
@@ -104,16 +113,16 @@ impl MplCoreProcessor {
 
     pub async fn create_mpl_asset_models(
         &self,
-        mpl_assets: &HashMap<Pubkey, CompressedProofWithWriteVersion>,
-    ) -> Result<RocksMetadataModels, IngesterError> {
-        let mut models = RocksMetadataModels::default();
+        mpl_assets: &HashMap<Pubkey, IndexableAssetWithWriteVersion>,
+    ) -> Result<MetadataModels, IngesterError> {
+        let mut models = MetadataModels::default();
         for (asset_key, account_data) in mpl_assets.iter() {
             // Notes:
             // The address of the Core asset is used for Core Asset ID.  There are no token or mint accounts.
             // There are no `MasterEdition` or `Edition` accounts associated with Core assets.
 
             // Note: This indexes both Core Assets and Core Collections.
-            let asset = match account_data.proof.clone() {
+            let asset = match account_data.indexable_asset.clone() {
                 MplCoreAccountData::Asset(indexable_asset) => indexable_asset,
                 MplCoreAccountData::Collection(indexable_asset) => indexable_asset,
                 _ => continue,
@@ -162,7 +171,7 @@ impl MplCoreProcessor {
             };
 
             let ownership_type = OwnerType::Single;
-            let (owner, class) = match account_data.proof.clone() {
+            let (owner, class) = match account_data.indexable_asset.clone() {
                 MplCoreAccountData::Asset(_) => {
                     (asset.owner, SpecificationAssetClass::MplCoreAsset)
                 }
@@ -432,14 +441,13 @@ impl MplCoreProcessor {
             .collect();
 
         store_assets!(
-            self,
+            self.rocks_db,
             asset_dynamic_details,
+            self.metrics.clone(),
             asset_dynamic_data,
             "accounts_saving_dynamic"
         )
     }
-
-    save_rocks_models!();
 }
 
 // Modify the JSON structure to remove the `Plugin`` name and just display its data.
@@ -467,8 +475,6 @@ fn remove_plugins_nesting(plugins_json: &mut Value) {
         }
     }
 }
-
-use serde_json::Map;
 
 // Modify the JSON for `PluginAuthority`` to have consistent output no matter the enum type.
 // For example, from:

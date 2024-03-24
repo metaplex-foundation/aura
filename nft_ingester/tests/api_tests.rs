@@ -31,7 +31,6 @@ mod tests {
     use mpl_token_metadata::accounts::MasterEdition;
     use nft_ingester::{
         buffer::Buffer,
-        db_v2::DBClient,
         mplx_updates_processor::{BurntMetadataSlot, MetadataInfo, MplxAccsProcessor},
         token_updates_processor::TokenAccsProcessor,
     };
@@ -653,10 +652,6 @@ mod tests {
 
         let buffer = Arc::new(Buffer::new());
 
-        let db_client = Arc::new(DBClient {
-            pool: env.pg_env.pool.clone(),
-        });
-
         let token_updates_processor = TokenAccsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
@@ -666,7 +661,7 @@ mod tests {
         let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            db_client.clone(),
+            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -806,10 +801,6 @@ mod tests {
 
         let buffer = Arc::new(Buffer::new());
 
-        let db_client = Arc::new(DBClient {
-            pool: env.pg_env.pool.clone(),
-        });
-
         let token_updates_processor = TokenAccsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
@@ -819,7 +810,7 @@ mod tests {
         let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            db_client.clone(),
+            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -969,10 +960,6 @@ mod tests {
 
         let buffer = Arc::new(Buffer::new());
 
-        let db_client = Arc::new(DBClient {
-            pool: env.pg_env.pool.clone(),
-        });
-
         let token_updates_processor = TokenAccsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
@@ -982,7 +969,7 @@ mod tests {
         let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            db_client.clone(),
+            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );

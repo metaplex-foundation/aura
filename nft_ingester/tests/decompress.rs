@@ -10,7 +10,6 @@ mod tests {
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
         buffer::Buffer,
-        db_v2::DBClient,
         mplx_updates_processor::{MetadataInfo, MplxAccsProcessor},
         token_updates_processor::TokenAccsProcessor,
         transaction_ingester::{self, BackfillTransactionIngester},
@@ -22,7 +21,6 @@ mod tests {
         Storage,
     };
     use solana_sdk::pubkey::Pubkey;
-    use sqlx::{Pool, Postgres};
     use std::fs::File;
     use std::str::FromStr;
     use std::sync::Arc;
@@ -34,6 +32,7 @@ mod tests {
     use tokio::sync::broadcast;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
+    use postgre_client::PgClient;
     use usecase::proofs::MaybeProofChecker;
 
     // 242856151 slot when decompress happened
@@ -106,18 +105,16 @@ mod tests {
     }
 
     async fn process_accounts(
-        pg_pool: Pool<Postgres>,
+        pg_client: Arc<PgClient>,
         buffer: Arc<Buffer>,
         env_rocks: Arc<rocks_db::Storage>,
         nft_created_slot: i64,
         mint: &Pubkey,
     ) {
-        let db_client = Arc::new(DBClient { pool: pg_pool });
-
         let mplx_accs_parser = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            db_client.clone(),
+            pg_client.clone(),
             env_rocks.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -198,11 +195,7 @@ mod tests {
         let mut map = HashMap::new();
         map.insert(mint.to_bytes().to_vec(), decompressed_token_data);
 
-        let metadata_models = mplx_accs_parser.create_rocks_metadata_models(&map).await;
-
-        mplx_accs_parser
-            .store_metadata_models(&metadata_models)
-            .await;
+        mplx_accs_parser.transform_and_store_metadata_accs(&map).await;
     }
 
     #[tokio::test]
@@ -245,7 +238,7 @@ mod tests {
         .await;
 
         process_accounts(
-            env.pg_env.pool.clone(),
+            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             242856151,
@@ -314,7 +307,7 @@ mod tests {
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
         process_accounts(
-            env.pg_env.pool.clone(),
+            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             242856151,
@@ -390,7 +383,7 @@ mod tests {
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
         process_accounts(
-            env.pg_env.pool.clone(),
+            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             252856151,
@@ -473,7 +466,7 @@ mod tests {
         .await;
 
         process_accounts(
-            env.pg_env.pool.clone(),
+            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             252856151,

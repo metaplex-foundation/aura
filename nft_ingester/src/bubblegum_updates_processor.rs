@@ -11,7 +11,7 @@ use entities::enums::{
     ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard,
     UseMethod,
 };
-use entities::models::{BufferedTransaction, SignatureWithSlot, UpdateVersion, Updated};
+use entities::models::{BufferedTransaction, SignatureWithSlot, Task, UpdateVersion, Updated};
 use entities::models::{ChainDataV1, Creator, Uses};
 use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
@@ -24,7 +24,7 @@ use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
 };
 use rocks_db::transaction::{
-    AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, Task, TransactionResult,
+    AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, TransactionResult,
     TreeUpdate,
 };
 use serde_json::json;
@@ -45,7 +45,7 @@ pub struct BubblegumTxProcessor {
 
     pub rocks_client: Arc<rocks_db::Storage>,
 
-    pub json_tasks: Arc<Mutex<VecDeque<crate::db_v2::Task>>>,
+    pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
     pub metrics: Arc<IngesterMetricsConfig>,
 }
 
@@ -53,7 +53,7 @@ impl BubblegumTxProcessor {
     pub fn new(
         rocks_client: Arc<rocks_db::Storage>,
         metrics: Arc<IngesterMetricsConfig>,
-        json_tasks: Arc<Mutex<VecDeque<crate::db_v2::Task>>>,
+        json_tasks: Arc<Mutex<VecDeque<Task>>>,
     ) -> Self {
         BubblegumTxProcessor {
             transaction_parser: Arc::new(FlatbufferMapper {}),

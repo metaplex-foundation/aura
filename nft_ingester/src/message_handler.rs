@@ -29,7 +29,7 @@ use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
 use crate::mplx_updates_processor::{
-    BurntMetadataSlot, CompressedProofWithWriteVersion, MetadataInfo, TokenMetadata,
+    BurntMetadataSlot, IndexableAssetWithWriteVersion, MetadataInfo, TokenMetadata,
 };
 use entities::models::{EditionV1, MasterEdition};
 
@@ -372,8 +372,8 @@ impl MessageHandler {
                 update_or_insert!(
                     self.buffer.mpl_core_compressed_proofs,
                     Pubkey::from(key_bytes),
-                    CompressedProofWithWriteVersion {
-                        proof: parsing_result.data.clone(),
+                    IndexableAssetWithWriteVersion {
+                        indexable_asset: parsing_result.data.clone(),
                         slot_updated: account_update.slot(),
                         write_version: account_update.write_version(),
                         lamports: account_update.lamports(),

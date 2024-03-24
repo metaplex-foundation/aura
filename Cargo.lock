@@ -4836,6 +4836,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-test",
+ "usecase",
  "uuid",
 ]
 
@@ -5726,6 +5727,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-test",
+ "usecase",
 ]
 
 [[package]]
