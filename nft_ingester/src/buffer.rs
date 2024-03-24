@@ -26,7 +26,7 @@ pub struct Buffer {
     pub token_metadata_editions: Mutex<HashMap<Pubkey, TokenMetadata>>,
     pub burnt_metadata_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub burnt_mpl_core_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
-    pub mpl_core_compressed_proofs: Mutex<HashMap<Pubkey, IndexableAssetWithWriteVersion>>,
+    pub mpl_core_indexable_assets: Mutex<HashMap<Pubkey, IndexableAssetWithWriteVersion>>,
 }
 
 impl Buffer {
@@ -40,7 +40,7 @@ impl Buffer {
             token_metadata_editions: Mutex::new(HashMap::new()),
             burnt_metadata_at_slot: Mutex::new(HashMap::new()),
             burnt_mpl_core_at_slot: Mutex::new(HashMap::new()),
-            mpl_core_compressed_proofs: Mutex::new(HashMap::new()),
+            mpl_core_indexable_assets: Mutex::new(HashMap::new()),
         }
     }
 
@@ -54,7 +54,7 @@ impl Buffer {
             self.json_tasks.lock().await.len(),
             self.token_metadata_editions.lock().await.len(),
             self.burnt_metadata_at_slot.lock().await.len(),
-            self.mpl_core_compressed_proofs.lock().await.len(),
+            self.mpl_core_indexable_assets.lock().await.len(),
             self.burnt_mpl_core_at_slot.lock().await.len(),
         );
     }
@@ -74,7 +74,7 @@ impl Buffer {
         );
         metrics.set_buffer(
             "mpl_core",
-            self.mpl_core_compressed_proofs.lock().await.len() as i64,
+            self.mpl_core_indexable_assets.lock().await.len() as i64,
         );
     }
 

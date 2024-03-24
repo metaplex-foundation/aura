@@ -74,7 +74,7 @@ impl MplCoreProcessor {
         process_accounts!(
             self,
             keep_running,
-            self.buffer.mpl_core_compressed_proofs,
+            self.buffer.mpl_core_indexable_assets,
             self.batch_size,
             |s: IndexableAssetWithWriteVersion| s,
             self.last_received_mpl_asset_at,

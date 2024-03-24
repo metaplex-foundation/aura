@@ -370,7 +370,7 @@ impl MessageHandler {
             }
             MplCoreAccountData::Asset(_) | MplCoreAccountData::Collection(_) => {
                 update_or_insert!(
-                    self.buffer.mpl_core_compressed_proofs,
+                    self.buffer.mpl_core_indexable_assets,
                     Pubkey::from(key_bytes),
                     IndexableAssetWithWriteVersion {
                         indexable_asset: parsing_result.data.clone(),
