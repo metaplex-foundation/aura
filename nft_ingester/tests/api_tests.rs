@@ -637,7 +637,7 @@ mod tests {
     }
 
     #[tokio::test]
-    // #[tracing_test::traced_test]
+    #[tracing_test::traced_test]
     async fn test_fungible_asset() {
         let cnt = 20;
         let cli = Cli::default();
@@ -988,7 +988,7 @@ mod tests {
             frozen: false,
             delegated_amount: 0,
             slot_updated: 1,
-            amount: 0,
+            amount: 1,
             write_version: 1,
         };
 
