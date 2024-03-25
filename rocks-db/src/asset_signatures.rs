@@ -55,8 +55,11 @@ impl AssetSignaturesGetter for Storage {
                 .unwrap_or_default() as usize,
         )
         .filter_map(std::result::Result::ok)
-        .flat_map(|(key, value)| {
+        .map_while(move |(key, value)| {
             let key = self.asset_signature.decode_key(key.to_vec()).ok()?;
+            if key.tree != tree || key.leaf_idx != leaf_idx {
+                return None;
+            }
             let value = bincode::deserialize::<AssetSignature>(value.as_ref()).ok()?;
             Some((key, value))
         })
