@@ -4,7 +4,11 @@ use {
     serde::Deserialize,
 };
 
-#[derive(Deserialize)]
+const fn default_synchronization_api_threshold() -> u64 {
+    1_000_000
+}
+
+#[derive(Deserialize, Clone)]
 pub struct Config {
     pub database_url: String,
     pub metrics_port: Option<u16>,
@@ -14,6 +18,8 @@ pub struct Config {
     pub archives_dir: String,
     #[serde(default = "default_max_page_limit")]
     pub max_page_limit: usize,
+    #[serde(default = "default_synchronization_api_threshold")]
+    pub synchronization_api_threshold: u64,
 }
 
 pub fn load_config() -> Result<Config, DasApiError> {

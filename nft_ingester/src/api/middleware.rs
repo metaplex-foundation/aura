@@ -1,13 +1,21 @@
+use jsonrpc_core::Output::Failure;
+use jsonrpc_core::{ErrorCode, Response};
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::api::meta_middleware::CANNOT_SERVICE_REQUEST_ERROR_CODE;
+use jsonrpc_http_server::hyper::header::HeaderValue;
+use jsonrpc_http_server::hyper::StatusCode;
 use jsonrpc_http_server::jsonrpc_core::futures::TryStreamExt;
+use jsonrpc_http_server::response_middleware::ResponseMiddleware;
 use jsonrpc_http_server::{hyper, RequestMiddleware, RequestMiddlewareAction};
 use log::info;
+use serde_json::json;
 use tokio_util::codec::{BytesCodec, FramedRead};
 
 const FULL_BACKUP_REQUEST_PATH: &str = "/snapshot";
 
+#[derive(Default, Clone)]
 pub struct RpcRequestMiddleware {
     pub archives_dir: String,
 }
@@ -124,5 +132,43 @@ impl RequestMiddleware for RpcRequestMiddleware {
         }
 
         request.into()
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct RpcResponseMiddleware {}
+
+impl ResponseMiddleware for RpcResponseMiddleware {
+    fn on_response(&self, response: Response) -> jsonrpc_http_server::Response {
+        match response {
+            Response::Single(ref o) => {
+                if let Failure(ref f) = o {
+                    if f.error.code == ErrorCode::ServerError(CANNOT_SERVICE_REQUEST_ERROR_CODE) {
+                        return Self::i_am_teapot(response);
+                    }
+                }
+            }
+            Response::Batch(ref os) => {
+                for o in os {
+                    if let Failure(ref f) = o {
+                        if f.error.code == ErrorCode::ServerError(CANNOT_SERVICE_REQUEST_ERROR_CODE)
+                        {
+                            return Self::i_am_teapot(response);
+                        }
+                    }
+                }
+            }
+        }
+        jsonrpc_http_server::Response::ok(format!("{}\n", json!(response)))
+    }
+}
+
+impl RpcResponseMiddleware {
+    fn i_am_teapot(response: Response) -> jsonrpc_http_server::Response {
+        jsonrpc_http_server::Response {
+            code: StatusCode::IM_A_TEAPOT,
+            content_type: HeaderValue::from_static("application/json; charset=utf-8"),
+            content: format!("{}", json!(response)),
+        }
     }
 }

@@ -1,16 +1,24 @@
 use std::sync::Arc;
 
 use jsonrpc_core::types::params::Params;
-use jsonrpc_core::IoHandler;
+use jsonrpc_core::MetaIoHandler;
 use usecase::proofs::MaybeProofChecker;
 
+use crate::api::meta_middleware::RpcMetaMiddleware;
+use crate::api::service::MiddlewaresData;
 use crate::api::*;
 
 pub struct RpcApiBuilder;
 
 impl RpcApiBuilder {
-    pub fn build(api: DasApi<MaybeProofChecker>) -> Result<IoHandler, DasApiError> {
-        let mut module = IoHandler::default();
+    pub(crate) fn build(
+        api: DasApi<MaybeProofChecker>,
+        middlewares_data: &Option<MiddlewaresData>,
+    ) -> Result<MetaIoHandler<RpcMetaMiddleware, RpcMetaMiddleware>, DasApiError> {
+        let mut module = MetaIoHandler::<RpcMetaMiddleware, RpcMetaMiddleware>::new(
+            Default::default(),
+            RpcMetaMiddleware::new(middlewares_data),
+        );
         let api = Arc::new(api);
 
         let cloned_api = api.clone();

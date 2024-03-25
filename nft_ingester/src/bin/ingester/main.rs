@@ -350,6 +350,7 @@ pub async fn main() -> Result<(), IngesterError> {
             config.check_proofs_commitment,
         ))
     });
+    let tasks_clone = mutexed_tasks.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
             cloned_rocks_storage.clone(),
@@ -357,6 +358,7 @@ pub async fn main() -> Result<(), IngesterError> {
             metrics_state.api_metrics.clone(),
             cloned_red_metrics,
             proof_checker,
+            tasks_clone,
         )
         .await
         {

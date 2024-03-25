@@ -3447,14 +3447,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpc-core"
+version = "19.0.1"
+source = "git+https://github.com/RequescoS/jsonrpc-response-middleware.git#238db6ab30314d06c7f8e046313beeee7782aee2"
+dependencies = [
+ "futures",
+ "futures-executor",
+ "futures-util",
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
+
+[[package]]
 name = "jsonrpc-http-server"
-version = "18.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1dea6e07251d9ce6a552abfb5d7ad6bc290a4596c8dcc3d795fae2bbdc1f3ff"
+version = "19.0.1"
+source = "git+https://github.com/RequescoS/jsonrpc-response-middleware.git#238db6ab30314d06c7f8e046313beeee7782aee2"
 dependencies = [
  "futures",
  "hyper",
- "jsonrpc-core",
+ "jsonrpc-core 19.0.1",
  "jsonrpc-server-utils",
  "log",
  "net2",
@@ -3464,14 +3477,13 @@ dependencies = [
 
 [[package]]
 name = "jsonrpc-server-utils"
-version = "18.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa4fdea130485b572c39a460d50888beb00afb3e35de23ccd7fad8ff19f0e0d4"
+version = "19.0.1"
+source = "git+https://github.com/RequescoS/jsonrpc-response-middleware.git#238db6ab30314d06c7f8e046313beeee7782aee2"
 dependencies = [
  "bytes",
  "futures",
  "globset",
- "jsonrpc-core",
+ "jsonrpc-core 19.0.1",
  "lazy_static",
  "log",
  "tokio",
@@ -4053,7 +4065,7 @@ dependencies = [
  "grpc",
  "interface",
  "itertools 0.12.1",
- "jsonrpc-core",
+ "jsonrpc-core 19.0.1",
  "jsonrpc-http-server",
  "lazy_static",
  "libc",
@@ -7073,7 +7085,7 @@ checksum = "b0cc64f5092d9c3e0bbfbd459689ffc17617b9f52773ffb7e26a2483a33d5ace"
 dependencies = [
  "base64 0.21.6",
  "bs58 0.4.0",
- "jsonrpc-core",
+ "jsonrpc-core 18.0.0",
  "reqwest",
  "semver 1.0.21",
  "serde",

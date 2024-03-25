@@ -38,7 +38,7 @@ where
     PC: ProofChecker + Sync + Send + 'static,
 {
     db_connection: DatabaseConnection,
-    pg_client: Arc<PgClient>,
+    pub(crate) pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
     metrics: Arc<ApiMetricsConfig>,
     proof_checker: Option<Arc<PC>>,
