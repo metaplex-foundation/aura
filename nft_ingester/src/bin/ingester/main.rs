@@ -55,6 +55,7 @@ use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::{SlotsCollector, SlotsGetter};
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
+pub const PG_MIGRATIONS_PATH: &str = "./migrations";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 
@@ -155,6 +156,11 @@ pub async fn main() -> Result<(), IngesterError> {
         )
         .await?,
     );
+
+    index_storage
+        .run_migration(PG_MIGRATIONS_PATH)
+        .await
+        .map_err(IngesterError::SqlxError)?;
 
     let db_client_v2 = Arc::new(DBClientV2::new(&config.database_config).await?);
 
