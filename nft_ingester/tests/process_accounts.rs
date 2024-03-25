@@ -11,9 +11,7 @@ mod tests {
     use rocks_db::columns::{Mint, TokenAccount};
     use rocks_db::editions::TokenMetadataEdition;
     use solana_program::pubkey::Pubkey;
-    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
-    use std::time::Duration;
     use testcontainers::clients::Cli;
 
     pub fn generate_metadata(mint_key: Pubkey) -> MetadataInfo {
@@ -49,6 +47,8 @@ mod tests {
     #[cfg(test)]
     #[tokio::test]
     async fn token_update_process() {
+        use std::collections::HashMap;
+
         let first_mint = Pubkey::new_unique();
         let second_mint = Pubkey::new_unique();
         let first_token_account = Pubkey::new_unique();
@@ -98,26 +98,12 @@ mod tests {
         };
 
         let buffer = Arc::new(Buffer::new());
-        buffer
-            .mints
-            .lock()
-            .await
-            .insert(first_mint.to_bytes().to_vec(), first_mint_to_save);
-        buffer
-            .mints
-            .lock()
-            .await
-            .insert(second_mint.to_bytes().to_vec(), second_mint_to_save);
-        buffer
-            .token_accs
-            .lock()
-            .await
-            .insert(first_token_account, first_token_account_to_save);
-        buffer
-            .token_accs
-            .lock()
-            .await
-            .insert(second_token_account, second_token_account_to_save);
+        let mut token_accs = HashMap::new();
+        let mut mints = HashMap::new();
+        mints.insert(first_mint.to_bytes().to_vec(), first_mint_to_save);
+        mints.insert(second_mint.to_bytes().to_vec(), second_mint_to_save);
+        token_accs.insert(first_token_account, first_token_account_to_save);
+        token_accs.insert(second_token_account, second_token_account_to_save);
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
@@ -127,23 +113,12 @@ mod tests {
             Arc::new(IngesterMetricsConfig::new()),
             1,
         );
-        let mut spl_token_accs_parser_clone = spl_token_accs_parser.clone();
-        let keep_running = Arc::new(AtomicBool::new(true));
-        let keep_running_clone = keep_running.clone();
-        tokio::spawn(async move {
-            spl_token_accs_parser_clone
-                .process_token_accs(keep_running_clone)
-                .await
-        });
-
-        let mut spl_token_accs_parser_clone = spl_token_accs_parser.clone();
-        let keep_running_clone = keep_running.clone();
-        tokio::spawn(async move {
-            spl_token_accs_parser_clone
-                .process_mint_accs(keep_running_clone)
-                .await
-        });
-        tokio::time::sleep(Duration::from_secs(10)).await;
+        spl_token_accs_parser
+            .transform_and_save_token_accs(&token_accs)
+            .await;
+        spl_token_accs_parser
+            .transform_and_save_mint_accs(&mints)
+            .await;
 
         let first_owner_from_db = env
             .rocks_env
@@ -183,6 +158,8 @@ mod tests {
     #[cfg(test)]
     #[tokio::test]
     async fn mplx_update_process() {
+        use std::collections::HashMap;
+
         let first_mint = Pubkey::new_unique();
         let second_mint = Pubkey::new_unique();
         let first_edition = Pubkey::new_unique();
@@ -218,26 +195,12 @@ mod tests {
         };
 
         let buffer = Arc::new(Buffer::new());
-        buffer
-            .mplx_metadata_info
-            .lock()
-            .await
-            .insert(first_mint.to_bytes().to_vec(), first_metadata_to_save);
-        buffer
-            .mplx_metadata_info
-            .lock()
-            .await
-            .insert(second_mint.to_bytes().to_vec(), second_metadata_to_save);
-        buffer
-            .token_metadata_editions
-            .lock()
-            .await
-            .insert(first_edition, first_edition_to_save);
-        buffer
-            .token_metadata_editions
-            .lock()
-            .await
-            .insert(second_edition, second_edition_to_save);
+        let mut mplx_metadata_info = HashMap::new();
+        let mut token_metadata_editions = HashMap::new();
+        mplx_metadata_info.insert(first_mint.to_bytes().to_vec(), first_metadata_to_save);
+        mplx_metadata_info.insert(second_mint.to_bytes().to_vec(), second_metadata_to_save);
+        token_metadata_editions.insert(first_edition, first_edition_to_save.edition);
+        token_metadata_editions.insert(second_edition, second_edition_to_save.edition);
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
@@ -252,23 +215,12 @@ mod tests {
             Arc::new(IngesterMetricsConfig::new()),
         );
 
-        let mut mplx_accs_parser_clone = mplx_accs_parser.clone();
-        let keep_running = Arc::new(AtomicBool::new(true));
-        let keep_running_clone = keep_running.clone();
-        tokio::spawn(async move {
-            mplx_accs_parser_clone
-                .process_metadata_accs(keep_running_clone)
-                .await
-        });
-
-        let mut mplx_accs_parser_clone = mplx_accs_parser.clone();
-        let keep_running_clone = keep_running.clone();
-        tokio::spawn(async move {
-            mplx_accs_parser_clone
-                .process_edition_accs(keep_running_clone)
-                .await
-        });
-        tokio::time::sleep(Duration::from_secs(10)).await;
+        mplx_accs_parser
+            .transform_and_store_metadata_accs(&mplx_metadata_info)
+            .await;
+        mplx_accs_parser
+            .transform_and_store_edition_accs(&token_metadata_editions)
+            .await;
 
         let first_static_from_db = env
             .rocks_env
