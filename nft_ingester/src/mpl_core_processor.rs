@@ -196,16 +196,26 @@ impl MplCoreProcessor {
                 })
                 .unwrap_or((0, &default_creators));
 
-            let mut plugins_json = json!(asset.plugins);
+            let mut plugins_json = serde_json::to_value(&asset.plugins)
+                .map_err(|e| IngesterError::DeserializationError(e.to_string()))?;
 
             remove_plugins_nesting(&mut plugins_json);
             transform_plugins_authority(&mut plugins_json);
             convert_keys_to_snake_case(&mut plugins_json);
 
             let supply = 1;
-            let mut unknown_plugins_json = json!(asset.unknown_plugins);
-            transform_plugins_authority(&mut unknown_plugins_json);
-            convert_keys_to_snake_case(&mut unknown_plugins_json);
+            // Serialize any uknown plugins into JSON.
+            let unknown_plugins_json = if !asset.unknown_plugins.is_empty() {
+                let mut unknown_plugins_json = serde_json::to_value(&asset.unknown_plugins)
+                    .map_err(|e| IngesterError::DeserializationError(e.to_string()))?;
+
+                transform_plugins_authority(&mut unknown_plugins_json);
+                convert_keys_to_snake_case(&mut unknown_plugins_json);
+
+                Some(unknown_plugins_json)
+            } else {
+                None
+            };
 
             // Get transfer delegate from `TransferDelegate` plugin if available.
             let transfer_delegate =
@@ -379,11 +389,13 @@ impl MplCoreProcessor {
                     Some(UpdateVersion::WriteVersion(account_data.write_version)),
                     plugins_json.to_string(),
                 )),
-                unknown_plugins: Some(Updated::new(
-                    account_data.slot_updated,
-                    Some(UpdateVersion::WriteVersion(account_data.write_version)),
-                    unknown_plugins_json.to_string(),
-                )),
+                unknown_plugins: unknown_plugins_json.map(|unknown_plugins_json| {
+                    Updated::new(
+                        account_data.slot_updated,
+                        Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                        unknown_plugins_json.to_string(),
+                    )
+                }),
                 num_minted: asset.num_minted.map(|num_minted| {
                     Updated::new(
                         account_data.slot_updated,

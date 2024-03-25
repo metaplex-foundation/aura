@@ -74,7 +74,7 @@ impl ProgramParser for MplCoreParser {
             }));
         }
         let key = Key::try_from_slice(&account_data[0..1])?;
-        let token_metadata_account_state = match key {
+        let mpl_core_account_state = match key {
             Key::AssetV1 => {
                 let indexable_asset = IndexableAsset::fetch(key, &account_data)?;
                 MplCoreAccountState {
@@ -98,6 +98,6 @@ impl ProgramParser for MplCoreParser {
             }
         };
 
-        Ok(Box::new(token_metadata_account_state))
+        Ok(Box::new(mpl_core_account_state))
     }
 }
