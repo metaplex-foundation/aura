@@ -70,31 +70,30 @@ impl<M: Metadata> Middleware<M> for RpcMetaMiddleware {
         F: Fn(Call, M) -> X + Send + Sync,
         X: Future<Output = Option<Output>> + Send + 'static,
     {
-        if let Some(ref sequences) = self.sequences {
-            if sequences
+        if self.sequences.as_ref().map_or(true, |sequences| {
+            sequences
                 .last_primary_storage_seq
                 .load(Ordering::SeqCst)
                 .saturating_sub(sequences.last_index_storage_seq.load(Ordering::SeqCst))
                 < sequences.synchronization_api_threshold
-            {
-                return Either::Right(next(call, meta));
-            }
-        } else {
+        }) {
             return Either::Right(next(call, meta));
         }
-        match call {
-            Call::MethodCall(ref call) => {
-                if INDEX_STORAGE_DEPENDS_METHODS.contains(&call.method.as_str()) {
-                    return Either::Left(Box::pin(future::ready(Self::cannot_service_request())));
-                }
+
+        let should_cancel_request = match &call {
+            Call::MethodCall(method_call) => {
+                INDEX_STORAGE_DEPENDS_METHODS.contains(&method_call.method.as_str())
             }
-            Call::Notification(ref call) => {
-                if INDEX_STORAGE_DEPENDS_METHODS.contains(&call.method.as_str()) {
-                    return Either::Left(Box::pin(future::ready(Self::cannot_service_request())));
-                }
+            Call::Notification(notification) => {
+                INDEX_STORAGE_DEPENDS_METHODS.contains(&notification.method.as_str())
             }
-            Call::Invalid { .. } => {}
+            _ => false,
+        };
+
+        if should_cancel_request {
+            Either::Left(Box::pin(future::ready(Self::cannot_service_request())))
+        } else {
+            Either::Right(next(call, meta))
         }
-        Either::Right(next(call, meta))
     }
 }

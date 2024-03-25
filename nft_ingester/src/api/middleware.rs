@@ -140,25 +140,16 @@ pub struct RpcResponseMiddleware {}
 
 impl ResponseMiddleware for RpcResponseMiddleware {
     fn on_response(&self, response: Response) -> jsonrpc_http_server::Response {
-        match response {
-            Response::Single(ref o) => {
-                if let Failure(ref f) = o {
-                    if f.error.code == ErrorCode::ServerError(CANNOT_SERVICE_REQUEST_ERROR_CODE) {
-                        return Self::i_am_teapot(response);
-                    }
-                }
-            }
-            Response::Batch(ref os) => {
-                for o in os {
-                    if let Failure(ref f) = o {
-                        if f.error.code == ErrorCode::ServerError(CANNOT_SERVICE_REQUEST_ERROR_CODE)
-                        {
-                            return Self::i_am_teapot(response);
-                        }
-                    }
-                }
+        fn is_cannot_service_request_error(response: &Response) -> bool {
+            match response {
+                Response::Single(ref o) => matches!(o, Failure(ref f) if f.error.code == ErrorCode::ServerError(CANNOT_SERVICE_REQUEST_ERROR_CODE)),
+                Response::Batch(ref os) => os.iter().any(|o| matches!(o, Failure(ref f) if f.error.code == ErrorCode::ServerError(CANNOT_SERVICE_REQUEST_ERROR_CODE))),
             }
         }
+        if is_cannot_service_request_error(&response) {
+            return Self::i_am_teapot(response);
+        }
+
         jsonrpc_http_server::Response::ok(format!("{}\n", json!(response)))
     }
 }
