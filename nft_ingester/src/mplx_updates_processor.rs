@@ -218,7 +218,7 @@ impl MplxAccsProcessor {
         );
     }
 
-    async fn transform_and_store_edition_accs(
+    pub async fn transform_and_store_edition_accs(
         &self,
         editions: &HashMap<Pubkey, TokenMetadataEdition>,
     ) {
