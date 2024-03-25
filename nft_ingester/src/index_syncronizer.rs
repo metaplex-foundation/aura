@@ -271,7 +271,7 @@ where
                     )
                     .await
                 }));
-                if updated_keys.len() < self.dump_synchronizer_batch_size{
+                if updated_keys.len() < self.dump_synchronizer_batch_size {
                     end_reached = true;
                     break;
                 }

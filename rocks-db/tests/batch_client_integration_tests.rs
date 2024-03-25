@@ -166,14 +166,24 @@ mod tests {
 
         // Verify fetch_asset_updated_keys with up to key which is less then the first key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, Some(AssetUpdatedKey::new(0, 2, DEFAULT_PUBKEY_OF_ONES.clone())), 10, None)
+            .fetch_asset_updated_keys(
+                None,
+                Some(AssetUpdatedKey::new(0, 2, DEFAULT_PUBKEY_OF_ONES.clone())),
+                10,
+                None,
+            )
             .unwrap();
         assert_eq!(keys.len(), 0, "Expected no keys");
         assert!(last_key.is_none(), "Expected an empty last key");
 
         // verify fetch_asset_updated_keys with up to key which is equal to the first key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, Some(AssetUpdatedKey::new(1, 4, DEFAULT_PUBKEY_OF_ONES.clone())), 10, None)
+            .fetch_asset_updated_keys(
+                None,
+                Some(AssetUpdatedKey::new(1, 4, DEFAULT_PUBKEY_OF_ONES.clone())),
+                10,
+                None,
+            )
             .unwrap();
         assert_eq!(keys.len(), 1, "Expected a single key");
         assert_eq!(
@@ -193,7 +203,12 @@ mod tests {
 
         // verify fetch_asset_updated_keys with up to key which is equal to the last key returns all the keys
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, Some(AssetUpdatedKey::new(4, 5, PUBKEY_OF_TWOS.clone())), 10, None)
+            .fetch_asset_updated_keys(
+                None,
+                Some(AssetUpdatedKey::new(4, 5, PUBKEY_OF_TWOS.clone())),
+                10,
+                None,
+            )
             .unwrap();
         assert_eq!(keys.len(), 2, "Expected 2 keys, got {:?}", keys);
         assert!(
