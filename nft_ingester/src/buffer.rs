@@ -13,7 +13,7 @@ use rocks_db::columns::{Mint, TokenAccount};
 
 use crate::mplx_updates_processor::MetadataInfo;
 use crate::mplx_updates_processor::{
-    BurntMetadataSlot, IndexableAssetWithWriteVersion, TokenMetadata,
+    BurntMetadataSlot, IndexableAssetWithAccountInfo, TokenMetadata,
 };
 
 #[derive(Default)]
@@ -26,7 +26,7 @@ pub struct Buffer {
     pub token_metadata_editions: Mutex<HashMap<Pubkey, TokenMetadata>>,
     pub burnt_metadata_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub burnt_mpl_core_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
-    pub mpl_core_indexable_assets: Mutex<HashMap<Pubkey, IndexableAssetWithWriteVersion>>,
+    pub mpl_core_indexable_assets: Mutex<HashMap<Pubkey, IndexableAssetWithAccountInfo>>,
 }
 
 impl Buffer {

@@ -13,7 +13,7 @@ mod tests {
     use nft_ingester::buffer::Buffer;
     use nft_ingester::mpl_core_processor::MplCoreProcessor;
     use nft_ingester::mplx_updates_processor::{
-        IndexableAssetWithWriteVersion, MetadataInfo, MplxAccsProcessor, TokenMetadata,
+        IndexableAssetWithAccountInfo, MetadataInfo, MplxAccsProcessor, TokenMetadata,
     };
     use nft_ingester::token_updates_processor::TokenAccsProcessor;
     use rocks_db::columns::{Mint, TokenAccount};
@@ -21,7 +21,6 @@ mod tests {
     use rocks_db::AssetAuthority;
     use solana_program::pubkey::Pubkey;
     use std::collections::HashMap;
-    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
     use testcontainers::clients::Cli;
 
@@ -304,7 +303,7 @@ mod tests {
             },
         );
 
-        let first_mpl_core_to_save = IndexableAssetWithWriteVersion {
+        let first_mpl_core_to_save = IndexableAssetWithAccountInfo {
             indexable_asset: MplCoreAccountData::Asset(IndexableAsset {
                 owner: Some(first_owner),
                 update_authority: UpdateAuthority::Address(first_authority),
@@ -321,7 +320,7 @@ mod tests {
             slot_updated: 1,
             write_version: 1,
         };
-        let second_mpl_core_to_save = IndexableAssetWithWriteVersion {
+        let second_mpl_core_to_save = IndexableAssetWithAccountInfo {
             indexable_asset: MplCoreAccountData::Collection(IndexableAsset {
                 owner: Some(second_owner),
                 update_authority: UpdateAuthority::Collection(second_authority),

@@ -54,7 +54,7 @@ pub struct BurntMetadataSlot {
 }
 
 #[derive(Clone)]
-pub struct IndexableAssetWithWriteVersion {
+pub struct IndexableAssetWithAccountInfo {
     pub indexable_asset: MplCoreAccountData,
     pub lamports: u64,
     pub executable: bool,

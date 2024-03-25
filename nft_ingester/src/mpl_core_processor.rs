@@ -1,6 +1,6 @@
 use crate::buffer::Buffer;
 use crate::error::IngesterError;
-use crate::mplx_updates_processor::{BurntMetadataSlot, IndexableAssetWithWriteVersion};
+use crate::mplx_updates_processor::{BurntMetadataSlot, IndexableAssetWithAccountInfo};
 use crate::process_accounts;
 use blockbuster::mpl_core::types::{Plugin, PluginAuthority, PluginType, UpdateAuthority};
 use blockbuster::programs::mpl_core_program::MplCoreAccountData;
@@ -76,7 +76,7 @@ impl MplCoreProcessor {
             keep_running,
             self.buffer.mpl_core_indexable_assets,
             self.batch_size,
-            |s: IndexableAssetWithWriteVersion| s,
+            |s: IndexableAssetWithAccountInfo| s,
             self.last_received_mpl_asset_at,
             Self::transform_and_store_mpl_assets,
             "mpl_core_asset"
@@ -85,7 +85,7 @@ impl MplCoreProcessor {
 
     pub async fn transform_and_store_mpl_assets(
         &self,
-        metadata_info: &HashMap<Pubkey, IndexableAssetWithWriteVersion>,
+        metadata_info: &HashMap<Pubkey, IndexableAssetWithAccountInfo>,
     ) {
         let metadata_models = match self.create_mpl_asset_models(metadata_info).await {
             Ok(metadata_models) => metadata_models,
@@ -113,7 +113,7 @@ impl MplCoreProcessor {
 
     pub async fn create_mpl_asset_models(
         &self,
-        mpl_assets: &HashMap<Pubkey, IndexableAssetWithWriteVersion>,
+        mpl_assets: &HashMap<Pubkey, IndexableAssetWithAccountInfo>,
     ) -> Result<MetadataModels, IngesterError> {
         let mut models = MetadataModels::default();
         for (asset_key, account_data) in mpl_assets.iter() {
