@@ -27,6 +27,7 @@ impl AssetSignaturesGetter for Storage {
         tree: Pubkey,
         leaf_idx: u64,
         page: Option<u64>,
+        before_sequence: Option<u64>,
         after_sequence: Option<u64>,
         direction: &AssetSortDirection,
         limit: u64,
@@ -57,7 +58,16 @@ impl AssetSignaturesGetter for Storage {
         .filter_map(std::result::Result::ok)
         .map_while(move |(key, value)| {
             let key = self.asset_signature.decode_key(key.to_vec()).ok()?;
-            if key.tree != tree || key.leaf_idx != leaf_idx {
+            if key.tree != tree
+                || key.leaf_idx != leaf_idx
+                || before_sequence
+                    .map(|before_sequence| {
+                        before_sequence <= key.seq && matches!(direction, AssetSortDirection::Asc)
+                            || before_sequence >= key.seq
+                                && matches!(direction, AssetSortDirection::Desc)
+                    })
+                    .unwrap_or_default()
+            {
                 return None;
             }
             let value = bincode::deserialize::<AssetSignature>(value.as_ref()).ok()?;
@@ -77,19 +87,16 @@ impl AssetSignaturesGetter for Storage {
     ) -> AssetSignatureWithPagination {
         let mut res = AssetSignatureWithPagination::default();
         let mut first_iter = true;
-        for (key, value) in
-            self.signatures_iter(tree, leaf_idx, page, after_sequence, &direction, limit)
-        {
-            if res.asset_signatures.len() >= limit as usize
-                || key.tree != tree
-                || before_sequence
-                    .map(|before_sequence| {
-                        before_sequence <= key.seq && matches!(direction, AssetSortDirection::Asc)
-                            || before_sequence >= key.seq
-                                && matches!(direction, AssetSortDirection::Desc)
-                    })
-                    .unwrap_or_default()
-            {
+        for (key, value) in self.signatures_iter(
+            tree,
+            leaf_idx,
+            page,
+            before_sequence,
+            after_sequence,
+            &direction,
+            limit,
+        ) {
+            if res.asset_signatures.len() >= limit as usize {
                 break;
             }
             res.asset_signatures.push(value);
