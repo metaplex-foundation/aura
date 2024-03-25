@@ -486,26 +486,49 @@ fn remove_plugins_nesting(plugins_json: &mut Value) {
 // to:
 // "authority":{"address":null,"type":"UpdateAuthority"}
 fn transform_plugins_authority(plugins_json: &mut Value) {
-    if let Some(plugins) = plugins_json.as_object_mut() {
-        for (_, plugin) in plugins.iter_mut() {
-            if let Some(Value::Object(authority)) = plugin.get_mut("authority") {
-                // Replace the nested JSON objects with desired format.
-                if let Some(Value::Object(pubkey_value)) = authority.remove("Address") {
-                    authority.insert("type".to_string(), Value::from("Address"));
-                    authority.extend(pubkey_value);
-                }
-            } else if let Some(Value::String(authority_type)) = plugin.get("authority") {
-                // Create new object in desired format.
-                let mut authority_obj = Map::new();
-                authority_obj.insert("type".to_string(), Value::from(authority_type.clone()));
-                authority_obj.insert("address".to_string(), Value::Null);
-
-                // Replace existing string value with new object.
-                if let Some(plugin) = plugin.as_object_mut() {
-                    plugin.insert("authority".to_string(), Value::Object(authority_obj));
+    match plugins_json {
+        Value::Object(plugins) => {
+            // Transform plugins in an object
+            for (_, plugin) in plugins.iter_mut() {
+                if let Some(plugin_obj) = plugin.as_object_mut() {
+                    transform_authority_in_object(plugin_obj);
                 }
             }
         }
+        Value::Array(plugins_array) => {
+            // Transform plugins in an array
+            for plugin in plugins_array.iter_mut() {
+                if let Some(plugin_obj) = plugin.as_object_mut() {
+                    transform_authority_in_object(plugin_obj);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+// Helper for `transform_plugins_authority` logic.
+fn transform_authority_in_object(plugin: &mut Map<String, Value>) {
+    match plugin.get_mut("authority") {
+        Some(Value::Object(authority)) => {
+            if let Some(authority_type) = authority.keys().next().cloned() {
+                // Replace the nested JSON objects with desired format.
+                if let Some(Value::Object(pubkey_obj)) = authority.remove(&authority_type) {
+                    if let Some(address_value) = pubkey_obj.get("address") {
+                        authority.insert("type".to_string(), Value::from(authority_type));
+                        authority.insert("address".to_string(), address_value.clone());
+                    }
+                }
+            }
+        }
+        Some(Value::String(authority_type)) => {
+            // Handle the case where authority is a string.
+            let mut authority_obj = Map::new();
+            authority_obj.insert("type".to_string(), Value::String(authority_type.clone()));
+            authority_obj.insert("address".to_string(), Value::Null);
+            plugin.insert("authority".to_string(), Value::Object(authority_obj));
+        }
+        _ => {}
     }
 }
 
