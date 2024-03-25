@@ -55,7 +55,7 @@ pub struct BurntMetadataSlot {
 }
 
 #[derive(Clone)]
-pub struct IndexableAssetWithWriteVersion {
+pub struct IndexableAssetWithAccountInfo {
     pub indexable_asset: MplCoreAccountData,
     pub lamports: u64,
     pub executable: bool,
@@ -220,7 +220,7 @@ impl MplxAccsProcessor {
         );
     }
 
-    async fn transform_and_store_edition_accs(
+    pub async fn transform_and_store_edition_accs(
         &self,
         editions: &HashMap<Pubkey, TokenMetadataEdition>,
     ) {

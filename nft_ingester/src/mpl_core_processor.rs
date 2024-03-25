@@ -1,6 +1,6 @@
 use crate::buffer::Buffer;
 use crate::error::IngesterError;
-use crate::mplx_updates_processor::{BurntMetadataSlot, IndexableAssetWithWriteVersion};
+use crate::mplx_updates_processor::{BurntMetadataSlot, IndexableAssetWithAccountInfo};
 use crate::process_accounts;
 use blockbuster::mpl_core::types::{Plugin, PluginAuthority, PluginType, UpdateAuthority};
 use blockbuster::programs::mpl_core_program::MplCoreAccountData;
@@ -74,9 +74,9 @@ impl MplCoreProcessor {
         process_accounts!(
             self,
             keep_running,
-            self.buffer.mpl_core_compressed_proofs,
+            self.buffer.mpl_core_indexable_assets,
             self.batch_size,
-            |s: IndexableAssetWithWriteVersion| s,
+            |s: IndexableAssetWithAccountInfo| s,
             self.last_received_mpl_asset_at,
             Self::transform_and_store_mpl_assets,
             "mpl_core_asset"
@@ -85,7 +85,7 @@ impl MplCoreProcessor {
 
     pub async fn transform_and_store_mpl_assets(
         &self,
-        metadata_info: &HashMap<Pubkey, IndexableAssetWithWriteVersion>,
+        metadata_info: &HashMap<Pubkey, IndexableAssetWithAccountInfo>,
     ) {
         let metadata_models = match self.create_mpl_asset_models(metadata_info).await {
             Ok(metadata_models) => metadata_models,
@@ -113,7 +113,7 @@ impl MplCoreProcessor {
 
     pub async fn create_mpl_asset_models(
         &self,
-        mpl_assets: &HashMap<Pubkey, IndexableAssetWithWriteVersion>,
+        mpl_assets: &HashMap<Pubkey, IndexableAssetWithAccountInfo>,
     ) -> Result<MetadataModels, IngesterError> {
         let mut models = MetadataModels::default();
         for (asset_key, account_data) in mpl_assets.iter() {
@@ -196,16 +196,26 @@ impl MplCoreProcessor {
                 })
                 .unwrap_or((0, &default_creators));
 
-            let mut plugins_json = json!(asset.plugins);
+            let mut plugins_json = serde_json::to_value(&asset.plugins)
+                .map_err(|e| IngesterError::DeserializationError(e.to_string()))?;
 
             remove_plugins_nesting(&mut plugins_json);
             transform_plugins_authority(&mut plugins_json);
             convert_keys_to_snake_case(&mut plugins_json);
 
             let supply = 1;
-            let mut unknown_plugins_json = json!(asset.unknown_plugins);
-            transform_plugins_authority(&mut unknown_plugins_json);
-            convert_keys_to_snake_case(&mut unknown_plugins_json);
+            // Serialize any uknown plugins into JSON.
+            let unknown_plugins_json = if !asset.unknown_plugins.is_empty() {
+                let mut unknown_plugins_json = serde_json::to_value(&asset.unknown_plugins)
+                    .map_err(|e| IngesterError::DeserializationError(e.to_string()))?;
+
+                transform_plugins_authority(&mut unknown_plugins_json);
+                convert_keys_to_snake_case(&mut unknown_plugins_json);
+
+                Some(unknown_plugins_json)
+            } else {
+                None
+            };
 
             // Get transfer delegate from `TransferDelegate` plugin if available.
             let transfer_delegate =
@@ -379,11 +389,13 @@ impl MplCoreProcessor {
                     Some(UpdateVersion::WriteVersion(account_data.write_version)),
                     plugins_json.to_string(),
                 )),
-                unknown_plugins: Some(Updated::new(
-                    account_data.slot_updated,
-                    Some(UpdateVersion::WriteVersion(account_data.write_version)),
-                    unknown_plugins_json.to_string(),
-                )),
+                unknown_plugins: unknown_plugins_json.map(|unknown_plugins_json| {
+                    Updated::new(
+                        account_data.slot_updated,
+                        Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                        unknown_plugins_json.to_string(),
+                    )
+                }),
                 num_minted: asset.num_minted.map(|num_minted| {
                     Updated::new(
                         account_data.slot_updated,
@@ -491,26 +503,49 @@ fn remove_plugins_nesting(plugins_json: &mut Value) {
 // to:
 // "authority":{"address":null,"type":"UpdateAuthority"}
 fn transform_plugins_authority(plugins_json: &mut Value) {
-    if let Some(plugins) = plugins_json.as_object_mut() {
-        for (_, plugin) in plugins.iter_mut() {
-            if let Some(Value::Object(authority)) = plugin.get_mut("authority") {
-                // Replace the nested JSON objects with desired format.
-                if let Some(Value::Object(pubkey_value)) = authority.remove("Address") {
-                    authority.insert("type".to_string(), Value::from("Address"));
-                    authority.extend(pubkey_value);
-                }
-            } else if let Some(Value::String(authority_type)) = plugin.get("authority") {
-                // Create new object in desired format.
-                let mut authority_obj = Map::new();
-                authority_obj.insert("type".to_string(), Value::from(authority_type.clone()));
-                authority_obj.insert("address".to_string(), Value::Null);
-
-                // Replace existing string value with new object.
-                if let Some(plugin) = plugin.as_object_mut() {
-                    plugin.insert("authority".to_string(), Value::Object(authority_obj));
+    match plugins_json {
+        Value::Object(plugins) => {
+            // Transform plugins in an object
+            for (_, plugin) in plugins.iter_mut() {
+                if let Some(plugin_obj) = plugin.as_object_mut() {
+                    transform_authority_in_object(plugin_obj);
                 }
             }
         }
+        Value::Array(plugins_array) => {
+            // Transform plugins in an array
+            for plugin in plugins_array.iter_mut() {
+                if let Some(plugin_obj) = plugin.as_object_mut() {
+                    transform_authority_in_object(plugin_obj);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+// Helper for `transform_plugins_authority` logic.
+fn transform_authority_in_object(plugin: &mut Map<String, Value>) {
+    match plugin.get_mut("authority") {
+        Some(Value::Object(authority)) => {
+            if let Some(authority_type) = authority.keys().next().cloned() {
+                // Replace the nested JSON objects with desired format.
+                if let Some(Value::Object(pubkey_obj)) = authority.remove(&authority_type) {
+                    if let Some(address_value) = pubkey_obj.get("address") {
+                        authority.insert("type".to_string(), Value::from(authority_type));
+                        authority.insert("address".to_string(), address_value.clone());
+                    }
+                }
+            }
+        }
+        Some(Value::String(authority_type)) => {
+            // Handle the case where authority is a string.
+            let mut authority_obj = Map::new();
+            authority_obj.insert("type".to_string(), Value::String(authority_type.clone()));
+            authority_obj.insert("address".to_string(), Value::Null);
+            plugin.insert("authority".to_string(), Value::Object(authority_obj));
+        }
+        _ => {}
     }
 }
 

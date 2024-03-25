@@ -402,7 +402,9 @@ pub struct Supply {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct MplCoreInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub num_minted: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub current_supply: Option<u32>,
     pub plugins_json_version: Option<u32>,
 }
@@ -437,7 +439,10 @@ pub struct Asset {
     pub metadata_owner: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rent_epoch: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub plugins: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub unknown_plugins: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mpl_core_info: Option<MplCoreInfo>,
 }

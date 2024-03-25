@@ -29,7 +29,7 @@ use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
 use crate::mplx_updates_processor::{
-    BurntMetadataSlot, IndexableAssetWithWriteVersion, MetadataInfo, TokenMetadata,
+    BurntMetadataSlot, IndexableAssetWithAccountInfo, MetadataInfo, TokenMetadata,
 };
 use entities::models::{EditionV1, MasterEdition};
 
@@ -371,9 +371,9 @@ impl MessageHandler {
             }
             MplCoreAccountData::Asset(_) | MplCoreAccountData::Collection(_) => {
                 update_or_insert!(
-                    self.buffer.mpl_core_compressed_proofs,
+                    self.buffer.mpl_core_indexable_assets,
                     Pubkey::from(key_bytes),
-                    IndexableAssetWithWriteVersion {
+                    IndexableAssetWithAccountInfo {
                         indexable_asset: parsing_result.data.clone(),
                         slot_updated: account_update.slot(),
                         write_version: account_update.write_version(),
