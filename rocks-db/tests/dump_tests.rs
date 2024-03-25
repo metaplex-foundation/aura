@@ -36,7 +36,7 @@ async fn test_scv_export_from_rocks() {
             &mut assets_writer,
             155,
             HashSet::new(),
-            rx,
+            &rx,
         )
         .await
         .unwrap();
