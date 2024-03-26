@@ -182,6 +182,8 @@ pub struct IngesterConfig {
     pub check_proofs_commitment: CommitmentLevel,
     #[serde(default)]
     pub backfiller_source_mode: BackfillerSourceMode,
+    #[serde(default)]
+    pub migrate_columns: bool,
 }
 
 const fn default_dump_sync_threshold() -> i64 {
