@@ -1,7 +1,7 @@
 use crate::config::{
     setup_config, BackgroundTaskConfig, BackgroundTaskRunnerConfig, INGESTER_CONFIG_PREFIX,
 };
-use crate::db_v2::{DBClient, UpdatedTask};
+use crate::db_v2::{DBClient, JsonDownloadTask, UpdatedTask};
 use entities::enums::TaskStatus;
 use log::{debug, error};
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
@@ -57,132 +57,14 @@ impl JsonDownloader {
                         tasks_set.spawn(async move {
                             let begin_processing = Instant::now();
 
-                            let client = ClientBuilder::new()
-                                .timeout(time::Duration::from_secs(5))
-                                .build()
-                                .map_err(|e| format!("Failed to create client: {:?}", e))
-                                .unwrap();
-                            let response = Client::get(&client, task.metadata_url.clone())
-                                .send()
-                                .await
-                                .map_err(|e| format!("Failed to make request: {:?}", e));
+                            let response = Self::download_file(task.metadata_url.clone()).await;
 
                             cloned_metrics.set_latency_task_executed(
                                 "json_downloader",
                                 begin_processing.elapsed().as_millis() as f64,
                             );
 
-                            match response {
-                                Ok(response) => {
-                                    if let Some(content_header) =
-                                        response.headers().get("Content-Type")
-                                    {
-                                        match content_header.to_str() {
-                                            Ok(header) => {
-                                                if !header.contains(JSON_CONTENT_TYPE) {
-                                                    let data_to_insert = UpdatedTask {
-                                                        status: TaskStatus::Success,
-                                                        metadata_url: task.metadata_url.clone(),
-                                                        attempts: task.attempts + 1,
-                                                        error: "".to_string(),
-                                                    };
-                                                    cloned_db_client
-                                                        .update_tasks(vec![data_to_insert])
-                                                        .await
-                                                        .unwrap();
-
-                                                    cloned_rocks
-                                                        .asset_offchain_data
-                                                        .put(
-                                                            task.metadata_url.clone(),
-                                                            OffChainData {
-                                                                url: task.metadata_url,
-                                                                metadata: "".to_string(),
-                                                            },
-                                                        )
-                                                        .unwrap();
-
-                                                    cloned_metrics
-                                                        .inc_tasks("media", MetricStatus::SUCCESS);
-                                                    return;
-                                                }
-                                            }
-                                            Err(_) => {
-                                                error!("Could not convert header into str");
-                                                cloned_metrics
-                                                    .inc_tasks("unknown", MetricStatus::FAILURE);
-                                                return;
-                                            }
-                                        }
-                                    }
-
-                                    if response.status() != reqwest::StatusCode::OK {
-                                        let status = {
-                                            if task.attempts >= task.max_attempts {
-                                                TaskStatus::Failed
-                                            } else {
-                                                TaskStatus::Pending
-                                            }
-                                        };
-                                        let data_to_insert = UpdatedTask {
-                                            status,
-                                            metadata_url: task.metadata_url,
-                                            attempts: task.attempts + 1,
-                                            error: response.status().as_str().to_string(),
-                                        };
-                                        cloned_db_client
-                                            .update_tasks(vec![data_to_insert])
-                                            .await
-                                            .unwrap();
-
-                                        cloned_metrics.inc_tasks("json", MetricStatus::FAILURE);
-                                    } else {
-                                        let metadata_body = response.text().await;
-                                        if let Ok(metadata) = metadata_body {
-                                            cloned_rocks
-                                                .asset_offchain_data
-                                                .put(
-                                                    task.metadata_url.clone(),
-                                                    OffChainData {
-                                                        url: task.metadata_url.clone(),
-                                                        metadata: metadata.trim().replace('\0', ""),
-                                                    },
-                                                )
-                                                .unwrap();
-                                            let data_to_insert = UpdatedTask {
-                                                status: TaskStatus::Success,
-                                                metadata_url: task.metadata_url,
-                                                attempts: task.attempts + 1,
-                                                error: "".to_string(),
-                                            };
-                                            cloned_db_client
-                                                .update_tasks(vec![data_to_insert])
-                                                .await
-                                                .unwrap();
-
-                                            debug!("Saved metadata successfully...");
-                                            cloned_metrics.inc_tasks("json", MetricStatus::SUCCESS);
-                                        } else {
-                                            let data_to_insert = UpdatedTask {
-                                                status: TaskStatus::Failed,
-                                                metadata_url: task.metadata_url,
-                                                attempts: task.attempts + 1,
-                                                error: "Failed to deserialize metadata body"
-                                                    .to_string(),
-                                            };
-                                            cloned_db_client
-                                                .update_tasks(vec![data_to_insert])
-                                                .await
-                                                .unwrap();
-                                            cloned_metrics.inc_tasks("json", MetricStatus::FAILURE);
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    debug!("Error downloading metadata: {}", e);
-                                    cloned_metrics.inc_tasks("unknown", MetricStatus::FAILURE);
-                                }
-                            }
+                            Self::persist_response(response, task, cloned_db_client, cloned_rocks, cloned_metrics).await;
                         });
                     }
                     while tasks_set.join_next().await.is_some() {}
@@ -193,4 +75,160 @@ impl JsonDownloader {
             }
         }
     }
+
+    pub async fn download_file(url: String) -> Result<String, JsonDownloaderError> {
+        let client = ClientBuilder::new()
+            .timeout(time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| format!("Failed to create client: {:?}", e))
+            .unwrap();
+        let response = Client::get(&client, url)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to make request: {:?}", e));
+
+        match response {
+            Ok(response) => {
+                if let Some(content_header) = response.headers().get("Content-Type") {
+                    match content_header.to_str() {
+                        Ok(header) => {
+                            if !header.contains(JSON_CONTENT_TYPE) {
+                                return Err(JsonDownloaderError::GotNotJsonFile);
+                            }
+                        }
+                        Err(_) => {
+                            return Err(JsonDownloaderError::CouldNotReadHeader);
+                        }
+                    }
+                }
+
+                if response.status() != reqwest::StatusCode::OK {
+                    return Err(JsonDownloaderError::ErrorStatusCode(
+                        response.status().as_str().to_string(),
+                    ));
+                } else {
+                    let metadata_body = response.text().await;
+                    if let Ok(metadata) = metadata_body {
+                        return Ok(metadata.trim().replace('\0', ""));
+                    } else {
+                        return Err(JsonDownloaderError::CouldNotDeserialize);
+                    }
+                }
+            }
+            Err(e) => {
+                return Err(JsonDownloaderError::ErrorDownloading(e.to_string()));
+            }
+        }
+    }
+
+    pub async fn persist_response(download_response: Result<String, JsonDownloaderError>, task: JsonDownloadTask, index_db_client: Arc<DBClient>, main_db_client: Arc<Storage>, metrics: Arc<JsonDownloaderMetricsConfig>) -> Option<String> {
+        match download_response {
+            Ok(json_file) => {
+                main_db_client
+                    .asset_offchain_data
+                    .put(
+                        task.metadata_url.clone(),
+                        OffChainData {
+                            url: task.metadata_url.clone(),
+                            metadata: json_file.clone(),
+                        },
+                    )
+                    .unwrap();
+                let data_to_insert = UpdatedTask {
+                    status: TaskStatus::Success,
+                    metadata_url: task.metadata_url,
+                    attempts: task.attempts + 1,
+                    error: "".to_string(),
+                };
+                index_db_client
+                    .update_tasks(vec![data_to_insert])
+                    .await
+                    .unwrap();
+
+                debug!("Saved metadata successfully...");
+                metrics.inc_tasks("json", MetricStatus::SUCCESS);
+
+                return Some(json_file);
+            }
+            Err(json_err) => match json_err {
+                JsonDownloaderError::GotNotJsonFile => {
+                    let data_to_insert = UpdatedTask {
+                        status: TaskStatus::Success,
+                        metadata_url: task.metadata_url.clone(),
+                        attempts: task.attempts + 1,
+                        error: "".to_string(),
+                    };
+                    index_db_client
+                        .update_tasks(vec![data_to_insert])
+                        .await
+                        .unwrap();
+
+                    main_db_client
+                        .asset_offchain_data
+                        .put(
+                            task.metadata_url.clone(),
+                            OffChainData {
+                                url: task.metadata_url,
+                                metadata: "".to_string(),
+                            },
+                        )
+                        .unwrap();
+
+                    metrics.inc_tasks("media", MetricStatus::SUCCESS);
+                }
+                JsonDownloaderError::CouldNotDeserialize => {
+                    let data_to_insert = UpdatedTask {
+                        status: TaskStatus::Failed,
+                        metadata_url: task.metadata_url,
+                        attempts: task.attempts + 1,
+                        error: "Failed to deserialize metadata body"
+                            .to_string(),
+                    };
+                    index_db_client
+                        .update_tasks(vec![data_to_insert])
+                        .await
+                        .unwrap();
+                    metrics.inc_tasks("json", MetricStatus::FAILURE);
+                }
+                JsonDownloaderError::CouldNotReadHeader => {
+                    error!("Could not convert header into str");
+                    metrics.inc_tasks("unknown", MetricStatus::FAILURE);
+                }
+                JsonDownloaderError::ErrorStatusCode(err) => {
+                    let status = {
+                        if task.attempts >= task.max_attempts {
+                            TaskStatus::Failed
+                        } else {
+                            TaskStatus::Pending
+                        }
+                    };
+                    let data_to_insert = UpdatedTask {
+                        status,
+                        metadata_url: task.metadata_url,
+                        attempts: task.attempts + 1,
+                        error: err,
+                    };
+                    index_db_client
+                        .update_tasks(vec![data_to_insert])
+                        .await
+                        .unwrap();
+
+                    metrics.inc_tasks("json", MetricStatus::FAILURE);
+                }
+                JsonDownloaderError::ErrorDownloading(err) => {
+                    debug!("Error downloading metadata: {}", err);
+                    metrics.inc_tasks("unknown", MetricStatus::FAILURE);
+                }
+            },
+        }
+        return None;
+    }
+}
+
+pub enum JsonDownloaderError {
+    GotNotJsonFile,
+    CouldNotDeserialize,
+    CouldNotReadHeader,
+    ErrorStatusCode(String),
+    ErrorDownloading(String),
 }

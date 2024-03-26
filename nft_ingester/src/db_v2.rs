@@ -164,4 +164,46 @@ impl DBClient {
 
         Ok(())
     }
+
+    pub async fn get_tasks_by_url(&self, tasks: Vec<String>) -> Result<Vec<JsonDownloadTask>, IngesterError> {
+        if tasks.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("SELECT tsk_metadata_url, tsk_status, tsk_attempts, tsk_max_attempts FROM tasks WHERE tsk_metadata_url in (");
+        let tasks_len = tasks.len();
+        for (i, k) in tasks.iter().enumerate() {
+            query_builder.push_bind(k);
+            if i < tasks_len - 1 {
+                query_builder.push(",");
+            }
+        }
+
+        query_builder.push(");");
+        let query = query_builder.build();
+
+        let rows = query
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|err| IngesterError::DatabaseError(format!("Get tasks by urls: {}", err)))?;
+
+        let mut tasks = Vec::new();
+
+        for row in rows {
+            let metadata_url: String = row.get("tsk_metadata_url");
+            let status: TaskStatus = row.get("tsk_status");
+            let attempts: i16 = row.get("tsk_attempts");
+            let max_attempts: i16 = row.get("tsk_max_attempts");
+
+            tasks.push(JsonDownloadTask {
+                metadata_url,
+                status,
+                attempts,
+                max_attempts,
+            });
+        }
+
+        return Ok(tasks)
+    }
 }

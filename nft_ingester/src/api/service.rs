@@ -7,6 +7,8 @@ use usecase::proofs::MaybeProofChecker;
 
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
+use super::middleware::JsonDownloaderMiddleware;
+
 use {crate::api::DasApi, std::env, std::net::SocketAddr};
 use {
     jsonrpc_http_server::cors::AccessControlAllowHeaders,
@@ -29,6 +31,7 @@ pub async fn start_api(
     metrics: Arc<ApiMetricsConfig>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
     proof_checker: Option<Arc<MaybeProofChecker>>,
+    json_downloader: Option<Arc<JsonDownloaderMiddleware>>,
 ) -> Result<(), DasApiError> {
     env::set_var(
         env_logger::DEFAULT_FILTER_ENV,
@@ -39,7 +42,7 @@ pub async fn start_api(
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server_port));
 
     let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
-    let api = DasApi::from_config(config, metrics, red_metrics, rocks_db, proof_checker).await?;
+    let api = DasApi::from_config(config, metrics, red_metrics, rocks_db, proof_checker, json_downloader).await?;
 
     run_api(api, Some(request_middleware), addr, keep_running).await
 }
@@ -52,17 +55,18 @@ pub async fn start_api_v2(
     port: u16,
     proof_checker: Option<Arc<MaybeProofChecker>>,
     max_page_limit: usize,
+    json_downloader: Option<Arc<JsonDownloaderMiddleware>>,
 ) -> Result<(), DasApiError> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     // todo: setup middleware, looks like too many shit related to backups are there
     // let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
-    let api = DasApi::new(pg_client, rocks_db, metrics, proof_checker, max_page_limit);
+    let api = DasApi::new(pg_client, rocks_db, metrics, proof_checker, max_page_limit, json_downloader);
 
     run_api(api, None, addr, keep_running).await
 }
 
 async fn run_api(
-    api: DasApi<MaybeProofChecker>,
+    api: DasApi<MaybeProofChecker, JsonDownloaderMiddleware>,
     request_middleware: Option<RpcRequestMiddleware>,
     addr: SocketAddr,
     keep_running: Arc<AtomicBool>,

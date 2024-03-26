@@ -73,6 +73,7 @@ fn convert_rocks_offchain_data(
 ) -> Result<AssetDataModel, DbErr> {
     let mut metadata = offchain_data.metadata.clone();
 
+    // TODO: PROCESSING_METADATA_STATE may be already deprecated code
     if metadata == PROCESSING_METADATA_STATE || metadata.is_empty() {
         metadata = "{}".to_string();
     }
