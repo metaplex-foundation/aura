@@ -174,13 +174,19 @@ impl PgClient {
         &self,
         main_table: &str,
         transaction: &mut Transaction<'_, Postgres>,
+        drop_on_commit: bool,
+        prefix: &str,
     ) -> Result<(), String> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("CREATE TEMP TABLE ");
-        query_builder.push(TEMP_TABLE_PREFIX);
+        query_builder.push(prefix);
         query_builder.push(main_table);
         query_builder.push(" (LIKE ");
         query_builder.push(main_table);
-        query_builder.push(" INCLUDING DEFAULTS) ON COMMIT DROP;");
+        query_builder.push(" INCLUDING ALL)");
+        if drop_on_commit {
+            query_builder.push(" ON COMMIT DROP");
+        }
+        query_builder.push(";");
 
         self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, main_table)
             .await?;
@@ -200,8 +206,19 @@ impl PgClient {
             self.truncate_table(transaction, table).await?;
         }
 
+        let table = "tasks";
+        self.create_temp_tables(table, transaction, true, TEMP_TABLE_PREFIX)
+            .await?;
+        self.copy_table_from(
+            transaction,
+            matadata_copy_path,
+            format!("{}{}", TEMP_TABLE_PREFIX, table).as_ref(),
+            "tsk_id, tsk_metadata_url, tsk_status",
+        )
+        .await?;
+        self.insert_from_temp_table(transaction, table).await?;
+
         for (table, path, columns) in [
-            ("tasks", matadata_copy_path, "tsk_id, tsk_metadata_url, tsk_status"),
             (
                 "asset_creators_v3",
                 asset_creators_copy_path,
@@ -213,9 +230,7 @@ impl PgClient {
                 "ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_authority, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated",
             ),
         ] {
-            self.create_temp_tables(table, transaction).await?;
-            self.copy_table_from(transaction, path, format!("{}{}", TEMP_TABLE_PREFIX, table).as_ref(), columns).await?;
-            self.insert_from_temp_table(transaction, table).await?;
+            self.copy_table_from(transaction, path, table, columns).await?;
         }
         self.recreate_indexes(transaction).await?;
         Ok(())
