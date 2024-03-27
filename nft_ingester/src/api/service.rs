@@ -135,7 +135,7 @@ async fn run_api(
     addr: SocketAddr,
     keep_running: Arc<AtomicBool>,
 ) -> Result<(), DasApiError> {
-    let rpc = RpcApiBuilder::build(api, middlewares_data.clone())?;
+    let rpc = RpcApiBuilder::build(api, middlewares_data.clone().map(|m| m.sequences))?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(RUNTIME_WORKER_THREAD_COUNT)
         .enable_all()

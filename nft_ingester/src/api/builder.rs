@@ -5,7 +5,7 @@ use jsonrpc_core::MetaIoHandler;
 use usecase::proofs::MaybeProofChecker;
 
 use crate::api::meta_middleware::RpcMetaMiddleware;
-use crate::api::service::MiddlewaresData;
+use crate::api::service::Sequences;
 use crate::api::synchronization_state_consistency::SynchronizationStateConsistencyChecker;
 use crate::api::*;
 
@@ -14,12 +14,12 @@ pub struct RpcApiBuilder;
 impl RpcApiBuilder {
     pub(crate) fn build(
         api: DasApi<MaybeProofChecker>,
-        middlewares_data: Option<MiddlewaresData>,
+        sequences: Option<Sequences>,
     ) -> Result<MetaIoHandler<RpcMetaMiddleware, RpcMetaMiddleware>, DasApiError> {
         let mut module = MetaIoHandler::<RpcMetaMiddleware, RpcMetaMiddleware>::new(
             Default::default(),
             RpcMetaMiddleware::new(vec![Arc::new(SynchronizationStateConsistencyChecker::new(
-                middlewares_data.map(|m| m.sequences),
+                sequences,
             ))]),
         );
         let api = Arc::new(api);
