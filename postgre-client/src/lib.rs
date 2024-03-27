@@ -3,6 +3,7 @@ use entities::models::UrlWithStatus;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use sqlx::Row;
 use sqlx::{
+    migrate::Migrator,
     postgres::{PgConnectOptions, PgPoolOptions},
     ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
 };
@@ -106,6 +107,13 @@ impl PgClient {
                 Err(e)
             }
         }
+    }
+
+    pub async fn run_migration(&self, migration_path: &str) -> Result<(), String> {
+        let m = Migrator::new(std::path::Path::new(migration_path))
+            .await
+            .map_err(|e| e.to_string())?;
+        m.run(&self.pool).await.map_err(|e| e.to_string())
     }
 
     pub(crate) async fn insert_tasks(
