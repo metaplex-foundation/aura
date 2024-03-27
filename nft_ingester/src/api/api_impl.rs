@@ -469,8 +469,7 @@ where
         let gs = self
             .pg_client
             .get_collection_size(group_value_pubkey.to_bytes().as_slice())
-            .await
-            .map_err(|_| DasApiError::InternalDdError)?;
+            .await?;
 
         let res = GetGroupingResponse {
             group_key,

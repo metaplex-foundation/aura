@@ -82,7 +82,7 @@ impl PgClient {
         }
     }
 
-    pub async fn get_collection_size(&self, collection_key: &[u8]) -> Result<u64, String> {
+    pub async fn get_collection_size(&self, collection_key: &[u8]) -> Result<u64, sqlx::Error> {
         let start_time = chrono::Utc::now();
         let resp = sqlx::query("SELECT COUNT(*) FROM assets_v3 WHERE ast_collection = $1 AND ast_is_collection_verified = true")
             .bind(collection_key)
@@ -102,7 +102,7 @@ impl PgClient {
             Err(e) => {
                 self.metrics
                     .observe_error(SQL_COMPONENT, SELECT_ACTION, "get_collection_size");
-                Err(e.to_string())
+                Err(e)
             }
         }
     }
