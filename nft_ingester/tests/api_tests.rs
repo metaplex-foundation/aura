@@ -28,7 +28,7 @@ mod tests {
         },
         models::{ChainDataV1, UpdateVersion, Updated},
     };
-    use interface::api::{APIJsonDownloaderMiddleware, MockAPIJsonDownloaderMiddleware};
+    use interface::api::MockAPIJsonDownloaderMiddleware;
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig};
     use mockall::predicate;
     use mpl_token_metadata::accounts::MasterEdition;
