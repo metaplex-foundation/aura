@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use clap::{arg, Parser};
 use metrics_utils::red::RequestErrorDurationMetrics;
+use nft_ingester::config::init_logger;
 use rocks_db::column::TypedColumn;
 use tempfile::TempDir;
 use tokio::sync::Mutex;
@@ -17,11 +18,14 @@ struct Args {
     pub source_db: String,
     #[arg(short, long, required = true)]
     pub target_db: String,
+    #[arg(short, long, default_value_t = String::from("info"))]
+    log_level: String,
 }
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
     let config = Args::parse();
+    init_logger(config.log_level.as_str());
 
     info!("Started...");
 
