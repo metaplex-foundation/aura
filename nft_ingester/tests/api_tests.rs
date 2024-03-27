@@ -1120,6 +1120,7 @@ mod tests {
         let first_tree = Pubkey::new_unique();
         let second_tree = Pubkey::new_unique();
         let first_leaf_idx = 100;
+        let first_tree_other_leaf_idx = 101;
         let second_leaf_idx = 200;
 
         for seq in 0..100 {
@@ -1131,6 +1132,25 @@ mod tests {
                     AssetSignatureKey {
                         tree: first_tree,
                         leaf_idx: first_leaf_idx,
+                        seq,
+                    },
+                    AssetSignature {
+                        tx: signature.to_string(),
+                        instruction: "TestInstruction".to_string(),
+                        slot: seq * 2,
+                    },
+                )
+                .unwrap();
+        }
+        for seq in 100..200 {
+            let signature = Signature::new_unique();
+            env.rocks_env
+                .storage
+                .asset_signature
+                .put(
+                    AssetSignatureKey {
+                        tree: first_tree,
+                        leaf_idx: first_tree_other_leaf_idx,
                         seq,
                     },
                     AssetSignature {
@@ -1268,6 +1288,24 @@ mod tests {
         assert_eq!(parsed_response.after, Some("50".to_string()));
         assert_eq!(parsed_response.before, Some("50".to_string()));
         assert_eq!(parsed_response.items.len(), 1);
+
+        // ensure there are no extra signatures returned for an asset
+
+        let payload = GetAssetSignatures {
+            id: None,
+            limit: Some(500),
+            page: Some(1),
+            before: None,
+            after: None,
+            tree: Some(first_tree.to_string()),
+            leaf_index: Some(first_leaf_idx),
+            sort_direction: None,
+            cursor: None,
+        };
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
+        let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(parsed_response.items.len(), 100);
 
         env.teardown().await;
     }

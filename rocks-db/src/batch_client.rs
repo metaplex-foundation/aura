@@ -11,7 +11,9 @@ use crate::column::TypedColumn;
 use crate::editions::TokenMetadataEdition;
 use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
-use crate::storage_traits::{AssetIndexReader, AssetSlotStorage, AssetUpdateIndexStorage};
+use crate::storage_traits::{
+    AssetIndexReader, AssetSlotStorage, AssetUpdateIndexStorage, AssetUpdatedKey,
+};
 use crate::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
     BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
@@ -19,7 +21,8 @@ use crate::{
 use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, UrlWithStatus};
 
 impl AssetUpdateIndexStorage for Storage {
-    fn last_known_asset_updated_key(&self) -> Result<Option<(u64, u64, Pubkey)>> {
+    fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
+        _ = self.db.try_catch_up_with_primary();
         let start_time = chrono::Utc::now();
         let mut iter = self.assets_update_idx.iter_end();
         if let Some(pair) = iter.next() {
@@ -40,11 +43,11 @@ impl AssetUpdateIndexStorage for Storage {
 
     fn fetch_asset_updated_keys(
         &self,
-        from: Option<(u64, u64, Pubkey)>,
-        up_to: Option<(u64, u64, Pubkey)>,
+        from: Option<AssetUpdatedKey>,
+        up_to: Option<AssetUpdatedKey>,
         limit: usize,
         skip_keys: Option<HashSet<Pubkey>>,
-    ) -> Result<(HashSet<Pubkey>, Option<(u64, u64, Pubkey)>)> {
+    ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)> {
         let mut unique_pubkeys = HashSet::new();
         let mut last_key = from;
 
@@ -53,9 +56,9 @@ impl AssetUpdateIndexStorage for Storage {
         }
         let start_time = chrono::Utc::now();
 
-        let iterator = match last_key {
+        let iterator = match last_key.clone() {
             Some(key) => {
-                let encoded = encode_u64x2_pubkey(key.0, key.1, key.2);
+                let encoded = encode_u64x2_pubkey(key.seq, key.slot, key.pubkey);
                 let mut iter = self.assets_update_idx.iter(encoded);
                 iter.next(); // Skip the first key, as it is the `from`
                 iter
@@ -68,22 +71,22 @@ impl AssetUpdateIndexStorage for Storage {
             let key = AssetsUpdateIdx::decode_key(idx_key.to_vec())?;
             // Stop if the current key is greater than `up_to`
             if let Some(ref up_to_key) = up_to {
-                let up_to = encode_u64x2_pubkey(up_to_key.0, up_to_key.1, up_to_key.2);
+                let up_to = encode_u64x2_pubkey(up_to_key.seq, up_to_key.slot, up_to_key.pubkey);
                 if key > up_to {
                     break;
                 }
             }
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
-            last_key = Some(decoded_key);
+            last_key = Some(decoded_key.clone());
             // Skip keys that are in the skip_keys set
             if skip_keys
                 .as_ref()
-                .map_or(false, |sk| sk.contains(&decoded_key.2))
+                .map_or(false, |sk| sk.contains(&decoded_key.pubkey))
             {
                 continue;
             }
 
-            unique_pubkeys.insert(decoded_key.2);
+            unique_pubkeys.insert(decoded_key.pubkey);
 
             if unique_pubkeys.len() >= limit {
                 break;

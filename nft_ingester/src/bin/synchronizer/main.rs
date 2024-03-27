@@ -107,10 +107,19 @@ pub async fn main() -> Result<(), IngesterError> {
     let synchronizer = Synchronizer::new(
         rocks_storage.clone(),
         index_storage.clone(),
+        index_storage.clone(),
         config.dump_synchronizer_batch_size,
         config.dump_path.to_string(),
         metrics.clone(),
+        1,
     );
+
+    if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
+        tracing::error!("Sync rocksdb error: {}", e);
+    }
+    synchronizer
+        .maybe_run_full_sync(&shutdown_rx, config.dump_sync_threshold)
+        .await;
 
     while shutdown_rx.is_empty() {
         if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
