@@ -12,7 +12,7 @@ use tokio::task::JoinSet;
 use tokio_util::codec::{BytesCodec, FramedRead};
 use tonic::async_trait;
 
-use crate::json_downloader::{self, JsonDownloader};
+use crate::json_downloader::JsonDownloader;
 
 const FULL_BACKUP_REQUEST_PATH: &str = "/snapshot";
 
@@ -142,7 +142,11 @@ pub struct JsonDownloaderMiddleware {
 }
 
 impl JsonDownloaderMiddleware {
-    pub fn new(json_downloader: Arc<JsonDownloader>, persist_response: bool, max_urls_to_process: u16,) -> Self {
+    pub fn new(
+        json_downloader: Arc<JsonDownloader>,
+        persist_response: bool,
+        max_urls_to_process: u16,
+    ) -> Self {
         Self {
             json_downloader,
             persist_response,
@@ -153,12 +157,20 @@ impl JsonDownloaderMiddleware {
 
 #[async_trait]
 impl APIJsonDownloaderMiddleware for JsonDownloaderMiddleware {
-    async fn get_metadata(&self, metadata_urls: HashSet<String>) -> Result<HashMap<String, String>, String> {
+    async fn get_metadata(
+        &self,
+        metadata_urls: HashSet<String>,
+    ) -> Result<HashMap<String, String>, String> {
         if metadata_urls.len() > self.max_urls_to_process as usize {
             return Err("Too many urls to download".to_string());
         }
 
-        let tasks = self.json_downloader.db_client.get_tasks_by_url(metadata_urls.into_iter().collect()).await.map_err(|e| e.to_string())?;
+        let tasks = self
+            .json_downloader
+            .db_client
+            .get_tasks_by_url(metadata_urls.into_iter().collect())
+            .await
+            .map_err(|e| e.to_string())?;
 
         let result = Arc::new(Mutex::new(HashMap::new()));
 
@@ -176,7 +188,14 @@ impl APIJsonDownloaderMiddleware for JsonDownloaderMiddleware {
 
                 let metadata = {
                     if persist_response {
-                        JsonDownloader::persist_response(response, task, json_downloader.db_client.clone(), json_downloader.rocks_db.clone(), json_downloader.metrics.clone()).await
+                        JsonDownloader::persist_response(
+                            response,
+                            task,
+                            &json_downloader.db_client,
+                            &json_downloader.rocks_db,
+                            &json_downloader.metrics,
+                        )
+                        .await
                     } else {
                         response.ok()
                     }

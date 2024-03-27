@@ -21,25 +21,13 @@ pub const JSON_MIGRATOR_CONFIG_PREFIX: &str = "JSON_MIGRATOR_";
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct BackgroundTaskRunnerConfig {
-    pub delete_interval: Option<u64>,
-    pub retry_interval: Option<u64>,
-    pub purge_time: Option<u64>,
-    pub batch_size: Option<u64>,
-    pub lock_duration: Option<i64>,
-    pub max_attempts: Option<i16>,
-    pub timeout: Option<u64>,
+    pub num_of_parallel_workers: i32,
 }
 
 impl Default for BackgroundTaskRunnerConfig {
     fn default() -> Self {
         BackgroundTaskRunnerConfig {
-            delete_interval: Some(5),
-            retry_interval: Some(5),
-            purge_time: Some(5),
-            batch_size: Some(5),
-            lock_duration: Some(5),
-            max_attempts: Some(5),
-            timeout: Some(3),
+            num_of_parallel_workers: 100,
         }
     }
 }
@@ -268,6 +256,14 @@ pub struct ApiConfig {
     pub check_proofs_commitment: CommitmentLevel,
     #[serde(default = "default_max_page_limit")]
     pub max_page_limit: usize,
+    pub json_middleware_config: Option<JsonMiddlewareConfig>,
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct JsonMiddlewareConfig {
+    pub is_enabled: bool,
+    pub persist_response: bool,
+    pub max_urls_to_parse: u16,
 }
 
 const fn default_check_proofs_probability() -> f64 {

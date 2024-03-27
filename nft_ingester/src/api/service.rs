@@ -5,9 +5,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use usecase::proofs::MaybeProofChecker;
 
+use super::middleware::JsonDownloaderMiddleware;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
-use super::middleware::JsonDownloaderMiddleware;
 
 use {crate::api::DasApi, std::env, std::net::SocketAddr};
 use {
@@ -42,11 +42,20 @@ pub async fn start_api(
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server_port));
 
     let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
-    let api = DasApi::from_config(config, metrics, red_metrics, rocks_db, proof_checker, json_downloader).await?;
+    let api = DasApi::from_config(
+        config,
+        metrics,
+        red_metrics,
+        rocks_db,
+        proof_checker,
+        json_downloader,
+    )
+    .await?;
 
     run_api(api, Some(request_middleware), addr, keep_running).await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn start_api_v2(
     pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
@@ -60,7 +69,14 @@ pub async fn start_api_v2(
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     // todo: setup middleware, looks like too many shit related to backups are there
     // let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
-    let api = DasApi::new(pg_client, rocks_db, metrics, proof_checker, max_page_limit, json_downloader);
+    let api = DasApi::new(
+        pg_client,
+        rocks_db,
+        metrics,
+        proof_checker,
+        max_page_limit,
+        json_downloader,
+    );
 
     run_api(api, None, addr, keep_running).await
 }

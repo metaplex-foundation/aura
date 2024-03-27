@@ -279,7 +279,7 @@ where
         let res = match get_asset_batch(self.rocks_db.clone(), ids, options).await {
             Ok(assets) => {
                 if let Some(json_downloader) = &self.json_downloader {
-                    let mut a_v = assets.iter().filter_map(|opt| opt.clone()).collect();
+                    let mut a_v: Vec<Asset> = assets.iter().filter_map(|opt| opt.clone()).collect();
                     Self::check_and_supplement_jsons(json_downloader.clone(), &mut a_v).await;
                     Some(a_v)
                 } else {
@@ -585,12 +585,12 @@ where
         Ok(res)
     }
 
-    async fn check_and_supplement_jsons(json_downloader: Arc<J>, assets: &mut Vec<Asset>) {
+    async fn check_and_supplement_jsons(json_downloader: Arc<J>, assets: &mut [Asset]) {
         let mut urls_set = HashSet::new();
 
         for a in assets.iter() {
             if let Some(content) = &a.content {
-                if content.json_uri != "" && content.metadata.inner().is_empty() {
+                if !content.json_uri.is_empty() && content.metadata.inner().is_empty() {
                     urls_set.insert(content.json_uri.clone());
                 }
             }
@@ -615,7 +615,10 @@ where
             }
         } else {
             // safe to use unwrap here because we checked that it's not Ok
-            debug!("API Json download error: {}", downloaded_jsons.err().unwrap());
+            debug!(
+                "API Json download error: {}",
+                downloaded_jsons.err().unwrap()
+            );
         }
     }
 }

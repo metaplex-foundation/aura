@@ -4,14 +4,16 @@ use std::sync::Arc;
 
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
+use nft_ingester::api::middleware::JsonDownloaderMiddleware;
 use nft_ingester::api::service::start_api_v2;
 use nft_ingester::config::{init_logger, setup_config, ApiConfig};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
+use nft_ingester::json_downloader::JsonDownloader;
 use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
-use metrics_utils::ApiMetricsConfig;
+use metrics_utils::{ApiMetricsConfig, JsonDownloaderMetricsConfig};
 use rocks_db::Storage;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::{broadcast, Mutex};
@@ -45,6 +47,8 @@ pub async fn main() -> Result<(), IngesterError> {
     metrics.register(&mut registry);
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     red_metrics.register(&mut registry);
+    let json_downloader_metrics = Arc::new(JsonDownloaderMetricsConfig::new());
+    json_downloader_metrics.register(&mut registry);
     tokio::spawn(async move {
         match setup_metrics(registry, config.metrics_port).await {
             Ok(_) => {
@@ -102,6 +106,25 @@ pub async fn main() -> Result<(), IngesterError> {
             config.check_proofs_commitment,
         ))
     });
+
+    let json_downloader = {
+        if let Some(middleware_config) = config.json_middleware_config {
+            let downloader = Arc::new(
+                JsonDownloader::new(rocks_storage.clone(), json_downloader_metrics.clone()).await,
+            );
+
+            // persist_response argument is hardcoded to false
+            // because this binary opens RocksDB in secondary mode
+            Some(Arc::new(JsonDownloaderMiddleware::new(
+                downloader,
+                false,
+                middleware_config.max_urls_to_parse,
+            )))
+        } else {
+            None
+        }
+    };
+
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api_v2(
             pg_client.clone(),
@@ -111,6 +134,7 @@ pub async fn main() -> Result<(), IngesterError> {
             config.server_port,
             proof_checker,
             config.max_page_limit,
+            json_downloader,
         )
         .await
         {

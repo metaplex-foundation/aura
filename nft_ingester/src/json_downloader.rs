@@ -9,6 +9,7 @@ use reqwest::{Client, ClientBuilder};
 use rocks_db::{offchain_data::OffChainData, Storage};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use tokio::time::{self, Instant};
 
@@ -35,45 +36,64 @@ impl JsonDownloader {
     }
 
     pub async fn run(&self, keep_running: Arc<AtomicBool>) {
-        let retry_interval = tokio::time::Duration::from_secs(self.config.retry_interval.unwrap());
-
-        let mut interval = time::interval(retry_interval);
-
         let mut tasks_set = JoinSet::new();
 
-        while keep_running.load(Ordering::SeqCst) {
-            interval.tick().await; // ticks immediately
+        let tasks = Arc::new(Mutex::new(vec![]));
 
-            let tasks = self.db_client.get_pending_tasks().await;
+        for _ in (0..self.config.num_of_parallel_workers)
+            .collect::<std::vec::Vec<i32>>()
+            .iter()
+        {
+            let keep_running = keep_running.clone();
+            let db_client = self.db_client.clone();
+            let metrics = self.metrics.clone();
+            let rocks = self.rocks_db.clone();
+            let tasks = tasks.clone();
+            let num_of_tasks = self.config.num_of_parallel_workers;
 
-            match tasks {
-                Ok(tasks) => {
-                    debug!("tasks that need to be executed: {}", tasks.len());
+            tasks_set.spawn(async move {
+                let db_client = db_client;
+                let metrics = metrics;
+                let rocks = rocks;
+                let tasks = tasks.clone();
 
-                    for task in tasks {
-                        let cloned_db_client = self.db_client.clone();
-                        let cloned_metrics = self.metrics.clone();
-                        let cloned_rocks = self.rocks_db.clone();
-                        tasks_set.spawn(async move {
-                            let begin_processing = Instant::now();
+                while keep_running.load(Ordering::SeqCst) {
+                    let mut locket_tasks = tasks.lock().await;
 
-                            let response = Self::download_file(task.metadata_url.clone()).await;
+                    if locket_tasks.is_empty() {
+                        let tasks = db_client.get_pending_tasks(num_of_tasks).await;
 
-                            cloned_metrics.set_latency_task_executed(
-                                "json_downloader",
-                                begin_processing.elapsed().as_millis() as f64,
-                            );
-
-                            Self::persist_response(response, task, cloned_db_client, cloned_rocks, cloned_metrics).await;
-                        });
+                        if let Ok(t) = tasks {
+                            *locket_tasks = t;
+                        } else {
+                            error!("Error getting pending tasks: {}", tasks.err().unwrap());
+                            continue;
+                        }
                     }
-                    while tasks_set.join_next().await.is_some() {}
+
+                    let task_to_process = locket_tasks.pop();
+
+                    drop(locket_tasks);
+
+                    if let Some(task) = task_to_process {
+                        let begin_processing = Instant::now();
+
+                        let response = Self::download_file(task.metadata_url.clone()).await;
+
+                        metrics.set_latency_task_executed(
+                            "json_downloader",
+                            begin_processing.elapsed().as_millis() as f64,
+                        );
+
+                        Self::persist_response(response, task, &db_client, &rocks, &metrics).await;
+                    } else {
+                        error!("Error getting task from array");
+                    }
                 }
-                Err(e) => {
-                    error!("Error getting pending tasks: {}", e);
-                }
-            }
+            });
         }
+
+        while tasks_set.join_next().await.is_some() {}
     }
 
     pub async fn download_file(url: String) -> Result<String, JsonDownloaderError> {
@@ -111,17 +131,21 @@ impl JsonDownloader {
                     if let Ok(metadata) = metadata_body {
                         return Ok(metadata.trim().replace('\0', ""));
                     } else {
-                        return Err(JsonDownloaderError::CouldNotDeserialize);
+                        Err(JsonDownloaderError::CouldNotDeserialize)
                     }
                 }
             }
-            Err(e) => {
-                return Err(JsonDownloaderError::ErrorDownloading(e.to_string()));
-            }
+            Err(e) => Err(JsonDownloaderError::ErrorDownloading(e.to_string())),
         }
     }
 
-    pub async fn persist_response(download_response: Result<String, JsonDownloaderError>, task: JsonDownloadTask, index_db_client: Arc<DBClient>, main_db_client: Arc<Storage>, metrics: Arc<JsonDownloaderMetricsConfig>) -> Option<String> {
+    pub async fn persist_response(
+        download_response: Result<String, JsonDownloaderError>,
+        task: JsonDownloadTask,
+        index_db_client: &Arc<DBClient>,
+        main_db_client: &Arc<Storage>,
+        metrics: &Arc<JsonDownloaderMetricsConfig>,
+    ) -> Option<String> {
         match download_response {
             Ok(json_file) => {
                 main_db_client
@@ -181,8 +205,7 @@ impl JsonDownloader {
                         status: TaskStatus::Failed,
                         metadata_url: task.metadata_url,
                         attempts: task.attempts + 1,
-                        error: "Failed to deserialize metadata body"
-                            .to_string(),
+                        error: "Failed to deserialize metadata body".to_string(),
                     };
                     index_db_client
                         .update_tasks(vec![data_to_insert])
@@ -221,7 +244,7 @@ impl JsonDownloader {
                 }
             },
         }
-        return None;
+        None
     }
 }
 

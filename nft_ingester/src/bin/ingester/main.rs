@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use nft_ingester::api::middleware::JsonDownloaderMiddleware;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,8 +26,8 @@ use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
-    setup_config, BackfillerConfig, BackfillerSourceMode, IngesterConfig, INGESTER_BACKUP_NAME,
-    INGESTER_CONFIG_PREFIX,
+    setup_config, ApiConfig, BackfillerConfig, BackfillerSourceMode, IngesterConfig,
+    INGESTER_BACKUP_NAME, INGESTER_CONFIG_PREFIX,
 };
 use nft_ingester::db_v2::DBClient as DBClientV2;
 use nft_ingester::index_syncronizer::Synchronizer;
@@ -339,9 +340,19 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     }));
 
+    let json_downloader = Arc::new(
+        JsonDownloader::new(
+            rocks_storage.clone(),
+            metrics_state.json_downloader_metrics.clone(),
+        )
+        .await,
+    );
+
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_red_metrics = metrics_state.red_metrics.clone();
+
+    let api_config: ApiConfig = setup_config("API_");
 
     let proof_checker = config.rpc_host.clone().map(|host| {
         Arc::new(MaybeProofChecker::new(
@@ -350,6 +361,15 @@ pub async fn main() -> Result<(), IngesterError> {
             config.check_proofs_commitment,
         ))
     });
+
+    let middleware_json_downloader = api_config.json_middleware_config.map(|middleware_config| {
+        Arc::new(JsonDownloaderMiddleware::new(
+            json_downloader.clone(),
+            middleware_config.persist_response,
+            middleware_config.max_urls_to_parse,
+        ))
+    });
+
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
             cloned_rocks_storage.clone(),
@@ -357,6 +377,7 @@ pub async fn main() -> Result<(), IngesterError> {
             metrics_state.api_metrics.clone(),
             cloned_red_metrics,
             proof_checker,
+            middleware_json_downloader,
         )
         .await
         {
@@ -389,12 +410,6 @@ pub async fn main() -> Result<(), IngesterError> {
             }
         }
     }));
-
-    let json_downloader = JsonDownloader::new(
-        rocks_storage.clone(),
-        metrics_state.json_downloader_metrics.clone(),
-    )
-    .await;
 
     let cloned_keep_running = keep_running.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {

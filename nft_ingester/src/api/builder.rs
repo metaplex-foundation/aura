@@ -11,7 +11,9 @@ use self::middleware::JsonDownloaderMiddleware;
 pub struct RpcApiBuilder;
 
 impl RpcApiBuilder {
-    pub fn build(api: DasApi<MaybeProofChecker, JsonDownloaderMiddleware>) -> Result<IoHandler, DasApiError> {
+    pub fn build(
+        api: DasApi<MaybeProofChecker, JsonDownloaderMiddleware>,
+    ) -> Result<IoHandler, DasApiError> {
         let mut module = IoHandler::default();
         let api = Arc::new(api);
 

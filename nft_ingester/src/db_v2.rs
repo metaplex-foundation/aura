@@ -87,21 +87,29 @@ impl DBClient {
         Ok(())
     }
 
-    pub async fn get_pending_tasks(&self) -> Result<Vec<JsonDownloadTask>, IngesterError> {
+    pub async fn get_pending_tasks(
+        &self,
+        tasks_count: i32,
+    ) -> Result<Vec<JsonDownloadTask>, IngesterError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("WITH cte AS (
                                         SELECT tsk_id
                                         FROM tasks
                                         WHERE tsk_status != 'success' AND tsk_locked_until < NOW() AND tsk_attempts < tsk_max_attempts
-                                        LIMIT 100
-                                        FOR UPDATE
-                                    )
-                                    UPDATE tasks t
-                                    SET tsk_status = 'running',
-                                    tsk_locked_until = NOW() + INTERVAL '20 seconds'
-                                    FROM cte
-                                    WHERE t.tsk_id = cte.tsk_id
-                                    RETURNING t.tsk_metadata_url, t.tsk_status, t.tsk_attempts, t.tsk_max_attempts;");
+                                        LIMIT ");
+
+        query_builder.push_bind(tasks_count);
+
+        query_builder.push(
+            " FOR UPDATE
+            )
+            UPDATE tasks t
+            SET tsk_status = 'running',
+            tsk_locked_until = NOW() + INTERVAL '20 seconds'
+            FROM cte
+            WHERE t.tsk_id = cte.tsk_id
+            RETURNING t.tsk_metadata_url, t.tsk_status, t.tsk_attempts, t.tsk_max_attempts;",
+        );
 
         let query = query_builder.build();
         let rows = query
@@ -165,7 +173,10 @@ impl DBClient {
         Ok(())
     }
 
-    pub async fn get_tasks_by_url(&self, tasks: Vec<String>) -> Result<Vec<JsonDownloadTask>, IngesterError> {
+    pub async fn get_tasks_by_url(
+        &self,
+        tasks: Vec<String>,
+    ) -> Result<Vec<JsonDownloadTask>, IngesterError> {
         if tasks.is_empty() {
             return Ok(vec![]);
         }
@@ -204,6 +215,6 @@ impl DBClient {
             });
         }
 
-        return Ok(tasks)
+        Ok(tasks)
     }
 }

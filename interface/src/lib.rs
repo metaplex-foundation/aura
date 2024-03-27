@@ -1,3 +1,4 @@
+pub mod api;
 pub mod asset_sigratures;
 pub mod asset_streaming_and_discovery;
 pub mod error;
@@ -9,4 +10,3 @@ pub mod slot_getter;
 pub mod slots_dumper;
 pub mod solana_rpc;
 pub mod token_accounts;
-pub mod api;
