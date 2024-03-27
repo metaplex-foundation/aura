@@ -15,8 +15,8 @@ pub mod integrity_verification_client;
 pub mod load_client;
 pub mod model;
 pub mod storage_traits;
-pub mod temp_index_client;
 pub mod tasks;
+pub mod temp_index_client;
 
 pub const SQL_COMPONENT: &str = "sql";
 pub const SELECT_ACTION: &str = "select";
