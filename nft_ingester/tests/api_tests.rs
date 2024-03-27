@@ -1795,7 +1795,8 @@ mod tests {
 
         let response = api.get_asset(payload).await.unwrap();
 
-        let expected_content: Value = serde_json::from_str(r#"
+        let expected_content: Value = serde_json::from_str(
+            r#"
         {
             "$schema": "https://schema.metaplex.com/nft1.0.json",
             "json_uri": "http://someUrl.com",
@@ -1819,7 +1820,9 @@ mod tests {
                 "external_url": "https://twitter.com"
             }
         }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         assert_eq!(response["id"], pb.to_string());
         assert_eq!(response["grouping"], Value::Array(vec![]));
