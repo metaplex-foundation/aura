@@ -191,7 +191,7 @@ impl DBClient {
             }
         }
 
-        query_builder.push(");");
+        query_builder.push(") AND tsk_status != 'failed';");
         let query = query_builder.build();
 
         let rows = query

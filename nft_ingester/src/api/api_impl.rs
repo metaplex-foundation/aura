@@ -237,7 +237,12 @@ where
             Ok(Some(asset)) => {
                 if let Some(json_downloader) = &self.json_downloader {
                     let mut a_v = vec![asset];
-                    Self::check_and_supplement_jsons(json_downloader.clone(), &mut a_v).await;
+                    Self::check_and_supplement_jsons(
+                        self.rocks_db.clone(),
+                        json_downloader.clone(),
+                        &mut a_v,
+                    )
+                    .await;
                     Some(a_v[0].clone())
                 } else {
                     Some(asset)
@@ -280,7 +285,12 @@ where
             Ok(assets) => {
                 if let Some(json_downloader) = &self.json_downloader {
                     let mut a_v: Vec<Asset> = assets.iter().filter_map(|opt| opt.clone()).collect();
-                    Self::check_and_supplement_jsons(json_downloader.clone(), &mut a_v).await;
+                    Self::check_and_supplement_jsons(
+                        self.rocks_db.clone(),
+                        json_downloader.clone(),
+                        &mut a_v,
+                    )
+                    .await;
                     Some(a_v)
                 } else {
                     Some(assets.iter().filter_map(|opt| opt.clone()).collect())
@@ -308,7 +318,12 @@ where
             .await?;
 
         if let Some(json_downloader) = &self.json_downloader {
-            Self::check_and_supplement_jsons(json_downloader.clone(), &mut res.items).await;
+            Self::check_and_supplement_jsons(
+                self.rocks_db.clone(),
+                json_downloader.clone(),
+                &mut res.items,
+            )
+            .await;
         }
 
         self.metrics
@@ -330,7 +345,12 @@ where
             .await?;
 
         if let Some(json_downloader) = &self.json_downloader {
-            Self::check_and_supplement_jsons(json_downloader.clone(), &mut res.items).await;
+            Self::check_and_supplement_jsons(
+                self.rocks_db.clone(),
+                json_downloader.clone(),
+                &mut res.items,
+            )
+            .await;
         }
 
         self.metrics
@@ -352,7 +372,12 @@ where
             .await?;
 
         if let Some(json_downloader) = &self.json_downloader {
-            Self::check_and_supplement_jsons(json_downloader.clone(), &mut res.items).await;
+            Self::check_and_supplement_jsons(
+                self.rocks_db.clone(),
+                json_downloader.clone(),
+                &mut res.items,
+            )
+            .await;
         }
 
         self.metrics
@@ -374,7 +399,12 @@ where
             .await?;
 
         if let Some(json_downloader) = &self.json_downloader {
-            Self::check_and_supplement_jsons(json_downloader.clone(), &mut res.items).await;
+            Self::check_and_supplement_jsons(
+                self.rocks_db.clone(),
+                json_downloader.clone(),
+                &mut res.items,
+            )
+            .await;
         }
 
         self.metrics
@@ -445,7 +475,12 @@ where
             .await?;
 
         if let Some(json_downloader) = &self.json_downloader {
-            Self::check_and_supplement_jsons(json_downloader.clone(), &mut res.items).await;
+            Self::check_and_supplement_jsons(
+                self.rocks_db.clone(),
+                json_downloader.clone(),
+                &mut res.items,
+            )
+            .await;
         }
 
         self.metrics
@@ -585,22 +620,48 @@ where
         Ok(res)
     }
 
-    async fn check_and_supplement_jsons(json_downloader: Arc<J>, assets: &mut [Asset]) {
-        let mut urls_set = HashSet::new();
+    async fn check_and_supplement_jsons(
+        rocks_db: Arc<Storage>,
+        json_downloader: Arc<J>,
+        assets: &mut [Asset],
+    ) {
+        let mut urls_to_get = HashSet::new();
+        let mut onchain_data_only = HashSet::new();
 
         for a in assets.iter() {
             if let Some(content) = &a.content {
-                if !content.json_uri.is_empty() && content.metadata.inner().is_empty() {
-                    urls_set.insert(content.json_uri.clone());
+                if !content.json_uri.is_empty() {
+                    if content.metadata.inner().is_empty() {
+                        urls_to_get.insert(content.json_uri.clone());
+                    } else if content.metadata.has_only_onchain_data() {
+                        onchain_data_only.insert(content.json_uri.clone());
+                    }
                 }
             }
         }
 
-        if urls_set.is_empty() {
+        let asset_with_onchain_data_url = onchain_data_only.clone().into_iter().collect::<Vec<_>>();
+
+        let offchain_data = rocks_db
+            .asset_offchain_data
+            .batch_get(asset_with_onchain_data_url.clone())
+            .await;
+
+        if let Ok(offchain_data) = offchain_data {
+            for (data, link) in offchain_data.iter().zip(asset_with_onchain_data_url.iter()) {
+                if data.is_none() {
+                    urls_to_get.insert(link.clone());
+                }
+            }
+        } else {
+            urls_to_get.extend(onchain_data_only);
+        }
+
+        if urls_to_get.is_empty() {
             return;
         }
 
-        let downloaded_jsons = json_downloader.get_metadata(urls_set).await;
+        let downloaded_jsons = json_downloader.get_metadata(urls_to_get).await;
 
         if let Ok(jsons) = downloaded_jsons {
             for a in assets.iter_mut() {
