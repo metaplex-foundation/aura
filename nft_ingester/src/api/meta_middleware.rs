@@ -1,50 +1,23 @@
-use crate::api::service::MiddlewaresData;
 use futures::future::Either;
+use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::futures_util::future;
 use jsonrpc_core::middleware::{NoopCallFuture, NoopFuture};
 use jsonrpc_core::{Call, ErrorCode, Failure, Metadata, Middleware, Output, Version};
 use std::future::Future;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-
-const INDEX_STORAGE_DEPENDS_METHODS: &[&str] = &[
-    "getAssetsByOwner",
-    "get_assets_by_owner",
-    "getAssetsByCreator",
-    "get_assets_by_creator",
-    "getAssetsByAuthority",
-    "get_assets_by_authority",
-    "getAssetsByGroup",
-    "get_assets_by_group",
-    "getGrouping",
-    "get_grouping",
-    "searchAssets",
-    "search_assets",
-];
 
 pub const CANNOT_SERVICE_REQUEST_ERROR_CODE: i64 = -32050;
 
 #[derive(Default, Clone)]
-struct Sequences {
-    last_primary_storage_seq: Arc<AtomicU64>,
-    last_index_storage_seq: Arc<AtomicU64>,
-    synchronization_api_threshold: u64,
-}
-
-#[derive(Default, Clone)]
 pub struct RpcMetaMiddleware {
-    sequences: Option<Sequences>,
+    consistency_checkers: Vec<Arc<dyn ConsistencyChecker>>,
 }
 impl Metadata for RpcMetaMiddleware {}
 
 impl RpcMetaMiddleware {
-    pub(crate) fn new(middlewares_data: &Option<MiddlewaresData>) -> Self {
+    pub(crate) fn new(consistency_checkers: Vec<Arc<dyn ConsistencyChecker>>) -> Self {
         Self {
-            sequences: middlewares_data.clone().map(|data| Sequences {
-                last_primary_storage_seq: data.last_primary_storage_seq,
-                last_index_storage_seq: data.last_index_storage_seq,
-                synchronization_api_threshold: data.synchronization_api_threshold,
-            }),
+            consistency_checkers,
         }
     }
 
@@ -70,30 +43,13 @@ impl<M: Metadata> Middleware<M> for RpcMetaMiddleware {
         F: Fn(Call, M) -> X + Send + Sync,
         X: Future<Output = Option<Output>> + Send + 'static,
     {
-        if self.sequences.as_ref().map_or(true, |sequences| {
-            sequences
-                .last_primary_storage_seq
-                .load(Ordering::SeqCst)
-                .saturating_sub(sequences.last_index_storage_seq.load(Ordering::SeqCst))
-                < sequences.synchronization_api_threshold
-        }) {
-            return Either::Right(next(call, meta));
+        if self
+            .consistency_checkers
+            .iter()
+            .any(|checker| checker.should_cancel_request(&call))
+        {
+            return Either::Left(Box::pin(future::ready(Self::cannot_service_request())));
         }
-
-        let should_cancel_request = match &call {
-            Call::MethodCall(method_call) => {
-                INDEX_STORAGE_DEPENDS_METHODS.contains(&method_call.method.as_str())
-            }
-            Call::Notification(notification) => {
-                INDEX_STORAGE_DEPENDS_METHODS.contains(&notification.method.as_str())
-            }
-            _ => false,
-        };
-
-        if should_cancel_request {
-            Either::Left(Box::pin(future::ready(Self::cannot_service_request())))
-        } else {
-            Either::Right(next(call, meta))
-        }
+        Either::Right(next(call, meta))
     }
 }

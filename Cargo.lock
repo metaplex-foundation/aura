@@ -3343,6 +3343,7 @@ dependencies = [
  "async-trait",
  "entities",
  "futures",
+ "jsonrpc-core 19.0.0",
  "mockall 0.12.1",
  "plerkle_serialization",
  "reqwest",

@@ -19,7 +19,7 @@ pub struct Config {
     #[serde(default = "default_max_page_limit")]
     pub max_page_limit: usize,
     #[serde(default = "default_synchronization_api_threshold")]
-    pub synchronization_api_threshold: u64,
+    pub consistence_synchronization_api_threshold: u64,
 }
 
 pub fn load_config() -> Result<Config, DasApiError> {

@@ -30,13 +30,18 @@ pub const RUNTIME_WORKER_THREAD_COUNT: usize = 2000;
 pub const MAX_CORS_AGE: u32 = 86400;
 const CATCH_UP_SEQUENCES_TIMEOUT_SEC: u64 = 30;
 
+#[derive(Clone, Default)]
+pub(crate) struct Sequences {
+    pub(crate) last_primary_storage_seq: Arc<AtomicU64>,
+    pub(crate) last_index_storage_seq: Arc<AtomicU64>,
+    pub(crate) synchronization_api_threshold: u64,
+}
+
 #[derive(Clone)]
 pub(crate) struct MiddlewaresData {
     response_middleware: RpcResponseMiddleware,
     request_middleware: RpcRequestMiddleware,
-    pub(crate) last_primary_storage_seq: Arc<AtomicU64>,
-    pub(crate) last_index_storage_seq: Arc<AtomicU64>,
-    pub(crate) synchronization_api_threshold: u64,
+    pub(crate) sequences: Sequences,
 }
 
 pub async fn start_api(
@@ -95,9 +100,11 @@ pub async fn start_api(
         Some(MiddlewaresData {
             response_middleware,
             request_middleware,
-            last_primary_storage_seq,
-            last_index_storage_seq,
-            synchronization_api_threshold: config.synchronization_api_threshold,
+            sequences: Sequences {
+                last_primary_storage_seq,
+                last_index_storage_seq,
+                synchronization_api_threshold: config.consistence_synchronization_api_threshold,
+            },
         }),
         addr,
         keep_running,
@@ -128,7 +135,7 @@ async fn run_api(
     addr: SocketAddr,
     keep_running: Arc<AtomicBool>,
 ) -> Result<(), DasApiError> {
-    let rpc = RpcApiBuilder::build(api, &middlewares_data)?;
+    let rpc = RpcApiBuilder::build(api, middlewares_data.clone())?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(RUNTIME_WORKER_THREAD_COUNT)
         .enable_all()
