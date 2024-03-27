@@ -17,7 +17,6 @@ use chrono::Utc;
 use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
 use log::{debug, error, warn};
-use plerkle_serialization::AccountInfo;
 use solana_program::program_pack::Pack;
 use solana_sdk::pubkey::Pubkey;
 use utils::flatbuffer::account_data_generated::account_data::root_as_account_data;
@@ -31,6 +30,8 @@ use crate::error::IngesterError::MissingFlatbuffersFieldError;
 use crate::mplx_updates_processor::{
     BurntMetadataSlot, IndexableAssetWithAccountInfo, MetadataInfo, TokenMetadata,
 };
+use crate::plerkle;
+use crate::plerkle::PlerkleAccountInfo;
 use entities::models::{EditionV1, MasterEdition};
 
 const BYTE_PREFIX_TX_SIMPLE_FINALIZED: u8 = 22;
@@ -117,40 +118,34 @@ impl MessageHandler {
             .map_err(|e| IngesterError::AccountParsingError(e.to_string()))
             .unwrap();
 
-        let account_owner = account_info
-            .owner()
-            .ok_or(IngesterError::DeserializationError(
-                "Missed account owner field for account".to_string(),
-            ))?;
+        let account_info: plerkle::AccountInfo = PlerkleAccountInfo(account_info).try_into()?;
+        let account_owner = account_info.owner;
 
-        if account_owner.0 == spl_token::id().to_bytes() {
+        if account_owner == spl_token::id() {
             self.handle_spl_token_account(&account_info).await?;
-        } else if account_owner.0
-            == blockbuster::programs::token_metadata::token_metadata_id().to_bytes()
-        {
+        } else if account_owner == blockbuster::programs::token_metadata::token_metadata_id() {
             self.handle_token_metadata_account(&account_info).await?;
-        } else if account_owner.0 == self.mpl_core_parser.key().to_bytes() {
+        } else if account_owner == self.mpl_core_parser.key() {
             self.handle_mpl_core_account(&account_info).await;
         }
 
         Ok(())
     }
 
-    async fn handle_spl_token_account<'a>(
+    async fn handle_spl_token_account(
         &self,
-        account_info: &'a AccountInfo<'a>,
+        account_info: &plerkle::AccountInfo,
     ) -> Result<(), IngesterError> {
         // skip processing of empty mints and multi-sig accounts
-        if let Some(account_info) = account_info.data() {
-            let account_data = account_info.iter().collect::<Vec<_>>();
-            if account_data.as_slice() == [0; spl_token::state::Mint::LEN] // empty mint
-                || account_data.as_slice() == [0; spl_token::state::Account::LEN] // empty token account
-                || account_data.len() == spl_token::state::Multisig::LEN
-            {
-                return Ok(());
-            }
+        if account_info.data.as_slice() == [0; spl_token::state::Mint::LEN] // empty mint
+                || account_info.data.as_slice() == [0; spl_token::state::Account::LEN] // empty token account
+                || account_info.data.len() == spl_token::state::Multisig::LEN
+        {
+            return Ok(());
         }
-        let acc_parse_result = self.token_acc_parser.handle_account(account_info);
+        let acc_parse_result = self
+            .token_acc_parser
+            .handle_account(account_info.data.as_slice());
 
         match acc_parse_result {
             Ok(acc_parsed) => {
@@ -171,149 +166,144 @@ impl MessageHandler {
         Ok(())
     }
 
-    async fn write_spl_accounts_models_to_buffer<'a, 'b>(
+    async fn write_spl_accounts_models_to_buffer(
         &self,
-        account_update: &'a AccountInfo<'a>,
-        parsing_result: &'b TokenProgramAccount,
+        account_update: &plerkle::AccountInfo,
+        parsing_result: &TokenProgramAccount,
     ) {
-        let key = *account_update.pubkey().unwrap();
-        let key_bytes = key.0;
+        let key = account_update.pubkey;
         match &parsing_result {
             TokenProgramAccount::TokenAccount(ta) => {
                 let frozen = matches!(ta.state, spl_token::state::AccountState::Frozen);
                 update_or_insert!(
                     self.buffer.token_accs,
-                    Pubkey::from(key_bytes),
+                    key,
                     TokenAccount {
-                        pubkey: Pubkey::from(key_bytes),
+                        pubkey: key,
                         mint: ta.mint,
                         delegate: ta.delegate.into(),
                         owner: ta.owner,
                         frozen,
                         delegated_amount: ta.delegated_amount as i64,
-                        slot_updated: account_update.slot() as i64,
+                        slot_updated: account_update.slot as i64,
                         amount: ta.amount as i64,
-                        write_version: account_update.write_version(),
+                        write_version: account_update.write_version,
                     },
-                    account_update.write_version()
+                    account_update.write_version
                 );
             }
             TokenProgramAccount::Mint(m) => {
                 update_or_insert!(
                     self.buffer.mints,
-                    key_bytes.to_vec(),
+                    key.to_bytes().to_vec(),
                     Mint {
-                        pubkey: Pubkey::from(key_bytes),
-                        slot_updated: account_update.slot() as i64,
+                        pubkey: key,
+                        slot_updated: account_update.slot as i64,
                         supply: m.supply as i64,
                         decimals: m.decimals as i32,
                         mint_authority: m.mint_authority.into(),
                         freeze_authority: m.freeze_authority.into(),
-                        write_version: account_update.write_version(),
+                        write_version: account_update.write_version,
                     },
-                    account_update.write_version()
+                    account_update.write_version
                 );
             }
-            _ => debug!("Not implemented"),
         };
     }
 
-    async fn handle_token_metadata_account<'a>(
+    async fn handle_token_metadata_account(
         &self,
-        account_info: &'a AccountInfo<'a>,
+        account_info: &plerkle::AccountInfo,
     ) -> Result<(), IngesterError> {
-        let acc_parse_result = self.mplx_acc_parser.handle_account(account_info);
-
+        let acc_parse_result = self
+            .mplx_acc_parser
+            .handle_account(account_info.data.as_slice());
         match acc_parse_result {
             Ok(acc_parsed) => {
                 let concrete = acc_parsed.result_type();
 
                 match concrete {
                     ProgramParseResult::TokenMetadata(parsing_result) => {
-                        let key = account_info.pubkey().unwrap();
-
+                        let key = account_info.pubkey;
                         match &parsing_result.data {
                             TokenMetadataAccountData::EmptyAccount => {
                                 let mut buff = self.buffer.burnt_metadata_at_slot.lock().await;
 
                                 buff.insert(
-                                    Pubkey::from(key.0),
+                                    key,
                                     BurntMetadataSlot {
-                                        slot_updated: account_info.slot(),
+                                        slot_updated: account_info.slot,
                                     },
                                 );
                             }
                             TokenMetadataAccountData::MetadataV1(m) => {
                                 update_or_insert!(
                                     self.buffer.mplx_metadata_info,
-                                    key.0.to_vec(),
+                                    key.to_bytes().to_vec(),
                                     MetadataInfo {
                                         metadata: m.clone(),
-                                        slot_updated: account_info.slot(),
-                                        write_version: account_info.write_version(),
-                                        lamports: account_info.lamports(),
-                                        executable: account_info.executable(),
-                                        rent_epoch: account_info.rent_epoch(),
-                                        metadata_owner: account_info
-                                            .owner()
-                                            .map(|o| Pubkey::from(o.0).to_string()),
+                                        slot_updated: account_info.slot,
+                                        write_version: account_info.write_version,
+                                        lamports: account_info.lamports,
+                                        executable: account_info.executable,
+                                        metadata_owner: Some(account_info.owner.to_string()),
                                     },
-                                    account_info.write_version()
+                                    account_info.write_version
                                 );
                             }
                             TokenMetadataAccountData::MasterEditionV1(m) => {
                                 update_or_insert!(
                                     self.buffer.token_metadata_editions,
-                                    Pubkey::from(key.0),
+                                    key,
                                     TokenMetadata {
                                         edition: TokenMetadataEdition::MasterEdition(
                                             MasterEdition {
-                                                key: Pubkey::from(key.0),
+                                                key,
                                                 supply: m.supply,
                                                 max_supply: m.max_supply,
-                                                write_version: account_info.write_version()
+                                                write_version: account_info.write_version
                                             },
                                         ),
-                                        write_version: account_info.write_version(),
-                                        slot_updated: account_info.slot(),
+                                        write_version: account_info.write_version,
+                                        slot_updated: account_info.slot,
                                     },
-                                    account_info.write_version()
+                                    account_info.write_version
                                 );
                             }
                             TokenMetadataAccountData::MasterEditionV2(m) => {
                                 update_or_insert!(
                                     self.buffer.token_metadata_editions,
-                                    Pubkey::from(key.0),
+                                    key,
                                     TokenMetadata {
                                         edition: TokenMetadataEdition::MasterEdition(
                                             MasterEdition {
-                                                key: Pubkey::from(key.0),
+                                                key,
                                                 supply: m.supply,
                                                 max_supply: m.max_supply,
-                                                write_version: account_info.write_version()
+                                                write_version: account_info.write_version
                                             },
                                         ),
-                                        write_version: account_info.write_version(),
-                                        slot_updated: account_info.slot(),
+                                        write_version: account_info.write_version,
+                                        slot_updated: account_info.slot,
                                     },
-                                    account_info.write_version()
+                                    account_info.write_version
                                 );
                             }
                             TokenMetadataAccountData::EditionV1(e) => {
                                 update_or_insert!(
                                     self.buffer.token_metadata_editions,
-                                    Pubkey::from(key.0),
+                                    key,
                                     TokenMetadata {
                                         edition: TokenMetadataEdition::EditionV1(EditionV1 {
-                                            key: Pubkey::from(key.0),
+                                            key,
                                             parent: e.parent,
                                             edition: e.edition,
-                                            write_version: account_info.write_version()
+                                            write_version: account_info.write_version
                                         },),
-                                        write_version: account_info.write_version(),
-                                        slot_updated: account_info.slot(),
+                                        write_version: account_info.write_version,
+                                        slot_updated: account_info.slot,
                                     },
-                                    account_info.write_version()
+                                    account_info.write_version
                                 );
                             }
                             _ => debug!("Not implemented"),
@@ -332,8 +322,10 @@ impl MessageHandler {
         Ok(())
     }
 
-    async fn handle_mpl_core_account<'a>(&self, account_info: &'a AccountInfo<'a>) {
-        let acc_parse_result = self.mpl_core_parser.handle_account(account_info);
+    async fn handle_mpl_core_account<'a>(&self, account_info: &plerkle::AccountInfo) {
+        let acc_parse_result = self
+            .mpl_core_parser
+            .handle_account(account_info.data.as_slice());
         match acc_parse_result {
             Ok(acc_parsed) => {
                 let concrete = acc_parsed.result_type();
@@ -351,37 +343,35 @@ impl MessageHandler {
         }
     }
 
-    async fn write_mpl_core_accounts_to_buffer<'a, 'b>(
+    async fn write_mpl_core_accounts_to_buffer(
         &self,
-        account_update: &'a AccountInfo<'a>,
-        parsing_result: &'b MplCoreAccountState,
+        account_update: &plerkle::AccountInfo,
+        parsing_result: &MplCoreAccountState,
     ) {
-        let key = *account_update.pubkey().unwrap();
-        let key_bytes = key.0;
+        let key = account_update.pubkey;
         match &parsing_result.data {
             MplCoreAccountData::EmptyAccount => {
                 let mut buff = self.buffer.burnt_mpl_core_at_slot.lock().await;
 
                 buff.insert(
-                    Pubkey::from(key.0),
+                    key,
                     BurntMetadataSlot {
-                        slot_updated: account_update.slot(),
+                        slot_updated: account_update.slot,
                     },
                 );
             }
             MplCoreAccountData::Asset(_) | MplCoreAccountData::Collection(_) => {
                 update_or_insert!(
                     self.buffer.mpl_core_indexable_assets,
-                    Pubkey::from(key_bytes),
+                    key,
                     IndexableAssetWithAccountInfo {
                         indexable_asset: parsing_result.data.clone(),
-                        slot_updated: account_update.slot(),
-                        write_version: account_update.write_version(),
-                        lamports: account_update.lamports(),
-                        executable: account_update.executable(),
-                        rent_epoch: account_update.rent_epoch(),
+                        slot_updated: account_update.slot,
+                        write_version: account_update.write_version,
+                        lamports: account_update.lamports,
+                        executable: account_update.executable,
                     },
-                    account_update.write_version()
+                    account_update.write_version
                 );
             }
             _ => debug!("Not implemented"),
@@ -444,20 +434,10 @@ fn map_account_info_fb_bytes(
     Ok(builder.finished_data().to_owned())
 }
 
-fn account_parsing_error(err: BlockbusterError, account_info: &AccountInfo) {
+fn account_parsing_error(err: BlockbusterError, account_info: &plerkle::AccountInfo) {
     warn!(
         "Error while parsing account: {:?} {}",
-        err,
-        bs58::encode(
-            account_info
-                .pubkey()
-                .unwrap_or(&plerkle_serialization::Pubkey::new(&[0u8; 32]))
-                .key()
-                .iter()
-                .collect::<Vec<_>>()
-                .as_slice()
-        )
-        .into_string()
+        err, account_info.pubkey
     );
 }
 
@@ -515,7 +495,8 @@ async fn test_edition_pda() {
     let parser = TokenMetadataParser {};
     let binding = ser_edition_account.finished_data().to_owned();
     let binding = plerkle_serialization::root_as_account_info(binding.as_ref()).unwrap();
-    let binding = parser.handle_account(&binding).unwrap();
+    let account_data: Vec<u8> = PlerkleOptionalU8Vector(binding.data()).try_into()?;
+    let binding = parser.handle_account(account_data.as_slice()).unwrap();
     let binding = binding.result_type();
     let binding = match binding {
         ProgramParseResult::TokenMetadata(c) => c,
@@ -548,7 +529,8 @@ async fn test_edition_pda() {
     );
     let binding = ser_master_edition_account.finished_data().to_owned();
     let binding = plerkle_serialization::root_as_account_info(binding.as_ref()).unwrap();
-    let binding = parser.handle_account(&binding).unwrap();
+    let account_data: Vec<u8> = PlerkleOptionalU8Vector(binding.data()).try_into()?;
+    let binding = parser.handle_account(account_data.as_slice()).unwrap();
     let binding = binding.result_type();
     let binding = match binding {
         ProgramParseResult::TokenMetadata(c) => c,

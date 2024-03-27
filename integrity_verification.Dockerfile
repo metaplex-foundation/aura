@@ -18,7 +18,6 @@ COPY rocks-db ./rocks-db
 COPY tests/setup ./tests/setup
 COPY usecase ./usecase
 COPY integrity_verification ./integrity_verification
-COPY blockbuster ./blockbuster
 
 RUN cargo chef prepare --recipe-path recipe.json
 

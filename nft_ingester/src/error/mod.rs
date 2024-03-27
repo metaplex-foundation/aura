@@ -11,6 +11,7 @@ use solana_sdk::signature::ParseSignatureError;
 use solana_transaction_status::EncodeError;
 use thiserror::Error;
 
+use crate::plerkle::PlerkleDeserializerError;
 use rocks_db::errors::{BackupServiceError, StorageError};
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -103,6 +104,8 @@ pub enum IngesterError {
     GrpcError(String),
     #[error("Usecase: {0}")]
     Usecase(String),
+    #[error("SolanaDeserializer: {0}")]
+    SolanaDeserializer(String),
 }
 
 impl From<reqwest::Error> for IngesterError {
@@ -235,5 +238,11 @@ impl From<tonic::transport::Error> for IngesterError {
 impl From<UsecaseError> for IngesterError {
     fn from(e: UsecaseError) -> Self {
         IngesterError::Usecase(e.to_string())
+    }
+}
+
+impl From<PlerkleDeserializerError> for IngesterError {
+    fn from(e: PlerkleDeserializerError) -> Self {
+        IngesterError::SolanaDeserializer(e.to_string())
     }
 }

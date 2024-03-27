@@ -1,4 +1,4 @@
-#[cfg(feature = "integration_tests")]
+// #[cfg(feature = "integration_tests")]
 #[cfg(test)]
 mod tests {
     use setup::pg::*;
@@ -27,10 +27,14 @@ mod tests {
         let last_known_key = generate_random_vec(8 + 8 + 32);
         // Insert assets and last key using update_asset_indexes_batch
         asset_index_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice(), &last_known_key)
+            .update_asset_indexes_batch(asset_indexes.as_slice())
             .await
             .unwrap();
 
+        asset_index_storage
+            .update_last_synced_key(&last_known_key)
+            .await
+            .unwrap();
         // Check fetch_last_synced_id again
         let last_synced_key = asset_index_storage.fetch_last_synced_id().await.unwrap();
         assert!(last_synced_key.is_some());
@@ -53,10 +57,13 @@ mod tests {
             })
             .collect::<Vec<AssetIndex>>();
         asset_index_storage
-            .update_asset_indexes_batch(updated_asset_indexes.as_slice(), &new_known_key)
+            .update_asset_indexes_batch(updated_asset_indexes.as_slice())
             .await
             .unwrap();
-
+        asset_index_storage
+            .update_last_synced_key(&new_known_key)
+            .await
+            .unwrap();
         let last_synced_key = asset_index_storage.fetch_last_synced_id().await.unwrap();
         assert!(last_synced_key.is_some());
         assert_eq!(last_synced_key.unwrap().as_slice(), &new_known_key[..]);
@@ -96,7 +103,11 @@ mod tests {
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_index_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice(), &last_known_key)
+            .update_asset_indexes_batch(asset_indexes.as_slice())
+            .await
+            .unwrap();
+        asset_index_storage
+            .update_last_synced_key(&last_known_key)
             .await
             .unwrap();
 
@@ -120,7 +131,11 @@ mod tests {
             .collect::<Vec<AssetIndex>>();
 
         asset_index_storage
-            .update_asset_indexes_batch(updated_asset_indexes.as_slice(), &last_known_key)
+            .update_asset_indexes_batch(updated_asset_indexes.as_slice())
+            .await
+            .unwrap();
+        asset_index_storage
+            .update_last_synced_key(&last_known_key)
             .await
             .unwrap();
 

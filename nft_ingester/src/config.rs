@@ -184,6 +184,12 @@ pub struct IngesterConfig {
     pub backfiller_source_mode: BackfillerSourceMode,
     #[serde(default)]
     pub migrate_columns: bool,
+    #[serde(default = "default_synchronizer_parallel_tasks")]
+    pub synchronizer_parallel_tasks: usize,
+}
+
+const fn default_synchronizer_parallel_tasks() -> usize {
+    20
 }
 
 const fn default_dump_sync_threshold() -> i64 {
@@ -252,6 +258,8 @@ pub struct SynchronizerConfig {
     pub dump_sync_threshold: i64,
     #[serde(default)]
     pub timeout_between_syncs_sec: u64,
+    #[serde(default = "default_synchronizer_parallel_tasks")]
+    pub parallel_tasks: usize,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]

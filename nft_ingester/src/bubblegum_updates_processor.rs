@@ -1,10 +1,15 @@
 use crate::error::IngesterError;
 use crate::flatbuffer_mapper::FlatbufferMapper;
+use crate::plerkle;
+use crate::plerkle::PlerkleTransactionInfo;
 use blockbuster::programs::bubblegum::{BubblegumInstruction, Payload};
 use blockbuster::{
     instruction::{order_instructions, InstructionBundle, IxPair},
     program_handler::ProgramParser,
-    programs::{bubblegum::BubblegumParser, ProgramParseResult},
+    programs::{
+        bubblegum::BubblegumParser, mpl_core_program::MplCoreParser,
+        token_account::TokenAccountParser, token_metadata::TokenMetadataParser, ProgramParseResult,
+    },
 };
 use chrono::Utc;
 use entities::enums::{
@@ -13,12 +18,12 @@ use entities::enums::{
 };
 use entities::models::{BufferedTransaction, SignatureWithSlot, Task, UpdateVersion, Updated};
 use entities::models::{ChainDataV1, Creator, Uses};
+use lazy_static::lazy_static;
 use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
 use num_traits::FromPrimitive;
-use plerkle_serialization::{Pubkey as FBPubkey, TransactionInfo};
 use rocks_db::asset::AssetOwner;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
@@ -30,19 +35,26 @@ use rocks_db::transaction::{
 use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
 use std::collections::{HashSet, VecDeque};
-use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
+lazy_static! {
+    static ref KEY_SET: HashSet<Pubkey> = {
+        let mut m = HashSet::new();
+        m.insert(BubblegumParser {}.key());
+        m.insert(TokenMetadataParser {}.key());
+        m.insert(TokenAccountParser {}.key());
+        m.insert(MplCoreParser {}.key());
+        m
+    };
+}
 
 #[derive(Clone)]
 pub struct BubblegumTxProcessor {
     pub transaction_parser: Arc<FlatbufferMapper>,
     pub instruction_parser: Arc<BubblegumParser>,
-
     pub rocks_client: Arc<rocks_db::Storage>,
 
     pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
@@ -64,13 +76,15 @@ impl BubblegumTxProcessor {
         }
     }
 
-    pub fn break_transaction<'i>(
-        tx: &'i TransactionInfo<'i>,
-    ) -> VecDeque<(IxPair<'i>, Option<Vec<IxPair<'i>>>)> {
-        let mut ref_set: HashSet<&[u8]> = HashSet::new();
-        let k = mpl_bubblegum::ID;
-        ref_set.insert(k.as_ref());
-        order_instructions(ref_set, tx)
+    pub fn break_transaction(
+        tx_info: &plerkle::TransactionInfo,
+    ) -> VecDeque<(IxPair, Option<Vec<IxPair>>)> {
+        order_instructions(
+            &KEY_SET,
+            tx_info.account_keys.as_slice(),
+            tx_info.message_instructions.as_slice(),
+            tx_info.meta_inner_instructions.as_slice(),
+        )
     }
 
     pub async fn process_transaction(
@@ -115,6 +129,8 @@ impl BubblegumTxProcessor {
         let transaction_info =
             plerkle_serialization::root_as_transaction_info(transaction_info_bytes.as_slice())
                 .unwrap();
+        let transaction_info: plerkle::TransactionInfo =
+            PlerkleTransactionInfo(transaction_info).try_into()?;
 
         Self::get_handle_transaction_results(instruction_parser, transaction_info, metrics)
     }
@@ -152,61 +168,48 @@ impl BubblegumTxProcessor {
 
     pub fn get_handle_transaction_results(
         instruction_parser: Arc<BubblegumParser>,
-        tx: TransactionInfo,
+        tx: plerkle::TransactionInfo,
         metrics: Arc<IngesterMetricsConfig>,
     ) -> Result<TransactionResult, IngesterError> {
-        let sig: Option<&str> = tx.signature();
+        let sig = tx.signature;
         let instructions = Self::break_transaction(&tx);
-        let accounts = tx.account_keys().unwrap_or_default();
-        let slot = tx.slot();
-        let txn_id = tx.signature().unwrap_or("");
-
-        let mut keys: Vec<FBPubkey> = Vec::with_capacity(accounts.len());
-        for k in accounts.into_iter() {
-            keys.push(*k);
-        }
-
+        let slot = tx.slot;
+        let signature = tx.signature;
         let mut transaction_result = TransactionResult {
             instruction_results: vec![],
             transaction_signature: Some((
                 mpl_bubblegum::programs::MPL_BUBBLEGUM_ID,
-                SignatureWithSlot {
-                    signature: Signature::from_str(txn_id)?,
-                    slot,
-                },
+                SignatureWithSlot { signature, slot },
             )),
         };
         for (outer_ix, inner_ix) in instructions {
             let (program, instruction) = outer_ix;
-            if program.0 != mpl_bubblegum::programs::MPL_BUBBLEGUM_ID.to_bytes() {
+            if program != mpl_bubblegum::programs::MPL_BUBBLEGUM_ID {
                 continue;
             }
 
-            let ix_accounts = instruction.accounts().unwrap().iter().collect::<Vec<_>>();
+            let ix_accounts = &instruction.accounts;
             let ix_account_len = ix_accounts.len();
             let max = ix_accounts.iter().max().copied().unwrap_or(0) as usize;
-
-            if keys.len() < max {
+            if tx.account_keys.len() < max {
                 return Err(IngesterError::DeserializationError(
                     "Missing Accounts in Serialized Ixn/Txn".to_string(),
                 ));
             }
-
             let ix_accounts =
                 ix_accounts
                     .iter()
                     .fold(Vec::with_capacity(ix_account_len), |mut acc, a| {
-                        if let Some(key) = keys.get(*a as usize) {
+                        if let Some(key) = tx.account_keys.get(*a as usize) {
                             acc.push(*key);
                         }
                         acc
                     });
-
             let ix = InstructionBundle {
-                txn_id,
+                txn_id: &signature.to_string(),
                 program,
                 instruction: Some(instruction),
-                inner_ix,
+                inner_ix: inner_ix.as_deref(),
                 keys: ix_accounts.as_slice(),
                 slot,
             };
@@ -227,7 +230,7 @@ impl BubblegumTxProcessor {
                         // we should not persist the signature if we have unhandled instructions
                         transaction_result.transaction_signature = None;
                         error!(
-                            "Failed to handle bubblegum instruction for txn {:?}: {:?}",
+                            "Failed to handle bubblegum instruction for txn {}: {:?}",
                             sig, e
                         );
                     }
@@ -445,9 +448,7 @@ impl BubblegumTxProcessor {
             let mut asset_update = AssetUpdateEvent {
                 ..Default::default()
             };
-            let tree_id = Pubkey::new_from_array(tree_id.to_owned());
             //     Pubkey::new_from_array(bundle.keys.get(3).unwrap().0.to_vec().try_into().unwrap());
-            let authority = Pubkey::new_from_array(authority.to_owned());
             //     Pubkey::new_from_array(bundle.keys.get(0).unwrap().0.to_vec().try_into().unwrap());
 
             let uri = args.uri.trim().replace('\0', "");
@@ -508,7 +509,7 @@ impl BubblegumTxProcessor {
                         slot: bundle.slot,
                         leaf: Some(AssetLeaf {
                             pubkey: id,
-                            tree_id,
+                            tree_id: *tree_id,
                             leaf: Some(le.leaf_hash.to_vec()),
                             nonce: Some(nonce),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
@@ -569,7 +570,7 @@ impl BubblegumTxProcessor {
 
                     let asset_authority = AssetAuthority {
                         pubkey: id,
-                        authority,
+                        authority: *authority,
                         slot_updated: bundle.slot,
                         write_version: None,
                     };
@@ -681,12 +682,11 @@ impl BubblegumTxProcessor {
     }
 
     pub fn get_decompress_update(bundle: &InstructionBundle) -> AssetUpdate<AssetDynamicDetails> {
-        let id_bytes = bundle.keys.get(3).unwrap().0.as_slice();
-        let asset_id = Pubkey::new_from_array(id_bytes.try_into().unwrap());
+        let asset_id = bundle.keys.get(3).unwrap();
         AssetUpdate {
-            pk: asset_id,
+            pk: *asset_id,
             details: AssetDynamicDetails {
-                pubkey: asset_id,
+                pubkey: *asset_id,
                 was_decompressed: Updated::new(bundle.slot, None, true),
                 is_compressible: Updated::new(bundle.slot, None, false),
                 supply: Some(Updated::new(bundle.slot, None, 1)),
@@ -999,7 +999,7 @@ impl BubblegumTxProcessor {
                         slot: bundle.slot,
                         leaf: Some(AssetLeaf {
                             pubkey: id,
-                            tree_id: Pubkey::from(*tree_id),
+                            tree_id: *tree_id,
                             leaf: Some(le.leaf_hash.to_vec()),
                             nonce: Some(nonce),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
