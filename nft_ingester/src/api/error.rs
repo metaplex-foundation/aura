@@ -11,12 +11,12 @@ const STANDARD_ERROR_CODE: i64 = -32000;
 pub enum DasApiError {
     #[error("Config Missing or Error: {0}")]
     ConfigurationError(String),
-    #[error("Database Connection Failed")]
-    DatabaseConnectionError(#[from] sqlx::Error),
+    #[error("Database Error: {0}")]
+    DatabaseError(#[from] sqlx::Error),
     #[error("Pubkey Validation Err: {0} is invalid")]
     PubkeyValidationError(String),
     #[error("Database Error: {0}")]
-    DatabaseError(#[from] sea_orm::DbErr),
+    DatabaseErrorOrm(#[from] sea_orm::DbErr),
     #[error("Pagination Error. Only one pagination parameter supported per query.")]
     PaginationError,
     #[error("Pagination Error. No Pagination Method Selected")]
@@ -37,6 +37,8 @@ pub enum DasApiError {
     Validation(String),
     #[error("Page number is too big. Up to {0} pages are supported with this kind of pagination. Please use a different pagination(before/after/cursor).")]
     PageTooBig(usize),
+    #[error("Internal DB error")]
+    InternalDdError,
 }
 
 impl From<DasApiError> for jsonrpc_core::Error {
