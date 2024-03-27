@@ -203,6 +203,7 @@ mod tests {
             executable: false,
             metadata_owner: None,
             write_version: 1,
+            rent_epoch: 0,
         };
 
         let mut map = HashMap::new();

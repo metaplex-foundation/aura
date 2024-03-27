@@ -718,6 +718,7 @@ mod tests {
             lamports: 1,
             executable: false,
             metadata_owner: None,
+            rent_epoch: 0,
         };
         let mut metadata_info = HashMap::new();
         metadata_info.insert(mint_key.to_bytes().to_vec(), metadata);
@@ -877,6 +878,7 @@ mod tests {
                 lamports: 1,
                 executable: false,
                 metadata_owner: None,
+                rent_epoch: 0,
             };
 
             metadata_info.insert(mint_key.to_bytes().to_vec(), metadata);
@@ -1026,6 +1028,7 @@ mod tests {
             lamports: 1,
             executable: false,
             metadata_owner: None,
+            rent_epoch: 0,
         };
 
         let metadata_ofch = OffChainData {
