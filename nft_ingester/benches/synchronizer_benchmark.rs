@@ -24,6 +24,7 @@ async fn bench_synchronize(env: Arc<TestEnvironment<'_>>, batch_size: usize) {
     let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
         env.rocks_env.storage.clone(),
         env.pg_env.client.clone(),
+        env.pg_env.client.clone(),
         batch_size,
         "".to_string(),
         metrics.clone(),
