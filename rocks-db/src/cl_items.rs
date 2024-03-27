@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bincode::deserialize;
 use entities::models::{AssetSignature, AssetSignatureKey};
-use log::error;
+use log::{debug, error};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
@@ -61,11 +61,11 @@ impl ClItem {
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
         let mut result = vec![];
-        let mut cli_seq = 0;
+        let mut cli_seq = -1;
         if let Some(existing_val) = existing_val {
             match deserialize::<ClItem>(existing_val) {
                 Ok(value) => {
-                    cli_seq = value.cli_seq;
+                    cli_seq = value.cli_seq as i64;
                     result = existing_val.to_vec();
                 }
                 Err(e) => {
@@ -74,16 +74,22 @@ impl ClItem {
             }
         }
 
-        for op in operands {
+        let len = operands.len();
+
+        for (i, op) in operands.iter().enumerate() {
             match deserialize::<ClItem>(op) {
                 Ok(new_val) => {
-                    if new_val.cli_seq > cli_seq {
-                        cli_seq = new_val.cli_seq;
+                    if new_val.cli_seq as i64 > cli_seq {
+                        cli_seq = new_val.cli_seq as i64;
                         result = op.to_vec();
                     }
                 }
                 Err(e) => {
-                    error!("RocksDB: ClItem deserialize new_val: {}", e)
+                    if i == len - 1 && result.is_empty() {
+                        error!("RocksDB: last operand in ClItem new_val could not be deserialized. Empty array will be saved: {}", e)
+                    } else {
+                        debug!("RocksDB: ClItem deserialize new_val: {}", e);
+                    }
                 }
             }
         }

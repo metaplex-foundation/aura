@@ -3,11 +3,13 @@ use entities::models::{AssetSignature, AssetSignatureKey, AssetSignatureWithPagi
 use solana_program::pubkey::Pubkey;
 
 pub trait AssetSignaturesGetter {
+    #[allow(clippy::too_many_arguments)]
     fn signatures_iter(
         &self,
         tree: Pubkey,
         leaf_idx: u64,
         page: Option<u64>,
+        before_sequence: Option<u64>,
         after_sequence: Option<u64>,
         direction: &AssetSortDirection,
         limit: u64,

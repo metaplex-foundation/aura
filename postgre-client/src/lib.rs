@@ -16,6 +16,7 @@ pub mod integrity_verification_client;
 pub mod load_client;
 pub mod model;
 pub mod storage_traits;
+pub mod temp_index_client;
 
 pub const SQL_COMPONENT: &str = "sql";
 pub const SELECT_ACTION: &str = "select";
@@ -107,13 +108,15 @@ impl PgClient {
         }
     }
 
-    pub async fn insert_tasks(
+    pub(crate) async fn insert_tasks(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         metadata_urls: &[UrlWithStatus],
+        table: &str,
     ) -> Result<(), String> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("INSERT INTO tasks (tsk_id, tsk_metadata_url, tsk_status) ");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
+        query_builder.push(table);
+        query_builder.push(" (tsk_id, tsk_metadata_url, tsk_status) ");
         query_builder.push_values(metadata_urls.iter(), |mut builder, metadata_url| {
             builder.push_bind(metadata_url.get_metadata_id());
             builder.push_bind(metadata_url.metadata_url.trim().to_owned());
@@ -124,13 +127,8 @@ impl PgClient {
         });
         query_builder.push(" ON CONFLICT (tsk_id) DO NOTHING;");
 
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            BATCH_UPSERT_ACTION,
-            "tasks",
-        )
-        .await
+        self.execute_query_with_metrics(transaction, &mut query_builder, BATCH_UPSERT_ACTION, table)
+            .await
     }
 
     async fn start_transaction(&self) -> Result<Transaction<'_, Postgres>, String> {
