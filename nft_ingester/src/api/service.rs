@@ -83,14 +83,14 @@ pub async fn start_api(
             let Ok(Some(index_seq)) = pg_clone.fetch_last_synced_id().await else {
                 continue;
             };
-            let Ok(decoded_index_seq) = decode_u64x2_pubkey(index_seq) else {
+            let Ok((decoded_index_seq, _, _)) = decode_u64x2_pubkey(index_seq) else {
                 continue;
             };
-            let Ok(Some(primary_seq)) = rocks_db.last_known_asset_updated_key() else {
+            let Ok(Some((primary_seq, _, _))) = rocks_db.last_known_asset_updated_key() else {
                 continue;
             };
-            last_primary_storage_seq_clone.store(primary_seq.0, Ordering::SeqCst);
-            last_index_storage_seq_clone.store(decoded_index_seq.0, Ordering::SeqCst);
+            last_primary_storage_seq_clone.store(primary_seq, Ordering::SeqCst);
+            last_index_storage_seq_clone.store(decoded_index_seq, Ordering::SeqCst);
         }
         Ok(())
     });
