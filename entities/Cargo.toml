@@ -7,14 +7,14 @@ edition = "2021"
 
 [dependencies]
 serde = "1.0.193"
-solana-sdk = "~1.16"
+solana-sdk = "~1.17"
 num-derive = "0.4.1"
 num-traits = "0.2.17"
 schemars = "0.8.6"
 serde_derive = "1.0.195"
 sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json"] }
-solana-program = "~1.16"
-blockbuster = { path = "../blockbuster" }
+solana-program = "~1.17"
+blockbuster = "2.1.0"
 sha2 = "0.10.0"
 
 [dev-dependencies]
