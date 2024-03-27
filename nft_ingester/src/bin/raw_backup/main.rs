@@ -1,0 +1,70 @@
+use std::sync::Arc;
+
+use clap::{arg, Parser};
+use metrics_utils::red::RequestErrorDurationMetrics;
+use rocks_db::column::TypedColumn;
+use tempfile::TempDir;
+use tokio::sync::Mutex;
+use tokio::task::JoinSet;
+use tracing::info;
+
+use nft_ingester::error::IngesterError;
+use rocks_db::Storage;
+
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(short, long, required = true)]
+    pub source_db: String,
+    #[arg(short, long, required = true)]
+    pub target_db: String,
+}
+
+#[tokio::main(flavor = "multi_thread")]
+pub async fn main() -> Result<(), IngesterError> {
+    let config = Args::parse();
+
+    info!("Started...");
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+    let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    let secondary_rocks_dir = TempDir::new().unwrap();
+    let source_storage = Storage::open_secondary(
+        &config.source_db,
+        secondary_rocks_dir.path().to_str().unwrap(),
+        mutexed_tasks.clone(),
+        red_metrics.clone(),
+    )
+    .unwrap();
+
+    let target_storage = Storage::open(
+        &config.target_db,
+        mutexed_tasks.clone(),
+        red_metrics.clone(),
+    )
+    .unwrap();
+
+    let cf = &target_storage
+        .db
+        .cf_handle(rocks_db::raw_block::RawBlock::NAME)
+        .unwrap();
+    info!("Copying raw blocks...");
+    source_storage
+        .raw_blocks_cbor
+        .iter_start()
+        .filter_map(|k| k.ok())
+        .for_each(|(k, v)| target_storage.db.put_cf(cf, k, v).unwrap());
+    info!("Done copying raw blocks");
+
+    let cf = &target_storage
+        .db
+        .cf_handle(rocks_db::offchain_data::OffChainData::NAME)
+        .unwrap();
+    info!("Copying offchain data...");
+    source_storage
+        .asset_offchain_data
+        .iter_start()
+        .filter_map(|k| k.ok())
+        .for_each(|(k, v)| target_storage.db.put_cf(cf, k, v).unwrap());
+    info!("Done copying offchain data");
+    Ok(())
+}
