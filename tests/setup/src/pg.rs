@@ -168,10 +168,10 @@ pub async fn setup_database<T: Image>(node: &Container<'_, T>) -> (Pool<Postgres
     run_sql_script(&test_db_pool, "../init_v3.sql")
         .await
         .unwrap();
-    let asset_index_storage = PgClient::new_with_pool(
+    let asset_index_storage = Arc::new(PgClient::new_with_pool(
         test_db_pool.clone(),
         Arc::new(RequestErrorDurationMetrics::new()),
-    );
+    ));
 
     // Verify initial fetch_last_synced_id returns None
     assert!(asset_index_storage

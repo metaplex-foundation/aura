@@ -8,17 +8,30 @@ pub use crate::Result;
 use crate::Storage;
 use entities::models::AssetIndex;
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct AssetUpdatedKey {
+    pub seq: u64,
+    pub slot: u64,
+    pub pubkey: Pubkey,
+}
+
+impl AssetUpdatedKey {
+    pub fn new(seq: u64, slot: u64, pubkey: Pubkey) -> Self {
+        AssetUpdatedKey { seq, slot, pubkey }
+    }
+}
+
 #[automock]
 pub trait AssetUpdateIndexStorage {
-    fn last_known_asset_updated_key(&self) -> Result<Option<(u64, u64, Pubkey)>>;
+    fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>>;
     #[allow(clippy::type_complexity)]
     fn fetch_asset_updated_keys(
         &self,
-        from: Option<(u64, u64, Pubkey)>,
-        up_to: Option<(u64, u64, Pubkey)>,
+        from: Option<AssetUpdatedKey>,
+        up_to: Option<AssetUpdatedKey>,
         limit: usize,
         skip_keys: Option<HashSet<Pubkey>>,
-    ) -> Result<(HashSet<Pubkey>, Option<(u64, u64, Pubkey)>)>;
+    ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)>;
 }
 
 #[automock]
@@ -33,7 +46,6 @@ pub trait Dumper {
     async fn dump_db(
         &self,
         base_path: &std::path::Path,
-        metadata_key_set: HashSet<Vec<u8>>,
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> core::result::Result<(), String>;
@@ -59,18 +71,18 @@ impl MockAssetIndexStorage {
 }
 
 impl AssetUpdateIndexStorage for MockAssetIndexStorage {
-    fn last_known_asset_updated_key(&self) -> Result<Option<(u64, u64, Pubkey)>> {
+    fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         self.mock_update_index_storage
             .last_known_asset_updated_key()
     }
 
     fn fetch_asset_updated_keys(
         &self,
-        from: Option<(u64, u64, Pubkey)>,
-        up_to: Option<(u64, u64, Pubkey)>,
+        from: Option<AssetUpdatedKey>,
+        up_to: Option<AssetUpdatedKey>,
         limit: usize,
         skip_keys: Option<HashSet<Pubkey>>,
-    ) -> Result<(HashSet<Pubkey>, Option<(u64, u64, Pubkey)>)> {
+    ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)> {
         self.mock_update_index_storage
             .fetch_asset_updated_keys(from, up_to, limit, skip_keys)
     }
@@ -88,13 +100,10 @@ impl Dumper for MockAssetIndexStorage {
     async fn dump_db(
         &self,
         base_path: &std::path::Path,
-        metadata_key_set: HashSet<Vec<u8>>,
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> core::result::Result<(), String> {
-        self.mock_dumper
-            .dump_db(base_path, metadata_key_set, batch_size, rx)
-            .await
+        self.mock_dumper.dump_db(base_path, batch_size, rx).await
     }
 }
 
