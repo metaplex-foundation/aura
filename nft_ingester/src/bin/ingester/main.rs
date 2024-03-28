@@ -177,10 +177,6 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
-    if config.migrate_columns {
-        rocks_storage.migrate_columns().await;
-    }
-
     let synchronizer = Synchronizer::new(
         rocks_storage.clone(),
         index_storage.clone(),
