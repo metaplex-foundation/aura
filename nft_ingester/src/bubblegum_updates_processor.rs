@@ -6,10 +6,7 @@ use blockbuster::programs::bubblegum::{BubblegumInstruction, Payload};
 use blockbuster::{
     instruction::{order_instructions, InstructionBundle, IxPair},
     program_handler::ProgramParser,
-    programs::{
-        bubblegum::BubblegumParser, mpl_core_program::MplCoreParser,
-        token_account::TokenAccountParser, token_metadata::TokenMetadataParser, ProgramParseResult,
-    },
+    programs::{bubblegum::BubblegumParser, ProgramParseResult},
 };
 use chrono::Utc;
 use entities::enums::{
@@ -44,9 +41,6 @@ lazy_static! {
     static ref KEY_SET: HashSet<Pubkey> = {
         let mut m = HashSet::new();
         m.insert(BubblegumParser {}.key());
-        m.insert(TokenMetadataParser {}.key());
-        m.insert(TokenAccountParser {}.key());
-        m.insert(MplCoreParser {}.key());
         m
     };
 }
@@ -448,11 +442,8 @@ impl BubblegumTxProcessor {
             let mut asset_update = AssetUpdateEvent {
                 ..Default::default()
             };
-            //     Pubkey::new_from_array(bundle.keys.get(3).unwrap().0.to_vec().try_into().unwrap());
-            //     Pubkey::new_from_array(bundle.keys.get(0).unwrap().0.to_vec().try_into().unwrap());
 
             let uri = args.uri.trim().replace('\0', "");
-
             match le.schema {
                 LeafSchema::V1 {
                     id,
