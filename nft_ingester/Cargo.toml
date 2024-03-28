@@ -107,3 +107,6 @@ name = "raw_backfiller"
 
 [[bin]]
 name = "synchronizer"
+
+[[bin]]
+name = "raw_backup"

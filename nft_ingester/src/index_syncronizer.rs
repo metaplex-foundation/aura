@@ -37,6 +37,7 @@ where
     dump_path: String,
     metrics: Arc<SynchronizerMetricsConfig>,
     parallel_tasks: usize,
+    run_temp_sync_during_dump: bool,
 }
 
 impl<T, U, P> Synchronizer<T, U, P>
@@ -45,6 +46,7 @@ where
     U: AssetIndexStorage + Clone + Send + Sync + 'static,
     P: TempClientProvider + Send + Sync + 'static + Clone,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         primary_storage: Arc<T>,
         index_storage: Arc<U>,
@@ -53,6 +55,7 @@ where
         dump_path: String,
         metrics: Arc<SynchronizerMetricsConfig>,
         parallel_tasks: usize,
+        run_temp_sync_during_dump: bool,
     ) -> Self {
         Synchronizer {
             primary_storage,
@@ -62,6 +65,7 @@ where
             dump_path,
             metrics,
             parallel_tasks,
+            run_temp_sync_during_dump,
         }
     }
 
@@ -181,6 +185,9 @@ where
             last_known_key.slot,
             last_known_key.pubkey,
         );
+        if !self.run_temp_sync_during_dump {
+            return self.dump_sync(last_included_rocks_key.as_slice(), rx).await;
+        }
         // start a regular synchronization into a temporary storage to catch up on it while the dump is being created and loaded, as it takes a loooong time
         let (tx, local_rx) = tokio::sync::broadcast::channel::<()>(1);
         let temp_storage = Arc::new(self.temp_client_provider.create_temp_client().await?);
@@ -195,6 +202,7 @@ where
             "not used".to_string(),
             self.metrics.clone(),
             1,
+            false,
         ));
         let task = tokio::spawn(async move {
             temp_syncronizer
@@ -202,6 +210,21 @@ where
                 .await;
         });
 
+        self.dump_sync(last_included_rocks_key.as_slice(), rx)
+            .await?;
+
+        tx.send(()).map_err(|e| e.to_string())?;
+        task.await.map_err(|e| e.to_string())?;
+        // now we can copy temp storage to the main storage
+        temp_storage.copy_to_main().await?;
+        Ok(())
+    }
+
+    async fn dump_sync(
+        &self,
+        last_included_rocks_key: &[u8],
+        rx: &tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<(), IngesterError> {
         let path = std::path::Path::new(self.dump_path.as_str());
         tracing::info!("Dumping the primary storage to {}", self.dump_path);
         self.primary_storage
@@ -210,13 +233,9 @@ where
         tracing::info!("Dump is complete. Loading the dump into the index storage");
 
         self.index_storage
-            .load_from_dump(path, last_included_rocks_key.as_slice())
+            .load_from_dump(path, last_included_rocks_key)
             .await?;
         tracing::info!("Dump is loaded into the index storage");
-        tx.send(()).map_err(|e| e.to_string())?;
-        task.await.map_err(|e| e.to_string())?;
-        // now we can copy temp storage to the main storage
-        temp_storage.copy_to_main().await?;
         Ok(())
     }
 
@@ -409,6 +428,7 @@ mod tests {
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
+            false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
@@ -478,6 +498,7 @@ mod tests {
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
+            false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
@@ -557,6 +578,7 @@ mod tests {
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
+            false,
         ); // Small batch size
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
@@ -679,6 +701,7 @@ mod tests {
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
+            false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
@@ -729,6 +752,7 @@ mod tests {
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
+            false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
