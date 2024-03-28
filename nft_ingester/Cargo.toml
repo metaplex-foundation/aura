@@ -66,9 +66,9 @@ itertools = "0.12.1"
 solana-client = "~1.17"
 heck = "0.5.0"
 "lazy_static" = "1.4.0"
+tempfile = "3.8.1"
 
 [dev-dependencies]
-tempfile = "3.8.1"
 setup = { path = "../tests/setup" }
 testcontainers = "0.15.0"
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
