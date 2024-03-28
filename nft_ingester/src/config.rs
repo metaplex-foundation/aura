@@ -179,6 +179,8 @@ pub struct IngesterConfig {
     pub backfiller_source_mode: BackfillerSourceMode,
     #[serde(default = "default_synchronizer_parallel_tasks")]
     pub synchronizer_parallel_tasks: usize,
+    #[serde(default)]
+    pub run_temp_sync_during_dump: bool,
 }
 
 const fn default_synchronizer_parallel_tasks() -> usize {
@@ -253,6 +255,8 @@ pub struct SynchronizerConfig {
     pub timeout_between_syncs_sec: u64,
     #[serde(default = "default_synchronizer_parallel_tasks")]
     pub parallel_tasks: usize,
+    #[serde(default)]
+    pub run_temp_sync_during_dump: bool,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]

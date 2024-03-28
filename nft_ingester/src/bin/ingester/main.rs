@@ -188,6 +188,7 @@ pub async fn main() -> Result<(), IngesterError> {
         config.dump_path.to_string(),
         metrics_state.synchronizer_metrics.clone(),
         config.synchronizer_parallel_tasks,
+        config.run_temp_sync_during_dump,
     );
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
