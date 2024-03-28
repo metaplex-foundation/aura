@@ -16,6 +16,7 @@ services:
       - ${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:rw
       - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
       - ./creds.json:/usr/src/app/creds.json
+      - ./migrations:/usr/src/app/migrations
     depends_on:
       - db
     build:
