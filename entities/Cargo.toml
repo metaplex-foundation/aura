@@ -12,7 +12,7 @@ num-derive = "0.4.1"
 num-traits = "0.2.17"
 schemars = "0.8.6"
 serde_derive = "1.0.195"
-sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json"] }
+sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json", "chrono"] }
 solana-program = "~1.17"
 blockbuster = "2.2.0"
 sha2 = "0.10.0"

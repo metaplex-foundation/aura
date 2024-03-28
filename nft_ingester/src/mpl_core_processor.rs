@@ -403,6 +403,11 @@ impl MplCoreProcessor {
                         num_minted,
                     )
                 }),
+                rent_epoch: Some(Updated::new(
+                    account_data.slot_updated,
+                    Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                    account_data.rent_epoch,
+                )),
                 current_size: asset.current_size.map(|current_size| {
                     Updated::new(
                         account_data.slot_updated,

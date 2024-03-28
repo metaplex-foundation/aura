@@ -182,6 +182,8 @@ pub struct IngesterConfig {
     pub check_proofs_commitment: CommitmentLevel,
     #[serde(default)]
     pub backfiller_source_mode: BackfillerSourceMode,
+    #[serde(default)]
+    pub migrate_columns: bool,
     #[serde(default = "default_synchronizer_parallel_tasks")]
     pub synchronizer_parallel_tasks: usize,
 }

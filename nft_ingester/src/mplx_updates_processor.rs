@@ -32,6 +32,7 @@ pub struct MetadataInfo {
     pub slot_updated: u64,
     pub write_version: u64,
     pub lamports: u64,
+    pub rent_epoch: u64,
     pub executable: bool,
     pub metadata_owner: Option<String>,
 }
@@ -60,6 +61,7 @@ pub struct IndexableAssetWithAccountInfo {
     pub executable: bool,
     pub slot_updated: u64,
     pub write_version: u64,
+    pub rent_epoch: u64,
 }
 
 #[derive(Clone)]
@@ -373,6 +375,11 @@ impl MplxAccsProcessor {
                     metadata_info.slot_updated,
                     Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                     chain_mutability,
+                )),
+                rent_epoch: Some(Updated::new(
+                    metadata_info.slot_updated,
+                    Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
+                    metadata_info.rent_epoch,
                 )),
                 ..Default::default()
             });

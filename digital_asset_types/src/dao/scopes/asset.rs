@@ -107,6 +107,7 @@ fn convert_rocks_offchain_data(
             reindex: None,
         },
         lamports: dynamic_data.lamports.clone().map(|v| v.value),
+        rent_epoch: dynamic_data.rent_epoch.clone().map(|v| v.value),
         executable: dynamic_data.executable.clone().map(|v| v.value),
         metadata_owner: dynamic_data.metadata_owner.clone().map(|v| v.value),
     })

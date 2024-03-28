@@ -438,6 +438,8 @@ pub struct Asset {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata_owner: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub rent_epoch: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub plugins: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unknown_plugins: Option<Value>,

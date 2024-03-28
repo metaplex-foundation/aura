@@ -47,6 +47,7 @@ mod tests {
             slot_updated: 1,
             write_version: 1,
             lamports: 1,
+            rent_epoch: 0,
             executable: false,
             metadata_owner: None,
         }
@@ -319,6 +320,7 @@ mod tests {
             executable: false,
             slot_updated: 1,
             write_version: 1,
+            rent_epoch: 0,
         };
         let second_mpl_core_to_save = IndexableAssetWithAccountInfo {
             indexable_asset: MplCoreAccountData::Collection(IndexableAsset {
@@ -336,6 +338,7 @@ mod tests {
             executable: false,
             slot_updated: 1,
             write_version: 1,
+            rent_epoch: 0,
         };
 
         let buffer = Arc::new(Buffer::new());

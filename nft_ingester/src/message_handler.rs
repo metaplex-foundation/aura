@@ -246,6 +246,7 @@ impl MessageHandler {
                                         write_version: account_info.write_version,
                                         lamports: account_info.lamports,
                                         executable: account_info.executable,
+                                        rent_epoch: account_info.rent_epoch,
                                         metadata_owner: Some(account_info.owner.to_string()),
                                     },
                                     account_info.write_version
@@ -370,6 +371,7 @@ impl MessageHandler {
                         write_version: account_update.write_version,
                         lamports: account_update.lamports,
                         executable: account_update.executable,
+                        rent_epoch: account_update.rent_epoch,
                     },
                     account_update.write_version
                 );

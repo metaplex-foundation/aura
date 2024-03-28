@@ -67,6 +67,7 @@ pub struct AssetDynamicDetails {
     pub raw_name: Option<Updated<String>>,
     pub plugins: Option<Updated<String>>,
     pub unknown_plugins: Option<Updated<String>>,
+    pub rent_epoch: Option<Updated<u64>>,
     pub num_minted: Option<Updated<u32>>,
     pub current_size: Option<Updated<u32>>,
     pub plugins_json_version: Option<Updated<u32>>,
@@ -394,6 +395,7 @@ impl AssetDynamicDetails {
                         );
                         update_optional_field(&mut current_val.num_minted, &new_val.num_minted);
                         update_optional_field(&mut current_val.current_size, &new_val.current_size);
+                        update_optional_field(&mut current_val.rent_epoch, &new_val.rent_epoch);
                         update_optional_field(
                             &mut current_val.plugins_json_version,
                             &new_val.plugins_json_version,
