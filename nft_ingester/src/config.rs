@@ -180,7 +180,7 @@ pub struct IngesterConfig {
     #[serde(default = "default_synchronizer_parallel_tasks")]
     pub synchronizer_parallel_tasks: usize,
     #[serde(default)]
-    pub run_temp_sync_during_dump: bool
+    pub run_temp_sync_during_dump: bool,
 }
 
 const fn default_synchronizer_parallel_tasks() -> usize {
