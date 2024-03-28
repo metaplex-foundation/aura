@@ -34,7 +34,6 @@ pub mod batch_savers;
 pub mod bubblegum_slots;
 pub mod cl_items;
 pub mod column;
-pub mod column_migrator;
 pub mod dump_client;
 pub mod editions;
 pub mod errors;
@@ -311,7 +310,7 @@ impl Storage {
             asset::AssetDynamicDetails::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_dynamic_details",
-                    AssetStaticDetails::merge_keep_existing,
+                    AssetDynamicDetails::merge_dynamic_details,
                 );
             }
             asset::AssetDynamicDetailsDeprecated::NAME => {
@@ -341,7 +340,7 @@ impl Storage {
             asset::AssetOwner::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_asset_owner",
-                    AssetStaticDetails::merge_keep_existing,
+                    AssetOwner::merge_asset_owner,
                 );
             }
             asset::AssetLeaf::NAME => {
