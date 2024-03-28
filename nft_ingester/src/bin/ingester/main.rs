@@ -28,7 +28,6 @@ use nft_ingester::config::{
     setup_config, BackfillerConfig, BackfillerSourceMode, IngesterConfig, INGESTER_BACKUP_NAME,
     INGESTER_CONFIG_PREFIX,
 };
-use nft_ingester::db_v2::DBClient as DBClientV2;
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::json_downloader::JsonDownloader;
@@ -49,6 +48,7 @@ use nft_ingester::backfiller::{
     TransactionsParser,
 };
 use nft_ingester::fork_cleaner::ForkCleaner;
+use nft_ingester::mpl_core_processor::MplCoreProcessor;
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
@@ -162,8 +162,6 @@ pub async fn main() -> Result<(), IngesterError> {
         .await
         .map_err(IngesterError::SqlxError)?;
 
-    let db_client_v2 = Arc::new(DBClientV2::new(&config.database_config).await?);
-
     let tasks = JoinSet::new();
 
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -179,6 +177,9 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
+    if config.migrate_columns {
+        rocks_storage.migrate_columns().await;
+    }
 
     let synchronizer = Synchronizer::new(
         rocks_storage.clone(),
@@ -263,7 +264,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let mplx_accs_parser = MplxAccsProcessor::new(
         config.mplx_buffer_size,
         buffer.clone(),
-        db_client_v2.clone(),
+        index_storage.clone(),
         rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
     );
@@ -273,6 +274,13 @@ pub async fn main() -> Result<(), IngesterError> {
         buffer.clone(),
         metrics_state.ingester_metrics.clone(),
         config.spl_buffer_size,
+    );
+    let mpl_core_parser = MplCoreProcessor::new(
+        rocks_storage.clone(),
+        index_storage.clone(),
+        buffer.clone(),
+        metrics_state.ingester_metrics.clone(),
+        config.mpl_core_buffer_size,
     );
 
     for _ in 0..config.mplx_workers {
@@ -315,6 +323,22 @@ pub async fn main() -> Result<(), IngesterError> {
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
             cloned_mplx_parser
                 .process_edition_accs(cloned_keep_running)
+                .await;
+        }));
+
+        let mut cloned_core_parser = mpl_core_parser.clone();
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            cloned_core_parser
+                .process_mpl_assets(cloned_keep_running)
+                .await;
+        }));
+
+        let mut cloned_core_parser = mpl_core_parser.clone();
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            cloned_core_parser
+                .process_mpl_asset_burn(cloned_keep_running)
                 .await;
         }));
     }

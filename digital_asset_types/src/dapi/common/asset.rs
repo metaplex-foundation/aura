@@ -18,7 +18,7 @@ use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_group
 use crate::rpc::response::{AssetError, TokenAccountsList, TransactionSignatureList};
 use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
-    MetadataMap, Ownership, Royalty, Scope, Supply, Uses,
+    MetadataMap, MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
 };
 
 pub fn to_uri(uri: String) -> Option<Url> {
@@ -225,6 +225,7 @@ pub fn to_grouping(groups: Vec<asset_grouping::Model>) -> Result<Vec<Group>, DbE
         Ok(Group {
             group_key: model.group_key.clone(),
             group_value: model.group_value.clone(),
+            verified: model.verified,
         })
     }
 
@@ -284,6 +285,15 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         .unwrap_or(false);
     let edition_nonce =
         safe_select(chain_data_selector, "$.edition_nonce").and_then(|v| v.as_u64());
+    let mpl_core_info = match interface {
+        Interface::MplCoreAsset | Interface::MplCoreCollection => Some(MplCoreInfo {
+            num_minted: asset.num_minted,
+            current_size: asset.current_supply,
+            plugins_json_version: asset.plugins_json_version,
+        }),
+        _ => None,
+    };
+
     Ok(Some(RpcAsset {
         interface: interface.clone(),
         id: bs58::encode(asset.id).into_string(),
@@ -352,6 +362,10 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         lamports: data.lamports,
         executable: data.executable,
         metadata_owner: data.metadata_owner,
+        rent_epoch: data.rent_epoch,
+        plugins: asset.plugins,
+        unknown_plugins: asset.unknown_plugins,
+        mpl_core_info,
     }))
 }
 

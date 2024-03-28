@@ -1,8 +1,6 @@
 use async_trait::async_trait;
-use entities::{
-    enums::TaskStatus,
-    models::{BufferedTransaction, SignatureWithSlot},
-};
+use entities::models::Task;
+use entities::models::{BufferedTransaction, SignatureWithSlot};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
@@ -12,16 +10,6 @@ use crate::{
     asset::{AssetCollection, AssetLeaf},
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
 };
-
-#[derive(Debug, Clone, Default)]
-pub struct Task {
-    pub ofd_metadata_url: String,
-    pub ofd_locked_until: Option<chrono::DateTime<chrono::Utc>>,
-    pub ofd_attempts: i32,
-    pub ofd_max_attempts: i32,
-    pub ofd_error: Option<String>,
-    pub ofd_status: TaskStatus,
-}
 
 pub trait TransactionProcessor: Sync + Send + 'static {
     fn get_ingest_transaction_results(

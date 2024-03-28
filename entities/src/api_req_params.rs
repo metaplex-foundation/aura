@@ -274,6 +274,223 @@ impl SearchAssets {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct SearchAssetsV0 {
+    pub negate: Option<bool>,
+    pub condition_type: Option<SearchConditionType>,
+    pub interface: Option<Interface>,
+    pub owner_address: Option<String>,
+    pub owner_type: Option<OwnershipModel>,
+    pub creator_address: Option<String>,
+    pub creator_verified: Option<bool>,
+    pub authority_address: Option<String>,
+    pub grouping: Option<(String, String)>,
+    pub delegate: Option<String>,
+    pub frozen: Option<bool>,
+    pub supply: Option<u64>,
+    pub supply_mint: Option<String>,
+    pub compressed: Option<bool>,
+    pub compressible: Option<bool>,
+    pub royalty_target_type: Option<RoyaltyModel>,
+    pub royalty_target: Option<String>,
+    pub royalty_amount: Option<u32>,
+    pub burnt: Option<bool>,
+    pub sort_by: Option<AssetSorting>,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    // before and after are base64 encoded sorting keys, which is NOT a pubkey, passing any non empty base64 encoded string will not cause an error
+    pub before: Option<String>,
+    pub after: Option<String>,
+    #[serde(default)]
+    pub json_uri: Option<String>,
+}
+
+impl From<SearchAssetsV0> for SearchAssets {
+    fn from(value: SearchAssetsV0) -> Self {
+        Self {
+            negate: value.negate,
+            condition_type: value.condition_type,
+            interface: value.interface,
+            owner_address: value.owner_address,
+            owner_type: value.owner_type,
+            creator_address: value.creator_address,
+            creator_verified: value.creator_verified,
+            authority_address: value.authority_address,
+            grouping: value.grouping,
+            delegate: value.delegate,
+            frozen: value.frozen,
+            supply: value.supply,
+            supply_mint: value.supply_mint,
+            compressed: value.compressed,
+            compressible: value.compressible,
+            royalty_target_type: value.royalty_target_type,
+            royalty_target: value.royalty_target,
+            royalty_amount: value.royalty_amount,
+            burnt: value.burnt,
+            sort_by: value.sort_by,
+            limit: value.limit,
+            page: value.page,
+            before: value.before,
+            after: value.after,
+            json_uri: value.json_uri,
+            cursor: None,
+            name: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetAssetV0 {
+    pub id: String,
+}
+
+impl From<GetAssetV0> for GetAsset {
+    fn from(value: GetAssetV0) -> Self {
+        Self {
+            id: value.id,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetAssetBatchV0 {
+    pub ids: Vec<String>,
+}
+
+impl From<GetAssetBatchV0> for GetAssetBatch {
+    fn from(value: GetAssetBatchV0) -> Self {
+        Self {
+            ids: value.ids,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetAssetsByAuthorityV0 {
+    pub authority_address: String,
+    pub sort_by: Option<AssetSorting>,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+}
+
+impl From<GetAssetsByAuthorityV0> for GetAssetsByAuthority {
+    fn from(value: GetAssetsByAuthorityV0) -> Self {
+        Self {
+            authority_address: value.authority_address,
+            sort_by: value.sort_by,
+            limit: value.limit,
+            page: value.page,
+            before: value.before,
+            after: value.after,
+            cursor: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetAssetsByCreatorV0 {
+    pub creator_address: String,
+    pub only_verified: Option<bool>,
+    pub sort_by: Option<AssetSorting>,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+}
+
+impl From<GetAssetsByCreatorV0> for GetAssetsByCreator {
+    fn from(value: GetAssetsByCreatorV0) -> Self {
+        Self {
+            creator_address: value.creator_address,
+            only_verified: value.only_verified,
+            sort_by: value.sort_by,
+            limit: value.limit,
+            page: value.page,
+            before: value.before,
+            after: value.after,
+            cursor: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetAssetsByOwnerV0 {
+    pub owner_address: String,
+    pub sort_by: Option<AssetSorting>,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+}
+
+impl From<GetAssetsByOwnerV0> for GetAssetsByOwner {
+    fn from(value: GetAssetsByOwnerV0) -> Self {
+        Self {
+            owner_address: value.owner_address,
+            sort_by: value.sort_by,
+            limit: value.limit,
+            page: value.page,
+            before: value.before,
+            after: value.after,
+            cursor: None,
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetAssetsByGroupV0 {
+    pub group_key: String,
+    pub group_value: String,
+    pub sort_by: Option<AssetSorting>,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+}
+
+impl From<GetAssetsByGroupV0> for GetAssetsByGroup {
+    fn from(value: GetAssetsByGroupV0) -> Self {
+        Self {
+            group_key: value.group_key,
+            group_value: value.group_value,
+            sort_by: value.sort_by,
+            limit: value.limit,
+            page: value.page,
+            before: value.before,
+            after: value.after,
+            cursor: None,
+            options: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

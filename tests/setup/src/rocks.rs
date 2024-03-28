@@ -148,6 +148,7 @@ pub fn create_test_dynamic_data(pubkey: Pubkey, slot: u64, url: String) -> Asset
         lamports: None,
         executable: None,
         metadata_owner: None,
+        ..Default::default()
     }
 }
 
@@ -181,7 +182,7 @@ pub fn generate_test_authority(pubkey: Pubkey) -> AssetAuthority {
 pub fn generate_test_owner(pubkey: Pubkey) -> AssetOwner {
     AssetOwner {
         pubkey,
-        owner: generate_test_updated(Pubkey::new_unique()),
+        owner: generate_test_updated(Some(Pubkey::new_unique())),
         owner_type: generate_test_updated(entities::enums::OwnerType::Single),
         owner_delegate_seq: generate_test_updated(Some(rand::thread_rng().gen_range(0..100))),
         delegate: generate_test_updated(Some(Pubkey::new_unique())),

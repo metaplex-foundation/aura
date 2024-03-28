@@ -25,6 +25,7 @@ pub struct FullAssetList {
 pub struct AssetDataModel {
     pub asset: asset_data::Model,
     pub lamports: Option<u64>,
+    pub rent_epoch: Option<u64>,
     pub executable: Option<bool>,
     pub metadata_owner: Option<String>,
 }

@@ -1,7 +1,8 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use blockbuster::token_metadata::state::{Collection, Creator, Data, Key, Metadata};
+    use blockbuster::token_metadata::accounts::Metadata;
+    use blockbuster::token_metadata::types::{Collection, Creator, Key};
     use entities::api_req_params::{GetAsset, Options};
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
@@ -9,11 +10,11 @@ mod tests {
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
         buffer::Buffer,
-        db_v2::DBClient,
         mplx_updates_processor::{MetadataInfo, MplxAccsProcessor},
         token_updates_processor::TokenAccsProcessor,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
+    use postgre_client::PgClient;
     use rocks_db::{
         bubblegum_slots::BubblegumSlotGetter,
         columns::{Mint, TokenAccount},
@@ -21,7 +22,6 @@ mod tests {
         Storage,
     };
     use solana_sdk::pubkey::Pubkey;
-    use sqlx::{Pool, Postgres};
     use std::fs::File;
     use std::str::FromStr;
     use std::sync::Arc;
@@ -105,18 +105,16 @@ mod tests {
     }
 
     async fn process_accounts(
-        pg_pool: Pool<Postgres>,
+        pg_client: Arc<PgClient>,
         buffer: Arc<Buffer>,
-        env_rocks: Arc<rocks_db::Storage>,
+        env_rocks: Arc<Storage>,
         nft_created_slot: i64,
         mint: &Pubkey,
     ) {
-        let db_client = Arc::new(DBClient { pool: pg_pool });
-
         let mplx_accs_parser = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            db_client.clone(),
+            pg_client.clone(),
             env_rocks.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -168,36 +166,15 @@ mod tests {
                 update_authority: Pubkey::from_str("ywx1vh2bG1brfX8SqWMxGiivNTZjMHf9vuKrXKt4pNT")
                     .unwrap(),
                 mint: *mint,
-                data: Data {
-                    name: "Mufacka name".to_string(),
-                    symbol: "SSNC".to_string(),
-                    uri: "https://arweave.net/nbCWy-OEu7MG5ORuJMurP5A-65qO811R-vL_8l_JHQM"
-                        .to_string(),
-                    seller_fee_basis_points: 100,
-                    creators: Some(vec![
-                        Creator {
-                            address: Pubkey::from_str(
-                                "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
-                            )
-                            .unwrap(),
-                            verified: true,
-                            share: 99,
-                        },
-                        Creator {
-                            address: Pubkey::from_str(
-                                "5zgWmEx4ppdh6LfaPUmfJG2gBAK8bC2gBv7zshD6N1hG",
-                            )
-                            .unwrap(),
-                            verified: false,
-                            share: 1,
-                        },
-                    ]),
-                },
+                name: "Mufacka name".to_string(),
+                symbol: "SSNC".to_string(),
+                uri: "https://arweave.net/nbCWy-OEu7MG5ORuJMurP5A-65qO811R-vL_8l_JHQM".to_string(),
+                seller_fee_basis_points: 100,
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: Some(255),
                 token_standard: Some(
-                    blockbuster::token_metadata::state::TokenStandard::NonFungible,
+                    blockbuster::token_metadata::types::TokenStandard::NonFungible,
                 ),
                 collection: Some(Collection {
                     verified: false,
@@ -206,21 +183,34 @@ mod tests {
                 uses: None,
                 collection_details: None,
                 programmable_config: None,
+                creators: Some(vec![
+                    Creator {
+                        address: Pubkey::from_str("3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM")
+                            .unwrap(),
+                        verified: true,
+                        share: 99,
+                    },
+                    Creator {
+                        address: Pubkey::from_str("5zgWmEx4ppdh6LfaPUmfJG2gBAK8bC2gBv7zshD6N1hG")
+                            .unwrap(),
+                        verified: false,
+                        share: 1,
+                    },
+                ]),
             },
             slot_updated: nft_created_slot as u64,
             lamports: 1,
             executable: false,
             metadata_owner: None,
             write_version: 1,
+            rent_epoch: 0,
         };
 
         let mut map = HashMap::new();
         map.insert(mint.to_bytes().to_vec(), decompressed_token_data);
 
-        let metadata_models = mplx_accs_parser.create_rocks_metadata_models(&map).await;
-
         mplx_accs_parser
-            .store_metadata_models(&metadata_models)
+            .transform_and_store_metadata_accs(&map)
             .await;
     }
 
@@ -264,7 +254,7 @@ mod tests {
         .await;
 
         process_accounts(
-            env.pg_env.pool.clone(),
+            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             242856151,
@@ -333,7 +323,7 @@ mod tests {
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
         process_accounts(
-            env.pg_env.pool.clone(),
+            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             242856151,
@@ -409,7 +399,7 @@ mod tests {
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
         process_accounts(
-            env.pg_env.pool.clone(),
+            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             252856151,
@@ -492,7 +482,7 @@ mod tests {
         .await;
 
         process_accounts(
-            env.pg_env.pool.clone(),
+            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             252856151,

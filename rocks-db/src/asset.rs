@@ -64,6 +64,13 @@ pub struct AssetDynamicDetails {
     pub lamports: Option<Updated<u64>>,
     pub executable: Option<Updated<bool>>,
     pub metadata_owner: Option<Updated<String>>,
+    pub raw_name: Option<Updated<String>>,
+    pub plugins: Option<Updated<String>>,
+    pub unknown_plugins: Option<Updated<String>>,
+    pub rent_epoch: Option<Updated<u64>>,
+    pub num_minted: Option<Updated<u32>>,
+    pub current_size: Option<Updated<u32>>,
+    pub plugins_json_version: Option<Updated<u32>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -108,7 +115,7 @@ pub struct AssetAuthorityDeprecated {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AssetOwner {
     pub pubkey: Pubkey,
-    pub owner: Updated<Pubkey>,
+    pub owner: Updated<Option<Pubkey>>,
     pub delegate: Updated<Option<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
     pub owner_delegate_seq: Updated<Option<u64>>,
@@ -379,6 +386,19 @@ impl AssetDynamicDetails {
                         update_optional_field(
                             &mut current_val.metadata_owner,
                             &new_val.metadata_owner,
+                        );
+                        update_optional_field(&mut current_val.raw_name, &new_val.raw_name);
+                        update_optional_field(&mut current_val.plugins, &new_val.plugins);
+                        update_optional_field(
+                            &mut current_val.unknown_plugins,
+                            &new_val.unknown_plugins,
+                        );
+                        update_optional_field(&mut current_val.num_minted, &new_val.num_minted);
+                        update_optional_field(&mut current_val.current_size, &new_val.current_size);
+                        update_optional_field(&mut current_val.rent_epoch, &new_val.rent_epoch);
+                        update_optional_field(
+                            &mut current_val.plugins_json_version,
+                            &new_val.plugins_json_version,
                         );
 
                         current_val

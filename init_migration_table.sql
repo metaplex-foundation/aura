@@ -10,4 +10,4 @@ CREATE TABLE "_sqlx_migrations" (
 	CONSTRAINT "_sqlx_migrations_pkey" PRIMARY KEY (version)
 );
 
-INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1, 'init', true, decode('026D89ABD185043991E8047F24674F231D6AC1E4339DD5401C78BF858BD256A360C9DE2277CA921479ADFAF31DB6C3F6', 'hex'), 273155436);
+INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (1, 'init', true, decode('8515E9EC03135C88EE288C6E8007608DD6DC598D15CCA1A0F45EF688F0FD4A4472555F4556BD73D6BC82A7A56F8FC0DA', 'hex'), 44544922);

@@ -422,7 +422,7 @@ mod tests {
 
         let asset_owner_data = AssetOwner {
             pubkey: pk,
-            owner: Updated::new(1, Some(UpdateVersion::Sequence(1)), owner),
+            owner: Updated::new(1, Some(UpdateVersion::Sequence(1)), Some(owner)),
             delegate: Updated::new(1, Some(UpdateVersion::Sequence(1)), Some(owner)),
             owner_type: Updated::new(1, Some(UpdateVersion::Sequence(1)), OwnerType::Single),
             owner_delegate_seq: Updated::new(1, Some(UpdateVersion::Sequence(1)), Some(1)),
@@ -442,7 +442,7 @@ mod tests {
 
         let updated_owner_data = AssetOwner {
             pubkey: pk,
-            owner: Updated::new(2, Some(UpdateVersion::Sequence(2)), new_owner),
+            owner: Updated::new(2, Some(UpdateVersion::Sequence(2)), Some(new_owner)),
             delegate: Updated::new(2, Some(UpdateVersion::Sequence(2)), None),
             owner_type: Updated::new(2, Some(UpdateVersion::Sequence(2)), OwnerType::Single),
             owner_delegate_seq: Updated::new(2, Some(UpdateVersion::Sequence(2)), Some(2)),
