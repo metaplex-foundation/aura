@@ -20,3 +20,4 @@ CREATE TYPE specification_asset_class AS ENUM (
 ALTER TABLE assets_v3
 ALTER COLUMN ast_specification_asset_class TYPE specification_asset_class
         USING (ast_specification_asset_class::specification_asset_class);
+CREATE INDEX assets_v3_specification_asset_class ON assets_v3 (ast_specification_asset_class) WHERE ast_specification_asset_class IS NOT NULL AND ast_specification_asset_class <> 'unknown'::specification_asset_class;
