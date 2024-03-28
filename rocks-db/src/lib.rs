@@ -311,7 +311,7 @@ impl Storage {
             asset::AssetDynamicDetails::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_dynamic_details",
-                    asset::AssetDynamicDetails::merge_dynamic_details,
+                    AssetStaticDetails::merge_keep_existing,
                 );
             }
             asset::AssetDynamicDetailsDeprecated::NAME => {
@@ -341,7 +341,7 @@ impl Storage {
             asset::AssetOwner::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_asset_owner",
-                    asset::AssetOwner::merge_asset_owner,
+                    AssetStaticDetails::merge_keep_existing,
                 );
             }
             asset::AssetLeaf::NAME => {
