@@ -64,6 +64,7 @@ impl BlockProducer for BigTableClient {
     async fn get_block(
         &self,
         slot: u64,
+        _backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<solana_transaction_status::UiConfirmedBlock, StorageError> {
         let mut counter = GET_DATA_FROM_BG_RETRIES;
 

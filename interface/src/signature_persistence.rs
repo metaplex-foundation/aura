@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::error::StorageError;
 use async_trait::async_trait;
 use entities::models::{BufferedTransaction, SignatureWithSlot};
@@ -53,5 +55,6 @@ pub trait BlockProducer: Send + Sync + 'static {
     async fn get_block(
         &self,
         slot: u64,
+        backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<solana_transaction_status::UiConfirmedBlock, StorageError>;
 }

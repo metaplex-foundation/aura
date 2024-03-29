@@ -113,6 +113,7 @@ impl<T: SlotsGetter + Send + Sync + 'static> Backfiller<T> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn run_perpetual_slot_processing<C, P, S>(
         &self,
         metrics: Arc<BackfillerMetricsConfig>,
@@ -121,6 +122,7 @@ impl<T: SlotsGetter + Send + Sync + 'static> Backfiller<T> {
         block_producer: Arc<P>,
         wait_period: Duration,
         rx: Receiver<()>,
+        backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<(), IngesterError>
     where
         C: BlockConsumer,
@@ -140,7 +142,7 @@ impl<T: SlotsGetter + Send + Sync + 'static> Backfiller<T> {
         let mut rx = rx.resubscribe();
         while rx.is_empty() {
             transactions_parser
-                .process_all_slots(rx.resubscribe())
+                .process_all_slots(rx.resubscribe(), backup_provider.clone())
                 .await;
             tokio::select! {
             _ = tokio::time::sleep(wait_period) => {},
@@ -291,7 +293,9 @@ where
                         task_number,
                         slots.len()
                     );
-                    let res = Self::parse_slots(c, p, m, chunk_size, slots, rx.resubscribe()).await;
+                    let none: Option<Arc<Storage>> = None;
+                    let res =
+                        Self::parse_slots(c, p, m, chunk_size, slots, rx.resubscribe(), none).await;
                     if let Err(err) = res {
                         error!("Error parsing slots: {}", err);
                     }
@@ -315,7 +319,9 @@ where
                     task_number,
                     slots.len()
                 );
-                let res = Self::parse_slots(c, p, m, chunk_size, slots, rx.resubscribe()).await;
+                let none: Option<Arc<Storage>> = None;
+                let res =
+                    Self::parse_slots(c, p, m, chunk_size, slots, rx.resubscribe(), none).await;
                 if let Err(err) = res {
                     error!("Error parsing slots: {}", err);
                 }
@@ -326,7 +332,11 @@ where
         tracing::info!("Transactions parser has finished working");
     }
 
-    pub async fn process_all_slots(&self, rx: Receiver<()>) {
+    pub async fn process_all_slots(
+        &self,
+        rx: Receiver<()>,
+        backup_provider: Option<Arc<impl BlockProducer>>,
+    ) {
         let slots_iter = self.slot_getter.get_unprocessed_slots_iter();
         let chunk_size = self.workers_count * self.chunk_size;
 
@@ -341,7 +351,11 @@ where
             if slots_batch.len() >= chunk_size {
                 info!("Got {} slots to parse", slots_batch.len());
                 let res = self
-                    .process_slots(slots_batch.clone(), rx.resubscribe())
+                    .process_slots(
+                        slots_batch.clone(),
+                        rx.resubscribe(),
+                        backup_provider.clone(),
+                    )
                     .await;
                 match res {
                     Ok(processed) => {
@@ -360,7 +374,9 @@ where
         }
         if !slots_batch.is_empty() {
             info!("Got {} slots to parse", slots_batch.len());
-            let res = self.process_slots(slots_batch, rx.resubscribe()).await;
+            let res = self
+                .process_slots(slots_batch, rx.resubscribe(), backup_provider.clone())
+                .await;
             match res {
                 Ok(processed) => {
                     info!("Processed {} slots", processed);
@@ -395,9 +411,9 @@ where
                     }
                 }
             }
-
+            let none: Option<Arc<Storage>> = None;
             let res = self
-                .process_slots(slots_to_parse_vec, rx.resubscribe())
+                .process_slots(slots_to_parse_vec, rx.resubscribe(), none)
                 .await;
             match res {
                 Ok(processed) => {
@@ -415,6 +431,7 @@ where
         &self,
         slots_to_parse_vec: Vec<u64>,
         rx: Receiver<()>,
+        backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<u64, String> {
         tracing::debug!("Got {} slots to parse", slots_to_parse_vec.len());
         let res = Self::parse_slots(
@@ -424,6 +441,7 @@ where
             self.chunk_size,
             slots_to_parse_vec.clone(),
             rx,
+            backup_provider,
         )
         .await?;
         let len = res.len() as u64;
@@ -455,6 +473,7 @@ where
         chunk_size: usize,
         slots: Vec<u64>,
         rx: Receiver<()>,
+        backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<Vec<u64>, String> {
         let mut tasks = Vec::new();
         let mut successful = Vec::new();
@@ -467,6 +486,7 @@ where
             let p = producer.clone();
             let m = metrics.clone();
             let rx1 = rx.resubscribe();
+            let backup_provider = backup_provider.clone();
             let task: tokio::task::JoinHandle<Vec<u64>> = tokio::spawn(async move {
                 let mut processed = Vec::new();
                 for s in chunk {
@@ -480,7 +500,7 @@ where
                         continue;
                     }
 
-                    let block = match p.get_block(s).await {
+                    let block = match p.get_block(s, backup_provider.clone()).await {
                         Ok(block) => block,
                         Err(err) => {
                             error!("Error getting block {}: {}", s, err);
