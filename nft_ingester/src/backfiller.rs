@@ -264,20 +264,27 @@ where
                 tracing::info!("terminating transactions parser");
                 break;
             }
-            if let Err(e) = next {
-                tracing::error!("Error getting next slot: {}", e);
-                continue;
-            }
-            let (key_box, _value_box) = next.unwrap();
-            let key = rocks_db::raw_block::RawBlock::decode_key(key_box.to_vec());
-            if let Err(e) = key {
-                tracing::error!("Error decoding key: {}", e);
-                continue;
-            }
-            let key = key.unwrap();
+
+            let (key_box, _value_box) = match next {
+                Ok((key_box, _value_box)) => (key_box, _value_box),
+                Err(e) => {
+                    tracing::error!("Error getting next slot: {}", e);
+                    continue;
+                }
+            };
+
+            let key = match rocks_db::raw_block::RawBlock::decode_key(key_box.to_vec()) {
+                Ok(key) => key,
+                Err(e) => {
+                    tracing::error!("Error decoding key: {}", e);
+                    continue;
+                }
+            };
+
             if key > max_slot {
                 max_slot = key;
             }
+
             slots_to_parse_vec.push(key);
             if slots_to_parse_vec.len() >= self.workers_count * self.chunk_size {
                 let permit = semaphore.clone().acquire_owned().await.unwrap();
