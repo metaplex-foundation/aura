@@ -82,23 +82,29 @@ impl<T: SlotsGetter + Send + Sync + 'static> Backfiller<T> {
             parse_until = slot;
         }
         loop {
-            let finalized_slot = finalized_slot_getter.get_finalized_slot().await?;
-            let top_collected_slot = slots_collector
-                .collect_slots(
-                    &blockbuster::programs::bubblegum::ID,
-                    finalized_slot,
-                    parse_until,
-                    &rx,
-                )
-                .await;
-            if let Some(slot) = top_collected_slot {
-                parse_until = slot;
-                if let Err(e) = self
-                    .rocks_client
-                    .put_parameter(rocks_db::parameters::Parameter::LastFetchedSlot, slot)
-                    .await
-                {
-                    error!("Error while updating last fetched slot: {}", e);
+            match finalized_slot_getter.get_finalized_slot().await {
+                Ok(finalized_slot) => {
+                    let top_collected_slot = slots_collector
+                        .collect_slots(
+                            &blockbuster::programs::bubblegum::ID,
+                            finalized_slot,
+                            parse_until,
+                            &rx,
+                        )
+                        .await;
+                    if let Some(slot) = top_collected_slot {
+                        parse_until = slot;
+                        if let Err(e) = self
+                            .rocks_client
+                            .put_parameter(rocks_db::parameters::Parameter::LastFetchedSlot, slot)
+                            .await
+                        {
+                            error!("Error while updating last fetched slot: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Error getting finalized slot: {}", e);
                 }
             }
 
