@@ -88,6 +88,7 @@ mod tests {
 
         let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
+        let none: Option<Arc<Storage>> = None;
         TransactionsParser::<
             DirectBlockParser<BackfillTransactionIngester, Storage>,
             Storage,
@@ -99,6 +100,7 @@ mod tests {
             1,
             slots_to_parse,
             shutdown_rx,
+            none,
         )
         .await
         .unwrap();

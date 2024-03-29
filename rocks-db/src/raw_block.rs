@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{column::TypedColumn, key_encoders, Storage};
 use async_trait::async_trait;
 use interface::signature_persistence::{BlockConsumer, BlockProducer};
@@ -70,12 +72,24 @@ impl BlockProducer for Storage {
     async fn get_block(
         &self,
         slot: u64,
+        backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<solana_transaction_status::UiConfirmedBlock, interface::error::StorageError> {
         let raw_block = self
             .raw_blocks_cbor
             .get_cbor_encoded(slot)
             .await
             .map_err(|e| interface::error::StorageError::Common(e.to_string()))?;
+        if raw_block.is_none() {
+            if let Some(backup_provider) = backup_provider {
+                let none_bp: Option<Arc<Storage>> = None;
+                let block = backup_provider.get_block(slot, none_bp).await?;
+                tracing::info!("Got block from backup provider for slot: {}", slot);
+                self.consume_block(slot, block.clone())
+                    .await
+                    .map_err(|_| interface::error::StorageError::NotFound)?;
+                return Ok(block);
+            }
+        }
         raw_block
             .map(|b| b.block)
             .ok_or(interface::error::StorageError::NotFound)

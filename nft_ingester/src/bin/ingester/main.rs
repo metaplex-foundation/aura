@@ -107,10 +107,14 @@ impl SlotsGetter for BackfillSource {
 
 #[async_trait]
 impl BlockProducer for BackfillSource {
-    async fn get_block(&self, slot: u64) -> Result<UiConfirmedBlock, StorageError> {
+    async fn get_block(
+        &self,
+        slot: u64,
+        backup_provider: Option<Arc<impl BlockProducer>>,
+    ) -> Result<UiConfirmedBlock, StorageError> {
         match self {
-            BackfillSource::Bigtable(bigtable) => bigtable.get_block(slot).await,
-            BackfillSource::Rpc(rpc) => rpc.get_block(slot).await,
+            BackfillSource::Bigtable(bigtable) => bigtable.get_block(slot, backup_provider).await,
+            BackfillSource::Rpc(rpc) => rpc.get_block(slot, backup_provider).await,
         }
     }
 }
@@ -547,12 +551,14 @@ pub async fn main() -> Result<(), IngesterError> {
                 let rx = shutdown_rx.resubscribe();
                 let consumer = rocks_storage.clone();
                 let producer = backfiller_source.clone();
-                let metrics = Arc::new(BackfillerMetricsConfig::new());
+                let metrics: Arc<BackfillerMetricsConfig> =
+                    Arc::new(BackfillerMetricsConfig::new());
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_persister_");
                 let slot_getter = Arc::new(BubblegumSlotGetter::new(rocks_storage.clone()));
                 let backfiller_clone = backfiller.clone();
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                     info!("Running slot persister...");
+                    let none: Option<Arc<Storage>> = None;
                     if let Err(e) = backfiller_clone
                         .run_perpetual_slot_processing(
                             metrics,
@@ -561,6 +567,7 @@ pub async fn main() -> Result<(), IngesterError> {
                             producer,
                             Duration::from_secs(backfiller_config.wait_period_sec),
                             rx,
+                            none,
                         )
                         .await
                     {
@@ -580,6 +587,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_ingester_");
                 let slot_getter = Arc::new(IngestableSlotGetter::new(rocks_storage.clone()));
                 let backfiller_clone = backfiller.clone();
+                let backup = backfiller_source.clone();
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                     info!("Running slot ingester...");
                     if let Err(e) = backfiller_clone
@@ -590,6 +598,7 @@ pub async fn main() -> Result<(), IngesterError> {
                             producer,
                             Duration::from_secs(backfiller_config.wait_period_sec),
                             rx,
+                            Some(backup),
                         )
                         .await
                     {
