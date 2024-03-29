@@ -250,6 +250,7 @@ where
         permits: usize,
         start_slot: Option<u64>,
     ) {
+        let mut max_slot = 0;
         let slots_to_parse_iter = match start_slot {
             Some(slot) => self.rocks_client.raw_blocks_cbor.iter(slot),
             None => self.rocks_client.raw_blocks_cbor.iter_start(),
@@ -274,6 +275,9 @@ where
                 continue;
             }
             let key = key.unwrap();
+            if key > max_slot {
+                max_slot = key;
+            }
             slots_to_parse_vec.push(key);
             if slots_to_parse_vec.len() >= self.workers_count * self.chunk_size {
                 let permit = semaphore.clone().acquire_owned().await.unwrap();
@@ -322,7 +326,17 @@ where
                 tracing::info!("Task {} finished", task_number);
             }));
         }
+
         join_all(tasks).await;
+
+        if let Err(e) = self
+            .rocks_client
+            .put_parameter(rocks_db::parameters::Parameter::LastFetchedSlot, max_slot)
+            .await
+        {
+            error!("Error while updating last fetched slot: {}", e);
+        }
+
         tracing::info!("Transactions parser has finished working");
     }
 
