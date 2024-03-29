@@ -130,6 +130,12 @@ where
         let Some(last_key) = self.primary_storage.last_known_asset_updated_key()? else {
             return Ok(SyncStatus::NoSyncRequired);
         };
+        if last_indexed_key.is_none() {
+            return Ok(SyncStatus::FullSyncRequired(SyncState {
+                last_indexed_key: None,
+                last_known_key: last_key,
+            }));
+        }
         let last_known_seq = last_key.seq as i64;
         self.metrics
             .set_last_synchronized_slot("last_known_updated_seq", last_known_seq);
