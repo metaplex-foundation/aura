@@ -62,7 +62,7 @@ impl PgClient {
         endpoint: &str,
     ) -> Result<(), String> {
         let query = query_builder.build();
-        tracing::info!("Executing query: {:?}", query.sql());
+        tracing::trace!("Executing query: {:?}", query.sql());
         let start_time = chrono::Utc::now();
         match query.execute(transaction).await {
             Ok(_) => {

@@ -1,16 +1,26 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use blockbuster::token_metadata::state::{Data, Key, Metadata, TokenStandard};
+    use blockbuster::mpl_core::types::{
+        FreezeDelegate, Plugin, PluginAuthority, PluginType, TransferDelegate, UpdateAuthority,
+    };
+    use blockbuster::mpl_core::{IndexableAsset, IndexablePluginSchemaV1};
+    use blockbuster::programs::mpl_core_program::MplCoreAccountData;
+    use blockbuster::token_metadata::accounts::Metadata;
+    use blockbuster::token_metadata::types::{Key, TokenStandard};
     use entities::models::{EditionV1, MasterEdition};
     use metrics_utils::IngesterMetricsConfig;
     use nft_ingester::buffer::Buffer;
-    use nft_ingester::db_v2::DBClient;
-    use nft_ingester::mplx_updates_processor::{MetadataInfo, MplxAccsProcessor, TokenMetadata};
+    use nft_ingester::mpl_core_processor::MplCoreProcessor;
+    use nft_ingester::mplx_updates_processor::{
+        IndexableAssetWithAccountInfo, MetadataInfo, MplxAccsProcessor, TokenMetadata,
+    };
     use nft_ingester::token_updates_processor::TokenAccsProcessor;
     use rocks_db::columns::{Mint, TokenAccount};
     use rocks_db::editions::TokenMetadataEdition;
+    use rocks_db::AssetAuthority;
     use solana_program::pubkey::Pubkey;
+    use std::collections::HashMap;
     use std::sync::Arc;
     use testcontainers::clients::Cli;
 
@@ -20,13 +30,10 @@ mod tests {
                 key: Key::MetadataV1,
                 update_authority: Pubkey::new_unique(),
                 mint: mint_key,
-                data: Data {
-                    name: "name".to_string(),
-                    symbol: "symbol".to_string(),
-                    uri: "https://ping-pong".to_string(),
-                    seller_fee_basis_points: 10,
-                    creators: None,
-                },
+                name: "".to_string(),
+                symbol: "".to_string(),
+                uri: "".to_string(),
+                seller_fee_basis_points: 0,
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: None,
@@ -35,16 +42,17 @@ mod tests {
                 uses: None,
                 collection_details: None,
                 programmable_config: None,
+                creators: None,
             },
             slot_updated: 1,
             write_version: 1,
             lamports: 1,
+            rent_epoch: 0,
             executable: false,
             metadata_owner: None,
         }
     }
 
-    #[cfg(test)]
     #[tokio::test]
     async fn token_update_process() {
         use std::collections::HashMap;
@@ -134,8 +142,8 @@ mod tests {
             .get(second_mint)
             .unwrap()
             .unwrap();
-        assert_eq!(first_owner_from_db.owner.value, first_owner);
-        assert_eq!(second_owner_from_db.owner.value, second_owner);
+        assert_eq!(first_owner_from_db.owner.value.unwrap(), first_owner);
+        assert_eq!(second_owner_from_db.owner.value.unwrap(), second_owner);
 
         let first_dynamic_from_db = env
             .rocks_env
@@ -155,7 +163,6 @@ mod tests {
         assert_eq!(second_dynamic_from_db.supply.unwrap().value, 1);
     }
 
-    #[cfg(test)]
     #[tokio::test]
     async fn mplx_update_process() {
         use std::collections::HashMap;
@@ -204,13 +211,10 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let db_client = Arc::new(DBClient {
-            pool: env.pg_env.pool.clone(),
-        });
         let mplx_accs_parser = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            db_client.clone(),
+            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -265,5 +269,170 @@ mod tests {
         } else {
             panic!("expected MasterEdition enum variant");
         };
+    }
+
+    #[tokio::test]
+    async fn mpl_core_update_process() {
+        let first_mpl_core = Pubkey::new_unique();
+        let first_owner = Pubkey::new_unique();
+        let first_authority = Pubkey::new_unique();
+        let first_core_name = "first_core_name";
+        let first_uri = "first_uri";
+        let second_mpl_core = Pubkey::new_unique();
+        let second_owner = Pubkey::new_unique();
+        let second_authority = Pubkey::new_unique();
+        let second_core_name = "second_core_name";
+        let second_uri = "second_uri";
+        let mut first_plugins = HashMap::new();
+        first_plugins.insert(
+            PluginType::FreezeDelegate,
+            IndexablePluginSchemaV1 {
+                index: 0,
+                offset: 165,
+                authority: PluginAuthority::UpdateAuthority,
+                data: Plugin::FreezeDelegate(FreezeDelegate { frozen: true }),
+            },
+        );
+        let mut second_plugins = HashMap::new();
+        second_plugins.insert(
+            PluginType::TransferDelegate,
+            IndexablePluginSchemaV1 {
+                index: 0,
+                offset: 165,
+                authority: PluginAuthority::UpdateAuthority,
+                data: Plugin::TransferDelegate(TransferDelegate {}),
+            },
+        );
+
+        let first_mpl_core_to_save = IndexableAssetWithAccountInfo {
+            indexable_asset: MplCoreAccountData::Asset(IndexableAsset {
+                owner: Some(first_owner),
+                update_authority: UpdateAuthority::Address(first_authority),
+                name: first_core_name.to_string(),
+                uri: first_uri.to_string(),
+                seq: 0,
+                num_minted: None,
+                current_size: None,
+                plugins: first_plugins,
+                unknown_plugins: vec![],
+            }),
+            lamports: 1,
+            executable: false,
+            slot_updated: 1,
+            write_version: 1,
+            rent_epoch: 0,
+        };
+        let second_mpl_core_to_save = IndexableAssetWithAccountInfo {
+            indexable_asset: MplCoreAccountData::Collection(IndexableAsset {
+                owner: Some(second_owner),
+                update_authority: UpdateAuthority::Collection(second_authority),
+                name: second_core_name.to_string(),
+                uri: second_uri.to_string(),
+                seq: 0,
+                num_minted: None,
+                current_size: None,
+                plugins: second_plugins,
+                unknown_plugins: vec![],
+            }),
+            lamports: 1,
+            executable: false,
+            slot_updated: 1,
+            write_version: 1,
+            rent_epoch: 0,
+        };
+
+        let buffer = Arc::new(Buffer::new());
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let mpl_core_parser = MplCoreProcessor::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
+            buffer.clone(),
+            Arc::new(IngesterMetricsConfig::new()),
+            1,
+        );
+        env.rocks_env
+            .storage
+            .asset_authority_data
+            .put(
+                second_authority,
+                AssetAuthority {
+                    pubkey: Default::default(),
+                    authority: second_owner,
+                    slot_updated: 0,
+                    write_version: None,
+                },
+            )
+            .unwrap();
+        let mut indexable_assets = HashMap::new();
+        indexable_assets.insert(first_mpl_core, first_mpl_core_to_save);
+        indexable_assets.insert(second_mpl_core, second_mpl_core_to_save);
+        mpl_core_parser
+            .transform_and_store_mpl_assets(&indexable_assets)
+            .await;
+
+        let first_dynamic_from_db = env
+            .rocks_env
+            .storage
+            .asset_dynamic_data
+            .get(first_mpl_core)
+            .unwrap()
+            .unwrap();
+        let first_owner_from_db = env
+            .rocks_env
+            .storage
+            .asset_owner_data
+            .get(first_mpl_core)
+            .unwrap()
+            .unwrap();
+        let first_authority_from_db = env
+            .rocks_env
+            .storage
+            .asset_authority_data
+            .get(first_mpl_core)
+            .unwrap()
+            .unwrap();
+        assert_eq!(first_dynamic_from_db.pubkey, first_mpl_core);
+        assert_eq!(first_dynamic_from_db.is_frozen.value, true);
+        assert_eq!(first_dynamic_from_db.url.value, first_uri.to_string());
+        assert_eq!(
+            first_dynamic_from_db.raw_name.unwrap().value,
+            first_core_name.to_string()
+        );
+        assert_eq!(first_owner_from_db.owner.value.unwrap(), first_owner);
+        assert_eq!(first_authority_from_db.authority, first_authority);
+
+        let second_dynamic_from_db = env
+            .rocks_env
+            .storage
+            .asset_dynamic_data
+            .get(second_mpl_core)
+            .unwrap()
+            .unwrap();
+        let second_owner_from_db = env
+            .rocks_env
+            .storage
+            .asset_owner_data
+            .get(second_mpl_core)
+            .unwrap()
+            .unwrap();
+        let second_authority_from_db = env
+            .rocks_env
+            .storage
+            .asset_authority_data
+            .get(second_mpl_core)
+            .unwrap()
+            .unwrap();
+        assert_eq!(second_dynamic_from_db.pubkey, second_mpl_core);
+        assert_eq!(second_dynamic_from_db.is_frozen.value, false);
+        assert_eq!(second_dynamic_from_db.url.value, second_uri.to_string());
+        assert_eq!(
+            second_dynamic_from_db.raw_name.unwrap().value,
+            second_core_name.to_string()
+        );
+        assert_eq!(second_owner_from_db.owner.value.unwrap(), second_owner);
+        assert_eq!(second_owner_from_db.delegate.value.unwrap(), second_owner);
+        assert_eq!(second_authority_from_db.authority, second_owner);
     }
 }

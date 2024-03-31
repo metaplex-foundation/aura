@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
 use log::info;
-use rocks_db::asset::{self, AssetAuthorityDeprecated, AssetOwnerDeprecated};
+use rocks_db::asset::{
+    self, AssetAuthorityDeprecated, AssetDynamicDetailsDeprecated, AssetOwnerDeprecated,
+    AssetStaticDetailsDeprecated, MetadataMintMap,
+};
 use rocks_db::column::TypedColumn;
-use rocks_db::tree_seq::TreeSeqIdx;
+use rocks_db::tree_seq::{TreeSeqIdx, TreesGaps};
 use rocks_db::{
     cl_items, signature_client, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
 };
@@ -14,7 +17,10 @@ use rocksdb::{Options, DB};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
+use entities::models::AssetSignature;
 use metrics_utils::red::RequestErrorDurationMetrics;
+use rocks_db::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
+use rocks_db::editions::TokenMetadataEdition;
 use std::env;
 
 #[tokio::main(flavor = "multi_thread")]
@@ -46,6 +52,15 @@ pub async fn main() -> Result<(), String> {
         AssetOwner::NAME,
         TreeSeqIdx::NAME,
         signature_client::SignatureIdx::NAME,
+        AssetDynamicDetailsDeprecated::NAME,
+        MetadataMintMap::NAME,
+        TreesGaps::NAME,
+        TokenMetadataEdition::NAME,
+        AssetStaticDetailsDeprecated::NAME,
+        AssetSignature::NAME,
+        TokenAccount::NAME,
+        TokenAccountOwnerIdx::NAME,
+        TokenAccountMintOwnerIdx::NAME,
     ];
 
     // Print the column families to be removed

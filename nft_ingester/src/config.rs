@@ -85,6 +85,10 @@ const fn default_permitted_tasks() -> usize {
     500
 }
 
+const fn default_mpl_core_buffer_size() -> usize {
+    10
+}
+
 impl BackfillerConfig {
     pub fn get_slot_until(&self) -> u64 {
         self.slot_until.unwrap_or_default()
@@ -129,7 +133,8 @@ pub struct IngesterConfig {
     pub mplx_workers: u32,
     pub spl_buffer_size: usize,
     pub spl_workers: u32,
-    pub env: Option<String>,
+    #[serde(default = "default_mpl_core_buffer_size")]
+    pub mpl_core_buffer_size: usize,
     pub metrics_port_first_consumer: Option<u16>,
     pub metrics_port_second_consumer: Option<u16>,
     pub backfill_consumer_metrics_port: Option<u16>,
@@ -179,6 +184,8 @@ pub struct IngesterConfig {
     pub backfiller_source_mode: BackfillerSourceMode,
     #[serde(default = "default_synchronizer_parallel_tasks")]
     pub synchronizer_parallel_tasks: usize,
+    #[serde(default)]
+    pub run_temp_sync_during_dump: bool,
 }
 
 const fn default_synchronizer_parallel_tasks() -> usize {
@@ -253,6 +260,8 @@ pub struct SynchronizerConfig {
     pub timeout_between_syncs_sec: u64,
     #[serde(default = "default_synchronizer_parallel_tasks")]
     pub parallel_tasks: usize,
+    #[serde(default)]
+    pub run_temp_sync_during_dump: bool,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]

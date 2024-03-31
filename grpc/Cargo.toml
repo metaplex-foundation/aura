@@ -9,7 +9,7 @@ edition = "2021"
 tonic = "0.10.2"
 prost = "0.12.3"
 futures = "0.3.29"
-solana-sdk = "~1.16"
+solana-sdk = "~1.17"
 interface = { path = "../interface" }
 entities = { path = "../entities" }
 

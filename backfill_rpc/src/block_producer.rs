@@ -5,7 +5,7 @@ use interface::signature_persistence::BlockProducer;
 use solana_client::rpc_config::RpcBlockConfig;
 use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 use solana_transaction_status::{TransactionDetails, UiConfirmedBlock};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use tracing::error;
 use usecase::bigtable::is_bubblegum_transaction_encoded;
 
@@ -13,7 +13,11 @@ const SECONDS_TO_RETRY_GET_BLOCK: u64 = 5;
 
 #[async_trait]
 impl BlockProducer for BackfillRPC {
-    async fn get_block(&self, slot: u64) -> Result<UiConfirmedBlock, StorageError> {
+    async fn get_block(
+        &self,
+        slot: u64,
+        _backup_provider: Option<Arc<impl BlockProducer>>,
+    ) -> Result<UiConfirmedBlock, StorageError> {
         let mut counter = GET_TX_RETRIES;
 
         loop {
