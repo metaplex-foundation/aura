@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use interface::consistency_check::ConsistencyChecker;
 use entities::api_req_params::{
     GetAssetBatchV0, GetAssetV0, GetAssetsByAuthorityV0, GetAssetsByCreatorV0, GetAssetsByGroupV0,
     GetAssetsByOwnerV0, SearchAssetsV0,
 };
+use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::types::params::Params;
 use jsonrpc_core::MetaIoHandler;
 use usecase::proofs::MaybeProofChecker;
