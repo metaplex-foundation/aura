@@ -38,6 +38,7 @@ mod tests {
             temp_dir_path.to_string(),
             Arc::new(SynchronizerMetricsConfig::new()),
             1,
+            false,
         );
         syncronizer.full_syncronize(&rx).await.unwrap();
         assert_eq!(pg_env.count_rows_in_metadata().await.unwrap(), 1);

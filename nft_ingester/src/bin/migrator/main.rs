@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use entities::enums::TaskStatus;
+use entities::models::Task;
 use log::{error, info};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
@@ -12,7 +13,7 @@ use tokio::task::{JoinError, JoinSet};
 use nft_ingester::config::{
     init_logger, setup_config, JsonMigratorConfig, JsonMigratorMode, JSON_MIGRATOR_CONFIG_PREFIX,
 };
-use nft_ingester::db_v2::{DBClient, Task};
+use nft_ingester::db_v2::DBClient;
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use rocks_db::offchain_data::OffChainData;

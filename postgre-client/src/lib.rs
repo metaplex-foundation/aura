@@ -1,7 +1,9 @@
 use entities::enums::TaskStatus;
 use entities::models::UrlWithStatus;
 use metrics_utils::red::RequestErrorDurationMetrics;
+use sqlx::Row;
 use sqlx::{
+    migrate::Migrator,
     postgres::{PgConnectOptions, PgPoolOptions},
     ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
 };
@@ -15,6 +17,7 @@ pub mod integrity_verification_client;
 pub mod load_client;
 pub mod model;
 pub mod storage_traits;
+pub mod tasks;
 pub mod temp_index_client;
 
 pub const SQL_COMPONENT: &str = "sql";
@@ -62,6 +65,56 @@ impl PgClient {
 
     pub fn new_with_pool(pool: PgPool, metrics: Arc<RequestErrorDurationMetrics>) -> Self {
         Self { pool, metrics }
+    }
+
+    pub async fn check_health(&self) -> Result<(), String> {
+        let start_time = chrono::Utc::now();
+        let resp = sqlx::query("SELECT 1;").fetch_one(&self.pool).await;
+
+        match resp {
+            Ok(_) => {
+                self.metrics
+                    .observe_request(SQL_COMPONENT, SELECT_ACTION, "health", start_time);
+                Ok(())
+            }
+            Err(e) => {
+                self.metrics
+                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "health");
+                Err(e.to_string())
+            }
+        }
+    }
+
+    pub async fn get_collection_size(&self, collection_key: &[u8]) -> Result<u64, sqlx::Error> {
+        let start_time = chrono::Utc::now();
+        let resp = sqlx::query("SELECT COUNT(*) FROM assets_v3 WHERE ast_collection = $1 AND ast_is_collection_verified = true")
+            .bind(collection_key)
+            .fetch_one(&self.pool).await;
+
+        match resp {
+            Ok(size) => {
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    SELECT_ACTION,
+                    "get_collection_size",
+                    start_time,
+                );
+                let v: i64 = size.get(0);
+                Ok(v as u64)
+            }
+            Err(e) => {
+                self.metrics
+                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "get_collection_size");
+                Err(e)
+            }
+        }
+    }
+
+    pub async fn run_migration(&self, migration_path: &str) -> Result<(), String> {
+        let m = Migrator::new(std::path::Path::new(migration_path))
+            .await
+            .map_err(|e| e.to_string())?;
+        m.run(&self.pool).await.map_err(|e| e.to_string())
     }
 
     pub(crate) async fn insert_tasks(

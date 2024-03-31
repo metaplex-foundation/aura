@@ -7,23 +7,11 @@ use rand::Rng;
 use solana_sdk::pubkey::Pubkey;
 use sqlx::{Executor, Pool, Postgres};
 use std::collections::BTreeMap;
-use std::fs;
 use std::sync::Arc;
 use testcontainers::core::WaitFor;
 use testcontainers::{Container, Image};
 use testcontainers_modules::testcontainers::clients::Cli;
 use uuid::Uuid;
-
-async fn run_sql_script(pool: &Pool<Postgres>, file_path: &str) -> Result<(), sqlx::Error> {
-    let sql = fs::read_to_string(file_path).expect("Failed to read SQL file");
-    for statement in sql.split(';') {
-        let statement = statement.trim();
-        if !statement.is_empty() {
-            sqlx::query(statement).execute(pool).await?;
-        }
-    }
-    Ok(())
-}
 
 pub struct TestEnvironment<'a> {
     pub client: Arc<PgClient>,
@@ -164,14 +152,15 @@ pub async fn setup_database<T: Image>(node: &Container<'_, T>) -> (Pool<Postgres
 
     let test_db_pool = Pool::<Postgres>::connect(&connection_string).await.unwrap();
 
-    // Run migrations or schema setup here
-    run_sql_script(&test_db_pool, "../init_v3.sql")
-        .await
-        .unwrap();
-    let asset_index_storage = Arc::new(PgClient::new_with_pool(
+    let asset_index_storage = PgClient::new_with_pool(
         test_db_pool.clone(),
         Arc::new(RequestErrorDurationMetrics::new()),
-    ));
+    );
+
+    asset_index_storage
+        .run_migration("../migrations")
+        .await
+        .unwrap();
 
     // Verify initial fetch_last_synced_id returns None
     assert!(asset_index_storage
