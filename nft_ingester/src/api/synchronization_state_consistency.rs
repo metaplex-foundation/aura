@@ -27,7 +27,6 @@ const INDEX_STORAGE_DEPENDS_METHODS: &[&str] = &[
     "search_assets",
 ];
 
-#[derive(Default)]
 pub struct SynchronizationStateConsistencyChecker {
     last_primary_storage_seq: Arc<AtomicU64>,
     last_index_storage_seq: Arc<AtomicU64>,

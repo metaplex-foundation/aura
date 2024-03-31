@@ -8,6 +8,10 @@ const fn default_synchronization_api_threshold() -> u64 {
     1_000_000
 }
 
+const fn default_consistence_backfilling_slots_threshold() -> u64 {
+    100
+}
+
 #[derive(Deserialize, Clone)]
 pub struct Config {
     pub database_url: String,
@@ -20,6 +24,8 @@ pub struct Config {
     pub max_page_limit: usize,
     #[serde(default = "default_synchronization_api_threshold")]
     pub consistence_synchronization_api_threshold: u64,
+    #[serde(default = "default_consistence_backfilling_slots_threshold")]
+    pub consistence_backfilling_slots_threshold: u64,
 }
 
 pub fn load_config() -> Result<Config, DasApiError> {

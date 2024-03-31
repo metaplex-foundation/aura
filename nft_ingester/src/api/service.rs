@@ -7,6 +7,7 @@ use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use usecase::proofs::MaybeProofChecker;
 
+use crate::api::backfilling_state_consistency::BackfillingStateConsistencyChecker;
 use interface::consistency_check::ConsistencyChecker;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
@@ -70,13 +71,17 @@ pub async fn start_api(
         )
         .await,
     );
+    let backfilling_state_consistency_checker = Arc::new(BackfillingStateConsistencyChecker::new());
 
     run_api(
         api,
         Some(MiddlewaresData {
             response_middleware,
             request_middleware,
-            consistency_checkers: vec![synchronization_state_consistency_checker],
+            consistency_checkers: vec![
+                synchronization_state_consistency_checker,
+                backfilling_state_consistency_checker,
+            ],
         }),
         addr,
         keep_running,
