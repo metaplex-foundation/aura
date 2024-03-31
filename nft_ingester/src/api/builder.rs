@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
+use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::types::params::Params;
 use jsonrpc_core::MetaIoHandler;
 use usecase::proofs::MaybeProofChecker;
 
 use crate::api::meta_middleware::RpcMetaMiddleware;
-use crate::api::service::Sequences;
-use crate::api::synchronization_state_consistency::SynchronizationStateConsistencyChecker;
 use crate::api::*;
 
 pub struct RpcApiBuilder;
@@ -14,13 +13,11 @@ pub struct RpcApiBuilder;
 impl RpcApiBuilder {
     pub(crate) fn build(
         api: DasApi<MaybeProofChecker>,
-        sequences: Option<Sequences>,
+        consistency_checkers: Vec<Arc<dyn ConsistencyChecker>>,
     ) -> Result<MetaIoHandler<RpcMetaMiddleware, RpcMetaMiddleware>, DasApiError> {
         let mut module = MetaIoHandler::<RpcMetaMiddleware, RpcMetaMiddleware>::new(
             Default::default(),
-            RpcMetaMiddleware::new(vec![Arc::new(SynchronizationStateConsistencyChecker::new(
-                sequences,
-            ))]),
+            RpcMetaMiddleware::new(consistency_checkers),
         );
         let api = Arc::new(api);
 
