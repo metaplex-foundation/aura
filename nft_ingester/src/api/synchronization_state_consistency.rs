@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
-const CATCH_UP_SEQUENCES_TIMEOUT_SEC: u64 = 30;
+pub(crate) const CATCH_UP_SEQUENCES_TIMEOUT_SEC: u64 = 30;
 const INDEX_STORAGE_DEPENDS_METHODS: &[&str] = &[
     "getAssetsByOwner",
     "get_assets_by_owner",

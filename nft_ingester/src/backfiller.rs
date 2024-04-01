@@ -12,6 +12,7 @@ use metrics_utils::BackfillerMetricsConfig;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, ForceReingestableSlots};
 use rocks_db::column::TypedColumn;
+use rocks_db::parameters::Parameter;
 use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
 use rocks_db::Storage;
 use solana_transaction_status::{
@@ -371,6 +372,16 @@ where
                         error!("Error processing slots: {}", err);
                     }
                 }
+                if let Err(e) = self
+                    .rocks_client
+                    .merge_top_parameter(
+                        Parameter::LastBackfilledSlot,
+                        slots_batch.iter().max().copied().unwrap_or_default(),
+                    )
+                    .await
+                {
+                    error!("Error merge top parameter: {}", e);
+                };
                 slots_batch.clear();
             }
         }
@@ -381,7 +392,11 @@ where
         if !slots_batch.is_empty() {
             info!("Got {} slots to parse", slots_batch.len());
             let res = self
-                .process_slots(slots_batch, rx.resubscribe(), backup_provider.clone())
+                .process_slots(
+                    slots_batch.clone(),
+                    rx.resubscribe(),
+                    backup_provider.clone(),
+                )
                 .await;
             match res {
                 Ok(processed) => {
@@ -391,6 +406,16 @@ where
                     error!("Error processing slots: {}", err);
                 }
             }
+            if let Err(e) = self
+                .rocks_client
+                .merge_top_parameter(
+                    Parameter::LastBackfilledSlot,
+                    slots_batch.iter().max().copied().unwrap_or_default(),
+                )
+                .await
+            {
+                error!("Error merge top parameter: {}", e);
+            };
         }
     }
 

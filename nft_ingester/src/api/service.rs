@@ -63,7 +63,7 @@ pub async fn start_api(
     .await?;
     let synchronization_state_consistency_checker = Arc::new(
         SynchronizationStateConsistencyChecker::build(
-            tasks,
+            tasks.clone(),
             keep_running.clone(),
             api.pg_client.clone(),
             rocks_db.clone(),
@@ -71,7 +71,15 @@ pub async fn start_api(
         )
         .await,
     );
-    let backfilling_state_consistency_checker = Arc::new(BackfillingStateConsistencyChecker::new());
+    let backfilling_state_consistency_checker = Arc::new(
+        BackfillingStateConsistencyChecker::build(
+            tasks.clone(),
+            keep_running.clone(),
+            rocks_db.clone(),
+            config.consistence_backfilling_slots_threshold,
+        )
+        .await,
+    );
 
     run_api(
         api,
