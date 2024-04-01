@@ -5,7 +5,7 @@ use postgre_client::PgClient;
 use rocks_db::key_encoders::decode_u64x2_pubkey;
 use rocks_db::storage_traits::AssetUpdateIndexStorage;
 use rocks_db::Storage;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -29,9 +29,7 @@ const INDEX_STORAGE_DEPENDS_METHODS: &[&str] = &[
 
 #[derive(Default)]
 pub struct SynchronizationStateConsistencyChecker {
-    last_primary_storage_seq: Arc<AtomicU64>,
-    last_index_storage_seq: Arc<AtomicU64>,
-    synchronization_api_threshold: u64,
+    overwhelm_seq_gap: Arc<AtomicBool>,
 }
 
 impl SynchronizationStateConsistencyChecker {
@@ -42,11 +40,8 @@ impl SynchronizationStateConsistencyChecker {
         rocks_db: Arc<Storage>,
         synchronization_api_threshold: u64,
     ) -> Self {
-        let last_primary_storage_seq = Arc::new(AtomicU64::new(0));
-        let last_index_storage_seq = Arc::new(AtomicU64::new(0));
-
-        let last_primary_storage_seq_clone = last_primary_storage_seq.clone();
-        let last_index_storage_seq_clone = last_index_storage_seq.clone();
+        let overwhelm_seq_gap = Arc::new(AtomicBool::new(false));
+        let overwhelm_seq_gap_clone = overwhelm_seq_gap.clone();
         let cloned_keep_running = keep_running.clone();
         tasks.lock().await.spawn(async move {
             while cloned_keep_running.load(Ordering::SeqCst) {
@@ -60,28 +55,25 @@ impl SynchronizationStateConsistencyChecker {
                 let Ok(Some(primary_update_key)) = rocks_db.last_known_asset_updated_key() else {
                     continue;
                 };
-                last_primary_storage_seq_clone.store(primary_update_key.seq, Ordering::SeqCst);
-                last_index_storage_seq_clone.store(decoded_index_update_key.seq, Ordering::SeqCst);
+
+                overwhelm_seq_gap_clone.store(
+                    primary_update_key
+                        .seq
+                        .saturating_sub(decoded_index_update_key.seq)
+                        >= synchronization_api_threshold,
+                    Ordering::SeqCst,
+                );
             }
             Ok(())
         });
 
-        Self {
-            last_primary_storage_seq,
-            last_index_storage_seq,
-            synchronization_api_threshold,
-        }
+        Self { overwhelm_seq_gap }
     }
 }
 
 impl ConsistencyChecker for SynchronizationStateConsistencyChecker {
     fn should_cancel_request(&self, call: &Call) -> bool {
-        if self
-            .last_primary_storage_seq
-            .load(Ordering::SeqCst)
-            .saturating_sub(self.last_index_storage_seq.load(Ordering::SeqCst))
-            < self.synchronization_api_threshold
-        {
+        if !self.overwhelm_seq_gap.load(Ordering::SeqCst) {
             return false;
         }
 
