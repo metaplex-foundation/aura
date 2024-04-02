@@ -74,7 +74,7 @@ The producer for slots is the **BackfillSource** (BigTable or RPC).
 
 It takes the parse_until slot from RockDB LastFetchedSlot parameter. If there is no value, it takes it from the config.
 
-Slots are saved to the BubblegumSlots Rocks CF.
+Slot numbers are saved to the BubblegumSlots Rocks CF.
 
 ### Perpetual Slot Processing
 
