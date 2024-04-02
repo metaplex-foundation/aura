@@ -53,11 +53,17 @@ impl TcpReceiver {
                 return Ok(());
             }
 
-            let (bytes_read, duration, num_elements) = self.read_response(&mut stream).await?;
-            debug!(
-                "TCP Socket: Received {} elements, {} in {:?}",
-                num_elements, bytes_read, duration
-            );
+            match self.read_response(&mut stream).await {
+                Ok((bytes_read, duration, num_elements)) => {
+                    debug!(
+                        "TCP Socket: Received {} elements, {} in {:?}",
+                        num_elements, bytes_read, duration
+                    );
+                }
+                Err(e) => {
+                    error!("read_response: {}", e)
+                }
+            };
         }
     }
 
@@ -89,7 +95,12 @@ impl TcpReceiver {
             i = end;
 
             end = i + size;
-            self.callback.call(body[i..end].to_vec()).await;
+            let handler_clone = self.callback.clone();
+            let body_clone = body[i..end].to_vec();
+            if let Err(e) = tokio::spawn(async move { handler_clone.call(body_clone).await }).await
+            {
+                error!("callback panic: {:?}", e);
+            };
             i = end;
 
             num_elements += 1;
