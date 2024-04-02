@@ -12,7 +12,8 @@
     "grouping": [
         {
             "group_key": "collection",
-            "group_value": "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG"
+            "group_value": "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG",
+            "verified": false
         }
     ],
     "royalty": {

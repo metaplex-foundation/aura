@@ -10,7 +10,7 @@ async fn bench_dump(storage: Arc<Storage>, batch_size: usize) {
     let temp_dir_path = temp_dir.path();
 
     storage
-        .dump_db(temp_dir_path, HashSet::new(), batch_size, rx)
+        .dump_db(temp_dir_path, batch_size, rx)
         .await
         .unwrap();
 }

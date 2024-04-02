@@ -1,3 +1,4 @@
+use entities::models::Task;
 use entities::{enums::TaskStatus, models::UrlWithStatus};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions, Postgres},
@@ -10,16 +11,6 @@ use crate::error::IngesterError;
 #[derive(Clone)]
 pub struct DBClient {
     pub pool: PgPool,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct Task {
-    pub ofd_metadata_url: String,
-    pub ofd_locked_until: Option<chrono::DateTime<chrono::Utc>>,
-    pub ofd_attempts: i32,
-    pub ofd_max_attempts: i32,
-    pub ofd_error: Option<String>,
-    pub ofd_status: TaskStatus,
 }
 
 #[derive(Debug, Clone)]

@@ -29,7 +29,6 @@ use nft_ingester::config::{
     setup_config, ApiConfig, BackfillerConfig, BackfillerSourceMode, IngesterConfig,
     INGESTER_BACKUP_NAME, INGESTER_CONFIG_PREFIX,
 };
-use nft_ingester::db_v2::DBClient as DBClientV2;
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::json_downloader::JsonDownloader;
@@ -50,12 +49,14 @@ use nft_ingester::backfiller::{
     TransactionsParser,
 };
 use nft_ingester::fork_cleaner::ForkCleaner;
+use nft_ingester::mpl_core_processor::MplCoreProcessor;
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::{SlotsCollector, SlotsGetter};
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
+pub const PG_MIGRATIONS_PATH: &str = "./migrations";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 
@@ -107,10 +108,14 @@ impl SlotsGetter for BackfillSource {
 
 #[async_trait]
 impl BlockProducer for BackfillSource {
-    async fn get_block(&self, slot: u64) -> Result<UiConfirmedBlock, StorageError> {
+    async fn get_block(
+        &self,
+        slot: u64,
+        backup_provider: Option<Arc<impl BlockProducer>>,
+    ) -> Result<UiConfirmedBlock, StorageError> {
         match self {
-            BackfillSource::Bigtable(bigtable) => bigtable.get_block(slot).await,
-            BackfillSource::Rpc(rpc) => rpc.get_block(slot).await,
+            BackfillSource::Bigtable(bigtable) => bigtable.get_block(slot, backup_provider).await,
+            BackfillSource::Rpc(rpc) => rpc.get_block(slot, backup_provider).await,
         }
     }
 }
@@ -157,7 +162,10 @@ pub async fn main() -> Result<(), IngesterError> {
         .await?,
     );
 
-    let db_client_v2 = Arc::new(DBClientV2::new(&config.database_config).await?);
+    index_storage
+        .run_migration(PG_MIGRATIONS_PATH)
+        .await
+        .map_err(IngesterError::SqlxError)?;
 
     let tasks = JoinSet::new();
 
@@ -174,13 +182,15 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
-
     let synchronizer = Synchronizer::new(
         rocks_storage.clone(),
+        index_storage.clone(),
         index_storage.clone(),
         config.dump_synchronizer_batch_size,
         config.dump_path.to_string(),
         metrics_state.synchronizer_metrics.clone(),
+        config.synchronizer_parallel_tasks,
+        config.run_temp_sync_during_dump,
     );
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
@@ -255,7 +265,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let mplx_accs_parser = MplxAccsProcessor::new(
         config.mplx_buffer_size,
         buffer.clone(),
-        db_client_v2.clone(),
+        index_storage.clone(),
         rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
     );
@@ -265,6 +275,13 @@ pub async fn main() -> Result<(), IngesterError> {
         buffer.clone(),
         metrics_state.ingester_metrics.clone(),
         config.spl_buffer_size,
+    );
+    let mpl_core_parser = MplCoreProcessor::new(
+        rocks_storage.clone(),
+        index_storage.clone(),
+        buffer.clone(),
+        metrics_state.ingester_metrics.clone(),
+        config.mpl_core_buffer_size,
     );
 
     for _ in 0..config.mplx_workers {
@@ -307,6 +324,22 @@ pub async fn main() -> Result<(), IngesterError> {
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
             cloned_mplx_parser
                 .process_edition_accs(cloned_keep_running)
+                .await;
+        }));
+
+        let mut cloned_core_parser = mpl_core_parser.clone();
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            cloned_core_parser
+                .process_mpl_assets(cloned_keep_running)
+                .await;
+        }));
+
+        let mut cloned_core_parser = mpl_core_parser.clone();
+        let cloned_keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            cloned_core_parser
+                .process_mpl_asset_burn(cloned_keep_running)
                 .await;
         }));
     }
@@ -533,12 +566,14 @@ pub async fn main() -> Result<(), IngesterError> {
                 let rx = shutdown_rx.resubscribe();
                 let consumer = rocks_storage.clone();
                 let producer = backfiller_source.clone();
-                let metrics = Arc::new(BackfillerMetricsConfig::new());
+                let metrics: Arc<BackfillerMetricsConfig> =
+                    Arc::new(BackfillerMetricsConfig::new());
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_persister_");
                 let slot_getter = Arc::new(BubblegumSlotGetter::new(rocks_storage.clone()));
                 let backfiller_clone = backfiller.clone();
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                     info!("Running slot persister...");
+                    let none: Option<Arc<Storage>> = None;
                     if let Err(e) = backfiller_clone
                         .run_perpetual_slot_processing(
                             metrics,
@@ -547,6 +582,7 @@ pub async fn main() -> Result<(), IngesterError> {
                             producer,
                             Duration::from_secs(backfiller_config.wait_period_sec),
                             rx,
+                            none,
                         )
                         .await
                     {
@@ -566,6 +602,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_ingester_");
                 let slot_getter = Arc::new(IngestableSlotGetter::new(rocks_storage.clone()));
                 let backfiller_clone = backfiller.clone();
+                let backup = backfiller_source.clone();
                 mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
                     info!("Running slot ingester...");
                     if let Err(e) = backfiller_clone
@@ -576,6 +613,7 @@ pub async fn main() -> Result<(), IngesterError> {
                             producer,
                             Duration::from_secs(backfiller_config.wait_period_sec),
                             rx,
+                            Some(backup),
                         )
                         .await
                     {
@@ -593,20 +631,13 @@ pub async fn main() -> Result<(), IngesterError> {
     if !config.disable_synchronizer {
         let rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-            while rx.is_empty() {
-                let res = synchronizer
-                    .synchronize_asset_indexes(&rx, config.dump_sync_threshold)
-                    .await;
-                match res {
-                    Ok(_) => {
-                        info!("Synchronization finished successfully");
-                    }
-                    Err(e) => {
-                        error!("Synchronization failed: {:?}", e);
-                    }
-                }
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-            }
+            synchronizer
+                .run(
+                    &rx,
+                    config.dump_sync_threshold,
+                    tokio::time::Duration::from_secs(5),
+                )
+                .await;
         }));
     }
     // setup dependencies for grpc server

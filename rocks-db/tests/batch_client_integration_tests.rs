@@ -10,7 +10,7 @@ mod tests {
 
     use metrics_utils::red::RequestErrorDurationMetrics;
     use rocks_db::key_encoders::encode_u64x2_pubkey;
-    use rocks_db::storage_traits::AssetUpdateIndexStorage;
+    use rocks_db::storage_traits::{AssetUpdateIndexStorage, AssetUpdatedKey};
     use rocks_db::{AssetDynamicDetails, AssetOwner, Storage};
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
@@ -88,7 +88,7 @@ mod tests {
         assert!(last_key.is_some(), "Expected a last key");
         // Verify fetch_asset_updated_keys with the last key from previous call
         let (new_keys, new_last_key) = storage
-            .fetch_asset_updated_keys(last_key, None, 10, None)
+            .fetch_asset_updated_keys(last_key.clone(), None, 10, None)
             .unwrap();
         assert!(
             new_keys.is_empty(),
@@ -118,7 +118,7 @@ mod tests {
         assert!(last_key.is_some(), "Expected a last key");
         // Verify fetch_asset_updated_keys with the last key from previous call
         let (new_keys, new_last_key) = storage
-            .fetch_asset_updated_keys(last_key, None, 1, Some(keys))
+            .fetch_asset_updated_keys(last_key.clone(), None, 1, Some(keys))
             .unwrap();
         assert!(
             new_keys.is_empty(),
@@ -146,7 +146,7 @@ mod tests {
             .unwrap();
         assert_eq!(keys.len(), 0, "Expected no keys");
         assert!(last_key.is_some(), "Expected a last key");
-        let expected_key = (2, 2, DEFAULT_PUBKEY_OF_ONES.clone());
+        let expected_key = AssetUpdatedKey::new(2, 2, DEFAULT_PUBKEY_OF_ONES.clone());
         assert_eq!(
             last_key.unwrap(),
             expected_key,
@@ -166,14 +166,24 @@ mod tests {
 
         // Verify fetch_asset_updated_keys with up to key which is less then the first key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, Some((0, 2, DEFAULT_PUBKEY_OF_ONES.clone())), 10, None)
+            .fetch_asset_updated_keys(
+                None,
+                Some(AssetUpdatedKey::new(0, 2, DEFAULT_PUBKEY_OF_ONES.clone())),
+                10,
+                None,
+            )
             .unwrap();
         assert_eq!(keys.len(), 0, "Expected no keys");
         assert!(last_key.is_none(), "Expected an empty last key");
 
         // verify fetch_asset_updated_keys with up to key which is equal to the first key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, Some((1, 4, DEFAULT_PUBKEY_OF_ONES.clone())), 10, None)
+            .fetch_asset_updated_keys(
+                None,
+                Some(AssetUpdatedKey::new(1, 4, DEFAULT_PUBKEY_OF_ONES.clone())),
+                10,
+                None,
+            )
             .unwrap();
         assert_eq!(keys.len(), 1, "Expected a single key");
         assert_eq!(
@@ -182,9 +192,9 @@ mod tests {
             "Expected the specific pubkey"
         );
         assert!(last_key.is_some(), "Expected a last key");
-        let expected_key = (1, 4, DEFAULT_PUBKEY_OF_ONES.clone());
+        let expected_key = AssetUpdatedKey::new(1, 4, DEFAULT_PUBKEY_OF_ONES.clone());
         assert_eq!(
-            last_key.unwrap(),
+            last_key.clone().unwrap(),
             expected_key,
             "Expected the specific last key {:?}, got {:?}",
             expected_key,
@@ -193,7 +203,12 @@ mod tests {
 
         // verify fetch_asset_updated_keys with up to key which is equal to the last key returns all the keys
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, Some((4, 5, PUBKEY_OF_TWOS.clone())), 10, None)
+            .fetch_asset_updated_keys(
+                None,
+                Some(AssetUpdatedKey::new(4, 5, PUBKEY_OF_TWOS.clone())),
+                10,
+                None,
+            )
             .unwrap();
         assert_eq!(keys.len(), 2, "Expected 2 keys, got {:?}", keys);
         assert!(
@@ -205,9 +220,9 @@ mod tests {
             "Expected the specific pubkey"
         );
         assert!(last_key.is_some(), "Expected a last key");
-        let expected_key = (4, 5, PUBKEY_OF_TWOS.clone());
+        let expected_key = AssetUpdatedKey::new(4, 5, PUBKEY_OF_TWOS.clone());
         assert_eq!(
-            last_key.unwrap(),
+            last_key.clone().unwrap(),
             expected_key,
             "Expected the specific last key {:?}, got {:?}",
             expected_key,
@@ -237,9 +252,9 @@ mod tests {
             .last_known_asset_updated_key()
             .expect("Failed to get last known asset updated key");
         assert!(last_key.is_some(), "Expected a last key");
-        let expected_key = (4, 5, PUBKEY_OF_TWOS.clone());
+        let expected_key = AssetUpdatedKey::new(4, 5, PUBKEY_OF_TWOS.clone());
         assert_eq!(
-            last_key.unwrap(),
+            last_key.clone().unwrap(),
             expected_key,
             "Expected the specific last key {:?}, got {:?}",
             expected_key,
@@ -268,9 +283,9 @@ mod tests {
             "Expected the specific pubkey"
         );
         assert!(last_key.is_some(), "Expected a last key");
-        let expected_key = (2, 2, PUBKEY_OF_TWOS.clone());
+        let expected_key = AssetUpdatedKey::new(2, 2, PUBKEY_OF_TWOS.clone());
         assert_eq!(
-            last_key.unwrap(),
+            last_key.clone().unwrap(),
             expected_key,
             "Expected the specific last key {:?}, got {:?}",
             expected_key,
@@ -290,9 +305,9 @@ mod tests {
             keys
         );
         assert!(last_key.is_some(), "Expected a last key");
-        let expected_key = (3, 5, key.clone());
+        let expected_key = AssetUpdatedKey::new(3, 5, key.clone());
         assert_eq!(
-            last_key.unwrap(),
+            last_key.clone().unwrap(),
             expected_key,
             "Expected the specific last key {:?}, got {:?}",
             expected_key,
@@ -304,7 +319,7 @@ mod tests {
         for i in 0..10000 {
             let key = Pubkey::new_unique();
             storage.asset_updated(i, key.clone()).unwrap();
-            keys.push((4 + i, i, key.clone()));
+            keys.push(AssetUpdatedKey::new(4 + i, i, key.clone()));
         }
         let mut last_seen_key = last_key.clone();
         for i in 0..10 {
@@ -315,7 +330,7 @@ mod tests {
             assert!(last_key.is_some(), "Expected a last key");
             let expected_key = keys[i * 1000 + 999].clone();
             assert_eq!(
-                last_key.unwrap(),
+                last_key.clone().unwrap(),
                 expected_key,
                 "Expected the specific last key {:?}, got {:?} for {:?} iteration",
                 expected_key,
@@ -324,9 +339,9 @@ mod tests {
             );
             for j in 0..1000 {
                 assert!(
-                    new_keys.contains(&keys[i * 1000 + j].2),
+                    new_keys.contains(&keys[i * 1000 + j].pubkey),
                     "Expected the specific pubkey {:?}, got {:?}",
-                    keys[i * 1000 + j].2,
+                    keys[i * 1000 + j].pubkey,
                     new_keys
                 );
             }
@@ -407,7 +422,7 @@ mod tests {
 
         let asset_owner_data = AssetOwner {
             pubkey: pk,
-            owner: Updated::new(1, Some(UpdateVersion::Sequence(1)), owner),
+            owner: Updated::new(1, Some(UpdateVersion::Sequence(1)), Some(owner)),
             delegate: Updated::new(1, Some(UpdateVersion::Sequence(1)), Some(owner)),
             owner_type: Updated::new(1, Some(UpdateVersion::Sequence(1)), OwnerType::Single),
             owner_delegate_seq: Updated::new(1, Some(UpdateVersion::Sequence(1)), Some(1)),
@@ -427,7 +442,7 @@ mod tests {
 
         let updated_owner_data = AssetOwner {
             pubkey: pk,
-            owner: Updated::new(2, Some(UpdateVersion::Sequence(2)), new_owner),
+            owner: Updated::new(2, Some(UpdateVersion::Sequence(2)), Some(new_owner)),
             delegate: Updated::new(2, Some(UpdateVersion::Sequence(2)), None),
             owner_type: Updated::new(2, Some(UpdateVersion::Sequence(2)), OwnerType::Single),
             owner_delegate_seq: Updated::new(2, Some(UpdateVersion::Sequence(2)), Some(2)),

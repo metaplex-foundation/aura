@@ -9,9 +9,8 @@ mod tests {
         },
     };
 
-    use blockbuster::token_metadata::state::{
-        Data, Key, Metadata, TokenStandard as BLKTokenStandard,
-    };
+    use blockbuster::token_metadata::accounts::Metadata;
+    use blockbuster::token_metadata::types::{Key, TokenStandard as BLKTokenStandard};
     use digital_asset_types::rpc::response::{
         AssetList, TokenAccountsList, TransactionSignatureList,
     };
@@ -35,7 +34,6 @@ mod tests {
     use nft_ingester::{
         api::middleware::JsonDownloaderMiddleware,
         buffer::Buffer,
-        db_v2::DBClient,
         mplx_updates_processor::{BurntMetadataSlot, MetadataInfo, MplxAccsProcessor},
         token_updates_processor::TokenAccsProcessor,
     };
@@ -231,7 +229,7 @@ mod tests {
             let ref_value = generated_assets.owners[8].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
-                owner_address: Some(ref_value.owner.value.to_string()),
+                owner_address: ref_value.owner.value.map(|owner| owner.to_string()),
                 options: Some(Options {
                     show_unverified_collections: true,
                 }),
@@ -481,7 +479,7 @@ mod tests {
 
         let owner = AssetOwner {
             pubkey: pb,
-            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), authority),
+            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(authority)),
             delegate: Updated::new(12, Some(UpdateVersion::Sequence(12)), None),
             owner_type: Updated::new(12, Some(UpdateVersion::Sequence(12)), OwnerType::Single),
             owner_delegate_seq: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(12)),
@@ -601,7 +599,7 @@ mod tests {
 
         let owner = AssetOwner {
             pubkey: pb,
-            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), authority),
+            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(authority)),
             delegate: Updated::new(12, Some(UpdateVersion::Sequence(12)), None),
             owner_type: Updated::new(12, Some(UpdateVersion::Sequence(12)), OwnerType::Single),
             owner_delegate_seq: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(12)),
@@ -665,10 +663,6 @@ mod tests {
 
         let buffer = Arc::new(Buffer::new());
 
-        let db_client = Arc::new(DBClient {
-            pool: env.pg_env.pool.clone(),
-        });
-
         let token_updates_processor = TokenAccsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
@@ -678,7 +672,7 @@ mod tests {
         let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            db_client.clone(),
+            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -716,13 +710,11 @@ mod tests {
                 key: Key::MetadataV1,
                 update_authority: Pubkey::new_unique(),
                 mint: mint_key,
-                data: Data {
-                    name: "name".to_string(),
-                    symbol: "symbol".to_string(),
-                    uri: "https://ping-pong".to_string(),
-                    seller_fee_basis_points: 10,
-                    creators: None,
-                },
+                name: "".to_string(),
+                symbol: "".to_string(),
+                uri: "".to_string(),
+                seller_fee_basis_points: 0,
+                creators: None,
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: None,
@@ -737,6 +729,7 @@ mod tests {
             lamports: 1,
             executable: false,
             metadata_owner: None,
+            rent_epoch: 0,
         };
         let mut metadata_info = HashMap::new();
         metadata_info.insert(mint_key.to_bytes().to_vec(), metadata);
@@ -822,10 +815,6 @@ mod tests {
 
         let buffer = Arc::new(Buffer::new());
 
-        let db_client = Arc::new(DBClient {
-            pool: env.pg_env.pool.clone(),
-        });
-
         let token_updates_processor = TokenAccsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
@@ -835,7 +824,7 @@ mod tests {
         let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            db_client.clone(),
+            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -883,13 +872,11 @@ mod tests {
                     key: Key::MetadataV1,
                     update_authority: Pubkey::new_unique(),
                     mint: mint_key,
-                    data: Data {
-                        name: "name".to_string(),
-                        symbol: "symbol".to_string(),
-                        uri: "https://ping-pong".to_string(),
-                        seller_fee_basis_points: 10,
-                        creators: None,
-                    },
+                    creators: None,
+                    name: "".to_string(),
+                    symbol: "".to_string(),
+                    uri: "".to_string(),
+                    seller_fee_basis_points: 0,
                     primary_sale_happened: false,
                     is_mutable: true,
                     edition_nonce: None,
@@ -904,6 +891,7 @@ mod tests {
                 lamports: 1,
                 executable: false,
                 metadata_owner: None,
+                rent_epoch: 0,
             };
 
             metadata_info.insert(mint_key.to_bytes().to_vec(), metadata);
@@ -989,10 +977,6 @@ mod tests {
 
         let buffer = Arc::new(Buffer::new());
 
-        let db_client = Arc::new(DBClient {
-            pool: env.pg_env.pool.clone(),
-        });
-
         let token_updates_processor = TokenAccsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
@@ -1002,7 +986,7 @@ mod tests {
         let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            db_client.clone(),
+            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -1040,13 +1024,11 @@ mod tests {
                 key: Key::MetadataV1,
                 update_authority: Pubkey::new_unique(),
                 mint: mint_key,
-                data: Data {
-                    name: "name".to_string(),
-                    symbol: "symbol".to_string(),
-                    uri: "https://ping-pong".to_string(),
-                    seller_fee_basis_points: 10,
-                    creators: None,
-                },
+                creators: None,
+                name: "".to_string(),
+                symbol: "".to_string(),
+                uri: "".to_string(),
+                seller_fee_basis_points: 0,
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: None,
@@ -1061,6 +1043,7 @@ mod tests {
             lamports: 1,
             executable: false,
             metadata_owner: None,
+            rent_epoch: 0,
         };
 
         let metadata_ofch = OffChainData {
@@ -1137,6 +1120,7 @@ mod tests {
         let first_tree = Pubkey::new_unique();
         let second_tree = Pubkey::new_unique();
         let first_leaf_idx = 100;
+        let first_tree_other_leaf_idx = 101;
         let second_leaf_idx = 200;
 
         for seq in 0..100 {
@@ -1148,6 +1132,25 @@ mod tests {
                     AssetSignatureKey {
                         tree: first_tree,
                         leaf_idx: first_leaf_idx,
+                        seq,
+                    },
+                    AssetSignature {
+                        tx: signature.to_string(),
+                        instruction: "TestInstruction".to_string(),
+                        slot: seq * 2,
+                    },
+                )
+                .unwrap();
+        }
+        for seq in 100..200 {
+            let signature = Signature::new_unique();
+            env.rocks_env
+                .storage
+                .asset_signature
+                .put(
+                    AssetSignatureKey {
+                        tree: first_tree,
+                        leaf_idx: first_tree_other_leaf_idx,
                         seq,
                     },
                     AssetSignature {
@@ -1285,6 +1288,24 @@ mod tests {
         assert_eq!(parsed_response.after, Some("50".to_string()));
         assert_eq!(parsed_response.before, Some("50".to_string()));
         assert_eq!(parsed_response.items.len(), 1);
+
+        // ensure there are no extra signatures returned for an asset
+
+        let payload = GetAssetSignatures {
+            id: None,
+            limit: Some(500),
+            page: Some(1),
+            before: None,
+            after: None,
+            tree: Some(first_tree.to_string()),
+            leaf_index: Some(first_leaf_idx),
+            sort_direction: None,
+            cursor: None,
+        };
+        let response = api.get_asset_signatures(payload, false).await.unwrap();
+        let parsed_response: TransactionSignatureList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(parsed_response.items.len(), 100);
 
         env.teardown().await;
     }
@@ -1495,7 +1516,11 @@ mod tests {
 
         let ref_value = generated_assets.owners[8].clone();
         let payload = GetAssetsByOwner {
-            owner_address: ref_value.owner.value.to_string(),
+            owner_address: ref_value
+                .owner
+                .value
+                .map(|owner| owner.to_string())
+                .unwrap_or_default(),
             sort_by: None,
             limit: None,
             page: None,

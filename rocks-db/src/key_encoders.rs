@@ -1,7 +1,7 @@
 use entities::models::AssetSignatureKey;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::Result;
+use crate::{storage_traits::AssetUpdatedKey, Result};
 
 pub fn encode_u64x2_pubkey(seq: u64, slot: u64, pubkey: Pubkey) -> Vec<u8> {
     // create a key that is a concatenation of the seq, slot and the pubkey allocating memory immediately
@@ -14,7 +14,7 @@ pub fn encode_u64x2_pubkey(seq: u64, slot: u64, pubkey: Pubkey) -> Vec<u8> {
     key
 }
 
-pub fn decode_u64x2_pubkey(bytes: Vec<u8>) -> Result<(u64, u64, Pubkey)> {
+pub fn decode_u64x2_pubkey(bytes: Vec<u8>) -> Result<AssetUpdatedKey> {
     let slot_size = std::mem::size_of::<u64>();
     let pubkey_size = std::mem::size_of::<Pubkey>();
     if bytes.len() != slot_size * 2 + pubkey_size {
@@ -23,7 +23,7 @@ pub fn decode_u64x2_pubkey(bytes: Vec<u8>) -> Result<(u64, u64, Pubkey)> {
     let seq = u64::from_be_bytes(bytes[..slot_size].try_into()?);
     let slot = u64::from_be_bytes(bytes[slot_size..slot_size * 2].try_into()?);
     let pubkey = Pubkey::try_from(&bytes[slot_size * 2..])?;
-    Ok((seq, slot, pubkey))
+    Ok(AssetUpdatedKey::new(seq, slot, pubkey))
 }
 
 pub fn encode_u64_pubkey(slot: u64, pubkey: Pubkey) -> Vec<u8> {
@@ -174,9 +174,9 @@ mod tests {
         let encoded = encode_u64x2_pubkey(seq, slot, pubkey);
         let decoded = decode_u64x2_pubkey(encoded).unwrap();
 
-        assert_eq!(decoded.0, seq);
-        assert_eq!(decoded.1, slot);
-        assert_eq!(decoded.2, pubkey);
+        assert_eq!(decoded.seq, seq);
+        assert_eq!(decoded.slot, slot);
+        assert_eq!(decoded.pubkey, pubkey);
     }
 
     #[test]

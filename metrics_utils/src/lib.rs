@@ -679,7 +679,7 @@ impl IngesterMetricsConfig {
         Self {
             start_time: Default::default(),
             latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new([1.0, 10.0, 50.0, 100.0].into_iter())
+                Histogram::new([1.0, 10.0, 50.0, 100.0, 200.0, 500.0, 1000.0].into_iter())
             }),
             process: Family::<MetricLabelWithStatus, Counter>::default(),
             buffers: Family::<MetricLabel, Gauge>::default(),

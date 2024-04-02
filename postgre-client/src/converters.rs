@@ -49,6 +49,12 @@ impl From<entities::enums::SpecificationAssetClass> for SpecificationAssetClass 
             entities::enums::SpecificationAssetClass::IdentityNft => {
                 SpecificationAssetClass::IdentityNft
             }
+            entities::enums::SpecificationAssetClass::MplCoreAsset => {
+                SpecificationAssetClass::MplCoreAsset
+            }
+            entities::enums::SpecificationAssetClass::MplCoreCollection => {
+                SpecificationAssetClass::MplCoreCollection
+            }
         }
     }
 }

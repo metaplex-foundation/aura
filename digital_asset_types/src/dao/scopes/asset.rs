@@ -108,6 +108,7 @@ fn convert_rocks_offchain_data(
             reindex: None,
         },
         lamports: dynamic_data.lamports.clone().map(|v| v.value),
+        rent_epoch: dynamic_data.rent_epoch.clone().map(|v| v.value),
         executable: dynamic_data.executable.clone().map(|v| v.value),
         metadata_owner: dynamic_data.metadata_owner.clone().map(|v| v.value),
     })
@@ -166,7 +167,7 @@ fn convert_rocks_asset_model(
         alt_id: None,
         specification_version: Some(SpecificationVersions::V1),
         specification_asset_class: Some(static_data.specification_asset_class.into()),
-        owner: Some(owner.owner.value.to_bytes().to_vec()),
+        owner: owner.owner.value.map(|owner| owner.to_bytes().to_vec()),
         owner_type: owner.owner_type.value.into(),
         delegate: owner.delegate.value.map(|k| k.to_bytes().to_vec()),
         frozen: dynamic_data.is_frozen.value,
@@ -194,6 +195,26 @@ fn convert_rocks_asset_model(
         owner_delegate_seq: owner.owner_delegate_seq.value.map(|s| s as i64),
         was_decompressed: dynamic_data.was_decompressed.value,
         leaf_seq: leaf.leaf_seq.map(|seq| seq as i64),
+        plugins: dynamic_data
+            .plugins
+            .clone()
+            .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
+        unknown_plugins: dynamic_data
+            .unknown_plugins
+            .clone()
+            .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
+        num_minted: dynamic_data
+            .num_minted
+            .clone()
+            .map(|num_minted| num_minted.value),
+        current_supply: dynamic_data
+            .current_size
+            .clone()
+            .map(|current_size| current_size.value),
+        plugins_json_version: dynamic_data
+            .plugins_json_version
+            .clone()
+            .map(|plugins_json_version| plugins_json_version.value),
     })
 }
 
@@ -225,6 +246,12 @@ impl From<entities::enums::SpecificationAssetClass> for SpecificationAssetClass 
                 SpecificationAssetClass::TransferRestrictedNft
             }
             entities::enums::SpecificationAssetClass::Unknown => SpecificationAssetClass::Unknown,
+            entities::enums::SpecificationAssetClass::MplCoreAsset => {
+                SpecificationAssetClass::MplCoreAsset
+            }
+            entities::enums::SpecificationAssetClass::MplCoreCollection => {
+                SpecificationAssetClass::MplCoreCollection
+            }
         }
     }
 }

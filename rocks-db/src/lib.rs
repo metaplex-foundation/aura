@@ -30,6 +30,7 @@ pub mod asset_signatures;
 pub mod asset_streaming_client;
 pub mod backup_service;
 mod batch_client;
+pub mod batch_savers;
 pub mod bubblegum_slots;
 pub mod cl_items;
 pub mod column;

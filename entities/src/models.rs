@@ -1,11 +1,12 @@
 use crate::enums::{
     ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
-    TokenStandard, UseMethod,
+    TaskStatus, TokenStandard, UseMethod,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
+use sqlx::types::chrono;
 use std::cmp::Ordering;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Eq, Hash)]
@@ -96,7 +97,7 @@ pub struct CompleteAssetDetails {
     pub authority: Updated<Pubkey>,
 
     // From AssetOwner as Tuples
-    pub owner: Updated<Pubkey>,
+    pub owner: Updated<Option<Pubkey>>,
     pub delegate: Updated<Option<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
     pub owner_delegate_seq: Updated<Option<u64>>,
@@ -340,6 +341,16 @@ pub struct TokenAccount {
     pub amount: u64,
     pub delegated_amount: u64,
     pub frozen: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Task {
+    pub ofd_metadata_url: String,
+    pub ofd_locked_until: Option<chrono::DateTime<chrono::Utc>>,
+    pub ofd_attempts: i32,
+    pub ofd_max_attempts: i32,
+    pub ofd_error: Option<String>,
+    pub ofd_status: TaskStatus,
 }
 
 #[cfg(test)]

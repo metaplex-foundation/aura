@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use entities::models::BufferedTransaction;
+use entities::models::{BufferedTransaction, Task};
 use interface::signature_persistence::ProcessingDataGetter;
 use tokio::sync::Mutex;
 use tonic::async_trait;
@@ -11,8 +11,10 @@ use tonic::async_trait;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::columns::{Mint, TokenAccount};
 
-use crate::mplx_updates_processor::{BurntMetadataSlot, TokenMetadata};
-use crate::{db_v2::Task, mplx_updates_processor::MetadataInfo};
+use crate::mplx_updates_processor::MetadataInfo;
+use crate::mplx_updates_processor::{
+    BurntMetadataSlot, IndexableAssetWithAccountInfo, TokenMetadata,
+};
 
 #[derive(Default)]
 pub struct Buffer {
@@ -23,6 +25,8 @@ pub struct Buffer {
     pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
     pub token_metadata_editions: Mutex<HashMap<Pubkey, TokenMetadata>>,
     pub burnt_metadata_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
+    pub burnt_mpl_core_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
+    pub mpl_core_indexable_assets: Mutex<HashMap<Pubkey, IndexableAssetWithAccountInfo>>,
 }
 
 impl Buffer {
@@ -35,12 +39,14 @@ impl Buffer {
             json_tasks: Arc::new(Mutex::new(VecDeque::<Task>::new())),
             token_metadata_editions: Mutex::new(HashMap::new()),
             burnt_metadata_at_slot: Mutex::new(HashMap::new()),
+            burnt_mpl_core_at_slot: Mutex::new(HashMap::new()),
+            mpl_core_indexable_assets: Mutex::new(HashMap::new()),
         }
     }
 
     pub async fn debug(&self) {
         println!(
-            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\nToken Metadata Editions buffer: {}\nBurnt Metadata buffer: {}\n",
+            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\nToken Metadata Editions buffer: {}\nBurnt Metadata buffer: {}\nMpl Core full assets buffer: {}\nBurnt Mpl Core buffer: {}\n",
             self.mplx_metadata_info.lock().await.len(),
             self.transactions.lock().await.len(),
             self.token_accs.lock().await.len(),
@@ -48,6 +54,8 @@ impl Buffer {
             self.json_tasks.lock().await.len(),
             self.token_metadata_editions.lock().await.len(),
             self.burnt_metadata_at_slot.lock().await.len(),
+            self.mpl_core_indexable_assets.lock().await.len(),
+            self.burnt_mpl_core_at_slot.lock().await.len(),
         );
     }
 
@@ -63,6 +71,10 @@ impl Buffer {
         metrics.set_buffer(
             "buffer_editions",
             self.token_metadata_editions.lock().await.len() as i64,
+        );
+        metrics.set_buffer(
+            "mpl_core",
+            self.mpl_core_indexable_assets.lock().await.len() as i64,
         );
     }
 
