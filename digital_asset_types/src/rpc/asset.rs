@@ -157,8 +157,6 @@ pub type Files = Vec<File>;
 #[derive(PartialEq, Eq, Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 pub struct MetadataMap(BTreeMap<String, serde_json::Value>);
 
-const ONCHAIN_DATA_KEYS: [&str; 3] = ["name", "symbol", "token_standard"];
-
 impl MetadataMap {
     pub fn new() -> Self {
         Self(BTreeMap::new())
@@ -175,11 +173,6 @@ impl MetadataMap {
 
     pub fn get_item(&self, key: &str) -> Option<&serde_json::Value> {
         self.0.get(key)
-    }
-
-    pub fn has_only_onchain_data(&self) -> bool {
-        let keys: Vec<&String> = self.0.keys().collect();
-        keys == ONCHAIN_DATA_KEYS
     }
 }
 
