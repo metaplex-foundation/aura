@@ -87,7 +87,7 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
             .unwrap_or_default();
 
         Ok(Self {
-            pubkey: Pubkey::try_from(value.pubkey).map_err(|e| GrpcError::PubkeyFrom(e))?,
+            pubkey: Pubkey::try_from(value.pubkey).map_err(GrpcError::PubkeyFrom)?,
             specification_asset_class: entities::enums::SpecificationAssetClass::from(
                 SpecificationAssetClass::try_from(value.specification_asset_class).map_err(
                     |e| GrpcError::EnumCast("SpecificationAssetClass".to_string(), e.to_string()),
@@ -103,7 +103,7 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 .edition_address
                 .map(TryInto::try_into)
                 .transpose()
-                .map_err(|e| GrpcError::PubkeyFrom(e))?,
+                .map_err(GrpcError::PubkeyFrom)?,
             is_compressible: value
                 .is_compressible
                 .map(Into::into)
@@ -128,7 +128,8 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 .ok_or(GrpcError::MissingField("was_decompressed".to_string()))?,
             creators: value
                 .creators
-                .map(Into::into)
+                .map(TryInto::try_into)
+                .transpose()?
                 .ok_or(GrpcError::MissingField("creators".to_string()))?,
             royalty_amount: value
                 .royalty_amount
@@ -170,8 +171,8 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
             cl_items: value
                 .cl_items
                 .into_iter()
-                .flat_map(TryInto::try_into)
-                .collect(),
+                .map(TryInto::<entities::models::ClItem>::try_into)
+                .collect::<Result<Vec<_>, _>>()?,
             edition: value.edition.map(TryInto::try_into).transpose()?,
             master_edition: value.master_edition.map(TryInto::try_into).transpose()?,
         })
@@ -353,7 +354,7 @@ impl TryFrom<DynamicBytesField> for Updated<Option<Pubkey>> {
         Ok(Self::new(
             value.slot_updated,
             value.update_version.map(Into::into),
-            Some(Pubkey::try_from(value.value).map_err(|e| GrpcError::PubkeyFrom(e))?),
+            Some(Pubkey::try_from(value.value).map_err(GrpcError::PubkeyFrom)?),
         ))
     }
 }
@@ -363,7 +364,7 @@ impl TryFrom<DynamicBytesField> for Updated<Pubkey> {
 
     fn try_from(value: DynamicBytesField) -> Result<Self, Self::Error> {
         Ok(Self {
-            value: Pubkey::try_from(value.value).map_err(|e| GrpcError::PubkeyFrom(e))?,
+            value: Pubkey::try_from(value.value).map_err(GrpcError::PubkeyFrom)?,
             slot_updated: value.slot_updated,
             update_version: value.update_version.map(Into::into),
         })
@@ -390,23 +391,25 @@ impl TryFrom<Creator> for entities::models::Creator {
 
     fn try_from(value: Creator) -> Result<Self, Self::Error> {
         Ok(Self {
-            creator: Pubkey::try_from(value.creator).map_err(|e| GrpcError::PubkeyFrom(e))?,
+            creator: Pubkey::try_from(value.creator).map_err(GrpcError::PubkeyFrom)?,
             creator_verified: value.creator_verified,
             creator_share: value.creator_share as u8,
         })
     }
 }
-impl From<DynamicCreatorsField> for Updated<Vec<entities::models::Creator>> {
-    fn from(value: DynamicCreatorsField) -> Self {
-        Self {
+impl TryFrom<DynamicCreatorsField> for Updated<Vec<entities::models::Creator>> {
+    type Error = GrpcError;
+
+    fn try_from(value: DynamicCreatorsField) -> Result<Self, Self::Error> {
+        Ok(Self {
             value: value
                 .creators
                 .into_iter()
-                .flat_map(TryInto::try_into)
-                .collect(),
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()?,
             slot_updated: value.slot_updated,
             update_version: value.update_version.map(Into::into),
-        }
+        })
     }
 }
 
@@ -418,14 +421,14 @@ impl TryFrom<AssetLeaf> for Updated<entities::models::AssetLeaf> {
             slot_updated: value.slot_updated,
             update_version: value.update_version.map(Into::into),
             value: entities::models::AssetLeaf {
-                tree_id: Pubkey::try_from(value.tree_id).map_err(|e| GrpcError::PubkeyFrom(e))?,
+                tree_id: Pubkey::try_from(value.tree_id).map_err(GrpcError::PubkeyFrom)?,
                 leaf: value.leaf.clone(),
                 nonce: value.nonce,
                 data_hash: value
                     .data_hash
                     .map(|h| {
                         Ok::<_, GrpcError>(Hash::from(
-                            <[u8; 32]>::try_from(h).map_err(|e| GrpcError::PubkeyFrom(e))?,
+                            <[u8; 32]>::try_from(h).map_err(GrpcError::PubkeyFrom)?,
                         ))
                     })
                     .transpose()?,
@@ -433,7 +436,7 @@ impl TryFrom<AssetLeaf> for Updated<entities::models::AssetLeaf> {
                     .creator_hash
                     .map(|h| {
                         Ok::<_, GrpcError>(Hash::from(
-                            <[u8; 32]>::try_from(h).map_err(|e| GrpcError::PubkeyFrom(e))?,
+                            <[u8; 32]>::try_from(h).map_err(GrpcError::PubkeyFrom)?,
                         ))
                     })
                     .transpose()?,
@@ -536,7 +539,7 @@ impl TryFrom<MasterEdition> for entities::models::MasterEdition {
 
     fn try_from(value: MasterEdition) -> Result<Self, Self::Error> {
         Ok(Self {
-            key: Pubkey::try_from(value.key).map_err(|e| GrpcError::PubkeyFrom(e))?,
+            key: Pubkey::try_from(value.key).map_err(GrpcError::PubkeyFrom)?,
             supply: value.supply,
             max_supply: value.max_supply,
             write_version: value.write_version,
@@ -549,8 +552,8 @@ impl TryFrom<EditionV1> for entities::models::EditionV1 {
 
     fn try_from(value: EditionV1) -> Result<Self, Self::Error> {
         Ok(Self {
-            key: Pubkey::try_from(value.key).map_err(|e| GrpcError::PubkeyFrom(e))?,
-            parent: Pubkey::try_from(value.parent).map_err(|e| GrpcError::PubkeyFrom(e))?,
+            key: Pubkey::try_from(value.key).map_err(GrpcError::PubkeyFrom)?,
+            parent: Pubkey::try_from(value.parent).map_err(GrpcError::PubkeyFrom)?,
             edition: value.edition,
             write_version: value.write_version,
         })
@@ -563,8 +566,7 @@ impl TryFrom<ClLeaf> for entities::models::ClLeaf {
     fn try_from(value: ClLeaf) -> Result<Self, Self::Error> {
         Ok(Self {
             cli_leaf_idx: value.cli_leaf_idx,
-            cli_tree_key: Pubkey::try_from(value.cli_tree_key)
-                .map_err(|e| GrpcError::PubkeyFrom(e))?,
+            cli_tree_key: Pubkey::try_from(value.cli_tree_key).map_err(GrpcError::PubkeyFrom)?,
             cli_node_idx: value.cli_node_idx,
         })
     }
@@ -579,8 +581,7 @@ impl TryFrom<ClItem> for entities::models::ClItem {
             cli_seq: value.cli_seq,
             cli_level: value.cli_level,
             cli_hash: value.cli_hash,
-            cli_tree_key: Pubkey::try_from(value.cli_tree_key)
-                .map_err(|e| GrpcError::PubkeyFrom(e))?,
+            cli_tree_key: Pubkey::try_from(value.cli_tree_key).map_err(GrpcError::PubkeyFrom)?,
             cli_node_idx: value.cli_node_idx,
             slot_updated: value.slot_updated,
         })
@@ -593,8 +594,7 @@ impl TryFrom<AssetCollection> for Updated<entities::models::AssetCollection> {
     fn try_from(value: AssetCollection) -> Result<Self, Self::Error> {
         Ok(Self {
             value: entities::models::AssetCollection {
-                collection: Pubkey::try_from(value.collection)
-                    .map_err(|e| GrpcError::PubkeyFrom(e))?,
+                collection: Pubkey::try_from(value.collection).map_err(GrpcError::PubkeyFrom)?,
                 is_collection_verified: value.is_collection_verified,
                 collection_seq: value.collection_seq,
             },
