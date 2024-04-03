@@ -274,13 +274,14 @@ pub struct ApiConfig {
     #[serde(default = "default_max_page_limit")]
     pub max_page_limit: usize,
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
+    pub archives_dir: String,
 }
 
-#[derive(Deserialize, PartialEq, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Debug, Clone, Default)]
 pub struct JsonMiddlewareConfig {
     pub is_enabled: bool,
     pub persist_response: bool,
-    pub max_urls_to_parse: u16,
+    pub max_urls_to_parse: usize,
 }
 
 const fn default_check_proofs_probability() -> f64 {

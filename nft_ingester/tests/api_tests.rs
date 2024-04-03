@@ -2,7 +2,7 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use std::{
-        collections::{HashMap, HashSet},
+        collections::HashMap,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc,
@@ -27,13 +27,14 @@ mod tests {
         },
         models::{ChainDataV1, UpdateVersion, Updated},
     };
-    use interface::api::MockAPIJsonDownloaderMiddleware;
+    use interface::json::MockJsonProcessor;
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig};
     use mockall::predicate;
     use mpl_token_metadata::accounts::MasterEdition;
     use nft_ingester::{
-        api::middleware::JsonDownloaderMiddleware,
         buffer::Buffer,
+        config::JsonMiddlewareConfig,
+        json_downloader::JsonDownloader,
         mplx_updates_processor::{BurntMetadataSlot, MetadataInfo, MplxAccsProcessor},
         token_updates_processor::TokenAccsProcessor,
     };
@@ -55,15 +56,15 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloaderMiddleware>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            JsonMiddlewareConfig::default(),
+        );
         let limit = 10;
         let before: Option<String>;
         let after: Option<String>;
@@ -405,15 +406,15 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloaderMiddleware>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            JsonMiddlewareConfig::default(),
+        );
 
         let pb = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
@@ -539,15 +540,15 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloaderMiddleware>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            JsonMiddlewareConfig::default(),
+        );
 
         let pb = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
@@ -651,15 +652,15 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloaderMiddleware>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            JsonMiddlewareConfig::default(),
+        );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -803,15 +804,15 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloaderMiddleware>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            JsonMiddlewareConfig::default(),
+        );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -963,15 +964,15 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloaderMiddleware>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            JsonMiddlewareConfig::default(),
+        );
 
         let keep_running = Arc::new(AtomicBool::new(true));
 
@@ -1107,15 +1108,15 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloaderMiddleware>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            JsonMiddlewareConfig::default(),
+        );
 
         let first_tree = Pubkey::new_unique();
         let second_tree = Pubkey::new_unique();
@@ -1315,15 +1316,15 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloaderMiddleware>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            JsonMiddlewareConfig::default(),
+        );
 
         let buffer = Arc::new(Buffer::new());
         let token_updates_processor = TokenAccsProcessor::new(
@@ -1504,15 +1505,15 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloaderMiddleware>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            JsonMiddlewareConfig::default(),
+        );
 
         let ref_value = generated_assets.owners[8].clone();
         let payload = GetAssetsByOwner {
@@ -1549,15 +1550,15 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloaderMiddleware>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            JsonMiddlewareConfig::default(),
+        );
 
         let ref_value = generated_assets.collections[12].clone();
         let payload = GetAssetsByGroup {
@@ -1591,15 +1592,15 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloaderMiddleware>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            JsonMiddlewareConfig::default(),
+        );
 
         let ref_value = generated_assets.dynamic_details[5].clone();
         let payload = GetAssetsByCreator {
@@ -1633,15 +1634,15 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloaderMiddleware>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            JsonMiddlewareConfig::default(),
+        );
 
         let ref_value = generated_assets.authorities[9].clone();
         let payload = GetAssetsByAuthority {
@@ -1675,8 +1676,7 @@ mod tests {
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
 
-        let mut urls = HashSet::new();
-        urls.insert("http://someUrl.com".to_string());
+        let url = "http://someUrl.com".to_string();
 
         let offchain_data = r#"
         {
@@ -1712,26 +1712,29 @@ mod tests {
         }
         "#;
 
-        let mut map_result = HashMap::new();
-        map_result.insert("http://someUrl.com".to_string(), offchain_data.to_string());
-
-        let mut mock_middleware = MockAPIJsonDownloaderMiddleware::new();
+        let mut mock_middleware = MockJsonProcessor::new();
         mock_middleware
-            .expect_get_metadata()
-            .with(predicate::eq(urls))
+            .expect_download_file()
+            .with(predicate::eq(url))
             .times(1)
-            .returning(move |_| Ok(map_result.clone()));
+            .returning(move |_| Ok(offchain_data.to_string()));
 
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            MockAPIJsonDownloaderMiddleware,
-        >::new(
+        mock_middleware
+            .expect_persist_response()
+            .return_const(Some(offchain_data.to_string()));
+
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, MockJsonProcessor>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             50,
             Some(Arc::new(mock_middleware)),
+            JsonMiddlewareConfig {
+                is_enabled: true,
+                persist_response: true,
+                max_urls_to_parse: 10,
+            },
         );
 
         let pb = Pubkey::new_unique();
@@ -1784,7 +1787,7 @@ mod tests {
 
         let owner = AssetOwner {
             pubkey: pb,
-            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), authority),
+            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(authority)),
             delegate: Updated::new(12, Some(UpdateVersion::Sequence(12)), None),
             owner_type: Updated::new(12, Some(UpdateVersion::Sequence(12)), OwnerType::Single),
             owner_delegate_seq: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(12)),

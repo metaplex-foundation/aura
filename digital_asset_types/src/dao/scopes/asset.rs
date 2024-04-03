@@ -4,8 +4,9 @@ use std::string::ToString;
 use std::sync::Arc;
 
 use entities::api_req_params::{AssetSortDirection, Options};
-use entities::models::AssetSignatureWithPagination;
+use entities::models::{AssetSignatureWithPagination, JsonDownloadTask};
 use interface::asset_sigratures::AssetSignaturesGetter;
+use interface::json::JsonProcessor;
 use log::error;
 use sea_orm::prelude::Json;
 use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult};
@@ -17,6 +18,8 @@ use rocks_db::asset::{
 };
 use rocks_db::offchain_data::OffChainData;
 use rocks_db::Storage;
+use tokio::sync::Mutex;
+use tokio::task::JoinSet;
 
 use crate::dao::sea_orm_active_enums::{
     ChainMutability, Mutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
@@ -425,6 +428,9 @@ pub async fn get_by_ids(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
     options: Options,
+    json_downloader: Option<Arc<impl JsonProcessor + Sync + Send + 'static>>,
+    persist_json: bool,
+    max_json_to_download: usize,
 ) -> Result<Vec<Option<FullAsset>>, DbErr> {
     if asset_ids.is_empty() {
         return Ok(vec![]);
@@ -440,10 +446,59 @@ pub async fn get_by_ids(
     }
 
     let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
-    let asset_selected_maps = rocks_db
+    let mut asset_selected_maps = rocks_db
         .get_asset_selected_maps_async(unique_asset_ids.clone())
         .await
         .map_err(|e| DbErr::Custom(e.to_string()))?;
+
+    if let Some(json_downloader) = json_downloader {
+        let offchain_data = Arc::new(Mutex::new(HashMap::new()));
+
+        let mut tasks_set = JoinSet::new();
+
+        for (_, url) in asset_selected_maps.urls.iter() {
+            if tasks_set.len() >= max_json_to_download {
+                break;
+            }
+            if asset_selected_maps.offchain_data.get(url).is_none() {
+                let json_downloader = json_downloader.clone();
+                let url = url.clone();
+                let offchain_data = offchain_data.clone();
+
+                tasks_set.spawn(async move {
+                    let response = json_downloader.download_file(url.clone()).await;
+
+                    let json = {
+                        if persist_json {
+                            json_downloader
+                                .persist_response(
+                                    response,
+                                    JsonDownloadTask {
+                                        metadata_url: url.clone(),
+                                        attempts: 1,
+                                        ..Default::default()
+                                    },
+                                )
+                                .await
+                        } else {
+                            response.ok()
+                        }
+                    };
+
+                    if let Some(metadata) = json {
+                        let mut res = offchain_data.lock().await;
+                        res.insert(url.clone(), OffChainData { url, metadata });
+                    }
+                });
+            }
+        }
+
+        while tasks_set.join_next().await.is_some() {}
+
+        let offchain_data = offchain_data.lock().await.clone();
+
+        asset_selected_maps.offchain_data.extend(offchain_data);
+    }
 
     let mut results = vec![None; asset_ids.len()];
     for id in unique_asset_ids {

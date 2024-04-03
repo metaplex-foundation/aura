@@ -5,7 +5,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use usecase::proofs::MaybeProofChecker;
 
-use super::middleware::JsonDownloaderMiddleware;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 
@@ -16,9 +15,10 @@ use {
 };
 
 use crate::api::builder::RpcApiBuilder;
-use crate::api::config::load_config;
 use crate::api::error::DasApiError;
 use crate::api::middleware::RpcRequestMiddleware;
+use crate::config::{setup_config, ApiConfig, JsonMiddlewareConfig};
+use crate::json_downloader::JsonDownloader;
 
 pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10);
 // 50kB
@@ -31,14 +31,16 @@ pub async fn start_api(
     metrics: Arc<ApiMetricsConfig>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
     proof_checker: Option<Arc<MaybeProofChecker>>,
-    json_downloader: Option<Arc<JsonDownloaderMiddleware>>,
+    json_downloader: Option<Arc<JsonDownloader>>,
 ) -> Result<(), DasApiError> {
     env::set_var(
         env_logger::DEFAULT_FILTER_ENV,
         env::var_os(env_logger::DEFAULT_FILTER_ENV)
             .unwrap_or_else(|| "info,sqlx::query=warn".into()),
     );
-    let config = load_config()?;
+
+    let config: ApiConfig = setup_config("API_");
+
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server_port));
 
     let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
@@ -64,7 +66,8 @@ pub async fn start_api_v2(
     port: u16,
     proof_checker: Option<Arc<MaybeProofChecker>>,
     max_page_limit: usize,
-    json_downloader: Option<Arc<JsonDownloaderMiddleware>>,
+    json_downloader: Option<Arc<JsonDownloader>>,
+    json_middleware_config: Option<JsonMiddlewareConfig>,
 ) -> Result<(), DasApiError> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     // todo: setup middleware, looks like too many shit related to backups are there
@@ -76,13 +79,14 @@ pub async fn start_api_v2(
         proof_checker,
         max_page_limit,
         json_downloader,
+        json_middleware_config.unwrap_or_default(),
     );
 
     run_api(api, None, addr, keep_running).await
 }
 
 async fn run_api(
-    api: DasApi<MaybeProofChecker, JsonDownloaderMiddleware>,
+    api: DasApi<MaybeProofChecker, JsonDownloader>,
     request_middleware: Option<RpcRequestMiddleware>,
     addr: SocketAddr,
     keep_running: Arc<AtomicBool>,

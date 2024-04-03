@@ -3,7 +3,6 @@ pub mod backfiller;
 pub mod bubblegum_updates_processor;
 pub mod buffer;
 pub mod config;
-pub mod db_v2;
 pub mod error;
 pub mod flatbuffer_mapper;
 pub mod fork_cleaner;

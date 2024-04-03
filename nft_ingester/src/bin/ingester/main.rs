@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use nft_ingester::api::middleware::JsonDownloaderMiddleware;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -8,7 +7,7 @@ use clap::Parser;
 use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info, warn};
-use nft_ingester::{backfiller, config, transaction_ingester};
+use nft_ingester::{backfiller, config, json_downloader, transaction_ingester};
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
@@ -375,6 +374,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let json_downloader = Arc::new(
         JsonDownloader::new(
+            index_storage.clone(),
             rocks_storage.clone(),
             metrics_state.json_downloader_metrics.clone(),
         )
@@ -395,13 +395,17 @@ pub async fn main() -> Result<(), IngesterError> {
         ))
     });
 
-    let middleware_json_downloader = api_config.json_middleware_config.map(|middleware_config| {
-        Arc::new(JsonDownloaderMiddleware::new(
-            json_downloader.clone(),
-            middleware_config.persist_response,
-            middleware_config.max_urls_to_parse,
-        ))
-    });
+    let middleware_json_downloader = {
+        if let Some(conf) = api_config.json_middleware_config {
+            if conf.is_enabled {
+                Some(json_downloader.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
 
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
@@ -445,8 +449,9 @@ pub async fn main() -> Result<(), IngesterError> {
     }));
 
     let cloned_keep_running = keep_running.clone();
+    let cloned_js = json_downloader.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        json_downloader.run(cloned_keep_running).await;
+        json_downloader::run(cloned_js, cloned_keep_running).await;
     }));
 
     let backfill_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(

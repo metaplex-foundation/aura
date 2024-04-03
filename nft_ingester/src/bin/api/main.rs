@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
-use nft_ingester::api::middleware::JsonDownloaderMiddleware;
 use nft_ingester::api::service::start_api_v2;
 use nft_ingester::config::{init_logger, setup_config, ApiConfig};
 use nft_ingester::error::IngesterError;
@@ -108,18 +107,19 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     let json_downloader = {
-        if let Some(middleware_config) = config.json_middleware_config {
-            let downloader = Arc::new(
-                JsonDownloader::new(rocks_storage.clone(), json_downloader_metrics.clone()).await,
-            );
-
-            // persist_response argument is hardcoded to false
-            // because this binary opens RocksDB in secondary mode
-            Some(Arc::new(JsonDownloaderMiddleware::new(
-                downloader,
-                false,
-                middleware_config.max_urls_to_parse,
-            )))
+        if let Some(middleware_config) = &config.json_middleware_config {
+            if middleware_config.is_enabled {
+                Some(Arc::new(
+                    JsonDownloader::new(
+                        pg_client.clone(),
+                        rocks_storage.clone(),
+                        json_downloader_metrics.clone(),
+                    )
+                    .await,
+                ))
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -135,6 +135,7 @@ pub async fn main() -> Result<(), IngesterError> {
             proof_checker,
             config.max_page_limit,
             json_downloader,
+            config.json_middleware_config.clone(),
         )
         .await
         {

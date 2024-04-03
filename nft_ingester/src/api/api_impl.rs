@@ -1,18 +1,15 @@
 use digital_asset_types::dao::SearchAssetsQuery;
-use digital_asset_types::dapi::common::complement_asset_content_with_json_data;
 use digital_asset_types::dapi::{get_asset, get_asset_batch, get_proof_for_assets, search_assets};
 use digital_asset_types::rpc::response::AssetList;
-use interface::api::APIJsonDownloaderMiddleware;
 use interface::error::UsecaseError;
+use interface::json::JsonProcessor;
 use interface::proofs::ProofChecker;
-use log::debug;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
-use std::collections::HashSet;
 use std::{sync::Arc, time::Instant};
 
 use self::util::ApiRequest;
-use crate::api::config::Config;
+use crate::config::{ApiConfig, JsonMiddlewareConfig};
 use digital_asset_types::dapi::get_asset_signatures::get_asset_signatures;
 use digital_asset_types::dapi::get_token_accounts::get_token_accounts;
 use digital_asset_types::rpc::response::TransactionSignatureListDeprecated;
@@ -35,7 +32,7 @@ const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
 pub struct DasApi<PC, J>
 where
     PC: ProofChecker + Sync + Send + 'static,
-    J: APIJsonDownloaderMiddleware,
+    J: JsonProcessor + Sync + Send + 'static,
 {
     pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
@@ -43,12 +40,13 @@ where
     proof_checker: Option<Arc<PC>>,
     max_page_limit: u32,
     json_downloader: Option<Arc<J>>,
+    json_middleware_config: JsonMiddlewareConfig,
 }
 
 impl<PC, J> DasApi<PC, J>
 where
     PC: ProofChecker + Sync + Send + 'static,
-    J: APIJsonDownloaderMiddleware,
+    J: JsonProcessor + Sync + Send + 'static,
 {
     pub fn new(
         pg_client: Arc<PgClient>,
@@ -57,6 +55,7 @@ where
         proof_checker: Option<Arc<PC>>,
         max_page_limit: usize,
         json_downloader: Option<Arc<J>>,
+        json_middleware_config: JsonMiddlewareConfig,
     ) -> Self {
         DasApi {
             pg_client,
@@ -65,11 +64,12 @@ where
             proof_checker,
             max_page_limit: max_page_limit as u32,
             json_downloader,
+            json_middleware_config,
         }
     }
 
     pub async fn from_config(
-        config: Config,
+        config: ApiConfig,
         metrics: Arc<ApiMetricsConfig>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         rocks_db: Arc<Storage>,
@@ -78,7 +78,12 @@ where
     ) -> Result<Self, DasApiError> {
         let pool = PgPoolOptions::new()
             .max_connections(250)
-            .connect(&config.database_url)
+            .connect(
+                &config
+                    .database_config
+                    .get_database_url()
+                    .map_err(|err| DasApiError::ConfigurationError(err.to_string()))?,
+            )
             .await?;
 
         let pg_client = PgClient::new_with_pool(pool, red_metrics);
@@ -89,6 +94,7 @@ where
             proof_checker,
             max_page_limit: config.max_page_limit as u32,
             json_downloader,
+            json_middleware_config: config.json_middleware_config.unwrap_or_default(),
         })
     }
 }
@@ -100,7 +106,7 @@ pub fn not_found() -> DasApiError {
 impl<PC, J> DasApi<PC, J>
 where
     PC: ProofChecker + Sync + Send + 'static,
-    J: APIJsonDownloaderMiddleware,
+    J: JsonProcessor + Sync + Send + 'static,
 {
     pub async fn check_health(&self) -> Result<Value, DasApiError> {
         let label = "check_health";
@@ -220,24 +226,16 @@ where
         let id = validate_pubkey(payload.id.clone())?;
         let options = payload.options.unwrap_or_default();
 
-        let res = match get_asset(self.rocks_db.clone(), id, options).await {
-            Ok(Some(asset)) => {
-                if let Some(json_downloader) = &self.json_downloader {
-                    let mut a_v = vec![asset];
-                    Self::check_and_supplement_jsons(
-                        self.rocks_db.clone(),
-                        json_downloader.clone(),
-                        &mut a_v,
-                    )
-                    .await;
-                    Some(a_v[0].clone())
-                } else {
-                    Some(asset)
-                }
-            }
-            Ok(None) => None,
-            Err(e) => return Err(Into::<DasApiError>::into(e)),
-        };
+        let res = get_asset(
+            self.rocks_db.clone(),
+            id,
+            options,
+            self.json_downloader.clone(),
+            self.json_middleware_config.persist_response,
+            self.json_middleware_config.max_urls_to_parse,
+        )
+        .await
+        .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -268,23 +266,16 @@ where
             .collect::<Result<Vec<_>, _>>()?;
         let options = payload.options.unwrap_or_default();
 
-        let res = match get_asset_batch(self.rocks_db.clone(), ids, options).await {
-            Ok(assets) => {
-                if let Some(json_downloader) = &self.json_downloader {
-                    let mut a_v: Vec<Asset> = assets.iter().filter_map(|opt| opt.clone()).collect();
-                    Self::check_and_supplement_jsons(
-                        self.rocks_db.clone(),
-                        json_downloader.clone(),
-                        &mut a_v,
-                    )
-                    .await;
-                    Some(a_v)
-                } else {
-                    Some(assets.iter().filter_map(|opt| opt.clone()).collect())
-                }
-            }
-            Err(e) => return Err(Into::<DasApiError>::into(e)),
-        };
+        let res = get_asset_batch(
+            self.rocks_db.clone(),
+            ids,
+            options,
+            self.json_downloader.clone(),
+            true,
+            10,
+        )
+        .await
+        .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -300,18 +291,9 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let mut res = self
+        let res = self
             .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
             .await?;
-
-        if let Some(json_downloader) = &self.json_downloader {
-            Self::check_and_supplement_jsons(
-                self.rocks_db.clone(),
-                json_downloader.clone(),
-                &mut res.items,
-            )
-            .await;
-        }
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -327,18 +309,9 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let mut res = self
+        let res = self
             .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
             .await?;
-
-        if let Some(json_downloader) = &self.json_downloader {
-            Self::check_and_supplement_jsons(
-                self.rocks_db.clone(),
-                json_downloader.clone(),
-                &mut res.items,
-            )
-            .await;
-        }
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -354,18 +327,9 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let mut res = self
+        let res = self
             .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
             .await?;
-
-        if let Some(json_downloader) = &self.json_downloader {
-            Self::check_and_supplement_jsons(
-                self.rocks_db.clone(),
-                json_downloader.clone(),
-                &mut res.items,
-            )
-            .await;
-        }
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -381,18 +345,9 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let mut res = self
+        let res = self
             .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
             .await?;
-
-        if let Some(json_downloader) = &self.json_downloader {
-            Self::check_and_supplement_jsons(
-                self.rocks_db.clone(),
-                json_downloader.clone(),
-                &mut res.items,
-            )
-            .await;
-        }
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -457,18 +412,9 @@ where
         self.metrics.inc_search_asset_requests(&label);
         let latency_timer = Instant::now();
 
-        let mut res = self
+        let res = self
             .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
             .await?;
-
-        if let Some(json_downloader) = &self.json_downloader {
-            Self::check_and_supplement_jsons(
-                self.rocks_db.clone(),
-                json_downloader.clone(),
-                &mut res.items,
-            )
-            .await;
-        }
 
         self.metrics
             .set_search_asset_latency(&label, latency_timer.elapsed().as_millis() as f64);
@@ -601,72 +547,12 @@ where
             pagination.after,
             pagination.cursor,
             options,
+            self.json_downloader.clone(),
+            self.json_middleware_config.persist_response,
+            self.json_middleware_config.max_urls_to_parse,
         )
         .await?;
 
         Ok(res)
-    }
-
-    async fn check_and_supplement_jsons(
-        rocks_db: Arc<Storage>,
-        json_downloader: Arc<J>,
-        assets: &mut [Asset],
-    ) {
-        let mut urls_to_get = HashSet::new();
-        let mut onchain_data_only = HashSet::new();
-
-        for a in assets.iter() {
-            if let Some(content) = &a.content {
-                if !content.json_uri.is_empty() {
-                    if content.metadata.inner().is_empty() {
-                        urls_to_get.insert(content.json_uri.clone());
-                    } else if content.metadata.has_only_onchain_data() {
-                        onchain_data_only.insert(content.json_uri.clone());
-                    }
-                }
-            }
-        }
-
-        let asset_with_onchain_data_url = onchain_data_only.clone().into_iter().collect::<Vec<_>>();
-
-        let offchain_data = rocks_db
-            .asset_offchain_data
-            .batch_get(asset_with_onchain_data_url.clone())
-            .await;
-
-        if let Ok(offchain_data) = offchain_data {
-            for (data, link) in offchain_data.iter().zip(asset_with_onchain_data_url.iter()) {
-                if data.is_none() {
-                    urls_to_get.insert(link.clone());
-                }
-            }
-        } else {
-            urls_to_get.extend(onchain_data_only);
-        }
-
-        if urls_to_get.is_empty() {
-            return;
-        }
-
-        let downloaded_jsons = json_downloader.get_metadata(urls_to_get).await;
-
-        if let Ok(jsons) = downloaded_jsons {
-            for a in assets.iter_mut() {
-                if let Some(content) = &mut a.content {
-                    if let Some(json) = jsons.get(&content.json_uri) {
-                        let metadata_value = serde_json::from_str(json);
-                        if let Ok(metadata) = metadata_value {
-                            complement_asset_content_with_json_data(content, metadata);
-                        }
-                    }
-                }
-            }
-        } else {
-            // safe to use unwrap here because we checked that it's not Ok
-            debug!(
-                "API Json download error: {}",
-                downloaded_jsons.err().unwrap()
-            );
-        }
     }
 }

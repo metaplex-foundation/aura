@@ -1,18 +1,10 @@
-use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-use interface::api::APIJsonDownloaderMiddleware;
 use jsonrpc_http_server::jsonrpc_core::futures::TryStreamExt;
 use jsonrpc_http_server::{hyper, RequestMiddleware, RequestMiddlewareAction};
 use log::info;
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
 use tokio_util::codec::{BytesCodec, FramedRead};
-use tonic::async_trait;
-
-use crate::json_downloader::JsonDownloader;
 
 const FULL_BACKUP_REQUEST_PATH: &str = "/snapshot";
 
@@ -132,87 +124,5 @@ impl RequestMiddleware for RpcRequestMiddleware {
         }
 
         request.into()
-    }
-}
-
-pub struct JsonDownloaderMiddleware {
-    json_downloader: Arc<JsonDownloader>,
-    persist_response: bool,
-    max_urls_to_process: u16,
-}
-
-impl JsonDownloaderMiddleware {
-    pub fn new(
-        json_downloader: Arc<JsonDownloader>,
-        persist_response: bool,
-        max_urls_to_process: u16,
-    ) -> Self {
-        Self {
-            json_downloader,
-            persist_response,
-            max_urls_to_process,
-        }
-    }
-}
-
-#[async_trait]
-impl APIJsonDownloaderMiddleware for JsonDownloaderMiddleware {
-    async fn get_metadata(
-        &self,
-        metadata_urls: HashSet<String>,
-    ) -> Result<HashMap<String, String>, String> {
-        if metadata_urls.len() > self.max_urls_to_process as usize {
-            return Err("Too many urls to download".to_string());
-        }
-
-        let tasks = self
-            .json_downloader
-            .db_client
-            .get_tasks_by_url(metadata_urls.into_iter().collect())
-            .await
-            .map_err(|e| e.to_string())?;
-
-        let result = Arc::new(Mutex::new(HashMap::new()));
-
-        let mut tasks_set = JoinSet::new();
-
-        for task in tasks.iter() {
-            let json_downloader = self.json_downloader.clone();
-            let persist_response = self.persist_response;
-            let task = task.clone();
-            let result = result.clone();
-            tasks_set.spawn(async move {
-                let response = JsonDownloader::download_file(task.metadata_url.clone()).await;
-
-                let url = task.metadata_url.clone();
-
-                let metadata = {
-                    if persist_response {
-                        JsonDownloader::persist_response(
-                            response,
-                            task,
-                            &json_downloader.db_client,
-                            &json_downloader.rocks_db,
-                            &json_downloader.metrics,
-                        )
-                        .await
-                    } else {
-                        response.ok()
-                    }
-                };
-
-                if let Some(json) = metadata {
-                    let mut res = result.lock().await;
-
-                    res.insert(url, json);
-                }
-            });
-        }
-
-        while tasks_set.join_next().await.is_some() {}
-
-        let r = result.lock().await.clone();
-
-        Ok(r)
     }
 }
