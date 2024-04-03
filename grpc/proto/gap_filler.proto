@@ -138,17 +138,24 @@ message AssetDetails {
     DynamicBoolField executable = 22;
     DynamicStringField metadata_owner = 23;
     DynamicStringField url = 24;
+    DynamicStringField raw_name = 25;
+    DynamicStringField plugins = 26;
+    DynamicStringField unknown_plugins = 27;
+    DynamicUint64Field rent_epoch = 28;
+    DynamicUint32Field num_minted = 29;
+    DynamicUint32Field current_size = 30;
+    DynamicUint32Field plugins_json_version = 31;
 
-    AssetLeaf asset_leaf = 25;
-    AssetCollection collection = 26;
-    ChainDataV1 chain_data = 27;
+    AssetLeaf asset_leaf = 32;
+    AssetCollection collection = 33;
+    ChainDataV1 chain_data = 34;
 
-    ClLeaf cl_leaf = 28;
-    repeated ClItem cl_items = 29;
+    ClLeaf cl_leaf = 35;
+    repeated ClItem cl_items = 36;
 
     // From TokenMetadataEdition
-    EditionV1 edition = 30;
-    MasterEdition master_edition = 31;
+    EditionV1 edition = 37;
+    MasterEdition master_edition = 38;
 }
 
 // Dynamic field messages

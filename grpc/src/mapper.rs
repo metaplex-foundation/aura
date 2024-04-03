@@ -60,6 +60,13 @@ impl From<CompleteAssetDetails> for AssetDetails {
             executable: value.executable.map(|v| v.into()),
             metadata_owner: value.metadata_owner.map(|v| v.into()),
             url: Some(value.url.into()),
+            raw_name: value.raw_name.map(Into::into),
+            plugins: value.plugins.map(Into::into),
+            unknown_plugins: value.unknown_plugins.map(Into::into),
+            rent_epoch: value.rent_epoch.map(Into::into),
+            num_minted: value.num_minted.map(Into::into),
+            current_size: value.current_size.map(Into::into),
+            plugins_json_version: value.plugins_json_version.map(Into::into),
             asset_leaf: value.asset_leaf.map(|v| v.into()),
             collection: value.collection.map(|v| v.into()),
             chain_data: value.onchain_data.map(|v| v.into()),
@@ -143,6 +150,13 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
             lamports: value.lamports.map(Into::into),
             executable: value.executable.map(Into::into),
             metadata_owner: value.metadata_owner.map(Into::into),
+            raw_name: value.raw_name.map(Into::into),
+            plugins: value.plugins.map(Into::into),
+            unknown_plugins: value.unknown_plugins.map(Into::into),
+            rent_epoch: value.rent_epoch.map(Into::into),
+            num_minted: value.num_minted.map(Into::into),
+            current_size: value.current_size.map(Into::into),
+            plugins_json_version: value.plugins_json_version.map(Into::into),
             authority: value
                 .authority
                 .map(TryInto::try_into)
@@ -216,6 +230,26 @@ impl From<Updated<bool>> for DynamicBoolField {
 
 impl From<Updated<u64>> for DynamicUint64Field {
     fn from(value: Updated<u64>) -> Self {
+        Self {
+            value: value.value,
+            slot_updated: value.slot_updated,
+            update_version: value.update_version.map(Into::into),
+        }
+    }
+}
+
+impl From<Updated<u32>> for DynamicUint32Field {
+    fn from(value: Updated<u32>) -> Self {
+        Self {
+            value: value.value,
+            slot_updated: value.slot_updated,
+            update_version: value.update_version.map(Into::into),
+        }
+    }
+}
+
+impl From<DynamicUint32Field> for Updated<u32> {
+    fn from(value: DynamicUint32Field) -> Self {
         Self {
             value: value.value,
             slot_updated: value.slot_updated,

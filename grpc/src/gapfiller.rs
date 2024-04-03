@@ -136,19 +136,33 @@ pub struct AssetDetails {
     #[prost(message, optional, tag = "24")]
     pub url: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "25")]
-    pub asset_leaf: ::core::option::Option<AssetLeaf>,
+    pub raw_name: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "26")]
-    pub collection: ::core::option::Option<AssetCollection>,
+    pub plugins: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "27")]
-    pub chain_data: ::core::option::Option<ChainDataV1>,
+    pub unknown_plugins: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "28")]
+    pub rent_epoch: ::core::option::Option<DynamicUint64Field>,
+    #[prost(message, optional, tag = "29")]
+    pub num_minted: ::core::option::Option<DynamicUint32Field>,
+    #[prost(message, optional, tag = "30")]
+    pub current_size: ::core::option::Option<DynamicUint32Field>,
+    #[prost(message, optional, tag = "31")]
+    pub plugins_json_version: ::core::option::Option<DynamicUint32Field>,
+    #[prost(message, optional, tag = "32")]
+    pub asset_leaf: ::core::option::Option<AssetLeaf>,
+    #[prost(message, optional, tag = "33")]
+    pub collection: ::core::option::Option<AssetCollection>,
+    #[prost(message, optional, tag = "34")]
+    pub chain_data: ::core::option::Option<ChainDataV1>,
+    #[prost(message, optional, tag = "35")]
     pub cl_leaf: ::core::option::Option<ClLeaf>,
-    #[prost(message, repeated, tag = "29")]
+    #[prost(message, repeated, tag = "36")]
     pub cl_items: ::prost::alloc::vec::Vec<ClItem>,
     /// From TokenMetadataEdition
-    #[prost(message, optional, tag = "30")]
+    #[prost(message, optional, tag = "37")]
     pub edition: ::core::option::Option<EditionV1>,
-    #[prost(message, optional, tag = "31")]
+    #[prost(message, optional, tag = "38")]
     pub master_edition: ::core::option::Option<MasterEdition>,
 }
 /// Dynamic field messages

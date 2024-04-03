@@ -299,7 +299,13 @@ impl Storage {
                 lamports: data.lamports,
                 executable: data.executable,
                 metadata_owner: data.metadata_owner,
-                ..Default::default()
+                raw_name: data.raw_name,
+                plugins: data.plugins,
+                unknown_plugins: data.unknown_plugins,
+                rent_epoch: data.rent_epoch,
+                num_minted: data.num_minted,
+                current_size: data.current_size,
+                plugins_json_version: data.plugins_json_version,
             },
         )?;
 
