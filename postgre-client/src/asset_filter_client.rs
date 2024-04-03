@@ -1,11 +1,18 @@
+use std::str::FromStr;
+
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
+use entities::api_req_params::Options;
+use solana_sdk::{bs58, pubkey::Pubkey};
 use sqlx::{Postgres, QueryBuilder};
 
 use crate::{
-    model::{AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, SearchAssetsFilter},
+    model::{
+        AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, AssetSupply,
+        SearchAssetsFilter,
+    },
     storage_traits::AssetPubkeyFilteredFetcher,
-    PgClient,
+    PgClient, SELECT_ACTION, SQL_COMPONENT,
 };
 
 #[derive(sqlx::FromRow, Debug)]
@@ -23,7 +30,9 @@ impl PgClient {
         page: Option<u64>,
         before: Option<String>,
         after: Option<String>,
-    ) -> (QueryBuilder<'a, Postgres>, bool) {
+        options: &'a Options,
+    ) -> Result<(QueryBuilder<'a, Postgres>, bool), String> {
+        // todo: remove the inner join with tasks and only perform it if the metadata_url_id is present in the filter
         let mut query_builder = QueryBuilder::new(
             "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 ",
         );
@@ -37,13 +46,12 @@ impl PgClient {
             group_clause_required = true;
         }
         if filter.json_uri.is_some() {
-            query_builder.push(" INNER JOIN metadata ON ast_metadata_url_id = mtd_id ");
+            query_builder.push(" INNER JOIN tasks ON ast_metadata_url_id = tsk_id ");
             group_clause_required = true;
         }
 
         // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
         query_builder.push(" WHERE TRUE ");
-
         if let Some(spec_version) = &filter.specification_version {
             query_builder.push(" AND assets_v3.ast_specification_version = ");
             query_builder.push_bind(spec_version);
@@ -84,6 +92,10 @@ impl PgClient {
             query_builder.push_bind(collection);
         }
 
+        if !options.show_unverified_collections {
+            query_builder.push(" AND assets_v3.ast_is_collection_verified = true");
+        }
+
         if let Some(delegate) = &filter.delegate {
             query_builder.push(" AND assets_v3.ast_delegate = ");
             query_builder.push_bind(delegate);
@@ -94,9 +106,17 @@ impl PgClient {
             query_builder.push_bind(frozen);
         }
 
-        if let Some(supply) = filter.supply {
-            query_builder.push(" AND assets_v3.ast_supply = ");
-            query_builder.push_bind(supply as i64);
+        if let Some(supply) = &filter.supply {
+            match supply {
+                AssetSupply::Equal(s) => {
+                    query_builder.push(" AND assets_v3.ast_supply = ");
+                    query_builder.push_bind(*s as i64);
+                }
+                AssetSupply::Greater(s) => {
+                    query_builder.push(" AND assets_v3.ast_supply > ");
+                    query_builder.push_bind(*s as i64);
+                }
+            }
         }
 
         // supply_mint is identical to pubkey
@@ -136,57 +156,70 @@ impl PgClient {
         }
 
         if let Some(json_uri) = &filter.json_uri {
-            query_builder.push(" AND metadata.mtd_url = ");
+            query_builder.push(" AND tsk_metadata_url = ");
             query_builder.push_bind(json_uri);
         }
 
-        let order_field = match order.sort_by {
-            AssetSortBy::SlotCreated => "ast_slot_created",
-            AssetSortBy::SlotUpdated => "ast_slot_updated",
-        };
         let order_reversed = before.is_some() && after.is_none();
 
-        if let Some(before) = before {
-            let res = AssetRawResponse::decode_sorting_key(before.as_str());
-            if let Ok((slot, pubkey)) = res {
-                query_builder.push(" AND (");
-                query_builder.push(order_field);
-                let comparison = match order.sort_direction {
-                    AssetSortDirection::Asc => " < ",
-                    AssetSortDirection::Desc => " > ",
-                };
-                query_builder.push(comparison);
-                query_builder.push_bind(slot);
-                query_builder.push(" OR (");
-                query_builder.push(order_field);
-                query_builder.push(" = ");
-                query_builder.push_bind(slot);
-                query_builder.push(" AND ast_pubkey ");
-                query_builder.push(comparison);
-                query_builder.push_bind(pubkey);
-                query_builder.push("))");
-            }
-        }
+        match &order.sort_by {
+            AssetSortBy::SlotCreated | AssetSortBy::SlotUpdated => {
+                if let Some(before) = before {
+                    let comparison = match order.sort_direction {
+                        AssetSortDirection::Asc => " < ",
+                        AssetSortDirection::Desc => " > ",
+                    };
 
-        if let Some(after) = after {
-            let res = AssetRawResponse::decode_sorting_key(&after);
-            if let Ok((slot, pubkey)) = res {
-                query_builder.push(" AND (");
-                query_builder.push(order_field);
-                let comparison = match order.sort_direction {
-                    AssetSortDirection::Asc => " > ",
-                    AssetSortDirection::Desc => " < ",
-                };
-                query_builder.push(comparison);
-                query_builder.push_bind(slot);
-                query_builder.push(" OR (");
-                query_builder.push(order_field);
-                query_builder.push(" = ");
-                query_builder.push_bind(slot);
-                query_builder.push(" AND ast_pubkey ");
-                query_builder.push(comparison);
-                query_builder.push_bind(pubkey);
-                query_builder.push("))");
+                    add_slot_and_key_comparison(
+                        before.as_ref(),
+                        comparison,
+                        &order.sort_by,
+                        &mut query_builder,
+                    )?;
+                }
+
+                if let Some(after) = after {
+                    let comparison = match order.sort_direction {
+                        AssetSortDirection::Asc => " > ",
+                        AssetSortDirection::Desc => " < ",
+                    };
+
+                    add_slot_and_key_comparison(
+                        after.as_ref(),
+                        comparison,
+                        &order.sort_by,
+                        &mut query_builder,
+                    )?;
+                }
+            }
+            AssetSortBy::Key => {
+                if let Some(before) = before {
+                    let comparison = match order.sort_direction {
+                        AssetSortDirection::Asc => " < ",
+                        AssetSortDirection::Desc => " > ",
+                    };
+
+                    add_key_comparison(
+                        before.as_ref(),
+                        comparison,
+                        &order.sort_by,
+                        &mut query_builder,
+                    )?;
+                }
+
+                if let Some(after) = after {
+                    let comparison = match order.sort_direction {
+                        AssetSortDirection::Asc => " > ",
+                        AssetSortDirection::Desc => " < ",
+                    };
+
+                    add_key_comparison(
+                        after.as_ref(),
+                        comparison,
+                        &order.sort_by,
+                        &mut query_builder,
+                    )?;
+                }
             }
         }
 
@@ -202,7 +235,7 @@ impl PgClient {
         };
 
         query_builder.push(" ORDER BY ");
-        query_builder.push(order_field);
+        query_builder.push(order.sort_by.to_string());
         query_builder.push(direction);
         query_builder.push(", ast_pubkey ");
         query_builder.push(direction);
@@ -218,8 +251,45 @@ impl PgClient {
                 query_builder.push_bind(offset as i64);
             }
         }
-        (query_builder, order_reversed)
+        Ok((query_builder, order_reversed))
     }
+}
+
+fn add_slot_and_key_comparison(
+    key: &str,
+    comparison: &str,
+    order_field: &AssetSortBy,
+    query_builder: &mut QueryBuilder<'_, Postgres>,
+) -> Result<(), String> {
+    let res = AssetRawResponse::decode_sorting_key(key);
+    if let Ok((slot, pubkey)) = res {
+        let order_field = order_field.to_string();
+
+        query_builder.push(format!(" AND ({}{}", order_field, comparison));
+        query_builder.push_bind(slot);
+        query_builder.push(format!(" OR ({} = ", order_field));
+        query_builder.push_bind(slot);
+        query_builder.push(format!(" AND ast_pubkey {}", comparison));
+        query_builder.push_bind(pubkey);
+        query_builder.push("))");
+    }
+
+    Ok(())
+}
+
+fn add_key_comparison(
+    key: &str,
+    comparison: &str,
+    order_field: &AssetSortBy,
+    query_builder: &mut QueryBuilder<'_, Postgres>,
+) -> Result<(), String> {
+    let after = Pubkey::from_str(key).map_err(|e| e.to_string())?;
+
+    query_builder.push(format!(" AND ({}{}", order_field, comparison));
+    query_builder.push_bind(after.to_bytes());
+    query_builder.push(")");
+
+    Ok(())
 }
 
 #[async_trait]
@@ -232,14 +302,22 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         page: Option<u64>,
         before: Option<String>,
         after: Option<String>,
+        options: &Options,
     ) -> Result<Vec<AssetSortedIndex>, String> {
         let (mut query_builder, order_reversed) =
-            Self::build_search_query(filter, order, limit, page, before, after);
+            Self::build_search_query(filter, order, limit, page, before, after, options)?;
         let query = query_builder.build_query_as::<AssetRawResponse>();
+        let start_time = chrono::Utc::now();
         let result = query
             .fetch_all(&self.pool)
             .await
-            .map_err(|e: sqlx::Error| e.to_string())?;
+            .map_err(|e: sqlx::Error| {
+                self.metrics
+                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "assets_v3");
+                e.to_string()
+            })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, SELECT_ACTION, "assets_v3", start_time);
         let r = result
             .into_iter()
             .map(|r| AssetSortedIndex::from((&r, &order.sort_by)));
@@ -253,12 +331,19 @@ impl AssetPubkeyFilteredFetcher for PgClient {
 
 impl AssetRawResponse {
     pub fn encode_sorting_key(&self, sort_by: &AssetSortBy) -> String {
-        let mut key = match sort_by {
-            AssetSortBy::SlotCreated => self.slot_created.to_be_bytes().to_vec(),
-            AssetSortBy::SlotUpdated => self.slot_updated.to_be_bytes().to_vec(),
-        };
-        key.extend_from_slice(&self.pubkey);
-        general_purpose::STANDARD_NO_PAD.encode(key)
+        match sort_by {
+            AssetSortBy::SlotCreated => {
+                let mut key = self.slot_created.to_be_bytes().to_vec();
+                key.extend_from_slice(&self.pubkey);
+                general_purpose::STANDARD_NO_PAD.encode(key)
+            }
+            AssetSortBy::SlotUpdated => {
+                let mut key = self.slot_updated.to_be_bytes().to_vec();
+                key.extend_from_slice(&self.pubkey);
+                general_purpose::STANDARD_NO_PAD.encode(key)
+            }
+            AssetSortBy::Key => bs58::encode(&self.pubkey).into_string(),
+        }
     }
 
     pub fn decode_sorting_key(encoded_key: &str) -> Result<(i64, Vec<u8>), String> {

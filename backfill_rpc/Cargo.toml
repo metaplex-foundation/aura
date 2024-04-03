@@ -1,0 +1,24 @@
+[package]
+name = "backfill-rpc"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait="0.1.74"
+futures="0.3.29"
+entities = { path = "../entities" }
+solana-sdk = "~1.17"
+solana-client = "~1.17"
+solana-program = "~1.17"
+solana-transaction-status = "~1.17"
+interface = { path = "../interface" }
+tokio = { version = "1.26.0", features = ["full"] }
+plerkle_serialization = "1.8.0"
+flatbuffers = "23.1.21"
+tracing = "0.1.40"
+usecase = { path = "../usecase" }
+
+[features]
+rpc_tests = []

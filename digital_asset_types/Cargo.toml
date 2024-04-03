@@ -10,14 +10,14 @@ json_types = ["serde", "serde_json"]
 sql_types = ["sea-orm"]
 
 [dependencies]
-spl-concurrent-merkle-tree = { version = "0.1.3" }
+spl-concurrent-merkle-tree = { version = "0.2.0" }
 sea-orm = { optional = true, version = "0.10.6", features = ["macros", "runtime-tokio-rustls", "sqlx-postgres", "with-chrono", "mock"] }
 serde = { version = "1.0.137", optional = true }
 serde_json = { version = "1.0.81", optional = true, features = ["preserve_order"] }
 bs58 = "0.4.0"
-solana-sdk = { version = "1.14.10" }
+solana-sdk = "~1.17"
 thiserror = "1.0.31"
-blockbuster = { git = "https://github.com/metaplex-foundation/blockbuster.git", rev = "552aba6a" }
+blockbuster = "2.2.0"
 jsonpath_lib = "0.3.0"
 mime_guess = "2.0.4"
 url = "2.3.1"
@@ -27,3 +27,6 @@ log = "0.4.17"
 rocks-db = { path = "../rocks-db" }
 postgre-client = { path = "../postgre-client" }
 entities = { path = "../entities" }
+usecase = { path = "../usecase" }
+interface = { path = "../interface" }
+metrics-utils = { path = "../metrics_utils" }

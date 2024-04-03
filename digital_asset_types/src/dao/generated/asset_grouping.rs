@@ -3,16 +3,10 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Default, Debug, DeriveEntity)]
+#[derive(Copy, Clone, Default, Debug)]
 pub struct Entity;
 
-impl EntityName for Entity {
-    fn table_name(&self) -> &str {
-        "asset_grouping"
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, DeriveModel, DeriveActiveModel, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Model {
     pub id: i64,
     pub asset_id: Vec<u8>,
@@ -35,55 +29,3 @@ pub enum Column {
     Verified,
     GroupInfoSeq,
 }
-
-#[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
-pub enum PrimaryKey {
-    Id,
-}
-
-impl PrimaryKeyTrait for PrimaryKey {
-    type ValueType = i64;
-    fn auto_increment() -> bool {
-        true
-    }
-}
-
-#[derive(Copy, Clone, Debug, EnumIter)]
-pub enum Relation {
-    Asset,
-}
-
-impl ColumnTrait for Column {
-    type EntityName = Entity;
-    fn def(&self) -> ColumnDef {
-        match self {
-            Self::Id => ColumnType::BigInteger.def(),
-            Self::AssetId => ColumnType::Binary.def(),
-            Self::GroupKey => ColumnType::Text.def(),
-            Self::GroupValue => ColumnType::Text.def().null(),
-            Self::Seq => ColumnType::BigInteger.def().null(),
-            Self::SlotUpdated => ColumnType::BigInteger.def().null(),
-            Self::Verified => ColumnType::Boolean.def(),
-            Self::GroupInfoSeq => ColumnType::BigInteger.def().null(),
-        }
-    }
-}
-
-impl RelationTrait for Relation {
-    fn def(&self) -> RelationDef {
-        match self {
-            Self::Asset => Entity::belongs_to(super::asset::Entity)
-                .from(Column::AssetId)
-                .to(super::asset::Column::Id)
-                .into(),
-        }
-    }
-}
-
-impl Related<super::asset::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Asset.def()
-    }
-}
-
-impl ActiveModelBehavior for ActiveModel {}

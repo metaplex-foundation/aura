@@ -1,4 +1,4 @@
-use crate::api::error::DasApiError;
+use crate::{api::error::DasApiError, config::default_max_page_limit};
 use {
     figment::{providers::Env, Figment},
     serde::Deserialize,
@@ -12,6 +12,8 @@ pub struct Config {
     pub server_port: u16,
     pub env: Option<String>,
     pub archives_dir: String,
+    #[serde(default = "default_max_page_limit")]
+    pub max_page_limit: usize,
 }
 
 pub fn load_config() -> Result<Config, DasApiError> {

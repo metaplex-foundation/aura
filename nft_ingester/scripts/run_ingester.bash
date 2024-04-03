@@ -35,9 +35,13 @@ export INGESTER_BIG_TABLE_CONFIG='{creds="./creds.json", timeout=1000}'
 
 export INGESTER_SYNCHRONIZER_BATCH_SIZE=500
 
-export PEER_GRPC_PORT=9091
-export PEER_GRPC_MAX_GAP_SLOTS=1000000
+export INGESTER_PEER_GRPC_PORT=9091
+export INGESTER_PEER_GRPC_MAX_GAP_SLOTS=1000000
 
+export INGESTER_GAPFILLER_PEER_ADDR="0.0.0.0"
+export INGESTER_BACKFILL_RPC_ADDRESS="https://solana-mainnet.rpc.extrnode.com/XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX"
+
+export INGESTER_SQL_LOG_LEVEL="error"
 cargo run --package nft_ingester --bin ingester
 # start with restore rocks DB
 #cargo run --package nft_ingester --bin ingester -- --restore-rocks-db

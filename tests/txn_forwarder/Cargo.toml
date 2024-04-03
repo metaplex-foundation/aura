@@ -15,9 +15,9 @@ plerkle_messenger = { version = "1.5.0", features = ['redis'] }
 plerkle_serialization = { version = "1.5.0" }
 flatbuffers = "23.1.21"
 clap = { version = "4.1.4", features = ["derive"] }
-solana-client = { version = "=1.14.15"}
-solana-sdk = { version = "=1.14.15"}
-solana-transaction-status = { version = "=1.14.15"}
+solana-client = { version = "~1.17"}
+solana-sdk = "~1.17"
+solana-transaction-status = { version = "~1.17"}
 figment = { version = "0.10.8" }
 bs58 = "0.4.0"
 tokio-stream = "0.1.11"

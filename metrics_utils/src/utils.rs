@@ -28,7 +28,7 @@ pub async fn start_metrics_server(
     registry: Registry,
 ) -> Result<(), MetricsError> {
     let mut shutdown_stream =
-        signal(SignalKind::terminate()).map_err(|e| MetricsError::Unexpected(e.to_string()))?;
+        signal(SignalKind::interrupt()).map_err(|e| MetricsError::Unexpected(e.to_string()))?;
 
     info!("Starting metrics server on {metrics_addr}");
 
@@ -76,4 +76,17 @@ pub fn make_handler(
                 })
         })
     }
+}
+
+pub async fn start_metrics(register: Registry, port: Option<u16>) {
+    tokio::spawn(async move {
+        match setup_metrics(register, port).await {
+            Ok(_) => {
+                info!("Setup metrics successfully")
+            }
+            Err(e) => {
+                error!("Setup metrics failed: {:?}", e)
+            }
+        }
+    });
 }

@@ -1,8 +1,9 @@
+use entities::models::Task;
+use entities::{enums::TaskStatus, models::UrlWithStatus};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions, Postgres},
     ConnectOptions, PgPool, QueryBuilder, Row,
 };
-use std::collections::{HashMap, HashSet};
 
 use crate::config::DatabaseConfig;
 use crate::error::IngesterError;
@@ -12,46 +13,9 @@ pub struct DBClient {
     pub pool: PgPool,
 }
 
-#[derive(
-    serde_derive::Deserialize,
-    serde_derive::Serialize,
-    PartialEq,
-    Debug,
-    Eq,
-    Hash,
-    sqlx::Type,
-    Copy,
-    Clone,
-)]
-#[sqlx(type_name = "task_status", rename_all = "lowercase")]
-pub enum TaskStatus {
-    Pending,
-    Running,
-    Success,
-    Failed,
-}
-
-#[derive(Debug)]
-pub struct Task {
-    pub ofd_metadata_url: String,
-    pub ofd_locked_until: Option<chrono::DateTime<chrono::Utc>>,
-    pub ofd_attempts: i32,
-    pub ofd_max_attempts: i32,
-    pub ofd_error: Option<String>,
-}
-
-pub struct TaskForInsert {
-    pub ofd_metadata_url: i64,
-    pub ofd_locked_until: Option<chrono::DateTime<chrono::Utc>>,
-    pub ofd_attempts: i32,
-    pub ofd_max_attempts: i32,
-    pub ofd_error: Option<String>,
-}
-
 #[derive(Debug, Clone)]
 pub struct JsonDownloadTask {
     pub metadata_url: String,
-    pub metadata_url_key: i64,
     pub status: TaskStatus,
     pub attempts: i16,
     pub max_attempts: i16,
@@ -59,7 +23,7 @@ pub struct JsonDownloadTask {
 
 pub struct UpdatedTask {
     pub status: TaskStatus,
-    pub metadata_url_key: i64,
+    pub metadata_url: String,
     pub attempts: i16,
     pub error: String,
 }
@@ -75,7 +39,7 @@ impl DBClient {
                 .map_err(|err| IngesterError::ConfigurationError {
                     msg: format!("URL parse: {}", err),
                 })?;
-        options.log_statements(log::LevelFilter::Trace);
+        options.log_statements(log::LevelFilter::Off);
 
         options.log_slow_statements(
             log::LevelFilter::Debug,
@@ -97,7 +61,7 @@ impl DBClient {
             QueryBuilder::new("UPDATE tasks SET tsk_status = tmp.tsk_status, tsk_attempts = tmp.tsk_attempts, tsk_error = tmp.tsk_error FROM (");
 
         query_builder.push_values(data, |mut b, key| {
-            b.push_bind(key.metadata_url_key);
+            b.push_bind(key.metadata_url);
             b.push_bind(key.status);
             b.push_bind(key.attempts);
             b.push_bind(key.error);
@@ -128,9 +92,7 @@ impl DBClient {
                                     tsk_locked_until = NOW() + INTERVAL '20 seconds'
                                     FROM cte
                                     WHERE t.tsk_id = cte.tsk_id
-                                    RETURNING (
-                                        SELECT mtd_url FROM metadata m WHERE m.mtd_id = t.tsk_metadata_url) as metadata_url, t.tsk_metadata_url,
-                                        t.tsk_status, t.tsk_attempts, t.tsk_max_attempts;");
+                                    RETURNING t.tsk_metadata_url, t.tsk_status, t.tsk_attempts, t.tsk_max_attempts;");
 
         let query = query_builder.build();
         let rows = query
@@ -141,15 +103,13 @@ impl DBClient {
         let mut tasks = Vec::new();
 
         for row in rows {
-            let metadata_url: String = row.get("metadata_url");
-            let metadata_url_key: i64 = row.get("tsk_metadata_url");
+            let metadata_url: String = row.get("tsk_metadata_url");
             let status: TaskStatus = row.get("tsk_status");
             let attempts: i16 = row.get("tsk_attempts");
             let max_attempts: i16 = row.get("tsk_max_attempts");
 
             tasks.push(JsonDownloadTask {
                 metadata_url,
-                metadata_url_key,
                 status,
                 attempts,
                 max_attempts,
@@ -159,61 +119,12 @@ impl DBClient {
         Ok(tasks)
     }
 
-    pub async fn insert_metadata(
-        &self,
-        urls: &Vec<&str>,
-    ) -> Result<HashMap<String, i64>, IngesterError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("INSERT INTO metadata (mtd_url)");
-
-        query_builder.push_values(urls, |mut b, key| {
-            b.push_bind(key);
-        });
-
-        query_builder.push("ON CONFLICT (mtd_url) DO NOTHING RETURNING mtd_id, mtd_url;");
-
-        let query = query_builder.build();
-        let rows = query
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|err| IngesterError::DatabaseError(format!("Insert one metadata: {}", err)))?;
-
-        let res: HashMap<String, i64> = rows
-            .iter()
-            .map(|row| (row.get("mtd_url"), row.get("mtd_id")))
-            .collect();
-
-        Ok(res)
-    }
-
-    pub async fn insert_tasks(&self, data: &Vec<Task>) -> Result<(), IngesterError> {
-        let mut keys = HashSet::new();
-        for off_d in data {
-            keys.insert(off_d.ofd_metadata_url.as_str());
-        }
-
-        let keys = keys.into_iter().collect::<Vec<_>>();
-        let ids_keys = self.insert_metadata(&keys).await?;
-
-        let mut offchain_data_to_insert = Vec::new();
-
-        for offchain_d in data.iter() {
-            // save tasks only for those links which are new
-            if let Some(id) = ids_keys.get(&offchain_d.ofd_metadata_url) {
-                offchain_data_to_insert.push(TaskForInsert {
-                    ofd_metadata_url: *id,
-                    ofd_locked_until: offchain_d.ofd_locked_until,
-                    ofd_attempts: offchain_d.ofd_attempts,
-                    ofd_max_attempts: offchain_d.ofd_max_attempts,
-                    ofd_error: offchain_d.ofd_error.clone(),
-                });
-            }
-        }
-
-        offchain_data_to_insert.sort_by(|a, b| a.ofd_metadata_url.cmp(&b.ofd_metadata_url));
+    pub async fn insert_tasks(&self, data: &mut Vec<Task>) -> Result<(), IngesterError> {
+        data.sort_by(|a, b| a.ofd_metadata_url.cmp(&b.ofd_metadata_url));
 
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
             "INSERT INTO tasks (
+                tsk_id,
                 tsk_metadata_url,
                 tsk_locked_until,
                 tsk_attempts,
@@ -223,16 +134,18 @@ impl DBClient {
             ) ",
         );
 
-        query_builder.push_values(offchain_data_to_insert, |mut b, off_d| {
-            b.push_bind(off_d.ofd_metadata_url);
+        query_builder.push_values(data, |mut b, off_d| {
+            let tsk = UrlWithStatus::new(off_d.ofd_metadata_url.as_str(), false);
+            b.push_bind(tsk.get_metadata_id());
+            b.push_bind(tsk.metadata_url);
             b.push_bind(off_d.ofd_locked_until);
             b.push_bind(off_d.ofd_attempts);
             b.push_bind(off_d.ofd_max_attempts);
-            b.push_bind(off_d.ofd_error);
-            b.push_bind(TaskStatus::Pending);
+            b.push_bind(off_d.ofd_error.clone());
+            b.push_bind(off_d.ofd_status);
         });
 
-        query_builder.push("ON CONFLICT (tsk_metadata_url) DO NOTHING;");
+        query_builder.push("ON CONFLICT (tsk_id) DO NOTHING;");
 
         let query = query_builder.build();
         query

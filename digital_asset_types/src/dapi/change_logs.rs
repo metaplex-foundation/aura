@@ -1,7 +1,9 @@
-use std::collections::HashMap;
 use std::sync::Arc;
+use std::{collections::HashMap, str::FromStr};
 
-use log::debug;
+use interface::proofs::ProofChecker;
+use log::{debug, warn};
+use metrics_utils::ApiMetricsConfig;
 use solana_sdk::pubkey::Pubkey;
 
 use rocks_db::asset_streaming_client::get_required_nodes_for_proof;
@@ -24,27 +26,17 @@ struct SimpleChangeLog {
     cli_tree: Vec<u8>,
 }
 
-#[derive(FromQueryResult, Debug, Default, Clone, Eq, PartialEq)]
-struct LeafWithAssetID {
-    ast_pubkey: Vec<u8>,
-    cli_tree: Vec<u8>,
-    cli_node_idx: i64,
-    cli_seq: i64,
-    cli_level: i64,
-    cli_hash: Vec<u8>,
-}
-
 pub async fn get_proof_for_assets(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
+    proof_checker: Option<Arc<impl ProofChecker + Sync + Send + 'static>>,
+    metrics: Arc<ApiMetricsConfig>,
 ) -> Result<HashMap<String, Option<AssetProof>>, DbErr> {
     let mut results: HashMap<String, Option<AssetProof>> =
         asset_ids.iter().map(|id| (id.to_string(), None)).collect();
 
     let tree_ids = fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids)
         .values()
-        .collect::<Vec<_>>()
-        .into_iter()
         .map(|asset| {
             (
                 asset.tree_id,
@@ -76,22 +68,25 @@ pub async fn get_proof_for_assets(
         return Ok(HashMap::new());
     }
 
-    let leaves: HashMap<_, cl_items::Model> = cl_items_first_leaf
+    let leaves: HashMap<_, (cl_items::Model, u64)> = cl_items_first_leaf
         .into_iter()
         .filter_map(|leaf| {
             leaf.and_then(|leaf| {
-                tree_ids.get(&leaf.cli_tree_key).map(|(pubkey, _)| {
+                tree_ids.get(&leaf.cli_tree_key).map(|(pubkey, nonce)| {
                     (
                         pubkey.to_bytes().to_vec(),
-                        cl_items::Model {
-                            id: 0,
-                            tree: leaf.cli_tree_key.to_bytes().to_vec(),
-                            node_idx: leaf.cli_node_idx as i64,
-                            leaf_idx: leaf.cli_leaf_idx.map(|idx| idx as i64),
-                            seq: leaf.cli_seq as i64,
-                            level: leaf.cli_level as i64,
-                            hash: leaf.cli_hash,
-                        },
+                        (
+                            cl_items::Model {
+                                id: 0,
+                                tree: leaf.cli_tree_key.to_bytes().to_vec(),
+                                node_idx: leaf.cli_node_idx as i64,
+                                leaf_idx: leaf.cli_leaf_idx.map(|idx| idx as i64),
+                                seq: leaf.cli_seq as i64,
+                                level: leaf.cli_level as i64,
+                                hash: leaf.cli_hash,
+                            },
+                            *nonce,
+                        ),
                     )
                 })
             })
@@ -123,7 +118,13 @@ pub async fn get_proof_for_assets(
         .collect::<Vec<_>>();
 
     for asset_id in asset_ids.clone().iter() {
-        let proof = get_asset_proof(asset_id, &all_nodes, &leaves);
+        let proof = get_asset_proof(
+            asset_id,
+            &all_nodes,
+            &leaves,
+            proof_checker.clone(),
+            metrics.clone(),
+        );
         results.insert(asset_id.to_string(), proof);
     }
 
@@ -133,11 +134,13 @@ pub async fn get_proof_for_assets(
 fn get_asset_proof(
     asset_id: &Pubkey,
     nodes: &[SimpleChangeLog],
-    leaves: &HashMap<Vec<u8>, cl_items::Model>,
+    leaves: &HashMap<Vec<u8>, (cl_items::Model, u64)>,
+    proof_checker: Option<Arc<impl ProofChecker + Sync + Send + 'static>>,
+    metrics: Arc<ApiMetricsConfig>,
 ) -> Option<AssetProof> {
     let leaf_key = asset_id.to_bytes().to_vec();
-    let leaf = match leaves.get(&leaf_key) {
-        Some(leaf) => leaf.clone(),
+    let (leaf, nonce) = match leaves.get(&leaf_key) {
+        Some((leaf, nonce)) => (leaf.clone(), *nonce),
         None => return None,
     };
 
@@ -178,21 +181,60 @@ fn get_asset_proof(
     }
 
     let root = bs58::encode(final_node_list.pop().unwrap().cli_hash).into_string();
-    let proof: Vec<String> = final_node_list
+    let proof: Vec<Vec<u8>> = final_node_list
         .iter()
-        .map(|model| bs58::encode(&model.cli_hash).into_string())
+        .map(|model| model.cli_hash.clone())
         .collect();
 
     if proof.is_empty() {
         return None;
     }
 
+    let tree_id = Pubkey::try_from(leaf.tree.clone()).unwrap_or_default();
+    let initial_proofs = proof
+        .iter()
+        .filter_map(|k| Pubkey::try_from(k.clone()).ok())
+        .collect();
+    let leaf_b58 = bs58::encode(&leaf.hash).into_string();
+    if let Some(proof_checker) = proof_checker {
+        let lf = Pubkey::from_str(leaf_b58.as_str()).unwrap_or_default();
+        let metrics = metrics.clone();
+        let cloned_checker = proof_checker.clone();
+        let asset_id = *asset_id;
+        tokio::spawn(async move {
+            match cloned_checker
+                .check_proof(tree_id, initial_proofs, nonce as u32, lf.to_bytes())
+                .await
+            {
+                Ok(true) => metrics.inc_proof_checks("proof", metrics_utils::MetricStatus::SUCCESS),
+                Ok(false) => {
+                    warn!(
+                        "Proof for asset {:?} of tree {:?} is invalid",
+                        asset_id, tree_id
+                    );
+                    metrics.inc_proof_checks("proof", metrics_utils::MetricStatus::FAILURE)
+                }
+                Err(e) => {
+                    warn!(
+                        "Proof check for asset {:?} of tree {:?} failed: {}",
+                        asset_id, tree_id, e
+                    );
+                    metrics.inc_proof_checks("proof", metrics_utils::MetricStatus::FAILURE)
+                }
+            }
+        });
+    }
+    let proof = proof
+        .iter()
+        .map(|model| bs58::encode(model).into_string())
+        .collect();
+
     Some(AssetProof {
         root,
-        leaf: bs58::encode(&leaf.hash).into_string(),
+        leaf: leaf_b58,
         proof,
         node_index: leaf.node_idx,
-        tree_id: bs58::encode(&leaf.tree).into_string(),
+        tree_id: tree_id.to_string(),
     })
 }
 

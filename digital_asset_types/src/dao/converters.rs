@@ -1,12 +1,11 @@
+use entities::api_req_params::SearchConditionType;
 use thiserror::Error;
-
-use crate::rpc::filter::{AssetSortBy, AssetSortDirection, AssetSorting};
 
 use super::{
     sea_orm_active_enums::{
         OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
     },
-    ConditionType, SearchAssetsQuery,
+    AssetSupply, ConditionType, SearchAssetsQuery,
 };
 
 #[derive(Error, Debug)]
@@ -39,7 +38,7 @@ impl TryFrom<SearchAssetsQuery> for postgre_client::model::SearchAssetsFilter {
             collection,
             delegate: query.delegate,
             frozen: query.frozen,
-            supply: query.supply,
+            supply: query.supply.map(|s| s.into()),
             supply_mint: query.supply_mint,
             compressed: query.compressed,
             compressible: query.compressible,
@@ -49,6 +48,15 @@ impl TryFrom<SearchAssetsQuery> for postgre_client::model::SearchAssetsFilter {
             burnt: query.burnt,
             json_uri: query.json_uri,
         })
+    }
+}
+
+impl From<AssetSupply> for postgre_client::model::AssetSupply {
+    fn from(supply: AssetSupply) -> Self {
+        match supply {
+            AssetSupply::Equal(s) => Self::Equal(s),
+            AssetSupply::Greater(s) => Self::Greater(s),
+        }
     }
 }
 
@@ -76,6 +84,8 @@ impl From<SpecificationAssetClass> for postgre_client::model::SpecificationAsset
             SpecificationAssetClass::PrintableNft => Self::PrintableNft,
             SpecificationAssetClass::ProgrammableNft => Self::ProgrammableNft,
             SpecificationAssetClass::TransferRestrictedNft => Self::TransferRestrictedNft,
+            SpecificationAssetClass::MplCoreAsset => Self::MplCoreAsset,
+            SpecificationAssetClass::MplCoreCollection => Self::MplCoreCollection,
         }
     }
 }
@@ -101,42 +111,11 @@ impl From<RoyaltyTargetType> for postgre_client::model::RoyaltyTargetType {
     }
 }
 
-impl From<AssetSorting> for postgre_client::model::AssetSorting {
-    fn from(sorting: AssetSorting) -> Self {
-        Self {
-            sort_by: sorting.sort_by.into(),
-            sort_direction: sorting
-                .sort_direction
-                .map_or(postgre_client::model::AssetSortDirection::Desc, |v| {
-                    v.into()
-                }),
-        }
-    }
-}
-
-impl From<AssetSortBy> for postgre_client::model::AssetSortBy {
-    fn from(sort_by: AssetSortBy) -> Self {
-        match sort_by {
-            AssetSortBy::Created => Self::SlotCreated,
-            _ => Self::SlotUpdated,
-        }
-    }
-}
-
-impl From<AssetSortDirection> for postgre_client::model::AssetSortDirection {
-    fn from(sort_direction: AssetSortDirection) -> Self {
-        match sort_direction {
-            AssetSortDirection::Asc => Self::Asc,
-            AssetSortDirection::Desc => Self::Desc,
-        }
-    }
-}
-
-impl From<crate::rpc::filter::SearchConditionType> for ConditionType {
-    fn from(search_condition_type: crate::rpc::filter::SearchConditionType) -> Self {
+impl From<SearchConditionType> for ConditionType {
+    fn from(search_condition_type: SearchConditionType) -> Self {
         match search_condition_type {
-            crate::rpc::filter::SearchConditionType::All => Self::All,
-            crate::rpc::filter::SearchConditionType::Any => Self::Any,
+            SearchConditionType::All => Self::All,
+            SearchConditionType::Any => Self::Any,
         }
     }
 }
@@ -154,6 +133,7 @@ impl From<&crate::rpc::Interface> for SpecificationAssetClass {
     fn from(interface: &crate::rpc::Interface) -> Self {
         match interface {
             crate::rpc::Interface::FungibleAsset => Self::FungibleAsset,
+            crate::rpc::Interface::FungibleToken => Self::FungibleToken,
             crate::rpc::Interface::Identity => Self::IdentityNft,
             crate::rpc::Interface::Nft
             | crate::rpc::Interface::V1NFT
@@ -161,6 +141,8 @@ impl From<&crate::rpc::Interface> for SpecificationAssetClass {
             crate::rpc::Interface::V1PRINT => Self::Print,
             crate::rpc::Interface::ProgrammableNFT => Self::ProgrammableNft,
             crate::rpc::Interface::Custom | crate::rpc::Interface::Executable => Self::Unknown,
+            crate::rpc::Interface::MplCoreAsset => Self::MplCoreAsset,
+            crate::rpc::Interface::MplCoreCollection => Self::MplCoreCollection,
         }
     }
 }

@@ -1,12 +1,11 @@
-use sea_orm::{
-    entity::*, sea_query::Expr, sea_query::IntoCondition, Condition, DbErr, RelationDef,
-};
-
 pub use full_asset::*;
 pub use generated::*;
 
-use self::sea_orm_active_enums::{
-    OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
+use self::{
+    scopes::asset::COLLECTION_GROUP_KEY,
+    sea_orm_active_enums::{
+        OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
+    },
 };
 
 mod converters;
@@ -14,19 +13,14 @@ mod full_asset;
 mod generated;
 pub mod scopes;
 pub use converters::*;
+use entities::api_req_params::{
+    GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, SearchAssets,
+};
+use interface::error::UsecaseError;
+use usecase::validation::{validate_opt_pubkey_vec, validate_pubkey};
 
 pub struct GroupingSize {
     pub size: u64,
-}
-
-pub enum Pagination {
-    Keyset {
-        before: Option<Vec<u8>>,
-        after: Option<Vec<u8>>,
-    },
-    Page {
-        page: u64,
-    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,7 +45,7 @@ pub struct SearchAssetsQuery {
     pub grouping: Option<(String, Vec<u8>)>,
     pub delegate: Option<Vec<u8>>,
     pub frozen: Option<bool>,
-    pub supply: Option<u64>,
+    pub supply: Option<AssetSupply>,
     pub supply_mint: Option<Vec<u8>>,
     pub compressed: Option<bool>,
     pub compressible: Option<bool>,
@@ -62,201 +56,121 @@ pub struct SearchAssetsQuery {
     pub json_uri: Option<String>,
 }
 
-impl SearchAssetsQuery {
-    pub fn count_conditions(&self) -> usize {
-        // Initialize counter
-        // todo ever heard of a flipping macro
-        let mut num_conditions = 0;
-        if self.specification_version.is_some() {
-            num_conditions += 1;
-        }
-        if self.specification_asset_class.is_some() {
-            num_conditions += 1;
-        }
-        if self.owner_address.is_some() {
-            num_conditions += 1;
-        }
-        if self.owner_type.is_some() {
-            num_conditions += 1;
-        }
-        if self.delegate.is_some() {
-            num_conditions += 1;
-        }
-        if self.frozen.is_some() {
-            num_conditions += 1;
-        }
-        if self.supply.is_some() {
-            num_conditions += 1;
-        }
-        if self.supply_mint.is_some() {
-            num_conditions += 1;
-        }
-        if self.compressed.is_some() {
-            num_conditions += 1;
-        }
-        if self.compressible.is_some() {
-            num_conditions += 1;
-        }
-        if self.royalty_target_type.is_some() {
-            num_conditions += 1;
-        }
-        if self.royalty_target.is_some() {
-            num_conditions += 1;
-        }
-        if self.royalty_amount.is_some() {
-            num_conditions += 1;
-        }
-        if self.burnt.is_some() {
-            num_conditions += 1;
-        }
-        if self.creator_address.is_some() {
-            num_conditions += 1;
-        }
-        if self.creator_address.is_some() {
-            num_conditions += 1;
-        }
-        if self.grouping.is_some() {
-            num_conditions += 1;
-        }
-        if self.json_uri.is_some() {
-            num_conditions += 1;
-        }
+#[derive(Debug, Clone, PartialEq)]
+pub enum AssetSupply {
+    Greater(u64),
+    Equal(u64),
+}
 
-        num_conditions
+impl TryFrom<SearchAssets> for SearchAssetsQuery {
+    type Error = UsecaseError;
+    fn try_from(search_assets: SearchAssets) -> Result<Self, Self::Error> {
+        let grouping = search_assets
+            .grouping
+            .map(|(key, val)| {
+                if key != "collection" {
+                    return Err(UsecaseError::InvalidGroupingKey(key));
+                }
+                validate_pubkey(val).map(|pubkey| (key, pubkey.to_bytes().to_vec()))
+            })
+            .transpose()?;
+        Ok(SearchAssetsQuery {
+            negate: search_assets.negate,
+            condition_type: search_assets.condition_type.map(|s| s.into()),
+            owner_address: validate_opt_pubkey_vec(&search_assets.owner_address)?,
+            owner_type: search_assets
+                .owner_type
+                .map(|s| crate::rpc::OwnershipModel::from(s).into()),
+            creator_address: validate_opt_pubkey_vec(&search_assets.creator_address)?,
+            creator_verified: search_assets.creator_verified,
+            authority_address: validate_opt_pubkey_vec(&search_assets.authority_address)?,
+            grouping,
+            delegate: validate_opt_pubkey_vec(&search_assets.delegate)?,
+            frozen: search_assets.frozen,
+            supply: search_assets.supply.map(AssetSupply::Equal),
+            supply_mint: validate_opt_pubkey_vec(&search_assets.supply_mint)?,
+            compressed: search_assets.compressed,
+            compressible: search_assets.compressible,
+            royalty_target_type: search_assets
+                .royalty_target_type
+                .map(|s| crate::rpc::RoyaltyModel::from(s).into()),
+            royalty_target: validate_opt_pubkey_vec(&search_assets.royalty_target)?,
+            royalty_amount: search_assets.royalty_amount,
+            burnt: search_assets.burnt,
+            json_uri: search_assets.json_uri,
+            specification_version: search_assets
+                .interface
+                .clone()
+                .map(|s| (&crate::rpc::Interface::from(s)).into()),
+            specification_asset_class: search_assets
+                .interface
+                .map(|s| (&crate::rpc::Interface::from(s)).into())
+                .filter(|v| v != &SpecificationAssetClass::Unknown),
+        })
     }
+}
 
-    pub fn conditions(&self) -> Result<(Condition, Vec<RelationDef>), DbErr> {
-        let mut conditions = match self.condition_type {
-            // None --> default to all when no option is provided
-            None | Some(ConditionType::All) => Condition::all(),
-            Some(ConditionType::Any) => Condition::any(),
+impl TryFrom<GetAssetsByAuthority> for SearchAssetsQuery {
+    type Error = UsecaseError;
+    fn try_from(asset_authority: GetAssetsByAuthority) -> Result<Self, Self::Error> {
+        Ok(SearchAssetsQuery {
+            authority_address: Some(
+                validate_pubkey(asset_authority.authority_address)
+                    .map(|k| k.to_bytes().to_vec())?,
+            ),
+            supply: Some(AssetSupply::Greater(0)),
+            ..Default::default()
+        })
+    }
+}
+
+impl TryFrom<GetAssetsByCreator> for SearchAssetsQuery {
+    type Error = UsecaseError;
+    fn try_from(asset_creator: GetAssetsByCreator) -> Result<Self, Self::Error> {
+        let creator_verified = if let Some(false) = asset_creator.only_verified {
+            None
+        } else {
+            asset_creator.only_verified
         };
 
-        let mut joins = Vec::new();
+        Ok(SearchAssetsQuery {
+            creator_address: Some(
+                validate_pubkey(asset_creator.creator_address).map(|k| k.to_bytes().to_vec())?,
+            ),
+            creator_verified,
+            supply: Some(AssetSupply::Greater(0)),
+            ..Default::default()
+        })
+    }
+}
 
-        conditions = conditions
-            .add_option(
-                self.specification_version
-                    .clone()
-                    .map(|x| asset::Column::SpecificationVersion.eq(x)),
-            )
-            .add_option(
-                self.specification_asset_class
-                    .clone()
-                    .map(|x| asset::Column::SpecificationAssetClass.eq(x)),
-            )
-            .add_option(
-                self.owner_address
-                    .to_owned()
-                    .map(|x| asset::Column::Owner.eq(x)),
-            )
-            .add_option(
-                self.owner_type
-                    .clone()
-                    .map(|x| asset::Column::OwnerType.eq(x)),
-            )
-            .add_option(
-                self.delegate
-                    .to_owned()
-                    .map(|x| asset::Column::Delegate.eq(x)),
-            )
-            .add_option(self.frozen.map(|x| asset::Column::Frozen.eq(x)))
-            .add_option(self.supply.map(|x| asset::Column::Supply.eq(x)))
-            .add_option(
-                self.supply_mint
-                    .to_owned()
-                    .map(|x| asset::Column::SupplyMint.eq(x)),
-            )
-            .add_option(self.compressed.map(|x| asset::Column::Compressed.eq(x)))
-            .add_option(self.compressible.map(|x| asset::Column::Compressible.eq(x)))
-            .add_option(
-                self.royalty_target_type
-                    .clone()
-                    .map(|x| asset::Column::RoyaltyTargetType.eq(x)),
-            )
-            .add_option(
-                self.royalty_target
-                    .to_owned()
-                    .map(|x| asset::Column::RoyaltyTarget.eq(x)),
-            )
-            .add_option(
-                self.royalty_amount
-                    .map(|x| asset::Column::RoyaltyAmount.eq(x)),
-            )
-            .add_option(self.burnt.map(|x| asset::Column::Burnt.eq(x)));
-
-        if let Some(c) = self.creator_address.to_owned() {
-            conditions = conditions.add(asset_creators::Column::Creator.eq(c));
+impl TryFrom<GetAssetsByGroup> for SearchAssetsQuery {
+    type Error = UsecaseError;
+    fn try_from(asset_group: GetAssetsByGroup) -> Result<Self, Self::Error> {
+        if asset_group.group_key != COLLECTION_GROUP_KEY {
+            return Err(UsecaseError::InvalidGroupingKey(asset_group.group_key));
         }
 
-        // Without specifying the creators themselves, there is no index being hit.
-        // So in some rare scenarios, this query could be very slow.
-        if let Some(cv) = self.creator_verified.to_owned() {
-            conditions = conditions.add(asset_creators::Column::Verified.eq(cv));
-        }
+        Ok(SearchAssetsQuery {
+            grouping: Some((
+                asset_group.group_key,
+                validate_pubkey(asset_group.group_value).map(|k| k.to_bytes().to_vec())?,
+            )),
+            supply: Some(AssetSupply::Greater(0)),
+            ..Default::default()
+        })
+    }
+}
 
-        // If creator_address or creator_verified is set, join with asset_creators
-        if self.creator_address.is_some() || self.creator_verified.is_some() {
-            let rel = asset_creators::Relation::Asset
-                .def()
-                .rev()
-                .on_condition(|left, right| {
-                    Expr::tbl(right, asset_creators::Column::AssetId)
-                        .eq(Expr::tbl(left, asset::Column::Id))
-                        .into_condition()
-                });
-            joins.push(rel);
-        }
-
-        if let Some(a) = self.authority_address.to_owned() {
-            conditions = conditions.add(asset_authority::Column::Authority.eq(a));
-            let rel = asset_authority::Relation::Asset
-                .def()
-                .rev()
-                .on_condition(|left, right| {
-                    Expr::tbl(right, asset_authority::Column::AssetId)
-                        .eq(Expr::tbl(left, asset::Column::Id))
-                        .into_condition()
-                });
-            joins.push(rel);
-        }
-
-        if let Some(g) = self.grouping.to_owned() {
-            let cond = Condition::all()
-                .add(asset_grouping::Column::GroupKey.eq(g.0))
-                .add(asset_grouping::Column::GroupValue.eq(g.1));
-            conditions = conditions.add(cond);
-            let rel = asset_grouping::Relation::Asset
-                .def()
-                .rev()
-                .on_condition(|left, right| {
-                    Expr::tbl(right, asset_grouping::Column::AssetId)
-                        .eq(Expr::tbl(left, asset::Column::Id))
-                        .into_condition()
-                });
-            joins.push(rel);
-        }
-
-        if let Some(ju) = self.json_uri.to_owned() {
-            let cond = Condition::all().add(asset_data::Column::MetadataUrl.eq(ju));
-            conditions = conditions.add(cond);
-            let rel = asset_data::Relation::Asset
-                .def()
-                .rev()
-                .on_condition(|left, right| {
-                    Expr::tbl(right, asset_data::Column::Id)
-                        .eq(Expr::tbl(left, asset::Column::AssetData))
-                        .into_condition()
-                });
-            joins.push(rel);
-        }
-
-        Ok((
-            match self.negate {
-                None | Some(false) => conditions,
-                Some(true) => conditions.not(),
-            },
-            joins,
-        ))
+impl TryFrom<GetAssetsByOwner> for SearchAssetsQuery {
+    type Error = UsecaseError;
+    fn try_from(asset_owner: GetAssetsByOwner) -> Result<Self, Self::Error> {
+        Ok(SearchAssetsQuery {
+            owner_address: Some(
+                validate_pubkey(asset_owner.owner_address).map(|k| k.to_bytes().to_vec())?,
+            ),
+            supply: Some(AssetSupply::Greater(0)),
+            ..Default::default()
+        })
     }
 }

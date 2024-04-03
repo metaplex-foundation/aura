@@ -11,11 +11,94 @@ services:
     network_mode: host
     volumes:
       - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
+      - ${INGESTER_SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:${INGESTER_SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:rw
       - ${INGESTER_ROCKS_BACKUP_DIR}:${INGESTER_ROCKS_BACKUP_DIR}:rw
       - ${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:rw
+      - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
       - ./creds.json:/usr/src/app/creds.json
+      - ./migrations:/usr/src/app/migrations
     depends_on:
       - db
+    build:
+      context: .
+      dockerfile: ingester.Dockerfile
+    stop_grace_period: 10m
+    logging:
+      options:
+        max-size: "2048m"
+
+  das-api:
+    container_name: das-api
+    restart: always
+    entrypoint: "./api"
+    env_file:
+      - .env
+    network_mode: host
+    volumes:
+      - ${API_ROCKS_DB_PATH_CONTAINER}:${API_ROCKS_DB_PATH_CONTAINER}:ro
+      - ${API_ROCKS_DB_SECONDARY_PATH_CONTAINER}:${API_ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
+    depends_on:
+      - db
+    build:
+      context: .
+      dockerfile: ingester.Dockerfile
+    stop_grace_period: 20s
+    logging:
+      options:
+        max-size: "2048m"
+
+  synchronizer:
+    container_name: synchronizer
+    restart: always
+    entrypoint: "./synchronizer"
+    env_file:
+      - .env
+    network_mode: host
+    volumes:
+      - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
+      - ${SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:${SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:rw
+      - ${SYNCHRONIZER_ROCKS_DB_SECONDARY_PATH_CONTAINER}:${SYNCHRONIZER_ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
+    depends_on:
+      - db
+    build:
+      context: .
+      dockerfile: ingester.Dockerfile
+    stop_grace_period: 1m
+    logging:
+      options:
+        max-size: "2048m"
+
+  integrity-verification:
+    container_name: integrity-verification
+    restart: always
+    entrypoint: "./integrity-verification"
+    env_file:
+      - .env
+    network_mode: host
+    volumes:
+      - ./creds.json:/usr/src/app/creds.json
+      - ${INTEGRITY_VERIFICATION_TEST_FILE_PATH}:${INTEGRITY_VERIFICATION_TEST_FILE_PATH_CONTAINER}:rw
+      - ${INTEGRITY_VERIFICATION_SLOTS_COLLECT_PATH}:${INTEGRITY_VERIFICATION_SLOTS_COLLECT_PATH_CONTAINER}:rw
+    depends_on:
+      - db
+    build:
+      context: .
+      dockerfile: integrity_verification.Dockerfile
+    logging:
+      options:
+        max-size: "2048m"
+
+  raw-backfiller:
+    container_name: raw-backfiller
+    restart: always
+    entrypoint: "./raw_backfiller"
+    env_file:
+      - .env
+    network_mode: host
+    volumes:
+      - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
+      - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
+      - ./creds.json:/usr/src/app/creds.json
     build:
       context: .
       dockerfile: ingester.Dockerfile
@@ -35,7 +118,8 @@ services:
       POSTGRES_PASSWORD: solana # The PostgreSQL password (useful to connect to the database)
       POSTGRES_DB: solana
     volumes:
-      - ./db-data/:/var/lib/postgresql/data/:rw
+      - ${POSTGRE_DB_PATH:-./db-data}:/var/lib/postgresql/data/:rw
+      - ${INGESTER_SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:${INGESTER_SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:ro
     logging:
       options:
         max-size: "100m"

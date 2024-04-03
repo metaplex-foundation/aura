@@ -1,0 +1,49 @@
+{
+    "compression": {
+        "eligible": false,
+        "compressed": false,
+        "data_hash": "",
+        "creator_hash": "",
+        "asset_hash": "",
+        "tree": "",
+        "seq": 0,
+        "leaf_id": 0
+    },
+    "grouping": [
+        {
+            "group_key": "collection",
+            "group_value": "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG",
+            "verified": false
+        }
+    ],
+    "royalty": {
+        "royalty_model": "creators",
+        "target": null,
+        "percent": 0.01,
+        "basis_points": 100,
+        "primary_sale_happened": false,
+        "locked": false
+    },
+    "creators": [
+        {
+            "address": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+            "share": 99,
+            "verified": true
+        },
+        {
+            "address": "5zgWmEx4ppdh6LfaPUmfJG2gBAK8bC2gBv7zshD6N1hG",
+            "share": 1,
+            "verified": false
+        }
+    ],
+    "ownership": {
+        "frozen": false,
+        "delegated": false,
+        "delegate": null,
+        "ownership_model": "single",
+        "owner": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM"
+    },
+    "supply": null,
+    "mutable": true,
+    "burnt": false
+}

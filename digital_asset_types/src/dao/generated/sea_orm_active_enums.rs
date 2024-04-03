@@ -84,6 +84,10 @@ pub enum SpecificationAssetClass {
     ProgrammableNft,
     #[sea_orm(string_value = "transfer_restricted_nft")]
     TransferRestrictedNft,
+    #[sea_orm(string_value = "mpl_core_asset")]
+    MplCoreAsset,
+    #[sea_orm(string_value = "mpl_core_collection")]
+    MplCoreCollection,
     #[sea_orm(string_value = "unknown")]
     Unknown,
 }
@@ -96,6 +100,15 @@ pub enum ChainMutability {
     Mutable,
     #[sea_orm(string_value = "unknown")]
     Unknown,
+}
+
+impl From<entities::enums::ChainMutability> for ChainMutability {
+    fn from(value: entities::enums::ChainMutability) -> Self {
+        match value {
+            entities::enums::ChainMutability::Immutable => ChainMutability::Immutable,
+            entities::enums::ChainMutability::Mutable => ChainMutability::Mutable,
+        }
+    }
 }
 #[derive(Debug, Clone, PartialEq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(

@@ -7,12 +7,17 @@ use std::{
 use figment::{providers::Env, Figment};
 use interface::asset_streaming_and_discovery::PeerDiscovery;
 use serde::Deserialize;
+use solana_sdk::commitment_config::CommitmentLevel;
 use tracing_subscriber::fmt;
 
 use crate::error::IngesterError;
 
 const INGESTER_CONSUMERS_COUNT: usize = 2;
 pub const INGESTER_BACKUP_NAME: &str = "snapshot.tar.lz4";
+
+pub const INGESTER_CONFIG_PREFIX: &str = "INGESTER_";
+pub const SYNCHRONIZER_CONFIG_PREFIX: &str = "SYNCHRONIZER_";
+pub const JSON_MIGRATOR_CONFIG_PREFIX: &str = "JSON_MIGRATOR_";
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct BackgroundTaskRunnerConfig {
@@ -48,20 +53,75 @@ pub struct BackgroundTaskConfig {
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct BackfillerConfig {
-    pub database_config: DatabaseConfig,
-    pub tcp_config: TcpConfig,
-    pub env: Option<String>,
     pub big_table_config: BigTableConfig,
     pub slot_until: Option<u64>,
     pub slot_start_from: u64,
+    #[serde(default)]
+    pub backfiller_mode: BackfillerMode,
+    #[serde(default = "default_workers_count")]
+    pub workers_count: usize,
+    #[serde(default = "default_chunk_size")]
+    pub chunk_size: usize,
+    #[serde(default = "default_permitted_tasks")]
+    pub permitted_tasks: usize,
+    #[serde(default = "default_wait_period_sec")]
+    pub wait_period_sec: u64,
+    #[serde(default)]
+    pub should_reingest: bool,
+}
+const fn default_wait_period_sec() -> u64 {
+    60
+}
+
+const fn default_workers_count() -> usize {
+    100
+}
+
+const fn default_chunk_size() -> usize {
+    5
+}
+
+const fn default_permitted_tasks() -> usize {
+    500
+}
+
+const fn default_mpl_core_buffer_size() -> usize {
+    10
 }
 
 impl BackfillerConfig {
     pub fn get_slot_until(&self) -> u64 {
-        self.slot_until.unwrap_or(0)
+        self.slot_until.unwrap_or_default()
     }
 }
 
+#[derive(Deserialize, Default, PartialEq, Debug, Clone)]
+pub enum BackfillerMode {
+    None,
+    Persist,
+    PersistAndIngest,
+    IngestPersisted,
+    #[default]
+    IngestDirectly,
+}
+
+#[derive(Deserialize, Default, PartialEq, Debug, Clone, Copy)]
+pub enum BackfillerSourceMode {
+    Bigtable,
+    #[default]
+    RPC,
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct RawBackfillConfig {
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+    pub metrics_port: Option<u16>,
+    pub rocks_db_path_container: Option<String>,
+    #[serde(default)]
+    pub run_profiling: bool,
+    pub profiling_file_path_container: Option<String>,
+}
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {
     pub database_config: DatabaseConfig,
@@ -73,7 +133,8 @@ pub struct IngesterConfig {
     pub mplx_workers: u32,
     pub spl_buffer_size: usize,
     pub spl_workers: u32,
-    pub env: Option<String>,
+    #[serde(default = "default_mpl_core_buffer_size")]
+    pub mpl_core_buffer_size: usize,
     pub metrics_port_first_consumer: Option<u16>,
     pub metrics_port_second_consumer: Option<u16>,
     pub backfill_consumer_metrics_port: Option<u16>,
@@ -88,9 +149,160 @@ pub struct IngesterConfig {
     pub rocks_backup_dir: String,
     pub run_bubblegum_backfiller: bool,
     pub synchronizer_batch_size: usize,
+    #[serde(default = "default_dump_synchronizer_batch_size")]
+    pub dump_synchronizer_batch_size: usize,
+    #[serde(default = "default_dump_path")]
+    pub dump_path: String,
+    #[serde(default = "default_dump_sync_threshold")]
+    pub dump_sync_threshold: i64,
+    #[serde(default)]
+    pub run_dump_synchronize_on_start: bool,
+    #[serde(default)]
+    pub disable_synchronizer: bool,
     pub gapfiller_peer_addr: String,
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
+    pub rust_log: Option<String>,
+    pub backfill_rpc_address: String,
+    pub run_profiling: Option<bool>,
+    pub profiling_file_path_container: Option<String>,
+    pub store_db_backups: Option<bool>,
+    #[serde(default)]
+    pub rpc_retry_interval_millis: u64,
+    #[serde(default)]
+    pub run_sequence_consistent_checker: bool,
+    #[serde(default = "default_sequence_consistent_checker_wait_period_sec")]
+    pub sequence_consistent_checker_wait_period_sec: u64,
+    #[serde(default = "default_sequence_consister_skip_check_slots_offset")]
+    pub sequence_consister_skip_check_slots_offset: u64, // TODO: remove in future if there no need in that env
+    pub rpc_host: Option<String>,
+    #[serde(default = "default_check_proofs_probability")]
+    pub check_proofs_probability: f64,
+    #[serde(default = "default_check_proofs_commitment")]
+    pub check_proofs_commitment: CommitmentLevel,
+    #[serde(default)]
+    pub backfiller_source_mode: BackfillerSourceMode,
+    #[serde(default = "default_synchronizer_parallel_tasks")]
+    pub synchronizer_parallel_tasks: usize,
+    #[serde(default)]
+    pub run_temp_sync_during_dump: bool,
+}
+
+const fn default_synchronizer_parallel_tasks() -> usize {
+    20
+}
+
+const fn default_dump_sync_threshold() -> i64 {
+    100_000_000
+}
+fn default_dump_path() -> String {
+    "/tmp/sync_dump".to_string()
+}
+
+const fn default_dump_synchronizer_batch_size() -> usize {
+    200_000
+}
+
+const fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
+    60
+}
+
+const fn default_sequence_consister_skip_check_slots_offset() -> u64 {
+    20
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct JsonMigratorConfig {
+    pub rust_log: Option<String>,
+    pub json_source_db: String,
+    pub json_target_db: String,
+    pub database_config: DatabaseConfig,
+    pub metrics_port: u16,
+    pub work_mode: JsonMigratorMode,
+}
+
+#[derive(Deserialize, Default, PartialEq, Debug, Clone)]
+pub enum JsonMigratorMode {
+    #[default]
+    Full,
+    JsonsOnly,
+    TasksOnly,
+}
+
+impl JsonMigratorConfig {
+    pub fn get_log_level(&self) -> String {
+        self.rust_log.clone().unwrap_or("warn".to_string())
+    }
+}
+
+fn default_log_level() -> String {
+    "warn".to_string()
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct SynchronizerConfig {
+    pub database_config: DatabaseConfig,
+    pub rocks_db_path_container: Option<String>,
+    pub rocks_db_secondary_path_container: Option<String>,
+    pub metrics_port: Option<u16>,
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+    #[serde(default)]
+    pub run_profiling: bool,
+    pub profiling_file_path_container: Option<String>,
+    #[serde(default = "default_dump_synchronizer_batch_size")]
+    pub dump_synchronizer_batch_size: usize,
+    #[serde(default = "default_dump_path")]
+    pub dump_path: String,
+    #[serde(default = "default_dump_sync_threshold")]
+    pub dump_sync_threshold: i64,
+    #[serde(default)]
+    pub timeout_between_syncs_sec: u64,
+    #[serde(default = "default_synchronizer_parallel_tasks")]
+    pub parallel_tasks: usize,
+    #[serde(default)]
+    pub run_temp_sync_during_dump: bool,
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct ApiConfig {
+    pub database_config: DatabaseConfig,
+    pub rocks_db_path_container: Option<String>,
+    pub rocks_db_secondary_path_container: Option<String>,
+    pub rocks_sync_interval_seconds: u64,
+    pub metrics_port: Option<u16>,
+    pub server_port: u16,
+    pub rust_log: Option<String>,
+    pub peer_grpc_port: u16,
+    pub peer_grpc_max_gap_slots: u64,
+    #[serde(default)]
+    pub run_profiling: bool,
+    pub profiling_file_path_container: Option<String>,
+    pub rpc_host: Option<String>,
+    #[serde(default = "default_check_proofs_probability")]
+    pub check_proofs_probability: f64,
+    #[serde(default = "default_check_proofs_commitment")]
+    pub check_proofs_commitment: CommitmentLevel,
+    #[serde(default = "default_max_page_limit")]
+    pub max_page_limit: usize,
+}
+
+const fn default_check_proofs_probability() -> f64 {
+    0.1
+}
+
+const fn default_check_proofs_commitment() -> CommitmentLevel {
+    CommitmentLevel::Finalized
+}
+
+pub const fn default_max_page_limit() -> usize {
+    50
+}
+
+impl ApiConfig {
+    pub fn get_log_level(&self) -> String {
+        self.rust_log.clone().unwrap_or("warn".to_string())
+    }
 }
 
 impl IngesterConfig {
@@ -121,6 +333,17 @@ impl IngesterConfig {
 
     pub fn get_is_snapshot(&self) -> bool {
         self.is_snapshot.unwrap_or_default()
+    }
+
+    pub fn get_log_level(&self) -> String {
+        self.rust_log.clone().unwrap_or("warn".to_string())
+    }
+
+    pub fn get_is_run_profiling(&self) -> bool {
+        self.run_profiling.unwrap_or_default()
+    }
+    pub fn store_db_backups(&self) -> bool {
+        self.store_db_backups.unwrap_or_default()
     }
 }
 
@@ -363,8 +586,10 @@ impl PeerDiscovery for IngesterConfig {
     }
 }
 
-pub fn setup_config<'a, T: Deserialize<'a>>() -> T {
-    let figment = Figment::new().join(Env::prefixed("INGESTER_"));
+pub fn setup_config<'a, T: Deserialize<'a>>(config_prefix: &str) -> T {
+    let figment = Figment::new()
+        .join(Env::prefixed(config_prefix))
+        .join(Env::raw());
 
     figment
         .extract()
@@ -374,8 +599,76 @@ pub fn setup_config<'a, T: Deserialize<'a>>() -> T {
         .unwrap()
 }
 
-pub fn init_logger() {
-    let env_filter = env::var("RUST_LOG").unwrap_or("info".to_string());
-    let t = tracing_subscriber::fmt().with_env_filter(env_filter);
+pub fn init_logger(log_level: &str) {
+    let t = tracing_subscriber::fmt().with_env_filter(log_level);
     t.event_format(fmt::format::json()).init();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lazy_static::lazy_static;
+    use std::sync::Mutex;
+
+    lazy_static! {
+        static ref ENV_MUTEX: Mutex<()> = Mutex::new(());
+    }
+
+    #[test]
+    fn test_setup_default_backfiller_config() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        std::env::set_var("INGESTER_DATABASE_CONFIG", "{}");
+        std::env::set_var("INGESTER_TCP_CONFIG", "{}");
+        std::env::set_var("INGESTER_BIG_TABLE_CONFIG", "{}");
+        std::env::set_var("INGESTER_SLOT_START_FROM", "0");
+        let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
+        assert_eq!(
+            config,
+            BackfillerConfig {
+                big_table_config: BigTableConfig(figment::value::Dict::new()),
+                slot_until: None,
+                slot_start_from: 0,
+                backfiller_mode: BackfillerMode::IngestDirectly,
+                workers_count: 100,
+                chunk_size: 5,
+                permitted_tasks: 500,
+                wait_period_sec: 60,
+                should_reingest: false,
+            }
+        );
+        std::env::remove_var("INGESTER_DATABASE_CONFIG");
+        std::env::remove_var("INGESTER_TCP_CONFIG");
+        std::env::remove_var("INGESTER_BIG_TABLE_CONFIG");
+        std::env::remove_var("INGESTER_SLOT_START_FROM");
+    }
+
+    #[test]
+    fn test_setup_backfiller_config_backfill_mode() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        std::env::set_var("INGESTER_DATABASE_CONFIG", "{}");
+        std::env::set_var("INGESTER_TCP_CONFIG", "{}");
+        std::env::set_var("INGESTER_BIG_TABLE_CONFIG", "{}");
+        std::env::set_var("INGESTER_SLOT_START_FROM", "0");
+        std::env::set_var("INGESTER_BACKFILLER_MODE", "Persist");
+        let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
+        assert_eq!(
+            config,
+            BackfillerConfig {
+                big_table_config: BigTableConfig(figment::value::Dict::new()),
+                slot_until: None,
+                slot_start_from: 0,
+                backfiller_mode: BackfillerMode::Persist,
+                workers_count: 100,
+                chunk_size: 5,
+                permitted_tasks: 500,
+                wait_period_sec: 60,
+                should_reingest: false,
+            }
+        );
+        std::env::remove_var("INGESTER_DATABASE_CONFIG");
+        std::env::remove_var("INGESTER_TCP_CONFIG");
+        std::env::remove_var("INGESTER_BIG_TABLE_CONFIG");
+        std::env::remove_var("INGESTER_SLOT_START_FROM");
+        std::env::remove_var("INGESTER_BACKFILLER_MODE");
+    }
 }
