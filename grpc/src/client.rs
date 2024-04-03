@@ -6,6 +6,7 @@ use interface::asset_streaming_and_discovery::{
     AssetDetailsConsumer, AssetDetailsStreamNonSync, AsyncError, PeerDiscovery,
 };
 use tonic::transport::{Channel, Error};
+use tonic::{Code, Status};
 
 pub struct Client {
     inner: GapFillerServiceClient<Channel>,
@@ -43,7 +44,11 @@ impl AssetDetailsConsumer for Client {
                 .into_inner()
                 .map(|stream| {
                     stream
-                        .map(|asset_details| asset_details.into())
+                        .and_then(|asset_details| {
+                            asset_details
+                                .try_into()
+                                .map_err(|e| Status::new(Code::Internal, e))
+                        })
                         .map_err(|e| Box::new(e) as AsyncError)
                 }),
         ))

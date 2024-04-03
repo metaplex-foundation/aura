@@ -3,9 +3,9 @@ use crate::gapfiller::{
     Creator, DynamicBoolField, DynamicBytesField, DynamicChainMutability, DynamicCreatorsField,
     DynamicEnumField, DynamicStringField, DynamicUint32Field, DynamicUint64Field, EditionV1,
     MasterEdition, OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
-    TokenStandard, UseMethod, Uses,
+    TokenStandard, UpdateVersionValue, UseMethod, Uses,
 };
-use entities::models::{CompleteAssetDetails, Updated};
+use entities::models::{CompleteAssetDetails, UpdateVersion, Updated};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 impl From<CompleteAssetDetails> for AssetDetails {
@@ -13,12 +13,12 @@ impl From<CompleteAssetDetails> for AssetDetails {
         let delegate = value.delegate.value.map(|key| DynamicBytesField {
             value: key.to_bytes().to_vec(),
             slot_updated: value.delegate.slot_updated,
-            seq_updated: value.delegate.get_upd_ver_seq(),
+            update_version: value.delegate.update_version.map(Into::into),
         });
         let owner = value.owner.value.map(|key| DynamicBytesField {
             value: key.to_bytes().to_vec(),
             slot_updated: value.owner.slot_updated,
-            seq_updated: value.owner.get_upd_ver_seq(),
+            update_version: value.owner.update_version.map(Into::into),
         });
 
         let owner_delegate_seq = value
@@ -27,7 +27,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
             .map(|seq| DynamicUint64Field {
                 value: seq,
                 slot_updated: value.owner_delegate_seq.slot_updated,
-                seq_updated: value.owner_delegate_seq.get_upd_ver_seq(),
+                update_version: value.owner_delegate_seq.update_version.map(Into::into),
             });
 
         Self {
@@ -68,9 +68,22 @@ impl From<CompleteAssetDetails> for AssetDetails {
     }
 }
 
-impl From<AssetDetails> for CompleteAssetDetails {
-    fn from(value: AssetDetails) -> Self {
-        Self {
+impl TryFrom<AssetDetails> for CompleteAssetDetails {
+    type Error = String;
+
+    fn try_from(value: AssetDetails) -> Result<Self, Self::Error> {
+        let owner_delegate_seq = value
+            .owner_delegate_seq
+            .map(|val| {
+                Updated::new(
+                    val.slot_updated,
+                    val.update_version.map(Into::into),
+                    Some(val.value),
+                )
+            })
+            .unwrap_or_default();
+
+        Ok(Self {
             pubkey: Pubkey::try_from(value.pubkey).unwrap_or_default(),
             specification_asset_class: entities::enums::SpecificationAssetClass::from(
                 SpecificationAssetClass::try_from(value.specification_asset_class)
@@ -80,6 +93,11 @@ impl From<AssetDetails> for CompleteAssetDetails {
                 RoyaltyTargetType::try_from(value.royalty_target_type).unwrap_or_default(),
             ),
             slot_created: value.slot_created,
+            edition_address: value
+                .edition_address
+                .map(TryInto::try_into)
+                .transpose()
+                .map_err(|e| format!("{:?}", e))?,
             is_compressible: value.is_compressible.map(Into::into).unwrap_or_default(),
             is_compressed: value.is_compressed.map(Into::into).unwrap_or_default(),
             is_frozen: value.is_frozen.map(Into::into).unwrap_or_default(),
@@ -89,17 +107,64 @@ impl From<AssetDetails> for CompleteAssetDetails {
             was_decompressed: value.was_decompressed.map(Into::into).unwrap_or_default(),
             creators: value.creators.map(Into::into).unwrap_or_default(),
             royalty_amount: value.royalty_amount.map(Into::into).unwrap_or_default(),
-            authority: value.authority.map(Into::into).unwrap_or_default(),
-            owner: value.owner.map(Into::into).unwrap_or_default(),
-            delegate: value.delegate.map(Into::into),
+            url: Default::default(),
+            chain_mutability: None,
+            lamports: value.lamports.map(Into::into),
+            executable: value.executable.map(Into::into),
+            metadata_owner: value.metadata_owner.map(Into::into),
+            authority: value
+                .authority
+                .map(TryInto::try_into)
+                .transpose()?
+                .unwrap_or_default(),
+            owner: value
+                .owner
+                .map(TryInto::try_into)
+                .transpose()?
+                .unwrap_or_default(),
+            delegate: value
+                .delegate
+                .map(TryInto::try_into)
+                .transpose()?
+                .unwrap_or_default(),
             owner_type: value.owner_type.map(Into::into).unwrap_or_default(),
-            owner_delegate_seq: value.owner_delegate_seq.map(Into::into),
-            asset_leaf: value.asset_leaf.map(Into::into),
-            collection: value.collection.map(Into::into),
+            owner_delegate_seq,
+            asset_leaf: value.asset_leaf.map(TryInto::try_into).transpose()?,
+            collection: value.collection.map(TryInto::try_into).transpose()?,
             onchain_data: value.chain_data.map(Into::into),
-            cl_leaf: value.cl_leaf.map(Into::into),
-            cl_items: value.cl_items.into_iter().map(Into::into).collect(),
+            cl_leaf: value.cl_leaf.map(TryInto::try_into).transpose()?,
+            cl_items: value
+                .cl_items
+                .into_iter()
+                .flat_map(TryInto::try_into)
+                .collect(),
+            edition: value.edition.map(TryInto::try_into).transpose()?,
+            master_edition: value.master_edition.map(TryInto::try_into).transpose()?,
+        })
+    }
+}
+
+impl From<UpdateVersion> for UpdateVersionValue {
+    fn from(value: UpdateVersion) -> Self {
+        match value {
+            UpdateVersion::Sequence(seq) => Self {
+                r#type: crate::gapfiller::UpdateVersion::Sequence.into(),
+                value: seq,
+            },
+            UpdateVersion::WriteVersion(wv) => Self {
+                r#type: crate::gapfiller::UpdateVersion::WriteVersion.into(),
+                value: wv,
+            },
         }
+    }
+}
+
+impl From<UpdateVersionValue> for UpdateVersion {
+    fn from(value: UpdateVersionValue) -> Self {
+        if value.r#type == crate::gapfiller::UpdateVersion::Sequence as i32 {
+            return Self::Sequence(value.value);
+        }
+        Self::WriteVersion(value.value)
     }
 }
 
@@ -108,7 +173,7 @@ impl From<Updated<bool>> for DynamicBoolField {
         Self {
             value: value.value,
             slot_updated: value.slot_updated,
-            seq_updated: value.get_upd_ver_seq(),
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -118,7 +183,7 @@ impl From<Updated<u64>> for DynamicUint64Field {
         Self {
             value: value.value,
             slot_updated: value.slot_updated,
-            seq_updated: value.get_upd_ver_seq(),
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -128,7 +193,7 @@ impl From<Updated<String>> for DynamicStringField {
         Self {
             value: value.clone().value,
             slot_updated: value.slot_updated,
-            seq_updated: value.get_upd_ver_seq(),
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -138,7 +203,7 @@ impl From<Updated<u16>> for DynamicUint32Field {
         Self {
             value: value.value as u32,
             slot_updated: value.slot_updated,
-            seq_updated: value.get_upd_ver_seq(),
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -148,7 +213,7 @@ impl From<Updated<Pubkey>> for DynamicBytesField {
         Self {
             value: value.value.to_bytes().to_vec(),
             slot_updated: value.slot_updated,
-            seq_updated: value.get_upd_ver_seq(),
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -158,7 +223,7 @@ impl From<Updated<entities::enums::OwnerType>> for DynamicEnumField {
         Self {
             value: OwnerType::from(value.value).into(),
             slot_updated: value.slot_updated,
-            seq_updated: value.get_upd_ver_seq(),
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -168,7 +233,7 @@ impl From<Updated<entities::enums::ChainMutability>> for DynamicChainMutability 
         Self {
             value: ChainMutability::from(value.value).into(),
             slot_updated: value.slot_updated,
-            seq_updated: value.get_upd_ver_seq(),
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -187,7 +252,7 @@ impl From<Updated<Vec<entities::models::Creator>>> for DynamicCreatorsField {
         Self {
             creators: value.value.iter().map(|v| v.into()).collect(),
             slot_updated: value.slot_updated,
-            seq_updated: value.get_upd_ver_seq(),
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -202,7 +267,7 @@ impl From<Updated<entities::models::AssetLeaf>> for AssetLeaf {
             creator_hash: value.value.creator_hash.map(|h| h.to_bytes().to_vec()),
             leaf_seq: value.value.leaf_seq,
             slot_updated: value.slot_updated,
-            seq_updated: value.get_upd_ver_seq(),
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -212,7 +277,7 @@ impl From<DynamicBoolField> for Updated<bool> {
         Self {
             value: value.value,
             slot_updated: value.slot_updated,
-            seq: value.seq_updated,
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -222,7 +287,7 @@ impl From<DynamicUint64Field> for Updated<u64> {
         Self {
             value: value.value,
             slot_updated: value.slot_updated,
-            seq: value.seq_updated,
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -232,21 +297,46 @@ impl From<DynamicUint32Field> for Updated<u16> {
         Self {
             value: value.value as u16,
             slot_updated: value.slot_updated,
-            seq: value.seq_updated,
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
 
-impl From<DynamicBytesField> for Updated<Pubkey> {
-    fn from(value: DynamicBytesField) -> Self {
+impl From<DynamicStringField> for Updated<String> {
+    fn from(value: DynamicStringField) -> Self {
         Self {
-            value: Pubkey::try_from(value.value).unwrap_or_default(),
+            value: value.clone().value,
             slot_updated: value.slot_updated,
-            seq: value.seq_updated,
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
 
+impl TryFrom<DynamicBytesField> for Updated<Option<Pubkey>> {
+    type Error = String;
+
+    fn try_from(value: DynamicBytesField) -> Result<Self, Self::Error> {
+        Ok(Self::new(
+            value.slot_updated,
+            value.update_version.map(Into::into),
+            Some(Pubkey::try_from(value.value).map_err(|e| format!("{:?}", e))?),
+        ))
+    }
+}
+
+impl TryFrom<DynamicBytesField> for Updated<Pubkey> {
+    type Error = String;
+
+    fn try_from(value: DynamicBytesField) -> Result<Self, Self::Error> {
+        Ok(Self {
+            value: Pubkey::try_from(value.value).map_err(|e| format!("{:?}", e))?,
+            slot_updated: value.slot_updated,
+            update_version: value.update_version.map(Into::into),
+        })
+    }
+}
+
+// TODO
 impl From<DynamicEnumField> for Updated<entities::enums::OwnerType> {
     fn from(value: DynamicEnumField) -> Self {
         Self {
@@ -254,48 +344,66 @@ impl From<DynamicEnumField> for Updated<entities::enums::OwnerType> {
                 OwnerType::try_from(value.value).unwrap_or_default(),
             ),
             slot_updated: value.slot_updated,
-            seq: value.seq_updated,
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
 
-impl From<Creator> for entities::models::Creator {
-    fn from(value: Creator) -> Self {
-        Self {
-            creator: Pubkey::try_from(value.creator).unwrap_or_default(),
+impl TryFrom<Creator> for entities::models::Creator {
+    type Error = String;
+
+    fn try_from(value: Creator) -> Result<Self, Self::Error> {
+        Ok(Self {
+            creator: Pubkey::try_from(value.creator).map_err(|e| format!("{:?}", e))?,
             creator_verified: value.creator_verified,
             creator_share: value.creator_share as u8,
-        }
+        })
     }
 }
 impl From<DynamicCreatorsField> for Updated<Vec<entities::models::Creator>> {
     fn from(value: DynamicCreatorsField) -> Self {
         Self {
-            value: value.creators.into_iter().map(|v| v.into()).collect(),
+            value: value
+                .creators
+                .into_iter()
+                .flat_map(TryInto::try_into)
+                .collect(),
             slot_updated: value.slot_updated,
-            seq: value.seq_updated,
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
 
-impl From<AssetLeaf> for Updated<entities::models::AssetLeaf> {
-    fn from(value: AssetLeaf) -> Self {
-        Self {
+impl TryFrom<AssetLeaf> for Updated<entities::models::AssetLeaf> {
+    type Error = String;
+
+    fn try_from(value: AssetLeaf) -> Result<Self, Self::Error> {
+        Ok(Self {
             slot_updated: value.slot_updated,
-            seq: value.seq_updated,
+            update_version: value.update_version.map(Into::into),
             value: entities::models::AssetLeaf {
-                tree_id: Pubkey::try_from(value.tree_id).unwrap_or_default(),
+                tree_id: Pubkey::try_from(value.tree_id).map_err(|e| format!("{:?}", e))?,
                 leaf: value.leaf.clone(),
                 nonce: value.nonce,
                 data_hash: value
                     .data_hash
-                    .map(|h| Hash::from(<[u8; 32]>::try_from(h).unwrap_or_default())),
+                    .map(|h| {
+                        Ok::<_, String>(Hash::from(
+                            <[u8; 32]>::try_from(h).map_err(|e| format!("{:?}", e))?,
+                        ))
+                    })
+                    .transpose()?,
                 creator_hash: value
                     .creator_hash
-                    .map(|h| Hash::from(<[u8; 32]>::try_from(h).unwrap_or_default())),
+                    .map(|h| {
+                        Ok::<_, String>(Hash::from(
+                            <[u8; 32]>::try_from(h).map_err(|e| format!("{:?}", e))?,
+                        ))
+                    })
+                    .transpose()?,
                 leaf_seq: value.leaf_seq,
             },
-        }
+        })
     }
 }
 
@@ -330,7 +438,7 @@ impl From<Updated<entities::models::AssetCollection>> for AssetCollection {
             is_collection_verified: value.value.is_collection_verified,
             collection_seq: value.value.collection_seq,
             slot_updated: value.slot_updated,
-            seq_updated: value.get_upd_ver_seq(),
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -350,7 +458,7 @@ impl From<Updated<entities::models::ChainDataV1>> for ChainDataV1 {
                 .unwrap_or_default(),
             uses: value.clone().value.uses.map(|v| v.into()),
             slot_updated: value.slot_updated,
-            seq_updated: value.get_upd_ver_seq(),
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
@@ -387,42 +495,73 @@ impl From<entities::models::EditionV1> for EditionV1 {
     }
 }
 
+impl TryFrom<MasterEdition> for entities::models::MasterEdition {
+    type Error = String;
 
-impl From<ClLeaf> for entities::models::ClLeaf {
-    fn from(value: ClLeaf) -> Self {
-        Self {
-            cli_leaf_idx: value.cli_leaf_idx,
-            cli_tree_key: Pubkey::try_from(value.cli_tree_key).unwrap_or_default(),
-            cli_node_idx: value.cli_node_idx,
-        }
+    fn try_from(value: MasterEdition) -> Result<Self, Self::Error> {
+        Ok(Self {
+            key: Pubkey::try_from(value.key).map_err(|e| format!("{:?}", e))?,
+            supply: value.supply,
+            max_supply: value.max_supply,
+            write_version: value.write_version,
+        })
     }
 }
 
-impl From<ClItem> for entities::models::ClItem {
-    fn from(value: ClItem) -> Self {
-        Self {
+impl TryFrom<EditionV1> for entities::models::EditionV1 {
+    type Error = String;
+
+    fn try_from(value: EditionV1) -> Result<Self, Self::Error> {
+        Ok(Self {
+            key: Pubkey::try_from(value.key).map_err(|e| format!("{:?}", e))?,
+            parent: Pubkey::try_from(value.parent).map_err(|e| format!("{:?}", e))?,
+            edition: value.edition,
+            write_version: value.write_version,
+        })
+    }
+}
+
+impl TryFrom<ClLeaf> for entities::models::ClLeaf {
+    type Error = String;
+
+    fn try_from(value: ClLeaf) -> Result<Self, Self::Error> {
+        Ok(Self {
+            cli_leaf_idx: value.cli_leaf_idx,
+            cli_tree_key: Pubkey::try_from(value.cli_tree_key).map_err(|e| format!("{:?}", e))?,
+            cli_node_idx: value.cli_node_idx,
+        })
+    }
+}
+
+impl TryFrom<ClItem> for entities::models::ClItem {
+    type Error = String;
+
+    fn try_from(value: ClItem) -> Result<Self, Self::Error> {
+        Ok(Self {
             cli_leaf_idx: value.cli_leaf_idx,
             cli_seq: value.cli_seq,
             cli_level: value.cli_level,
             cli_hash: value.cli_hash,
-            cli_tree_key: Pubkey::try_from(value.cli_tree_key).unwrap_or_default(),
+            cli_tree_key: Pubkey::try_from(value.cli_tree_key).map_err(|e| format!("{:?}", e))?,
             cli_node_idx: value.cli_node_idx,
             slot_updated: value.slot_updated,
-        }
+        })
     }
 }
 
-impl From<AssetCollection> for Updated<entities::models::AssetCollection> {
-    fn from(value: AssetCollection) -> Self {
-        Self {
+impl TryFrom<AssetCollection> for Updated<entities::models::AssetCollection> {
+    type Error = String;
+
+    fn try_from(value: AssetCollection) -> Result<Self, Self::Error> {
+        Ok(Self {
             value: entities::models::AssetCollection {
-                collection: Pubkey::try_from(value.collection).unwrap_or_default(),
+                collection: Pubkey::try_from(value.collection).map_err(|e| format!("{:?}", e))?,
                 is_collection_verified: value.is_collection_verified,
                 collection_seq: value.collection_seq,
             },
             slot_updated: value.slot_updated,
-            seq: value.seq_updated,
-        }
+            update_version: value.update_version.map(Into::into),
+        })
     }
 }
 
@@ -440,7 +579,7 @@ impl From<ChainDataV1> for Updated<entities::models::ChainDataV1> {
                 uses: value.uses.map(|v| v.into()),
             },
             slot_updated: value.slot_updated,
-            seq: value.seq_updated,
+            update_version: value.update_version.map(Into::into),
         }
     }
 }
