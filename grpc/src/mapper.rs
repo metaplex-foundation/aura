@@ -139,7 +139,7 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 .url
                 .map(Into::into)
                 .ok_or(GrpcError::MissingField("url".to_string()))?,
-            chain_mutability: None,
+            chain_mutability: value.chain_mutability.map(TryInto::try_into).transpose()?,
             lamports: value.lamports.map(Into::into),
             executable: value.executable.map(Into::into),
             metadata_owner: value.metadata_owner.map(Into::into),
@@ -442,6 +442,22 @@ impl TryFrom<AssetLeaf> for Updated<entities::models::AssetLeaf> {
                     .transpose()?,
                 leaf_seq: value.leaf_seq,
             },
+        })
+    }
+}
+
+impl TryFrom<DynamicChainMutability> for Updated<entities::enums::ChainMutability> {
+    type Error = GrpcError;
+
+    fn try_from(value: DynamicChainMutability) -> Result<Self, Self::Error> {
+        Ok(Self {
+            slot_updated: value.slot_updated,
+            update_version: value.update_version.map(Into::into),
+            value: entities::enums::ChainMutability::from(
+                ChainMutability::try_from(value.value).map_err(|e| {
+                    GrpcError::EnumCast("ChainMutability".to_string(), e.to_string())
+                })?,
+            ),
         })
     }
 }
