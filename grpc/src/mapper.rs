@@ -148,6 +148,7 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 .map(TryInto::try_into)
                 .transpose()?
                 .ok_or(GrpcError::MissingField("authority".to_string()))?,
+            // unwrap_or_default used for fields with Update<Option<_>> type
             owner: value
                 .owner
                 .map(TryInto::try_into)
