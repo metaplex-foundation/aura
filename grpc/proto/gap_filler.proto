@@ -137,17 +137,18 @@ message AssetDetails {
     DynamicUint64Field lamports = 21;
     DynamicBoolField executable = 22;
     DynamicStringField metadata_owner = 23;
+    DynamicStringField url = 24;
 
-    AssetLeaf asset_leaf = 24;
-    AssetCollection collection = 25;
-    ChainDataV1 chain_data = 26;
+    AssetLeaf asset_leaf = 25;
+    AssetCollection collection = 26;
+    ChainDataV1 chain_data = 27;
 
-    ClLeaf cl_leaf = 27;
-    repeated ClItem cl_items = 28;
+    ClLeaf cl_leaf = 28;
+    repeated ClItem cl_items = 29;
 
     // From TokenMetadataEdition
-    EditionV1 edition = 29;
-    MasterEdition master_edition = 30;
+    EditionV1 edition = 30;
+    MasterEdition master_edition = 31;
 }
 
 // Dynamic field messages

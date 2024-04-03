@@ -1,3 +1,4 @@
+use crate::error::GrpcError;
 use crate::gapfiller::gap_filler_service_client::GapFillerServiceClient;
 use crate::gapfiller::RangeRequest;
 use async_trait::async_trait;
@@ -47,7 +48,7 @@ impl AssetDetailsConsumer for Client {
                         .and_then(|asset_details| {
                             asset_details
                                 .try_into()
-                                .map_err(|e| Status::new(Code::Internal, e))
+                                .map_err(|e: GrpcError| Status::new(Code::Internal, e.to_string()))
                         })
                         .map_err(|e| Box::new(e) as AsyncError)
                 }),

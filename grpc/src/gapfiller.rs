@@ -134,19 +134,21 @@ pub struct AssetDetails {
     #[prost(message, optional, tag = "23")]
     pub metadata_owner: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "24")]
-    pub asset_leaf: ::core::option::Option<AssetLeaf>,
+    pub url: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "25")]
-    pub collection: ::core::option::Option<AssetCollection>,
+    pub asset_leaf: ::core::option::Option<AssetLeaf>,
     #[prost(message, optional, tag = "26")]
-    pub chain_data: ::core::option::Option<ChainDataV1>,
+    pub collection: ::core::option::Option<AssetCollection>,
     #[prost(message, optional, tag = "27")]
+    pub chain_data: ::core::option::Option<ChainDataV1>,
+    #[prost(message, optional, tag = "28")]
     pub cl_leaf: ::core::option::Option<ClLeaf>,
-    #[prost(message, repeated, tag = "28")]
+    #[prost(message, repeated, tag = "29")]
     pub cl_items: ::prost::alloc::vec::Vec<ClItem>,
     /// From TokenMetadataEdition
-    #[prost(message, optional, tag = "29")]
-    pub edition: ::core::option::Option<EditionV1>,
     #[prost(message, optional, tag = "30")]
+    pub edition: ::core::option::Option<EditionV1>,
+    #[prost(message, optional, tag = "31")]
     pub master_edition: ::core::option::Option<MasterEdition>,
 }
 /// Dynamic field messages
