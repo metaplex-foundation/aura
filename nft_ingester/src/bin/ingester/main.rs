@@ -17,6 +17,7 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 
 use backfill_rpc::rpc::BackfillRPC;
+use grpc::client::Client;
 use interface::error::{StorageError, UsecaseError};
 use interface::signature_persistence::{BlockProducer, ProcessingDataGetter};
 use metrics_utils::utils::start_metrics;
@@ -48,6 +49,7 @@ use nft_ingester::backfiller::{
     TransactionsParser,
 };
 use nft_ingester::fork_cleaner::ForkCleaner;
+use nft_ingester::gapfiller::process_asset_details_stream;
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::bigtable::BigTableClient;
@@ -181,6 +183,7 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
+    let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap_or_default(); // TODO: change to unwrap when we will have all gapfill logic implemented
     let synchronizer = Synchronizer::new(
         rocks_storage.clone(),
         index_storage.clone(),
@@ -246,8 +249,6 @@ pub async fn main() -> Result<(), IngesterError> {
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
     }));
-
-    let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap_or(0);
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;
@@ -371,6 +372,31 @@ pub async fn main() -> Result<(), IngesterError> {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }));
+
+    match Client::connect(config.clone()).await {
+        Ok(gaped_data_client) => {
+            while first_processed_slot.load(Ordering::SeqCst) == 0 {
+                tokio::time::sleep(Duration::from_millis(100)).await
+            }
+            let cloned_keep_running = keep_running.clone();
+            let cloned_rocks_storage = rocks_storage.clone();
+            mutexed_tasks.lock().await.spawn(async move {
+                info!(
+                    "Processed {} gaped slots",
+                    process_asset_details_stream(
+                        cloned_keep_running,
+                        cloned_rocks_storage,
+                        newest_restored_slot,
+                        first_processed_slot.load(Ordering::SeqCst),
+                        gaped_data_client,
+                    )
+                    .await
+                );
+                Ok(())
+            });
+        }
+        Err(e) => error!("GRPC Client new: {}", e),
+    };
 
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
