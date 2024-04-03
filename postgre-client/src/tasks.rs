@@ -94,7 +94,8 @@ impl PgClient {
             QueryBuilder::new("UPDATE tasks SET tsk_status = tmp.tsk_status, tsk_attempts = tmp.tsk_attempts, tsk_error = tmp.tsk_error FROM (");
 
         query_builder.push_values(data, |mut b, key| {
-            b.push_bind(key.metadata_url);
+            let tsk = UrlWithStatus::new(key.metadata_url.as_str(), false); // status is ignoring here
+            b.push_bind(tsk.metadata_url);
             b.push_bind(key.status);
             b.push_bind(key.attempts);
             b.push_bind(key.error);
