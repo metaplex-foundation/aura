@@ -271,8 +271,8 @@ where
             ids,
             options,
             self.json_downloader.clone(),
-            true,
-            10,
+            self.json_middleware_config.persist_response,
+            self.json_middleware_config.max_urls_to_parse,
         )
         .await
         .map_err(Into::<DasApiError>::into)?;
