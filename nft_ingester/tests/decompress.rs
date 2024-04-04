@@ -238,16 +238,17 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -317,16 +318,17 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -396,16 +398,17 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -475,16 +478,17 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 

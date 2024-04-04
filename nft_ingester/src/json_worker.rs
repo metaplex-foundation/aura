@@ -111,7 +111,8 @@ pub async fn run(json_downloader: Arc<JsonWorker>, keep_running: Arc<AtomicBool>
                     let mut clock = general_clock.lock().await;
 
                     if result_array.len() > JSON_BATCH
-                        || tokio::time::Instant::now() - *clock > Duration::from_secs(WIPE_PERIOD_SEC)
+                        || tokio::time::Instant::now() - *clock
+                            > Duration::from_secs(WIPE_PERIOD_SEC)
                     {
                         match json_downloader
                             .persist_response((*result_array).clone())
