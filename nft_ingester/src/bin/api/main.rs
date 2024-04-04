@@ -8,7 +8,7 @@ use nft_ingester::api::service::start_api_v2;
 use nft_ingester::config::{init_logger, setup_config, ApiConfig};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
-use nft_ingester::json_downloader::JsonDownloader;
+use nft_ingester::json_worker::JsonWorker;
 use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
@@ -106,11 +106,11 @@ pub async fn main() -> Result<(), IngesterError> {
         ))
     });
 
-    let json_downloader = {
+    let json_worker = {
         if let Some(middleware_config) = &config.json_middleware_config {
             if middleware_config.is_enabled {
                 Some(Arc::new(
-                    JsonDownloader::new(
+                    JsonWorker::new(
                         pg_client.clone(),
                         rocks_storage.clone(),
                         json_downloader_metrics.clone(),
@@ -134,7 +134,8 @@ pub async fn main() -> Result<(), IngesterError> {
             config.server_port,
             proof_checker,
             config.max_page_limit,
-            json_downloader,
+            json_worker,
+            None,
             config.json_middleware_config.clone(),
         )
         .await

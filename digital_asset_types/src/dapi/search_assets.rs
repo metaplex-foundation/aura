@@ -1,7 +1,7 @@
 use crate::dao::{scopes, ConversionError, SearchAssetsQuery};
 use crate::rpc::response::AssetList;
 use entities::api_req_params::{AssetSorting, Options};
-use interface::json::JsonProcessor;
+use interface::json::{JsonDownloader, JsonPersister};
 use rocks_db::Storage;
 use sea_orm::DbErr;
 use solana_sdk::pubkey::Pubkey;
@@ -21,8 +21,8 @@ pub async fn search_assets(
     after: Option<String>,
     cursor: Option<String>,
     options: Options,
-    json_downloader: Option<Arc<impl JsonProcessor + Sync + Send + 'static>>,
-    persist_json: bool,
+    json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
+    json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
 ) -> Result<AssetList, DbErr> {
     let filter_result: &Result<postgre_client::model::SearchAssetsFilter, ConversionError> =
@@ -72,7 +72,7 @@ pub async fn search_assets(
         asset_ids,
         options,
         json_downloader,
-        persist_json,
+        json_persister,
         max_json_to_download,
     )
     .await?;

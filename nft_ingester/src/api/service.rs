@@ -18,7 +18,7 @@ use crate::api::builder::RpcApiBuilder;
 use crate::api::error::DasApiError;
 use crate::api::middleware::RpcRequestMiddleware;
 use crate::config::{setup_config, ApiConfig, JsonMiddlewareConfig};
-use crate::json_downloader::JsonDownloader;
+use crate::json_worker::JsonWorker;
 
 pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10);
 // 50kB
@@ -31,7 +31,8 @@ pub async fn start_api(
     metrics: Arc<ApiMetricsConfig>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
     proof_checker: Option<Arc<MaybeProofChecker>>,
-    json_downloader: Option<Arc<JsonDownloader>>,
+    json_downloader: Option<Arc<JsonWorker>>,
+    json_persister: Option<Arc<JsonWorker>>,
 ) -> Result<(), DasApiError> {
     env::set_var(
         env_logger::DEFAULT_FILTER_ENV,
@@ -51,6 +52,7 @@ pub async fn start_api(
         rocks_db,
         proof_checker,
         json_downloader,
+        json_persister,
     )
     .await?;
 
@@ -66,7 +68,8 @@ pub async fn start_api_v2(
     port: u16,
     proof_checker: Option<Arc<MaybeProofChecker>>,
     max_page_limit: usize,
-    json_downloader: Option<Arc<JsonDownloader>>,
+    json_downloader: Option<Arc<JsonWorker>>,
+    json_persister: Option<Arc<JsonWorker>>,
     json_middleware_config: Option<JsonMiddlewareConfig>,
 ) -> Result<(), DasApiError> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -79,6 +82,7 @@ pub async fn start_api_v2(
         proof_checker,
         max_page_limit,
         json_downloader,
+        json_persister,
         json_middleware_config.unwrap_or_default(),
     );
 
@@ -86,7 +90,7 @@ pub async fn start_api_v2(
 }
 
 async fn run_api(
-    api: DasApi<MaybeProofChecker, JsonDownloader>,
+    api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker>,
     request_middleware: Option<RpcRequestMiddleware>,
     addr: SocketAddr,
     keep_running: Arc<AtomicBool>,

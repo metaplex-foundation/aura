@@ -4,9 +4,9 @@ use std::string::ToString;
 use std::sync::Arc;
 
 use entities::api_req_params::{AssetSortDirection, Options};
-use entities::models::{AssetSignatureWithPagination, JsonDownloadTask};
+use entities::models::AssetSignatureWithPagination;
 use interface::asset_sigratures::AssetSignaturesGetter;
-use interface::json::JsonProcessor;
+use interface::json::{JsonDownloader, JsonPersister};
 use log::error;
 use sea_orm::prelude::Json;
 use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult};
@@ -428,8 +428,8 @@ pub async fn get_by_ids(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
     options: Options,
-    json_downloader: Option<Arc<impl JsonProcessor + Sync + Send + 'static>>,
-    persist_json: bool,
+    json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
+    json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
 ) -> Result<Vec<Option<FullAsset>>, DbErr> {
     if asset_ids.is_empty() {
@@ -454,6 +454,8 @@ pub async fn get_by_ids(
     if let Some(json_downloader) = json_downloader {
         let offchain_data = Arc::new(Mutex::new(HashMap::new()));
 
+        let results = Arc::new(Mutex::new(vec![]));
+
         let mut tasks_set = JoinSet::new();
 
         for (_, url) in asset_selected_maps.urls.iter() {
@@ -462,38 +464,38 @@ pub async fn get_by_ids(
             }
             if asset_selected_maps.offchain_data.get(url).is_none() {
                 let json_downloader = json_downloader.clone();
+                let results = results.clone();
                 let url = url.clone();
                 let offchain_data = offchain_data.clone();
 
                 tasks_set.spawn(async move {
                     let response = json_downloader.download_file(url.clone()).await;
 
-                    let json = {
-                        if persist_json {
-                            json_downloader
-                                .persist_response(
-                                    response,
-                                    JsonDownloadTask {
-                                        metadata_url: url.clone(),
-                                        attempts: 1,
-                                        ..Default::default()
-                                    },
-                                )
-                                .await
-                        } else {
-                            response.ok()
-                        }
-                    };
+                    let mut results = results.lock().await;
+                    results.push((url.clone(), response.clone()));
+                    drop(results);
 
-                    if let Some(metadata) = json {
-                        let mut res = offchain_data.lock().await;
-                        res.insert(url.clone(), OffChainData { url, metadata });
+                    match response {
+                        Ok(metadata) => {
+                            let mut res = offchain_data.lock().await;
+                            res.insert(url.clone(), OffChainData { url, metadata });
+                        }
+                        Err(e) => {
+                            error!("Could not download JSON file on API middleware: {:?}", e);
+                        }
                     }
                 });
             }
         }
 
         while tasks_set.join_next().await.is_some() {}
+
+        if let Some(json_persister) = json_persister {
+            let results = results.lock().await;
+            if let Err(e) = json_persister.persist_response((*results).clone()).await {
+                error!("Could not persist downloaded JSONs: {:?}", e);
+            }
+        }
 
         let offchain_data = offchain_data.lock().await.clone();
 

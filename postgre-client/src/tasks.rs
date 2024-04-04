@@ -14,7 +14,6 @@ pub const MAX_BUFFERED_TASKS_TO_TAKE: usize = 5000;
 pub struct UpdatedTask {
     pub status: TaskStatus,
     pub metadata_url: String,
-    pub attempts: i16,
     pub error: String,
 }
 
@@ -89,19 +88,18 @@ impl PgClient {
         }
     }
 
-    pub async fn update_tasks(&self, data: Vec<UpdatedTask>) -> Result<(), String> {
+    pub async fn update_tasks_and_attempts(&self, data: Vec<UpdatedTask>) -> Result<(), String> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("UPDATE tasks SET tsk_status = tmp.tsk_status, tsk_attempts = tmp.tsk_attempts, tsk_error = tmp.tsk_error FROM (");
+            QueryBuilder::new("UPDATE tasks SET tsk_status = tmp.tsk_status, tsk_attempts = tsk_attempts+1, tsk_error = tmp.tsk_error FROM (");
 
         query_builder.push_values(data, |mut b, key| {
             let tsk = UrlWithStatus::new(key.metadata_url.as_str(), false); // status is ignoring here
             b.push_bind(tsk.metadata_url);
             b.push_bind(key.status);
-            b.push_bind(key.attempts);
             b.push_bind(key.error);
         });
 
-        query_builder.push(") as tmp (tsk_metadata_url, tsk_status, tsk_attempts, tsk_error) WHERE tasks.tsk_metadata_url = tmp.tsk_metadata_url;");
+        query_builder.push(") as tmp (tsk_metadata_url, tsk_status, tsk_error) WHERE tasks.tsk_metadata_url = tmp.tsk_metadata_url;");
 
         let query = query_builder.build();
         query

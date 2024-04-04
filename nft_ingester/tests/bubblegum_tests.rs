@@ -5,7 +5,7 @@ mod tests {
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::config::JsonMiddlewareConfig;
-    use nft_ingester::json_downloader::JsonDownloader;
+    use nft_ingester::json_worker::JsonWorker;
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
@@ -58,12 +58,13 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             50,
+            None,
             None,
             JsonMiddlewareConfig::default(),
         );
@@ -173,12 +174,13 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonDownloader>::new(
+        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             50,
+            None,
             None,
             JsonMiddlewareConfig::default(),
         );

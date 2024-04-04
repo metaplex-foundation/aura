@@ -2,7 +2,7 @@ use digital_asset_types::dao::SearchAssetsQuery;
 use digital_asset_types::dapi::{get_asset, get_asset_batch, get_proof_for_assets, search_assets};
 use digital_asset_types::rpc::response::AssetList;
 use interface::error::UsecaseError;
-use interface::json::JsonProcessor;
+use interface::json::{JsonDownloader, JsonPersister};
 use interface::proofs::ProofChecker;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
@@ -29,32 +29,37 @@ use {crate::api::*, sqlx::postgres::PgPoolOptions};
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
 
-pub struct DasApi<PC, J>
+pub struct DasApi<PC, JD, JP>
 where
     PC: ProofChecker + Sync + Send + 'static,
-    J: JsonProcessor + Sync + Send + 'static,
+    JD: JsonDownloader + Sync + Send + 'static,
+    JP: JsonPersister + Sync + Send + 'static,
 {
     pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
     metrics: Arc<ApiMetricsConfig>,
     proof_checker: Option<Arc<PC>>,
     max_page_limit: u32,
-    json_downloader: Option<Arc<J>>,
+    json_downloader: Option<Arc<JD>>,
+    json_persister: Option<Arc<JP>>,
     json_middleware_config: JsonMiddlewareConfig,
 }
 
-impl<PC, J> DasApi<PC, J>
+impl<PC, JD, JP> DasApi<PC, JD, JP>
 where
     PC: ProofChecker + Sync + Send + 'static,
-    J: JsonProcessor + Sync + Send + 'static,
+    JD: JsonDownloader + Sync + Send + 'static,
+    JP: JsonPersister + Sync + Send + 'static,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         pg_client: Arc<PgClient>,
         rocks_db: Arc<Storage>,
         metrics: Arc<ApiMetricsConfig>,
         proof_checker: Option<Arc<PC>>,
         max_page_limit: usize,
-        json_downloader: Option<Arc<J>>,
+        json_downloader: Option<Arc<JD>>,
+        json_persister: Option<Arc<JP>>,
         json_middleware_config: JsonMiddlewareConfig,
     ) -> Self {
         DasApi {
@@ -64,6 +69,7 @@ where
             proof_checker,
             max_page_limit: max_page_limit as u32,
             json_downloader,
+            json_persister,
             json_middleware_config,
         }
     }
@@ -74,7 +80,8 @@ where
         red_metrics: Arc<RequestErrorDurationMetrics>,
         rocks_db: Arc<Storage>,
         proof_checker: Option<Arc<PC>>,
-        json_downloader: Option<Arc<J>>,
+        json_downloader: Option<Arc<JD>>,
+        json_persister: Option<Arc<JP>>,
     ) -> Result<Self, DasApiError> {
         let pool = PgPoolOptions::new()
             .max_connections(250)
@@ -94,6 +101,7 @@ where
             proof_checker,
             max_page_limit: config.max_page_limit as u32,
             json_downloader,
+            json_persister,
             json_middleware_config: config.json_middleware_config.unwrap_or_default(),
         })
     }
@@ -103,10 +111,11 @@ pub fn not_found() -> DasApiError {
     DasApiError::NoDataFoundError
 }
 
-impl<PC, J> DasApi<PC, J>
+impl<PC, JD, JP> DasApi<PC, JD, JP>
 where
     PC: ProofChecker + Sync + Send + 'static,
-    J: JsonProcessor + Sync + Send + 'static,
+    JD: JsonDownloader + Sync + Send + 'static,
+    JP: JsonPersister + Sync + Send + 'static,
 {
     pub async fn check_health(&self) -> Result<Value, DasApiError> {
         let label = "check_health";
@@ -231,7 +240,7 @@ where
             id,
             options,
             self.json_downloader.clone(),
-            self.json_middleware_config.persist_response,
+            self.json_persister.clone(),
             self.json_middleware_config.max_urls_to_parse,
         )
         .await
@@ -271,7 +280,7 @@ where
             ids,
             options,
             self.json_downloader.clone(),
-            self.json_middleware_config.persist_response,
+            self.json_persister.clone(),
             self.json_middleware_config.max_urls_to_parse,
         )
         .await
@@ -548,7 +557,7 @@ where
             pagination.cursor,
             options,
             self.json_downloader.clone(),
-            self.json_middleware_config.persist_response,
+            self.json_persister.clone(),
             self.json_middleware_config.max_urls_to_parse,
         )
         .await?;

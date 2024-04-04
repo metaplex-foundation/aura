@@ -9,12 +9,14 @@ use jsonrpc_core::IoHandler;
 use usecase::proofs::MaybeProofChecker;
 
 use crate::api::*;
-use crate::json_downloader::JsonDownloader;
+use crate::json_worker::JsonWorker;
 
 pub struct RpcApiBuilder;
 
 impl RpcApiBuilder {
-    pub fn build(api: DasApi<MaybeProofChecker, JsonDownloader>) -> Result<IoHandler, DasApiError> {
+    pub fn build(
+        api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker>,
+    ) -> Result<IoHandler, DasApiError> {
         let mut module = IoHandler::default();
         let api = Arc::new(api);
 

@@ -20,26 +20,6 @@ pub const SYNCHRONIZER_CONFIG_PREFIX: &str = "SYNCHRONIZER_";
 pub const JSON_MIGRATOR_CONFIG_PREFIX: &str = "JSON_MIGRATOR_";
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct BackgroundTaskRunnerConfig {
-    pub num_of_parallel_workers: i32,
-}
-
-impl Default for BackgroundTaskRunnerConfig {
-    fn default() -> Self {
-        BackgroundTaskRunnerConfig {
-            num_of_parallel_workers: 100,
-        }
-    }
-}
-
-#[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct BackgroundTaskConfig {
-    pub background_task_runner_config: Option<BackgroundTaskRunnerConfig>,
-    pub database_config: DatabaseConfig,
-    pub bg_task_runner_metrics_port: Option<u16>,
-}
-
-#[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct BackfillerConfig {
     pub big_table_config: BigTableConfig,
     pub slot_until: Option<u64>,
@@ -126,7 +106,6 @@ pub struct IngesterConfig {
     pub metrics_port_first_consumer: Option<u16>,
     pub metrics_port_second_consumer: Option<u16>,
     pub backfill_consumer_metrics_port: Option<u16>,
-    pub background_task_runner_config: Option<BackgroundTaskRunnerConfig>,
     pub is_snapshot: Option<bool>,
     pub consumer_number: Option<usize>,
     pub migration_batch_size: Option<u32>,
@@ -174,6 +153,13 @@ pub struct IngesterConfig {
     pub synchronizer_parallel_tasks: usize,
     #[serde(default)]
     pub run_temp_sync_during_dump: bool,
+    #[serde(default = "default_parallel_json_downloaders")]
+    pub parallel_json_downloaders: i32,
+    pub json_middleware_config: Option<JsonMiddlewareConfig>,
+}
+
+const fn default_parallel_json_downloaders() -> i32 {
+    100
 }
 
 const fn default_synchronizer_parallel_tasks() -> usize {
@@ -280,7 +266,6 @@ pub struct ApiConfig {
 #[derive(Deserialize, PartialEq, Debug, Clone, Default)]
 pub struct JsonMiddlewareConfig {
     pub is_enabled: bool,
-    pub persist_response: bool,
     pub max_urls_to_parse: usize,
 }
 
