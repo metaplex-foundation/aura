@@ -33,41 +33,52 @@ pub struct SynchronizationStateConsistencyChecker {
 }
 
 impl SynchronizationStateConsistencyChecker {
-    pub(crate) async fn build(
+    pub(crate) fn new() -> Self {
+        Self {
+            overwhelm_seq_gap: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub(crate) async fn run(
+        &self,
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-        keep_running: Arc<AtomicBool>,
+        mut rx: tokio::sync::broadcast::Receiver<()>,
         pg_client: Arc<PgClient>,
         rocks_db: Arc<Storage>,
         synchronization_api_threshold: u64,
-    ) -> Self {
-        let overwhelm_seq_gap = Arc::new(AtomicBool::new(false));
-        let overwhelm_seq_gap_clone = overwhelm_seq_gap.clone();
-        let cloned_keep_running = keep_running.clone();
+    ) {
+        let overwhelm_seq_gap_clone = self.overwhelm_seq_gap.clone();
         tasks.lock().await.spawn(async move {
-            while cloned_keep_running.load(Ordering::SeqCst) {
-                tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)).await;
-                let Ok(Some(index_seq)) = pg_client.fetch_last_synced_id().await else {
-                    continue;
-                };
-                let Ok(decoded_index_update_key) = decode_u64x2_pubkey(index_seq) else {
-                    continue;
-                };
-                let Ok(Some(primary_update_key)) = rocks_db.last_known_asset_updated_key() else {
-                    continue;
-                };
+            tokio::select! {
+                _ = async {
+                    loop {
+                        tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)).await;
+                        let Ok(Some(index_seq)) = pg_client.fetch_last_synced_id().await else {
+                            continue;
+                        };
+                        let Ok(decoded_index_update_key) = decode_u64x2_pubkey(index_seq) else {
+                            continue;
+                        };
+                        let Ok(Some(primary_update_key)) = rocks_db.last_known_asset_updated_key() else {
+                            continue;
+                        };
 
-                overwhelm_seq_gap_clone.store(
-                    primary_update_key
-                        .seq
-                        .saturating_sub(decoded_index_update_key.seq)
-                        >= synchronization_api_threshold,
-                    Ordering::SeqCst,
-                );
+                        overwhelm_seq_gap_clone.store(
+                            primary_update_key
+                                .seq
+                                .saturating_sub(decoded_index_update_key.seq)
+                                >= synchronization_api_threshold,
+                            Ordering::SeqCst,
+                        );
+                    }
+                } => {
+                    Ok(())
+                },
+                _ = rx.recv() => {
+                    Ok(())
+                }
             }
-            Ok(())
         });
-
-        Self { overwhelm_seq_gap }
     }
 }
 

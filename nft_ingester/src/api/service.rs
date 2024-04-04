@@ -37,6 +37,7 @@ pub(crate) struct MiddlewaresData {
 pub async fn start_api(
     rocks_db: Arc<Storage>,
     keep_running: Arc<AtomicBool>,
+    rx: tokio::sync::broadcast::Receiver<()>,
     metrics: Arc<ApiMetricsConfig>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
     proof_checker: Option<Arc<MaybeProofChecker>>,
@@ -60,16 +61,17 @@ pub async fn start_api(
         proof_checker,
     )
     .await?;
-    let synchronization_state_consistency_checker = Arc::new(
-        SynchronizationStateConsistencyChecker::build(
+    let synchronization_state_consistency_checker =
+        Arc::new(SynchronizationStateConsistencyChecker::new());
+    synchronization_state_consistency_checker
+        .run(
             tasks,
-            keep_running.clone(),
+            rx.resubscribe(),
             api.pg_client.clone(),
             rocks_db.clone(),
             config.consistence_synchronization_api_threshold,
         )
-        .await,
-    );
+        .await;
 
     run_api(
         api,
