@@ -88,52 +88,56 @@ pub async fn run(json_downloader: Arc<JsonWorker>, keep_running: Arc<AtomicBool>
                     }
                 }
 
-                let task_to_process = locket_tasks.pop();
+                if !locket_tasks.is_empty() {
+                    let task_to_process = locket_tasks.pop();
 
-                drop(locket_tasks);
+                    drop(locket_tasks);
 
-                if let Some(task) = task_to_process {
-                    let begin_processing = Instant::now();
+                    if let Some(task) = task_to_process {
+                        let begin_processing = Instant::now();
 
-                    let response = json_downloader
-                        .download_file(task.metadata_url.clone())
-                        .await;
+                        let response = json_downloader
+                            .download_file(task.metadata_url.clone())
+                            .await;
 
-                    json_downloader.metrics.set_latency_task_executed(
-                        "json_downloader",
-                        begin_processing.elapsed().as_millis() as f64,
-                    );
+                        json_downloader.metrics.set_latency_task_executed(
+                            "json_downloader",
+                            begin_processing.elapsed().as_millis() as f64,
+                        );
 
-                    let mut result_array = results.lock().await;
+                        let mut result_array = results.lock().await;
 
-                    result_array.push((task.metadata_url, response));
+                        result_array.push((task.metadata_url, response));
 
-                    let mut clock = general_clock.lock().await;
+                        let mut clock = general_clock.lock().await;
 
-                    if result_array.len() > JSON_BATCH
-                        || tokio::time::Instant::now() - *clock
-                            > Duration::from_secs(WIPE_PERIOD_SEC)
-                    {
-                        match json_downloader
-                            .persist_response((*result_array).clone())
-                            .await
+                        if result_array.len() > JSON_BATCH
+                            || tokio::time::Instant::now() - *clock
+                                > Duration::from_secs(WIPE_PERIOD_SEC)
                         {
-                            Ok(_) => {
-                                debug!("Saved metadata successfully...");
+                            match json_downloader
+                                .persist_response((*result_array).clone())
+                                .await
+                            {
+                                Ok(_) => {
+                                    debug!("Saved metadata successfully...");
+                                }
+                                Err(e) => {
+                                    error!("Could not save JSONs to the storage: {:?}", e);
+                                }
                             }
-                            Err(e) => {
-                                error!("Could not save JSONs to the storage: {:?}", e);
-                            }
+
+                            result_array.clear();
+                            *clock = tokio::time::Instant::now();
                         }
 
-                        result_array.clear();
-                        *clock = tokio::time::Instant::now();
+                        drop(clock);
+                        drop(result_array);
+                    } else {
+                        error!("Error getting task from array");
                     }
-
-                    drop(clock);
-                    drop(result_array);
                 } else {
-                    error!("Error getting task from array");
+                    drop(locket_tasks);
                 }
             }
         });
@@ -261,16 +265,20 @@ impl JsonPersister for JsonWorker {
             }
         }
 
-        self.db_client
-            .update_tasks_and_attempts(pg_updates)
-            .await
-            .map_err(|e| JsonDownloaderError::IndexStorageError(e.to_string()))?;
+        if !pg_updates.is_empty() {
+            self.db_client
+                .update_tasks_and_attempts(pg_updates)
+                .await
+                .map_err(|e| JsonDownloaderError::IndexStorageError(e.to_string()))?;
+        }
 
-        self.rocks_db
-            .asset_offchain_data
-            .put_batch(rocks_updates)
-            .await
-            .map_err(|e| JsonDownloaderError::MainStorageError(e.to_string()))?;
+        if !rocks_updates.is_empty() {
+            self.rocks_db
+                .asset_offchain_data
+                .put_batch(rocks_updates)
+                .await
+                .map_err(|e| JsonDownloaderError::MainStorageError(e.to_string()))?;
+        }
 
         Ok(())
     }

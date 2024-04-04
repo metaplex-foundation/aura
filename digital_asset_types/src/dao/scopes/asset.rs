@@ -462,7 +462,7 @@ pub async fn get_by_ids(
             if tasks_set.len() >= max_json_to_download {
                 break;
             }
-            if asset_selected_maps.offchain_data.get(url).is_none() {
+            if !asset_selected_maps.offchain_data.contains_key(url) && !url.is_empty() {
                 let json_downloader = json_downloader.clone();
                 let results = results.clone();
                 let url = url.clone();
@@ -491,9 +491,15 @@ pub async fn get_by_ids(
         while tasks_set.join_next().await.is_some() {}
 
         if let Some(json_persister) = json_persister {
-            let results = results.lock().await;
-            if let Err(e) = json_persister.persist_response((*results).clone()).await {
-                error!("Could not persist downloaded JSONs: {:?}", e);
+            let download_results = results.lock().await;
+
+            if !download_results.is_empty() {
+                if let Err(e) = json_persister
+                    .persist_response((*download_results).clone())
+                    .await
+                {
+                    error!("Could not persist downloaded JSONs: {:?}", e);
+                }
             }
         }
 
