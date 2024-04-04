@@ -23,34 +23,41 @@ impl BackfillingStateConsistencyChecker {
     pub(crate) async fn run(
         &self,
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-        keep_running: Arc<AtomicBool>,
+        mut rx: tokio::sync::broadcast::Receiver<()>,
         rocks_db: Arc<Storage>,
         consistence_backfilling_slots_threshold: u64,
     ) {
         let overwhelm_backfill_gap_clone = self.overwhelm_backfill_gap.clone();
-        let cloned_keep_running = keep_running.clone();
         tasks.lock().await.spawn(async move {
-            while cloned_keep_running.load(Ordering::SeqCst) {
-                tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)).await;
-                let Ok(Some(top_seen_slot)) =
-                    rocks_db.get_parameter::<u64>(Parameter::TopSeenSlot).await
-                else {
-                    continue;
-                };
-                let Ok(Some(last_backfilled_slot)) = rocks_db
-                    .get_parameter::<u64>(Parameter::LastBackfilledSlot)
-                    .await
-                else {
-                    continue;
-                };
+            tokio::select! {
+                _ = async {
+                    loop {
+                        tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)).await;
+                        let Ok(Some(top_seen_slot)) =
+                            rocks_db.get_parameter::<u64>(Parameter::TopSeenSlot).await
+                        else {
+                            continue;
+                        };
+                        let Ok(Some(last_backfilled_slot)) = rocks_db
+                            .get_parameter::<u64>(Parameter::LastBackfilledSlot)
+                            .await
+                        else {
+                            continue;
+                        };
 
-                overwhelm_backfill_gap_clone.store(
-                    top_seen_slot.saturating_sub(last_backfilled_slot)
-                        >= consistence_backfilling_slots_threshold,
-                    Ordering::SeqCst,
-                );
+                        overwhelm_backfill_gap_clone.store(
+                            top_seen_slot.saturating_sub(last_backfilled_slot)
+                                >= consistence_backfilling_slots_threshold,
+                            Ordering::SeqCst,
+                        );
+                    }
+                } => {
+                    Ok(())
+                },
+                _ = rx.recv() => {
+                    Ok(())
+                }
             }
-            Ok(())
         });
     }
 }
