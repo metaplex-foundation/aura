@@ -14,14 +14,20 @@ pub struct BackfillingStateConsistencyChecker {
 }
 
 impl BackfillingStateConsistencyChecker {
-    pub(crate) async fn build(
+    pub(crate) fn new() -> Self {
+        Self {
+            overwhelm_backfill_gap: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub(crate) async fn run(
+        &self,
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
         keep_running: Arc<AtomicBool>,
         rocks_db: Arc<Storage>,
         consistence_backfilling_slots_threshold: u64,
-    ) -> Self {
-        let overwhelm_backfill_gap = Arc::new(AtomicBool::new(false));
-        let overwhelm_backfill_gap_clone = overwhelm_backfill_gap.clone();
+    ) {
+        let overwhelm_backfill_gap_clone = self.overwhelm_backfill_gap.clone();
         let cloned_keep_running = keep_running.clone();
         tasks.lock().await.spawn(async move {
             while cloned_keep_running.load(Ordering::SeqCst) {
@@ -46,10 +52,6 @@ impl BackfillingStateConsistencyChecker {
             }
             Ok(())
         });
-
-        Self {
-            overwhelm_backfill_gap,
-        }
     }
 }
 

@@ -3,6 +3,7 @@ use entities::models::SignatureWithSlot;
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
+use crate::parameters::Parameter;
 use crate::{
     parameters,
     signature_client::SignatureIdx,
@@ -12,12 +13,18 @@ use crate::{
 
 #[async_trait]
 impl TransactionResultPersister for Storage {
-    async fn store_block(&self, txs: Vec<TransactionResult>) -> Result<(), StorageError> {
+    async fn store_block(
+        &self,
+        slot: u64,
+        txs: Vec<TransactionResult>,
+    ) -> Result<(), StorageError> {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for tx in txs {
             self.store_transaction_result_with_batch(&mut batch, tx, false)
                 .await?;
         }
+        self.merge_top_parameter_with_batch(&mut batch, Parameter::LastBackfilledSlot, slot)
+            .map_err(|e| StorageError::Common(e.to_string()))?;
         self.write_batch(batch)
             .await
             .map_err(|e| StorageError::Common(e.to_string()))?;

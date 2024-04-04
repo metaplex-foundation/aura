@@ -12,7 +12,6 @@ use metrics_utils::BackfillerMetricsConfig;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, ForceReingestableSlots};
 use rocks_db::column::TypedColumn;
-use rocks_db::parameters::Parameter;
 use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
 use rocks_db::Storage;
 use solana_transaction_status::{
@@ -372,16 +371,6 @@ where
                         error!("Error processing slots: {}", err);
                     }
                 }
-                if let Err(e) = self
-                    .rocks_client
-                    .merge_top_parameter(
-                        Parameter::LastBackfilledSlot,
-                        slots_batch.iter().max().copied().unwrap_or_default(),
-                    )
-                    .await
-                {
-                    error!("Error merge top parameter: {}", e);
-                };
                 slots_batch.clear();
             }
         }
@@ -406,16 +395,6 @@ where
                     error!("Error processing slots: {}", err);
                 }
             }
-            if let Err(e) = self
-                .rocks_client
-                .merge_top_parameter(
-                    Parameter::LastBackfilledSlot,
-                    slots_batch.iter().max().copied().unwrap_or_default(),
-                )
-                .await
-            {
-                error!("Error merge top parameter: {}", e);
-            };
         }
     }
 
@@ -671,7 +650,7 @@ where
         }
         match self
             .persister
-            .store_block(results)
+            .store_block(slot, results)
             .await
             .map_err(|e| e.to_string())
         {

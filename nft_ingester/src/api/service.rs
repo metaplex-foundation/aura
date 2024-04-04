@@ -71,15 +71,15 @@ pub async fn start_api(
         )
         .await,
     );
-    let backfilling_state_consistency_checker = Arc::new(
-        BackfillingStateConsistencyChecker::build(
+    let backfilling_state_consistency_checker = Arc::new(BackfillingStateConsistencyChecker::new());
+    backfilling_state_consistency_checker
+        .run(
             tasks.clone(),
             keep_running.clone(),
             rocks_db.clone(),
             config.consistence_backfilling_slots_threshold,
         )
-        .await,
-    );
+        .await;
 
     run_api(
         api,
