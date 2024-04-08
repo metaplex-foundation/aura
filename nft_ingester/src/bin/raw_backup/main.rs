@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use clap::{arg, Parser};
+use entities::models::RawBlock;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::config::init_logger;
 use rocks_db::column::TypedColumn;
@@ -47,10 +48,7 @@ pub async fn main() -> Result<(), IngesterError> {
     )
     .unwrap();
 
-    let cf = &target_storage
-        .db
-        .cf_handle(rocks_db::raw_block::RawBlock::NAME)
-        .unwrap();
+    let cf = &target_storage.db.cf_handle(RawBlock::NAME).unwrap();
     info!("Copying raw blocks...");
     source_storage
         .raw_blocks_cbor

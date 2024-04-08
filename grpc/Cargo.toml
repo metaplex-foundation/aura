@@ -15,6 +15,8 @@ entities = { path = "../entities" }
 tokio = { version = "1.35.1", features = ["full"] }
 async-trait = "0.1.74"
 thiserror = "1.0.31"
+solana-transaction-status = "~1.17"
+serde_cbor = "0.11.2"
 
 [dev-dependencies]
 mockall = "0.12.0"

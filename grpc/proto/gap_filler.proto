@@ -158,6 +158,10 @@ message AssetDetails {
     MasterEdition master_edition = 38;
 }
 
+message RawBlock {
+    bytes block = 1;
+}
+
 // Dynamic field messages
 message DynamicBoolField {
     bool value = 1;
@@ -243,7 +247,13 @@ message RangeRequest {
     uint64 end_slot = 2;
 }
 
+message GetRawBlockRequest {
+    uint64 slot = 1;
+}
+
 // Define the gRPC service
 service GapFillerService {
     rpc GetAssetsUpdatedWithin(RangeRequest) returns (stream AssetDetails);
+    rpc GetRawBlocksWithin(RangeRequest) returns (stream RawBlock);
+    rpc GetRawBlock(GetRawBlockRequest) returns (RawBlock);
 }

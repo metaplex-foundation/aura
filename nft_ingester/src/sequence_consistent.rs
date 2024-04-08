@@ -43,6 +43,10 @@ where
     }
 
     pub async fn collect_sequences_gaps(&self, rx: Receiver<()>) {
+        let processed_reingestable_slots = self
+            .sequence_consistent_manager
+            .all_processed_reingestable_slots()
+            .await;
         let last_slot_to_look_for_gaps = self
             .finalized_slot_getter
             .get_finalized_slot_no_error()
@@ -94,6 +98,9 @@ where
         }
         // Handle last tree keys
         self.save_tree_gap_analyze(prev_state.tree, last_consistent_seq, gap_found)
+            .await;
+        self.sequence_consistent_manager
+            .manage_ingestable_slots(processed_reingestable_slots)
             .await
     }
 

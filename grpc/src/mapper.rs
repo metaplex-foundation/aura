@@ -3,10 +3,10 @@ use crate::gapfiller::{
     AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ChainMutability, ClItem, ClLeaf,
     Creator, DynamicBoolField, DynamicBytesField, DynamicChainMutability, DynamicCreatorsField,
     DynamicEnumField, DynamicStringField, DynamicUint32Field, DynamicUint64Field, EditionV1,
-    MasterEdition, OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
-    TokenStandard, UpdateVersionValue, UseMethod, Uses,
+    MasterEdition, OwnerType, RawBlock, RoyaltyTargetType, SpecificationAssetClass,
+    SpecificationVersions, TokenStandard, UpdateVersionValue, UseMethod, Uses,
 };
-use entities::models::{CompleteAssetDetails, UpdateVersion, Updated};
+use entities::models::{CompleteAssetDetails, SerializedRawBlock, UpdateVersion, Updated};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 
@@ -692,6 +692,19 @@ impl TryFrom<Uses> for entities::models::Uses {
         })
     }
 }
+
+impl From<SerializedRawBlock> for RawBlock {
+    fn from(value: SerializedRawBlock) -> Self {
+        Self { block: value.block }
+    }
+}
+
+impl From<RawBlock> for SerializedRawBlock {
+    fn from(value: RawBlock) -> Self {
+        Self { block: value.block }
+    }
+}
+
 macro_rules! impl_from_enum {
     ($src:ty, $dst:ident, $($variant:ident),*) => {
         impl From<$src> for $dst {

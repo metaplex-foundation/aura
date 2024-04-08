@@ -360,6 +360,17 @@ pub struct Task {
     pub ofd_status: TaskStatus,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RawBlock {
+    pub slot: u64,
+    pub block: solana_transaction_status::UiConfirmedBlock,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SerializedRawBlock {
+    pub block: Vec<u8>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

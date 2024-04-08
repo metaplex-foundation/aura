@@ -2,8 +2,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bincode::deserialize;
 use interface::slots_dumper::SlotGetter;
+use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
 use crate::column::TypedColumn;
 use crate::key_encoders::{decode_u64, encode_u64};
@@ -139,5 +142,66 @@ impl TypedColumn for ForceReingestableSlots {
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
         decode_u64(bytes)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PeerForceReingestableSlots {
+    pub slot: u64,
+    pub processed: bool,
+}
+
+impl TypedColumn for PeerForceReingestableSlots {
+    type KeyType = u64;
+    type ValueType = Self;
+    const NAME: &'static str = "PEER_FORCE_REINGESTABLE_SLOTS";
+
+    fn encode_key(slot: u64) -> Vec<u8> {
+        encode_u64(slot)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_u64(bytes)
+    }
+}
+
+impl PeerForceReingestableSlots {
+    pub fn merge_peer_force_reingestable_slots(
+        _new_key: &[u8],
+        existing_val: Option<&[u8]>,
+        operands: &MergeOperands,
+    ) -> Option<Vec<u8>> {
+        let mut result = vec![];
+        if let Some(existing_val) = existing_val {
+            match deserialize::<Self>(existing_val) {
+                Ok(_) => {
+                    result = existing_val.to_vec();
+                }
+                Err(e) => {
+                    error!(
+                        "RocksDB: PeerForceReingestableSlots deserialize existing_val: {}",
+                        e
+                    )
+                }
+            }
+        }
+
+        for op in operands {
+            match deserialize::<Self>(op) {
+                Ok(new_val) => {
+                    if new_val.processed {
+                        result = op.to_vec();
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "RocksDB: PeerForceReingestableSlots deserialize new_val: {}",
+                        e
+                    )
+                }
+            }
+        }
+
+        Some(result)
     }
 }

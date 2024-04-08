@@ -2,8 +2,10 @@
 mod tests {
     use std::collections::HashSet;
 
-    use interface::asset_streaming_and_discovery::AssetDetailsStreamer;
+    use entities::models::RawBlock;
+    use interface::asset_streaming_and_discovery::{AssetDetailsStreamer, RawBlocksStreamer};
     use solana_sdk::pubkey::Pubkey;
+    use solana_transaction_status::UiConfirmedBlock;
     use tokio_stream::StreamExt;
 
     use setup::rocks::*;
@@ -97,5 +99,43 @@ mod tests {
         }
         assert_eq!(pk_set.len(), cnt);
         assert_eq!(pk_set, pks.pubkeys.into_iter().collect::<HashSet<_>>());
+    }
+
+    #[tokio::test]
+    async fn test_get_raw_blocks_stream_in_range_data() {
+        let env = RocksTestEnvironment::new(&[]);
+        let storage = &env.storage;
+        let slot = 153;
+        let blockhash = "blockhash";
+        storage
+            .raw_blocks_cbor
+            .put_cbor_encoded(
+                slot,
+                RawBlock {
+                    slot,
+                    block: UiConfirmedBlock {
+                        previous_blockhash: "".to_string(),
+                        blockhash: blockhash.to_string(),
+                        parent_slot: 0,
+                        transactions: None,
+                        signatures: None,
+                        rewards: None,
+                        block_time: None,
+                        block_height: None,
+                    },
+                },
+            )
+            .await
+            .unwrap();
+        // Call get_asset_details_stream_in_range on a database
+        let response = storage.get_raw_blocks_stream_in_range(100, 200).await;
+
+        assert!(response.is_ok());
+        let mut stream = response.unwrap();
+        let resp = stream.next().await.unwrap().unwrap();
+
+        let block = serde_cbor::from_slice::<RawBlock>(resp.block.as_slice()).unwrap();
+        assert_eq!(block.slot, slot);
+        assert_eq!(block.block.blockhash, blockhash.to_string());
     }
 }

@@ -1,14 +1,19 @@
 use crate::error::GrpcError;
 use crate::gapfiller::gap_filler_service_client::GapFillerServiceClient;
-use crate::gapfiller::RangeRequest;
+use crate::gapfiller::{GetRawBlockRequest, RangeRequest};
 use async_trait::async_trait;
 use futures::StreamExt;
 use interface::asset_streaming_and_discovery::{
-    AssetDetailsConsumer, AssetDetailsStreamNonSync, AsyncError, PeerDiscovery,
+    AssetDetailsConsumer, AssetDetailsStreamNonSync, AsyncError, PeerDiscovery, RawBlocksConsumer,
+    RawBlocksStreamNonSync,
 };
+use interface::error::StorageError;
+use interface::signature_persistence::BlockProducer;
+use std::sync::Arc;
 use tonic::transport::{Channel, Error};
 use tonic::{Code, Status};
 
+#[derive(Clone)]
 pub struct Client {
     inner: GapFillerServiceClient<Channel>,
 }
@@ -29,7 +34,7 @@ impl Client {
 
 #[async_trait]
 impl AssetDetailsConsumer for Client {
-    async fn get_consumable_stream_in_range(
+    async fn get_asset_details_consumable_stream_in_range(
         &mut self,
         start_slot: u64,
         end_slot: u64,
@@ -53,5 +58,52 @@ impl AssetDetailsConsumer for Client {
                         .map_err(|e| Box::new(e) as AsyncError)
                 }),
         ))
+    }
+}
+
+#[async_trait]
+impl RawBlocksConsumer for Client {
+    async fn get_raw_blocks_consumable_stream_in_range(
+        &mut self,
+        start_slot: u64,
+        end_slot: u64,
+    ) -> Result<RawBlocksStreamNonSync, AsyncError> {
+        Ok(Box::pin(
+            self.inner
+                .get_raw_blocks_within(RangeRequest {
+                    start_slot,
+                    end_slot,
+                })
+                .await
+                .map_err(|e| Box::new(e) as AsyncError)?
+                .into_inner()
+                .map(|stream| {
+                    stream
+                        .map(|raw_block| raw_block.into())
+                        .map_err(|e| Box::new(e) as AsyncError)
+                }),
+        ))
+    }
+}
+
+#[async_trait]
+impl BlockProducer for Client {
+    async fn get_block(
+        &self,
+        slot: u64,
+        _backup_provider: Option<Arc<impl BlockProducer>>,
+    ) -> Result<solana_transaction_status::UiConfirmedBlock, StorageError> {
+        self.inner
+            .clone()
+            .get_raw_block(GetRawBlockRequest { slot })
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))
+            .and_then(|response| {
+                serde_cbor::from_slice::<entities::models::RawBlock>(
+                    response.into_inner().block.as_slice(),
+                )
+                .map_err(|e| StorageError::Common(e.to_string()))
+                .map(|raw_block| raw_block.block)
+            })
     }
 }

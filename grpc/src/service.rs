@@ -1,19 +1,32 @@
 use std::{pin::Pin, sync::Arc};
 
-use crate::gapfiller::{gap_filler_service_server::GapFillerService, AssetDetails, RangeRequest};
+use crate::gapfiller::{
+    gap_filler_service_server::GapFillerService, AssetDetails, GetRawBlockRequest, RangeRequest,
+    RawBlock,
+};
 use futures::{stream::Stream, StreamExt};
-use interface::asset_streaming_and_discovery::AssetDetailsStreamer;
+use interface::asset_streaming_and_discovery::{
+    AssetDetailsStreamer, RawBlockGetter, RawBlocksStreamer,
+};
 use interface::error::UsecaseError;
 use tonic::{async_trait, Request, Response, Status};
 
 pub struct PeerGapFillerServiceImpl {
     asset_details_streamer: Arc<dyn AssetDetailsStreamer>, // Dependency injection of the streaming service
+    raw_blocks_streamer: Arc<dyn RawBlocksStreamer>,
+    raw_block_getter: Arc<dyn RawBlockGetter>,
 }
 
 impl PeerGapFillerServiceImpl {
-    pub fn new(asset_details_streamer: Arc<dyn AssetDetailsStreamer>) -> Self {
+    pub fn new(
+        asset_details_streamer: Arc<dyn AssetDetailsStreamer>,
+        raw_blocks_streamer: Arc<dyn RawBlocksStreamer>,
+        raw_block_getter: Arc<dyn RawBlockGetter>,
+    ) -> Self {
         PeerGapFillerServiceImpl {
             asset_details_streamer,
+            raw_blocks_streamer,
+            raw_block_getter,
         }
     }
 }
@@ -57,6 +70,54 @@ impl GapFillerService for PeerGapFillerServiceImpl {
         });
         Ok(Response::new(Box::pin(response_stream)))
     }
+
+    type GetRawBlocksWithinStream =
+        Pin<Box<dyn Stream<Item = Result<RawBlock, Status>> + Send + Sync>>;
+
+    async fn get_raw_blocks_within(
+        &self,
+        request: Request<RangeRequest>,
+    ) -> Result<Response<Self::GetRawBlocksWithinStream>, Status> {
+        let range = request.into_inner();
+
+        // Convert RangeRequest to your domain-specific request format if needed
+        let start_slot = range.start_slot;
+        let end_slot = range.end_slot;
+
+        // Get the stream of asset details from the business logic layer
+        let raw_blocks_stream = self
+            .raw_blocks_streamer
+            .get_raw_blocks_stream_in_range(start_slot, end_slot)
+            .await;
+
+        let raw_blocks_stream = match raw_blocks_stream {
+            Ok(stream) => stream,
+            Err(e) => {
+                if let Some(usecase_error) = e.downcast_ref::<UsecaseError>() {
+                    return Err(usecase_error_to_status(usecase_error));
+                }
+                // If it's not a UsecaseError, or if you don't have specific handling for it
+                return Err(Status::internal(format!("Internal error: {}", e)));
+            }
+        };
+
+        let response_stream = raw_blocks_stream.map(|result| {
+            result
+                .map(|serialized_raw_block| serialized_raw_block.into())
+                .map_err(|e| Status::internal(format!("Streaming error: {}", e)))
+        });
+        Ok(Response::new(Box::pin(response_stream)))
+    }
+
+    async fn get_raw_block(
+        &self,
+        request: Request<GetRawBlockRequest>,
+    ) -> Result<Response<RawBlock>, Status> {
+        self.raw_block_getter
+            .get_raw_block(request.into_inner().slot)
+            .map(|serialized_raw_block| Response::new(serialized_raw_block.into()))
+            .map_err(|e| Status::internal(format!("Get RawBlock error: {}", e)))
+    }
 }
 
 fn usecase_error_to_status(err: &UsecaseError) -> Status {
@@ -80,8 +141,10 @@ fn usecase_error_to_status(err: &UsecaseError) -> Status {
 mod tests {
     use super::*;
     use futures::stream;
-    use interface::asset_streaming_and_discovery::AssetDetailsStream;
     use interface::asset_streaming_and_discovery::MockAssetDetailsStreamer;
+    use interface::asset_streaming_and_discovery::{
+        AssetDetailsStream, MockRawBlockGetter, MockRawBlocksStreamer,
+    };
     use interface::error::UsecaseError;
     use mockall::predicate::*;
 
@@ -99,6 +162,8 @@ mod tests {
             );
         let service = super::PeerGapFillerServiceImpl {
             asset_details_streamer: Arc::new(mock_streamer),
+            raw_blocks_streamer: Arc::new(MockRawBlocksStreamer::new()),
+            raw_block_getter: Arc::new(MockRawBlockGetter::new()),
         };
 
         let response = service
@@ -130,6 +195,8 @@ mod tests {
 
         let service = PeerGapFillerServiceImpl {
             asset_details_streamer: Arc::new(mock),
+            raw_blocks_streamer: Arc::new(MockRawBlocksStreamer::new()),
+            raw_block_getter: Arc::new(MockRawBlockGetter::new()),
         };
 
         let response = service

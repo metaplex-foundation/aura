@@ -15,7 +15,7 @@ pub use asset::{
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
-use entities::models::AssetSignature;
+use entities::models::{AssetSignature, RawBlock};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -42,6 +42,7 @@ pub mod key_encoders;
 pub mod offchain_data;
 pub mod parameters;
 pub mod raw_block;
+pub mod raw_blocks_streaming_client;
 pub mod sequence_consistent;
 pub mod signature_client;
 pub mod slots_dumper;
@@ -80,7 +81,8 @@ pub struct Storage {
     pub bubblegum_slots: Column<bubblegum_slots::BubblegumSlots>,
     pub ingestable_slots: Column<bubblegum_slots::IngestableSlots>,
     pub force_reingestable_slots: Column<bubblegum_slots::ForceReingestableSlots>,
-    pub raw_blocks_cbor: Column<raw_block::RawBlock>,
+    pub peer_force_reingestable_slots: Column<bubblegum_slots::PeerForceReingestableSlots>,
+    pub raw_blocks_cbor: Column<RawBlock>,
     pub db: Arc<DB>,
     pub assets_update_idx: Column<AssetsUpdateIdx>,
     pub slot_asset_idx: Column<SlotAssetIdx>,
@@ -132,6 +134,7 @@ impl Storage {
         let token_accounts = Self::column(db.clone(), red_metrics.clone());
         let token_account_owner_idx = Self::column(db.clone(), red_metrics.clone());
         let token_account_mint_owner_idx = Self::column(db.clone(), red_metrics.clone());
+        let peer_force_reingestable_slots = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -151,6 +154,7 @@ impl Storage {
             bubblegum_slots,
             ingestable_slots,
             force_reingestable_slots,
+            peer_force_reingestable_slots,
             raw_blocks_cbor: raw_blocks,
             db,
             assets_update_idx,
@@ -218,10 +222,11 @@ impl Storage {
             Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(),
             Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
             Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
-            Self::new_cf_descriptor::<raw_block::RawBlock>(),
+            Self::new_cf_descriptor::<RawBlock>(),
             Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(),
             Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(),
             Self::new_cf_descriptor::<bubblegum_slots::ForceReingestableSlots>(),
+            Self::new_cf_descriptor::<bubblegum_slots::PeerForceReingestableSlots>(),
             Self::new_cf_descriptor::<AssetOwner>(),
             Self::new_cf_descriptor::<TreeSeqIdx>(),
             Self::new_cf_descriptor::<TreesGaps>(),
@@ -409,7 +414,13 @@ impl Storage {
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
-            raw_block::RawBlock::NAME => {
+            bubblegum_slots::PeerForceReingestableSlots::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_force_peer_reingestable_slots_keep_existing",
+                    bubblegum_slots::PeerForceReingestableSlots::merge_peer_force_reingestable_slots,
+                );
+            }
+            RawBlock::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_raw_block_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
