@@ -106,6 +106,8 @@ pub enum IngesterError {
     Usecase(String),
     #[error("SolanaDeserializer: {0}")]
     SolanaDeserializer(String),
+    #[error("PDACheckFail: expected: {0}, got: {1}")]
+    PDACheckFail(String, String),
 }
 
 impl From<reqwest::Error> for IngesterError {

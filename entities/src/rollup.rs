@@ -36,3 +36,13 @@ pub struct RolledMintInstruction {
     // derived data
     pub id: Pubkey, // PDA("asset", tree_id, nonce?) // validate
 }
+
+pub struct BatchMintInstruction {
+    pub max_depth: u32,
+    pub max_buffer_size: u32,
+    pub num_minted: u64,
+    pub root: [u8; 32],
+    pub leaf: [u8; 32],
+    pub index: u32,
+    pub metadata_url: String,
+}

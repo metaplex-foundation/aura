@@ -1068,11 +1068,11 @@ dependencies = [
 
 [[package]]
 name = "borsh"
-version = "1.3.0"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26d4d6dafc1a3bb54687538972158f07b2c948bc57d5890df22c0739098b3028"
+checksum = "0901fc8eb0aca4c83be0106d6f2db17d86a08dfc2c25f0e84464bf381158add6"
 dependencies = [
- "borsh-derive 1.3.0",
+ "borsh-derive 1.4.0",
  "cfg_aliases",
 ]
 
@@ -1104,12 +1104,12 @@ dependencies = [
 
 [[package]]
 name = "borsh-derive"
-version = "1.3.0"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf4918709cc4dd777ad2b6303ed03cb37f3ca0ccede8c1b0d28ac6db8f4710e0"
+checksum = "51670c3aa053938b0ee3bd67c3817e471e626151131b934038e83c5bf8de48f5"
 dependencies = [
  "once_cell",
- "proc-macro-crate 2.0.0",
+ "proc-macro-crate 3.0.0",
  "proc-macro2",
  "quote",
  "syn 2.0.48",
@@ -2214,11 +2214,13 @@ version = "0.1.0"
 dependencies = [
  "blockbuster",
  "hex",
+ "mpl-bubblegum",
  "num-derive 0.4.1",
  "num-traits",
  "schemars",
  "serde",
  "serde_derive",
+ "serde_json",
  "sha2 0.10.8",
  "solana-program",
  "solana-sdk",
@@ -3847,6 +3849,7 @@ dependencies = [
 name = "nft_ingester"
 version = "0.7.2"
 dependencies = [
+ "anchor-lang",
  "async-trait",
  "backfill-rpc",
  "bincode",
@@ -3882,6 +3885,7 @@ dependencies = [
  "postgre-client",
  "pprof",
  "prometheus-client",
+ "rand 0.8.5",
  "reqwest",
  "rocks-db",
  "schemars",
@@ -4726,15 +4730,6 @@ dependencies = [
 
 [[package]]
 name = "proc-macro-crate"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e8366a6159044a37876a2b9817124296703c586a5c92e2c53751fa06d8d43e8"
-dependencies = [
- "toml_edit 0.20.7",
-]
-
-[[package]]
-name = "proc-macro-crate"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b2685dd208a3771337d8d386a89840f0f43cd68be8dae90a5f8c2384effc9cd"
@@ -5529,7 +5524,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06676aec5ccb8fc1da723cc8c0f9a46549f21ebb8753d3915c6c41db1e7f1dc4"
 dependencies = [
  "arrayvec",
- "borsh 1.3.0",
+ "borsh 1.4.0",
  "bytes",
  "num-traits",
  "rand 0.8.5",
@@ -8106,17 +8101,6 @@ name = "toml_edit"
 version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
-dependencies = [
- "indexmap 2.1.0",
- "toml_datetime",
- "winnow",
-]
-
-[[package]]
-name = "toml_edit"
-version = "0.20.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70f427fce4d84c72b5b732388bf4a9f4531b53f74e2887e3ecb2481f68f66d81"
 dependencies = [
  "indexmap 2.1.0",
  "toml_datetime",

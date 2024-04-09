@@ -60,13 +60,14 @@ tonic = "0.10.2"
 tracing = "0.1.40"
 backfill-rpc = { path = "../backfill_rpc" }
 prometheus-client = "0.21.2"
-pprof = {version = "0.13.0", features = ["_protobuf", "protobuf-codec"]}
+pprof = { version = "0.13.0", features = ["_protobuf", "protobuf-codec"] }
 solana-program = "~1.17"
 itertools = "0.12.1"
 solana-client = "~1.17"
 heck = "0.5.0"
 "lazy_static" = "1.4.0"
 tempfile = "3.8.1"
+anchor-lang = "0.29.0"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

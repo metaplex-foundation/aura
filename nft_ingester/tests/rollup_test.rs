@@ -4,8 +4,8 @@ use std::fs::File;
 use anchor_lang::prelude::*;
 use mpl_bubblegum::types::MetadataArgs;
 
-use nft_ingester::rollup::RolledMintInstruction;
-use nft_ingester::{bubblegum_updates_processor::BubblegumTxProcessor, rollup::Rollup};
+use entities::rollup::{RolledMintInstruction, Rollup};
+use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use rand::{thread_rng, Rng};
 use solana_sdk::keccak;
 use solana_sdk::pubkey::Pubkey;
@@ -84,7 +84,6 @@ fn generate_rollup(size: usize) -> Rollup {
         let id = mpl_bubblegum::utils::get_asset_id(&tree, nonce);
         let owner = Pubkey::new_unique();
         let delegate = Pubkey::new_unique();
-        
 
         let metadata_args_hash = keccak::hashv(&[mint_args.try_to_vec().unwrap().as_slice()]);
         let data_hash = keccak::hashv(&[
@@ -126,10 +125,10 @@ fn generate_rollup(size: usize) -> Rollup {
         last_leaf_hash = hashed_leaf;
 
         let rolled_mint = RolledMintInstruction {
-            mint_args: mint_args,
+            mint_args,
             authority,
-            owner: owner,
-            delegate: delegate,
+            owner,
+            delegate,
             nonce,
             id,
         };
@@ -181,7 +180,6 @@ fn test_generate_1_000_000_rollup() {
     let file = File::create("rollup-1_000_000.json").unwrap();
     serde_json::to_writer(file, &rollup).unwrap()
 }
-
 
 #[test]
 fn test_generate_10_000_000_rollup() {

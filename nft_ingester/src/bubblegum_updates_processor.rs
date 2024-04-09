@@ -2,6 +2,7 @@ use crate::error::IngesterError;
 use crate::flatbuffer_mapper::FlatbufferMapper;
 use crate::plerkle;
 use crate::plerkle::PlerkleTransactionInfo;
+use crate::rollup_processor::{create_leaf_schema, find_rollup_pda};
 use blockbuster::programs::bubblegum::{BubblegumInstruction, Payload};
 use blockbuster::{
     instruction::{order_instructions, InstructionBundle, IxPair},
@@ -15,6 +16,8 @@ use entities::enums::{
 };
 use entities::models::{BufferedTransaction, SignatureWithSlot, Task, UpdateVersion, Updated};
 use entities::models::{ChainDataV1, Creator, Uses};
+use entities::rollup::BatchMintInstruction;
+use interface::rollup::RollupDownloader;
 use lazy_static::lazy_static;
 use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
@@ -32,6 +35,7 @@ use rocks_db::transaction::{
 use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use spl_account_compression::events::ChangeLogEventV1;
 use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -1048,6 +1052,53 @@ impl BubblegumTxProcessor {
         Err(IngesterError::ParsingError(
             "Ix not parsed correctly".to_string(),
         ))
+    }
+
+    pub async fn get_rollup_update(
+        bundle: &InstructionBundle<'_>,
+        batch_mint_instruction: &BatchMintInstruction, // TODO: use BubblegumInstruction instead
+        rollup_downloader: impl RollupDownloader,
+    ) -> Result<(), IngesterError> {
+        let rollup = rollup_downloader
+            .download_rollup(&batch_mint_instruction.metadata_url)
+            .await?;
+
+        let (rollup_pda, _) = find_rollup_pda(&rollup.tree_authority, rollup.tree_nonce);
+        if rollup_pda != rollup.tree_id {
+            return Err(IngesterError::PDACheckFail(
+                rollup_pda.to_string(),
+                rollup.tree_id.to_string(),
+            ));
+        }
+
+        for asset in rollup.rolled_mints {
+            let leaf = match create_leaf_schema(&asset, &rollup.tree_id) {
+                Ok(leaf) => leaf,
+                Err(_e) => continue,
+            };
+            let Ok(_asset_update) = Self::get_mint_v1_update(
+                &BubblegumInstruction {
+                    instruction: InstructionName::MintV1,
+                    tree_update: Some(ChangeLogEventV1 {
+                        id: rollup.tree_id,
+                        path: vec![],
+                        seq: asset.nonce,
+                        index: asset.nonce as u32,
+                    }),
+                    leaf_update: Some(leaf),
+                    payload: Some(Payload::MintV1 {
+                        args: asset.mint_args,
+                        authority: asset.authority,
+                        tree_id: rollup.tree_id,
+                    }),
+                },
+                bundle,
+            ) else {
+                continue;
+            };
+        }
+
+        Ok(())
     }
 }
 
