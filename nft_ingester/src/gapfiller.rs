@@ -25,7 +25,7 @@ pub async fn process_asset_details_stream(
         }
     };
 
-    let mut processed_slots = 0;
+    let mut processed_assets = 0;
     while let Some(result) = stream.next().await {
         if !keep_running.load(Ordering::SeqCst) {
             break;
@@ -35,7 +35,7 @@ pub async fn process_asset_details_stream(
                 if let Some(e) = insert_gaped_data(storage.clone(), details).await.err() {
                     error!("Error processing gaped data: {}", e)
                 }
-                processed_slots += 1;
+                processed_assets += 1;
             }
             Err(e) => {
                 error!("Error processing stream item: {}", e);
@@ -43,7 +43,7 @@ pub async fn process_asset_details_stream(
         }
     }
 
-    processed_slots
+    processed_assets
 }
 
 pub async fn insert_gaped_data(
