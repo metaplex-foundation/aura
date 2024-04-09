@@ -15,7 +15,7 @@ pub struct Rollup {
 
     // derived data
     pub tree_id: Pubkey, // derived from the tree authority and nonce PDA("rollup", tree_authority, tree_nonce) // validate
-    pub merkle_root: Pubkey, // validate
+    pub merkle_root: [u8; 32], // validate
     pub last_leaf_hash: [u8; 32], // validate
 }
 
