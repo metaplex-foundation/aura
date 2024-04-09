@@ -95,12 +95,7 @@ impl TcpReceiver {
             i = end;
 
             end = i + size;
-            let handler_clone = self.callback.clone();
-            let body_clone = body[i..end].to_vec();
-            if let Err(e) = tokio::spawn(async move { handler_clone.call(body_clone).await }).await
-            {
-                error!("callback panic: {:?}", e);
-            };
+            self.callback.call(body[i..end].to_vec()).await;
             i = end;
 
             num_elements += 1;

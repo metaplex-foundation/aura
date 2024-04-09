@@ -222,19 +222,43 @@ pub async fn main() -> Result<(), IngesterError> {
     let keep_running = Arc::new(AtomicBool::new(true));
     let cloned_keep_running = keep_running.clone();
 
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        geyser_tcp_receiver
-            .connect(geyser_addr, cloned_keep_running)
+    mutexed_tasks.lock().await.spawn(async move {
+        let geyser_tcp_receiver = Arc::new(geyser_tcp_receiver);
+        while cloned_keep_running.load(Ordering::SeqCst) {
+            let geyser_tcp_receiver_clone = geyser_tcp_receiver.clone();
+            let cloned_keep_running = cloned_keep_running.clone();
+            if let Err(e) = tokio::spawn(async move {
+                geyser_tcp_receiver_clone
+                    .connect(geyser_addr, cloned_keep_running)
+                    .await
+                    .unwrap()
+            })
             .await
-            .unwrap()
-    }));
+            {
+                error!("geyser_tcp_receiver panic: {:?}", e);
+            }
+        }
+        Ok(())
+    });
     let cloned_keep_running = keep_running.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        snapshot_tcp_receiver
-            .connect(snapshot_addr, cloned_keep_running)
+    mutexed_tasks.lock().await.spawn(async move {
+        let snapshot_tcp_receiver = Arc::new(snapshot_tcp_receiver);
+        while cloned_keep_running.load(Ordering::SeqCst) {
+            let snapshot_tcp_receiver_clone = snapshot_tcp_receiver.clone();
+            let cloned_keep_running = cloned_keep_running.clone();
+            if let Err(e) = tokio::spawn(async move {
+                snapshot_tcp_receiver_clone
+                    .connect(snapshot_addr, cloned_keep_running)
+                    .await
+                    .unwrap()
+            })
             .await
-            .unwrap()
-    }));
+            {
+                error!("snapshot_tcp_receiver panic: {:?}", e);
+            }
+        }
+        Ok(())
+    });
 
     let cloned_buffer = buffer.clone();
     let cloned_keep_running = keep_running.clone();
