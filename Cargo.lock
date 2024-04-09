@@ -3369,6 +3369,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e623cca1f0e2a0919032c1bdabbf81dd9aa34658d5066aca7bb90d608317ab91"
 dependencies = [
  "borsh 0.10.3",
+ "serde",
 ]
 
 [[package]]
@@ -3757,6 +3758,8 @@ dependencies = [
  "kaigan",
  "num-derive 0.3.3",
  "num-traits",
+ "serde",
+ "serde_with 3.7.0",
  "solana-program",
  "thiserror",
 ]
