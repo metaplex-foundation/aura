@@ -3901,6 +3901,7 @@ dependencies = [
  "solana-storage-bigtable",
  "solana-transaction-status",
  "spl-account-compression",
+ "spl-concurrent-merkle-tree",
  "spl-token",
  "sqlx",
  "stretto",

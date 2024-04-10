@@ -11,5 +11,5 @@ pub trait BatchMintInstructionGetter {
 #[automock]
 #[async_trait]
 pub trait RollupDownloader {
-    async fn download_rollup(&self, url: &str) -> Result<Rollup, UsecaseError>;
+    async fn download_rollup(&self, url: &str) -> Result<Box<Rollup>, UsecaseError>;
 }

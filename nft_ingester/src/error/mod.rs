@@ -108,6 +108,10 @@ pub enum IngesterError {
     SolanaDeserializer(String),
     #[error("PDACheckFail: expected: {0}, got: {1}")]
     PDACheckFail(String, String),
+    #[error("SplCompression: {0}")]
+    SplCompression(#[from] spl_account_compression::ConcurrentMerkleTreeError),
+    #[error("CannotCreateMerkleTree: depth [{0}], size [{1}]")]
+    CannotCreateMerkleTree(u32, u32),
 }
 
 impl From<reqwest::Error> for IngesterError {

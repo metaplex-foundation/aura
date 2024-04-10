@@ -116,6 +116,7 @@ impl From<AssetUpdate<AssetDynamicDetails>> for InstructionResult {
     }
 }
 
+#[derive(Clone)]
 pub struct TransactionResult {
     pub instruction_results: Vec<InstructionResult>,
     pub transaction_signature: Option<(Pubkey, SignatureWithSlot)>,

@@ -2,14 +2,18 @@ use std::collections::HashMap;
 use std::fs::File;
 
 use anchor_lang::prelude::*;
+use async_trait::async_trait;
 use mpl_bubblegum::types::MetadataArgs;
 
-use entities::rollup::{RolledMintInstruction, Rollup};
+use entities::rollup::{BatchMintInstruction, RolledMintInstruction, Rollup};
+use interface::error::UsecaseError;
+use interface::rollup::RollupDownloader;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use rand::{thread_rng, Rng};
 use solana_sdk::keccak;
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::ConcurrentMerkleTree;
+use testcontainers::clients::Cli;
 
 fn generate_rollup(size: usize) -> Rollup {
     let authority = Pubkey::new_unique();
@@ -122,6 +126,7 @@ fn generate_rollup(size: usize) -> Rollup {
         ])
         .to_bytes();
         merkle.append(hashed_leaf).unwrap();
+        // merkle.rightmost_proof.proof
         last_leaf_hash = hashed_leaf;
 
         let rolled_mint = RolledMintInstruction {
@@ -187,4 +192,38 @@ fn test_generate_10_000_000_rollup() {
     assert_eq!(rollup.rolled_mints.len(), 10_000_000);
     let file = File::create("rollup-10_000_000.json").unwrap();
     serde_json::to_writer(file, &rollup).unwrap()
+}
+
+struct TestRollupDownloader {}
+#[async_trait]
+impl RollupDownloader for TestRollupDownloader {
+    async fn download_rollup(&self, _url: &str) -> std::result::Result<Box<Rollup>, UsecaseError> {
+        Ok(Box::new(generate_rollup(2)))
+    }
+}
+
+#[tokio::test]
+async fn store_rollup_test() {
+    let cnt = 0;
+    let cli = Cli::default();
+    let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+    BubblegumTxProcessor::store_rollup_update(
+        100,
+        &BatchMintInstruction {
+            max_depth: 24,
+            max_buffer_size: 1024,
+            num_minted: 0,
+            root: [0u8; 32],
+            leaf: [0u8; 32],
+            index: 0,
+            metadata_url: "ff".to_string(),
+        },
+        TestRollupDownloader {},
+        env.rocks_env.storage.clone(),
+    )
+    .await
+    .unwrap();
+
+    let static_iter = env.rocks_env.storage.asset_static_data.iter_start();
+    assert_eq!(static_iter.count(), 2);
 }
