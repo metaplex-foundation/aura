@@ -44,7 +44,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
-const ROLLUP_BATCH_FLUSH_SIZE: usize = 500;
+const ROLLUP_BATCH_FLUSH_SIZE: usize = 10_000;
 lazy_static! {
     static ref KEY_SET: HashSet<Pubkey> = {
         let mut m = HashSet::new();
@@ -1111,15 +1111,12 @@ impl BubblegumTxProcessor {
         for instruction in bubblegum_instructions.iter() {
             let (mut update, mut task_option) = Self::get_mint_v1_update(instruction, slot)?;
             if let Some(ref mut task) = task_option {
-                if rollup.raw_metadata_map.contains_key(&task.ofd_metadata_url) {
+                if let Some(metadata) = rollup.raw_metadata_map.get(&task.ofd_metadata_url) {
                     task.ofd_status = TaskStatus::Success;
-
-                    if let Some(metadata) = rollup.raw_metadata_map.get(&task.ofd_metadata_url) {
-                        update.offchain_data_update = Some(OffChainData {
-                            url: task.ofd_metadata_url.clone(),
-                            metadata: metadata.to_string(),
-                        });
-                    }
+                    update.offchain_data_update = Some(OffChainData {
+                        url: task.ofd_metadata_url.clone(),
+                        metadata: metadata.to_string(),
+                    });
                 }
             }
 
@@ -1129,14 +1126,14 @@ impl BubblegumTxProcessor {
             if transaction_result.instruction_results.len() >= ROLLUP_BATCH_FLUSH_SIZE {
                 // TODO: add retry
                 rocks_db
-                    .store_transaction_result(transaction_result.clone(), false)
+                    .store_transaction_result(transaction_result.clone(), true)
                     .await?;
                 transaction_result.instruction_results.clear();
             }
         }
         // TODO: add retry
         rocks_db
-            .store_transaction_result(transaction_result.clone(), false)
+            .store_transaction_result(transaction_result.clone(), true)
             .await?;
 
         Ok(())
