@@ -494,12 +494,12 @@ pub async fn get_by_ids(
             let download_results = results.lock().await;
 
             if !download_results.is_empty() {
-                if let Err(e) = json_persister
-                    .persist_response((*download_results).clone())
-                    .await
-                {
-                    error!("Could not persist downloaded JSONs: {:?}", e);
-                }
+                let download_results = download_results.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = json_persister.persist_response(download_results).await {
+                        error!("Could not persist downloaded JSONs: {:?}", e);
+                    }
+                });
             }
         }
 

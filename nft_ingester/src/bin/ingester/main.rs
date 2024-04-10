@@ -393,17 +393,11 @@ pub async fn main() -> Result<(), IngesterError> {
         ))
     });
 
-    let middleware_json_downloader = {
-        if let Some(conf) = &config.json_middleware_config {
-            if conf.is_enabled {
-                Some(json_processor.clone())
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    };
+    let middleware_json_downloader = config
+        .json_middleware_config
+        .as_ref()
+        .filter(|conf| conf.is_enabled)
+        .map(|_| json_processor.clone());
 
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
