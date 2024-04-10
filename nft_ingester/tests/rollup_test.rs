@@ -120,7 +120,6 @@ fn generate_rollup(size: usize) -> Rollup {
         ])
         .to_bytes();
         merkle.append(hashed_leaf).unwrap();
-        // merkle.rightmost_proof.proof
         last_leaf_hash = hashed_leaf;
 
         let rolled_mint = RolledMintInstruction {

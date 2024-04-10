@@ -1,7 +1,10 @@
 use crate::bubblegum_updates_processor::BubblegumTxProcessor;
 use crate::error::IngesterError;
 use anchor_lang::AnchorSerialize;
-use entities::rollup::RolledMintInstruction;
+use async_trait::async_trait;
+use entities::rollup::{RolledMintInstruction, Rollup};
+use interface::error::UsecaseError;
+use interface::rollup::RollupDownloader;
 use mpl_bubblegum::types::{LeafSchema, Version};
 use mpl_bubblegum::utils::get_asset_id;
 use mpl_bubblegum::LeafSchemaEvent;
@@ -67,4 +70,13 @@ pub fn create_leaf_schema(
     let leaf_hash = leaf.hash();
 
     Ok(LeafSchemaEvent::new(Version::V1, leaf, leaf_hash))
+}
+
+pub struct RollupDownloaderImpl;
+#[async_trait]
+impl RollupDownloader for RollupDownloaderImpl {
+    async fn download_rollup(&self, url: &str) -> Result<Box<Rollup>, UsecaseError> {
+        let response = reqwest::get(url).await?.bytes().await?;
+        Ok(Box::new(serde_json::from_slice(&response)?))
+    }
 }
