@@ -261,6 +261,12 @@ pub struct ApiConfig {
     pub max_page_limit: usize,
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
     pub archives_dir: String,
+    #[serde(default = "default_synchronization_api_threshold")]
+    pub consistence_synchronization_api_threshold: u64,
+}
+
+const fn default_synchronization_api_threshold() -> u64 {
+    1_000_000
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone, Default)]
