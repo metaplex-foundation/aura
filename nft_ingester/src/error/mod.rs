@@ -222,6 +222,12 @@ impl From<StorageError> for IngesterError {
     }
 }
 
+impl From<interface::error::StorageError> for IngesterError {
+    fn from(e: interface::error::StorageError) -> Self {
+        IngesterError::DatabaseError(e.to_string())
+    }
+}
+
 // TODO: refactor to use the real errors from the postgres package
 impl From<String> for IngesterError {
     fn from(e: String) -> Self {

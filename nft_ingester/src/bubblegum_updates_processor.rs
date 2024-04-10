@@ -11,8 +11,8 @@ use blockbuster::{
 };
 use chrono::Utc;
 use entities::enums::{
-    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard,
-    UseMethod,
+    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TaskStatus,
+    TokenStandard, UseMethod,
 };
 use entities::models::{BufferedTransaction, SignatureWithSlot, Task, UpdateVersion, Updated};
 use entities::models::{ChainDataV1, Creator, Uses};
@@ -28,6 +28,7 @@ use rocks_db::asset::AssetOwner;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
 };
+use rocks_db::offchain_data::OffChainData;
 use rocks_db::transaction::{
     AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, TransactionResult,
     TreeUpdate,
@@ -1074,7 +1075,7 @@ impl BubblegumTxProcessor {
             ));
         }
 
-        let mut bubblegum_instructions = Box::new(Vec::new());
+        let mut bubblegum_instructions = Vec::new();
         for asset in rollup.rolled_mints {
             bubblegum_instructions.push(BubblegumInstruction {
                 instruction: InstructionName::MintV1,
@@ -1108,20 +1109,33 @@ impl BubblegumTxProcessor {
             )),
         };
         for instruction in bubblegum_instructions.iter() {
-            let (update, _) = Self::get_mint_v1_update(instruction, slot)?;
+            let (mut update, mut task_option) = Self::get_mint_v1_update(instruction, slot)?;
+            if let Some(ref mut task) = task_option {
+                if rollup.raw_metadata_map.contains_key(&task.ofd_metadata_url) {
+                    task.ofd_status = TaskStatus::Success;
+
+                    if let Some(metadata) = rollup.raw_metadata_map.get(&task.ofd_metadata_url) {
+                        update.offchain_data_update = Some(OffChainData {
+                            url: task.ofd_metadata_url.clone(),
+                            metadata: metadata.to_string(),
+                        });
+                    }
+                }
+            }
+
             transaction_result.instruction_results.push(update.into());
             if transaction_result.instruction_results.len() >= ROLLUP_BATCH_FLUSH_SIZE {
+                // TODO: add retry
                 rocks_db
                     .store_transaction_result(transaction_result.clone(), false)
-                    .await
-                    .unwrap();
+                    .await?;
                 transaction_result.instruction_results.clear();
             }
         }
+        // TODO: add retry
         rocks_db
             .store_transaction_result(transaction_result.clone(), false)
-            .await
-            .unwrap();
+            .await?;
 
         Ok(())
     }

@@ -120,6 +120,15 @@ impl Storage {
                     tracing::error!("Failed to merge asset collection data: {}", e);
                 }
             }
+            if let Some(ref offchain_data_update) = update.offchain_data_update {
+                if let Err(e) = self.asset_offchain_data.merge_with_batch(
+                    batch,
+                    offchain_data_update.url.clone(),
+                    offchain_data_update,
+                ) {
+                    tracing::error!("Failed to merge offchain data: {}", e);
+                }
+            }
         }
         //todo: this doesn't seem to be a correct way to handle this, as delete will have no effect after any "late" tx ingestion
         if let Some(decompressed) = ix.decompressed {

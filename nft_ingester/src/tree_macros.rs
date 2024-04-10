@@ -1,10 +1,12 @@
 #[macro_export]
 macro_rules! _set_tree_paths {
     ($max_depth:literal, $max_size:literal, $bubblegum_instructions:ident) => {{
-        let mut tree = Box::new(spl_concurrent_merkle_tree::concurrent_merkle_tree::ConcurrentMerkleTree::<
-            $max_depth,
-            $max_size,
-        >::new());
+        let mut tree = Box::new(
+            spl_concurrent_merkle_tree::concurrent_merkle_tree::ConcurrentMerkleTree::<
+                $max_depth,
+                $max_size,
+            >::new(),
+        );
         tree.initialize()?;
         for instruction in $bubblegum_instructions.iter_mut() {
             if let Some(leaf_hash) = instruction.leaf_update.as_ref().map(|leaf| leaf.leaf_hash) {

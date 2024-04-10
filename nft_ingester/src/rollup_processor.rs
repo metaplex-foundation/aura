@@ -1,7 +1,7 @@
+use crate::bubblegum_updates_processor::BubblegumTxProcessor;
 use crate::error::IngesterError;
 use anchor_lang::AnchorSerialize;
 use entities::rollup::RolledMintInstruction;
-use mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
 use mpl_bubblegum::types::{LeafSchema, Version};
 use mpl_bubblegum::utils::get_asset_id;
 use mpl_bubblegum::LeafSchemaEvent;
@@ -13,9 +13,9 @@ pub fn find_rollup_pda(tree_authority: &Pubkey, tree_nonce: u64) -> (Pubkey, u8)
         &[
             b"rollup",
             tree_authority.as_ref(),
-            &tree_nonce.to_be_bytes(),
+            BubblegumTxProcessor::u32_to_u8_array(tree_nonce as u32).as_ref(),
         ],
-        &MPL_BUBBLEGUM_ID,
+        &mpl_bubblegum::programs::SPL_ACCOUNT_COMPRESSION_ID,
     )
 }
 

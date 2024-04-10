@@ -9,6 +9,7 @@ use entities::rollup::{BatchMintInstruction, RolledMintInstruction, Rollup};
 use interface::error::UsecaseError;
 use interface::rollup::RollupDownloader;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
+use nft_ingester::rollup_processor::find_rollup_pda;
 use rand::{thread_rng, Rng};
 use solana_sdk::keccak;
 use solana_sdk::pubkey::Pubkey;
@@ -19,14 +20,7 @@ fn generate_rollup(size: usize) -> Rollup {
     let authority = Pubkey::new_unique();
     let nonce: u32 = 1035;
 
-    let (tree, _) = Pubkey::find_program_address(
-        &[
-            b"rollup",
-            authority.as_ref(),
-            BubblegumTxProcessor::u32_to_u8_array(nonce).as_ref(),
-        ],
-        &mpl_bubblegum::programs::SPL_ACCOUNT_COMPRESSION_ID,
-    );
+    let (tree, _) = find_rollup_pda(&authority, nonce as u64);
     let mut mints = Vec::new();
     let mut merkle = ConcurrentMerkleTree::<24, 1024>::new();
     merkle.initialize().unwrap();
@@ -194,11 +188,12 @@ fn test_generate_10_000_000_rollup() {
     serde_json::to_writer(file, &rollup).unwrap()
 }
 
+const ROLLUP_ASSETS_TO_SAVE: usize = 1_000;
 struct TestRollupDownloader {}
 #[async_trait]
 impl RollupDownloader for TestRollupDownloader {
     async fn download_rollup(&self, _url: &str) -> std::result::Result<Box<Rollup>, UsecaseError> {
-        Ok(Box::new(generate_rollup(2)))
+        Ok(Box::new(generate_rollup(ROLLUP_ASSETS_TO_SAVE)))
     }
 }
 
@@ -210,8 +205,8 @@ async fn store_rollup_test() {
     BubblegumTxProcessor::store_rollup_update(
         100,
         &BatchMintInstruction {
-            max_depth: 24,
-            max_buffer_size: 1024,
+            max_depth: 10,
+            max_buffer_size: 32,
             num_minted: 0,
             root: [0u8; 32],
             leaf: [0u8; 32],
@@ -225,5 +220,5 @@ async fn store_rollup_test() {
     .unwrap();
 
     let static_iter = env.rocks_env.storage.asset_static_data.iter_start();
-    assert_eq!(static_iter.count(), 2);
+    assert_eq!(static_iter.count(), ROLLUP_ASSETS_TO_SAVE);
 }

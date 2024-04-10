@@ -6,6 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
 use spl_account_compression::state::PathNode;
 
+use crate::offchain_data::OffChainData;
 use crate::{
     asset::{AssetCollection, AssetLeaf},
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
@@ -30,6 +31,7 @@ pub struct AssetUpdateEvent {
     pub owner_update: Option<AssetUpdate<AssetOwner>>,
     pub authority_update: Option<AssetUpdate<AssetAuthority>>,
     pub collection_update: Option<AssetUpdate<AssetCollection>>,
+    pub offchain_data_update: Option<OffChainData>,
 }
 
 #[derive(Clone, Default)]
