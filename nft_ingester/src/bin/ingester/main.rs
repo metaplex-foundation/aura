@@ -393,6 +393,9 @@ pub async fn main() -> Result<(), IngesterError> {
         ))
     });
 
+    let tasks_clone = mutexed_tasks.clone();
+    let cloned_rx = shutdown_rx.resubscribe();
+
     let middleware_json_downloader = config
         .json_middleware_config
         .as_ref()
@@ -403,11 +406,13 @@ pub async fn main() -> Result<(), IngesterError> {
         match start_api(
             cloned_rocks_storage.clone(),
             cloned_keep_running,
+            cloned_rx,
             metrics_state.api_metrics.clone(),
             cloned_red_metrics,
             proof_checker,
             middleware_json_downloader.clone(),
             middleware_json_downloader,
+            tasks_clone,
         )
         .await
         {

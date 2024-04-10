@@ -109,7 +109,7 @@ services:
   db:
     container_name: db
     image: 'postgres:14'
-    command: [ "postgres", "-c", "log_statement=none", "-c", "log_destination=stderr" ,"-c","max_connections=2000", "-c", "max_parallel_workers=32", "-c", "max_parallel_workers_per_gather=24", "-c", "max_parallel_maintenance_workers=8", "-c", "shared_buffers=30GB", "-c", "effective_cache_size=55GB", "-c", "work_mem=1GB" ]
+    command: [ "postgres", "-c", "log_statement=none", "-c", "log_destination=stderr" ,"-c","max_connections=2000", "-c", "max_parallel_workers=32", "-c", "max_parallel_workers_per_gather=24", "-c", "max_parallel_maintenance_workers=8", "-c", "shared_buffers=30GB", "-c", "effective_cache_size=55GB", "-c", "work_mem=1GB", "-c", "max_wal_size=20GB" ]
     shm_size: 1g
     ports:
       - 5432:5432

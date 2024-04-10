@@ -4,20 +4,26 @@ use entities::api_req_params::{
     GetAssetBatchV0, GetAssetV0, GetAssetsByAuthorityV0, GetAssetsByCreatorV0, GetAssetsByGroupV0,
     GetAssetsByOwnerV0, SearchAssetsV0,
 };
+use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::types::params::Params;
-use jsonrpc_core::IoHandler;
+use jsonrpc_core::MetaIoHandler;
 use usecase::proofs::MaybeProofChecker;
 
+use crate::api::meta_middleware::RpcMetaMiddleware;
 use crate::api::*;
 use crate::json_worker::JsonWorker;
 
 pub struct RpcApiBuilder;
 
 impl RpcApiBuilder {
-    pub fn build(
+    pub(crate) fn build(
         api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker>,
-    ) -> Result<IoHandler, DasApiError> {
-        let mut module = IoHandler::default();
+        consistency_checkers: Vec<Arc<dyn ConsistencyChecker>>,
+    ) -> Result<MetaIoHandler<RpcMetaMiddleware, RpcMetaMiddleware>, DasApiError> {
+        let mut module = MetaIoHandler::<RpcMetaMiddleware, RpcMetaMiddleware>::new(
+            Default::default(),
+            RpcMetaMiddleware::new(consistency_checkers),
+        );
         let api = Arc::new(api);
 
         let cloned_api = api.clone();

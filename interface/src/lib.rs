@@ -1,5 +1,6 @@
 pub mod asset_sigratures;
 pub mod asset_streaming_and_discovery;
+pub mod consistency_check;
 pub mod error;
 pub mod fork_cleaner;
 pub mod json;
