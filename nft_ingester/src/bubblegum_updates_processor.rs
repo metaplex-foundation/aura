@@ -1123,7 +1123,9 @@ impl BubblegumTxProcessor {
                 }
             }
 
-            transaction_result.instruction_results.push(update.into());
+            transaction_result
+                .instruction_results
+                .push((update, task_option).into());
             if transaction_result.instruction_results.len() >= ROLLUP_BATCH_FLUSH_SIZE {
                 // TODO: add retry
                 rocks_db
