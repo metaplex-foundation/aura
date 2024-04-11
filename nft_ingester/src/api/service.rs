@@ -184,29 +184,33 @@ async fn batch_mint_request_handler(
                 .and_then(|ct| ct.to_str().ok())
                 .and_then(|ct| multer::parse_boundary(ct).ok());
 
-            if let Some(boundary) = boundary {
-                let mut multipart = Multipart::new(req.into_body(), boundary);
-                while let Ok(Some(field)) = multipart.next_field().await {
-                    let bytes = match field.bytes().await {
-                        Ok(bytes) => bytes,
-                        Err(e) => {
+            return match boundary {
+                Some(boundary) => {
+                    let mut multipart = Multipart::new(req.into_body(), boundary);
+                    while let Ok(Some(field)) = multipart.next_field().await {
+                        let bytes = match field.bytes().await {
+                            Ok(bytes) => bytes,
+                            Err(e) => {
+                                return Ok(Response::builder()
+                                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                    .body(Body::from(format!("Failed to read file: {}", e)))
+                                    .unwrap())
+                            }
+                        };
+                        if let Err(e) = save_file(&file_storage_path, bytes.as_ref()).await {
                             return Ok(Response::builder()
                                 .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                .body(Body::from(format!("Failed to read file: {}", e)))
-                                .unwrap())
+                                .body(Body::from(format!("Failed to save file: {}", e)))
+                                .unwrap());
                         }
-                    };
-                    if let Err(e) = save_file(&file_storage_path, bytes.as_ref()).await {
-                        return Ok(Response::builder()
-                            .status(StatusCode::INTERNAL_SERVER_ERROR)
-                            .body(Body::from(format!("Failed to save file: {}", e)))
-                            .unwrap());
                     }
+                    Ok(Response::new(Body::from("File uploaded successfully")))
                 }
-                return Ok(Response::new(Body::from("File uploaded successfully")));
+                None => Ok(Response::builder()
+                    .status(StatusCode::BAD_REQUEST)
+                    .body(Body::from("BAD REQUEST"))
+                    .unwrap()),
             }
-
-            Ok(Response::new(Body::from("File uploaded")))
         }
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
