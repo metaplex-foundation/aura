@@ -6,7 +6,6 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use multer::Multipart;
 use postgre_client::PgClient;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::broadcast::Receiver;
@@ -120,27 +119,21 @@ const BATCH_MINT_REQUEST_PATH: &str = "/batch_mint";
 
 fn upload_file_page() -> Response<Body> {
     let html = r#"<!DOCTYPE html>
-                            <html>
-                            <body>
+                        <html>
+                        <body>
 
-                            <form action="/batch_mint" method="post" enctype="multipart/form-data">
-                              <input type="file" name="file" id="file">
-                              <input type="submit" value="Upload file">
-                            </form>
+                        <form action="/batch_mint" method="post" enctype="multipart/form-data">
+                          <input type="file" name="file" id="file">
+                          <input type="submit" value="Upload file">
+                        </form>
 
-                            </body>
-                            </html>"#;
+                        </body>
+                        </html>"#;
     Response::new(Body::from(html))
 }
 
 async fn save_file(file_bytes: &[u8]) -> std::io::Result<()> {
-    let start = SystemTime::now();
-    let since_the_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards");
-    let timestamp = since_the_epoch.as_secs();
-    let uuid = Uuid::new_v4().to_string();
-    let new_file_name = format!("./file_storage/{}_{}.dat", uuid, timestamp);
+    let new_file_name = format!("./file_storage/{}.dat", Uuid::new_v4());
 
     let mut file = File::create(new_file_name).await?;
     file.write_all(file_bytes).await?;
@@ -160,7 +153,16 @@ async fn request_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Er
             if let Some(boundary) = boundary {
                 let mut multipart = Multipart::new(req.into_body(), boundary);
                 while let Ok(Some(field)) = multipart.next_field().await {
-                    if let Err(e) = save_file(field.bytes().await.unwrap().as_ref()).await {
+                    let bytes = match field.bytes().await {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            return Ok(Response::builder()
+                                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                .body(Body::from(format!("Failed to read file: {}", e)))
+                                .unwrap())
+                        }
+                    };
+                    if let Err(e) = save_file(bytes.as_ref()).await {
                         return Ok(Response::builder()
                             .status(StatusCode::INTERNAL_SERVER_ERROR)
                             .body(Body::from(format!("Failed to save file: {}", e)))
