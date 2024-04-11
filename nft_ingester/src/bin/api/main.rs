@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
-use nft_ingester::api::service::start_api_v2;
+use nft_ingester::api::service::start_api;
 use nft_ingester::config::{init_logger, setup_config, ApiConfig};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
@@ -131,7 +131,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_rx = shutdown_rx.resubscribe();
 
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        match start_api_v2(
+        match start_api(
             pg_client.clone(),
             cloned_rocks_storage.clone(),
             cloned_keep_running,

@@ -1,5 +1,4 @@
 use log::info;
-use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -11,7 +10,7 @@ use interface::consistency_check::ConsistencyChecker;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 
-use {crate::api::DasApi, std::env, std::net::SocketAddr};
+use {crate::api::DasApi, std::net::SocketAddr};
 use {
     jsonrpc_http_server::cors::AccessControlAllowHeaders,
     jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder},
@@ -21,7 +20,7 @@ use crate::api::builder::RpcApiBuilder;
 use crate::api::error::DasApiError;
 use crate::api::middleware::{RpcRequestMiddleware, RpcResponseMiddleware};
 use crate::api::synchronization_state_consistency::SynchronizationStateConsistencyChecker;
-use crate::config::{setup_config, ApiConfig, JsonMiddlewareConfig};
+use crate::config::JsonMiddlewareConfig;
 use crate::json_worker::JsonWorker;
 
 pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10);
@@ -38,66 +37,6 @@ pub(crate) struct MiddlewaresData {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn start_api(
-    rocks_db: Arc<Storage>,
-    keep_running: Arc<AtomicBool>,
-    rx: tokio::sync::broadcast::Receiver<()>,
-    metrics: Arc<ApiMetricsConfig>,
-    red_metrics: Arc<RequestErrorDurationMetrics>,
-    proof_checker: Option<Arc<MaybeProofChecker>>,
-    json_downloader: Option<Arc<JsonWorker>>,
-    json_persister: Option<Arc<JsonWorker>>,
-    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-) -> Result<(), DasApiError> {
-    env::set_var(
-        env_logger::DEFAULT_FILTER_ENV,
-        env::var_os(env_logger::DEFAULT_FILTER_ENV)
-            .unwrap_or_else(|| "info,sqlx::query=warn".into()),
-    );
-
-    let config: ApiConfig = setup_config("API_");
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.server_port));
-
-    let response_middleware = RpcResponseMiddleware {};
-    let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
-    let api = DasApi::from_config(
-        config.clone(),
-        metrics,
-        red_metrics,
-        rocks_db.clone(),
-        proof_checker,
-        json_downloader,
-        json_persister,
-    )
-    .await?;
-    let synchronization_state_consistency_checker =
-        Arc::new(SynchronizationStateConsistencyChecker::new());
-    synchronization_state_consistency_checker
-        .run(
-            tasks.clone(),
-            rx.resubscribe(),
-            api.pg_client.clone(),
-            rocks_db.clone(),
-            config.consistence_synchronization_api_threshold,
-        )
-        .await;
-
-    run_api(
-        api,
-        Some(MiddlewaresData {
-            response_middleware,
-            request_middleware,
-            consistency_checkers: vec![synchronization_state_consistency_checker],
-        }),
-        addr,
-        keep_running,
-        tasks,
-    )
-    .await
-}
-
-#[allow(clippy::too_many_arguments)]
-pub async fn start_api_v2(
     pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
     keep_running: Arc<AtomicBool>,
