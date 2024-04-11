@@ -12,6 +12,7 @@ use sea_orm::prelude::Json;
 use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult};
 use solana_sdk::pubkey::Pubkey;
 
+use futures::{stream, StreamExt};
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetSelectedMaps,
     AssetStaticDetails,
@@ -19,7 +20,7 @@ use rocks_db::asset::{
 use rocks_db::offchain_data::OffChainData;
 use rocks_db::Storage;
 use tokio::sync::Mutex;
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinSet};
 
 use crate::dao::sea_orm_active_enums::{
     ChainMutability, Mutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
@@ -431,6 +432,7 @@ pub async fn get_by_ids(
     json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
+    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 ) -> Result<Vec<Option<FullAsset>>, DbErr> {
     if asset_ids.is_empty() {
         return Ok(vec![]);
@@ -452,60 +454,55 @@ pub async fn get_by_ids(
         .map_err(|e| DbErr::Custom(e.to_string()))?;
 
     if let Some(json_downloader) = json_downloader {
-        let offchain_data = Arc::new(Mutex::new(HashMap::new()));
-
-        let results = Arc::new(Mutex::new(vec![]));
-
-        let mut tasks_set = JoinSet::new();
+        let mut urls_to_download = Vec::new();
 
         for (_, url) in asset_selected_maps.urls.iter() {
-            if tasks_set.len() >= max_json_to_download {
+            if urls_to_download.len() >= max_json_to_download {
                 break;
             }
             if !asset_selected_maps.offchain_data.contains_key(url) && !url.is_empty() {
-                let json_downloader = json_downloader.clone();
-                let results = results.clone();
-                let url = url.clone();
-                let offchain_data = offchain_data.clone();
-
-                tasks_set.spawn(async move {
-                    let response = json_downloader.download_file(url.clone()).await;
-
-                    let mut results = results.lock().await;
-                    results.push((url.clone(), response.clone()));
-                    drop(results);
-
-                    match response {
-                        Ok(metadata) => {
-                            let mut res = offchain_data.lock().await;
-                            res.insert(url.clone(), OffChainData { url, metadata });
-                        }
-                        Err(e) => {
-                            error!("Could not download JSON file on API middleware: {:?}", e);
-                        }
-                    }
-                });
+                urls_to_download.push(url.clone());
             }
         }
 
-        while tasks_set.join_next().await.is_some() {}
+        let num_of_tasks = urls_to_download.len();
+
+        let download_results = stream::iter(urls_to_download)
+            .map(|url| {
+                let json_downloader = json_downloader.clone();
+
+                async move {
+                    let response = json_downloader.download_file(url.clone()).await;
+                    (url, response)
+                }
+            })
+            .buffered(num_of_tasks)
+            .collect::<Vec<_>>()
+            .await;
+
+        for (json_url, res) in download_results.iter() {
+            if let Ok(metadata) = res {
+                asset_selected_maps.offchain_data.insert(
+                    json_url.clone(),
+                    OffChainData {
+                        url: json_url.clone(),
+                        metadata: metadata.clone(),
+                    },
+                );
+            }
+        }
 
         if let Some(json_persister) = json_persister {
-            let download_results = results.lock().await;
-
             if !download_results.is_empty() {
                 let download_results = download_results.clone();
-                tokio::spawn(async move {
+                tasks.lock().await.spawn(async move {
                     if let Err(e) = json_persister.persist_response(download_results).await {
                         error!("Could not persist downloaded JSONs: {:?}", e);
                     }
+                    Ok(())
                 });
             }
         }
-
-        let offchain_data = offchain_data.lock().await.clone();
-
-        asset_selected_maps.offchain_data.extend(offchain_data);
     }
 
     let mut results = vec![None; asset_ids.len()];

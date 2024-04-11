@@ -125,11 +125,17 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     };
 
+    let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
+
+    let cloned_tasks = mutexed_tasks.clone();
+    let cloned_rx = shutdown_rx.resubscribe();
+
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api_v2(
             pg_client.clone(),
             cloned_rocks_storage.clone(),
             cloned_keep_running,
+            cloned_rx,
             metrics.clone(),
             config.server_port,
             proof_checker,
@@ -137,6 +143,9 @@ pub async fn main() -> Result<(), IngesterError> {
             json_worker,
             None,
             config.json_middleware_config.clone(),
+            cloned_tasks,
+            config.archives_dir.as_ref(),
+            config.consistence_synchronization_api_threshold,
         )
         .await
         {
@@ -147,7 +156,6 @@ pub async fn main() -> Result<(), IngesterError> {
         };
     }));
 
-    let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
     // setup dependencies for grpc server
     let uc = usecase::asset_streamer::AssetStreamer::new(
         config.peer_grpc_max_gap_slots,

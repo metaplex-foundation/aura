@@ -284,7 +284,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let asset_info = api.get_asset(payload).await.unwrap();
+        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);
@@ -364,7 +364,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let asset_info = api.get_asset(payload).await.unwrap();
+        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);
@@ -444,7 +444,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let asset_info = api.get_asset(payload).await.unwrap();
+        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);
@@ -524,7 +524,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let asset_info = api.get_asset(payload).await.unwrap();
+        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);

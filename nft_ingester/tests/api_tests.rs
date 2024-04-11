@@ -47,6 +47,7 @@ mod tests {
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
     use testcontainers::clients::Cli;
+    use tokio::{sync::Mutex, task::JoinSet};
     use usecase::proofs::MaybeProofChecker;
 
     const SLOT_UPDATED: u64 = 100;
@@ -67,6 +68,8 @@ mod tests {
                 None,
                 JsonMiddlewareConfig::default(),
             );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let limit = 10;
         let before: Option<String>;
         let after: Option<String>;
@@ -79,7 +82,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             assert!(res.is_object());
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             after = res_obj.cursor.clone();
@@ -116,7 +122,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -136,7 +145,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -156,7 +168,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert!(res_obj.items.is_empty(), "items should be empty");
         }
@@ -170,7 +185,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -190,7 +208,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert!(res_obj.items.is_empty(), "items should be empty");
         }
@@ -217,7 +238,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -238,7 +262,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -259,7 +286,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -280,7 +310,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             // calculate the number of assets with creator verified true
             let mut cnt = 0;
@@ -302,7 +335,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -323,7 +359,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -344,7 +383,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -365,7 +407,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -388,7 +433,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
             assert_eq!(res_obj.total, 1, "total should be 1");
@@ -419,6 +467,8 @@ mod tests {
                 None,
                 JsonMiddlewareConfig::default(),
             );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let pb = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
@@ -527,7 +577,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["grouping"], Value::Array(vec![]));
         assert_eq!(
@@ -555,6 +605,8 @@ mod tests {
                 None,
                 JsonMiddlewareConfig::default(),
             );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let pb = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
@@ -639,7 +691,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["id"], pb.to_string());
         assert_eq!(response["grouping"], Value::Array(vec![]));
@@ -669,6 +721,8 @@ mod tests {
                 None,
                 JsonMiddlewareConfig::default(),
             );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let buffer = Arc::new(Buffer::new());
 
@@ -771,7 +825,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "single");
         assert_eq!(response["ownership"]["owner"], "");
@@ -797,7 +851,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "token");
         assert_eq!(response["ownership"]["owner"], "");
@@ -823,6 +877,8 @@ mod tests {
                 None,
                 JsonMiddlewareConfig::default(),
             );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let buffer = Arc::new(Buffer::new());
 
@@ -949,7 +1005,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["id"], mint_accs[0].pubkey.to_string());
         assert_eq!(response["interface"], "ProgrammableNFT".to_string());
@@ -960,7 +1016,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["id"], mint_accs[1].pubkey.to_string());
         assert_eq!(response["interface"], "ProgrammableNFT".to_string());
@@ -985,6 +1041,8 @@ mod tests {
                 None,
                 JsonMiddlewareConfig::default(),
             );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let keep_running = Arc::new(AtomicBool::new(true));
 
@@ -1103,7 +1161,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "single");
         assert_eq!(response["ownership"]["owner"], "");
@@ -1532,6 +1590,8 @@ mod tests {
                 None,
                 JsonMiddlewareConfig::default(),
             );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let ref_value = generated_assets.owners[8].clone();
         let payload = GetAssetsByOwner {
@@ -1550,7 +1610,10 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let res = api.get_assets_by_owner(payload).await.unwrap();
+        let res = api
+            .get_assets_by_owner(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -1579,6 +1642,8 @@ mod tests {
                 None,
                 JsonMiddlewareConfig::default(),
             );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let ref_value = generated_assets.collections[12].clone();
         let payload = GetAssetsByGroup {
@@ -1594,7 +1659,10 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let res = api.get_assets_by_group(payload).await.unwrap();
+        let res = api
+            .get_assets_by_group(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -1623,6 +1691,8 @@ mod tests {
                 None,
                 JsonMiddlewareConfig::default(),
             );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let ref_value = generated_assets.dynamic_details[5].clone();
         let payload = GetAssetsByCreator {
@@ -1638,7 +1708,10 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let res = api.get_assets_by_creator(payload).await.unwrap();
+        let res = api
+            .get_assets_by_creator(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -1667,6 +1740,8 @@ mod tests {
                 None,
                 JsonMiddlewareConfig::default(),
             );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let ref_value = generated_assets.authorities[9].clone();
         let payload = GetAssetsByAuthority {
@@ -1681,7 +1756,10 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let res = api.get_assets_by_authority(payload).await.unwrap();
+        let res = api
+            .get_assets_by_authority(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -1699,6 +1777,8 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let url = "http://someUrl.com".to_string();
 
@@ -1845,7 +1925,7 @@ mod tests {
             }),
         };
 
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         let expected_content: Value = serde_json::from_str(
             r#"

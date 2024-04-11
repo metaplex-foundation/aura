@@ -74,7 +74,7 @@ pub async fn start_api(
         Arc::new(SynchronizationStateConsistencyChecker::new());
     synchronization_state_consistency_checker
         .run(
-            tasks,
+            tasks.clone(),
             rx.resubscribe(),
             api.pg_client.clone(),
             rocks_db.clone(),
@@ -91,6 +91,7 @@ pub async fn start_api(
         }),
         addr,
         keep_running,
+        tasks,
     )
     .await
 }
@@ -100,6 +101,7 @@ pub async fn start_api_v2(
     pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
     keep_running: Arc<AtomicBool>,
+    rx: tokio::sync::broadcast::Receiver<()>,
     metrics: Arc<ApiMetricsConfig>,
     port: u16,
     proof_checker: Option<Arc<MaybeProofChecker>>,
@@ -107,7 +109,24 @@ pub async fn start_api_v2(
     json_downloader: Option<Arc<JsonWorker>>,
     json_persister: Option<Arc<JsonWorker>>,
     json_middleware_config: Option<JsonMiddlewareConfig>,
+    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    archives_dir: &str,
+    consistence_synchronization_api_threshold: u64,
 ) -> Result<(), DasApiError> {
+    let response_middleware = RpcResponseMiddleware {};
+    let request_middleware = RpcRequestMiddleware::new(archives_dir);
+    let synchronization_state_consistency_checker =
+        Arc::new(SynchronizationStateConsistencyChecker::new());
+    synchronization_state_consistency_checker
+        .run(
+            tasks.clone(),
+            rx.resubscribe(),
+            pg_client.clone(),
+            rocks_db.clone(),
+            consistence_synchronization_api_threshold,
+        )
+        .await;
+
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     // todo: setup middleware, looks like too many shit related to backups are there
     // let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
@@ -122,7 +141,18 @@ pub async fn start_api_v2(
         json_middleware_config.unwrap_or_default(),
     );
 
-    run_api(api, None, addr, keep_running).await
+    run_api(
+        api,
+        Some(MiddlewaresData {
+            response_middleware,
+            request_middleware,
+            consistency_checkers: vec![synchronization_state_consistency_checker],
+        }),
+        addr,
+        keep_running,
+        tasks,
+    )
+    .await
 }
 
 async fn run_api(
@@ -130,6 +160,7 @@ async fn run_api(
     middlewares_data: Option<MiddlewaresData>,
     addr: SocketAddr,
     keep_running: Arc<AtomicBool>,
+    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 ) -> Result<(), DasApiError> {
     let rpc = RpcApiBuilder::build(
         api,
@@ -137,6 +168,7 @@ async fn run_api(
             .clone()
             .map(|m| m.consistency_checkers)
             .unwrap_or_default(),
+        tasks,
     )?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(RUNTIME_WORKER_THREAD_COUNT)

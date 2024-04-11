@@ -6,6 +6,8 @@ use rocks_db::Storage;
 use sea_orm::DbErr;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
+use tokio::sync::Mutex;
+use tokio::task::{JoinError, JoinSet};
 
 use super::common::asset_list_to_rpc;
 
@@ -24,6 +26,7 @@ pub async fn search_assets(
     json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
+    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 ) -> Result<AssetList, DbErr> {
     let filter_result: &Result<postgre_client::model::SearchAssetsFilter, ConversionError> =
         &filter.try_into();
@@ -74,6 +77,7 @@ pub async fn search_assets(
         json_downloader,
         json_persister,
         max_json_to_download,
+        tasks,
     )
     .await?;
     let assets = assets.into_iter().flatten().collect::<Vec<_>>();

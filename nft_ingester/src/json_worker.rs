@@ -135,7 +135,7 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
                         > Duration::from_secs(WIPE_PERIOD_SEC)
                 {
                     match self.persister
-                        .persist_response(buffer.clone())
+                        .persist_response(std::mem::take(&mut buffer))
                         .await
                     {
                         Ok(_) => {
@@ -146,7 +146,6 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
                         }
                     }
 
-                    buffer.clear();
                     clock = tokio::time::Instant::now();
                 }
 

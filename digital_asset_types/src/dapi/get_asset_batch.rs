@@ -4,6 +4,10 @@ use rocks_db::Storage;
 use sea_orm::DbErr;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
+use tokio::{
+    sync::Mutex,
+    task::{JoinError, JoinSet},
+};
 
 use crate::{dao::scopes, rpc::Asset};
 
@@ -16,6 +20,7 @@ pub async fn get_asset_batch(
     json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
+    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 ) -> Result<Vec<Option<Asset>>, DbErr> {
     let assets = scopes::asset::get_by_ids(
         rocks_db,
@@ -24,6 +29,7 @@ pub async fn get_asset_batch(
         json_downloader,
         json_persister,
         max_json_to_download,
+        tasks,
     )
     .await?;
 
