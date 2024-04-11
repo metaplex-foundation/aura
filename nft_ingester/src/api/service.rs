@@ -1,4 +1,4 @@
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use hyper::{header::CONTENT_TYPE, Body, Method, Request, Response, Server, StatusCode};
 use jsonrpc_http_server::hyper;
 use jsonrpc_http_server::hyper::service::{make_service_fn, service_fn};
 use log::info;
@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::broadcast::Receiver;
+use tracing::error;
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 
@@ -29,6 +30,7 @@ pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10);
 // 50kB
 pub const RUNTIME_WORKER_THREAD_COUNT: usize = 2000;
 pub const MAX_CORS_AGE: u32 = 86400;
+const BATCH_MINT_REQUEST_PATH: &str = "/batch_mint";
 
 pub async fn start_api(
     rocks_db: Arc<Storage>,
@@ -43,19 +45,34 @@ pub async fn start_api(
             .unwrap_or_else(|| "info,sqlx::query=warn".into()),
     );
     let config = load_config()?;
+    let (batch_mint_service_port, file_storage_path) = (
+        config.batch_mint_service_port,
+        &config.file_storage_path_container.clone(),
+    );
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server_port));
 
     let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
     let api = DasApi::from_config(config, metrics, red_metrics, rocks_db, proof_checker).await?;
 
-    run_api(api, Some(request_middleware), addr, shutdown_rx).await
+    run_api(
+        api,
+        Some(request_middleware),
+        addr,
+        batch_mint_service_port,
+        file_storage_path,
+        shutdown_rx,
+    )
+    .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn start_api_v2(
     pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
     metrics: Arc<ApiMetricsConfig>,
     port: u16,
+    batch_mint_service_port: u16,
+    file_storage_path: &str,
     proof_checker: Option<Arc<MaybeProofChecker>>,
     max_page_limit: usize,
     shutdown_rx: Receiver<()>,
@@ -65,13 +82,23 @@ pub async fn start_api_v2(
     // let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
     let api = DasApi::new(pg_client, rocks_db, metrics, proof_checker, max_page_limit);
 
-    run_api(api, None, addr, shutdown_rx).await
+    run_api(
+        api,
+        None,
+        addr,
+        batch_mint_service_port,
+        file_storage_path,
+        shutdown_rx,
+    )
+    .await
 }
 
 async fn run_api(
     api: DasApi<MaybeProofChecker>,
     request_middleware: Option<RpcRequestMiddleware>,
     addr: SocketAddr,
+    batch_mint_service_port: u16,
+    file_storage_path: &str,
     shutdown_rx: Receiver<()>,
 ) -> Result<(), DasApiError> {
     let rpc = RpcApiBuilder::build(api)?;
@@ -95,7 +122,12 @@ async fn run_api(
         builder = builder.request_middleware(mw);
     }
     let server = builder.start_http(&addr);
-    run_batch_mint_service(shutdown_rx.resubscribe()).await;
+    run_batch_mint_service(
+        shutdown_rx.resubscribe(),
+        batch_mint_service_port,
+        file_storage_path.to_string(),
+    )
+    .await;
 
     let server = server.unwrap();
     info!("API Server Started");
@@ -115,7 +147,6 @@ async fn run_api(
 
     Ok(())
 }
-const BATCH_MINT_REQUEST_PATH: &str = "/batch_mint";
 
 fn upload_file_page() -> Response<Body> {
     let html = r#"<!DOCTYPE html>
@@ -132,21 +163,24 @@ fn upload_file_page() -> Response<Body> {
     Response::new(Body::from(html))
 }
 
-async fn save_file(file_bytes: &[u8]) -> std::io::Result<()> {
-    let new_file_name = format!("./file_storage/{}.dat", Uuid::new_v4());
+async fn save_file(path: &str, file_bytes: &[u8]) -> std::io::Result<()> {
+    let new_file_name = format!("{}/{}.json", path, Uuid::new_v4());
 
     let mut file = File::create(new_file_name).await?;
     file.write_all(file_bytes).await?;
     Ok(())
 }
 
-async fn request_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+async fn batch_mint_request_handler(
+    file_storage_path: String,
+    req: Request<Body>,
+) -> Result<Response<Body>, hyper::Error> {
     match (req.method(), req.uri().path()) {
         (&Method::GET, BATCH_MINT_REQUEST_PATH) => Ok(upload_file_page()),
         (&Method::POST, BATCH_MINT_REQUEST_PATH) => {
             let boundary = req
                 .headers()
-                .get("content-type")
+                .get(CONTENT_TYPE)
                 .and_then(|ct| ct.to_str().ok())
                 .and_then(|ct| multer::parse_boundary(ct).ok());
 
@@ -162,7 +196,7 @@ async fn request_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Er
                                 .unwrap())
                         }
                     };
-                    if let Err(e) = save_file(bytes.as_ref()).await {
+                    if let Err(e) = save_file(&file_storage_path, bytes.as_ref()).await {
                         return Ok(Response::builder()
                             .status(StatusCode::INTERNAL_SERVER_ERROR)
                             .body(Body::from(format!("Failed to save file: {}", e)))
@@ -181,16 +215,27 @@ async fn request_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Er
     }
 }
 
-async fn run_batch_mint_service(mut shutdown_rx: Receiver<()>) {
-    let addr = ([127, 0, 0, 1], 6020).into();
-    let make_svc =
-        make_service_fn(|_conn| async { Ok::<_, hyper::Error>(service_fn(request_handler)) });
+async fn run_batch_mint_service(
+    mut shutdown_rx: Receiver<()>,
+    port: u16,
+    file_storage_path: String,
+) {
+    let addr = ([0, 0, 0, 0], port).into();
+    let file_storage_path = Arc::new(file_storage_path);
+    let make_svc = make_service_fn(move |_conn| {
+        let file_storage_path = file_storage_path.clone();
+        async {
+            Ok::<_, hyper::Error>(service_fn(move |req| {
+                batch_mint_request_handler(file_storage_path.to_string(), req)
+            }))
+        }
+    });
     let server = Server::bind(&addr)
         .serve(make_svc)
         .with_graceful_shutdown(async {
             shutdown_rx.recv().await.unwrap();
         });
     if let Err(e) = server.await {
-        eprintln!("server error: {}", e);
+        error!("server error: {}", e);
     }
 }

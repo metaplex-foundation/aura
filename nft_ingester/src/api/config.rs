@@ -10,6 +10,8 @@ pub struct Config {
     pub metrics_port: Option<u16>,
     pub metrics_host: Option<String>,
     pub server_port: u16,
+    pub batch_mint_service_port: u16,
+    pub file_storage_path_container: String,
     pub env: Option<String>,
     pub archives_dir: String,
     #[serde(default = "default_max_page_limit")]

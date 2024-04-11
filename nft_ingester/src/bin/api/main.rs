@@ -108,6 +108,8 @@ pub async fn main() -> Result<(), IngesterError> {
             cloned_rocks_storage.clone(),
             metrics.clone(),
             config.server_port,
+            config.batch_mint_service_port,
+            config.file_storage_path_container.as_str(),
             proof_checker,
             config.max_page_limit,
             rx_clone,
