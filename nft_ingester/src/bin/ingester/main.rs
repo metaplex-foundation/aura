@@ -372,10 +372,8 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     }));
 
-    let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_red_metrics = metrics_state.red_metrics.clone();
-
     let proof_checker = config.rpc_host.clone().map(|host| {
         Arc::new(MaybeProofChecker::new(
             Arc::new(RpcClient::new(host)),
@@ -383,13 +381,14 @@ pub async fn main() -> Result<(), IngesterError> {
             config.check_proofs_commitment,
         ))
     });
+    let rx_clone = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
             cloned_rocks_storage.clone(),
-            cloned_keep_running,
             metrics_state.api_metrics.clone(),
             cloned_red_metrics,
             proof_checker,
+            rx_clone,
         )
         .await
         {

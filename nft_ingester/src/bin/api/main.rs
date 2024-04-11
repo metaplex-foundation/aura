@@ -92,9 +92,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rocks_storage = Arc::new(storage);
 
-    let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
-
     let proof_checker = config.rpc_host.map(|host| {
         Arc::new(MaybeProofChecker::new(
             Arc::new(RpcClient::new(host)),
@@ -102,15 +100,17 @@ pub async fn main() -> Result<(), IngesterError> {
             config.check_proofs_commitment,
         ))
     });
+    let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
+    let rx_clone = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api_v2(
             pg_client.clone(),
             cloned_rocks_storage.clone(),
-            cloned_keep_running,
             metrics.clone(),
             config.server_port,
             proof_checker,
             config.max_page_limit,
+            rx_clone,
         )
         .await
         {
@@ -121,7 +121,6 @@ pub async fn main() -> Result<(), IngesterError> {
         };
     }));
 
-    let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
     // setup dependencies for grpc server
     let uc = usecase::asset_streamer::AssetStreamer::new(
         config.peer_grpc_max_gap_slots,
