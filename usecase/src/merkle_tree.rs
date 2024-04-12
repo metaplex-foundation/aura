@@ -7,11 +7,16 @@ macro_rules! _check_proof {
             $initial_proofs.as_ref(),
             &mut proof,
         );
+
         let tree = spl_concurrent_merkle_tree::concurrent_merkle_tree::ConcurrentMerkleTree::<
             $max_depth,
             $max_size,
         >::load_bytes($bytes)?;
-
+        println!("active index: {}", tree.active_index);
+        println!("sequence_number: {}", tree.sequence_number);
+        println!("rightmost_proof: {:?}", tree.rightmost_proof);
+        println!("change_logs: {:?}", tree.change_logs);
+        println!("buffer_size: {}", tree.buffer_size);
         Ok(tree.check_valid_proof($leaf, &proof, $leaf_index))
     }};
 }
@@ -23,6 +28,14 @@ macro_rules! check_proof {
         match ($header.get_max_depth(), $header.get_max_buffer_size()) {
             (3, 8) => _check_proof!(3, 8, $($arg)*),
             (5, 8) => _check_proof!(5, 8, $($arg)*),
+            (6, 16) => _check_proof!(6, 16, $($arg)*),
+            (7, 16) => _check_proof!(7, 16, $($arg)*),
+            (8, 16) => _check_proof!(8, 16, $($arg)*),
+            (9, 16) => _check_proof!(9, 16, $($arg)*),
+            (10, 32) => _check_proof!(10, 32, $($arg)*),
+            (11, 32) => _check_proof!(11, 32, $($arg)*),
+            (12, 32) => _check_proof!(12, 32, $($arg)*),
+            (13, 32) => _check_proof!(13, 32, $($arg)*),
             (14, 64) => _check_proof!(14, 64, $($arg)*),
             (14, 256) => _check_proof!(14, 256, $($arg)*),
             (14, 1024) => _check_proof!(14, 1024, $($arg)*),

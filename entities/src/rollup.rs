@@ -52,8 +52,8 @@ pub struct PathNode {
     pub index: u32,
 }
 
-impl From<PathNode> for spl_account_compression::state::PathNode {
-    fn from(value: PathNode) -> Self {
+impl From<&PathNode> for spl_account_compression::state::PathNode {
+    fn from(value: &PathNode) -> Self {
         Self {
             node: value.node,
             index: value.index,
@@ -68,8 +68,18 @@ impl From<spl_account_compression::state::PathNode> for PathNode {
         }
     }
 }
-impl From<ChangeLogEventV1> for blockbuster::programs::bubblegum::ChangeLogEventV1 {
-    fn from(value: ChangeLogEventV1) -> Self {
+impl From<&ChangeLogEventV1> for blockbuster::programs::bubblegum::ChangeLogEventV1 {
+    fn from(value: &ChangeLogEventV1) -> Self {
+        Self {
+            id: value.id,
+            path: value.path.iter().map(Into::into).collect::<Vec<_>>(),
+            seq: value.seq,
+            index: value.index,
+        }
+    }
+}
+impl From<blockbuster::programs::bubblegum::ChangeLogEventV1> for ChangeLogEventV1 {
+    fn from(value: blockbuster::programs::bubblegum::ChangeLogEventV1) -> Self {
         Self {
             id: value.id,
             path: value.path.into_iter().map(Into::into).collect::<Vec<_>>(),
