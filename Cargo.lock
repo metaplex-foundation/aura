@@ -2034,6 +2034,7 @@ dependencies = [
  "blockbuster",
  "bs58 0.4.0",
  "entities",
+ "futures",
  "interface",
  "jsonpath_lib",
  "log",

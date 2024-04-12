@@ -5,7 +5,6 @@ use crate::api::error::DasApiError;
 
 pub mod api_impl;
 pub mod builder;
-pub mod config;
 pub mod error;
 pub mod meta_middleware;
 pub mod middleware;
