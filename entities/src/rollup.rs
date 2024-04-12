@@ -7,14 +7,11 @@ use solana_sdk::pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize)]
 pub struct Rollup {
-    pub tree_authority: Pubkey,
-    pub tree_nonce: u64,
-
+    pub tree_id: Pubkey,
     pub rolled_mints: Vec<RolledMintInstruction>,
     pub raw_metadata_map: HashMap<String, Box<RawValue>>, // map by uri
 
     // derived data
-    pub tree_id: Pubkey, // derived from the tree authority and nonce PDA("rollup", tree_authority, tree_nonce) // validate
     pub merkle_root: [u8; 32], // validate
     pub last_leaf_hash: [u8; 32], // validate
 }

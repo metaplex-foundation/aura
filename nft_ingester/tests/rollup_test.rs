@@ -17,11 +17,15 @@ use spl_account_compression::ConcurrentMerkleTree;
 use testcontainers::clients::Cli;
 
 fn generate_rollup(size: usize) -> Rollup {
-    let authority = Pubkey::new_unique();
-    let nonce: u32 = 1035;
-
-    let (tree, _) = find_rollup_pda(&authority, nonce as u64);
+    // use create tree as is
+    // @Vadim - modify the contract to accept a tree_id
+    let authority = Pubkey::from_str("3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM").unwrap();
+    
+    // @Vadim - provide a created tree
+    let tree = Pubkey::new_unique();
+    
     let mut mints = Vec::new();
+    // @Vadim - provide the size of the tree
     let mut merkle = ConcurrentMerkleTree::<24, 1024>::new();
     merkle.initialize().unwrap();
 
@@ -80,8 +84,8 @@ fn generate_rollup(size: usize) -> Rollup {
         };
         let nonce = i as u64;
         let id = mpl_bubblegum::utils::get_asset_id(&tree, nonce);
-        let owner = Pubkey::new_unique();
-        let delegate = Pubkey::new_unique();
+        let owner = authority.clone();
+        let delegate = authority.clone();
 
         let metadata_args_hash = keccak::hashv(&[mint_args.try_to_vec().unwrap().as_slice()]);
         let data_hash = keccak::hashv(&[
@@ -124,19 +128,20 @@ fn generate_rollup(size: usize) -> Rollup {
 
         // TODO
         let rolled_mint = RolledMintInstruction {
+            // @Sviat - fill in the path and log
             tree_update: ChangeLogEventV1 {
-                id,
-                path: vec![],
-                seq: 0,
-                index: 0,
+                tree.clone(), 
+                path: vec![], //todo
+                seq: nonce, //todo: maybe + 1
+                index: 0, // todo
             },
             leaf_update: LeafSchema::V1 {
                 id,
                 owner,
                 delegate,
-                nonce: 0,
-                data_hash: [0; 32],
-                creator_hash: [0; 32],
+                nonce: nonce.to_le_bytes().as_ref(),
+                data_hash: data_hash.as_ref(),
+                creator_hash: creator_hash.to_bytes(),
             },
             mint_args,
             authority,
@@ -144,8 +149,6 @@ fn generate_rollup(size: usize) -> Rollup {
         mints.push(rolled_mint);
     }
     let rollup = Rollup {
-        tree_authority: authority,
-        tree_nonce: nonce as u64,
         tree_id: tree,
         raw_metadata_map: HashMap::new(),
         rolled_mints: mints,
@@ -182,7 +185,7 @@ fn test_generate_100_000_rollup() {
     serde_json::to_writer(file, &rollup).unwrap()
 }
 
-#[test]
+// #[test]
 fn test_generate_1_000_000_rollup() {
     let rollup = generate_rollup(1_000_000);
     assert_eq!(rollup.rolled_mints.len(), 1_000_000);
@@ -190,7 +193,7 @@ fn test_generate_1_000_000_rollup() {
     serde_json::to_writer(file, &rollup).unwrap()
 }
 
-#[test]
+// #[test]
 fn test_generate_10_000_000_rollup() {
     let rollup = generate_rollup(10_000_000);
     assert_eq!(rollup.rolled_mints.len(), 10_000_000);
