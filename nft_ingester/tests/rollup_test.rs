@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
+use std::str::FromStr;
 
 use anchor_lang::prelude::*;
 use async_trait::async_trait;
@@ -9,7 +10,6 @@ use entities::rollup::{BatchMintInstruction, ChangeLogEventV1, RolledMintInstruc
 use interface::error::UsecaseError;
 use interface::rollup::RollupDownloader;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
-use nft_ingester::rollup_processor::find_rollup_pda;
 use rand::{thread_rng, Rng};
 use solana_sdk::keccak;
 use solana_sdk::pubkey::Pubkey;
@@ -17,16 +17,10 @@ use spl_account_compression::ConcurrentMerkleTree;
 use testcontainers::clients::Cli;
 
 fn generate_rollup(size: usize) -> Rollup {
-    // use create tree as is
-    // @Vadim - modify the contract to accept a tree_id
     let authority = Pubkey::from_str("3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM").unwrap();
-    
-    // @Vadim - provide a created tree
-    let tree = Pubkey::new_unique();
-    
+    let tree = Pubkey::from_str("HxhCw9g3kZvrdg9zZvctmh6qpSDg1FfsBXfFvRkbCHB7").unwrap();
     let mut mints = Vec::new();
-    // @Vadim - provide the size of the tree
-    let mut merkle = ConcurrentMerkleTree::<24, 1024>::new();
+    let mut merkle = ConcurrentMerkleTree::<10, 32>::new();
     merkle.initialize().unwrap();
 
     let mut last_leaf_hash = [0u8; 32];
@@ -105,14 +99,6 @@ fn generate_rollup(size: usize) -> Rollup {
                 .as_ref(),
         );
 
-        // let leaf = LeafSchema::V1 {
-        //     id,
-        //     owner,
-        //     delegate,
-        //     nonce,
-        //     data_hash: data_hash.to_bytes(),
-        //     creator_hash: creator_hash.to_bytes(),
-        // };
         let hashed_leaf = keccak::hashv(&[
             &[1], //self.version().to_bytes()
             id.as_ref(),
@@ -125,22 +111,39 @@ fn generate_rollup(size: usize) -> Rollup {
         .to_bytes();
         merkle.append(hashed_leaf).unwrap();
         last_leaf_hash = hashed_leaf;
+        let changelog = merkle.change_logs[merkle.active_index as usize];
+        let path_len = changelog.path.len() as u32;
+        let mut path: Vec<spl_account_compression::state::PathNode> = changelog
+            .path
+            .iter()
+            .enumerate()
+            .map(|(lvl, n)| {
+                spl_account_compression::state::PathNode::new(
+                    *n,
+                    (1 << (path_len - lvl as u32)) + (changelog.index >> lvl),
+                )
+            })
+            .collect();
+        path.push(spl_account_compression::state::PathNode::new(
+            changelog.root,
+            1,
+        ));
 
         // TODO
         let rolled_mint = RolledMintInstruction {
             // @Sviat - fill in the path and log
             tree_update: ChangeLogEventV1 {
-                tree.clone(), 
-                path: vec![], //todo
-                seq: nonce, //todo: maybe + 1
-                index: 0, // todo
+                id: tree,
+                path: path.into_iter().map(Into::into).collect::<Vec<_>>(),
+                seq: nonce + 1,
+                index: changelog.index,
             },
             leaf_update: LeafSchema::V1 {
                 id,
                 owner,
                 delegate,
-                nonce: nonce.to_le_bytes().as_ref(),
-                data_hash: data_hash.as_ref(),
+                nonce,
+                data_hash: data_hash.to_bytes(),
                 creator_hash: creator_hash.to_bytes(),
             },
             mint_args,

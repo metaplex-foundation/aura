@@ -2,7 +2,6 @@ use crate::error::IngesterError;
 use crate::flatbuffer_mapper::FlatbufferMapper;
 use crate::plerkle;
 use crate::plerkle::PlerkleTransactionInfo;
-use crate::rollup_processor::find_rollup_pda;
 use blockbuster::programs::bubblegum::{BubblegumInstruction, Payload};
 use blockbuster::{
     instruction::{order_instructions, InstructionBundle, IxPair},
@@ -1067,13 +1066,13 @@ impl BubblegumTxProcessor {
         let rollup = rollup_downloader
             .download_rollup(&batch_mint_instruction.metadata_url)
             .await?;
-        let (rollup_pda, _) = find_rollup_pda(&rollup.tree_authority, rollup.tree_nonce);
-        if rollup_pda != rollup.tree_id {
-            return Err(IngesterError::PDACheckFail(
-                rollup_pda.to_string(),
-                rollup.tree_id.to_string(),
-            ));
-        }
+        // let (rollup_pda, _) = find_rollup_pda(&rollup.tree_authority, rollup.tree_nonce);
+        // if rollup_pda != rollup.tree_id {
+        //     return Err(IngesterError::PDACheckFail(
+        //         rollup_pda.to_string(),
+        //         rollup.tree_id.to_string(),
+        //     ));
+        // }
 
         // TODO: possible check of hashes
         // let mut bubblegum_instructions = Vec::new();

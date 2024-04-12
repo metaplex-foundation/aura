@@ -12,7 +12,7 @@ pub struct Rollup {
     pub raw_metadata_map: HashMap<String, Box<RawValue>>, // map by uri
 
     // derived data
-    pub merkle_root: [u8; 32], // validate
+    pub merkle_root: [u8; 32],    // validate
     pub last_leaf_hash: [u8; 32], // validate
 }
 
@@ -54,6 +54,14 @@ pub struct PathNode {
 
 impl From<PathNode> for spl_account_compression::state::PathNode {
     fn from(value: PathNode) -> Self {
+        Self {
+            node: value.node,
+            index: value.index,
+        }
+    }
+}
+impl From<spl_account_compression::state::PathNode> for PathNode {
+    fn from(value: spl_account_compression::state::PathNode) -> Self {
         Self {
             node: value.node,
             index: value.index,
