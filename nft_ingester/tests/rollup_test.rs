@@ -3,9 +3,9 @@ use std::fs::File;
 
 use anchor_lang::prelude::*;
 use async_trait::async_trait;
-use mpl_bubblegum::types::MetadataArgs;
+use mpl_bubblegum::types::{LeafSchema, MetadataArgs};
 
-use entities::rollup::{BatchMintInstruction, RolledMintInstruction, Rollup};
+use entities::rollup::{BatchMintInstruction, ChangeLogEventV1, RolledMintInstruction, Rollup};
 use interface::error::UsecaseError;
 use interface::rollup::RollupDownloader;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
@@ -122,13 +122,24 @@ fn generate_rollup(size: usize) -> Rollup {
         merkle.append(hashed_leaf).unwrap();
         last_leaf_hash = hashed_leaf;
 
+        // TODO
         let rolled_mint = RolledMintInstruction {
+            tree_update: ChangeLogEventV1 {
+                id,
+                path: vec![],
+                seq: 0,
+                index: 0,
+            },
+            leaf_update: LeafSchema::V1 {
+                id,
+                owner,
+                delegate,
+                nonce: 0,
+                data_hash: [0; 32],
+                creator_hash: [0; 32],
+            },
             mint_args,
             authority,
-            owner,
-            delegate,
-            nonce,
-            id,
         };
         mints.push(rolled_mint);
     }

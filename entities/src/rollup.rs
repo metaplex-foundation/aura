@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use mpl_bubblegum::types::MetadataArgs;
+use mpl_bubblegum::types::{LeafSchema, MetadataArgs};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use solana_sdk::pubkey::Pubkey;
@@ -21,20 +21,14 @@ pub struct Rollup {
 
 #[derive(Serialize, Deserialize)]
 pub struct RolledMintInstruction {
-    // pub tree_update: ChangeLogEvent, // validate // derive from nonce
-    // pub leaf_update: LeafSchema, // validate
+    pub tree_update: ChangeLogEventV1, // validate // derive from nonce
+    pub leaf_update: LeafSchema,       // validate
     pub mint_args: MetadataArgs,
     // V0.1: enforce collection.verify == false
     // V0.1: enforce creator.verify == false
     // V0.2: add pub collection_signature: Option<Signature> - sign asset_id with collection authority
     // V0.2: add pub creator_signature: Option<Map<Pubkey, Signature>> - sign asset_id with creator authority to ensure verified creator
     pub authority: Pubkey,
-    pub owner: Pubkey,
-    pub delegate: Pubkey,
-    pub nonce: u64, // equals index in the rolled_mints vector?
-
-    // derived data
-    pub id: Pubkey, // PDA("asset", tree_id, nonce?) // validate
 }
 
 pub struct BatchMintInstruction {
@@ -45,4 +39,37 @@ pub struct BatchMintInstruction {
     pub leaf: [u8; 32],
     pub index: u32,
     pub metadata_url: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ChangeLogEventV1 {
+    pub id: Pubkey,
+    pub path: Vec<PathNode>,
+    pub seq: u64,
+    pub index: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PathNode {
+    pub node: [u8; 32],
+    pub index: u32,
+}
+
+impl From<PathNode> for spl_account_compression::state::PathNode {
+    fn from(value: PathNode) -> Self {
+        Self {
+            node: value.node,
+            index: value.index,
+        }
+    }
+}
+impl From<ChangeLogEventV1> for blockbuster::programs::bubblegum::ChangeLogEventV1 {
+    fn from(value: ChangeLogEventV1) -> Self {
+        Self {
+            id: value.id,
+            path: value.path.into_iter().map(Into::into).collect::<Vec<_>>(),
+            seq: value.seq,
+            index: value.index,
+        }
+    }
 }
