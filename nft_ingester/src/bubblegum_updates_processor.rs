@@ -1,8 +1,8 @@
 use crate::error::IngesterError;
 use crate::flatbuffer_mapper::FlatbufferMapper;
+use crate::plerkle;
 use crate::plerkle::PlerkleTransactionInfo;
-use crate::rollup_processor::{create_leaf_schema, find_rollup_pda};
-use crate::{_set_tree_paths, plerkle, set_tree_paths};
+use crate::rollup_processor::find_rollup_pda;
 use blockbuster::programs::bubblegum::{BubblegumInstruction, Payload};
 use blockbuster::{
     instruction::{order_instructions, InstructionBundle, IxPair},
@@ -16,13 +16,13 @@ use entities::enums::{
 };
 use entities::models::{BufferedTransaction, SignatureWithSlot, Task, UpdateVersion, Updated};
 use entities::models::{ChainDataV1, Creator, Uses};
-use entities::rollup::BatchMintInstruction;
+use entities::rollup::{BatchMintInstruction, ChangeLogEventV1};
 use interface::rollup::RollupDownloader;
 use lazy_static::lazy_static;
 use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
-use mpl_bubblegum::types::LeafSchema;
-use mpl_bubblegum::InstructionName;
+use mpl_bubblegum::types::{LeafSchema, MetadataArgs, Version};
+use mpl_bubblegum::{InstructionName, LeafSchemaEvent};
 use num_traits::FromPrimitive;
 use rocks_db::asset::AssetOwner;
 use rocks_db::asset::{
@@ -34,11 +34,11 @@ use rocks_db::transaction::{
     TreeUpdate,
 };
 use rocks_db::Storage;
+use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use spl_account_compression::events::ChangeLogEventV1;
 use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -1075,29 +1075,30 @@ impl BubblegumTxProcessor {
             ));
         }
 
-        let mut bubblegum_instructions = Vec::new();
-        for asset in rollup.rolled_mints {
-            bubblegum_instructions.push(BubblegumInstruction {
-                instruction: InstructionName::MintV1,
-                tree_update: Some(ChangeLogEventV1 {
-                    id: rollup.tree_id,
-                    path: vec![],
-                    seq: asset.nonce,
-                    index: asset.nonce as u32,
-                }),
-                leaf_update: Some(create_leaf_schema(&asset, &rollup.tree_id)?),
-                payload: Some(Payload::MintV1 {
-                    args: asset.mint_args,
-                    authority: asset.authority,
-                    tree_id: rollup.tree_id,
-                }),
-            });
-        }
-        let (max_depth, max_buffer_size) = (
-            batch_mint_instruction.max_depth,
-            batch_mint_instruction.max_buffer_size,
-        );
-        set_tree_paths!(max_depth, max_buffer_size, bubblegum_instructions)?;
+        // TODO: possible check of hashes
+        // let mut bubblegum_instructions = Vec::new();
+        // for asset in rollup.rolled_mints {
+        //     bubblegum_instructions.push(BubblegumInstruction {
+        //         instruction: InstructionName::MintV1,
+        //         tree_update: Some(ChangeLogEventV1 {
+        //             id: rollup.tree_id,
+        //             path: vec![],
+        //             seq: asset.nonce,
+        //             index: asset.nonce as u32,
+        //         }),
+        //         leaf_update: Some(create_leaf_schema(&asset, &rollup.tree_id)?),
+        //         payload: Some(Payload::MintV1 {
+        //             args: asset.mint_args,
+        //             authority: asset.authority,
+        //             tree_id: rollup.tree_id,
+        //         }),
+        //     });
+        // }
+        // let (max_depth, max_buffer_size) = (
+        //     batch_mint_instruction.max_depth,
+        //     batch_mint_instruction.max_buffer_size,
+        // );
+        // set_tree_paths!(max_depth, max_buffer_size, bubblegum_instructions)?;
         let mut transaction_result = TransactionResult {
             instruction_results: vec![],
             transaction_signature: Some((
@@ -1108,8 +1109,18 @@ impl BubblegumTxProcessor {
                 },
             )),
         };
-        for instruction in bubblegum_instructions.iter() {
-            let (mut update, mut task_option) = Self::get_mint_v1_update(instruction, slot)?;
+        for rolled_mint in rollup.rolled_mints {
+            let (mut update, mut task_option) = Self::get_mint_v1_update(
+                &RolledMintInstructionWithTree {
+                    tree_update: rolled_mint.tree_update,
+                    leaf_update: rolled_mint.leaf_update,
+                    mint_args: rolled_mint.mint_args,
+                    tree_id: rollup.tree_id,
+                    authority: rolled_mint.authority,
+                }
+                .into(),
+                slot,
+            )?;
             if let Some(ref mut task) = task_option {
                 if let Some(metadata) = rollup.raw_metadata_map.get(&task.ofd_metadata_url) {
                     task.ofd_status = TaskStatus::Success;
@@ -1137,6 +1148,34 @@ impl BubblegumTxProcessor {
             .await?;
 
         Ok(())
+    }
+}
+#[derive(Serialize, Deserialize)]
+pub struct RolledMintInstructionWithTree {
+    pub tree_update: ChangeLogEventV1, // validate // derive from nonce
+    pub leaf_update: LeafSchema,       // validate
+    pub mint_args: MetadataArgs,
+    // V0.1: enforce collection.verify == false
+    // V0.1: enforce creator.verify == false
+    // V0.2: add pub collection_signature: Option<Signature> - sign asset_id with collection authority
+    // V0.2: add pub creator_signature: Option<Map<Pubkey, Signature>> - sign asset_id with creator authority to ensure verified creator
+    pub tree_id: Pubkey, // derived from the tree authority and nonce PDA("rollup", tree_authority, tree_nonce) // validate
+    pub authority: Pubkey,
+}
+
+impl From<RolledMintInstructionWithTree> for BubblegumInstruction {
+    fn from(value: RolledMintInstructionWithTree) -> Self {
+        let hash = value.leaf_update.hash();
+        Self {
+            instruction: InstructionName::Unknown,
+            tree_update: Some(value.tree_update.into()),
+            leaf_update: Some(LeafSchemaEvent::new(Version::V1, value.leaf_update, hash)),
+            payload: Some(Payload::MintV1 {
+                args: value.mint_args,
+                authority: value.authority,
+                tree_id: value.tree_id,
+            }),
+        }
     }
 }
 
