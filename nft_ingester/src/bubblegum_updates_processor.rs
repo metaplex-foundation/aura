@@ -1066,38 +1066,6 @@ impl BubblegumTxProcessor {
         let rollup = rollup_downloader
             .download_rollup(&batch_mint_instruction.metadata_url)
             .await?;
-        // let (rollup_pda, _) = find_rollup_pda(&rollup.tree_authority, rollup.tree_nonce);
-        // if rollup_pda != rollup.tree_id {
-        //     return Err(IngesterError::PDACheckFail(
-        //         rollup_pda.to_string(),
-        //         rollup.tree_id.to_string(),
-        //     ));
-        // }
-
-        // TODO: possible check of hashes
-        // let mut bubblegum_instructions = Vec::new();
-        // for asset in rollup.rolled_mints {
-        //     bubblegum_instructions.push(BubblegumInstruction {
-        //         instruction: InstructionName::MintV1,
-        //         tree_update: Some(ChangeLogEventV1 {
-        //             id: rollup.tree_id,
-        //             path: vec![],
-        //             seq: asset.nonce,
-        //             index: asset.nonce as u32,
-        //         }),
-        //         leaf_update: Some(create_leaf_schema(&asset, &rollup.tree_id)?),
-        //         payload: Some(Payload::MintV1 {
-        //             args: asset.mint_args,
-        //             authority: asset.authority,
-        //             tree_id: rollup.tree_id,
-        //         }),
-        //     });
-        // }
-        // let (max_depth, max_buffer_size) = (
-        //     batch_mint_instruction.max_depth,
-        //     batch_mint_instruction.max_buffer_size,
-        // );
-        // set_tree_paths!(max_depth, max_buffer_size, bubblegum_instructions)?;
         let mut transaction_result = TransactionResult {
             instruction_results: vec![],
             transaction_signature: Some((
@@ -1116,7 +1084,7 @@ impl BubblegumTxProcessor {
                 tree_id: rollup.tree_id,
                 authority: rolled_mint.authority,
             };
-            let aaaaa =
+            let event =
                 (&blockbuster::programs::bubblegum::ChangeLogEventV1::from(&with_tree.tree_update))
                     .into();
             let (mut update, mut task_option) = Self::get_mint_v1_update(&with_tree.into(), slot)?;
@@ -1135,9 +1103,9 @@ impl BubblegumTxProcessor {
                 tree: rollup.tree_id,
                 seq: seq as u64,
                 slot,
-                event: aaaaa,
+                event,
                 instruction: "".to_string(),
-                tx: "".to_string(),
+                tx: Signature::default().to_string(),
             });
 
             transaction_result.instruction_results.push(ix);

@@ -44,9 +44,9 @@ impl ProofChecker for MaybeProofChecker {
         leaf_index: u32,
         leaf: [u8; 32],
     ) -> core::result::Result<bool, IntegrityVerificationError> {
-        // if rand::random::<f64>() > self.check_probability {
-        //     return Ok(true);
-        // }
+        if rand::random::<f64>() > self.check_probability {
+            return Ok(true);
+        }
         let account_data = self
             .rpc_client
             .get_account_with_commitment(
