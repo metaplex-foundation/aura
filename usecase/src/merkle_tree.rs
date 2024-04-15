@@ -12,11 +12,6 @@ macro_rules! _check_proof {
             $max_depth,
             $max_size,
         >::load_bytes($bytes)?;
-        println!("active index: {}", tree.active_index);
-        println!("sequence_number: {}", tree.sequence_number);
-        println!("rightmost_proof: {:?}", tree.rightmost_proof);
-        println!("change_logs: {:?}", tree.change_logs);
-        println!("buffer_size: {}", tree.buffer_size);
         Ok(tree.check_valid_proof($leaf, &proof, $leaf_index))
     }};
 }
