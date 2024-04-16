@@ -1076,7 +1076,8 @@ impl BubblegumTxProcessor {
                 },
             )),
         };
-        for (seq, rolled_mint) in rollup.rolled_mints.into_iter().enumerate() {
+        for rolled_mint in rollup.rolled_mints.into_iter() {
+            let seq = rolled_mint.tree_update.seq;
             let with_tree = RolledMintInstructionWithTree {
                 tree_update: rolled_mint.tree_update,
                 leaf_update: rolled_mint.leaf_update,
@@ -1101,7 +1102,7 @@ impl BubblegumTxProcessor {
             let mut ix: InstructionResult = (update, task_option).into();
             ix.tree_update = Some(TreeUpdate {
                 tree: rollup.tree_id,
-                seq: seq as u64,
+                seq,
                 slot,
                 event,
                 instruction: "".to_string(),
