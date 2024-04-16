@@ -133,7 +133,7 @@ fn generate_rollup(size: usize) -> Rollup {
             tree_update: ChangeLogEventV1 {
                 id: tree,
                 path: path.into_iter().map(Into::into).collect::<Vec<_>>(),
-                seq: nonce + 1,
+                seq: merkle.sequence_number,
                 index: changelog.index,
             },
             leaf_update: LeafSchema::V1 {

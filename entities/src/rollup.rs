@@ -7,6 +7,7 @@ use solana_sdk::pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize)]
 pub struct Rollup {
+    #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
     pub tree_id: Pubkey,
     pub rolled_mints: Vec<RolledMintInstruction>,
     pub raw_metadata_map: HashMap<String, Box<RawValue>>, // map by uri
@@ -25,6 +26,7 @@ pub struct RolledMintInstruction {
     // V0.1: enforce creator.verify == false
     // V0.2: add pub collection_signature: Option<Signature> - sign asset_id with collection authority
     // V0.2: add pub creator_signature: Option<Map<Pubkey, Signature>> - sign asset_id with creator authority to ensure verified creator
+    #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
     pub authority: Pubkey,
 }
 
@@ -40,6 +42,7 @@ pub struct BatchMintInstruction {
 
 #[derive(Serialize, Deserialize)]
 pub struct ChangeLogEventV1 {
+    #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
     pub id: Pubkey,
     pub path: Vec<PathNode>,
     pub seq: u64,
