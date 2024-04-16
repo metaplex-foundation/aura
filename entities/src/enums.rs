@@ -172,3 +172,11 @@ pub enum TaskStatus {
     Success,
     Failed,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
+pub enum RollupState {
+    Uploaded,
+    Processing,
+    ValidationFail,
+    Complete,
+}
