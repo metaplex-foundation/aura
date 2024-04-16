@@ -1,20 +1,12 @@
-use crate::bubblegum_updates_processor::BubblegumTxProcessor;
 use async_trait::async_trait;
 use entities::rollup::Rollup;
 use interface::error::UsecaseError;
 use interface::rollup::RollupDownloader;
-use solana_program::pubkey::Pubkey;
-
-pub fn find_rollup_pda(tree_authority: &Pubkey, tree_nonce: u64) -> (Pubkey, u8) {
-    Pubkey::find_program_address(
-        &[
-            b"rollup",
-            tree_authority.as_ref(),
-            BubblegumTxProcessor::u32_to_u8_array(tree_nonce as u32).as_ref(),
-        ],
-        &mpl_bubblegum::programs::SPL_ACCOUNT_COMPRESSION_ID,
-    )
-}
+use postgre_client::PgClient;
+use rocks_db::Storage;
+use std::sync::Arc;
+use tokio::sync::broadcast::Receiver;
+use tracing::error;
 
 // pub fn create_leaf_schema(
 //     asset: &RolledMintInstruction,
@@ -72,5 +64,51 @@ impl RollupDownloader for RollupDownloaderImpl {
     async fn download_rollup(&self, url: &str) -> Result<Box<Rollup>, UsecaseError> {
         let response = reqwest::get(url).await?.bytes().await?;
         Ok(Box::new(serde_json::from_slice(&response)?))
+    }
+}
+
+pub struct RollupProcessor {
+    pg_client: Arc<PgClient>,
+    rocks: Arc<Storage>,
+}
+
+impl RollupProcessor {
+    pub fn new(pg_client: Arc<PgClient>, rocks: Arc<Storage>) -> Self {
+        Self { pg_client, rocks }
+    }
+
+    pub async fn process_rollups(&self, rx: Receiver<()>) {
+        while rx.is_empty() {
+            let rollup_to_process = match self.pg_client.fetch_rollup_for_processing().await {
+                Ok(rollup) => rollup,
+                Err(e) => {
+                    error!("Failed fetch rollup for processing: {}", e);
+                    continue;
+                }
+            };
+            let json_file = match tokio::fs::read_to_string(&rollup_to_process.file_path).await {
+                Ok(json_file) => json_file,
+                Err(e) => {
+                    error!("Failed read file to string: {}", e);
+                    continue;
+                }
+            };
+            let rollup = match serde_json::from_str::<Rollup>(&json_file) {
+                Ok(rollup) => rollup,
+                Err(e) => {
+                    if let Err(e) = self
+                        .pg_client
+                        .mark_rollup_as_verification_failed(
+                            &rollup_to_process.file_path,
+                            &e.to_string(),
+                        )
+                        .await
+                    {
+                        error!("Failed mark rollup as verification failed: {}", e);
+                    }
+                    continue;
+                }
+            };
+        }
     }
 }
