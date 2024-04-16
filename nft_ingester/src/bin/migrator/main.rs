@@ -7,17 +7,20 @@ use log::{error, info};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait};
+use postgre_client::PgClient;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::{JoinError, JoinSet};
 
 use nft_ingester::config::{
     init_logger, setup_config, JsonMigratorConfig, JsonMigratorMode, JSON_MIGRATOR_CONFIG_PREFIX,
 };
-use nft_ingester::db_v2::DBClient;
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use rocks_db::offchain_data::OffChainData;
 use rocks_db::{AssetDynamicDetails, Storage};
+
+pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
+pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
@@ -27,11 +30,25 @@ pub async fn main() -> Result<(), IngesterError> {
 
     info!("Started...");
 
-    let database_pool = DBClient::new(&config.database_config.clone()).await?;
-    let pg_client = Arc::new(database_pool);
+    let max_postgre_connections = config
+        .database_config
+        .get_max_postgres_connections()
+        .unwrap_or(DEFAULT_MAX_POSTGRES_CONNECTIONS);
 
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
+
+    let pg_client = Arc::new(
+        PgClient::new(
+            &config.database_config.get_database_url().unwrap(),
+            DEFAULT_MIN_POSTGRES_CONNECTIONS,
+            max_postgre_connections,
+            metrics_state.red_metrics.clone(),
+        )
+        .await
+        .unwrap(),
+    );
+
     start_metrics(metrics_state.registry, Some(config.metrics_port)).await;
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
@@ -79,7 +96,7 @@ pub async fn main() -> Result<(), IngesterError> {
 }
 
 pub struct JsonMigrator {
-    pub database_pool: Arc<DBClient>,
+    pub database_pool: Arc<PgClient>,
     pub source_rocks_db: Arc<Storage>,
     pub target_rocks_db: Arc<Storage>,
     pub metrics: Arc<JsonMigratorMetricsConfig>,
@@ -88,7 +105,7 @@ pub struct JsonMigrator {
 
 impl JsonMigrator {
     pub fn new(
-        database_pool: Arc<DBClient>,
+        database_pool: Arc<PgClient>,
         source_rocks_db: Arc<Storage>,
         target_rocks_db: Arc<Storage>,
         metrics: Arc<JsonMigratorMetricsConfig>,
@@ -226,7 +243,9 @@ impl JsonMigrator {
 
                 drop(tasks_buffer);
 
-                let res = cloned_pg_client.insert_tasks(&mut tasks_to_insert).await;
+                let res = cloned_pg_client
+                    .insert_json_download_tasks(&mut tasks_to_insert)
+                    .await;
                 match res {
                     Ok(_) => {
                         cloned_metrics.inc_tasks_set(
