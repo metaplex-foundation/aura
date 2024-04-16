@@ -2,13 +2,16 @@ use digital_asset_types::dao::SearchAssetsQuery;
 use digital_asset_types::dapi::{get_asset, get_asset_batch, get_proof_for_assets, search_assets};
 use digital_asset_types::rpc::response::AssetList;
 use interface::error::UsecaseError;
+use interface::json::{JsonDownloader, JsonPersister};
 use interface::proofs::ProofChecker;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
+use tokio::sync::Mutex;
+use tokio::task::{JoinError, JoinSet};
 
 use self::util::ApiRequest;
-use crate::api::config::Config;
+use crate::config::{ApiConfig, JsonMiddlewareConfig};
 use digital_asset_types::dapi::get_asset_signatures::get_asset_signatures;
 use digital_asset_types::dapi::get_token_accounts::get_token_accounts;
 use digital_asset_types::rpc::response::TransactionSignatureListDeprecated;
@@ -28,27 +31,38 @@ use {crate::api::*, sqlx::postgres::PgPoolOptions};
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
 
-pub struct DasApi<PC>
+pub struct DasApi<PC, JD, JP>
 where
     PC: ProofChecker + Sync + Send + 'static,
+    JD: JsonDownloader + Sync + Send + 'static,
+    JP: JsonPersister + Sync + Send + 'static,
 {
-    pg_client: Arc<PgClient>,
+    pub(crate) pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
     metrics: Arc<ApiMetricsConfig>,
     proof_checker: Option<Arc<PC>>,
     max_page_limit: u32,
+    json_downloader: Option<Arc<JD>>,
+    json_persister: Option<Arc<JP>>,
+    json_middleware_config: JsonMiddlewareConfig,
 }
 
-impl<PC> DasApi<PC>
+impl<PC, JD, JP> DasApi<PC, JD, JP>
 where
     PC: ProofChecker + Sync + Send + 'static,
+    JD: JsonDownloader + Sync + Send + 'static,
+    JP: JsonPersister + Sync + Send + 'static,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         pg_client: Arc<PgClient>,
         rocks_db: Arc<Storage>,
         metrics: Arc<ApiMetricsConfig>,
         proof_checker: Option<Arc<PC>>,
         max_page_limit: usize,
+        json_downloader: Option<Arc<JD>>,
+        json_persister: Option<Arc<JP>>,
+        json_middleware_config: JsonMiddlewareConfig,
     ) -> Self {
         DasApi {
             pg_client,
@@ -56,19 +70,29 @@ where
             metrics,
             proof_checker,
             max_page_limit: max_page_limit as u32,
+            json_downloader,
+            json_persister,
+            json_middleware_config,
         }
     }
 
     pub async fn from_config(
-        config: Config,
+        config: ApiConfig,
         metrics: Arc<ApiMetricsConfig>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         rocks_db: Arc<Storage>,
         proof_checker: Option<Arc<PC>>,
+        json_downloader: Option<Arc<JD>>,
+        json_persister: Option<Arc<JP>>,
     ) -> Result<Self, DasApiError> {
         let pool = PgPoolOptions::new()
             .max_connections(250)
-            .connect(&config.database_url)
+            .connect(
+                &config
+                    .database_config
+                    .get_database_url()
+                    .map_err(|err| DasApiError::ConfigurationError(err.to_string()))?,
+            )
             .await?;
 
         let pg_client = PgClient::new_with_pool(pool, red_metrics);
@@ -78,6 +102,9 @@ where
             metrics,
             proof_checker,
             max_page_limit: config.max_page_limit as u32,
+            json_downloader,
+            json_persister,
+            json_middleware_config: config.json_middleware_config.unwrap_or_default(),
         })
     }
 }
@@ -86,9 +113,11 @@ pub fn not_found() -> DasApiError {
     DasApiError::NoDataFoundError
 }
 
-impl<PC> DasApi<PC>
+impl<PC, JD, JP> DasApi<PC, JD, JP>
 where
     PC: ProofChecker + Sync + Send + 'static,
+    JD: JsonDownloader + Sync + Send + 'static,
+    JP: JsonPersister + Sync + Send + 'static,
 {
     pub async fn check_health(&self) -> Result<Value, DasApiError> {
         let label = "check_health";
@@ -200,7 +229,11 @@ where
         Ok(json!(res?))
     }
 
-    pub async fn get_asset(&self, payload: GetAsset) -> Result<Value, DasApiError> {
+    pub async fn get_asset(
+        &self,
+        payload: GetAsset,
+        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    ) -> Result<Value, DasApiError> {
         let label = "get_asset";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
@@ -208,9 +241,17 @@ where
         let id = validate_pubkey(payload.id.clone())?;
         let options = payload.options.unwrap_or_default();
 
-        let res = get_asset(self.rocks_db.clone(), id, options)
-            .await
-            .map_err(Into::<DasApiError>::into)?;
+        let res = get_asset(
+            self.rocks_db.clone(),
+            id,
+            options,
+            self.json_downloader.clone(),
+            self.json_persister.clone(),
+            self.json_middleware_config.max_urls_to_parse,
+            tasks,
+        )
+        .await
+        .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -222,7 +263,11 @@ where
         Ok(json!(res))
     }
 
-    pub async fn get_asset_batch(&self, payload: GetAssetBatch) -> Result<Value, DasApiError> {
+    pub async fn get_asset_batch(
+        &self,
+        payload: GetAssetBatch,
+        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    ) -> Result<Value, DasApiError> {
         let label = "get_asset_batch";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
@@ -241,9 +286,17 @@ where
             .collect::<Result<Vec<_>, _>>()?;
         let options = payload.options.unwrap_or_default();
 
-        let res = get_asset_batch(self.rocks_db.clone(), ids, options)
-            .await
-            .map_err(Into::<DasApiError>::into)?;
+        let res = get_asset_batch(
+            self.rocks_db.clone(),
+            ids,
+            options,
+            self.json_downloader.clone(),
+            self.json_persister.clone(),
+            self.json_middleware_config.max_urls_to_parse,
+            tasks,
+        )
+        .await
+        .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -254,13 +307,19 @@ where
     pub async fn get_assets_by_owner(
         &self,
         payload: GetAssetsByOwner,
+        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     ) -> Result<Value, DasApiError> {
         let label = "get_assets_by_owner";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let res = self
-            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
+            .process_request(
+                self.pg_client.clone(),
+                self.rocks_db.clone(),
+                payload,
+                tasks,
+            )
             .await?;
 
         self.metrics
@@ -272,13 +331,19 @@ where
     pub async fn get_assets_by_group(
         &self,
         payload: GetAssetsByGroup,
+        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     ) -> Result<Value, DasApiError> {
         let label = "get_assets_by_group";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let res = self
-            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
+            .process_request(
+                self.pg_client.clone(),
+                self.rocks_db.clone(),
+                payload,
+                tasks,
+            )
             .await?;
 
         self.metrics
@@ -290,13 +355,19 @@ where
     pub async fn get_assets_by_creator(
         &self,
         payload: GetAssetsByCreator,
+        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     ) -> Result<Value, DasApiError> {
         let label = "get_assets_by_creator";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let res = self
-            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
+            .process_request(
+                self.pg_client.clone(),
+                self.rocks_db.clone(),
+                payload,
+                tasks,
+            )
             .await?;
 
         self.metrics
@@ -308,13 +379,19 @@ where
     pub async fn get_assets_by_authority(
         &self,
         payload: GetAssetsByAuthority,
+        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     ) -> Result<Value, DasApiError> {
         let label = "get_assets_by_authority";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
         let res = self
-            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
+            .process_request(
+                self.pg_client.clone(),
+                self.rocks_db.clone(),
+                payload,
+                tasks,
+            )
             .await?;
 
         self.metrics
@@ -374,14 +451,23 @@ where
         Ok(json!(res))
     }
 
-    pub async fn search_assets(&self, payload: SearchAssets) -> Result<Value, DasApiError> {
+    pub async fn search_assets(
+        &self,
+        payload: SearchAssets,
+        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    ) -> Result<Value, DasApiError> {
         // use names of the filter fields as a label for better understanding of the endpoint usage
         let label = payload.extract_some_fields();
         self.metrics.inc_search_asset_requests(&label);
         let latency_timer = Instant::now();
 
         let res = self
-            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload)
+            .process_request(
+                self.pg_client.clone(),
+                self.rocks_db.clone(),
+                payload,
+                tasks,
+            )
             .await?;
 
         self.metrics
@@ -488,6 +574,7 @@ where
         pg_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
         rocks_db: Arc<Storage>,
         payload: T,
+        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     ) -> Result<AssetList, DasApiError>
     where
         T: TryInto<SearchAssetsQuery>,
@@ -515,6 +602,10 @@ where
             pagination.after,
             pagination.cursor,
             options,
+            self.json_downloader.clone(),
+            self.json_persister.clone(),
+            self.json_middleware_config.max_urls_to_parse,
+            tasks,
         )
         .await?;
 

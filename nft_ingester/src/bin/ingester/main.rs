@@ -7,7 +7,7 @@ use clap::Parser;
 use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info, warn};
-use nft_ingester::{backfiller, config, transaction_ingester};
+use nft_ingester::{backfiller, config, json_worker, transaction_ingester};
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
@@ -25,12 +25,12 @@ use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
-    setup_config, BackfillerConfig, BackfillerSourceMode, IngesterConfig, INGESTER_BACKUP_NAME,
-    INGESTER_CONFIG_PREFIX,
+    setup_config, ApiConfig, BackfillerConfig, BackfillerSourceMode, IngesterConfig,
+    INGESTER_BACKUP_NAME, INGESTER_CONFIG_PREFIX,
 };
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::graceful_stop;
-use nft_ingester::json_downloader::JsonDownloader;
+use nft_ingester::json_worker::JsonWorker;
 use nft_ingester::message_handler::MessageHandler;
 use nft_ingester::mplx_updates_processor::MplxAccsProcessor;
 use nft_ingester::tcp_receiver::TcpReceiver;
@@ -222,19 +222,43 @@ pub async fn main() -> Result<(), IngesterError> {
     let keep_running = Arc::new(AtomicBool::new(true));
     let cloned_keep_running = keep_running.clone();
 
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        geyser_tcp_receiver
-            .connect(geyser_addr, cloned_keep_running)
+    mutexed_tasks.lock().await.spawn(async move {
+        let geyser_tcp_receiver = Arc::new(geyser_tcp_receiver);
+        while cloned_keep_running.load(Ordering::SeqCst) {
+            let geyser_tcp_receiver_clone = geyser_tcp_receiver.clone();
+            let cloned_keep_running = cloned_keep_running.clone();
+            if let Err(e) = tokio::spawn(async move {
+                geyser_tcp_receiver_clone
+                    .connect(geyser_addr, cloned_keep_running)
+                    .await
+                    .unwrap()
+            })
             .await
-            .unwrap()
-    }));
+            {
+                error!("geyser_tcp_receiver panic: {:?}", e);
+            }
+        }
+        Ok(())
+    });
     let cloned_keep_running = keep_running.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        snapshot_tcp_receiver
-            .connect(snapshot_addr, cloned_keep_running)
+    mutexed_tasks.lock().await.spawn(async move {
+        let snapshot_tcp_receiver = Arc::new(snapshot_tcp_receiver);
+        while cloned_keep_running.load(Ordering::SeqCst) {
+            let snapshot_tcp_receiver_clone = snapshot_tcp_receiver.clone();
+            let cloned_keep_running = cloned_keep_running.clone();
+            if let Err(e) = tokio::spawn(async move {
+                snapshot_tcp_receiver_clone
+                    .connect(snapshot_addr, cloned_keep_running)
+                    .await
+                    .unwrap()
+            })
             .await
-            .unwrap()
-    }));
+            {
+                error!("snapshot_tcp_receiver panic: {:?}", e);
+            }
+        }
+        Ok(())
+    });
 
     let cloned_buffer = buffer.clone();
     let cloned_keep_running = keep_running.clone();
@@ -372,8 +396,20 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     }));
 
+    let json_processor = Arc::new(
+        JsonWorker::new(
+            index_storage.clone(),
+            rocks_storage.clone(),
+            metrics_state.json_downloader_metrics.clone(),
+        )
+        .await,
+    );
+
+    let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_red_metrics = metrics_state.red_metrics.clone();
+    let cloned_api_metrics = metrics_state.api_metrics.clone();
+
     let proof_checker = config.rpc_host.clone().map(|host| {
         Arc::new(MaybeProofChecker::new(
             Arc::new(RpcClient::new(host)),
@@ -382,12 +418,37 @@ pub async fn main() -> Result<(), IngesterError> {
         ))
     });
     let rx_clone = shutdown_rx.resubscribe();
+
+    let tasks_clone = mutexed_tasks.clone();
+    let cloned_rx = shutdown_rx.resubscribe();
+
+    let middleware_json_downloader = config
+        .json_middleware_config
+        .as_ref()
+        .filter(|conf| conf.is_enabled)
+        .map(|_| json_processor.clone());
+
+    let api_config: ApiConfig = setup_config(INGESTER_CONFIG_PREFIX);
+
+    let cloned_index_storage = index_storage.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
+            cloned_index_storage,
             cloned_rocks_storage.clone(),
+            cloned_keep_running,
+            cloned_rx,
+            cloned_api_metrics,
+            api_config.server_port,
             metrics_state.api_metrics.clone(),
             cloned_red_metrics,
             proof_checker,
+            api_config.max_page_limit,
+            middleware_json_downloader.clone(),
+            middleware_json_downloader,
+            api_config.json_middleware_config,
+            tasks_clone,
+            &api_config.archives_dir,
+            api_config.consistence_synchronization_api_threshold,
             rx_clone,
         )
         .await
@@ -422,15 +483,10 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     }));
 
-    let json_downloader = JsonDownloader::new(
-        rocks_storage.clone(),
-        metrics_state.json_downloader_metrics.clone(),
-    )
-    .await;
-
     let cloned_keep_running = keep_running.clone();
+    let cloned_js = json_processor.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        json_downloader.run(cloned_keep_running).await;
+        json_worker::run(cloned_js, cloned_keep_running).await;
     }));
 
     let backfill_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
