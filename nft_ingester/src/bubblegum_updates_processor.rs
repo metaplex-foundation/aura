@@ -2,7 +2,6 @@ use crate::error::IngesterError;
 use crate::flatbuffer_mapper::FlatbufferMapper;
 use crate::plerkle;
 use crate::plerkle::PlerkleTransactionInfo;
-use crate::rollup_processor::find_rollup_pda;
 use blockbuster::programs::bubblegum::{BubblegumInstruction, Payload};
 use blockbuster::{
     instruction::{order_instructions, InstructionBundle, IxPair},
@@ -1067,38 +1066,6 @@ impl BubblegumTxProcessor {
         let rollup = rollup_downloader
             .download_rollup(&batch_mint_instruction.metadata_url)
             .await?;
-        let (rollup_pda, _) = find_rollup_pda(&rollup.tree_authority, rollup.tree_nonce);
-        if rollup_pda != rollup.tree_id {
-            return Err(IngesterError::PDACheckFail(
-                rollup_pda.to_string(),
-                rollup.tree_id.to_string(),
-            ));
-        }
-
-        // TODO: possible check of hashes
-        // let mut bubblegum_instructions = Vec::new();
-        // for asset in rollup.rolled_mints {
-        //     bubblegum_instructions.push(BubblegumInstruction {
-        //         instruction: InstructionName::MintV1,
-        //         tree_update: Some(ChangeLogEventV1 {
-        //             id: rollup.tree_id,
-        //             path: vec![],
-        //             seq: asset.nonce,
-        //             index: asset.nonce as u32,
-        //         }),
-        //         leaf_update: Some(create_leaf_schema(&asset, &rollup.tree_id)?),
-        //         payload: Some(Payload::MintV1 {
-        //             args: asset.mint_args,
-        //             authority: asset.authority,
-        //             tree_id: rollup.tree_id,
-        //         }),
-        //     });
-        // }
-        // let (max_depth, max_buffer_size) = (
-        //     batch_mint_instruction.max_depth,
-        //     batch_mint_instruction.max_buffer_size,
-        // );
-        // set_tree_paths!(max_depth, max_buffer_size, bubblegum_instructions)?;
         let mut transaction_result = TransactionResult {
             instruction_results: vec![],
             transaction_signature: Some((
@@ -1109,18 +1076,18 @@ impl BubblegumTxProcessor {
                 },
             )),
         };
-        for rolled_mint in rollup.rolled_mints {
-            let (mut update, mut task_option) = Self::get_mint_v1_update(
-                &RolledMintInstructionWithTree {
-                    tree_update: rolled_mint.tree_update,
-                    leaf_update: rolled_mint.leaf_update,
-                    mint_args: rolled_mint.mint_args,
-                    tree_id: rollup.tree_id,
-                    authority: rolled_mint.authority,
-                }
-                .into(),
-                slot,
-            )?;
+        for (seq, rolled_mint) in rollup.rolled_mints.into_iter().enumerate() {
+            let with_tree = RolledMintInstructionWithTree {
+                tree_update: rolled_mint.tree_update,
+                leaf_update: rolled_mint.leaf_update,
+                mint_args: rolled_mint.mint_args,
+                tree_id: rollup.tree_id,
+                authority: rolled_mint.authority,
+            };
+            let event =
+                (&blockbuster::programs::bubblegum::ChangeLogEventV1::from(&with_tree.tree_update))
+                    .into();
+            let (mut update, mut task_option) = Self::get_mint_v1_update(&with_tree.into(), slot)?;
             if let Some(ref mut task) = task_option {
                 if let Some(metadata) = rollup.raw_metadata_map.get(&task.ofd_metadata_url) {
                     task.ofd_status = TaskStatus::Success;
@@ -1131,9 +1098,17 @@ impl BubblegumTxProcessor {
                 }
             }
 
-            transaction_result
-                .instruction_results
-                .push((update, task_option).into());
+            let mut ix: InstructionResult = (update, task_option).into();
+            ix.tree_update = Some(TreeUpdate {
+                tree: rollup.tree_id,
+                seq: seq as u64,
+                slot,
+                event,
+                instruction: "".to_string(),
+                tx: Signature::default().to_string(),
+            });
+
+            transaction_result.instruction_results.push(ix);
             if transaction_result.instruction_results.len() >= ROLLUP_BATCH_FLUSH_SIZE {
                 // TODO: add retry
                 rocks_db
@@ -1167,8 +1142,8 @@ impl From<RolledMintInstructionWithTree> for BubblegumInstruction {
     fn from(value: RolledMintInstructionWithTree) -> Self {
         let hash = value.leaf_update.hash();
         Self {
-            instruction: InstructionName::Unknown,
-            tree_update: Some(value.tree_update.into()),
+            instruction: InstructionName::MintV1,
+            tree_update: Some((&value.tree_update).into()),
             leaf_update: Some(LeafSchemaEvent::new(Version::V1, value.leaf_update, hash)),
             payload: Some(Payload::MintV1 {
                 args: value.mint_args,

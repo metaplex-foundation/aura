@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
+use std::str::FromStr;
 
 use anchor_lang::prelude::*;
 use async_trait::async_trait;
@@ -9,7 +10,6 @@ use entities::rollup::{BatchMintInstruction, ChangeLogEventV1, RolledMintInstruc
 use interface::error::UsecaseError;
 use interface::rollup::RollupDownloader;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
-use nft_ingester::rollup_processor::find_rollup_pda;
 use rand::{thread_rng, Rng};
 use solana_sdk::keccak;
 use solana_sdk::pubkey::Pubkey;
@@ -17,12 +17,10 @@ use spl_account_compression::ConcurrentMerkleTree;
 use testcontainers::clients::Cli;
 
 fn generate_rollup(size: usize) -> Rollup {
-    let authority = Pubkey::new_unique();
-    let nonce: u32 = 1035;
-
-    let (tree, _) = find_rollup_pda(&authority, nonce as u64);
+    let authority = Pubkey::from_str("3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM").unwrap();
+    let tree = Pubkey::from_str("HxhCw9g3kZvrdg9zZvctmh6qpSDg1FfsBXfFvRkbCHB7").unwrap();
     let mut mints = Vec::new();
-    let mut merkle = ConcurrentMerkleTree::<24, 1024>::new();
+    let mut merkle = ConcurrentMerkleTree::<10, 32>::new();
     merkle.initialize().unwrap();
 
     let mut last_leaf_hash = [0u8; 32];
@@ -80,8 +78,8 @@ fn generate_rollup(size: usize) -> Rollup {
         };
         let nonce = i as u64;
         let id = mpl_bubblegum::utils::get_asset_id(&tree, nonce);
-        let owner = Pubkey::new_unique();
-        let delegate = Pubkey::new_unique();
+        let owner = authority.clone();
+        let delegate = authority.clone();
 
         let metadata_args_hash = keccak::hashv(&[mint_args.try_to_vec().unwrap().as_slice()]);
         let data_hash = keccak::hashv(&[
@@ -101,14 +99,6 @@ fn generate_rollup(size: usize) -> Rollup {
                 .as_ref(),
         );
 
-        // let leaf = LeafSchema::V1 {
-        //     id,
-        //     owner,
-        //     delegate,
-        //     nonce,
-        //     data_hash: data_hash.to_bytes(),
-        //     creator_hash: creator_hash.to_bytes(),
-        // };
         let hashed_leaf = keccak::hashv(&[
             &[1], //self.version().to_bytes()
             id.as_ref(),
@@ -121,22 +111,38 @@ fn generate_rollup(size: usize) -> Rollup {
         .to_bytes();
         merkle.append(hashed_leaf).unwrap();
         last_leaf_hash = hashed_leaf;
+        let changelog = merkle.change_logs[merkle.active_index as usize];
+        let path_len = changelog.path.len() as u32;
+        let mut path: Vec<spl_account_compression::state::PathNode> = changelog
+            .path
+            .iter()
+            .enumerate()
+            .map(|(lvl, n)| {
+                spl_account_compression::state::PathNode::new(
+                    *n,
+                    (1 << (path_len - lvl as u32)) + (changelog.index >> lvl),
+                )
+            })
+            .collect();
+        path.push(spl_account_compression::state::PathNode::new(
+            changelog.root,
+            1,
+        ));
 
-        // TODO
         let rolled_mint = RolledMintInstruction {
             tree_update: ChangeLogEventV1 {
-                id,
-                path: vec![],
-                seq: 0,
-                index: 0,
+                id: tree,
+                path: path.into_iter().map(Into::into).collect::<Vec<_>>(),
+                seq: nonce + 1,
+                index: changelog.index,
             },
             leaf_update: LeafSchema::V1 {
                 id,
                 owner,
                 delegate,
-                nonce: 0,
-                data_hash: [0; 32],
-                creator_hash: [0; 32],
+                nonce,
+                data_hash: data_hash.to_bytes(),
+                creator_hash: creator_hash.to_bytes(),
             },
             mint_args,
             authority,
@@ -144,8 +150,6 @@ fn generate_rollup(size: usize) -> Rollup {
         mints.push(rolled_mint);
     }
     let rollup = Rollup {
-        tree_authority: authority,
-        tree_nonce: nonce as u64,
         tree_id: tree,
         raw_metadata_map: HashMap::new(),
         rolled_mints: mints,
@@ -157,6 +161,7 @@ fn generate_rollup(size: usize) -> Rollup {
 }
 
 #[test]
+#[cfg(feature = "rollup_tests")]
 fn test_generate_1_000_rollup() {
     let rollup = generate_rollup(1000);
     assert_eq!(rollup.rolled_mints.len(), 1000);
@@ -165,6 +170,7 @@ fn test_generate_1_000_rollup() {
 }
 
 #[test]
+#[cfg(feature = "rollup_tests")]
 fn test_generate_10_000_rollup() {
     let rollup = generate_rollup(10_000);
     assert_eq!(rollup.rolled_mints.len(), 10_000);
@@ -174,6 +180,7 @@ fn test_generate_10_000_rollup() {
 }
 
 #[test]
+#[cfg(feature = "rollup_tests")]
 fn test_generate_100_000_rollup() {
     let rollup = generate_rollup(100_000);
     assert_eq!(rollup.rolled_mints.len(), 100_000);
@@ -183,6 +190,7 @@ fn test_generate_100_000_rollup() {
 }
 
 #[test]
+#[cfg(feature = "rollup_tests")]
 fn test_generate_1_000_000_rollup() {
     let rollup = generate_rollup(1_000_000);
     assert_eq!(rollup.rolled_mints.len(), 1_000_000);
@@ -191,6 +199,7 @@ fn test_generate_1_000_000_rollup() {
 }
 
 #[test]
+#[cfg(feature = "rollup_tests")]
 fn test_generate_10_000_000_rollup() {
     let rollup = generate_rollup(10_000_000);
     assert_eq!(rollup.rolled_mints.len(), 10_000_000);
@@ -203,8 +212,55 @@ struct TestRollupDownloader {}
 #[async_trait]
 impl RollupDownloader for TestRollupDownloader {
     async fn download_rollup(&self, _url: &str) -> std::result::Result<Box<Rollup>, UsecaseError> {
+        // let json_file = std::fs::read_to_string("../rollup-1000.json").unwrap();
+        // let rollup: Rollup = serde_json::from_str(&json_file).unwrap();
+
         Ok(Box::new(generate_rollup(ROLLUP_ASSETS_TO_SAVE)))
     }
+}
+
+fn _generate() -> ConcurrentMerkleTree<10, 32> {
+    let json_file = std::fs::read_to_string("../rollup-1000.json").unwrap();
+    let rollup: Rollup = serde_json::from_str(&json_file).unwrap();
+
+    let mut merkle_tree = ConcurrentMerkleTree::<10, 32>::new();
+    merkle_tree.initialize().unwrap();
+
+    for (nonce, asset) in rollup.rolled_mints.iter().enumerate() {
+        let metadata_args_hash = keccak::hashv(&[asset.mint_args.try_to_vec().unwrap().as_slice()]);
+        let data_hash = keccak::hashv(&[
+            &metadata_args_hash.to_bytes(),
+            &asset.mint_args.seller_fee_basis_points.to_le_bytes(),
+        ]);
+
+        let creator_data = asset
+            .mint_args
+            .creators
+            .iter()
+            .map(|c| [c.address.as_ref(), &[c.verified as u8], &[c.share]].concat())
+            .collect::<Vec<_>>();
+
+        let creator_hash = keccak::hashv(
+            creator_data
+                .iter()
+                .map(|c| c.as_slice())
+                .collect::<Vec<&[u8]>>()
+                .as_ref(),
+        );
+
+        let id = mpl_bubblegum::utils::get_asset_id(&rollup.tree_id, nonce as u64);
+
+        let leaf = LeafSchema::V1 {
+            id,
+            owner: Pubkey::from_str("3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM").unwrap(),
+            delegate: Pubkey::from_str("3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM").unwrap(),
+            nonce: nonce as u64,
+            data_hash: data_hash.to_bytes(),
+            creator_hash: creator_hash.to_bytes(),
+        };
+        merkle_tree.append(leaf.hash()).unwrap();
+    }
+    merkle_tree
 }
 
 #[tokio::test]

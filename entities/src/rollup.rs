@@ -7,15 +7,12 @@ use solana_sdk::pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize)]
 pub struct Rollup {
-    pub tree_authority: Pubkey,
-    pub tree_nonce: u64,
-
+    pub tree_id: Pubkey,
     pub rolled_mints: Vec<RolledMintInstruction>,
     pub raw_metadata_map: HashMap<String, Box<RawValue>>, // map by uri
 
     // derived data
-    pub tree_id: Pubkey, // derived from the tree authority and nonce PDA("rollup", tree_authority, tree_nonce) // validate
-    pub merkle_root: [u8; 32], // validate
+    pub merkle_root: [u8; 32],    // validate
     pub last_leaf_hash: [u8; 32], // validate
 }
 
@@ -55,16 +52,34 @@ pub struct PathNode {
     pub index: u32,
 }
 
-impl From<PathNode> for spl_account_compression::state::PathNode {
-    fn from(value: PathNode) -> Self {
+impl From<&PathNode> for spl_account_compression::state::PathNode {
+    fn from(value: &PathNode) -> Self {
         Self {
             node: value.node,
             index: value.index,
         }
     }
 }
-impl From<ChangeLogEventV1> for blockbuster::programs::bubblegum::ChangeLogEventV1 {
-    fn from(value: ChangeLogEventV1) -> Self {
+impl From<spl_account_compression::state::PathNode> for PathNode {
+    fn from(value: spl_account_compression::state::PathNode) -> Self {
+        Self {
+            node: value.node,
+            index: value.index,
+        }
+    }
+}
+impl From<&ChangeLogEventV1> for blockbuster::programs::bubblegum::ChangeLogEventV1 {
+    fn from(value: &ChangeLogEventV1) -> Self {
+        Self {
+            id: value.id,
+            path: value.path.iter().map(Into::into).collect::<Vec<_>>(),
+            seq: value.seq,
+            index: value.index,
+        }
+    }
+}
+impl From<blockbuster::programs::bubblegum::ChangeLogEventV1> for ChangeLogEventV1 {
+    fn from(value: blockbuster::programs::bubblegum::ChangeLogEventV1) -> Self {
         Self {
             id: value.id,
             path: value.path.into_iter().map(Into::into).collect::<Vec<_>>(),
