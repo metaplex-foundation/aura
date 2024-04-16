@@ -9,15 +9,13 @@ impl PgClient {
             "INSERT INTO rollups (
                 rlp_file_name,
                 rlp_state
-            ) ",
+            ) VALUES ($1, $2) ON CONFLICT (rlp_file_name) DO NOTHING;",
         );
-
-        query_builder.push_bind(file_path);
-        query_builder.push_bind(RollupState::Uploaded);
-        query_builder.push(" ON CONFLICT (rlp_file_name) DO NOTHING;");
 
         let query = query_builder.build();
         query
+            .bind(file_path)
+            .bind(RollupState::Uploaded)
             .execute(&self.pool)
             .await
             .map_err(|err| format!("Insert rollup: {}", err))?;
@@ -67,13 +65,14 @@ impl PgClient {
         error_message: &str,
     ) -> Result<(), String> {
         let mut query_builder = QueryBuilder::new(
-            "UPDATE rollups SET rlp_state = $1, rlp_error = $2 WHERE rlp_file_name = $3",
+            "UPDATE rollups SET rlp_state = $1, rlp_error = $2, rlp_completed_at = $3 WHERE rlp_file_name = $4",
         );
         let start_time = chrono::Utc::now();
         let query = query_builder.build();
         let result = query
             .bind(RollupState::ValidationFail)
             .bind(error_message)
+            .bind(chrono::Utc::now())
             .bind(file_path)
             .execute(&self.pool)
             .await
@@ -94,13 +93,14 @@ impl PgClient {
 
     pub async fn mark_rollup_as_complete(&self, file_path: &str, url: &str) -> Result<(), String> {
         let mut query_builder = QueryBuilder::new(
-            "UPDATE rollups SET rlp_state = $1, rlp_url = $2 WHERE rlp_file_name = $3",
+            "UPDATE rollups SET rlp_state = $1, rlp_url = $2, rlp_completed_at = $3 WHERE rlp_file_name = $4",
         );
         let start_time = chrono::Utc::now();
         let query = query_builder.build();
         let result = query
             .bind(RollupState::Complete)
             .bind(url)
+            .bind(chrono::Utc::now())
             .bind(file_path)
             .execute(&self.pool)
             .await
