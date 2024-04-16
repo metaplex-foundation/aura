@@ -2,16 +2,15 @@ use hyper::{header::CONTENT_TYPE, Body, Method, Request, Response, Server, Statu
 use jsonrpc_http_server::hyper;
 use jsonrpc_http_server::hyper::service::{make_service_fn, service_fn};
 use log::info;
-use metrics_utils::red::RequestErrorDurationMetrics;
 use multer::Multipart;
 use postgre_client::PgClient;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::broadcast::Receiver;
-use tracing::error;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
+use tracing::error;
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 
@@ -49,8 +48,7 @@ pub(crate) struct MiddlewaresData {
 pub async fn start_api(
     pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
-    keep_running: Arc<AtomicBool>,
-    rx: tokio::sync::broadcast::Receiver<()>,
+    rx: Receiver<()>,
     metrics: Arc<ApiMetricsConfig>,
     port: u16,
     proof_checker: Option<Arc<MaybeProofChecker>>,
@@ -61,6 +59,8 @@ pub async fn start_api(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     archives_dir: &str,
     consistence_synchronization_api_threshold: u64,
+    batch_mint_service_port: u16,
+    file_storage_path: &str,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -77,8 +77,6 @@ pub async fn start_api(
         .await;
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    // todo: setup middleware, looks like too many shit related to backups are there
-    // let request_middleware = RpcRequestMiddleware::new(config.archives_dir.as_str());
     let api = DasApi::new(
         pg_client,
         rocks_db,
@@ -98,8 +96,10 @@ pub async fn start_api(
             consistency_checkers: vec![synchronization_state_consistency_checker],
         }),
         addr,
-        keep_running,
         tasks,
+        batch_mint_service_port,
+        file_storage_path,
+        rx,
     )
     .await
 }
@@ -108,7 +108,6 @@ async fn run_api(
     api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker>,
     middlewares_data: Option<MiddlewaresData>,
     addr: SocketAddr,
-    keep_running: Arc<AtomicBool>,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     batch_mint_service_port: u16,
     file_storage_path: &str,
@@ -233,7 +232,7 @@ async fn batch_mint_request_handler(
                     .status(StatusCode::BAD_REQUEST)
                     .body(Body::from("BAD REQUEST"))
                     .unwrap()),
-            }
+            };
         }
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
