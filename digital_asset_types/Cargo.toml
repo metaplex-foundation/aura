@@ -30,3 +30,4 @@ entities = { path = "../entities" }
 usecase = { path = "../usecase" }
 interface = { path = "../interface" }
 metrics-utils = { path = "../metrics_utils" }
+futures = "0.3.30"

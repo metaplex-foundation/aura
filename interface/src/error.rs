@@ -75,3 +75,14 @@ pub enum IntegrityVerificationError {
     #[error("TreeAccountNotFound {0}")]
     TreeAccountNotFound(String),
 }
+
+#[derive(Debug, Clone)]
+pub enum JsonDownloaderError {
+    GotNotJsonFile,
+    CouldNotDeserialize,
+    CouldNotReadHeader,
+    ErrorStatusCode(String),
+    ErrorDownloading(String),
+    IndexStorageError(String),
+    MainStorageError(String),
+}

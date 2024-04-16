@@ -258,6 +258,7 @@ where
         permits: usize,
         start_slot: Option<u64>,
     ) {
+        let mut max_slot = 0;
         let slots_to_parse_iter = match start_slot {
             Some(slot) => self.rocks_client.raw_blocks_cbor.iter(slot),
             None => self.rocks_client.raw_blocks_cbor.iter_start(),
@@ -271,17 +272,27 @@ where
                 tracing::info!("terminating transactions parser");
                 break;
             }
-            if let Err(e) = next {
-                tracing::error!("Error getting next slot: {}", e);
-                continue;
+
+            let (key_box, _value_box) = match next {
+                Ok((key_box, _value_box)) => (key_box, _value_box),
+                Err(e) => {
+                    tracing::error!("Error getting next slot: {}", e);
+                    continue;
+                }
+            };
+
+            let key = match rocks_db::raw_block::RawBlock::decode_key(key_box.to_vec()) {
+                Ok(key) => key,
+                Err(e) => {
+                    tracing::error!("Error decoding key: {}", e);
+                    continue;
+                }
+            };
+
+            if key > max_slot {
+                max_slot = key;
             }
-            let (key_box, _value_box) = next.unwrap();
-            let key = rocks_db::raw_block::RawBlock::decode_key(key_box.to_vec());
-            if let Err(e) = key {
-                tracing::error!("Error decoding key: {}", e);
-                continue;
-            }
-            let key = key.unwrap();
+
             slots_to_parse_vec.push(key);
             if slots_to_parse_vec.len() >= self.workers_count * self.chunk_size {
                 let permit = semaphore.clone().acquire_owned().await.unwrap();
@@ -334,7 +345,17 @@ where
                 tracing::info!("Task {} finished", task_number);
             }));
         }
+
         join_all(tasks).await;
+
+        if let Err(e) = self
+            .rocks_client
+            .put_parameter(rocks_db::parameters::Parameter::LastFetchedSlot, max_slot)
+            .await
+        {
+            error!("Error while updating last fetched slot: {}", e);
+        }
+
         tracing::info!("Transactions parser has finished working");
     }
 
