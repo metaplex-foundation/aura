@@ -51,6 +51,7 @@ pub enum RollupState {
     Uploaded,
     Processing,
     ValidationFail,
+    TransactionSent,
     Complete,
 }
 
@@ -158,6 +159,7 @@ impl From<RollupState> for entities::enums::RollupState {
             RollupState::Uploaded => entities::enums::RollupState::Uploaded,
             RollupState::Processing => entities::enums::RollupState::Processing,
             RollupState::ValidationFail => entities::enums::RollupState::ValidationFail,
+            RollupState::TransactionSent => entities::enums::RollupState::TransactionSent,
             RollupState::Complete => entities::enums::RollupState::Complete,
         }
     }

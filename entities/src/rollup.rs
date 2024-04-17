@@ -10,6 +10,8 @@ pub struct Rollup {
     pub tree_id: Pubkey,
     pub rolled_mints: Vec<RolledMintInstruction>,
     pub raw_metadata_map: HashMap<String, Box<RawValue>>, // map by uri
+    pub max_depth: u64,
+    pub max_buffer_size: u64,
 
     // derived data
     pub merkle_root: [u8; 32],    // validate

@@ -152,9 +152,11 @@ fn generate_rollup(size: usize) -> Rollup {
     let rollup = Rollup {
         tree_id: tree,
         raw_metadata_map: HashMap::new(),
+        max_depth: 10,
         rolled_mints: mints,
         merkle_root: merkle.get_root(),
         last_leaf_hash,
+        max_buffer_size: 32,
     };
 
     rollup
