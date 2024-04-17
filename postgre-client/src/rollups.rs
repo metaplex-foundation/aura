@@ -150,10 +150,3 @@ impl PgClient {
         Ok(())
     }
 }
-
-// #[cfg(test)]
-// #[tokio::test]
-// async fn test_insert_new_rollup() {
-//     let cli = Cli::default();
-//     let env = TestEnvironment::new(&cli).await;
-// }

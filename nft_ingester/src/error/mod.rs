@@ -106,8 +106,6 @@ pub enum IngesterError {
     Usecase(String),
     #[error("SolanaDeserializer: {0}")]
     SolanaDeserializer(String),
-    #[error("SplCompression: {0}")]
-    SplCompression(#[from] spl_account_compression::ConcurrentMerkleTreeError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -128,6 +126,12 @@ pub enum RollupValidationError {
     WrongAssetPath(String),
     #[error("StdIo {0}")]
     StdIo(String),
+    #[error("WrongTreeIdForChangeLog: asset: {0}, expected: {1}, got: {2}")]
+    WrongTreeIdForChangeLog(String, String, String),
+    #[error("WrongChangeLogIndex: expected: {0}, got: {1}")]
+    WrongChangeLogIndex(u32, u32),
+    #[error("SplCompression: {0}")]
+    SplCompression(#[from] spl_account_compression::ConcurrentMerkleTreeError),
 }
 
 impl From<std::io::Error> for RollupValidationError {

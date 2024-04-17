@@ -1,4 +1,5 @@
 use crate::error::RollupValidationError;
+use crate::tree_macros::validate_change_logs;
 use anchor_lang::AnchorSerialize;
 use async_trait::async_trait;
 use entities::rollup::{RolledMintInstruction, Rollup};
@@ -100,6 +101,11 @@ impl RollupProcessor {
                     }
                 };
                 leaf_hashes.push(leaf_hash);
+            }
+            let max_depth = rollup.max_depth;
+            let max_buffer_size = rollup.max_buffer_size;
+            if let Err(_e) = validate_change_logs(max_depth, max_buffer_size, &leaf_hashes, &rollup)
+            {
             }
         }
     }
