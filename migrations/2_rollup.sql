@@ -2,6 +2,7 @@ CREATE TYPE rollup_state AS ENUM (
 	'uploaded',
 	'processing',
 	'validation_fail',
+    'transaction_sent',
 	'complete'
 );
 

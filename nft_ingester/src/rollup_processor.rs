@@ -102,10 +102,25 @@ impl RollupProcessor {
                 };
                 leaf_hashes.push(leaf_hash);
             }
-            let max_depth = rollup.max_depth;
-            let max_buffer_size = rollup.max_buffer_size;
-            if let Err(_e) = validate_change_logs(max_depth, max_buffer_size, &leaf_hashes, &rollup)
-            {
+
+            if let Err(e) = validate_change_logs(
+                rollup.max_depth,
+                rollup.max_buffer_size,
+                &leaf_hashes,
+                &rollup,
+            ) {
+                if let Err(err) = self
+                    .pg_client
+                    .mark_rollup_as_verification_failed(
+                        &rollup_to_process.file_path,
+                        &e.to_string(),
+                    )
+                    .await
+                {
+                    error!("Failed to mark rollup as verification failed: {}", err);
+                }
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                continue 'out;
             }
         }
     }
