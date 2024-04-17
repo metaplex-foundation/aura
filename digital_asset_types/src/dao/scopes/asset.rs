@@ -467,40 +467,42 @@ pub async fn get_by_ids(
 
         let num_of_tasks = urls_to_download.len();
 
-        let download_results = stream::iter(urls_to_download)
-            .map(|url| {
-                let json_downloader = json_downloader.clone();
+        if num_of_tasks != 0 {
+            let download_results = stream::iter(urls_to_download)
+                .map(|url| {
+                    let json_downloader = json_downloader.clone();
 
-                async move {
-                    let response = json_downloader.download_file(url.clone()).await;
-                    (url, response)
-                }
-            })
-            .buffered(num_of_tasks)
-            .collect::<Vec<_>>()
-            .await;
-
-        for (json_url, res) in download_results.iter() {
-            if let Ok(metadata) = res {
-                asset_selected_maps.offchain_data.insert(
-                    json_url.clone(),
-                    OffChainData {
-                        url: json_url.clone(),
-                        metadata: metadata.clone(),
-                    },
-                );
-            }
-        }
-
-        if let Some(json_persister) = json_persister {
-            if !download_results.is_empty() {
-                let download_results = download_results.clone();
-                tasks.lock().await.spawn(async move {
-                    if let Err(e) = json_persister.persist_response(download_results).await {
-                        error!("Could not persist downloaded JSONs: {:?}", e);
+                    async move {
+                        let response = json_downloader.download_file(url.clone()).await;
+                        (url, response)
                     }
-                    Ok(())
-                });
+                })
+                .buffered(num_of_tasks)
+                .collect::<Vec<_>>()
+                .await;
+
+            for (json_url, res) in download_results.iter() {
+                if let Ok(metadata) = res {
+                    asset_selected_maps.offchain_data.insert(
+                        json_url.clone(),
+                        OffChainData {
+                            url: json_url.clone(),
+                            metadata: metadata.clone(),
+                        },
+                    );
+                }
+            }
+
+            if let Some(json_persister) = json_persister {
+                if !download_results.is_empty() {
+                    let download_results = download_results.clone();
+                    tasks.lock().await.spawn(async move {
+                        if let Err(e) = json_persister.persist_response(download_results).await {
+                            error!("Could not persist downloaded JSONs: {:?}", e);
+                        }
+                        Ok(())
+                    });
+                }
             }
         }
     }
