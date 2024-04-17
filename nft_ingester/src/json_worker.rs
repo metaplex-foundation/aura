@@ -255,7 +255,7 @@ pub async fn run(json_downloader: Arc<JsonWorker>, keep_running: Arc<AtomicBool>
         });
     }
 
-    while let Some(_) = workers_pool.join_next().await {}
+    while (workers_pool.join_next().await).is_some() {}
 }
 
 #[async_trait]
