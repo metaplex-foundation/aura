@@ -93,16 +93,21 @@ impl PgClient {
         Ok(())
     }
 
-    pub async fn mark_rollup_as_complete(&self, file_path: &str, url: &str) -> Result<(), String> {
+    pub async fn mark_rollup_as_tx_sent(
+        &self,
+        file_path: &str,
+        url: &str,
+        reward: i64,
+    ) -> Result<(), String> {
         let mut query_builder = QueryBuilder::new(
-            "UPDATE rollups SET rlp_state = $1, rlp_url = $2, rlp_completed_at = $3 WHERE rlp_file_name = $4",
+            "UPDATE rollups SET rlp_state = $1, rlp_url = $2, rlp_tx_reward = $3 WHERE rlp_file_name = $4",
         );
         let start_time = chrono::Utc::now();
         let query = query_builder.build();
         let result = query
-            .bind(RollupState::Complete)
+            .bind(RollupState::TransactionSent)
             .bind(url)
-            .bind(chrono::Utc::now())
+            .bind(reward)
             .bind(file_path)
             .execute(&self.pool)
             .await
@@ -116,7 +121,10 @@ impl PgClient {
             .observe_request(SQL_COMPONENT, UPDATE_ACTION, "rollups", start_time);
 
         if result.rows_affected() == 0 {
-            return Err("No rollup updated; the file path may not exist or it's already marked as complete.".to_string());
+            return Err(
+                "No rollup updated; the file path may not exist or it's already marked as tx sent."
+                    .to_string(),
+            );
         }
         Ok(())
     }

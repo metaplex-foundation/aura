@@ -106,6 +106,10 @@ pub enum IngesterError {
     Usecase(String),
     #[error("SolanaDeserializer: {0}")]
     SolanaDeserializer(String),
+    #[error("Arweave: {0}")]
+    Arweave(String),
+    #[error("Infallible: {0}")]
+    Infallible(String),
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -282,5 +286,17 @@ impl From<UsecaseError> for IngesterError {
 impl From<PlerkleDeserializerError> for IngesterError {
     fn from(e: PlerkleDeserializerError) -> Self {
         IngesterError::SolanaDeserializer(e.to_string())
+    }
+}
+
+impl From<arweave_rs::error::Error> for IngesterError {
+    fn from(err: arweave_rs::error::Error) -> Self {
+        IngesterError::Arweave(err.to_string())
+    }
+}
+
+impl From<std::convert::Infallible> for IngesterError {
+    fn from(err: std::convert::Infallible) -> Self {
+        IngesterError::Infallible(err.to_string())
     }
 }

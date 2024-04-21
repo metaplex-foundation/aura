@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS rollups (
     rlp_state rollup_state NOT NULL,
     rlp_error varchar(200),
     rlp_url varchar(200),
+    rlp_tx_reward int8,
     rlp_created_at timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'::text),
     rlp_completed_at timestamptz
 );

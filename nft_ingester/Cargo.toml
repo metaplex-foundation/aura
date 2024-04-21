@@ -71,6 +71,7 @@ anchor-lang = "0.29.0"
 spl-concurrent-merkle-tree = "0.2.0"
 uuid = { version = "1.6.1" }
 multer = "3.0.0"
+arweave-rs = {version = "0.2.0", git = "https://github.com/RequescoS/arweave-rs.git"}
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }
