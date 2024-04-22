@@ -156,6 +156,8 @@ pub struct IngesterConfig {
     #[serde(default = "default_parallel_json_downloaders")]
     pub parallel_json_downloaders: i32,
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
+    #[serde(default)]
+    pub arweave_wallet_path: String,
 }
 
 const fn default_parallel_json_downloaders() -> i32 {

@@ -179,5 +179,7 @@ pub enum RollupState {
     Processing,
     ValidationFail,
     TransactionSent,
+    FailSendingTransaction,
+    MovingToStorage,
     Complete,
 }

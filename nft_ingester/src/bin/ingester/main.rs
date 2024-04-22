@@ -49,6 +49,7 @@ use nft_ingester::backfiller::{
 };
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
+use nft_ingester::rollup_processor::{NoopRollupTxSender, RollupProcessor};
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
@@ -819,6 +820,28 @@ pub async fn main() -> Result<(), IngesterError> {
                     }
                 };
             }
+        }));
+    }
+    if !config.arweave_wallet_path.is_empty() {
+        let rollup_processor = Arc::new(RollupProcessor::new(
+            index_storage.clone(),
+            rocks_storage.clone(),
+            Arc::new(NoopRollupTxSender {}),
+            &config.arweave_wallet_path,
+        ));
+        let rx = shutdown_rx.resubscribe();
+        let processor_clone = rollup_processor.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            info!("Start processing rollups...");
+            processor_clone.process_rollups(rx).await;
+            info!("Finish processing rollups...");
+        }));
+        let rx = shutdown_rx.resubscribe();
+        let processor_clone = rollup_processor.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            info!("Start moving rollups to storage...");
+            processor_clone.move_rollups_to_storage(rx).await;
+            info!("Finish moving rollups to storage...");
         }));
     }
 

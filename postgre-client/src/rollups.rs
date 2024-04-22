@@ -23,7 +23,10 @@ impl PgClient {
         Ok(())
     }
 
-    pub async fn fetch_rollup_for_processing(&self) -> Result<Option<RollupWithState>, String> {
+    pub async fn fetch_rollup_for_processing(
+        &self,
+        state: RollupState,
+    ) -> Result<Option<RollupWithState>, String> {
         let mut query_builder = QueryBuilder::new(
             "SELECT rlp_file_name, rlp_state, rlp_error, rlp_url, EXTRACT(EPOCH FROM rlp_created_at) as created_at FROM rollups
             WHERE rlp_state = $1 ORDER BY rlp_created_at ASC"
@@ -31,7 +34,7 @@ impl PgClient {
         let start_time = chrono::Utc::now();
         let query = query_builder.build();
         let result = query
-            .bind(RollupState::Uploaded)
+            .bind(state)
             .fetch_optional(&self.pool)
             .await
             .map(|row| {
@@ -61,10 +64,11 @@ impl PgClient {
         Ok(result)
     }
 
-    pub async fn mark_rollup_as_verification_failed(
+    pub async fn mark_rollup_as_failed(
         &self,
         file_path: &str,
         error_message: &str,
+        state: RollupState,
     ) -> Result<(), String> {
         let mut query_builder = QueryBuilder::new(
             "UPDATE rollups SET rlp_state = $1, rlp_error = $2, rlp_completed_at = $3 WHERE rlp_file_name = $4",
@@ -72,7 +76,7 @@ impl PgClient {
         let start_time = chrono::Utc::now();
         let query = query_builder.build();
         let result = query
-            .bind(RollupState::ValidationFail)
+            .bind(state)
             .bind(error_message)
             .bind(chrono::Utc::now())
             .bind(file_path)
