@@ -94,6 +94,7 @@ impl<R: RollupTxSender> RollupProcessor<R> {
                 }
                 Err(e) => {
                     error!("Failed to fetch rollup for processing: {}", e);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
                     continue;
                 }
             };
@@ -342,6 +343,7 @@ impl<R: RollupTxSender> RollupProcessor<R> {
                 }
                 Err(e) => {
                     error!("Failed to fetch rollup for moving to storage: {}", e);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
                     continue;
                 }
             };
