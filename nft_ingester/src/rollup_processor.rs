@@ -390,6 +390,12 @@ impl<R: RollupTxSender> RollupProcessor<R> {
                     &rollup_to_process.file_path, e
                 );
             };
+            if let Err(e) = tokio::fs::remove_file(&rollup_to_process.file_path).await {
+                error!(
+                    "Failed to remove file: file_path: {}, error: {}",
+                    &rollup_to_process.file_path, e
+                );
+            }
         }
     }
 }
