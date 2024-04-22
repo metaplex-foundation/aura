@@ -6,6 +6,8 @@ mod tests {
     use entities::api_req_params::{GetAsset, Options};
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
+    use nft_ingester::config::JsonMiddlewareConfig;
+    use nft_ingester::json_worker::JsonWorker;
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
@@ -236,13 +238,17 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -278,7 +284,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let asset_info = api.get_asset(payload).await.unwrap();
+        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);
@@ -312,13 +318,17 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -354,7 +364,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let asset_info = api.get_asset(payload).await.unwrap();
+        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);
@@ -388,13 +398,17 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -430,7 +444,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let asset_info = api.get_asset(payload).await.unwrap();
+        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);
@@ -464,13 +478,17 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -506,7 +524,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let asset_info = api.get_asset(payload).await.unwrap();
+        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);

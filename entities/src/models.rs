@@ -353,6 +353,25 @@ pub struct Task {
     pub ofd_status: TaskStatus,
 }
 
+#[derive(Debug, Clone)]
+pub struct JsonDownloadTask {
+    pub metadata_url: String,
+    pub status: TaskStatus,
+    pub attempts: i16,
+    pub max_attempts: i16,
+}
+
+impl Default for JsonDownloadTask {
+    fn default() -> Self {
+        Self {
+            metadata_url: "".to_string(),
+            status: TaskStatus::Pending,
+            attempts: 1,
+            max_attempts: 10,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
