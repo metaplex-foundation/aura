@@ -1,20 +1,7 @@
-use crate::bubblegum_updates_processor::BubblegumTxProcessor;
 use async_trait::async_trait;
 use entities::rollup::Rollup;
 use interface::error::UsecaseError;
 use interface::rollup::RollupDownloader;
-use solana_program::pubkey::Pubkey;
-
-pub fn find_rollup_pda(tree_authority: &Pubkey, tree_nonce: u64) -> (Pubkey, u8) {
-    Pubkey::find_program_address(
-        &[
-            b"rollup",
-            tree_authority.as_ref(),
-            BubblegumTxProcessor::u32_to_u8_array(tree_nonce as u32).as_ref(),
-        ],
-        &mpl_bubblegum::programs::SPL_ACCOUNT_COMPRESSION_ID,
-    )
-}
 
 // pub fn create_leaf_schema(
 //     asset: &RolledMintInstruction,

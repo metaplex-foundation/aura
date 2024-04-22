@@ -1,6 +1,8 @@
+use blockbuster::programs::bubblegum::{BubblegumInstruction, Payload};
+use mpl_bubblegum::{InstructionName, LeafSchemaEvent};
 use std::collections::HashMap;
 
-use mpl_bubblegum::types::{LeafSchema, MetadataArgs};
+use mpl_bubblegum::types::{LeafSchema, MetadataArgs, Version};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use solana_sdk::pubkey::Pubkey;
@@ -88,6 +90,22 @@ impl From<blockbuster::programs::bubblegum::ChangeLogEventV1> for ChangeLogEvent
             path: value.path.into_iter().map(Into::into).collect::<Vec<_>>(),
             seq: value.seq,
             index: value.index,
+        }
+    }
+}
+
+impl From<RolledMintInstruction> for BubblegumInstruction {
+    fn from(value: RolledMintInstruction) -> Self {
+        let hash = value.leaf_update.hash();
+        Self {
+            instruction: InstructionName::MintV1,
+            tree_update: Some((&value.tree_update).into()),
+            leaf_update: Some(LeafSchemaEvent::new(Version::V1, value.leaf_update, hash)),
+            payload: Some(Payload::MintV1 {
+                args: value.mint_args,
+                authority: value.authority,
+                tree_id: value.tree_update.id,
+            }),
         }
     }
 }
