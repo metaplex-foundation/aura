@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
+use tracing::info;
 
 pub(crate) const CATCH_UP_SEQUENCES_TIMEOUT_SEC: u64 = 30;
 const INDEX_STORAGE_DEPENDS_METHODS: &[&str] = &[
@@ -48,35 +49,33 @@ impl SynchronizationStateConsistencyChecker {
     ) {
         let overwhelm_seq_gap_clone = self.overwhelm_seq_gap.clone();
         tasks.lock().await.spawn(async move {
-            tokio::select! {
-                _ = async {
-                    loop {
-                        tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)).await;
-                        let Ok(Some(index_seq)) = pg_client.fetch_last_synced_id().await else {
-                            continue;
-                        };
-                        let Ok(decoded_index_update_key) = decode_u64x2_pubkey(index_seq) else {
-                            continue;
-                        };
-                        let Ok(Some(primary_update_key)) = rocks_db.last_known_asset_updated_key() else {
-                            continue;
-                        };
+            while rx.is_empty() {
+                let Ok(Some(index_seq)) = pg_client.fetch_last_synced_id().await else {
+                    continue;
+                };
+                let Ok(decoded_index_update_key) = decode_u64x2_pubkey(index_seq) else {
+                    continue;
+                };
+                let Ok(Some(primary_update_key)) = rocks_db.last_known_asset_updated_key() else {
+                    continue;
+                };
 
-                        overwhelm_seq_gap_clone.store(
-                            primary_update_key
-                                .seq
-                                .saturating_sub(decoded_index_update_key.seq)
-                                >= synchronization_api_threshold,
-                            Ordering::SeqCst,
-                        );
+                overwhelm_seq_gap_clone.store(
+                    primary_update_key
+                        .seq
+                        .saturating_sub(decoded_index_update_key.seq)
+                        >= synchronization_api_threshold,
+                    Ordering::SeqCst,
+                );
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC))=> {},
+                    _ = rx.recv() => {
+                        info!("Received stop signal, stopping SynchronizationStateConsistencyChecker...");
+                        return Ok(());
                     }
-                } => {
-                    Ok(())
-                },
-                _ = rx.recv() => {
-                    Ok(())
                 }
             }
+            Ok(())
         });
     }
 }

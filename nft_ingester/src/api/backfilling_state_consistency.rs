@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
+use tracing::info;
 
 pub struct BackfillingStateConsistencyChecker {
     overwhelm_backfill_gap: Arc<AtomicBool>,
@@ -29,35 +30,33 @@ impl BackfillingStateConsistencyChecker {
     ) {
         let overwhelm_backfill_gap_clone = self.overwhelm_backfill_gap.clone();
         tasks.lock().await.spawn(async move {
-            tokio::select! {
-                _ = async {
-                    loop {
-                        tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)).await;
-                        let Ok(Some(top_seen_slot)) =
-                            rocks_db.get_parameter::<u64>(Parameter::TopSeenSlot).await
-                        else {
-                            continue;
-                        };
-                        let Ok(Some(last_backfilled_slot)) = rocks_db
-                            .get_parameter::<u64>(Parameter::LastBackfilledSlot)
-                            .await
-                        else {
-                            continue;
-                        };
+            while rx.is_empty() {
+                let Ok(Some(top_seen_slot)) =
+                    rocks_db.get_parameter::<u64>(Parameter::TopSeenSlot).await
+                else {
+                    continue;
+                };
+                let Ok(Some(last_backfilled_slot)) = rocks_db
+                    .get_parameter::<u64>(Parameter::LastBackfilledSlot)
+                    .await
+                else {
+                    continue;
+                };
 
-                        overwhelm_backfill_gap_clone.store(
-                            top_seen_slot.saturating_sub(last_backfilled_slot)
-                                >= consistence_backfilling_slots_threshold,
-                            Ordering::SeqCst,
-                        );
+                overwhelm_backfill_gap_clone.store(
+                    top_seen_slot.saturating_sub(last_backfilled_slot)
+                        >= consistence_backfilling_slots_threshold,
+                    Ordering::SeqCst,
+                );
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)) => {},
+                    _ = rx.recv() => {
+                        info!("Received stop signal, stopping BackfillingStateConsistencyChecker...");
+                        return Ok(());
                     }
-                } => {
-                    Ok(())
-                },
-                _ = rx.recv() => {
-                    Ok(())
                 }
             }
+            Ok(())
         });
     }
 }
