@@ -445,6 +445,7 @@ pub async fn main() -> Result<(), IngesterError> {
             tasks_clone,
             &api_config.archives_dir,
             api_config.consistence_synchronization_api_threshold,
+            api_config.consistence_backfilling_slots_threshold,
         )
         .await
         {

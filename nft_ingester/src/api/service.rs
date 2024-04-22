@@ -52,6 +52,7 @@ pub async fn start_api(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     archives_dir: &str,
     consistence_synchronization_api_threshold: u64,
+    consistence_backfilling_slots_threshold: u64,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -73,7 +74,7 @@ pub async fn start_api(
             tasks.clone(),
             rx.resubscribe(),
             rocks_db.clone(),
-            config.consistence_backfilling_slots_threshold,
+            consistence_backfilling_slots_threshold,
         )
         .await;
 
