@@ -60,8 +60,10 @@ pub struct FileRollupDownloader {
 #[async_trait]
 impl RollupDownloader for FileRollupDownloader {
     async fn download_rollup(&self, _url: &str) -> Result<Box<Rollup>, UsecaseError> {
-        let json_file = std::fs::read_to_string(&self.file_path).unwrap();
-        let rollup: Rollup = serde_json::from_str(&json_file).unwrap();
+        let json_file = std::fs::read_to_string(&self.file_path)
+            .map_err(|e| UsecaseError::Storage(e.to_string()))?;
+        let rollup: Rollup =
+            serde_json::from_str(&json_file).map_err(|e| UsecaseError::Json(e.to_string()))?;
         Ok(Box::new(rollup))
     }
 }
