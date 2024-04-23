@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use entities::rollup::{BatchMintInstruction, RolledMintInstruction, Rollup};
 use interface::error::UsecaseError;
 use interface::rollup::{RollupDownloader, RollupTxSender};
+use metrics_utils::RollupProcessorMetricsConfig;
 use mpl_bubblegum::utils::get_asset_id;
 use postgre_client::model::RollupState;
 use postgre_client::PgClient;
@@ -19,9 +20,17 @@ use solana_program::pubkey::Pubkey;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
+
+const SUCCESS_METRICS_LABEL: &str = "Success";
+const VALIDATION_FAIL_METRICS_LABEL: &str = "ValidationFail";
+const TRANSACTION_FAIL_METRICS_LABEL: &str = "TransactionFail";
+const ARWEAVE_UPLOAD_FAIL_METRICS_LABEL: &str = "ArweaveUploadFail";
+
+const MOVE_TO_STORAGE_METRICS_LABEL: &str = "MoveToStorage";
+const FILE_PROCESSING_METRICS_LABEL: &str = "RollupFileProcessing";
 
 pub struct RollupDownloaderImpl {
     pg_client: Arc<PgClient>,
@@ -105,8 +114,13 @@ impl<R: RollupTxSender> RollupProcessor<R> {
         }
     }
 
-    pub async fn process_rollups(&self, rx: Receiver<()>) {
+    pub async fn process_rollups(
+        &self,
+        rx: Receiver<()>,
+        metrics: Arc<RollupProcessorMetricsConfig>,
+    ) {
         'out: while rx.is_empty() {
+            let start_time = Instant::now();
             let rollup_to_process = match self
                 .pg_client
                 .fetch_rollup_for_processing(RollupState::Uploaded)
@@ -149,6 +163,7 @@ impl<R: RollupTxSender> RollupProcessor<R> {
                         error!("Failed to mark rollup as verification failed: file_path: {}, error: {}",
                         &rollup_to_process.file_path, e);
                     }
+                    metrics.inc_total_rollups(VALIDATION_FAIL_METRICS_LABEL);
                     continue;
                 }
             };
@@ -179,9 +194,9 @@ impl<R: RollupTxSender> RollupProcessor<R> {
                             .await
                         {
                             error!("Failed to mark rollup as verification failed: file_path: {}, error: {}",
-                        &rollup_to_process.file_path, err);
+                                &rollup_to_process.file_path, err);
                         }
-                        tokio::time::sleep(Duration::from_secs(5)).await;
+                        metrics.inc_total_rollups(VALIDATION_FAIL_METRICS_LABEL);
                         continue 'out;
                     }
                 };
@@ -208,6 +223,7 @@ impl<R: RollupTxSender> RollupProcessor<R> {
                         &rollup_to_process.file_path, err
                     );
                 }
+                metrics.inc_total_rollups(VALIDATION_FAIL_METRICS_LABEL);
                 continue 'out;
             }
             let (tx_id, reward) = match self
@@ -234,6 +250,7 @@ impl<R: RollupTxSender> RollupProcessor<R> {
                         "Failed to upload rollup to arweave: file_path: {}, error: {}",
                         &rollup_to_process.file_path, e
                     );
+                    metrics.inc_total_rollups(ARWEAVE_UPLOAD_FAIL_METRICS_LABEL);
                     continue 'out;
                 }
             };
@@ -284,6 +301,7 @@ impl<R: RollupTxSender> RollupProcessor<R> {
                     "Failed to upload rollup to arweave: file_path: {}, error: {}",
                     &rollup_to_process.file_path, e
                 );
+                metrics.inc_total_rollups(TRANSACTION_FAIL_METRICS_LABEL);
                 continue 'out;
             };
             if let Err(e) = self
@@ -296,6 +314,11 @@ impl<R: RollupTxSender> RollupProcessor<R> {
                     &rollup_to_process.file_path, e
                 );
             }
+            metrics.inc_total_rollups(SUCCESS_METRICS_LABEL);
+            metrics.set_processing_latency(
+                FILE_PROCESSING_METRICS_LABEL,
+                start_time.elapsed().as_secs_f64(),
+            );
         }
     }
 
@@ -369,8 +392,13 @@ impl<R: RollupTxSender> RollupProcessor<R> {
         format!("{}{}", ARWEAVE_BASE_URL, transaction_id)
     }
 
-    pub async fn move_rollups_to_storage(&self, rx: Receiver<()>) {
+    pub async fn move_rollups_to_storage(
+        &self,
+        rx: Receiver<()>,
+        metrics: Arc<RollupProcessorMetricsConfig>,
+    ) {
         while rx.is_empty() {
+            let start_time = Instant::now();
             let rollup_to_process = match self
                 .pg_client
                 .fetch_rollup_for_processing(RollupState::TransactionSent)
@@ -436,6 +464,11 @@ impl<R: RollupTxSender> RollupProcessor<R> {
                     &rollup_to_process.file_path, e
                 );
             }
+            metrics.inc_total_rollups(MOVE_TO_STORAGE_METRICS_LABEL);
+            metrics.set_processing_latency(
+                MOVE_TO_STORAGE_METRICS_LABEL,
+                start_time.elapsed().as_secs_f64(),
+            );
         }
     }
 }

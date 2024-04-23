@@ -832,16 +832,20 @@ pub async fn main() -> Result<(), IngesterError> {
     ));
     let rx = shutdown_rx.resubscribe();
     let processor_clone = rollup_processor.clone();
+    let rollup_metrics = metrics_state.rollup_processor_metrics.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         info!("Start processing rollups...");
-        processor_clone.process_rollups(rx).await;
+        processor_clone.process_rollups(rx, rollup_metrics).await;
         info!("Finish processing rollups...");
     }));
     let rx = shutdown_rx.resubscribe();
     let processor_clone = rollup_processor.clone();
+    let rollup_metrics = metrics_state.rollup_processor_metrics.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         info!("Start moving rollups to storage...");
-        processor_clone.move_rollups_to_storage(rx).await;
+        processor_clone
+            .move_rollups_to_storage(rx, rollup_metrics)
+            .await;
         info!("Finish moving rollups to storage...");
     }));
 
