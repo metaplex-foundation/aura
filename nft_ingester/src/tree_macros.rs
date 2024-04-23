@@ -1,7 +1,6 @@
 use crate::error::RollupValidationError;
 use entities::rollup::Rollup;
 use solana_program::keccak::Hash;
-#[macro_export]
 macro_rules! _validate_change_logs {
     ($max_depth:literal, $max_size:literal, $leafs:ident, $rollup:ident) => {{
         let mut tree = Box::new(
@@ -70,7 +69,6 @@ macro_rules! _validate_change_logs {
     }};
 }
 
-#[macro_export]
 macro_rules! validate_change_logs {
     ($max_depth:ident, $max_buffer_size:ident, $leafs:ident, $rollup:ident) => {{
         // Note: max_buffer_size MUST be a power of 2
