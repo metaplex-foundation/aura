@@ -1,7 +1,6 @@
 use crate::api::synchronization_state_consistency::CATCH_UP_SEQUENCES_TIMEOUT_SEC;
 use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::Call;
-use rocks_db::parameters::Parameter;
 use rocks_db::Storage;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -31,21 +30,9 @@ impl BackfillingStateConsistencyChecker {
         let overwhelm_backfill_gap_clone = self.overwhelm_backfill_gap.clone();
         tasks.lock().await.spawn(async move {
             while rx.is_empty() {
-                let Ok(Some(top_seen_slot)) =
-                    rocks_db.get_parameter::<u64>(Parameter::TopSeenSlot).await
-                else {
-                    continue;
-                };
-                let Ok(Some(last_backfilled_slot)) = rocks_db
-                    .get_parameter::<u64>(Parameter::LastBackfilledSlot)
-                    .await
-                else {
-                    continue;
-                };
-
                 overwhelm_backfill_gap_clone.store(
-                    top_seen_slot.saturating_sub(last_backfilled_slot)
-                        >= consistence_backfilling_slots_threshold,
+                    rocks_db.bubblegum_slots.iter_start().count() + rocks_db.ingestable_slots.iter_start().count()
+                        >= consistence_backfilling_slots_threshold as usize,
                     Ordering::SeqCst,
                 );
                 tokio::select! {
