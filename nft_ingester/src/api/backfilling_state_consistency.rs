@@ -31,7 +31,7 @@ impl BackfillingStateConsistencyChecker {
         tasks.lock().await.spawn(async move {
             while rx.is_empty() {
                 overwhelm_backfill_gap_clone.store(
-                    rocks_db.bubblegum_slots.iter_start().count() + rocks_db.ingestable_slots.iter_start().count()
+                    rocks_db.bubblegum_slots.iter_start().count().saturating_add(rocks_db.ingestable_slots.iter_start().count())
                         >= consistence_backfilling_slots_threshold as usize,
                     Ordering::SeqCst,
                 );
