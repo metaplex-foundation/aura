@@ -57,6 +57,7 @@ use usecase::slots_collector::{SlotsCollector, SlotsGetter};
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const PG_MIGRATIONS_PATH: &str = "./migrations";
+pub const ARWEAVE_WALLET_PATH: &str = "./arweave_wallet.json";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 
@@ -822,28 +823,27 @@ pub async fn main() -> Result<(), IngesterError> {
             }
         }));
     }
-    if !config.arweave_wallet_path.is_empty() {
-        let rollup_processor = Arc::new(RollupProcessor::new(
-            index_storage.clone(),
-            rocks_storage.clone(),
-            Arc::new(NoopRollupTxSender {}),
-            &config.arweave_wallet_path,
-        ));
-        let rx = shutdown_rx.resubscribe();
-        let processor_clone = rollup_processor.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-            info!("Start processing rollups...");
-            processor_clone.process_rollups(rx).await;
-            info!("Finish processing rollups...");
-        }));
-        let rx = shutdown_rx.resubscribe();
-        let processor_clone = rollup_processor.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-            info!("Start moving rollups to storage...");
-            processor_clone.move_rollups_to_storage(rx).await;
-            info!("Finish moving rollups to storage...");
-        }));
-    }
+
+    let rollup_processor = Arc::new(RollupProcessor::new(
+        index_storage.clone(),
+        rocks_storage.clone(),
+        Arc::new(NoopRollupTxSender {}),
+        ARWEAVE_WALLET_PATH,
+    ));
+    let rx = shutdown_rx.resubscribe();
+    let processor_clone = rollup_processor.clone();
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        info!("Start processing rollups...");
+        processor_clone.process_rollups(rx).await;
+        info!("Finish processing rollups...");
+    }));
+    let rx = shutdown_rx.resubscribe();
+    let processor_clone = rollup_processor.clone();
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        info!("Start moving rollups to storage...");
+        processor_clone.move_rollups_to_storage(rx).await;
+        info!("Finish moving rollups to storage...");
+    }));
 
     start_metrics(
         metrics_state.registry,

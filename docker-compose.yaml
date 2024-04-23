@@ -8,6 +8,7 @@ services:
       - .env
     environment:
       INGESTER_CONSUMER_NUMBER: 0
+      RUST_MIN_STACK: 83886080
     network_mode: host
     volumes:
       - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
@@ -18,6 +19,7 @@ services:
       - ${APP_FILE_STORAGE_PATH}:${APP_FILE_STORAGE_PATH_CONTAINER}:rw
       - ./creds.json:/usr/src/app/creds.json
       - ./migrations:/usr/src/app/migrations
+      - ./arweave_wallet.json:/usr/src/app/arweave_wallet.json
     depends_on:
       - db
     build:

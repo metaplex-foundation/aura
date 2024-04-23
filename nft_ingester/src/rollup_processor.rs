@@ -23,10 +23,33 @@ use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
 
-pub struct RollupDownloaderImpl;
+pub struct RollupDownloaderImpl {
+    pg_client: Arc<PgClient>,
+}
+impl RollupDownloaderImpl {
+    pub fn new(pg_client: Arc<PgClient>) -> Self {
+        Self { pg_client }
+    }
+}
 #[async_trait]
 impl RollupDownloader for RollupDownloaderImpl {
     async fn download_rollup(&self, url: &str) -> Result<Box<Rollup>, UsecaseError> {
+        let rollup_to_process = self.pg_client.get_rollup_by_url(url).await.ok().flatten();
+        if let Some(rollup_to_process) = rollup_to_process {
+            if let Ok(Ok(rollup)) = tokio::fs::read_to_string(&rollup_to_process.file_path)
+                .await
+                .map(|json_file| serde_json::from_str::<Rollup>(&json_file))
+            {
+                if self
+                    .pg_client
+                    .update_rollup_state(&rollup_to_process.file_path, RollupState::MovingToStorage)
+                    .await
+                    .is_ok()
+                {
+                    return Ok(Box::new(rollup));
+                }
+            };
+        }
         let response = reqwest::get(url).await?.bytes().await?;
         Ok(Box::new(serde_json::from_slice(&response)?))
     }
@@ -214,6 +237,21 @@ impl<R: RollupTxSender> RollupProcessor<R> {
             };
             let metadata_url = Self::build_metadata_url(&tx_id);
             if let Err(e) = self
+                .pg_client
+                .set_rollup_url_and_reward(
+                    &rollup_to_process.file_path,
+                    &metadata_url,
+                    reward as i64,
+                )
+                .await
+            {
+                // Do not continue, because we already upload data to arweave, so move on
+                error!(
+                    "Failed to set rollup url and reward: file_path: {}, error: {}",
+                    &rollup_to_process.file_path, e
+                );
+            }
+            if let Err(e) = self
                 .rollup_tx_sender
                 .send_rollup_tx(BatchMintInstruction {
                     max_depth: rollup.max_depth,
@@ -221,8 +259,8 @@ impl<R: RollupTxSender> RollupProcessor<R> {
                     num_minted: rollup.rolled_mints.len() as u64,
                     root: rollup.merkle_root,
                     leaf: rollup.last_leaf_hash,
-                    index: 0, // TODO
-                    metadata_url: metadata_url.clone(),
+                    index: rollup.rolled_mints.len().saturating_sub(1) as u32, // TODO
+                    metadata_url,
                 })
                 .await
             {
@@ -248,11 +286,11 @@ impl<R: RollupTxSender> RollupProcessor<R> {
             };
             if let Err(e) = self
                 .pg_client
-                .mark_rollup_as_tx_sent(&rollup_to_process.file_path, &metadata_url, reward as i64)
+                .update_rollup_state(&rollup_to_process.file_path, RollupState::TransactionSent)
                 .await
             {
                 error!(
-                    "Failed to mark rollup as tx sent: file_path: {}, error: {}",
+                    "Failed to mark rollup as transaction sent: file_path: {}, error: {}",
                     &rollup_to_process.file_path, e
                 );
             }
