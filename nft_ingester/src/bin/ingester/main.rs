@@ -435,7 +435,6 @@ pub async fn main() -> Result<(), IngesterError> {
         Err(e) => error!("GRPC Client new: {}", e),
     };
 
-    let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_api_metrics = metrics_state.api_metrics.clone();
     let proof_checker = config.rpc_host.clone().map(|host| {
