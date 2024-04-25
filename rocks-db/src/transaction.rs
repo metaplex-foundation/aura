@@ -20,7 +20,7 @@ pub trait TransactionProcessor: Sync + Send + 'static {
 
 #[async_trait]
 pub trait TransactionResultPersister: Sync + Send + 'static {
-    async fn store_block(&self, txs: Vec<TransactionResult>) -> Result<(), StorageError>;
+    async fn store_block(&self, slot: u64, txs: &[TransactionResult]) -> Result<(), StorageError>;
 }
 
 #[derive(Clone, Default)]

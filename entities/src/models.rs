@@ -240,7 +240,7 @@ pub struct BufferedTransaction {
     pub map_flatbuffer: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Copy)]
 pub struct SignatureWithSlot {
     pub signature: Signature,
     pub slot: u64,

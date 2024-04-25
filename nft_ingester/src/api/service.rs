@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use usecase::proofs::MaybeProofChecker;
 
+use crate::api::backfilling_state_consistency::BackfillingStateConsistencyChecker;
 use interface::consistency_check::ConsistencyChecker;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
@@ -51,6 +52,7 @@ pub async fn start_api(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     archives_dir: &str,
     consistence_synchronization_api_threshold: u64,
+    consistence_backfilling_slots_threshold: u64,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -63,6 +65,16 @@ pub async fn start_api(
             pg_client.clone(),
             rocks_db.clone(),
             consistence_synchronization_api_threshold,
+        )
+        .await;
+
+    let backfilling_state_consistency_checker = Arc::new(BackfillingStateConsistencyChecker::new());
+    backfilling_state_consistency_checker
+        .run(
+            tasks.clone(),
+            rx.resubscribe(),
+            rocks_db.clone(),
+            consistence_backfilling_slots_threshold,
         )
         .await;
 
@@ -85,7 +97,10 @@ pub async fn start_api(
         Some(MiddlewaresData {
             response_middleware,
             request_middleware,
-            consistency_checkers: vec![synchronization_state_consistency_checker],
+            consistency_checkers: vec![
+                synchronization_state_consistency_checker,
+                backfilling_state_consistency_checker,
+            ],
         }),
         addr,
         keep_running,

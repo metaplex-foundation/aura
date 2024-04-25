@@ -104,6 +104,26 @@ impl Storage {
         Ok(())
     }
 
+    pub fn merge_top_parameter_with_batch<T>(
+        &self,
+        batch: &mut rocksdb::WriteBatch,
+        parameter: Parameter,
+        value: T,
+    ) -> Result<()>
+    where
+        T: Serialize + for<'de> Deserialize<'de> + Clone + Send + Sync,
+    {
+        let serialized_data = serde_cbor::to_vec(&value)
+            .map_err(|e| StorageError::Common(format!("Failed to serialize parameter: {}", e)))?;
+        let key = ParameterColumn::<T>::encode_key(parameter);
+        batch.merge_cf(
+            &self.db.cf_handle(ParameterColumn::<T>::NAME).unwrap(),
+            key,
+            serialized_data,
+        );
+        Ok(())
+    }
+
     pub async fn delete_parameter<T>(&self, parameter: Parameter) -> Result<()>
     where
         T: Serialize + for<'de> Deserialize<'de> + Clone + Send + Sync,
