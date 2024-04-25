@@ -4,6 +4,7 @@ mod tests {
     use blockbuster::token_metadata::accounts::Metadata;
     use blockbuster::token_metadata::types::{Collection, Creator, Key};
     use entities::api_req_params::{GetAsset, Options};
+    use entities::models::OffChainData;
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::config::JsonMiddlewareConfig;
@@ -20,7 +21,6 @@ mod tests {
     use rocks_db::{
         bubblegum_slots::BubblegumSlotGetter,
         columns::{Mint, TokenAccount},
-        offchain_data::OffChainData,
         Storage,
     };
     use solana_sdk::pubkey::Pubkey;

@@ -2,6 +2,7 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use entities::api_req_params::{GetAsset, GetAssetProof, Options};
+    use entities::models::OffChainData;
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::config::JsonMiddlewareConfig;
@@ -12,7 +13,7 @@ mod tests {
         buffer::Buffer,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
-    use rocks_db::{bubblegum_slots::BubblegumSlotGetter, offchain_data::OffChainData, Storage};
+    use rocks_db::{bubblegum_slots::BubblegumSlotGetter, Storage};
     use std::fs::File;
     use std::io::{self, Read};
     use std::sync::Arc;
