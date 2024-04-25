@@ -1,9 +1,10 @@
 use entities::models::{CompleteAssetDetails, Updated};
 use futures::stream;
-use interface::asset_streaming_and_discovery::AsyncError;
+use interface::asset_streaming_and_discovery::{AsyncError, MockAssetDetailsConsumer};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::gapfiller::process_asset_details_stream;
 use solana_sdk::pubkey::Pubkey;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::{sync::Mutex, task::JoinSet};
@@ -37,13 +38,24 @@ async fn test_process_asset_details_stream() {
     let details1 = create_test_complete_asset_details(first_key.clone());
     let details2 = create_test_complete_asset_details(second_key.clone());
 
-    let stream = stream::iter(vec![
-        Ok(details1),
-        Ok(details2),
-        Err(AsyncError::from("test error")),
-    ]);
+    let mut mock = MockAssetDetailsConsumer::new();
+    mock.expect_get_consumable_stream_in_range()
+        .returning(move |_, _| {
+            Ok(Box::pin(stream::iter(vec![
+                Ok(details1.clone()),
+                Ok(details2.clone()),
+                Err(AsyncError::from("test error")),
+            ])))
+        });
 
-    process_asset_details_stream(storage.clone(), Box::pin(stream)).await;
+    process_asset_details_stream(
+        Arc::new(AtomicBool::new(true)),
+        storage.clone(),
+        100,
+        200,
+        mock,
+    )
+    .await;
 
     let selected_data = storage
         .asset_dynamic_data
