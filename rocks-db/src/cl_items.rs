@@ -279,11 +279,11 @@ impl Storage {
         &self,
         pk: Pubkey,
         slot: u64,
-        leaf: Option<AssetLeaf>,
-        dynamic_data: Option<AssetDynamicDetails>,
+        leaf: &Option<AssetLeaf>,
+        dynamic_data: &Option<AssetDynamicDetails>,
     ) -> Result<()> {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
-        self.save_tx_data_and_asset_updated_with_batch(&mut batch, pk, slot, &leaf, &dynamic_data)?;
+        self.save_tx_data_and_asset_updated_with_batch(&mut batch, pk, slot, leaf, dynamic_data)?;
         let backend = self.db.clone();
         tokio::task::spawn_blocking(move || {
             backend

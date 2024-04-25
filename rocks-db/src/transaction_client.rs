@@ -31,11 +31,11 @@ impl TransactionResultPersister for Storage {
 impl Storage {
     pub async fn store_transaction_result(
         &self,
-        tx: TransactionResult,
+        tx: &TransactionResult,
         with_signatures: bool,
     ) -> Result<(), StorageError> {
         let mut batch = rocksdb::WriteBatch::default();
-        self.store_transaction_result_with_batch(&mut batch, &tx, with_signatures)
+        self.store_transaction_result_with_batch(&mut batch, tx, with_signatures)
             .await?;
         self.write_batch(batch)
             .await
