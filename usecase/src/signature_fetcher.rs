@@ -60,7 +60,7 @@ where
         info!("Start fetching signatures...");
         let mut all_signatures = match self
             .rpc
-            .get_signatures_by_address(signature.clone(), program_id)
+            .get_signatures_by_address(signature, program_id)
             .await
             .map_err(|e| StorageError::Common(e.to_string()))
         {

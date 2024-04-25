@@ -254,6 +254,8 @@ pub async fn run(json_downloader: Arc<JsonWorker>, keep_running: Arc<AtomicBool>
             }
         });
     }
+
+    while (workers_pool.join_next().await).is_some() {}
 }
 
 #[async_trait]
@@ -367,8 +369,15 @@ impl JsonPersister for JsonWorker {
 
                         self.metrics.inc_tasks("json", MetricStatus::FAILURE);
                     }
-                    JsonDownloaderError::ErrorDownloading(_err) => {
+                    JsonDownloaderError::ErrorDownloading(err) => {
                         self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
+                        // back to pending status to try again
+                        // until attempts reach its maximum
+                        pg_updates.push(UpdatedTask {
+                            status: TaskStatus::Pending,
+                            metadata_url: metadata_url.clone(),
+                            error: err.clone(),
+                        });
                     }
                     _ => {} // intentionally empty because nothing to process
                 },

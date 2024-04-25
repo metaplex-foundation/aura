@@ -51,7 +51,7 @@ impl TransactionsGetter for BackfillRPC {
             let last = signatures.last().unwrap();
             for sig in signatures.iter() {
                 if sig.slot <= last_finalized_slot {
-                    txs.push(sig.clone());
+                    txs.push(*sig);
                 }
             }
             before = Some(last.signature);

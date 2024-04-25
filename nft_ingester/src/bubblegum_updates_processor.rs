@@ -103,7 +103,7 @@ impl BubblegumTxProcessor {
             self.metrics.clone(),
         )?;
         self.rocks_client
-            .store_transaction_result(result, true)
+            .store_transaction_result(&result, true)
             .await
             .map_err(|e| IngesterError::DatabaseError(e.to_string()))?;
         Ok(())
