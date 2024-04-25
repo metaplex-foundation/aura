@@ -1,7 +1,7 @@
 use crate::config::{setup_config, IngesterConfig, INGESTER_CONFIG_PREFIX};
 use async_trait::async_trait;
 use entities::enums::TaskStatus;
-use entities::models::JsonDownloadTask;
+use entities::models::{JsonDownloadTask, OffChainData};
 use interface::error::JsonDownloaderError;
 use interface::json::{JsonDownloader, JsonPersister};
 use log::{debug, error};
@@ -9,7 +9,7 @@ use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::tasks::UpdatedTask;
 use postgre_client::PgClient;
 use reqwest::{Client, ClientBuilder};
-use rocks_db::{offchain_data::OffChainData, Storage};
+use rocks_db::Storage;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
