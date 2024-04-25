@@ -2215,14 +2215,18 @@ version = "0.1.0"
 dependencies = [
  "blockbuster",
  "hex",
+ "mpl-bubblegum",
  "num-derive 0.4.2",
  "num-traits",
  "schemars",
  "serde",
  "serde_derive",
+ "serde_json",
+ "serde_with 3.7.0",
  "sha2 0.10.8",
  "solana-program",
  "solana-sdk",
+ "spl-account-compression",
  "sqlx",
 ]
 
@@ -3870,6 +3874,7 @@ dependencies = [
 name = "nft_ingester"
 version = "0.7.2"
 dependencies = [
+ "anchor-lang",
  "async-trait",
  "backfill-rpc",
  "bincode",
@@ -3905,6 +3910,7 @@ dependencies = [
  "postgre-client",
  "pprof",
  "prometheus-client",
+ "rand 0.8.5",
  "reqwest",
  "rocks-db",
  "schemars",
@@ -3920,6 +3926,7 @@ dependencies = [
  "solana-storage-bigtable",
  "solana-transaction-status",
  "spl-account-compression",
+ "spl-concurrent-merkle-tree",
  "spl-token",
  "sqlx",
  "stretto",

@@ -60,13 +60,15 @@ tonic = "0.10.2"
 tracing = "0.1.40"
 backfill-rpc = { path = "../backfill_rpc" }
 prometheus-client = "0.21.2"
-pprof = {version = "0.13.0", features = ["_protobuf", "protobuf-codec"]}
+pprof = { version = "0.13.0", features = ["_protobuf", "protobuf-codec"] }
 solana-program = "~1.17"
 itertools = "0.12.1"
 solana-client = "~1.17"
 heck = "0.5.0"
 "lazy_static" = "1.4.0"
 tempfile = "3.8.1"
+anchor-lang = "0.29.0"
+spl-concurrent-merkle-tree = "0.2.0"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }
@@ -76,7 +78,6 @@ criterion = "0.5.1"
 zip-extract = "0.1.2"
 csv = "1.3.0"
 rand = "0.8.5"
-anchor-lang = "0.29.0"
 
 [[bench]]
 name = "integrated_benchmark"
@@ -93,6 +94,7 @@ harness = false
 [features]
 rpc_tests = []
 integration_tests = []
+rollup_tests = []
 
 [dependencies.utils]
 version = "0.1.8"
