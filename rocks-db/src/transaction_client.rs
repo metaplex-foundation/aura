@@ -1,9 +1,8 @@
 use async_trait::async_trait;
-use entities::models::SignatureWithSlot;
+use entities::models::{OffChainData, SignatureWithSlot};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::offchain_data::OffChainData;
 use crate::parameters::Parameter;
 use crate::{
     parameters,

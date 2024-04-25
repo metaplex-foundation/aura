@@ -14,7 +14,8 @@ use entities::enums::{
     TokenStandard, UseMethod,
 };
 use entities::models::{
-    BufferedTransaction, SignatureWithSlot, Task, UpdateVersion, Updated, UrlWithStatus,
+    BufferedTransaction, OffChainData, SignatureWithSlot, Task, UpdateVersion, Updated,
+    UrlWithStatus,
 };
 use entities::models::{ChainDataV1, Creator, Uses};
 use entities::rollup::BatchMintInstruction;
@@ -29,7 +30,6 @@ use rocks_db::asset::AssetOwner;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
 };
-use rocks_db::offchain_data::OffChainData;
 use rocks_db::transaction::{
     AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, TransactionResult,
     TreeUpdate,
