@@ -61,7 +61,7 @@ pub async fn start_api(
     archives_dir: &str,
     consistence_synchronization_api_threshold: u64,
     consistence_backfilling_slots_threshold: u64,
-    batch_mint_service_port: u16,
+    batch_mint_service_port: Option<u16>,
     file_storage_path: &str,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
@@ -124,7 +124,7 @@ async fn run_api(
     middlewares_data: Option<MiddlewaresData>,
     addr: SocketAddr,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-    batch_mint_service_port: u16,
+    batch_mint_service_port: Option<u16>,
     file_storage_path: &str,
     shutdown_rx: Receiver<()>,
 ) -> Result<(), DasApiError> {
@@ -159,12 +159,14 @@ async fn run_api(
         builder = builder.response_middleware(mw.response_middleware);
     }
     let server = builder.start_http(&addr);
-    run_batch_mint_service(
-        shutdown_rx.resubscribe(),
-        batch_mint_service_port,
-        file_storage_path.to_string(),
-    )
-    .await;
+    if let Some(port) = batch_mint_service_port {
+        run_batch_mint_service(
+            shutdown_rx.resubscribe(),
+            port,
+            file_storage_path.to_string(),
+        )
+        .await;
+    }
 
     let server = server.unwrap();
     info!("API Server Started");
