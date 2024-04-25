@@ -47,7 +47,7 @@ RUN cargo build --release --features profiling --bin ingester --bin api --bin ra
 FROM rust:1.75-slim-bullseye AS runtime
 ARG APP=/usr/src/app
 RUN apt update && apt install -y curl ca-certificates tzdata libjemalloc2 graphviz && rm -rf /var/lib/apt/lists/*
-ENV TZ=Etc/UTC APP_USER=appuser
+ENV TZ=Etc/UTC APP_USER=appuser LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libjemalloc.so"
 RUN groupadd $APP_USER && useradd -g $APP_USER $APP_USER && mkdir -p ${APP}
 
 COPY --from=builder /rust/target/release/ingester ${APP}/ingester
