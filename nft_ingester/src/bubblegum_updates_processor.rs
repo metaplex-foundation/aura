@@ -13,15 +13,17 @@ use entities::enums::{
     ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TaskStatus,
     TokenStandard, UseMethod,
 };
-use entities::models::{BufferedTransaction, SignatureWithSlot, Task, UpdateVersion, Updated};
+use entities::models::{
+    BufferedTransaction, SignatureWithSlot, Task, UpdateVersion, Updated, UrlWithStatus,
+};
 use entities::models::{ChainDataV1, Creator, Uses};
-use entities::rollup::{BatchMintInstruction, ChangeLogEventV1};
+use entities::rollup::BatchMintInstruction;
 use interface::rollup::RollupDownloader;
 use lazy_static::lazy_static;
 use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
-use mpl_bubblegum::types::{LeafSchema, MetadataArgs, Version};
-use mpl_bubblegum::{InstructionName, LeafSchemaEvent};
+use mpl_bubblegum::types::LeafSchema;
+use mpl_bubblegum::InstructionName;
 use num_traits::FromPrimitive;
 use rocks_db::asset::AssetOwner;
 use rocks_db::asset::{
@@ -33,7 +35,6 @@ use rocks_db::transaction::{
     TreeUpdate,
 };
 use rocks_db::Storage;
-use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -102,7 +103,7 @@ impl BubblegumTxProcessor {
             self.metrics.clone(),
         )?;
         self.rocks_client
-            .store_transaction_result(result, true)
+            .store_transaction_result(&result, true)
             .await
             .map_err(|e| IngesterError::DatabaseError(e.to_string()))?;
         Ok(())
@@ -618,8 +619,9 @@ impl BubblegumTxProcessor {
             }
 
             let task = if !args.uri.is_empty() {
+                let url_with_status = UrlWithStatus::new(&args.uri, false);
                 Some(Task {
-                    ofd_metadata_url: args.uri.clone(),
+                    ofd_metadata_url: url_with_status.metadata_url,
                     ofd_locked_until: Some(chrono::Utc::now()),
                     ofd_attempts: 0,
                     ofd_max_attempts: 10,
@@ -1062,6 +1064,7 @@ impl BubblegumTxProcessor {
         batch_mint_instruction: &BatchMintInstruction, // TODO: use BubblegumInstruction instead
         rollup_downloader: impl RollupDownloader,
         rocks_db: Arc<Storage>,
+        signature: Signature,
     ) -> Result<(), IngesterError> {
         let rollup = rollup_downloader
             .download_rollup(&batch_mint_instruction.metadata_url)
@@ -1070,24 +1073,17 @@ impl BubblegumTxProcessor {
             instruction_results: vec![],
             transaction_signature: Some((
                 mpl_bubblegum::programs::MPL_BUBBLEGUM_ID,
-                SignatureWithSlot {
-                    signature: Signature::default(),
-                    slot,
-                },
+                SignatureWithSlot { signature, slot },
             )),
         };
-        for (seq, rolled_mint) in rollup.rolled_mints.into_iter().enumerate() {
-            let with_tree = RolledMintInstructionWithTree {
-                tree_update: rolled_mint.tree_update,
-                leaf_update: rolled_mint.leaf_update,
-                mint_args: rolled_mint.mint_args,
-                tree_id: rollup.tree_id,
-                authority: rolled_mint.authority,
-            };
-            let event =
-                (&blockbuster::programs::bubblegum::ChangeLogEventV1::from(&with_tree.tree_update))
-                    .into();
-            let (mut update, mut task_option) = Self::get_mint_v1_update(&with_tree.into(), slot)?;
+        for rolled_mint in rollup.rolled_mints.into_iter() {
+            let seq = rolled_mint.tree_update.seq;
+            let event = (&blockbuster::programs::bubblegum::ChangeLogEventV1::from(
+                &rolled_mint.tree_update,
+            ))
+                .into();
+            let (mut update, mut task_option) =
+                Self::get_mint_v1_update(&rolled_mint.into(), slot)?;
             if let Some(ref mut task) = task_option {
                 if let Some(metadata) = rollup.raw_metadata_map.get(&task.ofd_metadata_url) {
                     task.ofd_status = TaskStatus::Success;
@@ -1101,56 +1097,28 @@ impl BubblegumTxProcessor {
             let mut ix: InstructionResult = (update, task_option).into();
             ix.tree_update = Some(TreeUpdate {
                 tree: rollup.tree_id,
-                seq: seq as u64,
+                seq,
                 slot,
                 event,
                 instruction: "".to_string(),
-                tx: Signature::default().to_string(),
+                tx: signature.to_string(),
             });
 
             transaction_result.instruction_results.push(ix);
             if transaction_result.instruction_results.len() >= ROLLUP_BATCH_FLUSH_SIZE {
                 // TODO: add retry
                 rocks_db
-                    .store_transaction_result(transaction_result.clone(), true)
+                    .store_transaction_result(&transaction_result, false)
                     .await?;
                 transaction_result.instruction_results.clear();
             }
         }
         // TODO: add retry
         rocks_db
-            .store_transaction_result(transaction_result.clone(), true)
+            .store_transaction_result(&transaction_result, true)
             .await?;
 
         Ok(())
-    }
-}
-#[derive(Serialize, Deserialize)]
-pub struct RolledMintInstructionWithTree {
-    pub tree_update: ChangeLogEventV1, // validate // derive from nonce
-    pub leaf_update: LeafSchema,       // validate
-    pub mint_args: MetadataArgs,
-    // V0.1: enforce collection.verify == false
-    // V0.1: enforce creator.verify == false
-    // V0.2: add pub collection_signature: Option<Signature> - sign asset_id with collection authority
-    // V0.2: add pub creator_signature: Option<Map<Pubkey, Signature>> - sign asset_id with creator authority to ensure verified creator
-    pub tree_id: Pubkey, // derived from the tree authority and nonce PDA("rollup", tree_authority, tree_nonce) // validate
-    pub authority: Pubkey,
-}
-
-impl From<RolledMintInstructionWithTree> for BubblegumInstruction {
-    fn from(value: RolledMintInstructionWithTree) -> Self {
-        let hash = value.leaf_update.hash();
-        Self {
-            instruction: InstructionName::MintV1,
-            tree_update: Some((&value.tree_update).into()),
-            leaf_update: Some(LeafSchemaEvent::new(Version::V1, value.leaf_update, hash)),
-            payload: Some(Payload::MintV1 {
-                args: value.mint_args,
-                authority: value.authority,
-                tree_id: value.tree_id,
-            }),
-        }
     }
 }
 

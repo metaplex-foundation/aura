@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+#[allow(unused_imports)]
 use std::fs::File;
 use std::str::FromStr;
 
@@ -13,6 +14,7 @@ use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use rand::{thread_rng, Rng};
 use solana_sdk::keccak;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Signature;
 use spl_account_compression::ConcurrentMerkleTree;
 use testcontainers::clients::Cli;
 
@@ -133,7 +135,7 @@ fn generate_rollup(size: usize) -> Rollup {
             tree_update: ChangeLogEventV1 {
                 id: tree,
                 path: path.into_iter().map(Into::into).collect::<Vec<_>>(),
-                seq: nonce + 1,
+                seq: merkle.sequence_number,
                 index: changelog.index,
             },
             leaf_update: LeafSchema::V1 {
@@ -208,9 +210,9 @@ fn test_generate_10_000_000_rollup() {
 }
 
 const ROLLUP_ASSETS_TO_SAVE: usize = 1_000;
-struct TestRollupDownloader {}
+struct TestRollupCreator;
 #[async_trait]
-impl RollupDownloader for TestRollupDownloader {
+impl RollupDownloader for TestRollupCreator {
     async fn download_rollup(&self, _url: &str) -> std::result::Result<Box<Rollup>, UsecaseError> {
         // let json_file = std::fs::read_to_string("../rollup-1000.json").unwrap();
         // let rollup: Rollup = serde_json::from_str(&json_file).unwrap();
@@ -279,8 +281,9 @@ async fn store_rollup_test() {
             index: 0,
             metadata_url: "ff".to_string(),
         },
-        TestRollupDownloader {},
+        TestRollupCreator {},
         env.rocks_env.storage.clone(),
+        Signature::default(),
     )
     .await
     .unwrap();

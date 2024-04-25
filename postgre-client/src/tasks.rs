@@ -128,7 +128,7 @@ impl PgClient {
             )
             UPDATE tasks t
             SET tsk_status = 'running',
-            tsk_locked_until = NOW() + INTERVAL '20 seconds'
+            tsk_locked_until = NOW() + INTERVAL '90 seconds'
             FROM cte
             WHERE t.tsk_id = cte.tsk_id
             RETURNING t.tsk_metadata_url, t.tsk_status, t.tsk_attempts, t.tsk_max_attempts;",

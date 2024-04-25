@@ -441,6 +441,7 @@ pub async fn main() -> Result<(), IngesterError> {
             tasks_clone,
             &api_config.archives_dir,
             api_config.consistence_synchronization_api_threshold,
+            api_config.consistence_backfilling_slots_threshold,
             api_config.batch_mint_service_port,
             api_config.file_storage_path_container.as_str(),
         )

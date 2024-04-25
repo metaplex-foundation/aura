@@ -265,10 +265,15 @@ pub struct ApiConfig {
     pub archives_dir: String,
     #[serde(default = "default_synchronization_api_threshold")]
     pub consistence_synchronization_api_threshold: u64,
+    #[serde(default = "default_consistence_backfilling_slots_threshold")]
+    pub consistence_backfilling_slots_threshold: u64,
 }
 
 const fn default_synchronization_api_threshold() -> u64 {
     1_000_000
+}
+const fn default_consistence_backfilling_slots_threshold() -> u64 {
+    500
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone, Default)]

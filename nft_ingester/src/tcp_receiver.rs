@@ -53,17 +53,11 @@ impl TcpReceiver {
                 return Ok(());
             }
 
-            match self.read_response(&mut stream).await {
-                Ok((bytes_read, duration, num_elements)) => {
-                    debug!(
-                        "TCP Socket: Received {} elements, {} in {:?}",
-                        num_elements, bytes_read, duration
-                    );
-                }
-                Err(e) => {
-                    error!("read_response: {}", e)
-                }
-            };
+            let (bytes_read, duration, num_elements) = self.read_response(&mut stream).await?;
+            debug!(
+                "TCP Socket: Received {} elements, {} in {:?}",
+                num_elements, bytes_read, duration
+            );
         }
     }
 
