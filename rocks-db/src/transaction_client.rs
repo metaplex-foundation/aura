@@ -3,6 +3,7 @@ use entities::models::SignatureWithSlot;
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
+use crate::offchain_data::OffChainData;
 use crate::parameters::Parameter;
 use crate::{
     parameters,
@@ -121,6 +122,22 @@ impl Storage {
                     &collection_update.details,
                 ) {
                     tracing::error!("Failed to merge asset collection data: {}", e);
+                }
+            }
+            if let Some(ref task) = ix.task {
+                let offchain_data_update = OffChainData {
+                    url: task.ofd_metadata_url.clone(),
+                    metadata: update
+                        .offchain_data_update
+                        .as_ref()
+                        .map_or_else(String::new, |ofd| ofd.metadata.clone()),
+                };
+                if let Err(e) = self.asset_offchain_data.merge_with_batch(
+                    batch,
+                    offchain_data_update.url.clone(),
+                    &offchain_data_update,
+                ) {
+                    tracing::error!("Failed to merge offchain data: {}", e);
                 }
             }
         }
