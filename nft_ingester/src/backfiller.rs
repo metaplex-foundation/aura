@@ -258,6 +258,7 @@ where
         permits: usize,
         start_slot: Option<u64>,
     ) {
+        let mut max_slot = 0;
         let slots_to_parse_iter = match start_slot {
             Some(slot) => self.rocks_client.raw_blocks_cbor.iter(slot),
             None => self.rocks_client.raw_blocks_cbor.iter_start(),
@@ -271,17 +272,27 @@ where
                 tracing::info!("terminating transactions parser");
                 break;
             }
-            if let Err(e) = next {
-                tracing::error!("Error getting next slot: {}", e);
-                continue;
+
+            let (key_box, _value_box) = match next {
+                Ok((key_box, _value_box)) => (key_box, _value_box),
+                Err(e) => {
+                    tracing::error!("Error getting next slot: {}", e);
+                    continue;
+                }
+            };
+
+            let key = match rocks_db::raw_block::RawBlock::decode_key(key_box.to_vec()) {
+                Ok(key) => key,
+                Err(e) => {
+                    tracing::error!("Error decoding key: {}", e);
+                    continue;
+                }
+            };
+
+            if key > max_slot {
+                max_slot = key;
             }
-            let (key_box, _value_box) = next.unwrap();
-            let key = rocks_db::raw_block::RawBlock::decode_key(key_box.to_vec());
-            if let Err(e) = key {
-                tracing::error!("Error decoding key: {}", e);
-                continue;
-            }
-            let key = key.unwrap();
+
             slots_to_parse_vec.push(key);
             if slots_to_parse_vec.len() >= self.workers_count * self.chunk_size {
                 let permit = semaphore.clone().acquire_owned().await.unwrap();
@@ -300,8 +311,16 @@ where
                         slots.len()
                     );
                     let none: Option<Arc<Storage>> = None;
-                    let res =
-                        Self::parse_slots(c, p, m, chunk_size, slots, rx.resubscribe(), none).await;
+                    let res = Self::parse_slots(
+                        c,
+                        p,
+                        m,
+                        chunk_size,
+                        slots.as_slice(),
+                        rx.resubscribe(),
+                        none,
+                    )
+                    .await;
                     if let Err(err) = res {
                         error!("Error parsing slots: {}", err);
                     }
@@ -326,15 +345,33 @@ where
                     slots.len()
                 );
                 let none: Option<Arc<Storage>> = None;
-                let res =
-                    Self::parse_slots(c, p, m, chunk_size, slots, rx.resubscribe(), none).await;
+                let res = Self::parse_slots(
+                    c,
+                    p,
+                    m,
+                    chunk_size,
+                    slots.as_slice(),
+                    rx.resubscribe(),
+                    none,
+                )
+                .await;
                 if let Err(err) = res {
                     error!("Error parsing slots: {}", err);
                 }
                 tracing::info!("Task {} finished", task_number);
             }));
         }
+
         join_all(tasks).await;
+
+        if let Err(e) = self
+            .rocks_client
+            .put_parameter(rocks_db::parameters::Parameter::LastFetchedSlot, max_slot)
+            .await
+        {
+            error!("Error while updating last fetched slot: {}", e);
+        }
+
         tracing::info!("Transactions parser has finished working");
     }
 
@@ -358,7 +395,7 @@ where
                 info!("Got {} slots to parse", slots_batch.len());
                 let res = self
                     .process_slots(
-                        slots_batch.clone(),
+                        slots_batch.as_slice(),
                         rx.resubscribe(),
                         backup_provider.clone(),
                     )
@@ -381,7 +418,11 @@ where
         if !slots_batch.is_empty() {
             info!("Got {} slots to parse", slots_batch.len());
             let res = self
-                .process_slots(slots_batch, rx.resubscribe(), backup_provider.clone())
+                .process_slots(
+                    slots_batch.as_slice(),
+                    rx.resubscribe(),
+                    backup_provider.clone(),
+                )
                 .await;
             match res {
                 Ok(processed) => {
@@ -419,7 +460,7 @@ where
             }
             let none: Option<Arc<Storage>> = None;
             let res = self
-                .process_slots(slots_to_parse_vec, rx.resubscribe(), none)
+                .process_slots(slots_to_parse_vec.as_slice(), rx.resubscribe(), none)
                 .await;
             match res {
                 Ok(processed) => {
@@ -435,7 +476,7 @@ where
 
     async fn process_slots(
         &self,
-        slots_to_parse_vec: Vec<u64>,
+        slots_to_parse_vec: &[u64],
         rx: Receiver<()>,
         backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<u64, String> {
@@ -445,7 +486,7 @@ where
             self.producer.clone(),
             self.metrics.clone(),
             self.chunk_size,
-            slots_to_parse_vec.clone(),
+            slots_to_parse_vec,
             rx,
             backup_provider,
         )
@@ -477,7 +518,7 @@ where
         producer: Arc<P>,
         metrics: Arc<BackfillerMetricsConfig>,
         chunk_size: usize,
-        slots: Vec<u64>,
+        slots: &[u64],
         rx: Receiver<()>,
         backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<Vec<u64>, String> {
@@ -646,7 +687,7 @@ where
         }
         match self
             .persister
-            .store_block(results)
+            .store_block(slot, results.as_slice())
             .await
             .map_err(|e| e.to_string())
         {

@@ -256,7 +256,7 @@ pub struct BufferedTransaction {
     pub map_flatbuffer: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Copy)]
 pub struct SignatureWithSlot {
     pub signature: Signature,
     pub slot: u64,
@@ -367,6 +367,25 @@ pub struct Task {
     pub ofd_max_attempts: i32,
     pub ofd_error: Option<String>,
     pub ofd_status: TaskStatus,
+}
+
+#[derive(Debug, Clone)]
+pub struct JsonDownloadTask {
+    pub metadata_url: String,
+    pub status: TaskStatus,
+    pub attempts: i16,
+    pub max_attempts: i16,
+}
+
+impl Default for JsonDownloadTask {
+    fn default() -> Self {
+        Self {
+            metadata_url: "".to_string(),
+            status: TaskStatus::Pending,
+            attempts: 1,
+            max_attempts: 10,
+        }
+    }
 }
 
 #[cfg(test)]

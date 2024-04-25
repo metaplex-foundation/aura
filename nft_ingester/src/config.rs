@@ -20,38 +20,6 @@ pub const SYNCHRONIZER_CONFIG_PREFIX: &str = "SYNCHRONIZER_";
 pub const JSON_MIGRATOR_CONFIG_PREFIX: &str = "JSON_MIGRATOR_";
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct BackgroundTaskRunnerConfig {
-    pub delete_interval: Option<u64>,
-    pub retry_interval: Option<u64>,
-    pub purge_time: Option<u64>,
-    pub batch_size: Option<u64>,
-    pub lock_duration: Option<i64>,
-    pub max_attempts: Option<i16>,
-    pub timeout: Option<u64>,
-}
-
-impl Default for BackgroundTaskRunnerConfig {
-    fn default() -> Self {
-        BackgroundTaskRunnerConfig {
-            delete_interval: Some(5),
-            retry_interval: Some(5),
-            purge_time: Some(5),
-            batch_size: Some(5),
-            lock_duration: Some(5),
-            max_attempts: Some(5),
-            timeout: Some(3),
-        }
-    }
-}
-
-#[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct BackgroundTaskConfig {
-    pub background_task_runner_config: Option<BackgroundTaskRunnerConfig>,
-    pub database_config: DatabaseConfig,
-    pub bg_task_runner_metrics_port: Option<u16>,
-}
-
-#[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct BackfillerConfig {
     pub big_table_config: BigTableConfig,
     pub slot_until: Option<u64>,
@@ -138,7 +106,6 @@ pub struct IngesterConfig {
     pub metrics_port_first_consumer: Option<u16>,
     pub metrics_port_second_consumer: Option<u16>,
     pub backfill_consumer_metrics_port: Option<u16>,
-    pub background_task_runner_config: Option<BackgroundTaskRunnerConfig>,
     pub is_snapshot: Option<bool>,
     pub consumer_number: Option<usize>,
     pub migration_batch_size: Option<u32>,
@@ -186,6 +153,13 @@ pub struct IngesterConfig {
     pub synchronizer_parallel_tasks: usize,
     #[serde(default)]
     pub run_temp_sync_during_dump: bool,
+    #[serde(default = "default_parallel_json_downloaders")]
+    pub parallel_json_downloaders: i32,
+    pub json_middleware_config: Option<JsonMiddlewareConfig>,
+}
+
+const fn default_parallel_json_downloaders() -> i32 {
+    100
 }
 
 const fn default_synchronizer_parallel_tasks() -> usize {
@@ -285,6 +259,25 @@ pub struct ApiConfig {
     pub check_proofs_commitment: CommitmentLevel,
     #[serde(default = "default_max_page_limit")]
     pub max_page_limit: usize,
+    pub json_middleware_config: Option<JsonMiddlewareConfig>,
+    pub archives_dir: String,
+    #[serde(default = "default_synchronization_api_threshold")]
+    pub consistence_synchronization_api_threshold: u64,
+    #[serde(default = "default_consistence_backfilling_slots_threshold")]
+    pub consistence_backfilling_slots_threshold: u64,
+}
+
+const fn default_synchronization_api_threshold() -> u64 {
+    1_000_000
+}
+const fn default_consistence_backfilling_slots_threshold() -> u64 {
+    500
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone, Default)]
+pub struct JsonMiddlewareConfig {
+    pub is_enabled: bool,
+    pub max_urls_to_parse: usize,
 }
 
 const fn default_check_proofs_probability() -> f64 {
