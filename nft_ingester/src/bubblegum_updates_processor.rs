@@ -13,7 +13,9 @@ use entities::enums::{
     ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TaskStatus,
     TokenStandard, UseMethod,
 };
-use entities::models::{BufferedTransaction, SignatureWithSlot, Task, UpdateVersion, Updated};
+use entities::models::{
+    BufferedTransaction, SignatureWithSlot, Task, UpdateVersion, Updated, UrlWithStatus,
+};
 use entities::models::{ChainDataV1, Creator, Uses};
 use entities::rollup::BatchMintInstruction;
 use interface::rollup::RollupDownloader;
@@ -617,8 +619,9 @@ impl BubblegumTxProcessor {
             }
 
             let task = if !args.uri.is_empty() {
+                let url_with_status = UrlWithStatus::new(&args.uri, false);
                 Some(Task {
-                    ofd_metadata_url: args.uri.clone(),
+                    ofd_metadata_url: url_with_status.metadata_url,
                     ofd_locked_until: Some(chrono::Utc::now()),
                     ofd_attempts: 0,
                     ofd_max_attempts: 10,
@@ -1061,6 +1064,7 @@ impl BubblegumTxProcessor {
         batch_mint_instruction: &BatchMintInstruction, // TODO: use BubblegumInstruction instead
         rollup_downloader: impl RollupDownloader,
         rocks_db: Arc<Storage>,
+        signature: Signature,
     ) -> Result<(), IngesterError> {
         let rollup = rollup_downloader
             .download_rollup(&batch_mint_instruction.metadata_url)
@@ -1069,10 +1073,7 @@ impl BubblegumTxProcessor {
             instruction_results: vec![],
             transaction_signature: Some((
                 mpl_bubblegum::programs::MPL_BUBBLEGUM_ID,
-                SignatureWithSlot {
-                    signature: Signature::default(),
-                    slot,
-                },
+                SignatureWithSlot { signature, slot },
             )),
         };
         for rolled_mint in rollup.rolled_mints.into_iter() {
@@ -1100,21 +1101,21 @@ impl BubblegumTxProcessor {
                 slot,
                 event,
                 instruction: "".to_string(),
-                tx: Signature::default().to_string(),
+                tx: signature.to_string(),
             });
 
             transaction_result.instruction_results.push(ix);
             if transaction_result.instruction_results.len() >= ROLLUP_BATCH_FLUSH_SIZE {
                 // TODO: add retry
                 rocks_db
-                    .store_transaction_result(transaction_result.clone(), true)
+                    .store_transaction_result(transaction_result.clone(), false)
                     .await?;
                 transaction_result.instruction_results.clear();
             }
         }
         // TODO: add retry
         rocks_db
-            .store_transaction_result(transaction_result.clone(), false)
+            .store_transaction_result(transaction_result.clone(), true)
             .await?;
 
         Ok(())
