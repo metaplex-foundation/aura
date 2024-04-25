@@ -68,6 +68,12 @@ pub struct Creator {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct OffChainData {
+    pub url: String,
+    pub metadata: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct CompleteAssetDetails {
     // From AssetStaticDetails
     pub pubkey: Pubkey,
@@ -120,6 +126,9 @@ pub struct CompleteAssetDetails {
     // TokenMetadataEdition
     pub edition: Option<EditionV1>,
     pub master_edition: Option<MasterEdition>,
+
+    // OffChainData
+    pub offchain_data: Option<OffChainData>,
 }
 
 /// Leaf information about compressed asset

@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
-use entities::models::Updated;
+use entities::models::{OffChainData, Updated};
 use rand::{random, Rng};
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::{
-    asset::AssetCollection, offchain_data::OffChainData, AssetAuthority, AssetDynamicDetails,
-    AssetOwner, AssetStaticDetails, Storage,
+    asset::AssetCollection, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+    Storage,
 };
 use tokio::{sync::Mutex, task::JoinSet};
 

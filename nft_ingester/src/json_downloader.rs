@@ -3,10 +3,11 @@ use crate::config::{
 };
 use crate::db_v2::{DBClient, UpdatedTask};
 use entities::enums::TaskStatus;
+use entities::models::OffChainData;
 use log::{debug, error};
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use reqwest::{Client, ClientBuilder};
-use rocks_db::{offchain_data::OffChainData, Storage};
+use rocks_db::Storage;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::task::JoinSet;

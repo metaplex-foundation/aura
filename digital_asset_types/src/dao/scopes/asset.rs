@@ -4,7 +4,7 @@ use std::string::ToString;
 use std::sync::Arc;
 
 use entities::api_req_params::{AssetSortDirection, Options};
-use entities::models::AssetSignatureWithPagination;
+use entities::models::{AssetSignatureWithPagination, OffChainData};
 use interface::asset_sigratures::AssetSignaturesGetter;
 use log::error;
 use sea_orm::prelude::Json;
@@ -15,7 +15,6 @@ use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetSelectedMaps,
     AssetStaticDetails,
 };
-use rocks_db::offchain_data::OffChainData;
 use rocks_db::Storage;
 
 use crate::dao::sea_orm_active_enums::{

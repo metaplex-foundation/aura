@@ -164,6 +164,8 @@ pub struct AssetDetails {
     pub edition: ::core::option::Option<EditionV1>,
     #[prost(message, optional, tag = "38")]
     pub master_edition: ::core::option::Option<MasterEdition>,
+    #[prost(message, optional, tag = "39")]
+    pub offchain_data: ::core::option::Option<OffchainData>,
 }
 /// Dynamic field messages
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -297,6 +299,14 @@ pub struct MasterEdition {
     pub max_supply: ::core::option::Option<u64>,
     #[prost(uint64, tag = "4")]
     pub write_version: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OffchainData {
+    #[prost(string, tag = "1")]
+    pub url: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub metadata: ::prost::alloc::string::String,
 }
 /// RangeRequest and AssetDetailsResponse for data synchronization
 #[allow(clippy::derive_partial_eq_without_eq)]

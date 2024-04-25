@@ -156,6 +156,7 @@ message AssetDetails {
     // From TokenMetadataEdition
     EditionV1 edition = 37;
     MasterEdition master_edition = 38;
+    OffchainData offchain_data = 39;
 }
 
 // Dynamic field messages
@@ -235,6 +236,11 @@ message MasterEdition {
     uint64 supply = 2;
     google.protobuf.UInt64Value max_supply = 3;
     uint64 write_version = 4;
+}
+
+message OffchainData {
+    string url = 1;
+    string metadata = 2;
 }
 
 // RangeRequest and AssetDetailsResponse for data synchronization
