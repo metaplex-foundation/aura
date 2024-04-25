@@ -177,6 +177,8 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         guard,
         config.profiling_file_path_container,
+        &config.binary,
+        &config.heap_path,
     )
     .await;
 

@@ -3,7 +3,7 @@ services:
   ingester-first-consumer:
     container_name: ingester-first-consumer
     restart: always
-    entrypoint: "./ingester"
+    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then ./ingester; else ./profiling_ingester; fi"
     env_file:
       - .env
     environment:
@@ -17,6 +17,7 @@ services:
       - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
       - ./creds.json:/usr/src/app/creds.json
       - ./migrations:/usr/src/app/migrations
+      - ./heaps:/usr/src/app/heaps
     depends_on:
       - db
     build:
@@ -30,7 +31,7 @@ services:
   das-api:
     container_name: das-api
     restart: always
-    entrypoint: "./api"
+    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then ./api; else ./profiling_api; fi"
     env_file:
       - .env
     network_mode: host
@@ -38,12 +39,13 @@ services:
       - ${API_ROCKS_DB_PATH_CONTAINER}:${API_ROCKS_DB_PATH_CONTAINER}:ro
       - ${API_ROCKS_DB_SECONDARY_PATH_CONTAINER}:${API_ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
       - ${API_ARCHIVES_DIR}:${API_ARCHIVES_DIR}:ro
+      - ./heaps:/usr/src/app/heaps
     depends_on:
       - db
     build:
       context: .
       dockerfile: ingester.Dockerfile
-    stop_grace_period: 20s
+    stop_grace_period: 10m
     logging:
       options:
         max-size: "2048m"
@@ -51,7 +53,7 @@ services:
   synchronizer:
     container_name: synchronizer
     restart: always
-    entrypoint: "./synchronizer"
+    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then ./synchronizer; else ./profiling_synchronizer; fi"
     env_file:
       - .env
     network_mode: host
@@ -59,12 +61,13 @@ services:
       - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
       - ${SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:${SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:rw
       - ${SYNCHRONIZER_ROCKS_DB_SECONDARY_PATH_CONTAINER}:${SYNCHRONIZER_ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
+      - ./heaps:/usr/src/app/heaps
     depends_on:
       - db
     build:
       context: .
       dockerfile: ingester.Dockerfile
-    stop_grace_period: 1m
+    stop_grace_period: 10m
     logging:
       options:
         max-size: "2048m"
@@ -92,7 +95,7 @@ services:
   raw-backfiller:
     container_name: raw-backfiller
     restart: always
-    entrypoint: "./raw_backfiller"
+    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then ./raw_backfiller; else ./profiling_raw_backfiller; fi"
     env_file:
       - .env
     network_mode: host
@@ -100,6 +103,8 @@ services:
       - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
       - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
       - ./creds.json:/usr/src/app/creds.json
+      - ./heaps:/usr/src/app/heaps
+    stop_grace_period: 10m
     build:
       context: .
       dockerfile: ingester.Dockerfile

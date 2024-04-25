@@ -22,17 +22,24 @@ use interface::signature_persistence::{BlockProducer, ProcessingDataGetter};
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait};
 use nft_ingester::api::service::start_api;
+use nft_ingester::backfiller::{
+    connect_new_bigtable_from_config, DirectBlockParser, ForceReingestableSlotGetter,
+    TransactionsParser,
+};
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
     setup_config, ApiConfig, BackfillerConfig, BackfillerSourceMode, IngesterConfig,
     INGESTER_BACKUP_NAME, INGESTER_CONFIG_PREFIX,
 };
+use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::json_worker::JsonWorker;
 use nft_ingester::message_handler::MessageHandler;
+use nft_ingester::mpl_core_processor::MplCoreProcessor;
 use nft_ingester::mplx_updates_processor::MplxAccsProcessor;
+use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use nft_ingester::tcp_receiver::TcpReceiver;
 use nft_ingester::token_updates_processor::TokenAccsProcessor;
 use nft_ingester::{config::init_logger, error::IngesterError};
@@ -42,17 +49,13 @@ use rocks_db::errors::BackupServiceError;
 use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::{backup_service, Storage};
 use tonic::transport::Server;
-
-use nft_ingester::backfiller::{
-    connect_new_bigtable_from_config, DirectBlockParser, ForceReingestableSlotGetter,
-    TransactionsParser,
-};
-use nft_ingester::fork_cleaner::ForkCleaner;
-use nft_ingester::mpl_core_processor::MplCoreProcessor;
-use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::{SlotsCollector, SlotsGetter};
+
+#[cfg(feature = "profiling")]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const PG_MIGRATIONS_PATH: &str = "./migrations";
@@ -837,6 +840,8 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         guard,
         config.profiling_file_path_container,
+        &config.binary,
+        &config.heap_path,
     )
     .await;
 

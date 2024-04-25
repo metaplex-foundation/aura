@@ -5,9 +5,13 @@ use std::io::Write;
 use std::ops::DerefMut;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use tokio::process::Command;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
+use tracing::error;
+
+const MALLOC_CONF_ENV: &str = "MALLOC_CONF";
 
 pub async fn graceful_stop(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
@@ -15,6 +19,8 @@ pub async fn graceful_stop(
     shutdown_tx: Sender<()>,
     guard: Option<ProfilerGuard<'_>>,
     profile_path: Option<String>,
+    binary: &str,
+    heap_path: &str,
 ) {
     usecase::graceful_stop::listen_shutdown().await;
     keep_running.store(false, Ordering::SeqCst);
@@ -30,6 +36,25 @@ pub async fn graceful_stop(
             file.write_all(&content).unwrap();
         }
     }
+    if std::env::var(MALLOC_CONF_ENV).is_ok() {
+        generate_profiling_gif(binary, heap_path).await;
+    }
 
     usecase::graceful_stop::graceful_stop(tasks.lock().await.deref_mut()).await
+}
+
+async fn generate_profiling_gif(program: &str, heap_path: &str) {
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg(format!(
+            "jeprof --show_bytes --gif {0} {1}/.*.*.*.heap > {1}/profile.gif",
+            program, heap_path
+        ))
+        .output()
+        .await
+        .expect("failed to execute process");
+
+    if !output.status.success() {
+        error!("jeprof: {}", String::from_utf8_lossy(&output.stderr));
+    }
 }
