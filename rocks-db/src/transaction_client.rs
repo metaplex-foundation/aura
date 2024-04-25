@@ -129,7 +129,8 @@ impl Storage {
                     url: task.ofd_metadata_url.clone(),
                     metadata: update
                         .offchain_data_update
-                        .map_or_else(String::new, |ofd| ofd.metadata),
+                        .as_ref()
+                        .map_or_else(String::new, |ofd| ofd.metadata.clone()),
                 };
                 if let Err(e) = self.asset_offchain_data.merge_with_batch(
                     batch,

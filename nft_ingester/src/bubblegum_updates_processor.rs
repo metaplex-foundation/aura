@@ -1108,14 +1108,14 @@ impl BubblegumTxProcessor {
             if transaction_result.instruction_results.len() >= ROLLUP_BATCH_FLUSH_SIZE {
                 // TODO: add retry
                 rocks_db
-                    .store_transaction_result(transaction_result.clone(), false)
+                    .store_transaction_result(&transaction_result, false)
                     .await?;
                 transaction_result.instruction_results.clear();
             }
         }
         // TODO: add retry
         rocks_db
-            .store_transaction_result(transaction_result.clone(), true)
+            .store_transaction_result(&transaction_result, true)
             .await?;
 
         Ok(())
