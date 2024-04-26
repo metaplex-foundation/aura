@@ -725,7 +725,7 @@ dependencies = [
  "bitflags 1.3.2",
  "bytes",
  "futures-util",
- "http",
+ "http 0.2.12",
  "http-body",
  "hyper",
  "itoa",
@@ -754,7 +754,7 @@ dependencies = [
  "bitflags 1.3.2",
  "bytes",
  "futures-util",
- "http",
+ "http 0.2.12",
  "http-body",
  "hyper",
  "itoa",
@@ -780,7 +780,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "futures-util",
- "http",
+ "http 0.2.12",
  "http-body",
  "mime",
  "tower-layer",
@@ -796,7 +796,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "futures-util",
- "http",
+ "http 0.2.12",
  "http-body",
  "mime",
  "rustversion",
@@ -1008,9 +1008,9 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "blockbuster"
-version = "2.2.0"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5f1609d0c1d6d7f6b48bc470fd067f0d55dfdf6d84f7651b4a42a9666421755"
+checksum = "d084afd6dc16dfcf46124dfa75c1f9589aa51ae7b7823574dac246f545ca8391"
 dependencies = [
  "anchor-lang",
  "async-trait",
@@ -2215,14 +2215,18 @@ version = "0.1.0"
 dependencies = [
  "blockbuster",
  "hex",
+ "mpl-bubblegum",
  "num-derive 0.4.2",
  "num-traits",
  "schemars",
  "serde",
  "serde_derive",
+ "serde_json",
+ "serde_with 3.7.0",
  "sha2 0.10.8",
  "solana-program",
  "solana-sdk",
+ "spl-account-compression",
  "sqlx",
 ]
 
@@ -2714,12 +2718,14 @@ dependencies = [
 name = "grpc"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "entities",
  "futures",
  "interface",
  "mockall 0.12.1",
  "prost 0.12.3",
  "solana-sdk",
+ "thiserror",
  "tokio",
  "tonic 0.10.2",
  "tonic-build 0.10.2",
@@ -2736,7 +2742,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "futures-util",
- "http",
+ "http 0.2.12",
  "indexmap 2.2.6",
  "slab",
  "tokio",
@@ -2824,7 +2830,7 @@ dependencies = [
  "base64 0.21.7",
  "bytes",
  "headers-core",
- "http",
+ "http 0.2.12",
  "httpdate",
  "mime",
  "sha1 0.10.6",
@@ -2836,7 +2842,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
 dependencies = [
- "http",
+ "http 0.2.12",
 ]
 
 [[package]]
@@ -2950,13 +2956,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "http"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21b9ddb458710bc376481b842f5da65cdf31522de232c1ca8146abce2a358258"
+dependencies = [
+ "bytes",
+ "fnv",
+ "itoa",
+]
+
+[[package]]
 name = "http-body"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ceab25649e9960c0311ea418d17bee82c0dcec1bd053b5f9a66e265a693bed2"
 dependencies = [
  "bytes",
- "http",
+ "http 0.2.12",
  "pin-project-lite",
 ]
 
@@ -2995,7 +3012,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.12",
  "http-body",
  "httparse",
  "httpdate",
@@ -3017,7 +3034,7 @@ dependencies = [
  "bytes",
  "futures",
  "headers",
- "http",
+ "http 0.2.12",
  "hyper",
  "hyper-tls",
  "native-tls",
@@ -3033,7 +3050,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec3efd23720e2049821a693cbc7e65ea87c72f1c58ff2f9522ff332b1491e590"
 dependencies = [
  "futures-util",
- "http",
+ "http 0.2.12",
  "hyper",
  "rustls 0.21.10",
  "tokio",
@@ -3413,6 +3430,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e623cca1f0e2a0919032c1bdabbf81dd9aa34658d5066aca7bb90d608317ab91"
 dependencies = [
  "borsh 0.10.3",
+ "serde",
 ]
 
 [[package]]
@@ -3800,15 +3818,17 @@ dependencies = [
  "kaigan",
  "num-derive 0.3.3",
  "num-traits",
+ "serde",
+ "serde_with 3.7.0",
  "solana-program",
  "thiserror",
 ]
 
 [[package]]
 name = "mpl-core"
-version = "0.3.0"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12ab13d9c75156048c3e6d57717ec3ece59fdcae195124bf1cec82aef5295fa"
+checksum = "de7477a52a59fe4db051c6a83077319288e8bfbd1aaf8511d4f733e3a77b6d24"
 dependencies = [
  "base64 0.22.0",
  "borsh 0.10.3",
@@ -3846,6 +3866,24 @@ dependencies = [
  "serde_with 3.7.0",
  "solana-program",
  "thiserror",
+]
+
+[[package]]
+name = "multer"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a15d522be0a9c3e46fd2632e272d178f56387bdb5c9fbb3a36c649062e9b5219"
+dependencies = [
+ "bytes",
+ "encoding_rs",
+ "futures-util",
+ "http 1.1.0",
+ "httparse",
+ "log",
+ "memchr",
+ "mime",
+ "spin 0.9.8",
+ "version_check",
 ]
 
 [[package]]
@@ -3887,6 +3925,7 @@ dependencies = [
 name = "nft_ingester"
 version = "0.7.2"
 dependencies = [
+ "anchor-lang",
  "async-trait",
  "backfill-rpc",
  "bincode",
@@ -3916,6 +3955,7 @@ dependencies = [
  "mockall 0.11.4",
  "mpl-bubblegum",
  "mpl-token-metadata 3.2.3",
+ "multer",
  "num-traits",
  "open-rpc-schema",
  "plerkle_messenger",
@@ -3923,6 +3963,7 @@ dependencies = [
  "postgre-client",
  "pprof",
  "prometheus-client",
+ "rand 0.8.5",
  "reqwest",
  "rocks-db",
  "schemars",
@@ -3938,6 +3979,7 @@ dependencies = [
  "solana-storage-bigtable",
  "solana-transaction-status",
  "spl-account-compression",
+ "spl-concurrent-merkle-tree",
  "spl-token",
  "sqlx",
  "stretto",
@@ -3952,6 +3994,7 @@ dependencies = [
  "tracing-test",
  "usecase",
  "utils",
+ "uuid",
  "zip-extract",
 ]
 
@@ -5394,7 +5437,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.12",
  "http-body",
  "hyper",
  "hyper-rustls",
@@ -6392,7 +6435,7 @@ dependencies = [
  "enum-iterator 0.7.0",
  "flate2",
  "goauth 0.11.1",
- "http",
+ "http 0.2.12",
  "hyper",
  "hyper-proxy",
  "log",
@@ -6937,7 +6980,7 @@ dependencies = [
  "flate2",
  "futures",
  "goauth 0.13.1",
- "http",
+ "http 0.2.12",
  "hyper",
  "hyper-proxy",
  "log",
@@ -8195,7 +8238,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.12",
  "http-body",
  "hyper",
  "hyper-timeout",
@@ -8229,7 +8272,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.12",
  "http-body",
  "hyper",
  "hyper-timeout",
@@ -8258,7 +8301,7 @@ dependencies = [
  "base64 0.21.7",
  "bytes",
  "h2",
- "http",
+ "http 0.2.12",
  "http-body",
  "hyper",
  "hyper-timeout",
@@ -8342,7 +8385,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-util",
- "http",
+ "http 0.2.12",
  "http-body",
  "http-range-header",
  "pin-project-lite",
@@ -8496,7 +8539,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "data-encoding",
- "http",
+ "http 0.2.12",
  "httparse",
  "log",
  "rand 0.8.5",

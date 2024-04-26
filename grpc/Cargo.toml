@@ -12,9 +12,11 @@ futures = "0.3.29"
 solana-sdk = "~1.17"
 interface = { path = "../interface" }
 entities = { path = "../entities" }
+tokio = { version = "1.35.1", features = ["full"] }
+async-trait = "0.1.74"
+thiserror = "1.0.31"
 
 [dev-dependencies]
-tokio = { version = "1.35.1", features = ["full"] }
 mockall = "0.12.0"
 
 [build-dependencies]

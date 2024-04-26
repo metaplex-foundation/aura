@@ -106,6 +106,12 @@ pub enum IngesterError {
     Usecase(String),
     #[error("SolanaDeserializer: {0}")]
     SolanaDeserializer(String),
+    #[error("PDACheckFail: expected: {0}, got: {1}")]
+    PDACheckFail(String, String),
+    #[error("SplCompression: {0}")]
+    SplCompression(#[from] spl_account_compression::ConcurrentMerkleTreeError),
+    #[error("CannotCreateMerkleTree: depth [{0}], size [{1}]")]
+    CannotCreateMerkleTree(u32, u32),
 }
 
 impl From<reqwest::Error> for IngesterError {
@@ -212,6 +218,12 @@ impl From<BackupServiceError> for IngesterError {
 
 impl From<StorageError> for IngesterError {
     fn from(e: StorageError) -> Self {
+        IngesterError::DatabaseError(e.to_string())
+    }
+}
+
+impl From<interface::error::StorageError> for IngesterError {
+    fn from(e: interface::error::StorageError) -> Self {
         IngesterError::DatabaseError(e.to_string())
     }
 }

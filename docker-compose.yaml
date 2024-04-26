@@ -15,6 +15,7 @@ services:
       - ${INGESTER_ROCKS_BACKUP_DIR}:${INGESTER_ROCKS_BACKUP_DIR}:rw
       - ${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:rw
       - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
+      - ${APP_FILE_STORAGE_PATH}:${APP_FILE_STORAGE_PATH_CONTAINER}:rw
       - ./creds.json:/usr/src/app/creds.json
       - ./migrations:/usr/src/app/migrations
       - ./heaps:/usr/src/app/heaps
@@ -39,6 +40,7 @@ services:
       - ${API_ROCKS_DB_PATH_CONTAINER}:${API_ROCKS_DB_PATH_CONTAINER}:ro
       - ${API_ROCKS_DB_SECONDARY_PATH_CONTAINER}:${API_ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
       - ${API_ARCHIVES_DIR}:${API_ARCHIVES_DIR}:ro
+      - ${API_FILE_STORAGE_PATH}:${API_FILE_STORAGE_PATH_CONTAINER}:rw
       - ./heaps:/usr/src/app/heaps
     depends_on:
       - db

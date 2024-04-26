@@ -99,9 +99,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rocks_storage = Arc::new(storage);
 
-    let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
-
     let proof_checker = config.rpc_host.map(|host| {
         Arc::new(MaybeProofChecker::new(
             Arc::new(RpcClient::new(host)),
@@ -130,15 +128,12 @@ pub async fn main() -> Result<(), IngesterError> {
     };
 
     let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
-
     let cloned_tasks = mutexed_tasks.clone();
     let cloned_rx = shutdown_rx.resubscribe();
-
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
             pg_client.clone(),
             cloned_rocks_storage.clone(),
-            cloned_keep_running,
             cloned_rx,
             metrics.clone(),
             config.server_port,
@@ -150,6 +145,9 @@ pub async fn main() -> Result<(), IngesterError> {
             cloned_tasks,
             config.archives_dir.as_ref(),
             config.consistence_synchronization_api_threshold,
+            config.consistence_backfilling_slots_threshold,
+            config.batch_mint_service_port,
+            config.file_storage_path_container.as_str(),
         )
         .await
         {

@@ -17,6 +17,7 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 
 use backfill_rpc::rpc::BackfillRPC;
+use grpc::client::Client;
 use interface::error::{StorageError, UsecaseError};
 use interface::signature_persistence::{BlockProducer, ProcessingDataGetter};
 use metrics_utils::utils::start_metrics;
@@ -184,6 +185,7 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
+    let last_saved_slot = rocks_storage.last_saved_slot()?.unwrap_or_default();
     let synchronizer = Synchronizer::new(
         rocks_storage.clone(),
         index_storage.clone(),
@@ -273,8 +275,6 @@ pub async fn main() -> Result<(), IngesterError> {
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
     }));
-
-    let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap_or(0);
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;
@@ -381,7 +381,7 @@ pub async fn main() -> Result<(), IngesterError> {
             match slot {
                 Ok(slot) => {
                     if let Some(slot) = slot {
-                        if slot != newest_restored_slot {
+                        if slot != last_saved_slot {
                             first_processed_slot_clone.store(slot, Ordering::SeqCst);
                             break;
                         }
@@ -408,10 +408,37 @@ pub async fn main() -> Result<(), IngesterError> {
         .await,
     );
 
-    let cloned_keep_running = keep_running.clone();
+    match Client::connect(config.clone()).await {
+        Ok(gaped_data_client) => {
+            while first_processed_slot.load(Ordering::SeqCst) == 0
+                && keep_running.load(Ordering::SeqCst)
+            {
+                tokio::time::sleep(Duration::from_millis(100)).await
+            }
+            if keep_running.load(Ordering::SeqCst) {
+                let cloned_keep_running = keep_running.clone();
+                let cloned_rocks_storage = rocks_storage.clone();
+                mutexed_tasks.lock().await.spawn(async move {
+                    info!(
+                        "Processed {} gaped assets",
+                        process_asset_details_stream(
+                            cloned_keep_running,
+                            cloned_rocks_storage,
+                            last_saved_slot,
+                            first_processed_slot.load(Ordering::SeqCst),
+                            gaped_data_client,
+                        )
+                        .await
+                    );
+                    Ok(())
+                });
+            }
+        }
+        Err(e) => error!("GRPC Client new: {}", e),
+    };
+
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_api_metrics = metrics_state.api_metrics.clone();
-
     let proof_checker = config.rpc_host.clone().map(|host| {
         Arc::new(MaybeProofChecker::new(
             Arc::new(RpcClient::new(host)),
@@ -419,7 +446,6 @@ pub async fn main() -> Result<(), IngesterError> {
             config.check_proofs_commitment,
         ))
     });
-
     let tasks_clone = mutexed_tasks.clone();
     let cloned_rx = shutdown_rx.resubscribe();
 
@@ -436,7 +462,6 @@ pub async fn main() -> Result<(), IngesterError> {
         match start_api(
             cloned_index_storage,
             cloned_rocks_storage.clone(),
-            cloned_keep_running,
             cloned_rx,
             cloned_api_metrics,
             api_config.server_port,
@@ -448,6 +473,9 @@ pub async fn main() -> Result<(), IngesterError> {
             tasks_clone,
             &api_config.archives_dir,
             api_config.consistence_synchronization_api_threshold,
+            api_config.consistence_backfilling_slots_threshold,
+            api_config.batch_mint_service_port,
+            api_config.file_storage_path_container.as_str(),
         )
         .await
         {
