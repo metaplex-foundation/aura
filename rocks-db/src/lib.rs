@@ -5,7 +5,7 @@ use asset::{
     AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetOwnerDeprecated, MetadataMintMap,
     SlotAssetIdx,
 };
-use rocksdb::{ColumnFamilyDescriptor, Options, DB};
+use rocksdb::{BlockBasedOptions, Cache, ColumnFamilyDescriptor, Options, DB};
 
 use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
 use crate::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
@@ -278,6 +278,14 @@ impl Storage {
         // See https://github.com/facebook/rocksdb/wiki/Secondary-instance
         options.set_max_open_files(-1);
         options.set_wal_recovery_mode(rocksdb::DBRecoveryMode::TolerateCorruptedTailRecords);
+
+        let mut block_based_options = BlockBasedOptions::default();
+        let cache_size = 64 * 1024 * 1024; // 64MB
+        let cache = Cache::new_lru_cache(cache_size);
+        block_based_options.set_block_cache(&cache);
+        block_based_options.set_cache_index_and_filter_blocks(true);
+        block_based_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
+        options.set_block_based_table_factory(&block_based_options);
 
         options
     }
