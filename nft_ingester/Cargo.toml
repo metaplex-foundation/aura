@@ -73,6 +73,9 @@ uuid = { version = "1.6.1" }
 multer = "3.0.0"
 jemallocator = { version = "*", features = ["profiling", "debug"] }
 
+[profile.release]
+debug = true
+
 [dev-dependencies]
 setup = { path = "../tests/setup" }
 testcontainers = "0.15.0"

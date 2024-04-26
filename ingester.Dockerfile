@@ -24,7 +24,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 # Caching dependencies
 FROM chef AS cacher
 WORKDIR /rust
-RUN apt update && apt install -y libclang-dev protobuf-compiler google-perftools graphviz
+RUN apt update && apt install -y libclang-dev protobuf-compiler
 RUN wget https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2 && \
     tar -xjf jemalloc-5.3.0.tar.bz2 && \
     cd jemalloc-5.3.0 && \
@@ -46,7 +46,7 @@ RUN cargo build --release --features profiling --bin ingester --bin api --bin ra
 # Final image
 FROM rust:1.75-slim-bullseye AS runtime
 ARG APP=/usr/src/app
-RUN apt update && apt install -y curl ca-certificates tzdata libjemalloc2 graphviz && rm -rf /var/lib/apt/lists/*
+RUN apt update && apt install -y curl ca-certificates tzdata libjemalloc2 google-perftools graphviz libjemalloc-dev && rm -rf /var/lib/apt/lists/*
 COPY --from=cacher /usr/local/lib/libjemalloc.so.2 /usr/local/lib/libjemalloc.so.2
 ENV TZ=Etc/UTC APP_USER=appuser LD_PRELOAD="/usr/local/lib/libjemalloc.so.2"
 RUN groupadd $APP_USER && useradd -g $APP_USER $APP_USER && mkdir -p ${APP}
