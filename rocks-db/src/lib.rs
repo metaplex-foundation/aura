@@ -285,6 +285,7 @@ impl Storage {
         block_based_options.set_block_cache(&cache);
         block_based_options.set_cache_index_and_filter_blocks(true);
         block_based_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
+        block_based_options.disable_cache();
         options.set_block_based_table_factory(&block_based_options);
 
         options
