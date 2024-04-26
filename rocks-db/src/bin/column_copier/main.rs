@@ -22,12 +22,16 @@ const BATCH_SIZE: usize = 100_000;
 pub async fn main() -> Result<(), String> {
     // Retrieve the database paths from command-line arguments
     let args: Vec<String> = env::args().collect();
-    if args.len() < 3 {
-        println!("Usage: {} <source_db_path> <destination_db_path>", args[0]);
+    if args.len() < 4 {
+        println!(
+            "Usage: {} <source_db_path> <secondary_source_db_path> <destination_db_path>",
+            args[0]
+        );
         std::process::exit(1);
     }
     let source_db_path = &args[1];
-    let destination_db_path = &args[2];
+    let secondary_source_db_path = &args[2];
+    let destination_db_path = &args[3];
 
     println!("Starting data migration...");
 
@@ -60,7 +64,12 @@ pub async fn main() -> Result<(), String> {
     );
 
     // Copy specified column families
-    if let Err(e) = copy_column_families(source_db_path, destination_db_path, &columns_to_copy) {
+    if let Err(e) = copy_column_families(
+        source_db_path,
+        secondary_source_db_path,
+        destination_db_path,
+        &columns_to_copy,
+    ) {
         println!("Failed to copy data: {}.", e);
     } else {
         println!("Data copied successfully.");
@@ -71,14 +80,16 @@ pub async fn main() -> Result<(), String> {
 
 fn copy_column_families(
     source_path: &str,
+    secondary_source_path: &str,
     destination_path: &str,
     columns_to_copy: &[&str],
 ) -> Result<(), String> {
     let start = Instant::now();
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     // Open source and destination databases
-    let source_db = Storage::open(
+    let source_db = Storage::open_secondary(
         source_path,
+        secondary_source_path,
         Arc::new(Mutex::new(JoinSet::new())),
         red_metrics.clone(),
     )
