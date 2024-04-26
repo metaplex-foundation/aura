@@ -58,3 +58,6 @@ harness = false
 
 [[bin]]
 name = "column_remover"
+
+[[bin]]
+name = "column_copier"
