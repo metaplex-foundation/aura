@@ -96,7 +96,6 @@ pub async fn main() -> Result<(), IngesterError> {
         None,
         None,
         "",
-        "",
     )
     .await;
 

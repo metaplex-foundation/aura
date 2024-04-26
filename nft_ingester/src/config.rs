@@ -89,9 +89,7 @@ pub struct RawBackfillConfig {
     #[serde(default)]
     pub run_profiling: bool,
     pub profiling_file_path_container: Option<String>,
-    #[serde(default)]
-    pub binary: String,
-    #[serde(default)]
+    #[serde(default = "default_heap_path")]
     pub heap_path: String,
 }
 #[derive(Deserialize, PartialEq, Debug, Clone)]
@@ -160,9 +158,7 @@ pub struct IngesterConfig {
     #[serde(default = "default_parallel_json_downloaders")]
     pub parallel_json_downloaders: i32,
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
-    #[serde(default)]
-    pub binary: String,
-    #[serde(default)]
+    #[serde(default = "default_heap_path")]
     pub heap_path: String,
 }
 
@@ -244,9 +240,7 @@ pub struct SynchronizerConfig {
     pub parallel_tasks: usize,
     #[serde(default)]
     pub run_temp_sync_during_dump: bool,
-    #[serde(default)]
-    pub binary: String,
-    #[serde(default)]
+    #[serde(default = "default_heap_path")]
     pub heap_path: String,
 }
 
@@ -277,9 +271,7 @@ pub struct ApiConfig {
     pub archives_dir: String,
     #[serde(default = "default_synchronization_api_threshold")]
     pub consistence_synchronization_api_threshold: u64,
-    #[serde(default)]
-    pub binary: String,
-    #[serde(default)]
+    #[serde(default = "default_heap_path")]
     pub heap_path: String,
     #[serde(default = "default_consistence_backfilling_slots_threshold")]
     pub consistence_backfilling_slots_threshold: u64,
@@ -290,6 +282,9 @@ const fn default_synchronization_api_threshold() -> u64 {
 }
 const fn default_consistence_backfilling_slots_threshold() -> u64 {
     500
+}
+fn default_heap_path() -> String {
+    "/usr/src/app/heaps".to_string()
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone, Default)]

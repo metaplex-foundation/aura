@@ -47,7 +47,7 @@ services:
     build:
       context: .
       dockerfile: ingester.Dockerfile
-    stop_grace_period: 10m
+    stop_grace_period: 2m
     logging:
       options:
         max-size: "2048m"
@@ -69,7 +69,7 @@ services:
     build:
       context: .
       dockerfile: ingester.Dockerfile
-    stop_grace_period: 10m
+    stop_grace_period: 5m
     logging:
       options:
         max-size: "2048m"

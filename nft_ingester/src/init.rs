@@ -1,3 +1,4 @@
+use crate::error::IngesterError;
 use pprof::protos::Message;
 use pprof::ProfilerGuard;
 use std::fs::File;
@@ -19,7 +20,6 @@ pub async fn graceful_stop(
     shutdown_tx: Sender<()>,
     guard: Option<ProfilerGuard<'_>>,
     profile_path: Option<String>,
-    binary: &str,
     heap_path: &str,
 ) {
     usecase::graceful_stop::listen_shutdown().await;
@@ -37,13 +37,32 @@ pub async fn graceful_stop(
         }
     }
     if std::env::var(MALLOC_CONF_ENV).is_ok() {
-        generate_profiling_gif(binary, heap_path).await;
+        generate_profiling_gif(heap_path).await;
     }
 
     usecase::graceful_stop::graceful_stop(tasks.lock().await.deref_mut()).await
 }
 
-async fn generate_profiling_gif(program: &str, heap_path: &str) {
+async fn generate_profiling_gif(heap_path: &str) {
+    let program = match std::env::current_exe()
+        .map_err(|e| IngesterError::Usecase(e.to_string()))
+        .and_then(|exe| {
+            exe.file_name()
+                .ok_or(IngesterError::Usecase("No file".to_string()))
+                .and_then(|os_str| {
+                    os_str
+                        .to_str()
+                        .ok_or(IngesterError::Usecase("Cannot cast to string".to_string()))
+                        .map(|s| s.to_string())
+                })
+        }) {
+        Ok(program) => program,
+        Err(e) => {
+            error!("Cannot get program path: {}", e);
+            return;
+        }
+    };
+
     let output = Command::new("sh")
         .arg("-c")
         .arg(format!(

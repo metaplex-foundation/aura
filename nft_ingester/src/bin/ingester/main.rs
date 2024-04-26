@@ -3,53 +3,55 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use backfill_rpc::rpc::BackfillRPC;
 use clap::Parser;
 use futures::FutureExt;
-use grpc::client::Client;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
-use interface::error::{StorageError, UsecaseError};
-use interface::signature_persistence::{BlockProducer, ProcessingDataGetter};
 use log::{error, info, warn};
-use metrics_utils::utils::start_metrics;
-use metrics_utils::{BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait};
-use nft_ingester::api::service::start_api;
-use nft_ingester::backfiller::{
-    connect_new_bigtable_from_config, DirectBlockParser, ForceReingestableSlotGetter,
-    TransactionsParser,
-};
-use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
-use nft_ingester::buffer::Buffer;
-use nft_ingester::config::{
-    setup_config, ApiConfig, BackfillerConfig, BackfillerSourceMode, IngesterConfig,
-    INGESTER_BACKUP_NAME, INGESTER_CONFIG_PREFIX,
-};
-use nft_ingester::fork_cleaner::ForkCleaner;
-use nft_ingester::gapfiller::process_asset_details_stream;
-use nft_ingester::index_syncronizer::Synchronizer;
-use nft_ingester::init::graceful_stop;
-use nft_ingester::json_worker::JsonWorker;
-use nft_ingester::message_handler::MessageHandler;
-use nft_ingester::mpl_core_processor::MplCoreProcessor;
-use nft_ingester::mplx_updates_processor::MplxAccsProcessor;
-use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
-use nft_ingester::tcp_receiver::TcpReceiver;
-use nft_ingester::token_updates_processor::TokenAccsProcessor;
 use nft_ingester::{backfiller, config, json_worker, transaction_ingester};
-use nft_ingester::{config::init_logger, error::IngesterError};
-use postgre_client::PgClient;
-use rocks_db::backup_service::BackupService;
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
-use rocks_db::errors::BackupServiceError;
-use rocks_db::storage_traits::AssetSlotStorage;
-use rocks_db::{backup_service, Storage};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_transaction_status::UiConfirmedBlock;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
+
+use backfill_rpc::rpc::BackfillRPC;
+use grpc::client::Client;
+use interface::error::{StorageError, UsecaseError};
+use interface::signature_persistence::{BlockProducer, ProcessingDataGetter};
+use metrics_utils::utils::start_metrics;
+use metrics_utils::{BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait};
+use nft_ingester::api::service::start_api;
+use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
+use nft_ingester::buffer::Buffer;
+use nft_ingester::config::{
+    setup_config, ApiConfig, BackfillerConfig, BackfillerSourceMode, IngesterConfig,
+    INGESTER_BACKUP_NAME, INGESTER_CONFIG_PREFIX,
+};
+use nft_ingester::index_syncronizer::Synchronizer;
+use nft_ingester::init::graceful_stop;
+use nft_ingester::json_worker::JsonWorker;
+use nft_ingester::message_handler::MessageHandler;
+use nft_ingester::mplx_updates_processor::MplxAccsProcessor;
+use nft_ingester::tcp_receiver::TcpReceiver;
+use nft_ingester::token_updates_processor::TokenAccsProcessor;
+use nft_ingester::{config::init_logger, error::IngesterError};
+use postgre_client::PgClient;
+use rocks_db::backup_service::BackupService;
+use rocks_db::errors::BackupServiceError;
+use rocks_db::storage_traits::AssetSlotStorage;
+use rocks_db::{backup_service, Storage};
 use tonic::transport::Server;
+
+use nft_ingester::backfiller::{
+    connect_new_bigtable_from_config, DirectBlockParser, ForceReingestableSlotGetter,
+    TransactionsParser,
+};
+use nft_ingester::fork_cleaner::ForkCleaner;
+use nft_ingester::gapfiller::process_asset_details_stream;
+use nft_ingester::mpl_core_processor::MplCoreProcessor;
+use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::{SlotsCollector, SlotsGetter};
@@ -868,7 +870,6 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         guard,
         config.profiling_file_path_container,
-        &config.binary,
         &config.heap_path,
     )
     .await;
