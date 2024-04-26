@@ -106,7 +106,7 @@ services:
       - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
       - ./creds.json:/usr/src/app/creds.json
       - ./heaps:/usr/src/app/heaps:rw
-    stop_grace_period: 10m
+    stop_grace_period: 5m
     build:
       context: .
       dockerfile: ingester.Dockerfile
