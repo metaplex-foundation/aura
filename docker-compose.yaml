@@ -3,7 +3,7 @@ services:
   ingester-first-consumer:
     container_name: ingester-first-consumer
     restart: always
-    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then ./ingester; else ./profiling_ingester; fi"
+    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then exec ./ingester; else exec ./profiling_ingester; fi"
     env_file:
       - .env
     environment:
@@ -32,7 +32,7 @@ services:
   das-api:
     container_name: das-api
     restart: always
-    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then ./api; else ./profiling_api; fi"
+    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then exec ./api; else exec ./profiling_api; fi"
     env_file:
       - .env
     network_mode: host
@@ -55,7 +55,7 @@ services:
   synchronizer:
     container_name: synchronizer
     restart: always
-    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then ./synchronizer; else ./profiling_synchronizer; fi"
+    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then exec ./synchronizer; else exec ./profiling_synchronizer; fi"
     env_file:
       - .env
     network_mode: host
@@ -97,7 +97,7 @@ services:
   raw-backfiller:
     container_name: raw-backfiller
     restart: always
-    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then ./raw_backfiller; else ./profiling_raw_backfiller; fi"
+    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then exec ./raw_backfiller; else exec ./profiling_raw_backfiller; fi"
     env_file:
       - .env
     network_mode: host
