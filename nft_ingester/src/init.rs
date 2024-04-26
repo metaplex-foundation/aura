@@ -47,14 +47,10 @@ async fn generate_profiling_gif(heap_path: &str) {
     let program = match std::env::current_exe()
         .map_err(|e| IngesterError::Usecase(e.to_string()))
         .and_then(|exe| {
-            exe.file_name()
-                .ok_or(IngesterError::Usecase("No file".to_string()))
-                .and_then(|os_str| {
-                    os_str
-                        .to_str()
-                        .ok_or(IngesterError::Usecase("Cannot cast to string".to_string()))
-                        .map(|s| s.to_string())
-                })
+            exe.as_path()
+                .to_str()
+                .ok_or(IngesterError::Usecase("Cannot cast to string".to_string()))
+                .map(|s| s.to_string())
         }) {
         Ok(program) => program,
         Err(e) => {
