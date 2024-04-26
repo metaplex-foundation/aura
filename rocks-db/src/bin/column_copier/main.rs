@@ -13,6 +13,7 @@ use rocksdb::IteratorMode;
 use std::env;
 use std::sync::Arc;
 use std::time::Instant;
+use tempfile::TempDir;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
@@ -22,7 +23,7 @@ const BATCH_SIZE: usize = 100_000;
 pub async fn main() -> Result<(), String> {
     // Retrieve the database paths from command-line arguments
     let args: Vec<String> = env::args().collect();
-    if args.len() < 4 {
+    if args.len() < 3 {
         println!(
             "Usage: {} <source_db_path> <secondary_source_db_path> <destination_db_path>",
             args[0]
@@ -30,8 +31,7 @@ pub async fn main() -> Result<(), String> {
         std::process::exit(1);
     }
     let source_db_path = &args[1];
-    let secondary_source_db_path = &args[2];
-    let destination_db_path = &args[3];
+    let destination_db_path = &args[2];
 
     println!("Starting data migration...");
 
@@ -62,11 +62,11 @@ pub async fn main() -> Result<(), String> {
         "Columns to be copied from {} to {}: {:?}",
         source_db_path, destination_db_path, columns_to_copy
     );
-
+    let secondary_rocks_dir = TempDir::new().unwrap();
     // Copy specified column families
     if let Err(e) = copy_column_families(
         source_db_path,
-        secondary_source_db_path,
+        secondary_rocks_dir.path().to_str().unwrap(),
         destination_db_path,
         &columns_to_copy,
     ) {
