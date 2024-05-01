@@ -5,6 +5,7 @@ use solana_program::pubkey::Pubkey;
 
 #[async_trait]
 pub trait TokenAccountsGetter {
+    #[allow(clippy::too_many_arguments)]
     fn token_accounts_pubkeys_iter(
         &self,
         owner: Option<Pubkey>,

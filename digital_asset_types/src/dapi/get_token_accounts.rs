@@ -34,5 +34,7 @@ pub async fn get_token_accounts(
         .get_token_accounts(owner, mint, before, after, page, limit, show_zero_balance)
         .await
         .map_err(|e| DbErr::Custom(e.to_string()))?;
-    Ok(build_token_accounts_response(token_accounts, limit, page))
+
+    build_token_accounts_response(token_accounts, limit, page, cursor_enabled)
+        .map_err(|e| DbErr::Custom(format!("Building response: {:?}", e)))
 }

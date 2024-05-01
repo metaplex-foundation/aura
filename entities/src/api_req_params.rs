@@ -183,6 +183,9 @@ pub struct GetTokenAccounts {
     pub mint: Option<String>,
     #[serde(default, alias = "displayOptions")]
     pub options: Option<DisplayOptions>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

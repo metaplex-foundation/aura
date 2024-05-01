@@ -1,14 +1,17 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
+use std::str::FromStr;
 
 use entities::models::{AssetSignatureWithPagination, TokenAccount};
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
 use mime_guess::Mime;
+use rocks_db::token_accounts::encode_sorting_key;
 use sea_orm::DbErr;
 use serde_json::Value;
+use solana_sdk::pubkey::Pubkey;
 use url::Url;
 
 use crate::dao::sea_orm_active_enums::SpecificationAssetClass;
@@ -411,11 +414,90 @@ pub fn build_token_accounts_response(
     token_accounts: Vec<TokenAccount>,
     limit: u64,
     page: Option<u64>,
-) -> TokenAccountsList {
-    TokenAccountsList {
+    cursor_enabled: bool,
+) -> Result<TokenAccountsList, String> {
+    let pagination = get_pagination_values(&token_accounts, &page, cursor_enabled)?;
+
+    Ok(TokenAccountsList {
         total: token_accounts.len() as u32,
         limit: limit as u32,
-        page: page.map(|x| x as u32),
+        page: pagination.page,
+        after: pagination.after,
+        before: pagination.before,
+        cursor: pagination.cursor,
         token_accounts,
+    })
+}
+
+struct PaginationValues {
+    pub after: Option<String>,
+    pub before: Option<String>,
+    pub cursor: Option<String>,
+    pub page: Option<u32>,
+}
+
+fn get_pagination_values(
+    token_accounts: &[TokenAccount],
+    page: &Option<u64>,
+    cursor_enabled: bool,
+) -> Result<PaginationValues, String> {
+    if cursor_enabled {
+        if let Some(token_acc) = token_accounts.last() {
+            let last_row = encode_sorting_key(
+                &Pubkey::from_str(token_acc.owner.as_ref()).map_err(|e| e.to_string())?,
+                &Pubkey::from_str(token_acc.address.as_ref()).map_err(|e| e.to_string())?,
+            );
+
+            Ok(PaginationValues {
+                after: None,
+                before: None,
+                cursor: Some(last_row),
+                page: None,
+            })
+        } else {
+            Ok(PaginationValues {
+                after: None,
+                before: None,
+                cursor: None,
+                page: None,
+            })
+        }
+    } else if let Some(p) = page {
+        Ok(PaginationValues {
+            after: None,
+            before: None,
+            cursor: None,
+            page: Some(*p as u32),
+        })
+    } else {
+        let first_row = {
+            if let Some(token_acc) = token_accounts.first() {
+                let first = encode_sorting_key(
+                    &Pubkey::from_str(token_acc.owner.as_ref()).map_err(|e| e.to_string())?,
+                    &Pubkey::from_str(token_acc.address.as_ref()).map_err(|e| e.to_string())?,
+                );
+                Some(first)
+            } else {
+                None
+            }
+        };
+
+        let last_row = {
+            if let Some(token_acc) = token_accounts.last() {
+                let last = encode_sorting_key(
+                    &Pubkey::from_str(token_acc.owner.as_ref()).map_err(|e| e.to_string())?,
+                    &Pubkey::from_str(token_acc.address.as_ref()).map_err(|e| e.to_string())?,
+                );
+                Some(last)
+            } else {
+                None
+            }
+        };
+        Ok(PaginationValues {
+            after: first_row,
+            before: last_row,
+            cursor: None,
+            page: None,
+        })
     }
 }

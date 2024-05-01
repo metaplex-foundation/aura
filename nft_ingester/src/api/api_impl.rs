@@ -414,14 +414,17 @@ where
             owner,
             mint,
             options,
+            before,
+            after,
+            cursor,
         } = payload;
 
         let pagination = Pagination {
             limit,
             page,
-            before: None,
-            after: None,
-            cursor: None,
+            before,
+            after,
+            cursor,
         };
 
         let owner = validate_opt_pubkey(&owner)?;
@@ -441,6 +444,9 @@ where
             mint,
             limit.unwrap_or(DEFAULT_LIMIT as u32).into(),
             page.map(|page| page as u64),
+            pagination.before,
+            pagination.after,
+            pagination.cursor,
             options.map(|op| op.show_zero_balance).unwrap_or_default(),
         )
         .await?;

@@ -1,8 +1,7 @@
-use std::str::FromStr;
-
 use crate::columns::TokenAccountMintOwnerIdx;
 use crate::Storage;
 use async_trait::async_trait;
+use base64::{engine::general_purpose, Engine as _};
 use entities::models::{
     TokenAccount, TokenAccountIterableIdx, TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey,
 };
@@ -25,30 +24,32 @@ impl TokenAccountsGetter for Storage {
         let iter = {
             if reverse_iter {
                 match mint {
-                    Some(mint) => self
-                        .token_account_mint_owner_idx
-                        .iter_reverse(TokenAccountMintOwnerIdxKey {
+                    Some(mint) => self.token_account_mint_owner_idx.iter_reverse(
+                        TokenAccountMintOwnerIdxKey {
                             mint,
                             owner: owner.unwrap_or_default(),
                             token_account: token_account.unwrap_or_default(),
-                        }),
+                        },
+                    ),
                     None => {
-                        self.token_account_owner_idx.iter_reverse(TokenAccountOwnerIdxKey {
-                            // We have check above, so this is safe
-                            owner: owner.expect("Expected owner when mint is None"),
-                            token_account: token_account.unwrap_or_default(),
-                        })
+                        self.token_account_owner_idx
+                            .iter_reverse(TokenAccountOwnerIdxKey {
+                                // We have check above, so this is safe
+                                owner: owner.expect("Expected owner when mint is None"),
+                                token_account: token_account.unwrap_or_default(),
+                            })
                     }
                 }
             } else {
                 match mint {
-                    Some(mint) => self
-                        .token_account_mint_owner_idx
-                        .iter(TokenAccountMintOwnerIdxKey {
-                            mint,
-                            owner: owner.unwrap_or_default(),
-                            token_account: token_account.unwrap_or_default(),
-                        }),
+                    Some(mint) => {
+                        self.token_account_mint_owner_idx
+                            .iter(TokenAccountMintOwnerIdxKey {
+                                mint,
+                                owner: owner.unwrap_or_default(),
+                                token_account: token_account.unwrap_or_default(),
+                            })
+                    }
                     None => {
                         self.token_account_owner_idx.iter(TokenAccountOwnerIdxKey {
                             // We have check above, so this is safe
@@ -57,9 +58,8 @@ impl TokenAccountsGetter for Storage {
                         })
                     }
                 }
-        }};
-
-        // TODO: do not apply *.skip(..) if other pagination was used
+            }
+        };
 
         Ok(iter
             .filter_map(std::result::Result::ok)
@@ -116,37 +116,36 @@ impl TokenAccountsGetter for Storage {
         limit: u64,
         show_zero_balance: bool,
     ) -> Result<Vec<TokenAccount>, UsecaseError> {
-        // TODO: reverse iter if got only before
-
         let mut reverse = false;
 
-        let pagination_start = if let (Some(_before), Some(after)) = (&before, &after) {
-                Some(after)
-            } else if let (Some(before), None) = (&before, &after) {
-                reverse = true;
-                Some(before)
-            } else if let (None, Some(after)) = (&before, &after) {
-                Some(after)
-            } else {
-                None
+        let start_from = if let Some(after) = &after {
+            Some(after)
+        } else if let Some(before) = &before {
+            reverse = true;
+            Some(before)
+        } else {
+            None
         };
 
-        let (mint, owner, token_account) =
-            if let (Some(mint), Some(owner)) = (mint, owner) {
-                // get by mint and owner
-                // pagination - hash("token_account")
-                (None, None, None)
-            } else if let (Some(mint), None) = (mint, owner) {
-                // get by mint
-                // pagination - hash("owner+token_account")
-                (None, None, None)
-            } else if let (None, Some(owner)) = (mint, owner) {
-                // get by owner
-                // pagination - hash("token_account")
-                (None, None, None)
-            } else {
-                (None, None, None)
-            };
+        let (token_account, decoded_owner) = if let Some(key) = start_from {
+            let (token_acc, owner) = decode_sorting_key(key)
+                .map_err(|e| UsecaseError::InvalidParameters(format!("Pagination: {:?}", e)))?;
+
+            (Some(token_acc), Some(owner))
+        } else {
+            (None, None)
+        };
+
+        let until_token_acc = if let (Some(_after), Some(before)) = (&after, &before) {
+            let (token_acc, _owner) = decode_sorting_key(before)
+                .map_err(|e| UsecaseError::InvalidParameters(format!("Pagination: {:?}", e)))?;
+
+            Some(token_acc)
+        } else {
+            None
+        };
+
+        let owner = owner.or(decoded_owner);
 
         if (mint, owner, token_account) == (None, None, None) {
             return Err(UsecaseError::InvalidParameters(
@@ -155,12 +154,29 @@ impl TokenAccountsGetter for Storage {
         }
 
         let mut pubkeys = Vec::new();
-        for key in self.token_accounts_pubkeys_iter(owner, mint, token_account, reverse, page, limit, show_zero_balance)? {
+        for key in self.token_accounts_pubkeys_iter(
+            owner,
+            mint,
+            token_account,
+            reverse,
+            page,
+            limit,
+            show_zero_balance,
+        )? {
             if (pubkeys.len() >= limit as usize)
                 || owner.map(|owner| owner != key.owner).unwrap_or_default()
-                || mint != key.mint // if before and after was passed - check if asset is before
+                || mint != key.mint
+                || until_token_acc
+                    .map(|k| key.token_account > k)
+                    .unwrap_or_default()
             {
                 break;
+            }
+            // if we paginating we should not return the key we started from
+            if let Some(t_a) = token_account {
+                if t_a == key.token_account {
+                    continue;
+                }
             }
             pubkeys.push(key.token_account);
         }
@@ -183,4 +199,31 @@ impl TokenAccountsGetter for Storage {
             })
             .collect::<Vec<_>>())
     }
+}
+
+pub fn encode_sorting_key(owner: &Pubkey, token_account: &Pubkey) -> String {
+    let owner_b = owner.to_bytes();
+    let token_b = token_account.to_bytes();
+
+    let mut v = Vec::from(owner_b);
+    v.extend_from_slice(token_b.as_ref());
+
+    general_purpose::STANDARD_NO_PAD.encode(v)
+}
+
+pub fn decode_sorting_key(key: &String) -> Result<(Pubkey, Pubkey), String> {
+    let decoded = general_purpose::STANDARD_NO_PAD
+        .decode(key)
+        .map_err(|e| e.to_string())?;
+
+    let mut raw_owner_pubkey = [0; 32];
+    raw_owner_pubkey.copy_from_slice(&decoded[0..32]);
+
+    let mut raw_token_pubkey = [0; 32];
+    raw_token_pubkey.copy_from_slice(&decoded[32..]);
+
+    Ok((
+        Pubkey::new_from_array(raw_token_pubkey),
+        Pubkey::new_from_array(raw_owner_pubkey),
+    ))
 }
