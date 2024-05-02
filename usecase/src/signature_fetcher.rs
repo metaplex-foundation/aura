@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use entities::models::{BufferedTransaction, SignatureWithSlot};
 use interface::{
@@ -7,7 +7,7 @@ use interface::{
     solana_rpc::TransactionsGetter,
 };
 use metrics_utils::{MetricStatus, RpcBackfillerMetricsConfig};
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use tracing::info;
 
 pub struct SignatureFetcher<T, SP, TI>
@@ -23,6 +23,7 @@ where
 }
 
 const BATCH_SIZE: usize = 1000;
+const DOWNLOAD_TX_RETRY: u32 = 5;
 
 impl<T, SP, TI> SignatureFetcher<T, SP, TI>
 where
@@ -108,6 +109,7 @@ where
                 missing_signatures.len(),
                 program_id
             );
+
             let transactions: Vec<BufferedTransaction> = match self
                 .rpc
                 .get_txs_by_signatures(
@@ -130,21 +132,56 @@ where
             };
             let tx_cnt = transactions.len();
             for transaction in transactions {
-                match self.ingester.ingest_transaction(transaction).await {
-                    Ok(_) => {
-                        self.metrics.inc_transactions_processed(
-                            "ingest_transaction",
-                            MetricStatus::SUCCESS,
-                        );
-                    }
-                    Err(e) => {
-                        self.metrics.inc_transactions_processed(
-                            "ingest_transaction",
-                            MetricStatus::FAILURE,
-                        );
-                        return Err(e);
-                    }
-                };
+                let mut retries = DOWNLOAD_TX_RETRY;
+
+                // potentially we will re-download it, that's why allocate new variable
+                let mut transaction = transaction;
+
+                while retries > 0 {
+                    retries -= 1;
+
+                    match self.ingester.ingest_transaction(transaction.clone()).await {
+                        Ok(_) => {
+                            self.metrics.inc_transactions_processed(
+                                "ingest_transaction",
+                                MetricStatus::SUCCESS,
+                            );
+                            break;
+                        }
+                        Err(e) => {
+                            self.metrics.inc_transactions_processed(
+                                "ingest_transaction",
+                                MetricStatus::FAILURE,
+                            );
+                            if retries == 0 {
+                                return Err(e);
+                            }
+
+                            // deserialize to get signature from there
+                            let transaction_info = plerkle_serialization::root_as_transaction_info(
+                                transaction.transaction.as_slice(),
+                            )
+                            .map_err(|e| StorageError::Common(e.to_string()))?;
+
+                            let signature = Signature::from_str(
+                                transaction_info.signature().ok_or(StorageError::Common(
+                                    "No signature found in transaction".to_string(),
+                                ))?,
+                            )
+                            .map_err(|e| StorageError::Common(e.to_string()))?;
+
+                            transaction = self
+                                .rpc
+                                .get_txs_by_signatures(vec![signature], rpc_retry_interval_millis)
+                                .await
+                                .map_err(|e| StorageError::Common(e.to_string()))?
+                                .pop()
+                                .ok_or(StorageError::Common(
+                                    "Got empty transactions vector".to_string(),
+                                ))?;
+                        }
+                    };
+                }
             }
             // now we may drop the old signatures before the last element of the batch
             // we do this by constructing a fake key at the start of the same slot

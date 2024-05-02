@@ -229,12 +229,14 @@ impl BubblegumTxProcessor {
                         transaction_result.instruction_results.push(ix_result);
                     }
                     Err(e) => {
-                        // we should not persist the signature if we have unhandled instructions
-                        transaction_result.transaction_signature = None;
                         error!(
                             "Failed to handle bubblegum instruction for txn {}: {:?}",
                             sig, e
                         );
+                        return Err(IngesterError::TransactionParsingError(format!(
+                            "Failed to parse transaction: {:?}",
+                            sig
+                        )));
                     }
                 };
             }
