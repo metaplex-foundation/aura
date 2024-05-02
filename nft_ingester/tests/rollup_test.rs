@@ -219,6 +219,14 @@ impl RollupDownloader for TestRollupCreator {
 
         Ok(Box::new(generate_rollup(ROLLUP_ASSETS_TO_SAVE)))
     }
+
+    async fn download_rollup_and_check_checksum(
+        &self,
+        _url: &str,
+        _checksum: &str,
+    ) -> std::result::Result<Box<Rollup>, UsecaseError> {
+        Ok(Box::new(generate_rollup(ROLLUP_ASSETS_TO_SAVE)))
+    }
 }
 
 fn _generate() -> ConcurrentMerkleTree<10, 32> {
@@ -280,6 +288,7 @@ async fn store_rollup_test() {
             leaf: [0u8; 32],
             index: 0,
             metadata_url: "ff".to_string(),
+            file_checksum: "ff".to_string(),
         },
         TestRollupCreator {},
         env.rocks_env.storage.clone(),
@@ -290,4 +299,15 @@ async fn store_rollup_test() {
 
     let static_iter = env.rocks_env.storage.asset_static_data.iter_start();
     assert_eq!(static_iter.count(), ROLLUP_ASSETS_TO_SAVE);
+}
+
+#[tokio::test]
+async fn xxhash_test() {
+    let file_data = vec![43, 2, 5, 4, 76, 34, 123, 42, 73, 81, 47];
+
+    let file_hash = xxhash_rust::xxh3::xxh3_128(&file_data);
+
+    let hash_hex = hex::encode(file_hash.to_le_bytes());
+
+    assert_eq!(&hash_hex, "83505d07ecdeb6cbdc578d366091294f");
 }

@@ -30,7 +30,7 @@ spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
 solana-transaction-status = "~1.17"
 solana-storage-bigtable = "~1.17"
 solana-bigtable-connection = "1.10.31"
-stretto = { version = "0.7", features = ["async"] }
+stretto = { version = "0.8.3", features = ["async"] }
 tokio-util = { version = "0.7.10", features = ["codec", "compat"] }
 tracing-subscriber = { version = "0.3.16", features = [
     "json",
@@ -71,6 +71,8 @@ anchor-lang = "0.29.0"
 spl-concurrent-merkle-tree = "0.2.0"
 uuid = { version = "1.6.1" }
 multer = "3.0.0"
+xxhash-rust = { version = "0.8.10", features = ["xxh3"] }
+hex = "0.4.3"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }
