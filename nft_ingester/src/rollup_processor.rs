@@ -28,12 +28,12 @@ impl RollupDownloader for RollupDownloaderImpl {
 
 pub struct RollupProcessor {
     pg_client: Arc<PgClient>,
-    rocks: Arc<Storage>,
+    _rocks: Arc<Storage>,
 }
 
 impl RollupProcessor {
     pub fn new(pg_client: Arc<PgClient>, rocks: Arc<Storage>) -> Self {
-        Self { pg_client, rocks }
+        Self { pg_client, _rocks: rocks }
     }
 
     pub async fn process_rollups(&self, rx: Receiver<()>) {

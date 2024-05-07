@@ -167,6 +167,7 @@ async fn run_api(
             shutdown_rx.resubscribe(),
             port,
             file_storage_path.to_string(),
+            pg_client
         )
         .await;
     }
