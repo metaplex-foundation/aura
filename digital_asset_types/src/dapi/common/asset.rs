@@ -23,6 +23,7 @@ use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
     MetadataMap, MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
 };
+use entities::api_req_params::Pagination;
 
 pub fn to_uri(uri: String) -> Option<Url> {
     Url::parse(uri.as_str()).ok()
@@ -429,18 +430,11 @@ pub fn build_token_accounts_response(
     })
 }
 
-struct PaginationValues {
-    pub after: Option<String>,
-    pub before: Option<String>,
-    pub cursor: Option<String>,
-    pub page: Option<u32>,
-}
-
 fn get_pagination_values(
     token_accounts: &[TokenAccount],
     page: &Option<u64>,
     cursor_enabled: bool,
-) -> Result<PaginationValues, String> {
+) -> Result<Pagination, String> {
     if cursor_enabled {
         if let Some(token_acc) = token_accounts.last() {
             let last_row = encode_sorting_key(
@@ -448,26 +442,29 @@ fn get_pagination_values(
                 &Pubkey::from_str(token_acc.address.as_ref()).map_err(|e| e.to_string())?,
             );
 
-            Ok(PaginationValues {
+            Ok(Pagination {
                 after: None,
                 before: None,
                 cursor: Some(last_row),
                 page: None,
+                limit: None,
             })
         } else {
-            Ok(PaginationValues {
+            Ok(Pagination {
                 after: None,
                 before: None,
                 cursor: None,
                 page: None,
+                limit: None,
             })
         }
     } else if let Some(p) = page {
-        Ok(PaginationValues {
+        Ok(Pagination {
             after: None,
             before: None,
             cursor: None,
             page: Some(*p as u32),
+            limit: None,
         })
     } else {
         let first_row = {
@@ -493,11 +490,12 @@ fn get_pagination_values(
                 None
             }
         };
-        Ok(PaginationValues {
+        Ok(Pagination {
             after: first_row,
             before: last_row,
             cursor: None,
             page: None,
+            limit: None,
         })
     }
 }
