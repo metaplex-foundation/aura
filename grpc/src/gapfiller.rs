@@ -1,5 +1,13 @@
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateVersionValue {
+    #[prost(enumeration = "UpdateVersion", tag = "1")]
+    pub r#type: i32,
+    #[prost(uint64, tag = "2")]
+    pub value: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Uses {
     #[prost(enumeration = "UseMethod", tag = "1")]
     pub use_method: i32,
@@ -25,7 +33,7 @@ pub struct ChainDataV1 {
     #[prost(message, optional, tag = "6")]
     pub uses: ::core::option::Option<Uses>,
     #[prost(message, optional, tag = "7")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "8")]
     pub slot_updated: u64,
 }
@@ -45,7 +53,7 @@ pub struct AssetLeaf {
     #[prost(message, optional, tag = "6")]
     pub leaf_seq: ::core::option::Option<u64>,
     #[prost(message, optional, tag = "7")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "8")]
     pub slot_updated: u64,
 }
@@ -59,7 +67,7 @@ pub struct AssetCollection {
     #[prost(message, optional, tag = "3")]
     pub collection_seq: ::core::option::Option<u64>,
     #[prost(message, optional, tag = "4")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "5")]
     pub slot_updated: u64,
 }
@@ -126,20 +134,38 @@ pub struct AssetDetails {
     #[prost(message, optional, tag = "23")]
     pub metadata_owner: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "24")]
-    pub asset_leaf: ::core::option::Option<AssetLeaf>,
+    pub url: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "25")]
-    pub collection: ::core::option::Option<AssetCollection>,
+    pub raw_name: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "26")]
-    pub chain_data: ::core::option::Option<ChainDataV1>,
+    pub plugins: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "27")]
+    pub unknown_plugins: ::core::option::Option<DynamicStringField>,
+    #[prost(message, optional, tag = "28")]
+    pub rent_epoch: ::core::option::Option<DynamicUint64Field>,
+    #[prost(message, optional, tag = "29")]
+    pub num_minted: ::core::option::Option<DynamicUint32Field>,
+    #[prost(message, optional, tag = "30")]
+    pub current_size: ::core::option::Option<DynamicUint32Field>,
+    #[prost(message, optional, tag = "31")]
+    pub plugins_json_version: ::core::option::Option<DynamicUint32Field>,
+    #[prost(message, optional, tag = "32")]
+    pub asset_leaf: ::core::option::Option<AssetLeaf>,
+    #[prost(message, optional, tag = "33")]
+    pub collection: ::core::option::Option<AssetCollection>,
+    #[prost(message, optional, tag = "34")]
+    pub chain_data: ::core::option::Option<ChainDataV1>,
+    #[prost(message, optional, tag = "35")]
     pub cl_leaf: ::core::option::Option<ClLeaf>,
-    #[prost(message, repeated, tag = "28")]
+    #[prost(message, repeated, tag = "36")]
     pub cl_items: ::prost::alloc::vec::Vec<ClItem>,
     /// From TokenMetadataEdition
-    #[prost(message, optional, tag = "29")]
+    #[prost(message, optional, tag = "37")]
     pub edition: ::core::option::Option<EditionV1>,
-    #[prost(message, optional, tag = "30")]
+    #[prost(message, optional, tag = "38")]
     pub master_edition: ::core::option::Option<MasterEdition>,
+    #[prost(message, optional, tag = "39")]
+    pub offchain_data: ::core::option::Option<OffchainData>,
 }
 /// Dynamic field messages
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -148,7 +174,7 @@ pub struct DynamicBoolField {
     #[prost(bool, tag = "1")]
     pub value: bool,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -158,7 +184,7 @@ pub struct DynamicUint64Field {
     #[prost(uint64, tag = "1")]
     pub value: u64,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -168,7 +194,7 @@ pub struct DynamicUint32Field {
     #[prost(uint32, tag = "1")]
     pub value: u32,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -178,7 +204,7 @@ pub struct DynamicBytesField {
     #[prost(bytes = "vec", tag = "1")]
     pub value: ::prost::alloc::vec::Vec<u8>,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -188,7 +214,7 @@ pub struct DynamicStringField {
     #[prost(string, tag = "1")]
     pub value: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -198,7 +224,7 @@ pub struct DynamicChainMutability {
     #[prost(enumeration = "ChainMutability", tag = "1")]
     pub value: i32,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -208,7 +234,7 @@ pub struct DynamicEnumField {
     #[prost(enumeration = "OwnerType", tag = "1")]
     pub value: i32,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -218,7 +244,7 @@ pub struct DynamicCreatorsField {
     #[prost(message, repeated, tag = "1")]
     pub creators: ::prost::alloc::vec::Vec<Creator>,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -273,6 +299,14 @@ pub struct MasterEdition {
     pub max_supply: ::core::option::Option<u64>,
     #[prost(uint64, tag = "4")]
     pub write_version: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OffchainData {
+    #[prost(string, tag = "1")]
+    pub url: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub metadata: ::prost::alloc::string::String,
 }
 /// RangeRequest and AssetDetailsResponse for data synchronization
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -531,6 +565,32 @@ impl UseMethod {
             "BURN" => Some(Self::Burn),
             "MULTIPLE" => Some(Self::Multiple),
             "SINGLE" => Some(Self::Single),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum UpdateVersion {
+    Sequence = 0,
+    WriteVersion = 1,
+}
+impl UpdateVersion {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            UpdateVersion::Sequence => "SEQUENCE",
+            UpdateVersion::WriteVersion => "WRITE_VERSION",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SEQUENCE" => Some(Self::Sequence),
+            "WRITE_VERSION" => Some(Self::WriteVersion),
             _ => None,
         }
     }

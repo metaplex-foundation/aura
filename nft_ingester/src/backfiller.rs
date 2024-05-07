@@ -311,8 +311,16 @@ where
                         slots.len()
                     );
                     let none: Option<Arc<Storage>> = None;
-                    let res =
-                        Self::parse_slots(c, p, m, chunk_size, slots, rx.resubscribe(), none).await;
+                    let res = Self::parse_slots(
+                        c,
+                        p,
+                        m,
+                        chunk_size,
+                        slots.as_slice(),
+                        rx.resubscribe(),
+                        none,
+                    )
+                    .await;
                     if let Err(err) = res {
                         error!("Error parsing slots: {}", err);
                     }
@@ -337,8 +345,16 @@ where
                     slots.len()
                 );
                 let none: Option<Arc<Storage>> = None;
-                let res =
-                    Self::parse_slots(c, p, m, chunk_size, slots, rx.resubscribe(), none).await;
+                let res = Self::parse_slots(
+                    c,
+                    p,
+                    m,
+                    chunk_size,
+                    slots.as_slice(),
+                    rx.resubscribe(),
+                    none,
+                )
+                .await;
                 if let Err(err) = res {
                     error!("Error parsing slots: {}", err);
                 }
@@ -379,7 +395,7 @@ where
                 info!("Got {} slots to parse", slots_batch.len());
                 let res = self
                     .process_slots(
-                        slots_batch.clone(),
+                        slots_batch.as_slice(),
                         rx.resubscribe(),
                         backup_provider.clone(),
                     )
@@ -402,7 +418,11 @@ where
         if !slots_batch.is_empty() {
             info!("Got {} slots to parse", slots_batch.len());
             let res = self
-                .process_slots(slots_batch, rx.resubscribe(), backup_provider.clone())
+                .process_slots(
+                    slots_batch.as_slice(),
+                    rx.resubscribe(),
+                    backup_provider.clone(),
+                )
                 .await;
             match res {
                 Ok(processed) => {
@@ -440,7 +460,7 @@ where
             }
             let none: Option<Arc<Storage>> = None;
             let res = self
-                .process_slots(slots_to_parse_vec, rx.resubscribe(), none)
+                .process_slots(slots_to_parse_vec.as_slice(), rx.resubscribe(), none)
                 .await;
             match res {
                 Ok(processed) => {
@@ -456,7 +476,7 @@ where
 
     async fn process_slots(
         &self,
-        slots_to_parse_vec: Vec<u64>,
+        slots_to_parse_vec: &[u64],
         rx: Receiver<()>,
         backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<u64, String> {
@@ -466,7 +486,7 @@ where
             self.producer.clone(),
             self.metrics.clone(),
             self.chunk_size,
-            slots_to_parse_vec.clone(),
+            slots_to_parse_vec,
             rx,
             backup_provider,
         )
@@ -498,7 +518,7 @@ where
         producer: Arc<P>,
         metrics: Arc<BackfillerMetricsConfig>,
         chunk_size: usize,
-        slots: Vec<u64>,
+        slots: &[u64],
         rx: Receiver<()>,
         backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<Vec<u64>, String> {
@@ -667,7 +687,7 @@ where
         }
         match self
             .persister
-            .store_block(results)
+            .store_block(slot, results.as_slice())
             .await
             .map_err(|e| e.to_string())
         {

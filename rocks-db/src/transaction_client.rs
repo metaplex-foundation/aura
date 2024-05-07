@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use entities::models::SignatureWithSlot;
+use entities::models::{OffChainData, SignatureWithSlot};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::offchain_data::OffChainData;
+use crate::parameters::Parameter;
 use crate::{
     parameters,
     signature_client::SignatureIdx,
@@ -13,12 +13,14 @@ use crate::{
 
 #[async_trait]
 impl TransactionResultPersister for Storage {
-    async fn store_block(&self, txs: Vec<TransactionResult>) -> Result<(), StorageError> {
+    async fn store_block(&self, slot: u64, txs: &[TransactionResult]) -> Result<(), StorageError> {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for tx in txs {
             self.store_transaction_result_with_batch(&mut batch, tx, false)
                 .await?;
         }
+        self.merge_top_parameter_with_batch(&mut batch, Parameter::LastBackfilledSlot, slot)
+            .map_err(|e| StorageError::Common(e.to_string()))?;
         self.write_batch(batch)
             .await
             .map_err(|e| StorageError::Common(e.to_string()))?;
@@ -29,7 +31,7 @@ impl TransactionResultPersister for Storage {
 impl Storage {
     pub async fn store_transaction_result(
         &self,
-        tx: TransactionResult,
+        tx: &TransactionResult,
         with_signatures: bool,
     ) -> Result<(), StorageError> {
         let mut batch = rocksdb::WriteBatch::default();
@@ -44,11 +46,11 @@ impl Storage {
     async fn store_transaction_result_with_batch(
         &self,
         batch: &mut rocksdb::WriteBatch,
-        tx: TransactionResult,
+        tx: &TransactionResult,
         with_signatures: bool,
     ) -> Result<(), StorageError> {
         let mut skip_signatures = !with_signatures;
-        for ix in tx.instruction_results {
+        for ix in tx.instruction_results.iter() {
             if let Err(e) = self.store_instruction_result_with_batch(batch, ix) {
                 skip_signatures = true;
                 tracing::error!("Failed to store instruction result: {}", e);
@@ -71,21 +73,21 @@ impl Storage {
     fn store_instruction_result_with_batch(
         &self,
         batch: &mut rocksdb::WriteBatch,
-        ix: InstructionResult,
+        ix: &InstructionResult,
     ) -> Result<(), StorageError> {
-        if let Some(update) = ix.update {
-            if let Some(dyn_data) = update.update {
+        if let Some(ref update) = ix.update {
+            if let Some(ref dyn_data) = update.update {
                 if let Err(e) = self.save_tx_data_and_asset_updated_with_batch(
                     batch,
                     dyn_data.pk,
                     dyn_data.slot,
-                    dyn_data.leaf,
-                    dyn_data.dynamic_data,
+                    &dyn_data.leaf,
+                    &dyn_data.dynamic_data,
                 ) {
                     tracing::error!("Failed to save tx data and asset updated: {}", e);
                 }
             }
-            if let Some(static_update) = update.static_update {
+            if let Some(ref static_update) = update.static_update {
                 if let Err(e) = self.asset_static_data.merge_with_batch(
                     batch,
                     static_update.pk,
@@ -94,7 +96,7 @@ impl Storage {
                     tracing::error!("Failed to merge asset static data: {}", e);
                 }
             }
-            if let Some(owner_update) = update.owner_update {
+            if let Some(ref owner_update) = update.owner_update {
                 if let Err(e) = self.asset_owner_data.merge_with_batch(
                     batch,
                     owner_update.pk,
@@ -103,7 +105,7 @@ impl Storage {
                     tracing::error!("Failed to merge asset owner data: {}", e);
                 }
             }
-            if let Some(authority_update) = update.authority_update {
+            if let Some(ref authority_update) = update.authority_update {
                 if let Err(e) = self.asset_authority_data.merge_with_batch(
                     batch,
                     authority_update.pk,
@@ -112,7 +114,7 @@ impl Storage {
                     tracing::error!("Failed to merge asset authority data: {}", e);
                 }
             }
-            if let Some(collection_update) = update.collection_update {
+            if let Some(ref collection_update) = update.collection_update {
                 if let Err(e) = self.asset_collection_data.merge_with_batch(
                     batch,
                     collection_update.pk,
@@ -121,12 +123,13 @@ impl Storage {
                     tracing::error!("Failed to merge asset collection data: {}", e);
                 }
             }
-            if let Some(task) = ix.task {
+            if let Some(ref task) = ix.task {
                 let offchain_data_update = OffChainData {
                     url: task.ofd_metadata_url.clone(),
                     metadata: update
                         .offchain_data_update
-                        .map_or_else(String::new, |ofd| ofd.metadata),
+                        .as_ref()
+                        .map_or_else(String::new, |ofd| ofd.metadata.clone()),
                 };
                 if let Err(e) = self.asset_offchain_data.merge_with_batch(
                     batch,
@@ -138,7 +141,7 @@ impl Storage {
             }
         }
         //todo: this doesn't seem to be a correct way to handle this, as delete will have no effect after any "late" tx ingestion
-        if let Some(decompressed) = ix.decompressed {
+        if let Some(ref decompressed) = ix.decompressed {
             self.asset_leaf_data
                 .delete_with_batch(batch, decompressed.pk);
             if let Err(e) = self.asset_dynamic_data.merge_with_batch(
@@ -149,10 +152,10 @@ impl Storage {
                 tracing::error!("Failed to save tx data and asset updated: {}", e);
             }
         }
-        if let Some(tree_update) = ix.tree_update {
+        if let Some(ref tree_update) = ix.tree_update {
             self.save_changelog_with_batch(batch, &tree_update.event, tree_update.slot);
-            self.save_tree_with_batch(batch, &tree_update);
-            self.save_asset_signature_with_batch(batch, &tree_update)
+            self.save_tree_with_batch(batch, tree_update);
+            self.save_asset_signature_with_batch(batch, tree_update)
         }
 
         Ok(())

@@ -246,7 +246,7 @@ pub struct ApiConfig {
     pub rocks_sync_interval_seconds: u64,
     pub metrics_port: Option<u16>,
     pub server_port: u16,
-    pub batch_mint_service_port: u16,
+    pub batch_mint_service_port: Option<u16>,
     pub file_storage_path_container: String,
     pub rust_log: Option<String>,
     pub peer_grpc_port: u16,
@@ -265,10 +265,15 @@ pub struct ApiConfig {
     pub archives_dir: String,
     #[serde(default = "default_synchronization_api_threshold")]
     pub consistence_synchronization_api_threshold: u64,
+    #[serde(default = "default_consistence_backfilling_slots_threshold")]
+    pub consistence_backfilling_slots_threshold: u64,
 }
 
 const fn default_synchronization_api_threshold() -> u64 {
     1_000_000
+}
+const fn default_consistence_backfilling_slots_threshold() -> u64 {
+    500
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone, Default)]

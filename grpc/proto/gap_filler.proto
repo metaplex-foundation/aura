@@ -58,6 +58,16 @@ enum UseMethod {
     SINGLE = 2;
 }
 
+enum UpdateVersion {
+    SEQUENCE = 0;
+    WRITE_VERSION = 1;
+}
+
+message UpdateVersionValue {
+    UpdateVersion type = 1;
+    uint64 value = 2;
+}
+
 message Uses {
     UseMethod use_method = 1;
     uint64 remaining = 2;
@@ -71,7 +81,7 @@ message ChainDataV1 {
     bool primary_sale_happened = 4;
     TokenStandard token_standard = 5;
     Uses uses = 6;
-    google.protobuf.UInt64Value seq_updated = 7;
+    UpdateVersionValue update_version = 7;
     uint64 slot_updated = 8;
 }
 
@@ -82,7 +92,7 @@ message AssetLeaf {
     google.protobuf.BytesValue data_hash = 4;
     google.protobuf.BytesValue creator_hash = 5;
     google.protobuf.UInt64Value leaf_seq = 6;
-    google.protobuf.UInt64Value seq_updated = 7;
+    UpdateVersionValue update_version = 7;
     uint64 slot_updated = 8;
 }
 
@@ -90,7 +100,7 @@ message AssetCollection {
     bytes collection = 1;
     bool is_collection_verified = 2;
     google.protobuf.UInt64Value collection_seq = 3;
-    google.protobuf.UInt64Value seq_updated = 4;
+    UpdateVersionValue update_version = 4;
     uint64 slot_updated = 5;
 }
 
@@ -127,65 +137,74 @@ message AssetDetails {
     DynamicUint64Field lamports = 21;
     DynamicBoolField executable = 22;
     DynamicStringField metadata_owner = 23;
+    DynamicStringField url = 24;
+    DynamicStringField raw_name = 25;
+    DynamicStringField plugins = 26;
+    DynamicStringField unknown_plugins = 27;
+    DynamicUint64Field rent_epoch = 28;
+    DynamicUint32Field num_minted = 29;
+    DynamicUint32Field current_size = 30;
+    DynamicUint32Field plugins_json_version = 31;
 
-    AssetLeaf asset_leaf = 24;
-    AssetCollection collection = 25;
-    ChainDataV1 chain_data = 26;
+    AssetLeaf asset_leaf = 32;
+    AssetCollection collection = 33;
+    ChainDataV1 chain_data = 34;
 
-    ClLeaf cl_leaf = 27;
-    repeated ClItem cl_items = 28;
+    ClLeaf cl_leaf = 35;
+    repeated ClItem cl_items = 36;
 
     // From TokenMetadataEdition
-    EditionV1 edition = 29;
-    MasterEdition master_edition = 30;
+    EditionV1 edition = 37;
+    MasterEdition master_edition = 38;
+    OffchainData offchain_data = 39;
 }
 
 // Dynamic field messages
 message DynamicBoolField {
     bool value = 1;
-    google.protobuf.UInt64Value seq_updated = 2;
+    UpdateVersionValue update_version = 2;
     uint64 slot_updated = 3;
 }
 
 message DynamicUint64Field {
     uint64 value = 1;
-    google.protobuf.UInt64Value seq_updated = 2;
+    UpdateVersionValue update_version = 2;
     uint64 slot_updated = 3;
 }
 
 message DynamicUint32Field {
     uint32 value = 1;
-    google.protobuf.UInt64Value seq_updated = 2;
+    UpdateVersionValue update_version = 2;
     uint64 slot_updated = 3;
 }
 
 message DynamicBytesField {
     bytes value = 1;
-    google.protobuf.UInt64Value seq_updated = 2;
+    UpdateVersionValue update_version = 2;
     uint64 slot_updated = 3;
 }
 
 message DynamicStringField {
     string value = 1;
-    google.protobuf.UInt64Value seq_updated = 2;
+    UpdateVersionValue update_version = 2;
     uint64 slot_updated = 3;
 }
 
 message DynamicChainMutability {
     ChainMutability value = 1;
-    google.protobuf.UInt64Value seq_updated = 2;
+    UpdateVersionValue update_version = 2;
     uint64 slot_updated = 3;
 }
 
 message DynamicEnumField {
     OwnerType value = 1;
-    google.protobuf.UInt64Value seq_updated = 2;
+    UpdateVersionValue update_version = 2;
     uint64 slot_updated = 3;
 }
 
 message DynamicCreatorsField {
     repeated Creator creators = 1;
-    google.protobuf.UInt64Value seq_updated = 2;
+    UpdateVersionValue update_version = 2;
     uint64 slot_updated = 3;
 }
 
@@ -217,6 +236,11 @@ message MasterEdition {
     uint64 supply = 2;
     google.protobuf.UInt64Value max_supply = 3;
     uint64 write_version = 4;
+}
+
+message OffchainData {
+    string url = 1;
+    string metadata = 2;
 }
 
 // RangeRequest and AssetDetailsResponse for data synchronization

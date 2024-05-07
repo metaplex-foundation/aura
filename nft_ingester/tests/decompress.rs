@@ -4,6 +4,7 @@ mod tests {
     use blockbuster::token_metadata::accounts::Metadata;
     use blockbuster::token_metadata::types::{Collection, Creator, Key};
     use entities::api_req_params::{GetAsset, Options};
+    use entities::models::OffChainData;
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::config::JsonMiddlewareConfig;
@@ -20,7 +21,6 @@ mod tests {
     use rocks_db::{
         bubblegum_slots::BubblegumSlotGetter,
         columns::{Mint, TokenAccount},
-        offchain_data::OffChainData,
         Storage,
     };
     use solana_sdk::pubkey::Pubkey;
@@ -45,7 +45,7 @@ mod tests {
         buffer: Arc<Buffer>,
     ) {
         // write slots we need to parse because backfiller dropped it during raw transactions saving
-        let slots_to_parse: Vec<u64> = vec![
+        let slots_to_parse = &[
             242049108, 242049247, 242049255, 242050728, 242050746, 242143893, 242143906, 242239091,
             242239108, 242248687, 242560746, 242847845, 242848373, 242853752, 242856151, 242943141,
             242943774, 242947970, 242948187, 242949333, 242949940, 242951695, 242952638,

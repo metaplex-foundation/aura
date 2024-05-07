@@ -1,12 +1,11 @@
 use async_trait::async_trait;
-use entities::models::Task;
 use entities::models::{BufferedTransaction, SignatureWithSlot};
+use entities::models::{OffChainData, Task};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
 use spl_account_compression::state::PathNode;
 
-use crate::offchain_data::OffChainData;
 use crate::{
     asset::{AssetCollection, AssetLeaf},
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
@@ -21,7 +20,7 @@ pub trait TransactionProcessor: Sync + Send + 'static {
 
 #[async_trait]
 pub trait TransactionResultPersister: Sync + Send + 'static {
-    async fn store_block(&self, txs: Vec<TransactionResult>) -> Result<(), StorageError>;
+    async fn store_block(&self, slot: u64, txs: &[TransactionResult]) -> Result<(), StorageError>;
 }
 
 #[derive(Clone, Default)]
