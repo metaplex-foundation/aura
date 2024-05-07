@@ -24,10 +24,7 @@ pub async fn main() -> Result<(), String> {
     // Retrieve the database paths from command-line arguments
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        println!(
-            "Usage: {} <source_db_path> <secondary_source_db_path> <destination_db_path>",
-            args[0]
-        );
+        println!("Usage: {} <source_db_path> <destination_db_path>", args[0]);
         std::process::exit(1);
     }
     let source_db_path = &args[1];
