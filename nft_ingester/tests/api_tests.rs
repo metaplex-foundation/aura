@@ -1616,6 +1616,8 @@ mod tests {
 
         let first_owner = Pubkey::new_unique();
         let second_owner = Pubkey::new_unique();
+        let third_owner = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
         for _ in 0..1000 {
             let pk = Pubkey::new_unique();
             token_accounts.insert(
@@ -1640,6 +1642,21 @@ mod tests {
                     mint: Pubkey::new_unique(),
                     delegate: None,
                     owner: second_owner,
+                    frozen: false,
+                    delegated_amount: 0,
+                    slot_updated: 10,
+                    amount: 1050,
+                    write_version: 10,
+                },
+            );
+            let pk = Pubkey::new_unique();
+            token_accounts.insert(
+                pk,
+                TokenAccount {
+                    pubkey: pk,
+                    mint,
+                    delegate: None,
+                    owner: third_owner,
                     frozen: false,
                     delegated_amount: 0,
                     slot_updated: 10,
@@ -1733,6 +1750,103 @@ mod tests {
             page: None,
             owner: Some(first_owner.to_string()),
             mint: None,
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            // it's safe to do it in test because we want to check how reverse work
+            after: first_10.cursor,
+            before: first_20.cursor,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_10_before_after: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(
+            first_10_before_after.token_accounts,
+            second_10.token_accounts
+        );
+
+        let payload = GetTokenAccounts {
+            limit: Some(10),
+            page: None,
+            owner: Some(third_owner.to_string()),
+            mint: Some(mint.to_string()),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            // it's safe to do it in test because we want to check how reverse work
+            after: None,
+            before: None,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_10: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let payload = GetTokenAccounts {
+            limit: Some(10),
+            page: None,
+            owner: Some(third_owner.to_string()),
+            mint: Some(mint.to_string()),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            // it's safe to do it in test because we want to check how reverse work
+            after: None,
+            before: None,
+            cursor: first_10.cursor.clone(),
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let second_10: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let payload = GetTokenAccounts {
+            limit: Some(20),
+            page: None,
+            owner: Some(third_owner.to_string()),
+            mint: Some(mint.to_string()),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            // it's safe to do it in test because we want to check how reverse work
+            after: None,
+            before: None,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_20: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let mut first_two_resp = first_10.token_accounts;
+        first_two_resp.extend(second_10.token_accounts.clone());
+
+        assert_eq!(first_20.token_accounts, first_two_resp);
+
+        let payload = GetTokenAccounts {
+            limit: Some(10),
+            page: None,
+            owner: Some(third_owner.to_string()),
+            mint: Some(mint.to_string()),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: None,
+            // it's safe to do it in test because we want to check how reverse work
+            before: first_20.cursor.clone(),
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_10_reverse: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let mut reversed = first_10_reverse.token_accounts;
+        reversed.pop();
+        let mut second_10_resp = second_10.token_accounts.clone();
+        second_10_resp.pop();
+        second_10_resp.reverse();
+        assert_eq!(reversed, second_10_resp);
+
+        let payload = GetTokenAccounts {
+            limit: None,
+            page: None,
+            owner: Some(third_owner.to_string()),
+            mint: Some(mint.to_string()),
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
