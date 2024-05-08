@@ -178,6 +178,7 @@ pub enum RollupState {
     Uploaded,
     Processing,
     ValidationFail,
+    UploadedToArweave,
     TransactionSent,
     FailSendingTransaction,
     MovingToStorage,

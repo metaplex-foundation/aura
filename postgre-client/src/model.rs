@@ -51,6 +51,7 @@ pub enum RollupState {
     Uploaded,
     Processing,
     ValidationFail,
+    UploadedToArweave,
     TransactionSent,
     FailSendingTransaction,
     MovingToStorage,
@@ -161,6 +162,7 @@ impl From<RollupState> for entities::enums::RollupState {
             RollupState::Uploaded => entities::enums::RollupState::Uploaded,
             RollupState::Processing => entities::enums::RollupState::Processing,
             RollupState::ValidationFail => entities::enums::RollupState::ValidationFail,
+            RollupState::UploadedToArweave => entities::enums::RollupState::UploadedToArweave,
             RollupState::TransactionSent => entities::enums::RollupState::TransactionSent,
             RollupState::FailSendingTransaction => {
                 entities::enums::RollupState::FailSendingTransaction

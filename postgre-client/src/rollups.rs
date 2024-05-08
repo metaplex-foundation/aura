@@ -82,12 +82,19 @@ impl PgClient {
         reward: i64,
     ) -> Result<(), String> {
         let mut query_builder = QueryBuilder::new(
-            "UPDATE rollups SET rlp_url = $1, rlp_tx_reward = $2 WHERE rlp_file_name = $3",
+            "UPDATE rollups SET rlp_url = $1, rlp_tx_reward = $2, rlp_state = $3 WHERE rlp_file_name = $4",
         );
         let start_time = chrono::Utc::now();
         let query = query_builder.build();
-        self.update_rollup(query.bind(url).bind(reward).bind(file_path), start_time)
-            .await
+        self.update_rollup(
+            query
+                .bind(url)
+                .bind(reward)
+                .bind(RollupState::UploadedToArweave)
+                .bind(file_path),
+            start_time,
+        )
+        .await
     }
 
     pub async fn update_rollup_state(
