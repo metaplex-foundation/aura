@@ -443,28 +443,16 @@ fn get_pagination_values(
             );
 
             Ok(Pagination {
-                after: None,
-                before: None,
                 cursor: Some(last_row),
-                page: None,
-                limit: None,
+                ..Default::default()
             })
         } else {
-            Ok(Pagination {
-                after: None,
-                before: None,
-                cursor: None,
-                page: None,
-                limit: None,
-            })
+            Ok(Pagination::default())
         }
     } else if let Some(p) = page {
         Ok(Pagination {
-            after: None,
-            before: None,
-            cursor: None,
             page: Some(*p as u32),
-            limit: None,
+            ..Default::default()
         })
     } else {
         let first_row = {
@@ -493,9 +481,7 @@ fn get_pagination_values(
         Ok(Pagination {
             after: first_row,
             before: last_row,
-            cursor: None,
-            page: None,
-            limit: None,
+            ..Default::default()
         })
     }
 }

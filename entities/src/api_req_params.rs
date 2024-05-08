@@ -18,6 +18,7 @@ impl Default for AssetSorting {
     }
 }
 
+#[derive(Default)]
 pub struct Pagination {
     pub limit: Option<u32>,
     pub page: Option<u32>,
