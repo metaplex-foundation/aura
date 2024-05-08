@@ -1,4 +1,8 @@
+use arweave_rs::consts::ARWEAVE_BASE_URL;
+use arweave_rs::Arweave;
 use async_trait::async_trait;
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -855,11 +859,17 @@ pub async fn main() -> Result<(), IngesterError> {
             }
         }));
     }
-
+    let arweave = Arc::new(
+        Arweave::from_keypair_path(
+            PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(),
+            ARWEAVE_BASE_URL.parse().unwrap(),
+        )
+        .unwrap(),
+    );
     let rollup_processor = Arc::new(RollupProcessor::new(
         index_storage.clone(),
         Arc::new(NoopRollupTxSender {}),
-        ARWEAVE_WALLET_PATH,
+        arweave,
         file_storage_path,
     ));
     let rx = shutdown_rx.resubscribe();

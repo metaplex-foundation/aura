@@ -8,7 +8,7 @@ use sqlx::{Postgres, QueryBuilder, Row};
 
 impl PgClient {
     pub async fn insert_new_rollup(&self, file_path: &str) -> Result<(), String> {
-        let start_time = chrono::Utc::now();
+        let start_time = Utc::now();
         let mut query_builder = QueryBuilder::new(
             "INSERT INTO rollups (
                 rlp_file_name,
