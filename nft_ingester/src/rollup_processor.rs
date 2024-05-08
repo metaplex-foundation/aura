@@ -9,6 +9,7 @@ use entities::models::RollupWithState;
 use entities::rollup::{BatchMintInstruction, RolledMintInstruction, Rollup};
 use interface::error::UsecaseError;
 use interface::rollup::{RollupDownloader, RollupTxSender};
+use mockall::automock;
 use mpl_bubblegum::utils::get_asset_id;
 use postgre_client::model::RollupState;
 use postgre_client::PgClient;
@@ -62,6 +63,7 @@ impl RollupDownloader for RollupDownloaderImpl {
 }
 
 #[async_trait]
+#[automock]
 pub trait PermanentStorageClient {
     async fn upload_file(
         &self,
@@ -137,14 +139,18 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                     continue;
                 }
             };
-            self.process_rollup(rollup_to_process).await;
+            let _ = self.process_rollup(rollup_to_process).await;
         }
     }
 
-    pub async fn process_rollup(&self, rollup_to_process: RollupWithState) {
+    pub async fn process_rollup(
+        &self,
+        rollup_to_process: RollupWithState,
+    ) -> Result<(), IngesterError> {
         info!("Processing {} rollup file", &rollup_to_process.file_name);
-        let Ok((rollup, file_size)) = self.read_rollup_file(&rollup_to_process).await else {
-            return;
+        let (rollup, file_size) = match self.read_rollup_file(&rollup_to_process).await {
+            Ok((rollup, file_size)) => (rollup, file_size),
+            Err(e) => return Err(e),
         };
         if let Err(e) = self
             .pg_client
@@ -156,7 +162,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                 &rollup_to_process.file_name, e
             );
             tokio::time::sleep(Duration::from_secs(5)).await;
-            return;
+            return Err(IngesterError::StorageWriteError(e.to_string()));
         };
 
         if let Err(e) = self.validate_rollup(&rollup).await {
@@ -175,7 +181,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                 );
             }
             tokio::time::sleep(Duration::from_secs(5)).await;
-            return;
+            return Err(e.into());
         }
         self.send_rollup_transactions(&rollup, &rollup_to_process, file_size)
             .await;
@@ -188,7 +194,9 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                 "Failed to mark rollup as transaction sent: file_path: {}, error: {}",
                 &rollup_to_process.file_name, e
             );
+            return Err(IngesterError::StorageWriteError(e.to_string()));
         }
+        Ok(())
     }
 
     async fn read_rollup_file(
