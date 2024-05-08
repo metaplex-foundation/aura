@@ -378,7 +378,7 @@ pub struct JsonDownloadTask {
 }
 
 pub struct RollupWithState {
-    pub file_path: String,
+    pub file_name: String,
     pub state: RollupState,
     pub error: Option<String>,
     pub url: Option<String>,

@@ -2,6 +2,7 @@ use crate::error::RollupValidationError;
 use crate::tree_macros::validate_change_logs;
 use anchor_lang::AnchorSerialize;
 use async_trait::async_trait;
+use entities::models::RollupWithState;
 use entities::rollup::{RolledMintInstruction, Rollup};
 use interface::error::UsecaseError;
 use interface::rollup::RollupDownloader;
@@ -29,15 +30,98 @@ impl RollupDownloader for RollupDownloaderImpl {
 pub struct RollupProcessor {
     pg_client: Arc<PgClient>,
     _rocks: Arc<Storage>,
+    file_storage_path: String,
 }
 
 impl RollupProcessor {
-    pub fn new(pg_client: Arc<PgClient>, rocks: Arc<Storage>) -> Self {
-        Self { pg_client, _rocks: rocks }
+    pub fn new(pg_client: Arc<PgClient>, rocks: Arc<Storage>, file_storage_path: String) -> Self {
+        Self {
+            pg_client,
+            _rocks: rocks,
+            file_storage_path,
+        }
+    }
+
+    async fn process_rollup(&self, rollup_to_process: RollupWithState) {
+        let json_file = match tokio::fs::read_to_string(format!(
+            "{}/{}",
+            self.file_storage_path, &rollup_to_process.file_name
+        ))
+        .await
+        {
+            Ok(json_file) => json_file,
+            Err(e) => {
+                error!("Failed to read file to string: {}", e);
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                return;
+            }
+        };
+        let rollup = match serde_json::from_str::<Rollup>(&json_file) {
+            Ok(rollup) => rollup,
+            Err(e) => {
+                if let Err(e) = self
+                    .pg_client
+                    .mark_rollup_as_verification_failed(
+                        &rollup_to_process.file_name,
+                        &e.to_string(),
+                    )
+                    .await
+                {
+                    error!("Failed to mark rollup as verification failed: {}", e);
+                }
+                return;
+            }
+        };
+        if let Err(e) = self
+            .pg_client
+            .update_rollup_state(&rollup_to_process.file_name, RollupState::Processing)
+            .await
+        {
+            error!("Failed to mark rollup as processing: {}", e);
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            return;
+        };
+        let mut leaf_hashes = Vec::new();
+        for asset in rollup.rolled_mints.iter() {
+            let leaf_hash = match Self::get_leaf_hash(asset, &rollup.tree_id) {
+                Ok(leaf_hash) => leaf_hash,
+                Err(e) => {
+                    if let Err(err) = self
+                        .pg_client
+                        .mark_rollup_as_verification_failed(
+                            &rollup_to_process.file_name,
+                            &e.to_string(),
+                        )
+                        .await
+                    {
+                        error!("Failed to mark rollup as verification failed: {}", err);
+                    }
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    return;
+                }
+            };
+            leaf_hashes.push(leaf_hash);
+        }
+
+        if let Err(e) = validate_change_logs(
+            rollup.max_depth,
+            rollup.max_buffer_size,
+            &leaf_hashes,
+            &rollup,
+        ) {
+            if let Err(err) = self
+                .pg_client
+                .mark_rollup_as_verification_failed(&rollup_to_process.file_name, &e.to_string())
+                .await
+            {
+                error!("Failed to mark rollup as verification failed: {}", err);
+            }
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
     }
 
     pub async fn process_rollups(&self, rx: Receiver<()>) {
-        'out: while rx.is_empty() {
+        while rx.is_empty() {
             let rollup_to_process = match self.pg_client.fetch_rollup_for_processing().await {
                 Ok(Some(rollup)) => rollup,
                 Ok(None) => {
@@ -46,82 +130,11 @@ impl RollupProcessor {
                 }
                 Err(e) => {
                     error!("Failed to fetch rollup for processing: {}", e);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                     continue;
                 }
             };
-            let json_file = match tokio::fs::read_to_string(&rollup_to_process.file_path).await {
-                Ok(json_file) => json_file,
-                Err(e) => {
-                    error!("Failed to read file to string: {}", e);
-                    continue;
-                }
-            };
-            let rollup = match serde_json::from_str::<Rollup>(&json_file) {
-                Ok(rollup) => rollup,
-                Err(e) => {
-                    if let Err(e) = self
-                        .pg_client
-                        .mark_rollup_as_verification_failed(
-                            &rollup_to_process.file_path,
-                            &e.to_string(),
-                        )
-                        .await
-                    {
-                        error!("Failed to mark rollup as verification failed: {}", e);
-                    }
-                    continue;
-                }
-            };
-            if let Err(e) = self
-                .pg_client
-                .update_rollup_state(&rollup_to_process.file_path, RollupState::Processing)
-                .await
-            {
-                error!("Failed to mark rollup as processing: {}", e);
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                continue;
-            };
-            let mut leaf_hashes = Vec::new();
-            for asset in rollup.rolled_mints.iter() {
-                let leaf_hash = match Self::get_leaf_hash(asset, &rollup.tree_id) {
-                    Ok(leaf_hash) => leaf_hash,
-                    Err(e) => {
-                        if let Err(err) = self
-                            .pg_client
-                            .mark_rollup_as_verification_failed(
-                                &rollup_to_process.file_path,
-                                &e.to_string(),
-                            )
-                            .await
-                        {
-                            error!("Failed to mark rollup as verification failed: {}", err);
-                        }
-                        tokio::time::sleep(Duration::from_secs(5)).await;
-                        continue 'out;
-                    }
-                };
-                leaf_hashes.push(leaf_hash);
-            }
-
-            if let Err(e) = validate_change_logs(
-                rollup.max_depth,
-                rollup.max_buffer_size,
-                &leaf_hashes,
-                &rollup,
-            ) {
-                if let Err(err) = self
-                    .pg_client
-                    .mark_rollup_as_verification_failed(
-                        &rollup_to_process.file_path,
-                        &e.to_string(),
-                    )
-                    .await
-                {
-                    error!("Failed to mark rollup as verification failed: {}", err);
-                }
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                continue 'out;
-            }
+            self.process_rollup(rollup_to_process).await;
         }
     }
 

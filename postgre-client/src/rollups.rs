@@ -1,10 +1,11 @@
 use crate::model::RollupState;
-use crate::{PgClient, SELECT_ACTION, SQL_COMPONENT, UPDATE_ACTION};
+use crate::{PgClient, INSERT_ACTION, SELECT_ACTION, SQL_COMPONENT, UPDATE_ACTION};
 use entities::models::RollupWithState;
 use sqlx::{QueryBuilder, Row};
 
 impl PgClient {
     pub async fn insert_new_rollup(&self, file_path: &str) -> Result<(), String> {
+        let start_time = chrono::Utc::now();
         let mut query_builder = QueryBuilder::new(
             "INSERT INTO rollups (
                 rlp_file_name,
@@ -18,7 +19,14 @@ impl PgClient {
             .bind(RollupState::Uploaded)
             .execute(&self.pool)
             .await
-            .map_err(|err| format!("Insert rollup: {}", err))?;
+            .map_err(|err| {
+                self.metrics
+                    .observe_error(SQL_COMPONENT, INSERT_ACTION, "rollups");
+                format!("Insert rollup: {}", err)
+            })?;
+
+        self.metrics
+            .observe_request(SQL_COMPONENT, INSERT_ACTION, "rollups", start_time);
 
         Ok(())
     }
@@ -36,7 +44,7 @@ impl PgClient {
             .await
             .map(|row| {
                 row.map(|row| RollupWithState {
-                    file_path: row.try_get("rlp_file_name").unwrap_or_default(),
+                    file_name: row.try_get("rlp_file_name").unwrap_or_default(),
                     state: row
                         .try_get::<RollupState, _>("rlp_state")
                         .unwrap_or(RollupState::Uploaded)

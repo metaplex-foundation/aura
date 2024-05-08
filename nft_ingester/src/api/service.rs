@@ -167,7 +167,7 @@ async fn run_api(
             shutdown_rx.resubscribe(),
             port,
             file_storage_path.to_string(),
-            pg_client
+            pg_client,
         )
         .await;
     }
@@ -241,8 +241,8 @@ impl BatchMintService {
                 return match boundary {
                     Some(boundary) => {
                         let mut multipart = Multipart::new(req.into_body(), boundary);
-                        let file_name =
-                            format!("{}/{}.json", self.file_storage_path, Uuid::new_v4());
+                        let file_name = format!("{}.json", Uuid::new_v4());
+                        let full_file_path = format!("{}/{}", self.file_storage_path, &file_name);
                         while let Ok(Some(field)) = multipart.next_field().await {
                             let bytes = match field.bytes().await {
                                 Ok(bytes) => bytes,
@@ -253,7 +253,7 @@ impl BatchMintService {
                                         .unwrap())
                                 }
                             };
-                            if let Err(e) = Self::save_file(&file_name, bytes.as_ref()).await {
+                            if let Err(e) = Self::save_file(&full_file_path, bytes.as_ref()).await {
                                 return Ok(Response::builder()
                                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                                     .body(Body::from(format!("Failed to save file: {}", e)))
