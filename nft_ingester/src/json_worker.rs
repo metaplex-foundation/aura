@@ -1,7 +1,7 @@
 use crate::config::{setup_config, IngesterConfig, INGESTER_CONFIG_PREFIX};
 use async_trait::async_trait;
 use entities::enums::TaskStatus;
-use entities::models::JsonDownloadTask;
+use entities::models::{JsonDownloadTask, OffChainData};
 use interface::error::JsonDownloaderError;
 use interface::json::{JsonDownloader, JsonPersister};
 use log::{debug, error};
@@ -9,7 +9,7 @@ use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::tasks::UpdatedTask;
 use postgre_client::PgClient;
 use reqwest::{Client, ClientBuilder};
-use rocks_db::{offchain_data::OffChainData, Storage};
+use rocks_db::Storage;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -254,6 +254,8 @@ pub async fn run(json_downloader: Arc<JsonWorker>, keep_running: Arc<AtomicBool>
             }
         });
     }
+
+    while (workers_pool.join_next().await).is_some() {}
 }
 
 #[async_trait]
@@ -356,6 +358,11 @@ impl JsonPersister for JsonWorker {
                         self.metrics.inc_tasks("json", MetricStatus::FAILURE);
                     }
                     JsonDownloaderError::CouldNotReadHeader => {
+                        pg_updates.push(UpdatedTask {
+                            status: TaskStatus::Failed,
+                            metadata_url: metadata_url.clone(),
+                            error: "Failed to read header".to_string(),
+                        });
                         self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
                     }
                     JsonDownloaderError::ErrorStatusCode(err) => {
@@ -367,8 +374,15 @@ impl JsonPersister for JsonWorker {
 
                         self.metrics.inc_tasks("json", MetricStatus::FAILURE);
                     }
-                    JsonDownloaderError::ErrorDownloading(_err) => {
+                    JsonDownloaderError::ErrorDownloading(err) => {
                         self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
+                        // back to pending status to try again
+                        // until attempts reach its maximum
+                        pg_updates.push(UpdatedTask {
+                            status: TaskStatus::Pending,
+                            metadata_url: metadata_url.clone(),
+                            error: err.clone(),
+                        });
                     }
                     _ => {} // intentionally empty because nothing to process
                 },

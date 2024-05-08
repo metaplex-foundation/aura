@@ -36,7 +36,7 @@ mod tests {
             big_table_client.clone(),
             metrics,
             1,
-            [slot].to_vec(),
+            &[slot],
             rx,
         )
         .await

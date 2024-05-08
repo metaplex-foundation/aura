@@ -15,7 +15,7 @@ mod tests {
         AssetList, TokenAccountsList, TransactionSignatureList,
     };
     use entities::api_req_params::{DisplayOptions, GetAssetSignatures, GetTokenAccounts, Options};
-    use entities::models::{AssetSignature, AssetSignatureKey};
+    use entities::models::{AssetSignature, AssetSignatureKey, OffChainData};
     use entities::{
         api_req_params::{
             AssetSortBy, AssetSortDirection, AssetSorting, GetAsset, GetAssetsByAuthority,
@@ -40,7 +40,6 @@ mod tests {
     };
     use rocks_db::{
         columns::{Mint, TokenAccount},
-        offchain_data::OffChainData,
         AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
     };
     use serde_json::{json, Value};

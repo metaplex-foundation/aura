@@ -14,6 +14,7 @@ use tracing::error;
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 
+use crate::api::backfilling_state_consistency::BackfillingStateConsistencyChecker;
 use interface::consistency_check::ConsistencyChecker;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
@@ -59,7 +60,8 @@ pub async fn start_api(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     archives_dir: &str,
     consistence_synchronization_api_threshold: u64,
-    batch_mint_service_port: u16,
+    consistence_backfilling_slots_threshold: u64,
+    batch_mint_service_port: Option<u16>,
     file_storage_path: &str,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
@@ -73,6 +75,16 @@ pub async fn start_api(
             pg_client.clone(),
             rocks_db.clone(),
             consistence_synchronization_api_threshold,
+        )
+        .await;
+
+    let backfilling_state_consistency_checker = Arc::new(BackfillingStateConsistencyChecker::new());
+    backfilling_state_consistency_checker
+        .run(
+            tasks.clone(),
+            rx.resubscribe(),
+            rocks_db.clone(),
+            consistence_backfilling_slots_threshold,
         )
         .await;
 
@@ -93,7 +105,10 @@ pub async fn start_api(
         Some(MiddlewaresData {
             response_middleware,
             request_middleware,
-            consistency_checkers: vec![synchronization_state_consistency_checker],
+            consistency_checkers: vec![
+                synchronization_state_consistency_checker,
+                backfilling_state_consistency_checker,
+            ],
         }),
         addr,
         tasks,
@@ -111,7 +126,7 @@ async fn run_api(
     middlewares_data: Option<MiddlewaresData>,
     addr: SocketAddr,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-    batch_mint_service_port: u16,
+    batch_mint_service_port: Option<u16>,
     file_storage_path: &str,
     pg_client: Arc<PgClient>,
     shutdown_rx: Receiver<()>,
@@ -147,13 +162,15 @@ async fn run_api(
         builder = builder.response_middleware(mw.response_middleware);
     }
     let server = builder.start_http(&addr);
-    run_batch_mint_service(
-        shutdown_rx.resubscribe(),
-        batch_mint_service_port,
-        file_storage_path.to_string(),
-        pg_client,
-    )
-    .await;
+    if let Some(port) = batch_mint_service_port {
+        run_batch_mint_service(
+            shutdown_rx.resubscribe(),
+            port,
+            file_storage_path.to_string(),
+            pg_client,
+        )
+        .await;
+    }
 
     let server = server.unwrap();
     info!("API Server Started");
@@ -224,8 +241,8 @@ impl BatchMintService {
                 return match boundary {
                     Some(boundary) => {
                         let mut multipart = Multipart::new(req.into_body(), boundary);
-                        let file_name =
-                            format!("{}/{}.json", self.file_storage_path, Uuid::new_v4());
+                        let file_name = format!("{}.json", Uuid::new_v4());
+                        let full_file_path = format!("{}/{}", self.file_storage_path, &file_name);
                         while let Ok(Some(field)) = multipart.next_field().await {
                             let bytes = match field.bytes().await {
                                 Ok(bytes) => bytes,
@@ -236,7 +253,7 @@ impl BatchMintService {
                                         .unwrap())
                                 }
                             };
-                            if let Err(e) = Self::save_file(&file_name, bytes.as_ref()).await {
+                            if let Err(e) = Self::save_file(&full_file_path, bytes.as_ref()).await {
                                 return Ok(Response::builder()
                                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                                     .body(Body::from(format!("Failed to save file: {}", e)))

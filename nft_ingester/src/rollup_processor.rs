@@ -7,6 +7,7 @@ use arweave_rs::crypto::base64::Base64;
 use arweave_rs::Arweave;
 use async_trait::async_trait;
 use entities::rollup::{BatchMintInstruction, RolledMintInstruction, Rollup};
+use entities::models::RollupWithState;
 use interface::error::UsecaseError;
 use interface::rollup::{RollupDownloader, RollupTxSender};
 use mpl_bubblegum::utils::get_asset_id;
@@ -81,6 +82,7 @@ pub struct RollupProcessor<R: RollupTxSender> {
     rocks: Arc<Storage>,
     arweave: Arc<Arweave>,
     rollup_tx_sender: Arc<R>,
+    file_storage_path: String,
 }
 
 impl<R: RollupTxSender> RollupProcessor<R> {
@@ -89,6 +91,7 @@ impl<R: RollupTxSender> RollupProcessor<R> {
         rocks: Arc<Storage>,
         rollup_tx_sender: Arc<R>,
         arweave_wallet_path: &str,
+        file_storage_path: String
     ) -> Self {
         let arweave = Arc::new(
             Arweave::from_keypair_path(
@@ -102,6 +105,7 @@ impl<R: RollupTxSender> RollupProcessor<R> {
             rocks,
             arweave,
             rollup_tx_sender,
+            file_storage_path
         }
     }
 
