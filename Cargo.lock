@@ -626,6 +626,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-recursion"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.57",
+]
+
+[[package]]
 name = "async-stream"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8662,6 +8673,7 @@ name = "usecase"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "async-recursion",
  "async-trait",
  "entities",
  "futures",
@@ -8669,6 +8681,7 @@ dependencies = [
  "metrics-utils",
  "mockall 0.12.1",
  "mpl-bubblegum",
+ "plerkle_serialization",
  "rand 0.8.5",
  "serde",
  "serde_derive",

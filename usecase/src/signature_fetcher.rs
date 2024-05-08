@@ -1,5 +1,6 @@
 use std::{str::FromStr, sync::Arc};
 
+use async_recursion::async_recursion;
 use entities::models::{BufferedTransaction, SignatureWithSlot};
 use interface::{
     error::StorageError,
@@ -8,6 +9,7 @@ use interface::{
 };
 use metrics_utils::{MetricStatus, RpcBackfillerMetricsConfig};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use tokio::sync::Mutex;
 use tracing::info;
 
 pub struct SignatureFetcher<T, SP, TI>
@@ -27,7 +29,7 @@ const DOWNLOAD_TX_RETRY: u32 = 5;
 
 impl<T, SP, TI> SignatureFetcher<T, SP, TI>
 where
-    T: TransactionsGetter,
+    T: TransactionsGetter + 'static,
     SP: SignaturePersistence,
     TI: TransactionIngester,
 {
@@ -110,79 +112,23 @@ where
                 program_id
             );
 
-            let transactions: Vec<BufferedTransaction> = match self
-                .rpc
-                .get_txs_by_signatures(
-                    missing_signatures.iter().map(|s| s.signature).collect(),
-                    rpc_retry_interval_millis,
-                )
-                .await
-                .map_err(|e| StorageError::Common(e.to_string()))
-            {
-                Ok(transactions) => {
-                    self.metrics
-                        .inc_fetch_transactions("get_txs_by_signatures", MetricStatus::SUCCESS);
-                    transactions
-                }
-                Err(e) => {
-                    self.metrics
-                        .inc_fetch_transactions("get_txs_by_signatures", MetricStatus::FAILURE);
-                    return Err(e);
-                }
-            };
-            let tx_cnt = transactions.len();
-            for transaction in transactions {
-                let mut retries = DOWNLOAD_TX_RETRY;
+            let signatures: Vec<Signature> =
+                missing_signatures.iter().map(|s| s.signature).collect();
 
-                // potentially we will re-download it, that's why allocate new variable
-                let mut transaction = transaction;
+            let tx_cnt = signatures.len();
 
-                while retries > 0 {
-                    retries -= 1;
+            let counter = Arc::new(Mutex::new(0));
 
-                    match self.ingester.ingest_transaction(transaction.clone()).await {
-                        Ok(_) => {
-                            self.metrics.inc_transactions_processed(
-                                "ingest_transaction",
-                                MetricStatus::SUCCESS,
-                            );
-                            break;
-                        }
-                        Err(e) => {
-                            self.metrics.inc_transactions_processed(
-                                "ingest_transaction",
-                                MetricStatus::FAILURE,
-                            );
-                            if retries == 0 {
-                                return Err(e);
-                            }
+            Self::process_transactions(
+                self.rpc.clone(),
+                self.ingester.clone(),
+                self.metrics.clone(),
+                signatures,
+                rpc_retry_interval_millis,
+                counter,
+            )
+            .await?;
 
-                            // deserialize to get signature from there
-                            let transaction_info = plerkle_serialization::root_as_transaction_info(
-                                transaction.transaction.as_slice(),
-                            )
-                            .map_err(|e| StorageError::Common(e.to_string()))?;
-
-                            let signature = Signature::from_str(
-                                transaction_info.signature().ok_or(StorageError::Common(
-                                    "No signature found in transaction".to_string(),
-                                ))?,
-                            )
-                            .map_err(|e| StorageError::Common(e.to_string()))?;
-
-                            transaction = self
-                                .rpc
-                                .get_txs_by_signatures(vec![signature], rpc_retry_interval_millis)
-                                .await
-                                .map_err(|e| StorageError::Common(e.to_string()))?
-                                .pop()
-                                .ok_or(StorageError::Common(
-                                    "Got empty transactions vector".to_string(),
-                                ))?;
-                        }
-                    };
-                }
-            }
             // now we may drop the old signatures before the last element of the batch
             // we do this by constructing a fake key at the start of the same slot
             // and then dropping all signatures before it
@@ -211,6 +157,82 @@ where
         self.data_layer
             .drop_signatures_before(program_id, fake_key)
             .await?;
+        Ok(())
+    }
+
+    #[async_recursion]
+    async fn process_transactions(
+        rpc: Arc<T>,
+        ingester: Arc<TI>,
+        metrics: Arc<RpcBackfillerMetricsConfig>,
+        signatures: Vec<Signature>,
+        rpc_retry_interval_millis: u64,
+        counter: Arc<Mutex<u32>>,
+    ) -> Result<(), StorageError> {
+        // we need to check recursion depth not to fall in infinite loop with failed transactions
+        let mut counter_v = counter.lock().await;
+        *counter_v += 1;
+        if *counter_v > DOWNLOAD_TX_RETRY {
+            return Err(StorageError::Common(
+                "Fetch transaction recursion reach it's maximum".to_string(),
+            ));
+        }
+        drop(counter_v);
+
+        let transactions: Vec<BufferedTransaction> = match rpc
+            .get_txs_by_signatures(signatures, rpc_retry_interval_millis)
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))
+        {
+            Ok(transactions) => {
+                metrics.inc_fetch_transactions("get_txs_by_signatures", MetricStatus::SUCCESS);
+                transactions
+            }
+            Err(e) => {
+                metrics.inc_fetch_transactions("get_txs_by_signatures", MetricStatus::FAILURE);
+                return Err(e);
+            }
+        };
+
+        let mut failed_tx_signatures = vec![];
+
+        for transaction in transactions {
+            match ingester.ingest_transaction(transaction.clone()).await {
+                Ok(_) => {
+                    metrics.inc_transactions_processed("ingest_transaction", MetricStatus::SUCCESS);
+                }
+                Err(e) => {
+                    println!("Err: {:?}", e.to_string());
+                    metrics.inc_transactions_processed("ingest_transaction", MetricStatus::FAILURE);
+
+                    // deserialize to get signature from there
+                    let transaction_info = plerkle_serialization::root_as_transaction_info(
+                        transaction.transaction.as_slice(),
+                    )
+                    .map_err(|e| StorageError::Common(e.to_string()))?;
+
+                    let signature = Signature::from_str(transaction_info.signature().ok_or(
+                        StorageError::Common("No signature found in transaction".to_string()),
+                    )?)
+                    .map_err(|e| StorageError::Common(e.to_string()))?;
+
+                    failed_tx_signatures.push(signature);
+                }
+            };
+        }
+
+        if !failed_tx_signatures.is_empty() {
+            Self::process_transactions(
+                rpc,
+                ingester,
+                metrics,
+                failed_tx_signatures,
+                rpc_retry_interval_millis,
+                counter.clone(),
+            )
+            .await?;
+        }
+
         Ok(())
     }
 }
