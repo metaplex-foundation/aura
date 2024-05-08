@@ -1670,107 +1670,23 @@ mod tests {
             .transform_and_save_token_accs(&token_accounts)
             .await;
 
+        check_pagination(&api, Some(first_owner.to_string()), None).await;
+
+        check_pagination(&api, Some(third_owner.to_string()), Some(mint.to_string())).await;
+
+        check_pagination(&api, None, Some(mint.to_string())).await;
+    }
+
+    async fn check_pagination(
+        api: &nft_ingester::api::api_impl::DasApi<MaybeProofChecker, JsonWorker, JsonWorker>,
+        owner: Option<String>,
+        mint: Option<String>,
+    ) {
         let payload = GetTokenAccounts {
             limit: Some(10),
             page: None,
-            owner: Some(first_owner.to_string()),
-            mint: None,
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
-            after: None,
-            before: None,
-            cursor: None,
-        };
-        let response = api.get_token_accounts(payload).await.unwrap();
-        let first_10: TokenAccountsList = serde_json::from_value(response).unwrap();
-
-        let payload = GetTokenAccounts {
-            limit: Some(10),
-            page: None,
-            owner: Some(first_owner.to_string()),
-            mint: None,
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
-            after: None,
-            before: None,
-            cursor: first_10.cursor.clone(),
-        };
-        let response = api.get_token_accounts(payload).await.unwrap();
-        let second_10: TokenAccountsList = serde_json::from_value(response).unwrap();
-
-        let payload = GetTokenAccounts {
-            limit: Some(20),
-            page: None,
-            owner: Some(first_owner.to_string()),
-            mint: None,
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
-            after: None,
-            before: None,
-            cursor: None,
-        };
-        let response = api.get_token_accounts(payload).await.unwrap();
-        let first_20: TokenAccountsList = serde_json::from_value(response).unwrap();
-
-        let mut first_two_resp = first_10.token_accounts;
-        first_two_resp.extend(second_10.token_accounts.clone());
-
-        assert_eq!(first_20.token_accounts, first_two_resp);
-
-        let payload = GetTokenAccounts {
-            limit: Some(10),
-            page: None,
-            owner: Some(first_owner.to_string()),
-            mint: None,
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
-            after: None,
-            // it's safe to do it in test because we want to check how reverse work
-            before: first_20.cursor.clone(),
-            cursor: None,
-        };
-        let response = api.get_token_accounts(payload).await.unwrap();
-        let first_10_reverse: TokenAccountsList = serde_json::from_value(response).unwrap();
-
-        let mut reversed = first_10_reverse.token_accounts;
-        // drop last element because of using cursor we took one more key into resp
-        reversed.pop();
-        let mut second_10_resp = second_10.token_accounts.clone();
-        // same reason to drop here but opposite, key we dropped was in cursor
-        second_10_resp.pop();
-        second_10_resp.reverse();
-        assert_eq!(reversed, second_10_resp);
-
-        let payload = GetTokenAccounts {
-            limit: None,
-            page: None,
-            owner: Some(first_owner.to_string()),
-            mint: None,
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
-            // it's safe to do it in test because we want to check how reverse work
-            after: first_10.cursor,
-            before: first_20.cursor,
-            cursor: None,
-        };
-        let response = api.get_token_accounts(payload).await.unwrap();
-        let first_10_before_after: TokenAccountsList = serde_json::from_value(response).unwrap();
-
-        assert_eq!(
-            first_10_before_after.token_accounts,
-            second_10.token_accounts
-        );
-
-        let payload = GetTokenAccounts {
-            limit: Some(10),
-            page: None,
-            owner: Some(third_owner.to_string()),
-            mint: Some(mint.to_string()),
+            owner: owner.clone(),
+            mint: mint.clone(),
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
@@ -1785,8 +1701,8 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(10),
             page: None,
-            owner: Some(third_owner.to_string()),
-            mint: Some(mint.to_string()),
+            owner: owner.clone(),
+            mint: mint.clone(),
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
@@ -1801,8 +1717,8 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(20),
             page: None,
-            owner: Some(third_owner.to_string()),
-            mint: Some(mint.to_string()),
+            owner: owner.clone(),
+            mint: mint.clone(),
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
@@ -1822,8 +1738,8 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(10),
             page: None,
-            owner: Some(third_owner.to_string()),
-            mint: Some(mint.to_string()),
+            owner: owner.clone(),
+            mint: mint.clone(),
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
@@ -1845,8 +1761,8 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: None,
             page: None,
-            owner: Some(third_owner.to_string()),
-            mint: Some(mint.to_string()),
+            owner,
+            mint,
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
