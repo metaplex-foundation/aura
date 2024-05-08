@@ -458,6 +458,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let api_config: ApiConfig = setup_config(INGESTER_CONFIG_PREFIX);
 
     let cloned_index_storage = index_storage.clone();
+    let file_storage_path = api_config.file_storage_path_container.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
             cloned_index_storage,
@@ -857,9 +858,9 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rollup_processor = Arc::new(RollupProcessor::new(
         index_storage.clone(),
-        rocks_storage.clone(),
         Arc::new(NoopRollupTxSender {}),
         ARWEAVE_WALLET_PATH,
+        file_storage_path,
     ));
     let rx = shutdown_rx.resubscribe();
     let processor_clone = rollup_processor.clone();
@@ -867,13 +868,6 @@ pub async fn main() -> Result<(), IngesterError> {
         info!("Start processing rollups...");
         processor_clone.process_rollups(rx).await;
         info!("Finish processing rollups...");
-    }));
-    let rx = shutdown_rx.resubscribe();
-    let processor_clone = rollup_processor.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        info!("Start moving rollups to storage...");
-        processor_clone.move_rollups_to_storage(rx).await;
-        info!("Finish moving rollups to storage...");
     }));
 
     start_metrics(
