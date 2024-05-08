@@ -556,3 +556,76 @@ async fn rollup_processing_validation_test() {
         ))
     );
 }
+
+#[tokio::test]
+async fn rollup_upload_test() {
+    let cnt = 0;
+    let cli = Cli::default();
+    let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+    let rollup = generate_rollup(1000);
+    let mut permanent_storage_client = MockPermanentStorageClient::new();
+    permanent_storage_client
+        .expect_upload_file()
+        .times(nft_ingester::rollup_processor::MAX_ROLLUP_RETRIES - 1)
+        .returning(|_, _| {
+            Box::pin(async { Err(IngesterError::Arweave("test error".to_string())) })
+        });
+    permanent_storage_client
+        .expect_upload_file()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(("tx_id".to_string(), 100u64)) }));
+    permanent_storage_client
+        .expect_get_metadata_url()
+        .returning(|_| "".to_string());
+    let dir = TempDir::new().unwrap();
+    let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
+    let rollup_processor = RollupProcessor::new(
+        env.pg_env.client.clone(),
+        Arc::new(nft_ingester::rollup_processor::NoopRollupTxSender {}),
+        Arc::new(permanent_storage_client),
+        dir.path().to_str().unwrap().to_string(),
+    );
+
+    let processing_result = rollup_processor
+        .process_rollup(RollupWithState {
+            file_name,
+            state: RollupState::Uploaded,
+            error: None,
+            url: None,
+            created_at: 0,
+        })
+        .await;
+    // Retries covered previous errors
+    assert_eq!(processing_result, Ok(()));
+    let mut permanent_storage_client = MockPermanentStorageClient::new();
+    permanent_storage_client
+        .expect_upload_file()
+        .times(nft_ingester::rollup_processor::MAX_ROLLUP_RETRIES)
+        .returning(|_, _| {
+            Box::pin(async { Err(IngesterError::Arweave("test error".to_string())) })
+        });
+    permanent_storage_client
+        .expect_get_metadata_url()
+        .returning(|_| "".to_string());
+    let rollup_processor = RollupProcessor::new(
+        env.pg_env.client.clone(),
+        Arc::new(nft_ingester::rollup_processor::NoopRollupTxSender {}),
+        Arc::new(permanent_storage_client),
+        dir.path().to_str().unwrap().to_string(),
+    );
+    let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
+    let processing_result = rollup_processor
+        .process_rollup(RollupWithState {
+            file_name,
+            state: RollupState::Uploaded,
+            error: None,
+            url: None,
+            created_at: 0,
+        })
+        .await;
+    // Retries are exhausted
+    assert_eq!(
+        processing_result,
+        Err(IngesterError::Arweave("Arweave: test error".to_string()))
+    );
+}

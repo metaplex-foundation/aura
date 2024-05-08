@@ -34,7 +34,7 @@ pub struct RolledMintInstruction {
     pub authority: Pubkey,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct BatchMintInstruction {
     pub max_depth: u32,
     pub max_buffer_size: u32,

@@ -67,4 +67,4 @@ jobs:
         key: ${{ steps.cache-cargo.outputs.cache-primary-key }}
 
     - name: Run tests
-      run: cargo test --features integration_tests -- --nocapture --quiet
+      run: RUST_MIN_STACK=83886080 cargo test --features integration_tests -- --nocapture --quiet

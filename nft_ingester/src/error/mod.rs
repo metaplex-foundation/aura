@@ -112,6 +112,8 @@ pub enum IngesterError {
     Infallible(String),
     #[error("RollupValidation: {0}")]
     RollupValidation(#[from] RollupValidationError),
+    #[error("SendTransaction: {0}")]
+    SendTransaction(String),
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
