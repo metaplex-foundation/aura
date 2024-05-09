@@ -167,7 +167,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
             return Err(IngesterError::StorageWriteError(e.to_string()));
         };
 
-        if let Err(e) = self.validate_rollup(&rollup).await {
+        if let Err(e) = Self::validate_rollup(&rollup).await {
             if let Err(err) = self
                 .pg_client
                 .mark_rollup_as_failed(
@@ -366,7 +366,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         Err(IngesterError::SendTransaction(last_error.to_string()))
     }
 
-    async fn validate_rollup(&self, rollup: &Rollup) -> Result<(), RollupValidationError> {
+    async fn validate_rollup(rollup: &Rollup) -> Result<(), RollupValidationError> {
         let mut leaf_hashes = Vec::new();
         for asset in rollup.rolled_mints.iter() {
             let leaf_hash = match Self::get_leaf_hash(asset, &rollup.tree_id) {
