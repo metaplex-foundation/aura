@@ -9,7 +9,6 @@ use interface::{
 };
 use metrics_utils::{MetricStatus, RpcBackfillerMetricsConfig};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
-use tokio::sync::Mutex;
 use tracing::info;
 
 pub struct SignatureFetcher<T, SP, TI>
@@ -117,7 +116,7 @@ where
 
             let tx_cnt = signatures.len();
 
-            let counter = Arc::new(Mutex::new(0));
+            let counter = 0;
 
             Self::process_transactions(
                 self.rpc.clone(),
@@ -167,17 +166,14 @@ where
         metrics: Arc<RpcBackfillerMetricsConfig>,
         signatures: Vec<Signature>,
         rpc_retry_interval_millis: u64,
-        counter: Arc<Mutex<u32>>,
+        counter: u32,
     ) -> Result<(), StorageError> {
         // we need to check recursion depth not to fall in infinite loop with failed transactions
-        let mut counter_v = counter.lock().await;
-        *counter_v += 1;
-        if *counter_v > DOWNLOAD_TX_RETRY {
+        if counter > DOWNLOAD_TX_RETRY {
             return Err(StorageError::Common(
                 "Fetch transaction recursion reach it's maximum".to_string(),
             ));
         }
-        drop(counter_v);
 
         let transactions: Vec<BufferedTransaction> = match rpc
             .get_txs_by_signatures(signatures, rpc_retry_interval_millis)
@@ -227,7 +223,7 @@ where
                 metrics,
                 failed_tx_signatures,
                 rpc_retry_interval_millis,
-                counter.clone(),
+                counter + 1,
             )
             .await?;
         }
