@@ -201,8 +201,7 @@ where
                 Ok(_) => {
                     metrics.inc_transactions_processed("ingest_transaction", MetricStatus::SUCCESS);
                 }
-                Err(e) => {
-                    println!("Err: {:?}", e.to_string());
+                Err(_) => {
                     metrics.inc_transactions_processed("ingest_transaction", MetricStatus::FAILURE);
 
                     // deserialize to get signature from there
