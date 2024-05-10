@@ -18,4 +18,3 @@ CREATE TABLE IF NOT EXISTS rollups (
 );
 
 CREATE INDEX IF NOT EXISTS rollups_state_created ON rollups (rlp_state, rlp_created_at);
-CREATE INDEX IF NOT EXISTS rollups_created_at ON rollups (rlp_created_at);
