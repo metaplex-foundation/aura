@@ -1,9 +1,11 @@
-use crate::columns::TokenAccountMintOwnerIdx;
+use crate::column::TypedColumn;
+use crate::columns::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::Storage;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use entities::models::{
-    TokenAccount, TokenAccountIterableIdx, TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey,
+    TokenAccResponse, TokenAccount, TokenAccountIterableIdx, TokenAccountMintOwnerIdxKey,
+    TokenAccountOwnerIdxKey,
 };
 use interface::error::UsecaseError;
 use interface::token_accounts::TokenAccountsGetter;
@@ -21,45 +23,44 @@ impl TokenAccountsGetter for Storage {
         limit: u64,
         show_zero_balance: bool,
     ) -> Result<impl Iterator<Item = TokenAccountIterableIdx>, UsecaseError> {
-        let iter = {
-            if reverse_iter {
-                match mint {
-                    Some(mint) => self.token_account_mint_owner_idx.iter_reverse(
-                        TokenAccountMintOwnerIdxKey {
-                            mint,
-                            owner: owner.unwrap_or_default(),
-                            token_account: token_account.unwrap_or_default(),
-                        },
-                    ),
-                    None => {
-                        self.token_account_owner_idx
-                            .iter_reverse(TokenAccountOwnerIdxKey {
-                                // We have check above, so this is safe
-                                owner: owner.expect("Expected owner when mint is None"),
-                                token_account: token_account.unwrap_or_default(),
-                            })
-                    }
-                }
-            } else {
-                match mint {
-                    Some(mint) => {
-                        self.token_account_mint_owner_idx
-                            .iter(TokenAccountMintOwnerIdxKey {
-                                mint,
-                                owner: owner.unwrap_or_default(),
-                                token_account: token_account.unwrap_or_default(),
-                            })
-                    }
-                    None => {
-                        self.token_account_owner_idx.iter(TokenAccountOwnerIdxKey {
-                            // We have check above, so this is safe
-                            owner: owner.expect("Expected owner when mint is None"),
-                            token_account: token_account.unwrap_or_default(),
-                        })
-                    }
-                }
+        if (mint, owner, token_account) == (None, None, None) {
+            return Err(UsecaseError::InvalidParameters(
+                "Owner or mint must be provided".to_string(),
+            ));
+        }
+
+        let (key, handle) = match mint {
+            Some(mint) => (
+                TokenAccountMintOwnerIdx::encode_key(TokenAccountMintOwnerIdxKey {
+                    mint,
+                    owner: owner.unwrap_or_default(),
+                    token_account: token_account.unwrap_or_default(),
+                }),
+                self.token_account_mint_owner_idx.handle(),
+            ),
+            None => {
+                (
+                    TokenAccountOwnerIdx::encode_key(TokenAccountOwnerIdxKey {
+                        // We have check above, so this is safe
+                        owner: owner.expect("Expected owner when mint is None"),
+                        token_account: token_account.unwrap_or_default(),
+                    }),
+                    self.token_account_owner_idx.handle(),
+                )
             }
         };
+
+        let iter = self.db.iterator_cf(
+            &handle,
+            rocksdb::IteratorMode::From(
+                &key,
+                if reverse_iter {
+                    rocksdb::Direction::Reverse
+                } else {
+                    rocksdb::Direction::Forward
+                },
+            ),
+        );
 
         Ok(iter
             .filter_map(std::result::Result::ok)
@@ -115,7 +116,7 @@ impl TokenAccountsGetter for Storage {
         page: Option<u64>,
         limit: u64,
         show_zero_balance: bool,
-    ) -> Result<Vec<TokenAccount>, UsecaseError> {
+    ) -> Result<Vec<TokenAccResponse>, UsecaseError> {
         let mut reverse = false;
 
         let start_from = if let Some(after) = &after {
@@ -146,12 +147,6 @@ impl TokenAccountsGetter for Storage {
         };
 
         let owner = owner.or(decoded_owner);
-
-        if (mint, owner, token_account) == (None, None, None) {
-            return Err(UsecaseError::InvalidParameters(
-                "Owner or mint must be provided".to_string(),
-            ));
-        }
 
         let mut pubkeys = Vec::new();
         for key in self.token_accounts_pubkeys_iter(
@@ -188,13 +183,16 @@ impl TokenAccountsGetter for Storage {
             .map_err(|e| UsecaseError::Storage(e.to_string()))?
             .into_iter()
             .flat_map(|ta| {
-                ta.map(|ta| TokenAccount {
-                    address: ta.pubkey.to_string(),
-                    mint: ta.mint.to_string(),
-                    owner: ta.owner.to_string(),
-                    amount: ta.amount as u64,
-                    delegated_amount: ta.delegated_amount as u64,
-                    frozen: ta.frozen,
+                ta.map(|ta| TokenAccResponse {
+                    token_acc: TokenAccount {
+                        address: ta.pubkey.to_string(),
+                        mint: ta.mint.to_string(),
+                        owner: ta.owner.to_string(),
+                        amount: ta.amount as u64,
+                        delegated_amount: ta.delegated_amount as u64,
+                        frozen: ta.frozen,
+                    },
+                    sorting_id: encode_sorting_key(&ta.owner, &ta.pubkey),
                 })
             })
             .collect::<Vec<_>>())

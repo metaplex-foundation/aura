@@ -1,17 +1,15 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
-use std::str::FromStr;
 
-use entities::models::{AssetSignatureWithPagination, TokenAccount};
+use entities::models::AssetSignatureWithPagination;
+use entities::models::TokenAccResponse;
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
 use mime_guess::Mime;
-use rocks_db::token_accounts::encode_sorting_key;
 use sea_orm::DbErr;
 use serde_json::Value;
-use solana_sdk::pubkey::Pubkey;
 use url::Url;
 
 use crate::dao::sea_orm_active_enums::SpecificationAssetClass;
@@ -412,7 +410,7 @@ pub fn asset_list_to_rpc(asset_list: Vec<FullAsset>) -> (Vec<RpcAsset>, Vec<Asse
 }
 
 pub fn build_token_accounts_response(
-    token_accounts: Vec<TokenAccount>,
+    token_accounts: Vec<TokenAccResponse>,
     limit: u64,
     page: Option<u64>,
     cursor_enabled: bool,
@@ -426,24 +424,19 @@ pub fn build_token_accounts_response(
         after: pagination.after,
         before: pagination.before,
         cursor: pagination.cursor,
-        token_accounts,
+        token_accounts: token_accounts.into_iter().map(|t| t.token_acc).collect(),
     })
 }
 
 fn get_pagination_values(
-    token_accounts: &[TokenAccount],
+    token_accounts: &[TokenAccResponse],
     page: &Option<u64>,
     cursor_enabled: bool,
 ) -> Result<Pagination, String> {
     if cursor_enabled {
         if let Some(token_acc) = token_accounts.last() {
-            let last_row = encode_sorting_key(
-                &Pubkey::from_str(token_acc.owner.as_ref()).map_err(|e| e.to_string())?,
-                &Pubkey::from_str(token_acc.address.as_ref()).map_err(|e| e.to_string())?,
-            );
-
             Ok(Pagination {
-                cursor: Some(last_row),
+                cursor: Some(token_acc.sorting_id.clone()),
                 ..Default::default()
             })
         } else {
@@ -455,32 +448,17 @@ fn get_pagination_values(
             ..Default::default()
         })
     } else {
-        let first_row = {
-            if let Some(token_acc) = token_accounts.first() {
-                let first = encode_sorting_key(
-                    &Pubkey::from_str(token_acc.owner.as_ref()).map_err(|e| e.to_string())?,
-                    &Pubkey::from_str(token_acc.address.as_ref()).map_err(|e| e.to_string())?,
-                );
-                Some(first)
-            } else {
-                None
-            }
-        };
+        let first_row = token_accounts
+            .first()
+            .map(|token_acc| token_acc.sorting_id.clone());
 
-        let last_row = {
-            if let Some(token_acc) = token_accounts.last() {
-                let last = encode_sorting_key(
-                    &Pubkey::from_str(token_acc.owner.as_ref()).map_err(|e| e.to_string())?,
-                    &Pubkey::from_str(token_acc.address.as_ref()).map_err(|e| e.to_string())?,
-                );
-                Some(last)
-            } else {
-                None
-            }
-        };
+        let last_row = token_accounts
+            .last()
+            .map(|token_acc| token_acc.sorting_id.clone());
+
         Ok(Pagination {
-            after: first_row,
-            before: last_row,
+            after: last_row,
+            before: first_row,
             ..Default::default()
         })
     }
