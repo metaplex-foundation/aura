@@ -18,6 +18,7 @@ mod tests {
         transaction_ingester::{self, BackfillTransactionIngester},
     };
     use postgre_client::PgClient;
+    use rocks_db::column_migrator::MigrationState;
     use rocks_db::{
         bubblegum_slots::BubblegumSlotGetter,
         columns::{Mint, TokenAccount},
@@ -66,6 +67,7 @@ mod tests {
             ),
             mutexed_tasks.clone(),
             red_metrics.clone(),
+            MigrationState::Last,
         )
         .unwrap();
 

@@ -13,6 +13,7 @@ use tokio::{sync::Mutex, task::JoinSet};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
 use rocks_db::bubblegum_slots::BubblegumSlotGetter;
+use rocks_db::column_migrator::MigrationState;
 use testcontainers::clients::Cli;
 
 async fn setup_environment<'a>(
@@ -78,6 +79,7 @@ fn ingest_benchmark(c: &mut Criterion) {
         ),
         mutexed_tasks.clone(),
         red_metrics,
+        MigrationState::Last,
     )
     .unwrap();
 

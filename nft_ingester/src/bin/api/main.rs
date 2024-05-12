@@ -13,6 +13,7 @@ use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{ApiMetricsConfig, JsonDownloaderMetricsConfig};
+use rocks_db::column_migrator::MigrationState;
 use rocks_db::Storage;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::{broadcast, Mutex};
@@ -90,6 +91,7 @@ pub async fn main() -> Result<(), IngesterError> {
         &secondary_storage_path,
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        MigrationState::Last,
     )
     .unwrap();
 

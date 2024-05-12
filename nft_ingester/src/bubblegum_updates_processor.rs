@@ -604,11 +604,21 @@ impl BubblegumTxProcessor {
                     if let Some(collection) = &args.collection {
                         let asset_collection = AssetCollection {
                             pubkey: id,
-                            collection: collection.key,
-                            is_collection_verified: collection.verified,
-                            collection_seq: Some(cl.seq),
-                            slot_updated: slot,
-                            write_version: None,
+                            collection: Updated::new(
+                                slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                collection.key,
+                            ),
+                            is_collection_verified: Updated::new(
+                                slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                collection.verified,
+                            ),
+                            authority: Updated::new(
+                                slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                None,
+                            ),
                         };
                         asset_update.collection_update = Some(AssetUpdate {
                             pk: id,
@@ -861,11 +871,21 @@ impl BubblegumTxProcessor {
 
                     let collection = AssetCollection {
                         pubkey: id,
-                        collection,
-                        is_collection_verified: verify,
-                        collection_seq: Some(cl.seq),
-                        slot_updated: bundle.slot,
-                        write_version: None,
+                        collection: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            collection,
+                        ),
+                        is_collection_verified: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            verify,
+                        ),
+                        authority: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            None,
+                        ),
                     };
 
                     asset_update.collection_update = Some(AssetUpdate {

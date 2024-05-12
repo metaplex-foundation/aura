@@ -48,6 +48,7 @@ pub enum StorageError {
     TryFromSliceError(#[from] TryFromSliceError),
     NoAssetOwner(String),
     InvalidKeyLength,
+    InvalidMigrationVersion(u64),
 }
 
 impl std::fmt::Display for StorageError {

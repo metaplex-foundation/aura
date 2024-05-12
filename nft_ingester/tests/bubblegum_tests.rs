@@ -13,6 +13,7 @@ mod tests {
         buffer::Buffer,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
+    use rocks_db::column_migrator::MigrationState;
     use rocks_db::{bubblegum_slots::BubblegumSlotGetter, Storage};
     use std::fs::File;
     use std::io::{self, Read};
@@ -51,6 +52,7 @@ mod tests {
             ),
             mutexed_tasks.clone(),
             red_metrics.clone(),
+            MigrationState::Last,
         )
         .unwrap();
 
@@ -168,6 +170,7 @@ mod tests {
             ),
             mutexed_tasks.clone(),
             red_metrics.clone(),
+            MigrationState::Last,
         )
         .unwrap();
 

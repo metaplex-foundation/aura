@@ -52,6 +52,7 @@ use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::gapfiller::process_asset_details_stream;
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
+use rocks_db::column_migrator::MigrationState;
 use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::{SlotsCollector, SlotsGetter};
@@ -179,6 +180,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
         mutexed_tasks.clone(),
         metrics_state.red_metrics.clone(),
+        MigrationState::Last,
     )
     .unwrap();
 

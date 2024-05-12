@@ -245,11 +245,17 @@ impl MplCoreProcessor {
             if let UpdateAuthority::Collection(address) = asset.update_authority {
                 models.asset_collection.push(AssetCollection {
                     pubkey: *asset_key,
-                    collection: address,
-                    is_collection_verified: true,
-                    slot_updated: account_data.slot_updated,
-                    collection_seq: None,
-                    write_version: Some(account_data.write_version),
+                    collection: Updated::new(
+                        account_data.slot_updated,
+                        Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                        address,
+                    ),
+                    is_collection_verified: Updated::new(
+                        account_data.slot_updated,
+                        Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                        true,
+                    ),
+                    authority: Default::default(),
                 });
             }
 

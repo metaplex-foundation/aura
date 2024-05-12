@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bincode::{deserialize, serialize};
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::{EditionData, OffChainData, Updated};
+use entities::models::{EditionData, OffChainData, UpdateVersion, Updated};
 use log::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
@@ -145,14 +145,12 @@ pub struct AssetLeaf {
     pub slot_updated: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct AssetCollection {
     pub pubkey: Pubkey,
-    pub collection: Pubkey,
-    pub is_collection_verified: bool,
-    pub collection_seq: Option<u64>,
-    pub slot_updated: u64,
-    pub write_version: Option<u64>,
+    pub collection: Updated<Pubkey>,
+    pub is_collection_verified: Updated<bool>,
+    pub authority: Updated<Option<Pubkey>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -677,17 +675,11 @@ impl AssetCollection {
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
-        let mut result = vec![];
-        let mut slot = 0;
-        let mut collection_seq = None;
-        let mut write_version = None;
+        let mut result: Option<Self> = None;
         if let Some(existing_val) = existing_val {
-            match deserialize::<AssetCollection>(existing_val) {
+            match deserialize::<Self>(existing_val) {
                 Ok(value) => {
-                    slot = value.slot_updated;
-                    collection_seq = value.collection_seq;
-                    write_version = value.write_version;
-                    result = existing_val.to_vec();
+                    result = Some(value);
                 }
                 Err(e) => {
                     error!("RocksDB: AssetCollection deserialize existing_val: {}", e)
@@ -696,28 +688,20 @@ impl AssetCollection {
         }
 
         for op in operands {
-            match deserialize::<AssetCollection>(op) {
+            match deserialize::<Self>(op) {
                 Ok(new_val) => {
-                    if write_version.is_some() && new_val.write_version.is_some() {
-                        if new_val.write_version.unwrap() > write_version.unwrap() {
-                            slot = new_val.slot_updated;
-                            write_version = new_val.write_version;
-                            collection_seq = new_val.collection_seq;
-                            result = op.to_vec();
-                        }
-                    } else if collection_seq.is_some() && new_val.collection_seq.is_some() {
-                        if new_val.collection_seq.unwrap() > collection_seq.unwrap() {
-                            slot = new_val.slot_updated;
-                            write_version = new_val.write_version;
-                            collection_seq = new_val.collection_seq;
-                            result = op.to_vec();
-                        }
-                    } else if new_val.slot_updated > slot {
-                        slot = new_val.slot_updated;
-                        write_version = new_val.write_version;
-                        collection_seq = new_val.collection_seq;
-                        result = op.to_vec();
-                    }
+                    result = Some(if let Some(mut current_val) = result {
+                        update_field(&mut current_val.collection, &new_val.collection);
+                        update_field(
+                            &mut current_val.is_collection_verified,
+                            &new_val.is_collection_verified,
+                        );
+                        update_field(&mut current_val.authority, &new_val.authority);
+
+                        current_val
+                    } else {
+                        new_val
+                    });
                 }
                 Err(e) => {
                     error!("RocksDB: AssetCollection deserialize new_val: {}", e)
@@ -725,7 +709,34 @@ impl AssetCollection {
             }
         }
 
-        Some(result)
+        result.and_then(|result| serialize(&result).ok())
+    }
+
+    pub fn get_slot_updated(&self) -> u64 {
+        [
+            self.collection.slot_updated,
+            self.is_collection_verified.slot_updated,
+            self.authority.slot_updated,
+        ]
+        .into_iter()
+        .max()
+        .unwrap() // unwrap here is safe, because vec is not empty
+    }
+
+    pub fn get_seq(&self) -> Option<u64> {
+        let seq_1 = match self.authority.update_version {
+            Some(UpdateVersion::Sequence(seq)) => Some(seq),
+            _ => None,
+        };
+        let seq_2 = match self.collection.update_version {
+            Some(UpdateVersion::Sequence(seq)) => Some(seq),
+            _ => None,
+        };
+        let seq_3 = match self.is_collection_verified.update_version {
+            Some(UpdateVersion::Sequence(seq)) => Some(seq),
+            _ => None,
+        };
+        [seq_1, seq_2, seq_3].into_iter().flatten().max()
     }
 }
 

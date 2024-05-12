@@ -309,11 +309,11 @@ fn convert_rocks_grouping_model(
             id: 0,
             asset_id: asset_pubkey.to_bytes().to_vec(),
             group_key: COLLECTION_GROUP_KEY.to_string(),
-            group_value: Some(ast.collection.to_string()),
-            seq: ast.collection_seq.map(|s| s as i64),
-            slot_updated: Some(ast.slot_updated as i64),
-            verified: Some(ast.is_collection_verified),
-            group_info_seq: ast.collection_seq.map(|s| s as i64),
+            group_value: Some(ast.collection.value.to_string()),
+            seq: ast.get_seq().map(|s| s as i64),
+            slot_updated: Some(ast.get_slot_updated() as i64),
+            verified: Some(ast.is_collection_verified.value),
+            group_info_seq: ast.get_seq().map(|s| s as i64),
         })
 }
 
@@ -371,7 +371,7 @@ fn asset_selected_maps_into_full_asset(
 ) -> Option<FullAsset> {
     if !options.show_unverified_collections {
         if let Some(collection_data) = asset_selected_maps.assets_collection.get(id) {
-            if !collection_data.is_collection_verified {
+            if !collection_data.is_collection_verified.value {
                 return None;
             }
         } else {

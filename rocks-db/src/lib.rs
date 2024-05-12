@@ -8,6 +8,7 @@ use asset::{
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
+use crate::column_migrator::{AssetCollectionVersion0, MigrationState};
 use crate::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::editions::TokenMetadataEdition;
 pub use asset::{
@@ -34,6 +35,7 @@ pub mod batch_savers;
 pub mod bubblegum_slots;
 pub mod cl_items;
 pub mod column;
+pub mod column_migrator;
 pub mod dump_client;
 pub mod editions;
 pub mod errors;
@@ -97,7 +99,7 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub fn new(
+    fn new(
         db: Arc<DB>,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -173,8 +175,9 @@ impl Storage {
         db_path: &str,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
+        migration_state: MigrationState,
     ) -> Result<Self> {
-        let cf_descriptors = Self::create_cf_descriptors();
+        let cf_descriptors = Self::create_cf_descriptors(&migration_state);
         let db = Arc::new(DB::open_cf_descriptors(
             &Self::get_db_options(),
             db_path,
@@ -188,8 +191,9 @@ impl Storage {
         secondary_path: &str,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
+        migration_state: MigrationState,
     ) -> Result<Self> {
-        let cf_descriptors = Self::create_cf_descriptors();
+        let cf_descriptors = Self::create_cf_descriptors(&migration_state);
         let db = Arc::new(DB::open_cf_descriptors_as_secondary(
             &Self::get_db_options(),
             primary_path,
@@ -199,43 +203,45 @@ impl Storage {
         Ok(Self::new(db, join_set, red_metrics))
     }
 
-    fn create_cf_descriptors() -> Vec<ColumnFamilyDescriptor> {
+    fn create_cf_descriptors(migration_state: &MigrationState) -> Vec<ColumnFamilyDescriptor> {
         vec![
-            Self::new_cf_descriptor::<OffChainData>(),
-            Self::new_cf_descriptor::<AssetStaticDetails>(),
-            Self::new_cf_descriptor::<AssetDynamicDetails>(),
-            Self::new_cf_descriptor::<AssetDynamicDetailsDeprecated>(),
-            Self::new_cf_descriptor::<MetadataMintMap>(),
-            Self::new_cf_descriptor::<AssetAuthority>(),
-            Self::new_cf_descriptor::<AssetAuthorityDeprecated>(),
-            Self::new_cf_descriptor::<AssetOwnerDeprecated>(),
-            Self::new_cf_descriptor::<asset::AssetLeaf>(),
-            Self::new_cf_descriptor::<asset::AssetCollection>(),
-            Self::new_cf_descriptor::<AssetCollectionDeprecated>(),
-            Self::new_cf_descriptor::<cl_items::ClItem>(),
-            Self::new_cf_descriptor::<cl_items::ClLeaf>(),
-            Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(),
-            Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(),
-            Self::new_cf_descriptor::<asset::SlotAssetIdx>(),
-            Self::new_cf_descriptor::<signature_client::SignatureIdx>(),
-            Self::new_cf_descriptor::<raw_block::RawBlock>(),
-            Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(),
-            Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(),
-            Self::new_cf_descriptor::<bubblegum_slots::ForceReingestableSlots>(),
-            Self::new_cf_descriptor::<AssetOwner>(),
-            Self::new_cf_descriptor::<TreeSeqIdx>(),
-            Self::new_cf_descriptor::<TreesGaps>(),
-            Self::new_cf_descriptor::<TokenMetadataEdition>(),
-            Self::new_cf_descriptor::<AssetStaticDetailsDeprecated>(),
-            Self::new_cf_descriptor::<AssetSignature>(),
-            Self::new_cf_descriptor::<TokenAccount>(),
-            Self::new_cf_descriptor::<TokenAccountOwnerIdx>(),
-            Self::new_cf_descriptor::<TokenAccountMintOwnerIdx>(),
+            Self::new_cf_descriptor::<OffChainData>(migration_state),
+            Self::new_cf_descriptor::<AssetStaticDetails>(migration_state),
+            Self::new_cf_descriptor::<AssetDynamicDetails>(migration_state),
+            Self::new_cf_descriptor::<AssetDynamicDetailsDeprecated>(migration_state),
+            Self::new_cf_descriptor::<MetadataMintMap>(migration_state),
+            Self::new_cf_descriptor::<AssetAuthority>(migration_state),
+            Self::new_cf_descriptor::<AssetAuthorityDeprecated>(migration_state),
+            Self::new_cf_descriptor::<AssetOwnerDeprecated>(migration_state),
+            Self::new_cf_descriptor::<asset::AssetLeaf>(migration_state),
+            Self::new_cf_descriptor::<asset::AssetCollection>(migration_state),
+            Self::new_cf_descriptor::<AssetCollectionDeprecated>(migration_state),
+            Self::new_cf_descriptor::<cl_items::ClItem>(migration_state),
+            Self::new_cf_descriptor::<cl_items::ClLeaf>(migration_state),
+            Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(migration_state),
+            Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(migration_state),
+            Self::new_cf_descriptor::<asset::SlotAssetIdx>(migration_state),
+            Self::new_cf_descriptor::<signature_client::SignatureIdx>(migration_state),
+            Self::new_cf_descriptor::<raw_block::RawBlock>(migration_state),
+            Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(migration_state),
+            Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(migration_state),
+            Self::new_cf_descriptor::<bubblegum_slots::ForceReingestableSlots>(migration_state),
+            Self::new_cf_descriptor::<AssetOwner>(migration_state),
+            Self::new_cf_descriptor::<TreeSeqIdx>(migration_state),
+            Self::new_cf_descriptor::<TreesGaps>(migration_state),
+            Self::new_cf_descriptor::<TokenMetadataEdition>(migration_state),
+            Self::new_cf_descriptor::<AssetStaticDetailsDeprecated>(migration_state),
+            Self::new_cf_descriptor::<AssetSignature>(migration_state),
+            Self::new_cf_descriptor::<TokenAccount>(migration_state),
+            Self::new_cf_descriptor::<TokenAccountOwnerIdx>(migration_state),
+            Self::new_cf_descriptor::<TokenAccountMintOwnerIdx>(migration_state),
         ]
     }
 
-    fn new_cf_descriptor<C: TypedColumn>() -> ColumnFamilyDescriptor {
-        ColumnFamilyDescriptor::new(C::NAME, Self::get_cf_options::<C>())
+    fn new_cf_descriptor<C: TypedColumn>(
+        migration_state: &MigrationState,
+    ) -> ColumnFamilyDescriptor {
+        ColumnFamilyDescriptor::new(C::NAME, Self::get_cf_options::<C>(migration_state))
     }
 
     pub fn column<C>(backend: Arc<DB>, red_metrics: Arc<RequestErrorDurationMetrics>) -> Column<C>
@@ -282,7 +288,7 @@ impl Storage {
         options
     }
 
-    fn get_cf_options<C: TypedColumn>() -> Options {
+    fn get_cf_options<C: TypedColumn>(migration_state: &MigrationState) -> Options {
         const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 
         let mut cf_options = Options::default();
@@ -350,10 +356,17 @@ impl Storage {
                 );
             }
             asset::AssetCollection::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_asset_collection",
-                    asset::AssetCollection::merge_asset_collection,
-                );
+                if matches!(migration_state, &MigrationState::Version(0)) {
+                    cf_options.set_merge_operator_associative(
+                        "merge_fn_asset_collection",
+                        AssetCollectionVersion0::merge_asset_collection,
+                    );
+                } else {
+                    cf_options.set_merge_operator_associative(
+                        "merge_fn_asset_collection",
+                        asset::AssetCollection::merge_asset_collection,
+                    );
+                }
             }
             cl_items::ClItem::NAME => {
                 cf_options.set_merge_operator_associative(

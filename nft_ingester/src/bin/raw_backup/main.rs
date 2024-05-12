@@ -11,6 +11,7 @@ use tokio::task::JoinSet;
 use tracing::info;
 
 use nft_ingester::error::IngesterError;
+use rocks_db::column_migrator::MigrationState;
 use rocks_db::Storage;
 
 #[derive(Parser, Debug)]
@@ -38,6 +39,7 @@ pub async fn main() -> Result<(), IngesterError> {
         secondary_rocks_dir.path().to_str().unwrap(),
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        MigrationState::Last,
     )
     .unwrap();
 
@@ -45,6 +47,7 @@ pub async fn main() -> Result<(), IngesterError> {
         &config.target_db,
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        MigrationState::Last,
     )
     .unwrap();
 

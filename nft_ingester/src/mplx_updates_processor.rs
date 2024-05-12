@@ -396,11 +396,17 @@ impl MplxAccsProcessor {
             if let Some(c) = &metadata.collection {
                 models.asset_collection.push(AssetCollection {
                     pubkey: mint,
-                    collection: c.key,
-                    is_collection_verified: c.verified,
-                    collection_seq: None,
-                    slot_updated: metadata_info.slot_updated,
-                    write_version: Some(metadata_info.write_version),
+                    collection: Updated::new(
+                        metadata_info.slot_updated,
+                        Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
+                        c.key,
+                    ),
+                    is_collection_verified: Updated::new(
+                        metadata_info.slot_updated,
+                        Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
+                        c.verified,
+                    ),
+                    authority: Default::default(),
                 });
             }
 

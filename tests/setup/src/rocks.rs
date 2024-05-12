@@ -6,6 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 
 use metrics_utils::red::RequestErrorDurationMetrics;
+use rocks_db::column_migrator::MigrationState;
 use rocks_db::{
     asset::AssetCollection, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
     Storage,
@@ -35,6 +36,7 @@ impl RocksTestEnvironment {
             temp_dir.path().to_str().unwrap(),
             join_set,
             red_metrics.clone(),
+            MigrationState::Last,
         )
         .expect("Failed to create a database");
         for &(slot, ref pubkey) in keys {
@@ -196,10 +198,8 @@ fn generate_test_updated<T>(v: T) -> Updated<T> {
 fn generate_test_collection(pubkey: Pubkey) -> AssetCollection {
     AssetCollection {
         pubkey,
-        collection: Pubkey::new_unique(),
-        slot_updated: rand::thread_rng().gen_range(0..100),
-        is_collection_verified: random(),
-        collection_seq: random(),
-        write_version: None,
+        collection: generate_test_updated(Pubkey::new_unique()),
+        is_collection_verified: generate_test_updated(false),
+        authority: generate_test_updated(Some(Pubkey::new_unique())),
     }
 }

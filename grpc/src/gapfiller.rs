@@ -60,16 +60,12 @@ pub struct AssetLeaf {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AssetCollection {
-    #[prost(bytes = "vec", tag = "1")]
-    pub collection: ::prost::alloc::vec::Vec<u8>,
-    #[prost(bool, tag = "2")]
-    pub is_collection_verified: bool,
+    #[prost(message, optional, tag = "1")]
+    pub collection: ::core::option::Option<DynamicBytesField>,
+    #[prost(message, optional, tag = "2")]
+    pub is_collection_verified: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "3")]
-    pub collection_seq: ::core::option::Option<u64>,
-    #[prost(message, optional, tag = "4")]
-    pub update_version: ::core::option::Option<UpdateVersionValue>,
-    #[prost(uint64, tag = "5")]
-    pub slot_updated: u64,
+    pub authority: ::core::option::Option<DynamicBytesField>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

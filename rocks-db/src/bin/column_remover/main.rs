@@ -19,6 +19,7 @@ use rustyline::DefaultEditor;
 
 use entities::models::AssetSignature;
 use metrics_utils::red::RequestErrorDurationMetrics;
+use rocks_db::column_migrator::MigrationState;
 use rocks_db::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use rocks_db::editions::TokenMetadataEdition;
 use std::env;
@@ -106,6 +107,7 @@ fn remove_column_families(db_path: String, columns_to_remove: &[&str]) {
         &db_path,
         Arc::new(Mutex::new(JoinSet::new())),
         red_metrics.clone(),
+        MigrationState::Last,
     )
     .expect("Failed to open DB.");
     let db = db.db;

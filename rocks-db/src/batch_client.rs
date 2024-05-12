@@ -218,17 +218,17 @@ impl AssetIndexReader for Storage {
 
         for data in asset_collection_details.iter().flatten() {
             if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
-                existed_index.collection = Some(data.collection);
-                existed_index.is_collection_verified = Some(data.is_collection_verified);
-                if data.slot_updated as i64 > existed_index.slot_updated {
-                    existed_index.slot_updated = data.slot_updated as i64;
+                existed_index.collection = Some(data.collection.value);
+                existed_index.is_collection_verified = Some(data.is_collection_verified.value);
+                if data.get_slot_updated() as i64 > existed_index.slot_updated {
+                    existed_index.slot_updated = data.get_slot_updated() as i64;
                 }
             } else {
                 let asset_index = AssetIndex {
                     pubkey: data.pubkey,
-                    collection: Some(data.collection),
-                    is_collection_verified: Some(data.is_collection_verified),
-                    slot_updated: data.slot_updated as i64,
+                    collection: Some(data.collection.value),
+                    is_collection_verified: Some(data.is_collection_verified.value),
+                    slot_updated: data.get_slot_updated() as i64,
                     ..Default::default()
                 };
 
@@ -330,25 +330,14 @@ impl Storage {
         )?;
 
         if let Some(collection) = data.collection {
-            let write_version = if let Some(write_v) = collection.update_version {
-                match write_v {
-                    UpdateVersion::WriteVersion(v) => Some(v),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-
             self.asset_collection_data.merge_with_batch(
                 &mut batch,
                 data.pubkey,
                 &AssetCollection {
                     pubkey: data.pubkey,
-                    collection: collection.value.collection,
-                    is_collection_verified: collection.value.is_collection_verified,
-                    collection_seq: collection.value.collection_seq,
-                    slot_updated: collection.slot_updated,
-                    write_version,
+                    collection: collection.collection,
+                    is_collection_verified: collection.is_collection_verified,
+                    authority: collection.authority,
                 },
             )?;
         }
