@@ -176,11 +176,10 @@ pub enum TaskStatus {
 #[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
 pub enum RollupState {
     Uploaded,
-    Processing,
     ValidationFail,
+    ValidationComplete,
     UploadedToArweave,
-    TransactionSent,
+    FailUploadToArweave,
     FailSendingTransaction,
-    MovingToStorage,
     Complete,
 }

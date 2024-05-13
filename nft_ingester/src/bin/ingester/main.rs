@@ -863,26 +863,26 @@ pub async fn main() -> Result<(), IngesterError> {
             }
         }));
     }
-    let arweave = Arc::new(
-        Arweave::from_keypair_path(
-            PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(),
-            ARWEAVE_BASE_URL.parse().unwrap(),
-        )
-        .unwrap(),
-    );
-    let rollup_processor = Arc::new(RollupProcessor::new(
-        index_storage.clone(),
-        Arc::new(NoopRollupTxSender {}),
-        arweave,
-        file_storage_path,
-    ));
-    let rx = shutdown_rx.resubscribe();
-    let processor_clone = rollup_processor.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        info!("Start processing rollups...");
-        processor_clone.process_rollups(rx).await;
-        info!("Finish processing rollups...");
-    }));
+
+    if let Ok(arweave) = Arweave::from_keypair_path(
+        PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(),
+        ARWEAVE_BASE_URL.parse().unwrap(),
+    ) {
+        let arweave = Arc::new(arweave);
+        let rollup_processor = Arc::new(RollupProcessor::new(
+            index_storage.clone(),
+            Arc::new(NoopRollupTxSender {}),
+            arweave,
+            file_storage_path,
+        ));
+        let rx = shutdown_rx.resubscribe();
+        let processor_clone = rollup_processor.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            info!("Start processing rollups...");
+            processor_clone.process_rollups(rx).await;
+            info!("Finish processing rollups...");
+        }));
+    }
 
     start_metrics(
         metrics_state.registry,

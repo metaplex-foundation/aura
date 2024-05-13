@@ -34,17 +34,14 @@ impl PgClient {
         Ok(())
     }
 
-    pub async fn fetch_rollup_for_processing(
-        &self,
-        state: RollupState,
-    ) -> Result<Option<RollupWithState>, String> {
+    pub async fn fetch_rollup_for_processing(&self) -> Result<Option<RollupWithState>, String> {
         let mut query_builder = QueryBuilder::new(
             "SELECT rlp_file_name, rlp_state, rlp_error, rlp_url, EXTRACT(EPOCH FROM rlp_created_at) as created_at FROM rollups
-            WHERE rlp_state = $1 ORDER BY rlp_created_at ASC"
+            WHERE rlp_state in ('uploaded', 'validation_complete', 'fail_upload_to_arweave', 'uploaded_to_arweave', 'fail_sending_transaction') ORDER BY rlp_created_at ASC"
         );
         let start_time = chrono::Utc::now();
         let query = query_builder.build();
-        self.fetch_rollup(query.bind(state), start_time).await
+        self.fetch_rollup(query, start_time).await
     }
 
     pub async fn get_rollup_by_url(&self, url: &str) -> Result<Option<RollupWithState>, String> {

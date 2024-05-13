@@ -1,11 +1,10 @@
 CREATE TYPE rollup_state AS ENUM (
 	'uploaded',
-	'processing',
 	'validation_fail',
+    'validation_complete',
+    'fail_upload_to_arweave',
     'uploaded_to_arweave',
-    'transaction_sent',
     'fail_sending_transaction',
-    'moving_to_storage',
 	'complete'
 );
 
