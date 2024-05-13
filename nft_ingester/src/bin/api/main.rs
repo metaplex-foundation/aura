@@ -20,6 +20,10 @@ use tokio::task::JoinSet;
 use tonic::transport::Server;
 use usecase::proofs::MaybeProofChecker;
 
+#[cfg(feature = "profiling")]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
 
@@ -195,6 +199,7 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         guard,
         config.profiling_file_path_container,
+        &config.heap_path,
     )
     .await;
 
