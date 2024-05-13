@@ -100,7 +100,7 @@ mod tests {
             .expect_get_all_applied_migrations()
             .returning(move || Box::pin(async { Ok(HashSet::new()) }));
         Storage::apply_all_migrations(
-            dir.as_path().to_str().unwrap(),
+            dir.path().to_str().unwrap(),
             Arc::new(mock_migration_manager),
         )
         .await
