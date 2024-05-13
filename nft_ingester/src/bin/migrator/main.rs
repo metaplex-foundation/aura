@@ -89,7 +89,15 @@ pub async fn main() -> Result<(), IngesterError> {
     // useless thing in this context
     let (shutdown_tx, _shutdown_rx) = broadcast::channel::<()>(1);
 
-    graceful_stop(mutexed_tasks, keep_running.clone(), shutdown_tx, None, None).await;
+    graceful_stop(
+        mutexed_tasks,
+        keep_running.clone(),
+        shutdown_tx,
+        None,
+        None,
+        "",
+    )
+    .await;
 
     Ok(())
 }

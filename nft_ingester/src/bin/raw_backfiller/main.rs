@@ -23,6 +23,10 @@ use rocks_db::Storage;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 
+#[cfg(feature = "profiling")]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 
 #[tokio::main(flavor = "multi_thread")]
@@ -177,6 +181,7 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         guard,
         config.profiling_file_path_container,
+        &config.heap_path,
     )
     .await;
 
