@@ -112,12 +112,17 @@ impl PgClient {
     }
 }
 
+pub(crate) struct Authority {
+    pub key: Pubkey,
+    pub authority: Pubkey,
+    pub slot_updated: i64,
+}
 pub(crate) struct AssetComponenents {
     pub metadata_urls: Vec<UrlWithStatus>,
     pub asset_indexes: Vec<AssetIndex>,
     pub all_creators: Vec<(Pubkey, Creator, i64)>,
     pub updated_keys: Vec<Vec<u8>>,
-    pub authorities: Vec<(Pubkey, Pubkey)>,
+    pub authorities: Vec<Authority>,
 }
 pub(crate) struct TableNames {
     pub metadata_table: String,
@@ -166,21 +171,20 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     let authorities = asset_indexes
         .iter()
         .filter_map(|asset| {
-            asset.authority.map(|authority| {
-                (
-                    if let Some(collection) = asset.collection {
-                        if asset.specification_asset_class
-                            == entities::enums::SpecificationAssetClass::MplCoreAsset
-                        {
-                            collection
-                        } else {
-                            asset.pubkey
-                        }
+            asset.authority.map(|authority| Authority {
+                key: if let Some(collection) = asset.collection {
+                    if asset.specification_asset_class
+                        == entities::enums::SpecificationAssetClass::MplCoreAsset
+                    {
+                        collection
                     } else {
                         asset.pubkey
-                    },
-                    authority,
-                )
+                    }
+                } else {
+                    asset.pubkey
+                },
+                authority,
+                slot_updated: asset.slot_updated,
             })
         })
         .collect::<Vec<_>>();
@@ -457,7 +461,7 @@ impl PgClient {
     async fn insert_authorities(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
-        authorities: &[(Pubkey, Pubkey)],
+        authorities: &[Authority],
         table: &str,
     ) -> Result<(), String> {
         if authorities.is_empty() {
@@ -471,11 +475,11 @@ impl PgClient {
             auth_authority,
             auth_slot_updated) ",
         );
-        query_builder.push_values(authorities, |mut builder, asset_index| {
+        query_builder.push_values(authorities, |mut builder, authority| {
             builder
-                .push_bind(asset_index.0.to_bytes().to_vec())
-                .push_bind(asset_index.1.to_bytes().to_vec())
-                .push_bind(100i64);
+                .push_bind(authority.key.to_bytes().to_vec())
+                .push_bind(authority.authority.to_bytes().to_vec())
+                .push_bind(authority.slot_updated);
         });
         query_builder.push(
             " ON CONFLICT (auth_pubkey)
