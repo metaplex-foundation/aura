@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
-use tracing::error;
+use tracing::{error, info};
 
 const CURRENT_MIGRATION_VERSION: u64 = 0;
 const BATCH_SIZE: usize = 100_000;
@@ -146,6 +146,7 @@ impl Storage {
         db_path: &str,
         migration_version_manager: Arc<impl MigrationVersionManager>,
     ) -> Result<()> {
+        info!("Start execute migration V0");
         {
             let old_storage = Storage::open(
                 db_path,
@@ -192,6 +193,7 @@ impl Storage {
             }
         }
         new_storage.asset_collection_data.put_batch(batch).await?;
+        info!("Finish migration V0");
 
         migration_version_manager
             .apply_migration(0)

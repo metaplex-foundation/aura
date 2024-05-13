@@ -16,7 +16,7 @@ impl MigrationVersionManager for PgClient {
             .await
             .map(|rows| {
                 rows.iter().fold(HashSet::new(), |mut acc, row| {
-                    let version = row.get::<i32, _>("rm_migration_version");
+                    let version = row.get::<i64, _>("rm_migration_version");
                     acc.insert(version as u64);
                     acc
                 })
@@ -43,7 +43,7 @@ impl MigrationVersionManager for PgClient {
 
         let query = query_builder.build();
         query
-            .bind(version as i32)
+            .bind(version as i64)
             .execute(&self.pool)
             .await
             .map_err(|err| {

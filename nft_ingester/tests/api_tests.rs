@@ -352,7 +352,10 @@ mod tests {
             let ref_value = generated_assets.collections[12].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
-                grouping: Some(("collection".to_string(), ref_value.collection.value.to_string())),
+                grouping: Some((
+                    "collection".to_string(),
+                    ref_value.collection.value.to_string(),
+                )),
                 options: Some(Options {
                     show_unverified_collections: true,
                 }),
