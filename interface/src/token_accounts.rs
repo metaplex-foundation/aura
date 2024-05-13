@@ -10,7 +10,7 @@ pub trait TokenAccountsGetter {
         &self,
         owner: Option<Pubkey>,
         mint: Option<Pubkey>,
-        token_account: Option<Pubkey>,
+        starting_token_account: Option<Pubkey>,
         reverse_iter: bool,
         page: Option<u64>,
         limit: u64,

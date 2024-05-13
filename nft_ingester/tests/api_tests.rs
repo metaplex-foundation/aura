@@ -1690,7 +1690,6 @@ mod tests {
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
-            // it's safe to do it in test because we want to check how reverse work
             after: None,
             before: None,
             cursor: None,
@@ -1706,7 +1705,6 @@ mod tests {
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
-            // it's safe to do it in test because we want to check how reverse work
             after: None,
             before: None,
             cursor: first_10.cursor.clone(),
@@ -1722,7 +1720,6 @@ mod tests {
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
-            // it's safe to do it in test because we want to check how reverse work
             after: None,
             before: None,
             cursor: None,
@@ -1736,7 +1733,7 @@ mod tests {
         assert_eq!(first_20.token_accounts, first_two_resp);
 
         let payload = GetTokenAccounts {
-            limit: Some(10),
+            limit: Some(9),
             page: None,
             owner: owner.clone(),
             mint: mint.clone(),
@@ -1751,11 +1748,11 @@ mod tests {
         let response = api.get_token_accounts(payload).await.unwrap();
         let first_10_reverse: TokenAccountsList = serde_json::from_value(response).unwrap();
 
-        let mut reversed = first_10_reverse.token_accounts;
-        reversed.pop();
+        let reversed = first_10_reverse.token_accounts;
         let mut second_10_resp = second_10.token_accounts.clone();
+        // pop because we select 9 assets
+        // select 9 because request with before do not return asset which is in before parameter
         second_10_resp.pop();
-        second_10_resp.reverse();
         assert_eq!(reversed, second_10_resp);
 
         let payload = GetTokenAccounts {
@@ -1787,7 +1784,6 @@ mod tests {
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
-            // it's safe to do it in test because we want to check how reverse work
             after: first_10.cursor,
             before: None,
             cursor: None,
@@ -1803,7 +1799,6 @@ mod tests {
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
-            // it's safe to do it in test because we want to check how reverse work
             after: after_first_10.after,
             before: None,
             cursor: None,
@@ -1819,7 +1814,6 @@ mod tests {
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
-            // it's safe to do it in test because we want to check how reverse work
             after: None,
             before: None,
             cursor: None,

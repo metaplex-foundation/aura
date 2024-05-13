@@ -17,13 +17,13 @@ impl TokenAccountsGetter for Storage {
         &self,
         owner: Option<Pubkey>,
         mint: Option<Pubkey>,
-        token_account: Option<Pubkey>,
+        starting_token_account: Option<Pubkey>,
         reverse_iter: bool,
         page: Option<u64>,
         limit: u64,
         show_zero_balance: bool,
     ) -> Result<impl Iterator<Item = TokenAccountIterableIdx>, UsecaseError> {
-        if (mint, owner, token_account) == (None, None, None) {
+        if (mint, owner) == (None, None) {
             return Err(UsecaseError::InvalidParameters(
                 "Owner or mint must be provided".to_string(),
             ));
@@ -34,7 +34,7 @@ impl TokenAccountsGetter for Storage {
                 TokenAccountMintOwnerIdx::encode_key(TokenAccountMintOwnerIdxKey {
                     mint,
                     owner: owner.unwrap_or_default(),
-                    token_account: token_account.unwrap_or_default(),
+                    token_account: starting_token_account.unwrap_or_default(),
                 }),
                 self.token_account_mint_owner_idx.handle(),
             ),
@@ -43,7 +43,7 @@ impl TokenAccountsGetter for Storage {
                     TokenAccountOwnerIdx::encode_key(TokenAccountOwnerIdxKey {
                         // We have check above, so this is safe
                         owner: owner.expect("Expected owner when mint is None"),
-                        token_account: token_account.unwrap_or_default(),
+                        token_account: starting_token_account.unwrap_or_default(),
                     }),
                     self.token_account_owner_idx.handle(),
                 )
@@ -174,6 +174,11 @@ impl TokenAccountsGetter for Storage {
                 }
             }
             pubkeys.push(key.token_account);
+        }
+
+        // if we've got reverse iterator and should reverse assets order back
+        if reverse {
+            pubkeys.reverse();
         }
 
         Ok(self
