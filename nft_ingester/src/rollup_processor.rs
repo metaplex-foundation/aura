@@ -123,25 +123,27 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         }
     }
 
-    pub async fn process_rollups(&self, rx: Receiver<()>) {
-        while rx.is_empty() {
-            let rollup_to_process = match self
-                .pg_client
-                .fetch_rollup_for_processing(RollupState::Uploaded)
-                .await
-            {
-                Ok(Some(rollup)) => rollup,
-                Ok(None) => {
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                    continue;
-                }
-                Err(e) => {
-                    error!("Failed to fetch rollup for processing: {}", e);
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    continue;
-                }
-            };
-            let _ = self.process_rollup(rollup_to_process).await;
+    pub async fn process_rollups(&self, mut rx: Receiver<()>) {
+        loop {
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(5)) => {
+                        let rollup_to_process = match self.pg_client.fetch_rollup_for_processing(RollupState::Uploaded).await {
+                            Ok(Some(rollup)) => rollup,
+                            Ok(None) => {
+                                continue;
+                            }
+                            Err(e) => {
+                                error!("Failed to fetch rollup for processing: {}", e);
+                                continue;
+                            }
+                        };
+                        let _ = self.process_rollup(rollup_to_process).await;
+                    },
+                _ = rx.recv() => {
+                    info!("Received stop signal, stopping ...");
+                    return;
+                },
+            }
         }
     }
 
