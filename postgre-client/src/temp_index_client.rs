@@ -201,6 +201,7 @@ impl AssetIndexStorage for TempClient {
             metadata_table: format!("{}tasks", TEMP_INDEXING_TABLE_PREFIX),
             assets_table: format!("{}assets_v3", TEMP_INDEXING_TABLE_PREFIX),
             creators_table: format!("{}asset_creators_v3", TEMP_INDEXING_TABLE_PREFIX),
+            authorities_table: format!("{}assets_authorities", TEMP_INDEXING_TABLE_PREFIX),
         };
         self.pg_client
             .upsert_batched(&mut transaction, table_names, updated_components)

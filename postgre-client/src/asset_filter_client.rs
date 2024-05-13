@@ -49,6 +49,11 @@ impl PgClient {
             query_builder.push(" INNER JOIN tasks ON ast_metadata_url_id = tsk_id ");
             group_clause_required = true;
         }
+        if filter.authority_address.is_some() {
+            query_builder.push(" LEFT JOIN assets_authorities primary_authority ON assets_v3.ast_pubkey = primary_authority.ast_pubkey ");
+            query_builder.push(" LEFT JOIN assets_authorities secondary_authority ON assets_v3.ast_collection = secondary_authority.ast_pubkey AND assets_v3.ast_specification_asset_class = 'mpl_core_asset' ");
+            group_clause_required = true;
+        }
 
         // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
         query_builder.push(" WHERE TRUE ");
@@ -83,10 +88,9 @@ impl PgClient {
         }
 
         if let Some(authority) = &filter.authority_address {
-            query_builder.push(" AND assets_v3.ast_authority = ");
+            query_builder.push(" AND coalesce(secondary_authority.ast_authority, primary_authority.ast_authority) = ");
             query_builder.push_bind(authority);
         }
-
         if let Some(collection) = &filter.collection {
             query_builder.push(" AND assets_v3.ast_collection = ");
             query_builder.push_bind(collection);

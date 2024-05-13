@@ -24,6 +24,7 @@ pub struct AssetSelectedMaps {
     pub offchain_data: HashMap<String, OffChainData>,
     pub urls: HashMap<String, String>,
     pub editions: HashMap<Pubkey, EditionData>,
+    pub mpl_collections: HashMap<Pubkey, AssetCollection>,
 }
 
 // The following structures are used to store the asset data in the rocksdb database. The data is spread across multiple columns based on the update pattern.

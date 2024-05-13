@@ -79,6 +79,13 @@ impl PgClient {
             table_names.creators_table.as_str(),
         )
         .await?;
+        for chunk in updated_components
+            .authorities
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_ASSET_PARAMETERS_COUNT)
+        {
+            self.insert_authorities(transaction, chunk, table_names.authorities_table.as_str())
+                .await?;
+        }
 
         Ok(())
     }
@@ -110,11 +117,13 @@ pub(crate) struct AssetComponenents {
     pub asset_indexes: Vec<AssetIndex>,
     pub all_creators: Vec<(Pubkey, Creator, i64)>,
     pub updated_keys: Vec<Vec<u8>>,
+    pub authorities: Vec<(Pubkey, Pubkey)>,
 }
 pub(crate) struct TableNames {
     pub metadata_table: String,
     pub assets_table: String,
     pub creators_table: String,
+    pub authorities_table: String,
 }
 
 pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> AssetComponenents {
@@ -154,11 +163,33 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
         .iter()
         .map(|asset_index| asset_index.pubkey.to_bytes().to_vec())
         .collect::<Vec<Vec<u8>>>();
+    let authorities = asset_indexes
+        .iter()
+        .filter_map(|asset| {
+            asset.authority.map(|authority| {
+                (
+                    if let Some(collection) = asset.collection {
+                        if asset.specification_asset_class
+                            == entities::enums::SpecificationAssetClass::MplCoreAsset
+                        {
+                            collection
+                        } else {
+                            asset.pubkey
+                        }
+                    } else {
+                        asset.pubkey
+                    },
+                    authority,
+                )
+            })
+        })
+        .collect::<Vec<_>>();
     AssetComponenents {
         metadata_urls,
         asset_indexes,
         all_creators,
         updated_keys,
+        authorities,
     }
 }
 
@@ -176,6 +207,7 @@ impl AssetIndexStorage for PgClient {
             metadata_table: "tasks".to_string(),
             assets_table: "assets_v3".to_string(),
             creators_table: "asset_creators_v3".to_string(),
+            authorities_table: "assets_authorities".to_string(),
         };
         self.upsert_batched(&mut transaction, table_names, updated_components)
             .await?;
@@ -346,7 +378,6 @@ impl PgClient {
             ast_owner_type,
             ast_owner,
             ast_delegate,
-            ast_authority,
             ast_collection,
             ast_is_collection_verified,
             ast_is_burnt,
@@ -376,7 +407,6 @@ impl PgClient {
                 .push_bind(asset_index.owner_type.map(OwnerType::from))
                 .push_bind(asset_index.owner.map(|owner| owner.to_bytes().to_vec()))
                 .push_bind(asset_index.delegate.map(|k| k.to_bytes().to_vec()))
-                .push_bind(asset_index.authority.map(|k| k.to_bytes().to_vec()))
                 .push_bind(asset_index.collection.map(|k| k.to_bytes().to_vec()))
                 .push_bind(asset_index.is_collection_verified)
                 .push_bind(asset_index.is_burnt)
@@ -398,7 +428,6 @@ impl PgClient {
             ast_owner_type = EXCLUDED.ast_owner_type,
             ast_owner = EXCLUDED.ast_owner,
             ast_delegate = EXCLUDED.ast_delegate,
-            ast_authority = EXCLUDED.ast_authority,
             ast_collection = EXCLUDED.ast_collection,
             ast_is_collection_verified = EXCLUDED.ast_is_collection_verified,
             ast_is_burnt = EXCLUDED.ast_is_burnt,
@@ -408,6 +437,48 @@ impl PgClient {
             ast_supply = EXCLUDED.ast_supply,
             ast_metadata_url_id = EXCLUDED.ast_metadata_url_id,
             ast_slot_updated = EXCLUDED.ast_slot_updated
+            WHERE ",
+        );
+        query_builder.push(table);
+        query_builder.push(".ast_slot_updated <= EXCLUDED.ast_slot_updated OR ");
+        query_builder.push(table);
+        query_builder.push(".ast_slot_updated IS NULL;");
+
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            BATCH_UPSERT_ACTION,
+            table,
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn insert_authorities(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        authorities: &[(Pubkey, Pubkey)],
+        table: &str,
+    ) -> Result<(), String> {
+        if authorities.is_empty() {
+            return Ok(());
+        }
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
+        query_builder.push(table);
+        query_builder.push(
+            " (
+            ast_pubkey,
+            ast_authority) ",
+        );
+        query_builder.push_values(authorities, |mut builder, asset_index| {
+            builder
+                .push_bind(asset_index.0.to_bytes().to_vec())
+                .push_bind(asset_index.1.to_bytes().to_vec());
+        });
+        query_builder.push(
+            " ON CONFLICT (ast_pubkey)
+        DO UPDATE SET
+            ast_authority = EXCLUDED.ast_authority
             WHERE ",
         );
         query_builder.push(table);

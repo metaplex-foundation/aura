@@ -283,7 +283,16 @@ impl From<entities::enums::RoyaltyTargetType> for RoyaltyTargetType {
 fn convert_rocks_authority_model(
     asset_pubkey: &Pubkey,
     assets_authority: &HashMap<Pubkey, AssetAuthority>,
+    asset_collections: &HashMap<Pubkey, AssetCollection>,
+    mpl_collections: &HashMap<Pubkey, AssetCollection>,
 ) -> asset_authority::Model {
+    let update_authority = asset_collections
+        .get(asset_pubkey)
+        .and_then(|asset_collection| {
+            mpl_collections
+                .get(&asset_collection.collection.value)
+                .and_then(|update_authority| update_authority.authority.value)
+        });
     let authority = assets_authority
         .get(asset_pubkey)
         .cloned()
@@ -293,7 +302,9 @@ fn convert_rocks_authority_model(
         id: 0,
         asset_id: asset_pubkey.to_bytes().to_vec(),
         scopes: None,
-        authority: authority.authority.to_bytes().to_vec(),
+        authority: update_authority
+            .map(|update_authority| update_authority.to_bytes().to_vec())
+            .unwrap_or(authority.authority.to_bytes().to_vec()),
         seq: authority.slot_updated as i64,
         slot_updated: authority.slot_updated as i64,
     }
@@ -401,6 +412,8 @@ fn asset_selected_maps_into_full_asset(
             authorities: vec![convert_rocks_authority_model(
                 id,
                 &asset_selected_maps.assets_authority,
+                &asset_selected_maps.assets_collection,
+                &asset_selected_maps.mpl_collections,
             )],
             creators: convert_rocks_creators_model(id, &asset_selected_maps.assets_dynamic),
             groups: convert_rocks_grouping_model(id, &asset_selected_maps.assets_collection)
