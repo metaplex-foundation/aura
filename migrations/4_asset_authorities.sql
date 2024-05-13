@@ -1,11 +1,11 @@
 CREATE TABLE assets_authorities (
-    ast_pubkey bytea NOT NULL PRIMARY KEY,
-    ast_authority bytea,
-    asc_slot_updated bigint NOT NULL
+    auth_pubkey bytea NOT NULL PRIMARY KEY,
+    auth_authority bytea,
+    auth_slot_updated bigint NOT NULL
 );
-CREATE INDEX assets_authority ON assets_authorities(ast_authority) WHERE ast_authority IS NOT NULL;
+CREATE INDEX assets_authority ON assets_authorities(auth_authority) WHERE auth_authority IS NOT NULL;
 
-INSERT INTO assets_authorities (ast_pubkey, ast_authority, asc_slot_updated)
+INSERT INTO assets_authorities (auth_pubkey, auth_authority, auth_slot_updated)
 SELECT
     CASE
         WHEN ast_specification_asset_class = 'mpl_core_asset' AND ast_collection IS NOT NULL THEN ast_collection

@@ -467,24 +467,26 @@ impl PgClient {
         query_builder.push(table);
         query_builder.push(
             " (
-            ast_pubkey,
-            ast_authority) ",
+            auth_pubkey,
+            auth_authority,
+            auth_slot_updated) ",
         );
         query_builder.push_values(authorities, |mut builder, asset_index| {
             builder
                 .push_bind(asset_index.0.to_bytes().to_vec())
-                .push_bind(asset_index.1.to_bytes().to_vec());
+                .push_bind(asset_index.1.to_bytes().to_vec())
+                .push_bind(100i64);
         });
         query_builder.push(
-            " ON CONFLICT (ast_pubkey)
+            " ON CONFLICT (auth_pubkey)
         DO UPDATE SET
-            ast_authority = EXCLUDED.ast_authority
+            auth_authority = EXCLUDED.auth_authority
             WHERE ",
         );
         query_builder.push(table);
-        query_builder.push(".ast_slot_updated <= EXCLUDED.ast_slot_updated OR ");
+        query_builder.push(".auth_slot_updated <= EXCLUDED.auth_slot_updated OR ");
         query_builder.push(table);
-        query_builder.push(".ast_slot_updated IS NULL;");
+        query_builder.push(".auth_slot_updated IS NULL;");
 
         self.execute_query_with_metrics(
             transaction,
