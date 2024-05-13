@@ -71,6 +71,10 @@ anchor-lang = "0.29.0"
 spl-concurrent-merkle-tree = "0.2.0"
 uuid = { version = "1.6.1" }
 multer = "3.0.0"
+jemallocator = { version = "*", features = ["profiling", "debug"] }
+
+[profile.release]
+debug = true
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }
@@ -97,6 +101,7 @@ harness = false
 rpc_tests = []
 integration_tests = []
 rollup_tests = []
+profiling = []
 
 [dependencies.utils]
 version = "0.1.8"

@@ -17,6 +17,7 @@ pub mod integrity_verification_client;
 pub mod load_client;
 pub mod migration_manager;
 pub mod model;
+pub mod rollups;
 pub mod storage_traits;
 pub mod tasks;
 pub mod temp_index_client;

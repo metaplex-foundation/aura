@@ -13,6 +13,8 @@ pub struct Rollup {
     pub tree_id: Pubkey,
     pub rolled_mints: Vec<RolledMintInstruction>,
     pub raw_metadata_map: HashMap<String, Box<RawValue>>, // map by uri
+    pub max_depth: u32,
+    pub max_buffer_size: u32,
 
     // derived data
     pub merkle_root: [u8; 32],    // validate
@@ -51,7 +53,7 @@ pub struct ChangeLogEventV1 {
     pub index: u32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 pub struct PathNode {
     pub node: [u8; 32],
     pub index: u32,
