@@ -358,6 +358,11 @@ impl JsonPersister for JsonWorker {
                         self.metrics.inc_tasks("json", MetricStatus::FAILURE);
                     }
                     JsonDownloaderError::CouldNotReadHeader => {
+                        pg_updates.push(UpdatedTask {
+                            status: TaskStatus::Failed,
+                            metadata_url: metadata_url.clone(),
+                            error: "Failed to read header".to_string(),
+                        });
                         self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
                     }
                     JsonDownloaderError::ErrorStatusCode(err) => {

@@ -118,7 +118,7 @@ impl PgClient {
             QueryBuilder::new("WITH cte AS (
                                         SELECT tsk_id
                                         FROM tasks
-                                        WHERE tsk_status != 'success' AND tsk_locked_until < NOW() AND tsk_attempts < tsk_max_attempts
+                                        WHERE (tsk_status = 'running' OR tsk_status = 'pending') AND tsk_locked_until < NOW() AND tsk_attempts < tsk_max_attempts
                                         LIMIT ");
 
         query_builder.push_bind(tasks_count);

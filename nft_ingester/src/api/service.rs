@@ -90,7 +90,7 @@ pub async fn start_api(
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let api = DasApi::new(
-        pg_client,
+        pg_client.clone(),
         rocks_db,
         metrics,
         proof_checker,
@@ -114,11 +114,13 @@ pub async fn start_api(
         tasks,
         batch_mint_service_port,
         file_storage_path,
+        pg_client,
         rx,
     )
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_api(
     api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker>,
     middlewares_data: Option<MiddlewaresData>,
@@ -126,6 +128,7 @@ async fn run_api(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     batch_mint_service_port: Option<u16>,
     file_storage_path: &str,
+    pg_client: Arc<PgClient>,
     shutdown_rx: Receiver<()>,
 ) -> Result<(), DasApiError> {
     let rpc = RpcApiBuilder::build(
@@ -164,6 +167,7 @@ async fn run_api(
             shutdown_rx.resubscribe(),
             port,
             file_storage_path.to_string(),
+            pg_client,
         )
         .await;
     }
@@ -187,8 +191,21 @@ async fn run_api(
     Ok(())
 }
 
-fn upload_file_page() -> Response<Body> {
-    let html = r#"<!DOCTYPE html>
+struct BatchMintService {
+    pg_client: Arc<PgClient>,
+    file_storage_path: String,
+}
+
+impl BatchMintService {
+    fn new(pg_client: Arc<PgClient>, file_storage_path: String) -> Self {
+        Self {
+            pg_client,
+            file_storage_path,
+        }
+    }
+
+    fn upload_file_page() -> Response<Body> {
+        let html = r#"<!DOCTYPE html>
                         <html>
                         <body>
 
@@ -199,62 +216,70 @@ fn upload_file_page() -> Response<Body> {
 
                         </body>
                         </html>"#;
-    Response::new(Body::from(html))
-}
+        Response::new(Body::from(html))
+    }
 
-async fn save_file(path: &str, file_bytes: &[u8]) -> std::io::Result<()> {
-    let new_file_name = format!("{}/{}.json", path, Uuid::new_v4());
+    async fn save_file(file_name: &str, file_bytes: &[u8]) -> std::io::Result<()> {
+        let mut file = File::create(file_name).await?;
+        file.write_all(file_bytes).await?;
+        Ok(())
+    }
 
-    let mut file = File::create(new_file_name).await?;
-    file.write_all(file_bytes).await?;
-    Ok(())
-}
+    async fn request_handler(
+        self: Arc<Self>,
+        req: Request<Body>,
+    ) -> Result<Response<Body>, hyper::Error> {
+        match (req.method(), req.uri().path()) {
+            (&Method::GET, BATCH_MINT_REQUEST_PATH) => Ok(Self::upload_file_page()),
+            (&Method::POST, BATCH_MINT_REQUEST_PATH) => {
+                let boundary = req
+                    .headers()
+                    .get(CONTENT_TYPE)
+                    .and_then(|ct| ct.to_str().ok())
+                    .and_then(|ct| multer::parse_boundary(ct).ok());
 
-async fn batch_mint_request_handler(
-    file_storage_path: String,
-    req: Request<Body>,
-) -> Result<Response<Body>, hyper::Error> {
-    match (req.method(), req.uri().path()) {
-        (&Method::GET, BATCH_MINT_REQUEST_PATH) => Ok(upload_file_page()),
-        (&Method::POST, BATCH_MINT_REQUEST_PATH) => {
-            let boundary = req
-                .headers()
-                .get(CONTENT_TYPE)
-                .and_then(|ct| ct.to_str().ok())
-                .and_then(|ct| multer::parse_boundary(ct).ok());
-
-            return match boundary {
-                Some(boundary) => {
-                    let mut multipart = Multipart::new(req.into_body(), boundary);
-                    while let Ok(Some(field)) = multipart.next_field().await {
-                        let bytes = match field.bytes().await {
-                            Ok(bytes) => bytes,
-                            Err(e) => {
+                return match boundary {
+                    Some(boundary) => {
+                        let mut multipart = Multipart::new(req.into_body(), boundary);
+                        let file_name = format!("{}.json", Uuid::new_v4());
+                        let full_file_path = format!("{}/{}", self.file_storage_path, &file_name);
+                        while let Ok(Some(field)) = multipart.next_field().await {
+                            let bytes = match field.bytes().await {
+                                Ok(bytes) => bytes,
+                                Err(e) => {
+                                    return Ok(Response::builder()
+                                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                        .body(Body::from(format!("Failed to read file: {}", e)))
+                                        .unwrap())
+                                }
+                            };
+                            if let Err(e) = Self::save_file(&full_file_path, bytes.as_ref()).await {
                                 return Ok(Response::builder()
                                     .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                    .body(Body::from(format!("Failed to read file: {}", e)))
-                                    .unwrap())
+                                    .body(Body::from(format!("Failed to save file: {}", e)))
+                                    .unwrap());
                             }
-                        };
-                        if let Err(e) = save_file(&file_storage_path, bytes.as_ref()).await {
+                        }
+                        if let Err(e) = self.pg_client.insert_new_rollup(&file_name).await {
+                            error!("Failed to save rollup state: {}", e);
                             return Ok(Response::builder()
                                 .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                .body(Body::from(format!("Failed to save file: {}", e)))
+                                .body(Body::from("Failed to save file"))
                                 .unwrap());
                         }
+                        Ok(Response::new(Body::from("File uploaded successfully")))
                     }
-                    Ok(Response::new(Body::from("File uploaded successfully")))
-                }
-                None => Ok(Response::builder()
-                    .status(StatusCode::BAD_REQUEST)
-                    .body(Body::from("BAD REQUEST"))
-                    .unwrap()),
-            };
+                    None => Ok(Response::builder()
+                        .status(StatusCode::BAD_REQUEST)
+                        .body(Body::from("BAD REQUEST"))
+                        .unwrap()),
+                };
+            }
+            _ => Ok(Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Body::from("Page not found"))
+                .unwrap()),
         }
-        _ => Ok(Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Body::from("Page not found"))
-            .unwrap()),
     }
 }
 
@@ -262,14 +287,15 @@ async fn run_batch_mint_service(
     mut shutdown_rx: Receiver<()>,
     port: u16,
     file_storage_path: String,
+    pg_client: Arc<PgClient>,
 ) {
     let addr = ([0, 0, 0, 0], port).into();
-    let file_storage_path = Arc::new(file_storage_path);
+    let batch_mint_service = Arc::new(BatchMintService::new(pg_client, file_storage_path));
     let make_svc = make_service_fn(move |_conn| {
-        let file_storage_path = file_storage_path.clone();
+        let batch_mint_service = batch_mint_service.clone();
         async {
             Ok::<_, hyper::Error>(service_fn(move |req| {
-                batch_mint_request_handler(file_storage_path.to_string(), req)
+                batch_mint_service.clone().request_handler(req)
             }))
         }
     });

@@ -25,6 +25,11 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS cacher
 WORKDIR /rust
 RUN apt update && apt install -y libclang-dev protobuf-compiler
+RUN wget https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2 && \
+    tar -xjf jemalloc-5.3.0.tar.bz2 && \
+    cd jemalloc-5.3.0 && \
+    ./configure --enable-prof --enable-stats --enable-debug --enable-fill && \
+    make && make install
 COPY --from=planner /rust/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
@@ -33,16 +38,27 @@ FROM cacher AS builder
 COPY . .
 RUN cargo build --release --bin ingester --bin api --bin raw_backfiller --bin synchronizer
 
+# Building the profiling feature services
+FROM cacher AS builder-with-profiling
+COPY . .
+RUN cargo build --release --features profiling --bin ingester --bin api --bin raw_backfiller --bin synchronizer
+
 # Final image
-FROM rust:1.75-slim-bullseye
+FROM rust:1.75-slim-bullseye AS runtime
 ARG APP=/usr/src/app
-RUN apt update && apt install -y curl ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
-ENV TZ=Etc/UTC APP_USER=appuser
+RUN apt update && apt install -y curl ca-certificates tzdata libjemalloc2 google-perftools graphviz libjemalloc-dev && rm -rf /var/lib/apt/lists/*
+COPY --from=cacher /usr/local/lib/libjemalloc.so.2 /usr/local/lib/libjemalloc.so.2
+ENV TZ=Etc/UTC APP_USER=appuser LD_PRELOAD="/usr/local/lib/libjemalloc.so.2"
 RUN groupadd $APP_USER && useradd -g $APP_USER $APP_USER && mkdir -p ${APP}
 
 COPY --from=builder /rust/target/release/ingester ${APP}/ingester
 COPY --from=builder /rust/target/release/raw_backfiller ${APP}/raw_backfiller
 COPY --from=builder /rust/target/release/api ${APP}/api
 COPY --from=builder /rust/target/release/synchronizer ${APP}/synchronizer
+COPY --from=builder-with-profiling /rust/target/release/ingester ${APP}/profiling_ingester
+COPY --from=builder-with-profiling /rust/target/release/raw_backfiller ${APP}/profiling_raw_backfiller
+COPY --from=builder-with-profiling /rust/target/release/api ${APP}/profiling_api
+COPY --from=builder-with-profiling /rust/target/release/synchronizer ${APP}/profiling_synchronizer
+
 WORKDIR ${APP}
 STOPSIGNAL SIGINT
