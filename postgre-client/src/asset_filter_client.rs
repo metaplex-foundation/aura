@@ -91,6 +91,7 @@ impl PgClient {
             query_builder.push(" AND coalesce(secondary_authority.auth_authority, primary_authority.auth_authority) = ");
             query_builder.push_bind(authority);
         }
+
         if let Some(collection) = &filter.collection {
             query_builder.push(" AND assets_v3.ast_collection = ");
             query_builder.push_bind(collection);
