@@ -28,6 +28,7 @@ use spl_account_compression::ConcurrentMerkleTree;
 use tempfile::TempDir;
 use testcontainers::clients::Cli;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::broadcast;
 use uuid::Uuid;
 
 fn generate_rollup(size: usize) -> Rollup {
@@ -339,14 +340,18 @@ async fn rollup_processing_validation_test() {
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
     );
+    let (_, shutdown_rx) = broadcast::channel::<()>(1);
     let processing_result = rollup_processor
-        .process_rollup(RollupWithState {
-            file_name,
-            state: RollupState::Uploaded,
-            error: None,
-            url: None,
-            created_at: 0,
-        })
+        .process_rollup(
+            shutdown_rx.resubscribe(),
+            RollupWithState {
+                file_name,
+                state: RollupState::Uploaded,
+                error: None,
+                url: None,
+                created_at: 0,
+            },
+        )
         .await;
     assert_eq!(processing_result, Ok(()));
 
@@ -356,13 +361,16 @@ async fn rollup_processing_validation_test() {
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
 
     let processing_result = rollup_processor
-        .process_rollup(RollupWithState {
-            file_name,
-            state: RollupState::Uploaded,
-            error: None,
-            url: None,
-            created_at: 0,
-        })
+        .process_rollup(
+            shutdown_rx.resubscribe(),
+            RollupWithState {
+                file_name,
+                state: RollupState::Uploaded,
+                error: None,
+                url: None,
+                created_at: 0,
+            },
+        )
         .await;
     assert_eq!(
         processing_result,
@@ -389,13 +397,16 @@ async fn rollup_processing_validation_test() {
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
 
     let processing_result = rollup_processor
-        .process_rollup(RollupWithState {
-            file_name,
-            state: RollupState::Uploaded,
-            error: None,
-            url: None,
-            created_at: 0,
-        })
+        .process_rollup(
+            shutdown_rx.resubscribe(),
+            RollupWithState {
+                file_name,
+                state: RollupState::Uploaded,
+                error: None,
+                url: None,
+                created_at: 0,
+            },
+        )
         .await;
     assert_eq!(
         processing_result,
@@ -421,13 +432,16 @@ async fn rollup_processing_validation_test() {
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
 
     let processing_result = rollup_processor
-        .process_rollup(RollupWithState {
-            file_name,
-            state: RollupState::Uploaded,
-            error: None,
-            url: None,
-            created_at: 0,
-        })
+        .process_rollup(
+            shutdown_rx.resubscribe(),
+            RollupWithState {
+                file_name,
+                state: RollupState::Uploaded,
+                error: None,
+                url: None,
+                created_at: 0,
+            },
+        )
         .await;
     assert_eq!(
         processing_result,
@@ -450,13 +464,16 @@ async fn rollup_processing_validation_test() {
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
 
     let processing_result = rollup_processor
-        .process_rollup(RollupWithState {
-            file_name,
-            state: RollupState::Uploaded,
-            error: None,
-            url: None,
-            created_at: 0,
-        })
+        .process_rollup(
+            shutdown_rx.resubscribe(),
+            RollupWithState {
+                file_name,
+                state: RollupState::Uploaded,
+                error: None,
+                url: None,
+                created_at: 0,
+            },
+        )
         .await;
     assert_eq!(
         processing_result,
@@ -487,13 +504,16 @@ async fn rollup_processing_validation_test() {
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
 
     let processing_result = rollup_processor
-        .process_rollup(RollupWithState {
-            file_name,
-            state: RollupState::Uploaded,
-            error: None,
-            url: None,
-            created_at: 0,
-        })
+        .process_rollup(
+            shutdown_rx.resubscribe(),
+            RollupWithState {
+                file_name,
+                state: RollupState::Uploaded,
+                error: None,
+                url: None,
+                created_at: 0,
+            },
+        )
         .await;
     assert_eq!(
         processing_result,
@@ -511,13 +531,16 @@ async fn rollup_processing_validation_test() {
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
 
     let processing_result = rollup_processor
-        .process_rollup(RollupWithState {
-            file_name,
-            state: RollupState::Uploaded,
-            error: None,
-            url: None,
-            created_at: 0,
-        })
+        .process_rollup(
+            shutdown_rx.resubscribe(),
+            RollupWithState {
+                file_name,
+                state: RollupState::Uploaded,
+                error: None,
+                url: None,
+                created_at: 0,
+            },
+        )
         .await;
     assert_eq!(
         processing_result,
@@ -537,13 +560,16 @@ async fn rollup_processing_validation_test() {
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
 
     let processing_result = rollup_processor
-        .process_rollup(RollupWithState {
-            file_name,
-            state: RollupState::Uploaded,
-            error: None,
-            url: None,
-            created_at: 0,
-        })
+        .process_rollup(
+            shutdown_rx.resubscribe(),
+            RollupWithState {
+                file_name,
+                state: RollupState::Uploaded,
+                error: None,
+                url: None,
+                created_at: 0,
+            },
+        )
         .await;
     assert_eq!(
         processing_result,
@@ -586,14 +612,18 @@ async fn rollup_upload_test() {
         dir.path().to_str().unwrap().to_string(),
     );
 
+    let (_, shutdown_rx) = broadcast::channel::<()>(1);
     let processing_result = rollup_processor
-        .process_rollup(RollupWithState {
-            file_name,
-            state: RollupState::Uploaded,
-            error: None,
-            url: None,
-            created_at: 0,
-        })
+        .process_rollup(
+            shutdown_rx.resubscribe(),
+            RollupWithState {
+                file_name,
+                state: RollupState::Uploaded,
+                error: None,
+                url: None,
+                created_at: 0,
+            },
+        )
         .await;
     // Retries covered previous errors
     assert_eq!(processing_result, Ok(()));
@@ -615,13 +645,16 @@ async fn rollup_upload_test() {
     );
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
     let processing_result = rollup_processor
-        .process_rollup(RollupWithState {
-            file_name,
-            state: RollupState::Uploaded,
-            error: None,
-            url: None,
-            created_at: 0,
-        })
+        .process_rollup(
+            shutdown_rx.resubscribe(),
+            RollupWithState {
+                file_name,
+                state: RollupState::Uploaded,
+                error: None,
+                url: None,
+                created_at: 0,
+            },
+        )
         .await;
     // Retries are exhausted
     assert_eq!(
