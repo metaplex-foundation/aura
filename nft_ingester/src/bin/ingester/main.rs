@@ -172,6 +172,15 @@ pub async fn main() -> Result<(), IngesterError> {
     let tasks = JoinSet::new();
 
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
+    Storage::apply_all_migrations(
+        &config
+            .rocks_db_path_container
+            .clone()
+            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        index_storage.clone(),
+    )
+    .await
+    .unwrap();
     // start parsers
     let storage = Storage::open(
         &config

@@ -145,7 +145,7 @@ pub struct AssetLeaf {
     pub slot_updated: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AssetCollection {
     pub pubkey: Pubkey,
     pub collection: Updated<Pubkey>,

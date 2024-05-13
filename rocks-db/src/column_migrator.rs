@@ -119,7 +119,7 @@ impl Storage {
         let applied_migrations = migration_version_manager
             .get_all_applied_migrations()
             .await
-            .map_err(|e| StorageError::Common(e.to_string()))?;
+            .map_err(StorageError::Common)?;
         for version in 0..=CURRENT_MIGRATION_VERSION {
             if !applied_migrations.contains(&version) {
                 Storage::apply_migration(db_path, version, migration_version_manager.clone())
@@ -196,7 +196,7 @@ impl Storage {
         migration_version_manager
             .apply_migration(0)
             .await
-            .map_err(|e| StorageError::Common(e.to_string()))?;
+            .map_err(StorageError::Common)?;
         Ok(())
     }
 }

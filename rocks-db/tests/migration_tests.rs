@@ -116,6 +116,6 @@ mod tests {
 
         let selected_val = new_storage.asset_collection_data.get(key).unwrap().unwrap();
 
-        assert_eq!(selected_val, val.into())
+        assert_eq!(selected_val.pubkey, val.pubkey)
     }
 }

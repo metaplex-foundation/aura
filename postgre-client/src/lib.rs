@@ -15,6 +15,7 @@ pub mod asset_index_client;
 pub mod converters;
 pub mod integrity_verification_client;
 pub mod load_client;
+pub mod migration_manager;
 pub mod model;
 pub mod storage_traits;
 pub mod tasks;
