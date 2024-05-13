@@ -307,7 +307,7 @@ async fn xxhash_test() {
 
     let file_hash = xxhash_rust::xxh3::xxh3_128(&file_data);
 
-    let hash_hex = hex::encode(file_hash.to_le_bytes());
+    let hash_hex = hex::encode(file_hash.to_be_bytes());
 
-    assert_eq!(&hash_hex, "83505d07ecdeb6cbdc578d366091294f");
+    assert_eq!(&hash_hex, "4f299160368d57dccbb6deec075d5083");
 }

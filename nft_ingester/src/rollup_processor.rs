@@ -20,7 +20,7 @@ impl RollupDownloader for RollupDownloaderImpl {
 
         let file_hash = xxhash_rust::xxh3::xxh3_128(&response);
 
-        let hash_hex = hex::encode(file_hash.to_le_bytes());
+        let hash_hex = hex::encode(file_hash.to_be_bytes());
 
         if hash_hex != checksum {
             return Err(UsecaseError::InvalidParameters(
