@@ -11,6 +11,7 @@ mod tests {
     use std::collections::HashSet;
     use std::env::temp_dir;
     use std::sync::Arc;
+    use tempfile::TempDir;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
 
@@ -72,7 +73,7 @@ mod tests {
 
     #[test]
     fn test_merge_fail() {
-        let dir = temp_dir();
+        let dir = TempDir::new().unwrap();
         put_unmerged_value_to_storage(dir.as_path().to_str().unwrap());
         assert_eq!(
             Storage::open(
