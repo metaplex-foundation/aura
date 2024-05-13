@@ -9,7 +9,6 @@ mod tests {
     use rocks_db::Storage;
     use solana_sdk::pubkey::Pubkey;
     use std::collections::HashSet;
-    use std::env::temp_dir;
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::sync::Mutex;
@@ -74,10 +73,10 @@ mod tests {
     #[test]
     fn test_merge_fail() {
         let dir = TempDir::new().unwrap();
-        put_unmerged_value_to_storage(dir.as_path().to_str().unwrap());
+        put_unmerged_value_to_storage(dir.path().to_str().unwrap());
         assert_eq!(
             Storage::open(
-                dir.as_path().to_str().unwrap(),
+                dir.path().to_str().unwrap(),
                 Arc::new(Mutex::new(JoinSet::new())),
                 Arc::new(RequestErrorDurationMetrics::new()),
                 MigrationState::Last,
@@ -91,8 +90,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_migration() {
-        let dir = temp_dir();
-        let (key, val) = put_unmerged_value_to_storage(dir.as_path().to_str().unwrap());
+        let dir = TempDir::new().unwrap();
+        let (key, val) = put_unmerged_value_to_storage(dir.path().to_str().unwrap());
         let mut mock_migration_manager = MockMigrationVersionManager::new();
         mock_migration_manager
             .expect_apply_migration()
@@ -108,7 +107,7 @@ mod tests {
         .unwrap();
 
         let new_storage = Storage::open(
-            dir.as_path().to_str().unwrap(),
+            dir.path().to_str().unwrap(),
             Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
             MigrationState::Last,
