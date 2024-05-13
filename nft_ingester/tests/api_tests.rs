@@ -352,7 +352,7 @@ mod tests {
             let ref_value = generated_assets.collections[12].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
-                grouping: Some(("collection".to_string(), ref_value.collection.to_string())),
+                grouping: Some(("collection".to_string(), ref_value.collection.value.to_string())),
                 options: Some(Options {
                     show_unverified_collections: true,
                 }),
@@ -1647,7 +1647,7 @@ mod tests {
         let ref_value = generated_assets.collections[12].clone();
         let payload = GetAssetsByGroup {
             group_key: "collection".to_string(),
-            group_value: ref_value.collection.to_string(),
+            group_value: ref_value.collection.value.to_string(),
             sort_by: None,
             limit: None,
             page: None,
