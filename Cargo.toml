@@ -17,4 +17,5 @@ members = [
 
 [profile.release]
 lto = true
+debug = true
 codegen-units = 1
