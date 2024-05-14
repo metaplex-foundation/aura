@@ -224,6 +224,7 @@ pub fn generate_asset_index_records(n: usize) -> Vec<AssetIndex> {
                 metadata_url: "https://www.google.com".to_string(),
                 is_downloaded: true,
             }),
+            update_authority: None,
             slot_updated: (n + 10 + i) as i64,
             creators: vec![Creator {
                 creator: generate_random_pubkey(),

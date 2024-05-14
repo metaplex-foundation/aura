@@ -58,7 +58,6 @@ struct AssetRecord {
     ast_owner_type: Option<OwnerType>,
     ast_owner: Option<String>,
     ast_delegate: Option<String>,
-    ast_authority: Option<String>,
     ast_collection: Option<String>,
     ast_is_collection_verified: Option<bool>,
     ast_is_burnt: bool,
@@ -76,6 +75,7 @@ impl Storage {
         metadata_writer: &mut Writer<W>,
         creators_writer: &mut Writer<W>,
         assets_writer: &mut Writer<W>,
+        authority_writer: &mut Writer<W>,
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), String> {
@@ -94,6 +94,7 @@ impl Storage {
                     metadata_writer,
                     creators_writer,
                     assets_writer,
+                    authority_writer,
                     &mut metadata_key_set,
                 )
                 .await?;
@@ -109,6 +110,7 @@ impl Storage {
                 metadata_writer,
                 creators_writer,
                 assets_writer,
+                authority_writer,
                 &mut metadata_key_set,
             )
             .await?;
@@ -116,6 +118,7 @@ impl Storage {
         metadata_writer.flush().map_err(|e| e.to_string())?;
         creators_writer.flush().map_err(|e| e.to_string())?;
         assets_writer.flush().map_err(|e| e.to_string())?;
+        authority_writer.flush().map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -125,6 +128,7 @@ impl Storage {
         metadata_writer: &mut csv::Writer<W>,
         creators_writer: &mut csv::Writer<W>,
         assets_writer: &mut csv::Writer<W>,
+        authority_writer: &mut csv::Writer<W>,
         metadata_key_set: &mut HashSet<Vec<u8>>,
     ) -> Result<(), String> {
         let indexes = self
@@ -163,7 +167,6 @@ impl Storage {
                 ast_owner_type: index.owner_type,
                 ast_owner: index.owner.map(Self::encode),
                 ast_delegate: index.delegate.map(Self::encode),
-                ast_authority: index.authority.map(Self::encode),
                 ast_collection: index.collection.map(Self::encode),
                 ast_is_collection_verified: index.is_collection_verified,
                 ast_is_burnt: index.is_burnt,
@@ -175,6 +178,21 @@ impl Storage {
                 ast_slot_updated: index.slot_updated,
             };
             assets_writer.serialize(record).map_err(|e| e.to_string())?;
+            let authority = index.update_authority.or(index.authority);
+            let authority_key = if index.update_authority.is_some() {
+                index.collection
+            } else {
+                Some(key)
+            };
+            if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
+                authority_writer
+                    .serialize((
+                        Self::encode(authority_key.to_bytes()),
+                        Self::encode(authority.to_bytes()),
+                        index.slot_updated,
+                    ))
+                    .map_err(|e| e.to_string())?;
+            }
         }
         Ok(())
     }
@@ -203,23 +221,29 @@ impl Dumper for Storage {
         if assets_path.is_none() {
             return Err("invalid path".to_string());
         }
-        let authorities_path = base_path.join("assets_authorities.csv").to_str().map(str::to_owned);
+        let authorities_path = base_path
+            .join("assets_authorities.csv")
+            .to_str()
+            .map(str::to_owned);
         if authorities_path.is_none() {
             return Err("invalid path".to_string());
         }
         tracing::info!(
-            "Dumping to metadata: {:?}, creators: {:?}, assets: {:?}",
+            "Dumping to metadata: {:?}, creators: {:?}, assets: {:?}, authorities: {:?}",
             metadata_path,
             creators_path,
-            assets_path
+            assets_path,
+            authorities_path
         );
         let metadata_file = File::create(metadata_path.unwrap()).unwrap();
         let assets_file = File::create(assets_path.unwrap()).unwrap();
         let creators_file = File::create(creators_path.unwrap()).unwrap();
+        let authority_file = File::create(authorities_path.unwrap()).unwrap();
         // Wrap each file in a BufWriter
         let metadata_buf_writer = BufWriter::with_capacity(ONE_G, metadata_file);
         let assets_buf_writer = BufWriter::with_capacity(ONE_G, assets_file);
         let creators_buf_writer = BufWriter::with_capacity(ONE_G, creators_file);
+        let authority_buf_writer = BufWriter::with_capacity(ONE_G, authority_file);
         let mut metadata_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(metadata_buf_writer);
@@ -229,11 +253,15 @@ impl Dumper for Storage {
         let mut creators_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(creators_buf_writer);
+        let mut authority_writer = WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(authority_buf_writer);
 
         self.dump_csv(
             &mut metadata_writer,
             &mut creators_writer,
             &mut assets_writer,
+            &mut authority_writer,
             batch_size,
             rx,
         )

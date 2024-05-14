@@ -16,9 +16,11 @@ async fn test_scv_export_from_rocks() {
     let tasks_path = format!("{}/tasks.csv", temp_dir.path().to_str().unwrap());
     let assets_path = format!("{}/assets.csv", temp_dir.path().to_str().unwrap());
     let creators_path = format!("{}/creators.csv", temp_dir.path().to_str().unwrap());
+    let authority_path = format!("{}/authority.csv", temp_dir.path().to_str().unwrap());
     let tasks_file = File::create(tasks_path.to_string()).unwrap();
     let assets_file: File = File::create(assets_path.to_string()).unwrap();
     let creators_file = File::create(creators_path.to_string()).unwrap();
+    let authority_file = File::create(authority_path.to_string()).unwrap();
     let mut tasks_writer = WriterBuilder::new()
         .has_headers(false)
         .from_writer(tasks_file);
@@ -28,12 +30,16 @@ async fn test_scv_export_from_rocks() {
     let mut creators_writer = WriterBuilder::new()
         .has_headers(false)
         .from_writer(creators_file);
+    let mut authority_writer = WriterBuilder::new()
+        .has_headers(false)
+        .from_writer(authority_file);
 
     storage
         .dump_csv(
             &mut tasks_writer,
             &mut creators_writer,
             &mut assets_writer,
+            &mut authority_writer,
             155,
             &rx,
         )

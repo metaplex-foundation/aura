@@ -56,6 +56,7 @@ pub struct AssetIndex {
     pub is_frozen: bool,
     pub supply: Option<i64>,
     pub metadata_url: Option<UrlWithStatus>,
+    pub update_authority: Option<Pubkey>,
     pub slot_updated: i64,
 }
 

@@ -35,7 +35,13 @@ impl TempClient {
     pub async fn initialize(&self, initial_key: &[u8]) -> Result<(), String> {
         let mut c = self.pooled_connection.lock().await;
         let mut tx = c.begin().await.map_err(|e| e.to_string())?;
-        for table in ["tasks", "asset_creators_v3", "assets_v3", "assets_authorities", "last_synced_key"] {
+        for table in [
+            "tasks",
+            "asset_creators_v3",
+            "assets_v3",
+            "assets_authorities",
+            "last_synced_key",
+        ] {
             self.pg_client
                 .create_temp_tables(table, &mut tx, false, TEMP_INDEXING_TABLE_PREFIX)
                 .await?;
@@ -164,6 +170,24 @@ impl TempClient {
             .await?;
 
         let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("INSERT INTO assets_authorities SELECT * FROM ");
+        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
+        query_builder.push("assets_authorities ON CONFLICT (auth_pubkey)
+        DO UPDATE SET
+            auth_authority = EXCLUDED.auth_authority,
+            auth_slot_updated = EXCLUDED.auth_slot_updated,
+            WHERE assets_v3.auth_slot_updated <= EXCLUDED.auth_slot_updated OR assets_authorities.auth_slot_updated IS NULL;");
+
+        self.pg_client
+            .execute_query_with_metrics(
+                &mut tx,
+                &mut query_builder,
+                BATCH_UPSERT_ACTION,
+                "assets_authorities",
+            )
+            .await?;
+
+        let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("UPDATE last_synced_key SET last_synced_asset_update_key = (SELECT last_synced_asset_update_key FROM ");
         query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
         query_builder.push("last_synced_key WHERE id = 1) WHERE id = 1;");
@@ -175,25 +199,6 @@ impl TempClient {
                 "last_synced_key",
             )
             .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("INSERT INTO assets_authorities SELECT * FROM ");
-        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
-        query_builder.push("assets_authorities ON CONFLICT (auth_pubkey)
-        DO UPDATE SET
-            auth_authority = EXCLUDED.auth_authority,
-            auth_slot_updated = EXCLUDED.auth_slot_updated,
-            WHERE assets_v3.auth_slot_updated <= EXCLUDED.auth_slot_updated OR assets_v3.auth_slot_updated IS NULL;");
-
-        self.pg_client
-            .execute_query_with_metrics(
-                &mut tx,
-                &mut query_builder,
-                BATCH_UPSERT_ACTION,
-                "assets_authorities",
-            )
-            .await?;
-
         self.pg_client.commit_transaction(tx).await
     }
 }
