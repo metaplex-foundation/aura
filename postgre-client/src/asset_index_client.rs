@@ -19,6 +19,7 @@ use entities::models::{AssetIndex, Creator, UrlWithStatus};
 pub const INSERT_ASSET_PARAMETERS_COUNT: usize = 19;
 pub const DELETE_ASSET_CREATOR_PARAMETERS_COUNT: usize = 2;
 pub const INSERT_ASSET_CREATOR_PARAMETERS_COUNT: usize = 4;
+pub const INSERT_AUTHORITY_PARAMETERS_COUNT: usize = 3;
 
 impl PgClient {
     pub(crate) async fn fetch_last_synced_id_impl(
@@ -81,7 +82,7 @@ impl PgClient {
         .await?;
         for chunk in updated_components
             .authorities
-            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_ASSET_PARAMETERS_COUNT)
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_AUTHORITY_PARAMETERS_COUNT)
         {
             self.insert_authorities(transaction, chunk, table_names.authorities_table.as_str())
                 .await?;
