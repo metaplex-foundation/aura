@@ -203,6 +203,10 @@ impl Dumper for Storage {
         if assets_path.is_none() {
             return Err("invalid path".to_string());
         }
+        let authorities_path = base_path.join("assets_authorities.csv").to_str().map(str::to_owned);
+        if authorities_path.is_none() {
+            return Err("invalid path".to_string());
+        }
         tracing::info!(
             "Dumping to metadata: {:?}, creators: {:?}, assets: {:?}",
             metadata_path,

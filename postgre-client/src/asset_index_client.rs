@@ -229,12 +229,15 @@ impl AssetIndexStorage for PgClient {
         let Some(creators_path) = base_path.join("creators.csv").to_str().map(str::to_owned) else {
             return Err("invalid path".to_string());
         };
+        let Some(assets_authorities_path) = base_path.join("assets_authorities.csv").to_str().map(str::to_owned) else {
+            return Err("invalid path".to_string());
+        };
         let Some(assets_path) = base_path.join("assets.csv").to_str().map(str::to_owned) else {
             return Err("invalid path".to_string());
         };
         let mut transaction = self.start_transaction().await?;
 
-        self.copy_all(metadata_path, creators_path, assets_path, &mut transaction)
+        self.copy_all(metadata_path, creators_path, assets_path, assets_authorities_path,&mut transaction)
             .await?;
         self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
             .await?;
