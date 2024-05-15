@@ -312,8 +312,10 @@ impl PgClient {
         ] {
             self.copy_table_from(&mut transaction, path, table, columns)
                 .await?;
+            self.commit_transaction(transaction).await?;
+            transaction = self.start_transaction().await?;
         }
-        self.commit_transaction(transaction).await?;
+
         Ok(())
     }
 }
