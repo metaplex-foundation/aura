@@ -284,6 +284,19 @@ impl Storage {
         let asset_collection_details = asset_collection_details?;
         let asset_leaf_data = asset_leaf_data?;
 
+        let urls: Vec<_> = asset_dynamic_details
+            .iter()
+            .flatten()
+            .map(|asset| asset.url.value.clone())
+            .collect();
+        let offchain_data = self
+            .asset_offchain_data
+            .batch_get(urls)
+            .await?
+            .into_iter()
+            .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
+            .collect::<HashMap<_, _>>();
+
         for static_info in asset_static_details.iter().flatten() {
             let asset_index = ReferenceAssetIndex {
                 pubkey: static_info.pubkey,
@@ -317,8 +330,18 @@ impl Storage {
                     dynamic_info.current_size.as_ref().map(|n| n.value);
                 existed_index.mpl_core_plugins_json_version =
                     dynamic_info.plugins_json_version.as_ref().map(|n| n.value);
+                existed_index.chain_data = dynamic_info.onchain_data.clone().map(|d| d.value);
+                existed_index.raw_name = dynamic_info.raw_name.clone().map(|d| d.value);
+                existed_index.metadata = offchain_data
+                    .get(&dynamic_info.url.value)
+                    .map(|o| o.metadata.clone());
             } else {
                 let asset_index = ReferenceAssetIndex {
+                    metadata: offchain_data
+                        .get(&dynamic_info.url.value)
+                        .map(|o| o.metadata.clone()),
+                    raw_name: dynamic_info.raw_name.clone().map(|d| d.value),
+                    chain_data: dynamic_info.onchain_data.clone().map(|d| d.value),
                     mpl_core_plugins: dynamic_info.plugins.clone().map(|p| p.value),
                     mpl_core_unknown_plugins: dynamic_info.unknown_plugins.clone().map(|p| p.value),
                     mpl_core_collection_num_minted: dynamic_info

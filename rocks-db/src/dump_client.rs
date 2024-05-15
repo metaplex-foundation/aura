@@ -645,16 +645,16 @@ impl Storage {
             asset_data_writer
                 .serialize((
                     Self::encode(key.to_bytes()),
-                    index.slot_updated, // chain_data_mutability
-                    index.slot_updated, // chain_data
+                    "mutable", //chain_nutability,
+                    index.chain_data,
                     index.metadata_url.map(|m| m.metadata_url),
-                    index.slot_updated, // metadata_mutability
-                    index.slot_updated, // metadata
+                    "mutable", // metadata_mutability
+                    index.metadata,
                     index.slot_updated,
                     false,
-                    index.slot_updated, // raw_name
-                    index.slot_updated, // raw_symbol
-                    index.slot_updated, // base_info_seq
+                    index.raw_name.clone().map(|r| Self::encode(r.as_bytes())),
+                    index.raw_name.map(|r| Self::encode(r.as_bytes())), // raw_symbol
+                    index.slot_updated,                                 // base_info_seq
                 ))
                 .map_err(|e| e.to_string())?;
             if let Some(collection) = index.collection {

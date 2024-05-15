@@ -93,6 +93,9 @@ pub struct ReferenceAssetIndex {
     pub mpl_core_collection_num_minted: Option<u32>,
     pub mpl_core_collection_current_size: Option<u32>,
     pub mpl_core_plugins_json_version: Option<u32>,
+    pub chain_data: Option<String>,
+    pub metadata: Option<String>,
+    pub raw_name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
