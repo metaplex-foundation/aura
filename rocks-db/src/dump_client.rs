@@ -651,7 +651,7 @@ impl Storage {
 
             if let Some(metadata) = index
                 .metadata
-                .and_then(|p| escape_json(&p).ok().map(|s| escape_string(&s)))
+                .and_then(|p| escape_json(&p).ok().map(|s| remove_null_bytes(&s)))
             {
                 if !metadata.is_empty() {
                     asset_data_writer
@@ -660,7 +660,7 @@ impl Storage {
                             "mutable", //chain_nutability,
                             index
                                 .chain_data
-                                .and_then(|p| escape_json(&p).ok().map(|s| escape_string(&s))),
+                                .and_then(|p| escape_json(&p).ok().map(|s| remove_null_bytes(&s))),
                             index.metadata_url.map(|m| escape_string(&m.metadata_url)),
                             "mutable", // metadata_mutability
                             metadata,
@@ -722,6 +722,10 @@ fn escape_string(s: &str) -> String {
         .replace('\t', "\\t")
         .replace('\x08', "\\b")
         .replace('\x0C', "\\f")
+}
+
+fn remove_null_bytes(s: &str) -> String {
+    s.chars().filter(|&c| c != '\u{0000}').collect()
 }
 
 fn escape_json(json_str: &str) -> Result<String, serde_json::Error> {
