@@ -652,7 +652,7 @@ impl Storage {
             // }
 
             if let Some(metadata) = index.metadata {
-                if metadata != serde_json::value::Value::Null {
+                if !metadata.is_empty() {
                     asset_data_writer
                         .serialize((
                             Self::encode(key.to_bytes()),
