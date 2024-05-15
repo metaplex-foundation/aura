@@ -121,3 +121,6 @@ name = "synchronizer"
 
 [[bin]]
 name = "raw_backup"
+
+[[bin]]
+name = "reference_backfill"

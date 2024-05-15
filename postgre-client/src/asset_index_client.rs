@@ -214,6 +214,32 @@ impl AssetIndexStorage for PgClient {
     }
 }
 
+impl PgClient {
+    async fn load_from_reference_dump(
+        &self,
+        base_path: &std::path::Path,
+        last_key: &[u8],
+    ) -> Result<(), String> {
+        let Some(metadata_path) = base_path.join("metadata.csv").to_str().map(str::to_owned) else {
+            return Err("invalid path".to_string());
+        };
+        let Some(creators_path) = base_path.join("creators.csv").to_str().map(str::to_owned) else {
+            return Err("invalid path".to_string());
+        };
+        let Some(assets_path) = base_path.join("assets.csv").to_str().map(str::to_owned) else {
+            return Err("invalid path".to_string());
+        };
+        let mut transaction = self.start_transaction().await?;
+
+        self.copy_all(metadata_path, creators_path, assets_path, &mut transaction)
+            .await?;
+        self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
+            .await?;
+        self.commit_transaction(transaction).await?;
+        Ok(())
+    }
+}
+
 #[derive(sqlx::FromRow, Debug)]
 struct TaskIdRawResponse {
     pub(crate) tsk_id: Vec<u8>,
