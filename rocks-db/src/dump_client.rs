@@ -610,10 +610,12 @@ impl Storage {
             //     slot_updated_token_account: index.slot_updated, // slot_updated_token
             //     slot_updated_mint_account: index.slot_updated, // slot_updated_mint
             //     slot_updated_cnft_transaction: index.slot_updated, // slot_updated_cnft
-            //     mpl_core_plugins: index.mpl_core_plugins.and_then(|p| escape_json(&p).ok()),
+            //     mpl_core_plugins: index
+            //         .mpl_core_plugins
+            //         .and_then(|p| escape_json(&p).ok().map(|s| remove_null_bytes(&s))),
             //     mpl_core_unknown_plugins: index
             //         .mpl_core_unknown_plugins
-            //         .and_then(|p| escape_json(&p).ok()),
+            //         .and_then(|p| escape_json(&p).ok().map(|s| remove_null_bytes(&s))),
             //     mpl_core_collection_num_minted: index.mpl_core_collection_num_minted,
             //     mpl_core_collection_current_size: index.mpl_core_collection_current_size,
             //     mpl_core_plugins_json_version: index.mpl_core_plugins_json_version,
@@ -725,7 +727,7 @@ fn escape_string(s: &str) -> String {
 }
 
 fn remove_null_bytes(s: &str) -> String {
-    s.chars().filter(|&c| c != '\u{0000}').collect()
+    s.replace('\u{0000}', "")
 }
 
 fn escape_json(json_str: &str) -> Result<String, serde_json::Error> {
