@@ -4,12 +4,13 @@ The main flow of the application can be illustrated as following:
 
 ```mermaid
 flowchart TB
-  Geyser -->|"1.Receive\ntransaction data\n(via ZeroMQ)"| Ingester
-  BigTable -->|1.Receive\ntransaction data| Ingester
-  SolanaRPC -->|1.Receive\ntransaction data| Ingester
+  Geyser --> ZeroMQ([ZeroMQ]) -->|"1.Receive\ntransaction data"| Ingester
+  BigTable[(BigTable)] --->|1.Receive\ntransaction data| Ingester
+  SolanaRPC --->|1.Receive\ntransaction data| Ingester
   Ingester -->|2.Schedule metadata\ndownload task| Postgre[("PostgreSQL\n(download queue\n&\nindex)")]
   JSONDownloader -->|3.Take metadata\ndownload task| Postgre
   JSONDownloader["JSON\nDownloader"] -->|4.Download\nmedia\nmetadata| DigitalAssetResource["Digital\nAsset\nResource"]
+  
   
   subgraph system[" "]
     Backfiller -->|0.Trigger historical\ndata backfill\nif required| Ingester
@@ -20,7 +21,7 @@ flowchart TB
 
   RocksDB --> Synchronizer -->|6.Update index| Postgre
 
-  Clients <-->|"7.Request digital assets\ndirectly by key\nor by fields"| JsonRPCServer
+  Clients <--->|"7.Request digital assets\ndirectly by key\nor by fields"| JsonRPCServer
   JsonRPCServer-->|"8.Search key by fields\nusing index\n(optional)"| Postgre
 ```
 
