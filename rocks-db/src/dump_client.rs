@@ -85,14 +85,13 @@ struct ReferenceAssetRecord {
     alt_id: String,
     #[serde(serialize_with = "serialize_as_snake_case")]
     specification_version: SpecificationVersions,
-    #[serde(serialize_with = "serialize_as_snake_case")]
     specification_asset_class: SpecificationAssetClass,
     owner: Option<String>,
-    #[serde(serialize_with = "serialize_option_as_snake_case")]
-    owner_type: Option<OwnerType>,
+    #[serde(serialize_with = "serialize_as_snake_case")]
+    owner_type: OwnerType,
     delegate: Option<String>,
     frozen: bool,
-    supply: Option<i64>,
+    supply: i64,
     supply_mint: String,
     compressed: bool,
     compressible: bool,
@@ -106,6 +105,8 @@ struct ReferenceAssetRecord {
     royalty_amount: i64,
     asset_data: Option<String>,
     created_at: DateTime<Utc>,
+    burnt: bool,
+    slot_updated: i64,
     data_hash: Option<String>,
     creator_hash: Option<String>,
     owner_delegate_seq: i64,
@@ -355,7 +356,7 @@ impl Storage {
             cl_audits_v2_path,
             token_accounts_path
         );
-        let asset_file = File::create(asset_path.unwrap()).unwrap();
+        let asset_file = File::create(asset_path.clone().unwrap()).unwrap();
         let authority_file = File::create(authority_path.unwrap()).unwrap();
         let creators_file = File::create(creators_path.unwrap()).unwrap();
         let asset_data_file = File::create(asset_data_path.unwrap()).unwrap();
@@ -415,6 +416,7 @@ impl Storage {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn dump_reference_csv<W: Write>(
         &self,
         asset_writer: &mut Writer<W>,
@@ -498,11 +500,11 @@ impl Storage {
                 ))
                 .map_err(|e| e.to_string())?;
         }
-        let mut cl_items_last_id = 0;
         let iter = self.cl_items.iter_start();
-        for cl_item in iter
+        for (cl_items_last_id, cl_item) in iter
             .filter_map(|k| k.ok())
             .flat_map(|(_, value)| deserialize::<ClItem>(value.as_ref()).ok())
+            .enumerate()
         {
             cl_items_writer
                 .serialize((
@@ -515,17 +517,17 @@ impl Storage {
                     Self::encode(cl_item.cli_hash),
                 ))
                 .map_err(|e| e.to_string())?;
-            cl_items_last_id += 1;
         }
 
-        let mut cl_audit_last_id = 0;
         let iter = self.asset_signature.iter_start();
-        for (asset_signature_key, asset_signature) in
-            iter.filter_map(|k| k.ok()).flat_map(|(key, value)| {
+        for (cl_audit_last_id, (asset_signature_key, asset_signature)) in iter
+            .filter_map(|k| k.ok())
+            .flat_map(|(key, value)| {
                 let asset_signature = deserialize::<AssetSignature>(value.as_ref()).ok()?;
                 let asset_signature_key = AssetSignature::decode_key(key.as_ref().to_vec()).ok()?;
                 Some((asset_signature_key, asset_signature))
             })
+            .enumerate()
         {
             cl_audits_v2_writer
                 .serialize((
@@ -537,10 +539,9 @@ impl Storage {
                     Self::encode(
                         Signature::from_str(&asset_signature.tx).map_err(|e| e.to_string())?,
                     ),
-                    asset_signature.instruction,
+                    transform_input_instruction(&asset_signature.instruction),
                 ))
                 .map_err(|e| e.to_string())?;
-            cl_audit_last_id += 1;
         }
 
         asset_writer.flush().map_err(|e| e.to_string())?;
@@ -554,6 +555,7 @@ impl Storage {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn dump_reference_csv_batch<W: Write>(
         &self,
         batch: &[Pubkey],
@@ -577,10 +579,10 @@ impl Storage {
                 specification_version: index.specification_version,
                 specification_asset_class: index.specification_asset_class,
                 owner: index.owner.map(Self::encode),
-                owner_type: index.owner_type,
+                owner_type: index.owner_type.unwrap_or(OwnerType::Unknown),
                 delegate: index.delegate.map(Self::encode),
                 frozen: index.is_frozen,
-                supply: index.supply,
+                supply: index.supply.unwrap_or(1),
                 supply_mint: Self::encode(key.to_bytes()),
                 compressed: index.is_compressed,
                 compressible: index.is_compressible,
@@ -593,12 +595,12 @@ impl Storage {
                 royalty_amount: index.royalty_amount,
                 asset_data: Some(Self::encode(key.to_bytes())),
                 created_at: Utc::now(),
-                data_hash: index
-                    .data_hash
-                    .map(|data_hash| Self::encode(data_hash.to_bytes())),
+                burnt: index.is_burnt,
+                slot_updated: index.slot_updated,
+                data_hash: index.data_hash.map(|data_hash| data_hash.to_string()),
                 creator_hash: index
                     .creator_hash
-                    .map(|creator_hash| Self::encode(creator_hash.to_bytes())),
+                    .map(|creator_hash| creator_hash.to_string()),
                 owner_delegate_seq: index.slot_updated, // owner_delegate_seq
                 leaf_seq: index.slot_updated,           // leaf_seq
                 base_info_seq: index.slot_updated,      // base_info_seq
@@ -636,27 +638,32 @@ impl Storage {
                         creator.creator_share,
                         creator.creator_verified,
                         index.slot_updated,
+                        index.slot_updated,
                         position,
                     ))
                     .map_err(|e| e.to_string())?;
                 creators_last_id.add_assign(1);
             }
 
-            asset_data_writer
-                .serialize((
-                    Self::encode(key.to_bytes()),
-                    "mutable", //chain_nutability,
-                    index.chain_data,
-                    index.metadata_url.map(|m| m.metadata_url),
-                    "mutable", // metadata_mutability
-                    index.metadata,
-                    index.slot_updated,
-                    false,
-                    index.raw_name.clone().map(|r| Self::encode(r.as_bytes())),
-                    index.raw_name.map(|r| Self::encode(r.as_bytes())), // raw_symbol
-                    index.slot_updated,                                 // base_info_seq
-                ))
-                .map_err(|e| e.to_string())?;
+            if let Some(metadata) = index.metadata {
+                if !metadata.is_empty() {
+                    asset_data_writer
+                        .serialize((
+                            Self::encode(key.to_bytes()),
+                            "mutable", //chain_nutability,
+                            index.chain_data,
+                            index.metadata_url.map(|m| m.metadata_url),
+                            "mutable", // metadata_mutability
+                            metadata,
+                            index.slot_updated,
+                            false,
+                            index.raw_name.clone().map(|r| Self::encode(r.as_bytes())),
+                            index.raw_name.map(|r| Self::encode(r.as_bytes())), // raw_symbol
+                            index.slot_updated,                                 // base_info_seq
+                        ))
+                        .map_err(|e| e.to_string())?;
+                }
+            }
             if let Some(collection) = index.collection {
                 asset_grouping_writer
                     .serialize((
@@ -674,5 +681,26 @@ impl Storage {
             }
         }
         Ok(())
+    }
+}
+
+fn transform_input_instruction(input: &str) -> &str {
+    match input {
+        "MintV1" => "mint_v1",
+        "MintToCollectionV1" => "mint_to_collection_v1",
+        "Redeem" => "redeem",
+        "CancelRedeem" => "cancel_redeem",
+        "Transfer" => "transfer",
+        "Delegate" => "delegate",
+        "DecompressV1" => "decompress_v1",
+        "Compress" => "compress",
+        "Burn" => "burn",
+        "VerifyCreator" => "verify_creator",
+        "UnverifyCreator" => "unverify_creator",
+        "VerifyCollection" => "verify_collection",
+        "UnverifyCollection" => "unverify_collection",
+        "SetAndVerifyCollection" => "set_and_verify_collection",
+        "UpdateMetadata" => "update_metadata",
+        _ => "unknown",
     }
 }

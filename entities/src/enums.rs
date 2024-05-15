@@ -22,18 +22,30 @@ pub enum SpecificationVersions {
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Default)]
 pub enum SpecificationAssetClass {
+    #[serde(rename = "unknown")]
     #[default]
     Unknown,
+    #[serde(rename = "FUNGIBLE_TOKEN")]
     FungibleToken,
+    #[serde(rename = "FUNGIBLE_ASSET")]
     FungibleAsset,
+    #[serde(rename = "NFT")]
     Nft,
+    #[serde(rename = "PRINTABLE_NFT")]
     PrintableNft,
+    #[serde(rename = "PROGRAMMABLE_NFT")]
     ProgrammableNft,
+    #[serde(rename = "PRINT")]
     Print,
+    #[serde(rename = "TRANSFER_RESTRICTED_NFT")]
     TransferRestrictedNft,
+    #[serde(rename = "NON_TRANSFERABLE_NFT")]
     NonTransferableNft,
+    #[serde(rename = "IDENTITY_NFT")]
     IdentityNft,
+    #[serde(rename = "MPL_CORE_ASSET")]
     MplCoreAsset,
+    #[serde(rename = "MPL_CORE_COLLECTION")]
     MplCoreCollection,
 }
 
