@@ -653,16 +653,17 @@ impl Storage {
 
             if let Some(metadata) = index
                 .metadata
-                .and_then(|p| escape_json(&p).ok().map(|s| remove_null_bytes(&s)))
+                .and_then(|metadata| serde_json::value::Value::from_str(&metadata).ok())
+            // .and_then(|p| escape_json(&p).ok().map(|s| remove_null_bytes(&s)))
             {
-                if !metadata.is_empty() {
+                if metadata != serde_json::value::Value::Null {
                     asset_data_writer
                         .serialize((
                             Self::encode(key.to_bytes()),
                             "mutable", //chain_nutability,
-                            index
-                                .chain_data
-                                .and_then(|p| escape_json(&p).ok().map(|s| remove_null_bytes(&s))),
+                            index.chain_data.and_then(|json_str| {
+                                serde_json::value::Value::from_str(&json_str).ok()
+                            }),
                             index.metadata_url.map(|m| escape_string(&m.metadata_url)),
                             "mutable", // metadata_mutability
                             metadata,
