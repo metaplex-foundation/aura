@@ -2,7 +2,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 
-use entities::models::{AssetSignatureWithPagination, TokenAccount};
+use entities::models::AssetSignatureWithPagination;
+use entities::models::TokenAccResponse;
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
@@ -20,6 +21,7 @@ use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
     MetadataMap, MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
 };
+use entities::api_req_params::Pagination;
 
 pub fn to_uri(uri: String) -> Option<Url> {
     Url::parse(uri.as_str()).ok()
@@ -408,14 +410,56 @@ pub fn asset_list_to_rpc(asset_list: Vec<FullAsset>) -> (Vec<RpcAsset>, Vec<Asse
 }
 
 pub fn build_token_accounts_response(
-    token_accounts: Vec<TokenAccount>,
+    token_accounts: Vec<TokenAccResponse>,
     limit: u64,
     page: Option<u64>,
-) -> TokenAccountsList {
-    TokenAccountsList {
+    cursor_enabled: bool,
+) -> Result<TokenAccountsList, String> {
+    let pagination = get_pagination_values(&token_accounts, &page, cursor_enabled)?;
+
+    Ok(TokenAccountsList {
         total: token_accounts.len() as u32,
         limit: limit as u32,
-        page: page.map(|x| x as u32),
-        token_accounts,
+        page: pagination.page,
+        after: pagination.after,
+        before: pagination.before,
+        cursor: pagination.cursor,
+        token_accounts: token_accounts.into_iter().map(|t| t.token_acc).collect(),
+    })
+}
+
+fn get_pagination_values(
+    token_accounts: &[TokenAccResponse],
+    page: &Option<u64>,
+    cursor_enabled: bool,
+) -> Result<Pagination, String> {
+    if cursor_enabled {
+        if let Some(token_acc) = token_accounts.last() {
+            Ok(Pagination {
+                cursor: Some(token_acc.sorting_id.clone()),
+                ..Default::default()
+            })
+        } else {
+            Ok(Pagination::default())
+        }
+    } else if let Some(p) = page {
+        Ok(Pagination {
+            page: Some(*p as u32),
+            ..Default::default()
+        })
+    } else {
+        let first_row = token_accounts
+            .first()
+            .map(|token_acc| token_acc.sorting_id.clone());
+
+        let last_row = token_accounts
+            .last()
+            .map(|token_acc| token_acc.sorting_id.clone());
+
+        Ok(Pagination {
+            after: last_row,
+            before: first_row,
+            ..Default::default()
+        })
     }
 }
