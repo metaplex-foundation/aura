@@ -719,6 +719,9 @@ fn escape_string(s: &str) -> String {
         .replace('\"', "\\\"")
         .replace('\n', "\\n")
         .replace('\r', "\\r")
+        .replace('\t', "\\t")
+        .replace('\x08', "\\b")
+        .replace('\x0C', "\\f")
 }
 
 fn escape_json(json_str: &str) -> Result<String, serde_json::Error> {
