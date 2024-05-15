@@ -128,14 +128,13 @@ impl TokenAccountsGetter for Storage {
             None
         };
 
-        let (token_account, decoded_owner) = if let Some(key) = start_from {
-            let (token_acc, owner) = decode_sorting_key(key)
-                .map_err(|e| UsecaseError::InvalidParameters(format!("Pagination: {:?}", e)))?;
-
-            (Some(token_acc), Some(owner))
-        } else {
-            (None, None)
-        };
+        let (token_account, decoded_owner) = start_from
+            .map(|key| {
+                decode_sorting_key(key)
+                    .map_err(|e| UsecaseError::InvalidParameters(format!("Pagination: {:?}", e)))
+            })
+            .transpose()?
+            .unzip();
 
         let until_token_acc = if let (Some(_after), Some(before)) = (&after, &before) {
             let (token_acc, _owner) = decode_sorting_key(before)
