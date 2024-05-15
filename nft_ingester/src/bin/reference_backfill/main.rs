@@ -5,7 +5,7 @@ use rocks_db::Storage;
 use std::env;
 use std::sync::Arc;
 use tempfile::TempDir;
-use tokio::sync::Mutex;
+use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 
 #[tokio::main(flavor = "multi_thread")]
@@ -29,10 +29,19 @@ pub async fn main() -> Result<(), IngesterError> {
         red_metrics.clone(),
     )
     .unwrap();
+    let (_, shutdown_rx) = broadcast::channel::<()>(1);
 
     let reference_storage =
         Arc::new(PgClient::new(reference_db_url, 100, 250, red_metrics.clone()).await?);
     let dump_dir = TempDir::new().unwrap();
+    source_storage
+        .dump_reference_db(dump_dir.path(), 200_000, &shutdown_rx.resubscribe())
+        .await
+        .unwrap();
+    reference_storage
+        .load_from_reference_dump(dump_dir.path())
+        .await
+        .unwrap();
 
     println!("Starting data migration...");
 

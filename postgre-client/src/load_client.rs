@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl PgClient {
-    async fn copy_table_from(
+    pub async fn copy_table_from(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         path: String,

@@ -6,6 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use bincode::deserialize;
+use chrono::{DateTime, Utc};
 use csv::{Writer, WriterBuilder};
 use entities::enums::{
     OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
@@ -13,8 +14,9 @@ use entities::enums::{
 use hex;
 use inflector::Inflector;
 use serde::{Serialize, Serializer};
-use serde_json::json;
+use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
+use std::ops::AddAssign;
 use std::str::FromStr;
 use std::{
     collections::HashSet,
@@ -72,6 +74,49 @@ struct AssetRecord {
     ast_supply: Option<i64>,
     ast_metadata_url_id: Option<String>,
     ast_slot_updated: i64,
+}
+
+#[derive(Serialize)]
+struct ReferenceAssetRecord {
+    ast_pubkey: String,
+    alt_id: String,
+    #[serde(serialize_with = "serialize_as_snake_case")]
+    specification_version: SpecificationVersions,
+    #[serde(serialize_with = "serialize_as_snake_case")]
+    specification_asset_class: SpecificationAssetClass,
+    owner: Option<String>,
+    #[serde(serialize_with = "serialize_option_as_snake_case")]
+    owner_type: Option<OwnerType>,
+    delegate: Option<String>,
+    frozen: bool,
+    supply: Option<i64>,
+    supply_mint: String,
+    compressed: bool,
+    compressible: bool,
+    seq: i64,
+    tree_id: Option<String>,
+    leaf: Option<String>,
+    nonce: i64,
+    #[serde(serialize_with = "serialize_as_snake_case")]
+    royalty_target_type: RoyaltyTargetType,
+    royalty_target: Option<String>,
+    royalty_amount: i64,
+    asset_data: Option<String>,
+    created_at: DateTime<Utc>,
+    data_hash: Option<String>,
+    creator_hash: Option<String>,
+    owner_delegate_seq: i64,
+    leaf_seq: i64,
+    base_info_seq: i64,
+    slot_updated_metadata_account: i64,
+    slot_updated_token_account: i64,
+    slot_updated_mint_account: i64,
+    slot_updated_cnft_transaction: i64,
+    mpl_core_plugins: Value,
+    mpl_core_unknown_plugins: Value,
+    mpl_core_collection_num_minted: i64,
+    mpl_core_collection_current_size: i64,
+    mpl_core_plugins_json_version: i64,
 }
 
 impl Storage {
@@ -243,7 +288,7 @@ impl Dumper for Storage {
 }
 
 impl Storage {
-    async fn dump_reference_db(
+    pub async fn dump_reference_db(
         &self,
         base_path: &std::path::Path,
         batch_size: usize,
@@ -474,82 +519,73 @@ impl Storage {
         creators_writer: &mut Writer<W>,
         asset_data_writer: &mut Writer<W>,
         asset_grouping_writer: &mut Writer<W>,
-        cl_items_writer: &mut Writer<W>,
-        cl_audits_v2_writer: &mut Writer<W>,
+        _cl_items_writer: &mut Writer<W>,
+        _cl_audits_v2_writer: &mut Writer<W>,
         creators_last_id: &mut u64,
         authority_last_id: &mut u64,
         grouping_last_id: &mut u64,
     ) -> Result<(), String> {
         let indexes = self
-            .get_asset_indexes(batch)
+            .get_reference_asset_indexes(batch)
             .await
             .map_err(|e| e.to_string())?;
         for (key, index) in indexes {
-            // let metadata_url = index
-            //     .metadata_url
-            //     .map(|url| (url.get_metadata_id(), url.metadata_url.trim().to_owned()));
-            // if let Some((ref metadata_key, ref url)) = metadata_url {
-            //     if !metadata_key_set.contains(metadata_key) {
-            //         metadata_key_set.insert(metadata_key.clone());
-            //         metadata_writer
-            //             .serialize((Self::encode(metadata_key), url.to_string(), "pending"))
-            //             .map_err(|e| e.to_string())?;
-            //     }
-            // }
-            asset_writer
-                .serialize((
-                    Self::encode(key.to_bytes()),
-                    Self::encode(key.to_bytes()),
-                    index.specification_version,
-                    index.specification_asset_class,
-                    Self::encode(index.owner),
-                    index.owner_type,
-                    Self::encode(index.delegate),
-                    index.is_frozen,
-                    index.supply,
-                    Self::encode(key.to_bytes()),
-                    index.is_compressed,
-                    index.is_compressible,
-                    index.slot_updated,
-                    Self::encode(key.to_bytes()), // tree
-                    Self::encode(key.to_bytes()), // leaf
-                    index.slot_updated,           // nonce
-                    index.royalty_target_type,    // nonce
-                    Self::encode(key.to_bytes()), // royalty_target
-                    index.royalty_amount,
-                    Self::encode(key.to_bytes()),
-                    index.slot_updated,           // created_at
-                    Self::encode(key.to_bytes()), // data_hash
-                    Self::encode(key.to_bytes()), // creator_hash
-                    index.slot_updated,           // owner_delegate_seq
-                    index.slot_updated,           // leaf_seq
-                    index.slot_updated,           // base_info_seq
-                    index.slot_updated,           // slot_updated_metadata
-                    index.slot_updated,           // slot_updated_token
-                    index.slot_updated,           // slot_updated_mint
-                    index.slot_updated,           // slot_updated_cnft
-                    json!(index.slot_updated),    // core_plugins
-                    json!(index.slot_updated),    // core_unknown_plugins
-                    index.slot_updated,           // core collection num minted
-                    index.slot_updated,           // core collection current size
-                    index.slot_updated,           // core plugins json version
-                ))
-                .map_err(|e| e.to_string())?;
-            authority_writer
-                .serialize((
-                    authority_last_id,
-                    Self::encode(key.to_bytes()),
-                    "",
-                    Self::encode(index.authority.to_bytes()),
-                    index.slot_updated,
-                    index.slot_updated,
-                ))
-                .map_err(|e| e.to_string())?;
-            *authority_last_id += 1;
+            let asset = ReferenceAssetRecord {
+                ast_pubkey: Self::encode(key.to_bytes()),
+                alt_id: Self::encode(key.to_bytes()),
+                specification_version: index.specification_version,
+                specification_asset_class: index.specification_asset_class,
+                owner: index.owner.map(Self::encode),
+                owner_type: index.owner_type,
+                delegate: index.delegate.map(Self::encode),
+                frozen: index.is_frozen,
+                supply: index.supply,
+                supply_mint: Self::encode(key.to_bytes()),
+                compressed: index.is_compressed,
+                compressible: index.is_compressible,
+                seq: index.slot_updated,
+                tree_id: Some(Self::encode(key.to_bytes())), // tree
+                leaf: Some(Self::encode(key.to_bytes())),    // leaf
+                nonce: index.slot_updated,                   // nonce
+                royalty_target_type: index.royalty_target_type,
+                royalty_target: Some(Self::encode(key.to_bytes())), // royalty_target
+                royalty_amount: index.royalty_amount,
+                asset_data: Some(Self::encode(key.to_bytes())),
+                created_at: Utc::now(),                           // created_at
+                data_hash: Some(Self::encode(key.to_bytes())),    // data_hash
+                creator_hash: Some(Self::encode(key.to_bytes())), // creator_hash
+                owner_delegate_seq: index.slot_updated,           // owner_delegate_seq
+                leaf_seq: index.slot_updated,                     // leaf_seq
+                base_info_seq: index.slot_updated,                // base_info_seq
+                slot_updated_metadata_account: index.slot_updated, // slot_updated_metadata
+                slot_updated_token_account: index.slot_updated,   // slot_updated_token
+                slot_updated_mint_account: index.slot_updated,    // slot_updated_mint
+                slot_updated_cnft_transaction: index.slot_updated, // slot_updated_cnft
+                mpl_core_plugins: json!(index.slot_updated),      // core_plugins
+                mpl_core_unknown_plugins: json!(index.slot_updated), // core_unknown_plugins
+                mpl_core_collection_num_minted: index.slot_updated, // core collection num minted
+                mpl_core_collection_current_size: index.slot_updated, // core collection current size
+                mpl_core_plugins_json_version: index.slot_updated,    // core plugins json version
+            };
+            asset_writer.serialize(asset).map_err(|e| e.to_string())?;
+            if let Some(authority) = index.authority {
+                authority_writer
+                    .serialize((
+                        &authority_last_id,
+                        Self::encode(key.to_bytes()),
+                        "",
+                        Self::encode(authority.to_bytes()),
+                        index.slot_updated,
+                        index.slot_updated,
+                    ))
+                    .map_err(|e| e.to_string())?;
+            }
+
+            authority_last_id.add_assign(1);
             for (position, creator) in index.creators.iter().enumerate() {
                 creators_writer
                     .serialize((
-                        creators_last_id,
+                        &creators_last_id,
                         Self::encode(key.to_bytes()),
                         Self::encode(creator.creator),
                         creator.creator_share,
@@ -558,7 +594,7 @@ impl Storage {
                         position,
                     ))
                     .map_err(|e| e.to_string())?;
-                *creators_last_id += 1;
+                creators_last_id.add_assign(1);
             }
 
             asset_data_writer
@@ -579,7 +615,7 @@ impl Storage {
             if let Some(collection) = index.collection {
                 asset_grouping_writer
                     .serialize((
-                        grouping_last_id,
+                        &grouping_last_id,
                         Self::encode(key.to_bytes()),
                         "collection",
                         collection.to_string(),
@@ -589,7 +625,7 @@ impl Storage {
                         index.slot_updated,
                     ))
                     .map_err(|e| e.to_string())?;
-                *grouping_last_id += 1;
+                grouping_last_id.add_assign(1);
             }
         }
         Ok(())

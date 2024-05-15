@@ -18,7 +18,9 @@ use crate::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
     BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
-use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, UrlWithStatus};
+use entities::models::{
+    AssetIndex, CompleteAssetDetails, ReferenceAssetIndex, UpdateVersion, Updated, UrlWithStatus,
+};
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
@@ -225,6 +227,151 @@ impl AssetIndexReader for Storage {
                 }
             } else {
                 let asset_index = AssetIndex {
+                    pubkey: data.pubkey,
+                    collection: Some(data.collection),
+                    is_collection_verified: Some(data.is_collection_verified),
+                    slot_updated: data.slot_updated as i64,
+                    ..Default::default()
+                };
+
+                asset_indexes.insert(asset_index.pubkey, asset_index);
+            }
+        }
+        self.red_metrics.observe_request(
+            ROCKS_COMPONENT,
+            BATCH_ITERATION_ACTION,
+            "collect_asset_indexes",
+            start_time,
+        );
+        Ok(asset_indexes)
+    }
+}
+
+impl Storage {
+    pub(crate) async fn get_reference_asset_indexes(
+        &self,
+        keys: &[Pubkey],
+    ) -> Result<HashMap<Pubkey, ReferenceAssetIndex>> {
+        let mut asset_indexes = HashMap::new();
+        let start_time = chrono::Utc::now();
+        let assets_static_fut = self.asset_static_data.batch_get(keys.to_vec());
+        let assets_dynamic_fut = self.asset_dynamic_data.batch_get(keys.to_vec());
+        let assets_authority_fut = self.asset_authority_data.batch_get(keys.to_vec());
+        let assets_owner_fut = self.asset_owner_data.batch_get(keys.to_vec());
+        let assets_collection_fut = self.asset_collection_data.batch_get(keys.to_vec());
+
+        let (
+            asset_static_details,
+            asset_dynamic_details,
+            asset_authority_details,
+            asset_owner_details,
+            asset_collection_details,
+        ) = tokio::join!(
+            assets_static_fut,
+            assets_dynamic_fut,
+            assets_authority_fut,
+            assets_owner_fut,
+            assets_collection_fut,
+        );
+
+        let asset_static_details = asset_static_details?;
+        let asset_dynamic_details = asset_dynamic_details?;
+        let asset_authority_details = asset_authority_details?;
+        let asset_owner_details = asset_owner_details?;
+        let asset_collection_details = asset_collection_details?;
+
+        for static_info in asset_static_details.iter().flatten() {
+            let asset_index = ReferenceAssetIndex {
+                pubkey: static_info.pubkey,
+                specification_version: SpecificationVersions::V1,
+                specification_asset_class: static_info.specification_asset_class,
+                royalty_target_type: static_info.royalty_target_type,
+                slot_created: static_info.created_at,
+                ..Default::default()
+            };
+
+            asset_indexes.insert(asset_index.pubkey, asset_index);
+        }
+
+        for dynamic_info in asset_dynamic_details.iter().flatten() {
+            if let Some(existed_index) = asset_indexes.get_mut(&dynamic_info.pubkey) {
+                existed_index.is_compressible = dynamic_info.is_compressible.value;
+                existed_index.is_compressed = dynamic_info.is_compressed.value;
+                existed_index.is_frozen = dynamic_info.is_frozen.value;
+                existed_index.supply = dynamic_info.supply.clone().map(|s| s.value as i64);
+                existed_index.is_burnt = dynamic_info.is_burnt.value;
+                existed_index.creators = dynamic_info.creators.clone().value;
+                existed_index.royalty_amount = dynamic_info.royalty_amount.value as i64;
+                existed_index.slot_updated = dynamic_info.get_slot_updated() as i64;
+                existed_index.metadata_url = self.url_with_status_for(dynamic_info);
+            } else {
+                let asset_index = ReferenceAssetIndex {
+                    pubkey: dynamic_info.pubkey,
+                    is_compressible: dynamic_info.is_compressible.value,
+                    is_compressed: dynamic_info.is_compressed.value,
+                    is_frozen: dynamic_info.is_frozen.value,
+                    supply: dynamic_info.supply.clone().map(|s| s.value as i64),
+                    is_burnt: dynamic_info.is_burnt.value,
+                    creators: dynamic_info.creators.clone().value,
+                    royalty_amount: dynamic_info.royalty_amount.value as i64,
+                    slot_updated: dynamic_info.get_slot_updated() as i64,
+                    metadata_url: self.url_with_status_for(dynamic_info),
+                    ..Default::default()
+                };
+
+                asset_indexes.insert(asset_index.pubkey, asset_index);
+            }
+        }
+
+        for data in asset_authority_details.iter().flatten() {
+            if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
+                existed_index.authority = Some(data.authority);
+                if data.slot_updated as i64 > existed_index.slot_updated {
+                    existed_index.slot_updated = data.slot_updated as i64;
+                }
+            } else {
+                let asset_index = ReferenceAssetIndex {
+                    pubkey: data.pubkey,
+                    authority: Some(data.authority),
+                    slot_updated: data.slot_updated as i64,
+                    ..Default::default()
+                };
+
+                asset_indexes.insert(asset_index.pubkey, asset_index);
+            }
+        }
+
+        for data in asset_owner_details.iter().flatten() {
+            if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
+                existed_index.owner = data.owner.value;
+                existed_index.delegate = data.delegate.value;
+                existed_index.owner_type = Some(data.owner_type.value);
+                if data.get_slot_updated() as i64 > existed_index.slot_updated {
+                    existed_index.slot_updated = data.get_slot_updated() as i64;
+                }
+            } else {
+                let asset_index = ReferenceAssetIndex {
+                    pubkey: data.pubkey,
+                    owner: data.owner.value,
+                    delegate: data.delegate.value,
+                    owner_type: Some(data.owner_type.value),
+                    slot_updated: data.get_slot_updated() as i64,
+                    ..Default::default()
+                };
+
+                asset_indexes.insert(asset_index.pubkey, asset_index);
+            }
+        }
+
+        for data in asset_collection_details.iter().flatten() {
+            if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
+                existed_index.collection = Some(data.collection);
+                existed_index.is_collection_verified = Some(data.is_collection_verified);
+                if data.slot_updated as i64 > existed_index.slot_updated {
+                    existed_index.slot_updated = data.slot_updated as i64;
+                }
+            } else {
+                let asset_index = ReferenceAssetIndex {
                     pubkey: data.pubkey,
                     collection: Some(data.collection),
                     is_collection_verified: Some(data.is_collection_verified),

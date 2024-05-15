@@ -215,26 +215,104 @@ impl AssetIndexStorage for PgClient {
 }
 
 impl PgClient {
-    async fn load_from_reference_dump(
+    pub async fn load_from_reference_dump(
         &self,
         base_path: &std::path::Path,
-        last_key: &[u8],
     ) -> Result<(), String> {
-        let Some(metadata_path) = base_path.join("metadata.csv").to_str().map(str::to_owned) else {
+        let asset_path = base_path.join("asset.csv").to_str().map(str::to_owned);
+        if asset_path.is_none() {
             return Err("invalid path".to_string());
-        };
-        let Some(creators_path) = base_path.join("creators.csv").to_str().map(str::to_owned) else {
+        }
+        let authority_path = base_path
+            .join("asset_authority.csv")
+            .to_str()
+            .map(str::to_owned);
+        if authority_path.is_none() {
             return Err("invalid path".to_string());
-        };
-        let Some(assets_path) = base_path.join("assets.csv").to_str().map(str::to_owned) else {
+        }
+        let creators_path = base_path
+            .join("assets_creators.csv")
+            .to_str()
+            .map(str::to_owned);
+        if creators_path.is_none() {
             return Err("invalid path".to_string());
-        };
+        }
+        let asset_data_path = base_path.join("asset_data.csv").to_str().map(str::to_owned);
+        if asset_data_path.is_none() {
+            return Err("invalid path".to_string());
+        }
+        let asset_grouping_path = base_path
+            .join("asset_grouping.csv")
+            .to_str()
+            .map(str::to_owned);
+        if asset_grouping_path.is_none() {
+            return Err("invalid path".to_string());
+        }
+        let cl_items_path = base_path.join("cl_items.csv").to_str().map(str::to_owned);
+        if cl_items_path.is_none() {
+            return Err("invalid path".to_string());
+        }
+        let cl_audits_v2_path = base_path
+            .join("cl_audits_v2.csv")
+            .to_str()
+            .map(str::to_owned);
+        if cl_audits_v2_path.is_none() {
+            return Err("invalid path".to_string());
+        }
+        let token_accounts_path = base_path
+            .join("token_accounts.csv")
+            .to_str()
+            .map(str::to_owned);
+        if token_accounts_path.is_none() {
+            return Err("invalid path".to_string());
+        }
         let mut transaction = self.start_transaction().await?;
 
-        self.copy_all(metadata_path, creators_path, assets_path, &mut transaction)
-            .await?;
-        self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
-            .await?;
+        for (table, path, columns) in [
+            (
+                "asset",
+                asset_path.unwrap(),
+                "id, alt_id, specification_version, specification_asset_class, owner, owner_type, delegate, frozen, supply, supply_mint, compressed, compressible, seq, tree_id, leaf, nonce, royalty_target_type, royalty_target, royalty_amount, asset_data, created_at, burnt, slot_updated, data_hash, creator_hash, owner_delegate_seq, leaf_seq, base_info_seq, slot_updated_metadata_account, slot_updated_token_account, slot_updated_mint_account, slot_updated_cnft_transaction, mpl_core_plugins, mpl_core_unknown_plugins, mpl_core_collection_num_minted, mpl_core_collection_current_size, mpl_core_plugins_json_version",
+            ),
+            (
+                "asset_authority",
+                authority_path.unwrap(),
+                "id, asset_id, scopes, authority, seq, slot_updated",
+            ),
+            (
+                "asset_creators",
+                creators_path.unwrap(),
+                "id, asset_id, creator, share, verified, seq, slot_updated, position",
+            ),
+            (
+                "asset_data",
+                asset_data_path.unwrap(),
+                "id, chain_data_mutability, chain_data, metadata_url, metadata_mutability, metadata, slot_updated, reindex, raw_name, raw_symbol, base_info_seq",
+            ),
+            (
+                "asset_grouping",
+                asset_grouping_path.unwrap(),
+                "id, asset_id, group_key, group_value, seq, slot_updated, verified, group_info_seq",
+            ),
+            (
+                "cl_audits_v2",
+                cl_audits_v2_path.unwrap(),
+                "id, tree, leaf_idx, seq, created_at, tx, instruction",
+            ),
+            (
+                "cl_items",
+                cl_items_path.unwrap(),
+                "id, tree, node_idx, leaf_idx, seq, level, hash",
+            ),
+            (
+                "token_accounts",
+                token_accounts_path.unwrap(),
+                "pubkey, mint, amount, owner, frozen, close_authority, delegate, delegated_amount, slot_updated, token_program",
+            ),
+        ] {
+            self.copy_table_from(&mut transaction, path, table, columns)
+                .await?;
+        }
         self.commit_transaction(transaction).await?;
         Ok(())
     }
