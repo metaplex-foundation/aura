@@ -597,10 +597,12 @@ impl Storage {
                 created_at: Utc::now(),
                 burnt: index.is_burnt,
                 slot_updated: index.slot_updated,
-                data_hash: index.data_hash.map(|data_hash| data_hash.to_string()),
+                data_hash: index
+                    .data_hash
+                    .map(|data_hash| escape_string(&data_hash.to_string())),
                 creator_hash: index
                     .creator_hash
-                    .map(|creator_hash| creator_hash.to_string()),
+                    .map(|creator_hash| escape_string(&creator_hash.to_string())),
                 owner_delegate_seq: index.slot_updated, // owner_delegate_seq
                 leaf_seq: index.slot_updated,           // leaf_seq
                 base_info_seq: index.slot_updated,      // base_info_seq
@@ -608,8 +610,10 @@ impl Storage {
                 slot_updated_token_account: index.slot_updated, // slot_updated_token
                 slot_updated_mint_account: index.slot_updated, // slot_updated_mint
                 slot_updated_cnft_transaction: index.slot_updated, // slot_updated_cnft
-                mpl_core_plugins: index.mpl_core_plugins,
-                mpl_core_unknown_plugins: index.mpl_core_unknown_plugins,
+                mpl_core_plugins: index.mpl_core_plugins.and_then(|p| escape_json(&p).ok()),
+                mpl_core_unknown_plugins: index
+                    .mpl_core_unknown_plugins
+                    .and_then(|p| escape_json(&p).ok()),
                 mpl_core_collection_num_minted: index.mpl_core_collection_num_minted,
                 mpl_core_collection_current_size: index.mpl_core_collection_current_size,
                 mpl_core_plugins_json_version: index.mpl_core_plugins_json_version,
@@ -645,21 +649,21 @@ impl Storage {
                 creators_last_id.add_assign(1);
             }
 
-            if let Some(metadata) = index.metadata {
+            if let Some(metadata) = index.metadata.and_then(|p| escape_json(&p).ok()) {
                 if !metadata.is_empty() {
                     asset_data_writer
                         .serialize((
                             Self::encode(key.to_bytes()),
                             "mutable", //chain_nutability,
-                            index.chain_data,
+                            index.chain_data.and_then(|p| escape_json(&p).ok()),
                             index.metadata_url.map(|m| m.metadata_url),
                             "mutable", // metadata_mutability
                             metadata,
                             index.slot_updated,
                             false,
-                            index.raw_name.clone().map(|r| Self::encode(r.as_bytes())),
-                            index.raw_name.map(|r| Self::encode(r.as_bytes())), // raw_symbol
-                            index.slot_updated,                                 // base_info_seq
+                            index.raw_name.as_ref().map(|s| escape_string(s)),
+                            index.raw_name.as_ref().map(|s| escape_string(s)), // raw_symbol
+                            index.slot_updated,                                // base_info_seq
                         ))
                         .map_err(|e| e.to_string())?;
                 }
@@ -703,4 +707,17 @@ fn transform_input_instruction(input: &str) -> &str {
         "UpdateMetadata" => "update_metadata",
         _ => "unknown",
     }
+}
+
+fn escape_string(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('\"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+}
+
+fn escape_json(json_str: &str) -> Result<String, serde_json::Error> {
+    let json_value: serde_json::Value = serde_json::from_str(json_str)?;
+    let escaped_json = json_value.to_string();
+    Ok(escaped_json)
 }

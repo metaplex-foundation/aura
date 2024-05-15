@@ -13,10 +13,7 @@ pub async fn main() -> Result<(), IngesterError> {
     // Retrieve the database paths from command-line arguments
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        println!(
-            "Usage: {} <source_db_path> <reference_db_url>",
-            args[0]
-        );
+        println!("Usage: {} <source_db_path> <reference_db_url>", args[0]);
         std::process::exit(1);
     }
     let source_db_path = &args[1];
