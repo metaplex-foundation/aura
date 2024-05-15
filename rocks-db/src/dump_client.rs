@@ -1,3 +1,5 @@
+use crate::cl_items::ClItem;
+use crate::column::TypedColumn;
 use crate::columns::TokenAccount;
 use crate::{
     key_encoders::decode_pubkey,
@@ -11,11 +13,12 @@ use csv::{Writer, WriterBuilder};
 use entities::enums::{
     OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
 };
+use entities::models::AssetSignature;
 use hex;
 use inflector::Inflector;
 use serde::{Serialize, Serializer};
-use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Signature;
 use std::ops::AddAssign;
 use std::str::FromStr;
 use std::{
@@ -96,7 +99,7 @@ struct ReferenceAssetRecord {
     seq: i64,
     tree_id: Option<String>,
     leaf: Option<String>,
-    nonce: i64,
+    nonce: Option<u64>,
     #[serde(serialize_with = "serialize_as_snake_case")]
     royalty_target_type: RoyaltyTargetType,
     royalty_target: Option<String>,
@@ -112,11 +115,11 @@ struct ReferenceAssetRecord {
     slot_updated_token_account: i64,
     slot_updated_mint_account: i64,
     slot_updated_cnft_transaction: i64,
-    mpl_core_plugins: Value,
-    mpl_core_unknown_plugins: Value,
-    mpl_core_collection_num_minted: i64,
-    mpl_core_collection_current_size: i64,
-    mpl_core_plugins_json_version: i64,
+    mpl_core_plugins: Option<String>,
+    mpl_core_unknown_plugins: Option<String>,
+    mpl_core_collection_num_minted: Option<u32>,
+    mpl_core_collection_current_size: Option<u32>,
+    mpl_core_plugins_json_version: Option<u32>,
 }
 
 impl Storage {
@@ -444,8 +447,6 @@ impl Storage {
                     creators_writer,
                     asset_data_writer,
                     asset_grouping_writer,
-                    cl_items_writer,
-                    cl_audits_v2_writer,
                     &mut creators_last_id,
                     &mut authority_last_id,
                     &mut grouping_last_id,
@@ -465,8 +466,6 @@ impl Storage {
                 creators_writer,
                 asset_data_writer,
                 asset_grouping_writer,
-                cl_items_writer,
-                cl_audits_v2_writer,
                 &mut creators_last_id,
                 &mut authority_last_id,
                 &mut grouping_last_id,
@@ -499,6 +498,50 @@ impl Storage {
                 ))
                 .map_err(|e| e.to_string())?;
         }
+        let mut cl_items_last_id = 0;
+        let iter = self.cl_items.iter_start();
+        for cl_item in iter
+            .filter_map(|k| k.ok())
+            .flat_map(|(_, value)| deserialize::<ClItem>(value.as_ref()).ok())
+        {
+            cl_items_writer
+                .serialize((
+                    cl_items_last_id,
+                    Self::encode(cl_item.cli_tree_key),
+                    cl_item.cli_node_idx,
+                    cl_item.cli_leaf_idx,
+                    cl_item.cli_seq,
+                    cl_item.cli_level,
+                    Self::encode(cl_item.cli_hash),
+                ))
+                .map_err(|e| e.to_string())?;
+            cl_items_last_id += 1;
+        }
+
+        let mut cl_audit_last_id = 0;
+        let iter = self.asset_signature.iter_start();
+        for (asset_signature_key, asset_signature) in
+            iter.filter_map(|k| k.ok()).flat_map(|(key, value)| {
+                let asset_signature = deserialize::<AssetSignature>(value.as_ref()).ok()?;
+                let asset_signature_key = AssetSignature::decode_key(key.as_ref().to_vec()).ok()?;
+                Some((asset_signature_key, asset_signature))
+            })
+        {
+            cl_audits_v2_writer
+                .serialize((
+                    cl_audit_last_id,
+                    Self::encode(asset_signature_key.tree),
+                    asset_signature_key.leaf_idx,
+                    asset_signature_key.seq,
+                    Utc::now(),
+                    Self::encode(
+                        Signature::from_str(&asset_signature.tx).map_err(|e| e.to_string())?,
+                    ),
+                    asset_signature.instruction,
+                ))
+                .map_err(|e| e.to_string())?;
+            cl_audit_last_id += 1;
+        }
 
         asset_writer.flush().map_err(|e| e.to_string())?;
         authority_writer.flush().map_err(|e| e.to_string())?;
@@ -519,8 +562,6 @@ impl Storage {
         creators_writer: &mut Writer<W>,
         asset_data_writer: &mut Writer<W>,
         asset_grouping_writer: &mut Writer<W>,
-        _cl_items_writer: &mut Writer<W>,
-        _cl_audits_v2_writer: &mut Writer<W>,
         creators_last_id: &mut u64,
         authority_last_id: &mut u64,
         grouping_last_id: &mut u64,
@@ -544,28 +585,32 @@ impl Storage {
                 compressed: index.is_compressed,
                 compressible: index.is_compressible,
                 seq: index.slot_updated,
-                tree_id: Some(Self::encode(key.to_bytes())), // tree
-                leaf: Some(Self::encode(key.to_bytes())),    // leaf
-                nonce: index.slot_updated,                   // nonce
+                tree_id: index.tree.map(|tree| Self::encode(tree.to_bytes())),
+                leaf: index.leaf.map(Self::encode),
+                nonce: index.nonce,
                 royalty_target_type: index.royalty_target_type,
                 royalty_target: Some(Self::encode(key.to_bytes())), // royalty_target
                 royalty_amount: index.royalty_amount,
                 asset_data: Some(Self::encode(key.to_bytes())),
-                created_at: Utc::now(),                           // created_at
-                data_hash: Some(Self::encode(key.to_bytes())),    // data_hash
-                creator_hash: Some(Self::encode(key.to_bytes())), // creator_hash
-                owner_delegate_seq: index.slot_updated,           // owner_delegate_seq
-                leaf_seq: index.slot_updated,                     // leaf_seq
-                base_info_seq: index.slot_updated,                // base_info_seq
+                created_at: Utc::now(),
+                data_hash: index
+                    .data_hash
+                    .map(|data_hash| Self::encode(data_hash.to_bytes())),
+                creator_hash: index
+                    .creator_hash
+                    .map(|creator_hash| Self::encode(creator_hash.to_bytes())),
+                owner_delegate_seq: index.slot_updated, // owner_delegate_seq
+                leaf_seq: index.slot_updated,           // leaf_seq
+                base_info_seq: index.slot_updated,      // base_info_seq
                 slot_updated_metadata_account: index.slot_updated, // slot_updated_metadata
-                slot_updated_token_account: index.slot_updated,   // slot_updated_token
-                slot_updated_mint_account: index.slot_updated,    // slot_updated_mint
+                slot_updated_token_account: index.slot_updated, // slot_updated_token
+                slot_updated_mint_account: index.slot_updated, // slot_updated_mint
                 slot_updated_cnft_transaction: index.slot_updated, // slot_updated_cnft
-                mpl_core_plugins: json!(index.slot_updated),      // core_plugins
-                mpl_core_unknown_plugins: json!(index.slot_updated), // core_unknown_plugins
-                mpl_core_collection_num_minted: index.slot_updated, // core collection num minted
-                mpl_core_collection_current_size: index.slot_updated, // core collection current size
-                mpl_core_plugins_json_version: index.slot_updated,    // core plugins json version
+                mpl_core_plugins: index.mpl_core_plugins,
+                mpl_core_unknown_plugins: index.mpl_core_unknown_plugins,
+                mpl_core_collection_num_minted: index.mpl_core_collection_num_minted,
+                mpl_core_collection_current_size: index.mpl_core_collection_current_size,
+                mpl_core_plugins_json_version: index.mpl_core_plugins_json_version,
             };
             asset_writer.serialize(asset).map_err(|e| e.to_string())?;
             if let Some(authority) = index.authority {

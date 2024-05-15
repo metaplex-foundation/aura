@@ -34,16 +34,16 @@ pub async fn main() -> Result<(), IngesterError> {
     let reference_storage =
         Arc::new(PgClient::new(reference_db_url, 100, 250, red_metrics.clone()).await?);
     let dump_dir = TempDir::new().unwrap();
+    println!("Starting creating dump...");
     source_storage
         .dump_reference_db(dump_dir.path(), 200_000, &shutdown_rx.resubscribe())
         .await
         .unwrap();
+    println!("Starting insert dump...");
     reference_storage
         .load_from_reference_dump(dump_dir.path())
         .await
         .unwrap();
-
-    println!("Starting data migration...");
 
     Ok(())
 }

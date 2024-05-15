@@ -259,6 +259,7 @@ impl Storage {
         let assets_authority_fut = self.asset_authority_data.batch_get(keys.to_vec());
         let assets_owner_fut = self.asset_owner_data.batch_get(keys.to_vec());
         let assets_collection_fut = self.asset_collection_data.batch_get(keys.to_vec());
+        let asset_leaf_data_fut = self.asset_leaf_data.batch_get(keys.to_vec());
 
         let (
             asset_static_details,
@@ -266,12 +267,14 @@ impl Storage {
             asset_authority_details,
             asset_owner_details,
             asset_collection_details,
+            asset_leaf_data,
         ) = tokio::join!(
             assets_static_fut,
             assets_dynamic_fut,
             assets_authority_fut,
             assets_owner_fut,
             assets_collection_fut,
+            asset_leaf_data_fut,
         );
 
         let asset_static_details = asset_static_details?;
@@ -279,6 +282,7 @@ impl Storage {
         let asset_authority_details = asset_authority_details?;
         let asset_owner_details = asset_owner_details?;
         let asset_collection_details = asset_collection_details?;
+        let asset_leaf_data = asset_leaf_data?;
 
         for static_info in asset_static_details.iter().flatten() {
             let asset_index = ReferenceAssetIndex {
@@ -304,8 +308,31 @@ impl Storage {
                 existed_index.royalty_amount = dynamic_info.royalty_amount.value as i64;
                 existed_index.slot_updated = dynamic_info.get_slot_updated() as i64;
                 existed_index.metadata_url = self.url_with_status_for(dynamic_info);
+                existed_index.mpl_core_plugins = dynamic_info.plugins.clone().map(|p| p.value);
+                existed_index.mpl_core_unknown_plugins =
+                    dynamic_info.unknown_plugins.clone().map(|p| p.value);
+                existed_index.mpl_core_collection_num_minted =
+                    dynamic_info.num_minted.as_ref().map(|n| n.value);
+                existed_index.mpl_core_collection_current_size =
+                    dynamic_info.current_size.as_ref().map(|n| n.value);
+                existed_index.mpl_core_plugins_json_version =
+                    dynamic_info.plugins_json_version.as_ref().map(|n| n.value);
             } else {
                 let asset_index = ReferenceAssetIndex {
+                    mpl_core_plugins: dynamic_info.plugins.clone().map(|p| p.value),
+                    mpl_core_unknown_plugins: dynamic_info.unknown_plugins.clone().map(|p| p.value),
+                    mpl_core_collection_num_minted: dynamic_info
+                        .num_minted
+                        .as_ref()
+                        .map(|n| n.value),
+                    mpl_core_collection_current_size: dynamic_info
+                        .current_size
+                        .as_ref()
+                        .map(|n| n.value),
+                    mpl_core_plugins_json_version: dynamic_info
+                        .plugins_json_version
+                        .as_ref()
+                        .map(|n| n.value),
                     pubkey: dynamic_info.pubkey,
                     is_compressible: dynamic_info.is_compressible.value,
                     is_compressed: dynamic_info.is_compressed.value,
@@ -375,6 +402,30 @@ impl Storage {
                     pubkey: data.pubkey,
                     collection: Some(data.collection),
                     is_collection_verified: Some(data.is_collection_verified),
+                    slot_updated: data.slot_updated as i64,
+                    ..Default::default()
+                };
+
+                asset_indexes.insert(asset_index.pubkey, asset_index);
+            }
+        }
+        for data in asset_leaf_data.iter().flatten() {
+            if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
+                existed_index.tree = Some(data.tree_id);
+                existed_index.leaf = data.leaf.clone();
+                existed_index.nonce = data.nonce;
+                existed_index.data_hash = data.data_hash;
+                existed_index.creator_hash = data.creator_hash;
+                if data.slot_updated as i64 > existed_index.slot_updated {
+                    existed_index.slot_updated = data.slot_updated as i64;
+                }
+            } else {
+                let asset_index = ReferenceAssetIndex {
+                    tree: Some(data.tree_id),
+                    leaf: data.leaf.clone(),
+                    nonce: data.nonce,
+                    data_hash: data.data_hash,
+                    creator_hash: data.creator_hash,
                     slot_updated: data.slot_updated as i64,
                     ..Default::default()
                 };

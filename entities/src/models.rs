@@ -83,6 +83,16 @@ pub struct ReferenceAssetIndex {
     pub supply: Option<i64>,
     pub metadata_url: Option<UrlWithStatus>,
     pub slot_updated: i64,
+    pub tree: Option<Pubkey>,
+    pub leaf: Option<Vec<u8>>,
+    pub nonce: Option<u64>,
+    pub data_hash: Option<Hash>,
+    pub creator_hash: Option<Hash>,
+    pub mpl_core_plugins: Option<String>,
+    pub mpl_core_unknown_plugins: Option<String>,
+    pub mpl_core_collection_num_minted: Option<u32>,
+    pub mpl_core_collection_current_size: Option<u32>,
+    pub mpl_core_plugins_json_version: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
