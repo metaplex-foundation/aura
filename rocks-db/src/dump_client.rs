@@ -661,9 +661,9 @@ impl Storage {
                             metadata,
                             index.slot_updated,
                             false,
-                            index.raw_name.as_ref().map(|s| escape_string(s)),
-                            index.raw_name.as_ref().map(|s| escape_string(s)), // raw_symbol
-                            index.slot_updated,                                // base_info_seq
+                            "",
+                            "",                 // raw_symbol
+                            index.slot_updated, // base_info_seq
                         ))
                         .map_err(|e| e.to_string())?;
                 }
