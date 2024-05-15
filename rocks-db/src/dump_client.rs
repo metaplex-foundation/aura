@@ -649,14 +649,19 @@ impl Storage {
             //     creators_last_id.add_assign(1);
             // }
 
-            if let Some(metadata) = index.metadata.and_then(|p| escape_json(&p).ok()) {
+            if let Some(metadata) = index
+                .metadata
+                .and_then(|p| escape_json(&p).ok().map(|s| escape_string(&s)))
+            {
                 if !metadata.is_empty() {
                     asset_data_writer
                         .serialize((
                             Self::encode(key.to_bytes()),
                             "mutable", //chain_nutability,
-                            index.chain_data.and_then(|p| escape_json(&p).ok()),
-                            index.metadata_url.map(|m|escape_string(&m.metadata_url)),
+                            index
+                                .chain_data
+                                .and_then(|p| escape_json(&p).ok().map(|s| escape_string(&s))),
+                            index.metadata_url.map(|m| escape_string(&m.metadata_url)),
                             "mutable", // metadata_mutability
                             metadata,
                             index.slot_updated,
