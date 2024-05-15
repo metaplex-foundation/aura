@@ -573,83 +573,77 @@ impl Storage {
             .await
             .map_err(|e| e.to_string())?;
         for (key, index) in indexes {
-            // let asset = ReferenceAssetRecord {
-            //     ast_pubkey: Self::encode(key.to_bytes()),
-            //     alt_id: Self::encode(key.to_bytes()),
-            //     specification_version: index.specification_version,
-            //     specification_asset_class: index.specification_asset_class,
-            //     owner: index.owner.map(Self::encode),
-            //     owner_type: index.owner_type.unwrap_or(OwnerType::Unknown),
-            //     delegate: index.delegate.map(Self::encode),
-            //     frozen: index.is_frozen,
-            //     supply: index.supply.unwrap_or(1),
-            //     supply_mint: Self::encode(key.to_bytes()),
-            //     compressed: index.is_compressed,
-            //     compressible: index.is_compressible,
-            //     seq: index.slot_updated,
-            //     tree_id: index.tree.map(|tree| Self::encode(tree.to_bytes())),
-            //     leaf: index.leaf.map(Self::encode),
-            //     nonce: index.nonce,
-            //     royalty_target_type: index.royalty_target_type,
-            //     royalty_target: Some(Self::encode(key.to_bytes())), // royalty_target
-            //     royalty_amount: index.royalty_amount,
-            //     asset_data: Some(Self::encode(key.to_bytes())),
-            //     created_at: Utc::now(),
-            //     burnt: index.is_burnt,
-            //     slot_updated: index.slot_updated,
-            //     data_hash: index
-            //         .data_hash
-            //         .map(|data_hash| escape_string(&data_hash.to_string())),
-            //     creator_hash: index
-            //         .creator_hash
-            //         .map(|creator_hash| escape_string(&creator_hash.to_string())),
-            //     owner_delegate_seq: index.slot_updated, // owner_delegate_seq
-            //     leaf_seq: index.slot_updated,           // leaf_seq
-            //     base_info_seq: index.slot_updated,      // base_info_seq
-            //     slot_updated_metadata_account: index.slot_updated, // slot_updated_metadata
-            //     slot_updated_token_account: index.slot_updated, // slot_updated_token
-            //     slot_updated_mint_account: index.slot_updated, // slot_updated_mint
-            //     slot_updated_cnft_transaction: index.slot_updated, // slot_updated_cnft
-            //     mpl_core_plugins: index
-            //         .mpl_core_plugins
-            //         .and_then(|p| escape_json(&p).ok().map(|s| remove_null_bytes(&s))),
-            //     mpl_core_unknown_plugins: index
-            //         .mpl_core_unknown_plugins
-            //         .and_then(|p| escape_json(&p).ok().map(|s| remove_null_bytes(&s))),
-            //     mpl_core_collection_num_minted: index.mpl_core_collection_num_minted,
-            //     mpl_core_collection_current_size: index.mpl_core_collection_current_size,
-            //     mpl_core_plugins_json_version: index.mpl_core_plugins_json_version,
-            // };
-            // asset_writer.serialize(asset).map_err(|e| e.to_string())?;
-            // if let Some(authority) = index.authority {
-            //     authority_writer
-            //         .serialize((
-            //             &authority_last_id,
-            //             Self::encode(key.to_bytes()),
-            //             "",
-            //             Self::encode(authority.to_bytes()),
-            //             index.slot_updated,
-            //             index.slot_updated,
-            //         ))
-            //         .map_err(|e| e.to_string())?;
-            // }
+            let asset = ReferenceAssetRecord {
+                ast_pubkey: Self::encode(key.to_bytes()),
+                alt_id: Self::encode(key.to_bytes()),
+                specification_version: index.specification_version,
+                specification_asset_class: index.specification_asset_class,
+                owner: index.owner.map(Self::encode),
+                owner_type: index.owner_type.unwrap_or(OwnerType::Unknown),
+                delegate: index.delegate.map(Self::encode),
+                frozen: index.is_frozen,
+                supply: index.supply.unwrap_or(1),
+                supply_mint: Self::encode(key.to_bytes()),
+                compressed: index.is_compressed,
+                compressible: index.is_compressible,
+                seq: index.slot_updated,
+                tree_id: index.tree.map(|tree| Self::encode(tree.to_bytes())),
+                leaf: index.leaf.map(Self::encode),
+                nonce: index.nonce,
+                royalty_target_type: index.royalty_target_type,
+                royalty_target: Some(Self::encode(key.to_bytes())), // royalty_target
+                royalty_amount: index.royalty_amount,
+                asset_data: Some(Self::encode(key.to_bytes())),
+                created_at: Utc::now(),
+                burnt: index.is_burnt,
+                slot_updated: index.slot_updated,
+                data_hash: index.data_hash.map(|data_hash| data_hash.to_string()),
+                creator_hash: index
+                    .creator_hash
+                    .map(|creator_hash| creator_hash.to_string()),
+                owner_delegate_seq: index.slot_updated, // owner_delegate_seq
+                leaf_seq: index.slot_updated,           // leaf_seq
+                base_info_seq: index.slot_updated,      // base_info_seq
+                slot_updated_metadata_account: index.slot_updated, // slot_updated_metadata
+                slot_updated_token_account: index.slot_updated, // slot_updated_token
+                slot_updated_mint_account: index.slot_updated, // slot_updated_mint
+                slot_updated_cnft_transaction: index.slot_updated, // slot_updated_cnft
+                mpl_core_plugins: index.mpl_core_plugins,
+                mpl_core_unknown_plugins: index.mpl_core_unknown_plugins,
+                mpl_core_collection_num_minted: index.mpl_core_collection_num_minted,
+                mpl_core_collection_current_size: index.mpl_core_collection_current_size,
+                mpl_core_plugins_json_version: index.mpl_core_plugins_json_version,
+            };
+            asset_writer.serialize(asset).map_err(|e| e.to_string())?;
+            if let Some(authority) = index.authority {
+                authority_writer
+                    .serialize((
+                        &authority_last_id,
+                        Self::encode(key.to_bytes()),
+                        "",
+                        Self::encode(authority.to_bytes()),
+                        index.slot_updated,
+                        index.slot_updated,
+                    ))
+                    .map_err(|e| e.to_string())?;
+            }
 
-            // authority_last_id.add_assign(1);
-            // for (position, creator) in index.creators.iter().enumerate() {
-            //     creators_writer
-            //         .serialize((
-            //             &creators_last_id,
-            //             Self::encode(key.to_bytes()),
-            //             Self::encode(creator.creator),
-            //             creator.creator_share,
-            //             creator.creator_verified,
-            //             index.slot_updated,
-            //             index.slot_updated,
-            //             position,
-            //         ))
-            //         .map_err(|e| e.to_string())?;
-            //     creators_last_id.add_assign(1);
-            // }
+            authority_last_id.add_assign(1);
+            for (position, creator) in index.creators.iter().enumerate() {
+                creators_writer
+                    .serialize((
+                        &creators_last_id,
+                        Self::encode(key.to_bytes()),
+                        Self::encode(creator.creator),
+                        creator.creator_share,
+                        creator.creator_verified,
+                        index.slot_updated,
+                        index.slot_updated,
+                        position,
+                    ))
+                    .map_err(|e| e.to_string())?;
+                creators_last_id.add_assign(1);
+            }
 
             if let Some(metadata) = index.metadata {
                 if !metadata.is_empty() {

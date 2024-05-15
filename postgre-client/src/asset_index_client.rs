@@ -269,21 +269,21 @@ impl PgClient {
         let mut transaction = self.start_transaction().await?;
 
         for (table, path, columns) in [
-            // (
-            //     "asset",
-            //     asset_path.unwrap(),
-            //     "id, alt_id, specification_version, specification_asset_class, owner, owner_type, delegate, frozen, supply, supply_mint, compressed, compressible, seq, tree_id, leaf, nonce, royalty_target_type, royalty_target, royalty_amount, asset_data, created_at, burnt, slot_updated, data_hash, creator_hash, owner_delegate_seq, leaf_seq, base_info_seq, slot_updated_metadata_account, slot_updated_token_account, slot_updated_mint_account, slot_updated_cnft_transaction, mpl_core_plugins, mpl_core_unknown_plugins, mpl_core_collection_num_minted, mpl_core_collection_current_size, mpl_core_plugins_json_version",
-            // ),
-            // (
-            //     "asset_authority",
-            //     authority_path.unwrap(),
-            //     "id, asset_id, scopes, authority, seq, slot_updated",
-            // ),
-            // (
-            //     "asset_creators",
-            //     creators_path.unwrap(),
-            //     "id, asset_id, creator, share, verified, seq, slot_updated, position",
-            // ),
+            (
+                "asset",
+                asset_path.unwrap(),
+                "id, alt_id, specification_version, specification_asset_class, owner, owner_type, delegate, frozen, supply, supply_mint, compressed, compressible, seq, tree_id, leaf, nonce, royalty_target_type, royalty_target, royalty_amount, asset_data, created_at, burnt, slot_updated, data_hash, creator_hash, owner_delegate_seq, leaf_seq, base_info_seq, slot_updated_metadata_account, slot_updated_token_account, slot_updated_mint_account, slot_updated_cnft_transaction, mpl_core_plugins, mpl_core_unknown_plugins, mpl_core_collection_num_minted, mpl_core_collection_current_size, mpl_core_plugins_json_version",
+            ),
+            (
+                "asset_authority",
+                authority_path.unwrap(),
+                "id, asset_id, scopes, authority, seq, slot_updated",
+            ),
+            (
+                "asset_creators",
+                creators_path.unwrap(),
+                "id, asset_id, creator, share, verified, seq, slot_updated, position",
+            ),
             (
                 "asset_data",
                 asset_data_path.unwrap(),
