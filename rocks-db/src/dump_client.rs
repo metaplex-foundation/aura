@@ -651,20 +651,14 @@ impl Storage {
             //     creators_last_id.add_assign(1);
             // }
 
-            if let Some(metadata) = index
-                .metadata
-                .and_then(|metadata| serde_json::value::Value::from_str(&metadata).ok())
-            // .and_then(|p| escape_json(&p).ok().map(|s| remove_null_bytes(&s)))
-            {
+            if let Some(metadata) = index.metadata {
                 if metadata != serde_json::value::Value::Null {
                     asset_data_writer
                         .serialize((
                             Self::encode(key.to_bytes()),
                             "mutable", //chain_nutability,
-                            index.chain_data.and_then(|json_str| {
-                                serde_json::value::Value::from_str(&json_str).ok()
-                            }),
-                            index.metadata_url.map(|m| escape_string(&m.metadata_url)),
+                            index.chain_data,
+                            index.metadata_url.map(|m| m.metadata_url),
                             "mutable", // metadata_mutability
                             metadata,
                             index.slot_updated,
@@ -715,24 +709,4 @@ fn transform_input_instruction(input: &str) -> &str {
         "UpdateMetadata" => "update_metadata",
         _ => "unknown",
     }
-}
-
-fn escape_string(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('\"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t")
-        .replace('\x08', "\\b")
-        .replace('\x0C', "\\f")
-}
-
-fn remove_null_bytes(s: &str) -> String {
-    s.replace('\u{0000}', "")
-}
-
-fn escape_json(json_str: &str) -> Result<String, serde_json::Error> {
-    let json_value: serde_json::Value = serde_json::from_str(json_str)?;
-    let escaped_json = json_value.to_string();
-    Ok(escaped_json)
 }
