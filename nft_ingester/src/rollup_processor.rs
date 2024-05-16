@@ -40,6 +40,7 @@ impl RollupDownloaderImpl {
 #[async_trait]
 impl RollupDownloader for RollupDownloaderImpl {
     async fn download_rollup(&self, url: &str) -> Result<Box<Rollup>, UsecaseError> {
+        // TODO: normalize url
         let rollup_to_process = self.pg_client.get_rollup_by_url(url).await.ok().flatten();
         if let Some(rollup_to_process) = rollup_to_process {
             if let Ok(Ok(rollup)) = tokio::fs::read_to_string(format!(
@@ -146,34 +147,28 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         mut rollup_to_process: RollupWithState,
     ) -> Result<(), IngesterError> {
         info!("Processing {} rollup file", &rollup_to_process.file_name);
-        let (rollup, file_size) = match self.read_rollup_file(&rollup_to_process).await {
-            Ok((rollup, file_size)) => (rollup, file_size),
-            Err(e) => return Err(e),
-        };
+        let (rollup, file_size) = self.read_rollup_file(&rollup_to_process).await?;
         let mut metadata_url = String::new();
         while rx.is_empty() {
             match &rollup_to_process.state {
                 entities::enums::RollupState::Uploaded => {
-                    self.process_rollup_validation(&rollup, &rollup_to_process.file_name)
+                    self.process_rollup_validation(&rollup, &mut rollup_to_process)
                         .await?;
-                    rollup_to_process.state = entities::enums::RollupState::ValidationComplete;
                 }
                 entities::enums::RollupState::ValidationComplete
                 | entities::enums::RollupState::FailUploadToArweave => {
                     metadata_url = self
-                        .process_rollup_upload_to_arweave(&rollup_to_process.file_name, file_size)
+                        .process_rollup_upload_to_arweave(&mut rollup_to_process, file_size)
                         .await?;
-                    rollup_to_process.state = entities::enums::RollupState::UploadedToArweave;
                 }
                 entities::enums::RollupState::UploadedToArweave
                 | entities::enums::RollupState::FailSendingTransaction => {
                     self.process_rollup_send_solana_tx(
-                        &rollup_to_process.file_name,
+                        &mut rollup_to_process,
                         &metadata_url,
                         &rollup,
                     )
                     .await?;
-                    rollup_to_process.state = entities::enums::RollupState::Complete;
                 }
                 _ => {
                     info!(
@@ -190,72 +185,84 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
     async fn process_rollup_validation(
         &self,
         rollup: &Rollup,
-        file_name: &str,
+        rollup_to_process: &mut RollupWithState,
     ) -> Result<(), IngesterError> {
         if let Err(e) = Self::validate_rollup(rollup).await {
             if let Err(err) = self
                 .pg_client
-                .mark_rollup_as_failed(file_name, &e.to_string(), RollupState::ValidationFail)
+                .mark_rollup_as_failed(
+                    &rollup_to_process.file_name,
+                    &e.to_string(),
+                    RollupState::ValidationFail,
+                )
                 .await
             {
                 error!(
                     "Failed to mark rollup as verification failed: file_path: {}, error: {}",
-                    file_name, err
+                    &rollup_to_process.file_name, err
                 );
             }
             return Err(e.into());
         }
         if let Err(err) = self
             .pg_client
-            .update_rollup_state(file_name, RollupState::ValidationComplete)
+            .update_rollup_state(
+                &rollup_to_process.file_name,
+                RollupState::ValidationComplete,
+            )
             .await
         {
             error!(
                 "Failed to mark rollup as verification complete: file_path: {}, error: {}",
-                file_name, err
+                &rollup_to_process.file_name, err
             );
         };
+        rollup_to_process.state = entities::enums::RollupState::ValidationComplete;
         Ok(())
     }
 
     async fn process_rollup_upload_to_arweave(
         &self,
-        file_name: &str,
+        rollup_to_process: &mut RollupWithState,
         file_size: usize,
     ) -> Result<String, IngesterError> {
-        let (tx_id, reward) = self.upload_file_with_retry(file_name, file_size).await?;
+        let (tx_id, reward) = self
+            .upload_file_with_retry(&rollup_to_process.file_name, file_size)
+            .await?;
         let metadata_url = self.permanent_storage_client.get_metadata_url(&tx_id);
         if let Err(e) = self
             .pg_client
-            .set_rollup_url_and_reward(file_name, &metadata_url, reward as i64)
+            .set_rollup_url_and_reward(&rollup_to_process.file_name, &metadata_url, reward as i64)
             .await
         {
             error!(
                 "Failed to set rollup url and reward: file_path: {}, error: {}",
-                file_name, e
+                &rollup_to_process.file_name, e
             );
         }
+        rollup_to_process.state = entities::enums::RollupState::UploadedToArweave;
         Ok(metadata_url)
     }
 
     async fn process_rollup_send_solana_tx(
         &self,
-        file_name: &str,
+        rollup_to_process: &mut RollupWithState,
         metadata_url: &str,
         rollup: &Rollup,
     ) -> Result<(), IngesterError> {
-        self.send_rollup_tx_with_retry(file_name, rollup, metadata_url)
+        self.send_rollup_tx_with_retry(&rollup_to_process.file_name, rollup, metadata_url)
             .await?;
         if let Err(err) = self
             .pg_client
-            .update_rollup_state(file_name, RollupState::Complete)
+            .update_rollup_state(&rollup_to_process.file_name, RollupState::Complete)
             .await
         {
             error!(
                 "Failed to mark rollup as verification complete: file_path: {}, error: {}",
-                file_name, err
+                &rollup_to_process.file_name, err
             );
         };
+        rollup_to_process.state = entities::enums::RollupState::Complete;
         Ok(())
     }
 
