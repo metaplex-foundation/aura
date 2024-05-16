@@ -18,6 +18,7 @@ impl Default for AssetSorting {
     }
 }
 
+#[derive(Default)]
 pub struct Pagination {
     pub limit: Option<u32>,
     pub page: Option<u32>,
@@ -183,6 +184,9 @@ pub struct GetTokenAccounts {
     pub mint: Option<String>,
     #[serde(default, alias = "displayOptions")]
     pub options: Option<DisplayOptions>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

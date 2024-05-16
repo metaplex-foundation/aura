@@ -359,6 +359,11 @@ pub struct TokenAccount {
     pub frozen: bool,
 }
 
+pub struct TokenAccResponse {
+    pub token_acc: TokenAccount,
+    pub sorting_id: String,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Task {
     pub ofd_metadata_url: String,
