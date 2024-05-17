@@ -2,6 +2,7 @@
 use std::collections::BTreeMap;
 
 use schemars::JsonSchema;
+use serde_json::Value;
 
 use {
     serde::{Deserialize, Serialize},
@@ -34,6 +35,8 @@ pub enum Interface {
     Nft,
     #[serde(rename = "FungibleAsset")]
     FungibleAsset,
+    #[serde(rename = "FungibleToken")]
+    FungibleToken,
     #[serde(rename = "Custom")]
     Custom,
     #[serde(rename = "Identity")]
@@ -42,6 +45,10 @@ pub enum Interface {
     Executable,
     #[serde(rename = "ProgrammableNFT")]
     ProgrammableNFT,
+    #[serde(rename = "MplCoreAsset")]
+    MplCoreAsset,
+    #[serde(rename = "MplCoreCollection")]
+    MplCoreCollection,
 }
 
 impl From<entities::enums::Interface> for Interface {
@@ -56,6 +63,8 @@ impl From<entities::enums::Interface> for Interface {
             entities::enums::Interface::Identity => Interface::Identity,
             entities::enums::Interface::Executable => Interface::Executable,
             entities::enums::Interface::ProgrammableNFT => Interface::ProgrammableNFT,
+            entities::enums::Interface::MplCoreAsset => Interface::MplCoreAsset,
+            entities::enums::Interface::MplCoreCollection => Interface::MplCoreCollection,
         }
     }
 }
@@ -69,6 +78,10 @@ impl From<(&SpecificationVersions, &SpecificationAssetClass)> for Interface {
             (SpecificationVersions::V1, SpecificationAssetClass::ProgrammableNft) => {
                 Interface::ProgrammableNFT
             }
+            (_, SpecificationAssetClass::FungibleAsset) => Interface::FungibleAsset,
+            (_, SpecificationAssetClass::FungibleToken) => Interface::FungibleToken,
+            (_, SpecificationAssetClass::MplCoreAsset) => Interface::MplCoreAsset,
+            (_, SpecificationAssetClass::MplCoreCollection) => Interface::MplCoreCollection,
             _ => Interface::Custom,
         }
     }
@@ -87,6 +100,14 @@ impl From<Interface> for (SpecificationVersions, SpecificationAssetClass) {
             Interface::FungibleAsset => (
                 SpecificationVersions::V1,
                 SpecificationAssetClass::FungibleAsset,
+            ),
+            Interface::MplCoreAsset => (
+                SpecificationVersions::V1,
+                SpecificationAssetClass::MplCoreAsset,
+            ),
+            Interface::MplCoreCollection => (
+                SpecificationVersions::V1,
+                SpecificationAssetClass::MplCoreCollection,
             ),
             _ => (SpecificationVersions::V1, SpecificationAssetClass::Unknown),
         }
@@ -218,6 +239,8 @@ pub type GroupValue = String;
 pub struct Group {
     pub group_key: String,
     pub group_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verified: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
@@ -370,9 +393,20 @@ pub struct Uses {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Supply {
-    pub print_max_supply: u64,
+    pub print_max_supply: Option<u64>, // None value mean that NFT is printable and has an unlimited supply (https://developers.metaplex.com/token-metadata/print)
     pub print_current_supply: u64,
     pub edition_nonce: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edition_number: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct MplCoreInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_minted: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_size: Option<u32>,
+    pub plugins_json_version: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -397,4 +431,18 @@ pub struct Asset {
     pub supply: Option<Supply>,
     pub mutable: bool,
     pub burnt: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lamports: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub executable: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata_owner: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rent_epoch: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugins: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unknown_plugins: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mpl_core_info: Option<MplCoreInfo>,
 }

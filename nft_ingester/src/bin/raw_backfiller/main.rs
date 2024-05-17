@@ -15,12 +15,17 @@ use nft_ingester::init::graceful_stop;
 use nft_ingester::transaction_ingester;
 use prometheus_client::registry::Registry;
 
+use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
 use rocks_db::bubblegum_slots::BubblegumSlotGetter;
 use rocks_db::Storage;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
+
+#[cfg(feature = "profiling")]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 
@@ -31,15 +36,16 @@ pub async fn main() -> Result<(), IngesterError> {
     let config: RawBackfillConfig = setup_config(INGESTER_CONFIG_PREFIX);
     init_logger(&config.log_level);
 
-    let mut guard = None;
-    if config.run_profiling {
-        guard = Some(
+    let guard = if config.run_profiling {
+        Some(
             pprof::ProfilerGuardBuilder::default()
                 .frequency(100)
                 .build()
                 .unwrap(),
-        );
-    }
+        )
+    } else {
+        None
+    };
 
     let mut registry = Registry::default();
     let metrics = Arc::new(BackfillerMetricsConfig::new());
@@ -68,7 +74,13 @@ pub async fn main() -> Result<(), IngesterError> {
         .clone()
         .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string());
 
-    let storage = Storage::open(&primary_storage_path, mutexed_tasks.clone()).unwrap();
+    let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    let storage = Storage::open(
+        &primary_storage_path,
+        mutexed_tasks.clone(),
+        red_metrics.clone(),
+    )
+    .unwrap();
 
     let rocks_storage = Arc::new(storage);
 
@@ -82,7 +94,7 @@ pub async fn main() -> Result<(), IngesterError> {
     );
     let backfiller = Backfiller::new(
         rocks_storage.clone(),
-        big_table_client.clone(),
+        big_table_client.big_table_inner_client.clone(),
         backfiller_config.clone(),
     );
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
@@ -169,6 +181,7 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         guard,
         config.profiling_file_path_container,
+        &config.heap_path,
     )
     .await;
 

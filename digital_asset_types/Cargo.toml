@@ -15,9 +15,9 @@ sea-orm = { optional = true, version = "0.10.6", features = ["macros", "runtime-
 serde = { version = "1.0.137", optional = true }
 serde_json = { version = "1.0.81", optional = true, features = ["preserve_order"] }
 bs58 = "0.4.0"
-solana-sdk = "~1.16"
+solana-sdk = "~1.17"
 thiserror = "1.0.31"
-blockbuster = "=0.9.0-beta.5"
+blockbuster = "2.2.1"
 jsonpath_lib = "0.3.0"
 mime_guess = "2.0.4"
 url = "2.3.1"
@@ -29,3 +29,5 @@ postgre-client = { path = "../postgre-client" }
 entities = { path = "../entities" }
 usecase = { path = "../usecase" }
 interface = { path = "../interface" }
+metrics-utils = { path = "../metrics_utils" }
+futures = "0.3.30"

@@ -1,5 +1,7 @@
 use crate::error::IngesterError;
 use crate::flatbuffer_mapper::FlatbufferMapper;
+use crate::plerkle;
+use crate::plerkle::PlerkleTransactionInfo;
 use blockbuster::programs::bubblegum::{BubblegumInstruction, Payload};
 use blockbuster::{
     instruction::{order_instructions, InstructionBundle, IxPair},
@@ -8,44 +10,56 @@ use blockbuster::{
 };
 use chrono::Utc;
 use entities::enums::{
-    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard,
-    UseMethod,
+    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TaskStatus,
+    TokenStandard, UseMethod,
 };
-use entities::models::{BufferedTransaction, SignatureWithSlot, Updated};
+use entities::models::{
+    BufferedTransaction, OffChainData, SignatureWithSlot, Task, UpdateVersion, Updated,
+    UrlWithStatus,
+};
 use entities::models::{ChainDataV1, Creator, Uses};
+use entities::rollup::BatchMintInstruction;
+use interface::rollup::RollupDownloader;
+use lazy_static::lazy_static;
 use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
 use num_traits::FromPrimitive;
-use plerkle_serialization::{Pubkey as FBPubkey, TransactionInfo};
 use rocks_db::asset::AssetOwner;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
 };
 use rocks_db::transaction::{
-    AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, Task, TransactionResult,
-    TreeWithSeqAndSlot,
+    AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, TransactionResult,
+    TreeUpdate,
 };
+use rocks_db::Storage;
 use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::{HashSet, VecDeque};
-use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
+const ROLLUP_BATCH_FLUSH_SIZE: usize = 10_000;
+lazy_static! {
+    static ref KEY_SET: HashSet<Pubkey> = {
+        let mut m = HashSet::new();
+        m.insert(BubblegumParser {}.key());
+        m
+    };
+}
 
 #[derive(Clone)]
 pub struct BubblegumTxProcessor {
     pub transaction_parser: Arc<FlatbufferMapper>,
     pub instruction_parser: Arc<BubblegumParser>,
-
     pub rocks_client: Arc<rocks_db::Storage>,
 
-    pub json_tasks: Arc<Mutex<VecDeque<crate::db_v2::Task>>>,
+    pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
     pub metrics: Arc<IngesterMetricsConfig>,
 }
 
@@ -53,7 +67,7 @@ impl BubblegumTxProcessor {
     pub fn new(
         rocks_client: Arc<rocks_db::Storage>,
         metrics: Arc<IngesterMetricsConfig>,
-        json_tasks: Arc<Mutex<VecDeque<crate::db_v2::Task>>>,
+        json_tasks: Arc<Mutex<VecDeque<Task>>>,
     ) -> Self {
         BubblegumTxProcessor {
             transaction_parser: Arc::new(FlatbufferMapper {}),
@@ -64,19 +78,24 @@ impl BubblegumTxProcessor {
         }
     }
 
-    pub fn break_transaction<'i>(
-        tx: &'i TransactionInfo<'i>,
-    ) -> VecDeque<(IxPair<'i>, Option<Vec<IxPair<'i>>>)> {
-        let mut ref_set: HashSet<&[u8]> = HashSet::new();
-        let k = mpl_bubblegum::ID;
-        ref_set.insert(k.as_ref());
-        order_instructions(ref_set, tx)
+    pub fn break_transaction(
+        tx_info: &plerkle::TransactionInfo,
+    ) -> VecDeque<(IxPair, Option<Vec<IxPair>>)> {
+        order_instructions(
+            &KEY_SET,
+            tx_info.account_keys.as_slice(),
+            tx_info.message_instructions.as_slice(),
+            tx_info.meta_inner_instructions.as_slice(),
+        )
     }
 
     pub async fn process_transaction(
         &self,
         data: BufferedTransaction,
     ) -> Result<(), IngesterError> {
+        if data == BufferedTransaction::default() {
+            return Ok(());
+        }
         let result = Self::get_process_transaction_results(
             data,
             self.instruction_parser.clone(),
@@ -84,7 +103,7 @@ impl BubblegumTxProcessor {
             self.metrics.clone(),
         )?;
         self.rocks_client
-            .store_transaction_result(result, true)
+            .store_transaction_result(&result, true)
             .await
             .map_err(|e| IngesterError::DatabaseError(e.to_string()))?;
         Ok(())
@@ -112,6 +131,8 @@ impl BubblegumTxProcessor {
         let transaction_info =
             plerkle_serialization::root_as_transaction_info(transaction_info_bytes.as_slice())
                 .unwrap();
+        let transaction_info: plerkle::TransactionInfo =
+            PlerkleTransactionInfo(transaction_info).try_into()?;
 
         Self::get_handle_transaction_results(instruction_parser, transaction_info, metrics)
     }
@@ -140,7 +161,7 @@ impl BubblegumTxProcessor {
     }
 
     // PDA lookup requires an 8-byte array.
-    fn u32_to_u8_array(value: u32) -> [u8; 8] {
+    pub fn u32_to_u8_array(value: u32) -> [u8; 8] {
         let bytes: [u8; 4] = value.to_le_bytes();
         let mut result: [u8; 8] = [0; 8];
         result[..4].copy_from_slice(&bytes);
@@ -149,61 +170,48 @@ impl BubblegumTxProcessor {
 
     pub fn get_handle_transaction_results(
         instruction_parser: Arc<BubblegumParser>,
-        tx: TransactionInfo,
+        tx: plerkle::TransactionInfo,
         metrics: Arc<IngesterMetricsConfig>,
     ) -> Result<TransactionResult, IngesterError> {
-        let sig: Option<&str> = tx.signature();
+        let sig = tx.signature;
         let instructions = Self::break_transaction(&tx);
-        let accounts = tx.account_keys().unwrap_or_default();
-        let slot = tx.slot();
-        let txn_id = tx.signature().unwrap_or("");
-
-        let mut keys: Vec<FBPubkey> = Vec::with_capacity(accounts.len());
-        for k in accounts.into_iter() {
-            keys.push(*k);
-        }
-
+        let slot = tx.slot;
+        let signature = tx.signature;
         let mut transaction_result = TransactionResult {
             instruction_results: vec![],
             transaction_signature: Some((
                 mpl_bubblegum::programs::MPL_BUBBLEGUM_ID,
-                SignatureWithSlot {
-                    signature: Signature::from_str(txn_id)?,
-                    slot,
-                },
+                SignatureWithSlot { signature, slot },
             )),
         };
         for (outer_ix, inner_ix) in instructions {
             let (program, instruction) = outer_ix;
-            if program.0 != mpl_bubblegum::programs::MPL_BUBBLEGUM_ID.to_bytes() {
+            if program != mpl_bubblegum::programs::MPL_BUBBLEGUM_ID {
                 continue;
             }
 
-            let ix_accounts = instruction.accounts().unwrap().iter().collect::<Vec<_>>();
+            let ix_accounts = &instruction.accounts;
             let ix_account_len = ix_accounts.len();
             let max = ix_accounts.iter().max().copied().unwrap_or(0) as usize;
-
-            if keys.len() < max {
+            if tx.account_keys.len() < max {
                 return Err(IngesterError::DeserializationError(
                     "Missing Accounts in Serialized Ixn/Txn".to_string(),
                 ));
             }
-
             let ix_accounts =
                 ix_accounts
                     .iter()
                     .fold(Vec::with_capacity(ix_account_len), |mut acc, a| {
-                        if let Some(key) = keys.get(*a as usize) {
+                        if let Some(key) = tx.account_keys.get(*a as usize) {
                             acc.push(*key);
                         }
                         acc
                     });
-
             let ix = InstructionBundle {
-                txn_id,
+                txn_id: &signature.to_string(),
                 program,
                 instruction: Some(instruction),
-                inner_ix,
+                inner_ix: inner_ix.as_deref(),
                 keys: ix_accounts.as_slice(),
                 slot,
             };
@@ -221,12 +229,14 @@ impl BubblegumTxProcessor {
                         transaction_result.instruction_results.push(ix_result);
                     }
                     Err(e) => {
-                        // we should not persist the signature if we have unhandled instructions
-                        transaction_result.transaction_signature = None;
                         error!(
-                            "Failed to handle bubblegum instruction for txn {:?}: {:?}",
+                            "Failed to handle bubblegum instruction for txn {}: {:?}",
                             sig, e
                         );
+                        return Err(IngesterError::TransactionParsingError(format!(
+                            "Failed to parse transaction: {:?}",
+                            sig
+                        )));
                     }
                 };
             }
@@ -247,11 +257,14 @@ impl BubblegumTxProcessor {
 
         let mut tree_update = None;
         if let Some(cl) = &parsing_result.tree_update {
-            tree_update = Some(TreeWithSeqAndSlot {
+            tree_update = Some(TreeUpdate {
                 tree: cl.id,
                 seq: cl.seq,
                 slot: bundle.slot,
-            })
+                event: cl.into(),
+                instruction: ix_str.to_string(),
+                tx: bundle.txn_id.to_string(),
+            });
         };
         let instruction: Result<InstructionResult, IngesterError> = match ix_type {
             InstructionName::Transfer
@@ -263,14 +276,14 @@ impl BubblegumTxProcessor {
                 .map(From::from)
                 .map(Ok)?,
             InstructionName::MintV1 | InstructionName::MintToCollectionV1 => {
-                Self::get_mint_v1_update(parsing_result, bundle)
+                Self::get_mint_v1_update(parsing_result, bundle.slot)
                     .map(From::from)
                     .map(Ok)?
             }
             InstructionName::Redeem => Self::get_redeem_update(parsing_result, bundle)
                 .map(From::from)
                 .map(Ok)?,
-            InstructionName::DecompressV1 => Ok(Self::get_decompress_update(bundle).into()),
+            InstructionName::DecompressV1 => Ok(Self::get_decompress_update(bundle).into()), // no change log here? really?
             InstructionName::VerifyCreator | InstructionName::UnverifyCreator => {
                 Self::get_creator_verification_update(parsing_result, bundle)
                     .map(From::from)
@@ -291,7 +304,10 @@ impl BubblegumTxProcessor {
             _ => {
                 debug!("Bubblegum: Not Implemented Instruction");
                 Ok(InstructionResult::default())
-            }
+            } // InstructionName::Unknown => todo!(),
+              // InstructionName::Compress => todo!(),
+              // InstructionName::CreateTree => todo!(),
+              // InstructionName::SetDecompressibleState => todo!(),
         };
         let mut instruction = instruction?;
         instruction.tree_update = tree_update;
@@ -303,11 +319,6 @@ impl BubblegumTxProcessor {
         bundle: &InstructionBundle,
     ) -> Result<AssetUpdateEvent, IngesterError> {
         if let (Some(le), Some(cl)) = (&parsing_result.leaf_update, &parsing_result.tree_update) {
-            let mut asset_update = AssetUpdateEvent {
-                event: cl.into(),
-                slot: bundle.slot,
-                ..Default::default()
-            };
             match le.schema {
                 LeafSchema::V1 {
                     id,
@@ -327,24 +338,39 @@ impl BubblegumTxProcessor {
                     });
                     let owner = AssetOwner {
                         pubkey: id,
-                        owner: Updated::new(bundle.slot, Some(cl.seq), owner),
+                        owner: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            Some(owner),
+                        ),
                         delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
-                        owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
-                        owner_delegate_seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
+                        owner_type: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            OwnerType::Single,
+                        ),
+                        owner_delegate_seq: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            Some(cl.seq),
+                        ),
                     };
-                    asset_update.update = Some(AssetDynamicUpdate {
-                        pk: id,
-                        slot: bundle.slot,
-                        leaf,
-                        dynamic_data: None,
-                    });
-                    asset_update.owner_update = Some(AssetUpdate {
-                        pk: id,
-                        details: owner,
-                    });
+                    let asset_update = AssetUpdateEvent {
+                        update: Some(AssetDynamicUpdate {
+                            pk: id,
+                            slot: bundle.slot,
+                            leaf,
+                            dynamic_data: None,
+                        }),
+                        owner_update: Some(AssetUpdate {
+                            pk: id,
+                            details: owner,
+                        }),
+                        ..Default::default()
+                    };
+                    return Ok(asset_update);
                 }
             }
-            return Ok(asset_update);
         }
         Err(IngesterError::ParsingError(
             "Ix not parsed correctly".to_string(),
@@ -366,18 +392,32 @@ impl BubblegumTxProcessor {
             );
 
             let asset_update = AssetUpdateEvent {
-                event: cl.into(),
-                slot: bundle.slot,
                 update: Some(AssetDynamicUpdate {
                     pk: asset_id,
                     slot: bundle.slot,
                     leaf: None,
                     dynamic_data: Some(AssetDynamicDetails {
                         pubkey: asset_id,
-                        supply: Some(Updated::new(bundle.slot, Some(cl.seq), 0)),
-                        is_burnt: Updated::new(bundle.slot, Some(cl.seq), true),
-                        seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
-                        is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
+                        supply: Some(Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            0,
+                        )),
+                        is_burnt: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            true,
+                        ),
+                        seq: Some(Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            cl.seq,
+                        )),
+                        is_compressed: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            true,
+                        ),
                         ..Default::default()
                     }),
                 }),
@@ -394,8 +434,8 @@ impl BubblegumTxProcessor {
 
     pub fn get_mint_v1_update(
         parsing_result: &BubblegumInstruction,
-        bundle: &InstructionBundle,
-    ) -> Result<(AssetUpdateEvent, Task), IngesterError> {
+        slot: u64,
+    ) -> Result<(AssetUpdateEvent, Option<Task>), IngesterError> {
         if let (
             Some(le),
             Some(cl),
@@ -410,16 +450,10 @@ impl BubblegumTxProcessor {
             &parsing_result.payload,
         ) {
             let mut asset_update = AssetUpdateEvent {
-                event: cl.into(),
-                slot: bundle.slot,
                 ..Default::default()
             };
 
-            let tree_id = Pubkey::new_from_array(tree_id.to_owned());
-            //     Pubkey::new_from_array(bundle.keys.get(3).unwrap().0.to_vec().try_into().unwrap());
-            let authority = Pubkey::new_from_array(authority.to_owned());
-            //     Pubkey::new_from_array(bundle.keys.get(0).unwrap().0.to_vec().try_into().unwrap());
-
+            let uri = args.uri.trim().replace('\0', "");
             match le.schema {
                 LeafSchema::V1 {
                     id,
@@ -444,7 +478,6 @@ impl BubblegumTxProcessor {
                             remaining: u.remaining,
                             total: u.total,
                         }),
-                        chain_mutability: Some(chain_mutability),
                     };
                     chain_data.sanitize();
 
@@ -453,7 +486,8 @@ impl BubblegumTxProcessor {
                         pubkey: id,
                         specification_asset_class: SpecificationAssetClass::Nft,
                         royalty_target_type: RoyaltyTargetType::Creators,
-                        created_at: bundle.slot as i64,
+                        created_at: slot as i64,
+                        edition_address: None,
                     };
                     asset_update.static_update = Some(AssetUpdate {
                         pk: id,
@@ -473,43 +507,73 @@ impl BubblegumTxProcessor {
                     };
                     asset_update.update = Some(AssetDynamicUpdate {
                         pk: id,
-                        slot: bundle.slot,
+                        slot,
                         leaf: Some(AssetLeaf {
                             pubkey: id,
-                            tree_id,
+                            tree_id: *tree_id,
                             leaf: Some(le.leaf_hash.to_vec()),
                             nonce: Some(nonce),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
                             creator_hash: Some(Hash::from(le.schema.creator_hash())),
                             leaf_seq: Some(cl.seq),
-                            slot_updated: bundle.slot,
+                            slot_updated: slot,
                         }),
                         dynamic_data: Some(AssetDynamicDetails {
                             pubkey: id,
-                            is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
-                            is_compressible: Updated::new(bundle.slot, Some(cl.seq), false),
-                            supply: Some(Updated::new(bundle.slot, Some(cl.seq), 1)),
-                            seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
+                            is_compressed: Updated::new(
+                                slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                true,
+                            ),
+                            is_compressible: Updated::new(
+                                slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                false,
+                            ),
+                            supply: Some(Updated::new(
+                                slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                1,
+                            )),
+                            seq: Some(Updated::new(
+                                slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                cl.seq,
+                            )),
                             onchain_data: Some(Updated::new(
-                                bundle.slot,
-                                Some(cl.seq),
+                                slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
                                 chain_data.to_string(),
                             )),
-                            creators: Updated::new(bundle.slot, Some(cl.seq), creators),
+                            creators: Updated::new(
+                                slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                creators,
+                            ),
                             royalty_amount: Updated::new(
-                                bundle.slot,
-                                Some(cl.seq),
+                                slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
                                 args.seller_fee_basis_points,
                             ),
-                            url: Updated::new(bundle.slot, Some(cl.seq), args.uri.clone()),
+                            url: Updated::new(
+                                slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                uri.clone(),
+                            ),
+                            chain_mutability: Some(Updated::new(
+                                slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                chain_mutability,
+                            )),
                             ..Default::default()
                         }),
                     });
 
                     let asset_authority = AssetAuthority {
                         pubkey: id,
-                        authority,
-                        slot_updated: bundle.slot,
+                        authority: *authority,
+                        slot_updated: slot,
+                        write_version: None,
                     };
                     asset_update.authority_update = Some(AssetUpdate {
                         pk: id,
@@ -517,10 +581,22 @@ impl BubblegumTxProcessor {
                     });
                     let owner = AssetOwner {
                         pubkey: id,
-                        owner: Updated::new(bundle.slot, Some(cl.seq), owner),
-                        delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
-                        owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
-                        owner_delegate_seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
+                        owner: Updated::new(
+                            slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            Some(owner),
+                        ),
+                        delegate: get_delegate(delegate, owner, slot, cl.seq),
+                        owner_type: Updated::new(
+                            slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            OwnerType::Single,
+                        ),
+                        owner_delegate_seq: Updated::new(
+                            slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            Some(cl.seq),
+                        ),
                     };
                     asset_update.owner_update = Some(AssetUpdate {
                         pk: id,
@@ -533,7 +609,8 @@ impl BubblegumTxProcessor {
                             collection: collection.key,
                             is_collection_verified: collection.verified,
                             collection_seq: Some(cl.seq),
-                            slot_updated: bundle.slot,
+                            slot_updated: slot,
+                            write_version: None,
                         };
                         asset_update.collection_update = Some(AssetUpdate {
                             pk: id,
@@ -543,15 +620,19 @@ impl BubblegumTxProcessor {
                 }
             }
 
-            let task = Task {
-                ofd_metadata_url: args.uri.clone(),
-                ofd_locked_until: Some(chrono::Utc::now()),
-                ofd_attempts: 0,
-                ofd_max_attempts: 10,
-                ofd_error: None,
-                ..Default::default()
+            let task = if !args.uri.is_empty() {
+                let url_with_status = UrlWithStatus::new(&args.uri, false);
+                Some(Task {
+                    ofd_metadata_url: url_with_status.metadata_url,
+                    ofd_locked_until: Some(chrono::Utc::now()),
+                    ofd_attempts: 0,
+                    ofd_max_attempts: 10,
+                    ofd_error: None,
+                    ..Default::default()
+                })
+            } else {
+                None
             };
-
             return Ok((asset_update, task));
         }
         Err(IngesterError::ParsingError(
@@ -564,12 +645,6 @@ impl BubblegumTxProcessor {
         bundle: &InstructionBundle,
     ) -> Result<AssetUpdateEvent, IngesterError> {
         if let Some(cl) = &parsing_result.tree_update {
-            let mut asset_update = AssetUpdateEvent {
-                event: cl.into(),
-                slot: bundle.slot,
-                ..Default::default()
-            };
-
             let leaf_index = cl.index;
             let (asset_id, _) = Pubkey::find_program_address(
                 &[
@@ -582,21 +657,24 @@ impl BubblegumTxProcessor {
 
             let nonce = cl.index as u64;
 
-            asset_update.update = Some(AssetDynamicUpdate {
-                pk: asset_id,
-                slot: bundle.slot,
-                leaf: Some(AssetLeaf {
-                    pubkey: asset_id,
-                    tree_id: cl.id,
-                    leaf: Some(vec![0; 32]),
-                    nonce: Some(nonce),
-                    data_hash: Some(Hash::from([0; 32])),
-                    creator_hash: Some(Hash::from([0; 32])),
-                    leaf_seq: Some(cl.seq),
-                    slot_updated: bundle.slot,
+            let asset_update = AssetUpdateEvent {
+                update: Some(AssetDynamicUpdate {
+                    pk: asset_id,
+                    slot: bundle.slot,
+                    leaf: Some(AssetLeaf {
+                        pubkey: asset_id,
+                        tree_id: cl.id,
+                        leaf: Some(vec![0; 32]),
+                        nonce: Some(nonce),
+                        data_hash: Some(Hash::from([0; 32])),
+                        creator_hash: Some(Hash::from([0; 32])),
+                        leaf_seq: Some(cl.seq),
+                        slot_updated: bundle.slot,
+                    }),
+                    dynamic_data: None,
                 }),
-                dynamic_data: None,
-            });
+                ..Default::default()
+            };
             return Ok(asset_update);
         }
 
@@ -606,12 +684,11 @@ impl BubblegumTxProcessor {
     }
 
     pub fn get_decompress_update(bundle: &InstructionBundle) -> AssetUpdate<AssetDynamicDetails> {
-        let id_bytes = bundle.keys.get(3).unwrap().0.as_slice();
-        let asset_id = Pubkey::new_from_array(id_bytes.try_into().unwrap());
+        let asset_id = bundle.keys.get(3).unwrap();
         AssetUpdate {
-            pk: asset_id,
+            pk: *asset_id,
             details: AssetDynamicDetails {
-                pubkey: asset_id,
+                pubkey: *asset_id,
                 was_decompressed: Updated::new(bundle.slot, None, true),
                 is_compressible: Updated::new(bundle.slot, None, false),
                 supply: Some(Updated::new(bundle.slot, None, 1)),
@@ -629,12 +706,6 @@ impl BubblegumTxProcessor {
             &parsing_result.tree_update,
             &parsing_result.payload,
         ) {
-            let mut asset_update = AssetUpdateEvent {
-                event: cl.into(),
-                slot: bundle.slot,
-                ..Default::default()
-            };
-
             let updated_creators = match payload {
                 Payload::CreatorVerification {
                     metadata,
@@ -666,7 +737,9 @@ impl BubblegumTxProcessor {
                     ));
                 }
             };
-
+            let mut asset_update = AssetUpdateEvent {
+                ..Default::default()
+            };
             match le.schema {
                 LeafSchema::V1 {
                     id,
@@ -689,20 +762,48 @@ impl BubblegumTxProcessor {
                         }),
                         dynamic_data: Some(AssetDynamicDetails {
                             pubkey: id,
-                            is_compressed: Updated::new(bundle.slot, Some(cl.seq), true),
-                            supply: Some(Updated::new(bundle.slot, Some(cl.seq), 1)),
-                            seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
-                            creators: Updated::new(bundle.slot, Some(cl.seq), updated_creators),
+                            is_compressed: Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                true,
+                            ),
+                            supply: Some(Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                1,
+                            )),
+                            seq: Some(Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                cl.seq,
+                            )),
+                            creators: Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                updated_creators,
+                            ),
                             ..Default::default()
                         }),
                     });
 
                     let owner = AssetOwner {
                         pubkey: id,
-                        owner: Updated::new(bundle.slot, Some(cl.seq), owner),
+                        owner: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            Some(owner),
+                        ),
                         delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
-                        owner_type: Updated::new(bundle.slot, Some(cl.seq), OwnerType::Single),
-                        owner_delegate_seq: Some(Updated::new(bundle.slot, Some(cl.seq), cl.seq)),
+                        owner_type: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            OwnerType::Single,
+                        ),
+                        owner_delegate_seq: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            Some(cl.seq),
+                        ),
                     };
                     asset_update.owner_update = Some(AssetUpdate {
                         pk: id,
@@ -728,8 +829,6 @@ impl BubblegumTxProcessor {
             &parsing_result.payload,
         ) {
             let mut asset_update = AssetUpdateEvent {
-                event: cl.into(),
-                slot: bundle.slot,
                 ..Default::default()
             };
 
@@ -768,6 +867,7 @@ impl BubblegumTxProcessor {
                         is_collection_verified: verify,
                         collection_seq: Some(cl.seq),
                         slot_updated: bundle.slot,
+                        write_version: None,
                     };
 
                     asset_update.collection_update = Some(AssetUpdate {
@@ -787,7 +887,7 @@ impl BubblegumTxProcessor {
     pub fn get_update_metadata_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
-    ) -> Result<(AssetUpdateEvent, Task), IngesterError> {
+    ) -> Result<(AssetUpdateEvent, Option<Task>), IngesterError> {
         if let (
             Some(le),
             Some(cl),
@@ -802,8 +902,6 @@ impl BubblegumTxProcessor {
             &parsing_result.payload,
         ) {
             let mut asset_update = AssetUpdateEvent {
-                event: cl.into(),
-                slot: bundle.slot,
                 ..Default::default()
             };
 
@@ -814,11 +912,6 @@ impl BubblegumTxProcessor {
                     } else {
                         current_metadata.uri.replace('\0', "")
                     };
-                    if uri.is_empty() {
-                        return Err(IngesterError::DeserializationError(
-                            "URI is empty".to_string(),
-                        ));
-                    }
 
                     let name = if let Some(name) = update_args.name.clone() {
                         name
@@ -872,7 +965,6 @@ impl BubblegumTxProcessor {
                                 })
                             })
                             .transpose()?,
-                        chain_mutability: Some(chain_mutability),
                     };
                     chain_data.sanitize();
                     let chain_data_json = serde_json::to_value(chain_data)
@@ -909,7 +1001,7 @@ impl BubblegumTxProcessor {
                         slot: bundle.slot,
                         leaf: Some(AssetLeaf {
                             pubkey: id,
-                            tree_id: Pubkey::from(*tree_id),
+                            tree_id: *tree_id,
                             leaf: Some(le.leaf_hash.to_vec()),
                             nonce: Some(nonce),
                             data_hash: Some(Hash::from(le.schema.data_hash())),
@@ -919,36 +1011,45 @@ impl BubblegumTxProcessor {
                         }),
                         dynamic_data: Some(AssetDynamicDetails {
                             pubkey: id,
-                            onchain_data: Some(Updated {
-                                slot_updated: bundle.slot,
-                                seq: Some(cl.seq),
-                                value: chain_data_json.to_string(),
-                            }),
-                            url: Updated {
-                                slot_updated: bundle.slot,
-                                seq: Some(cl.seq),
-                                value: uri.clone(),
-                            },
-                            creators: Updated {
-                                slot_updated: bundle.slot,
-                                seq: Some(cl.seq),
-                                value: creators,
-                            },
+                            onchain_data: Some(Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                chain_data_json.to_string(),
+                            )),
+                            url: Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                uri.clone(),
+                            ),
+                            creators: Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                creators,
+                            ),
                             royalty_amount: Updated::new(
                                 bundle.slot,
-                                Some(cl.seq),
+                                Some(UpdateVersion::Sequence(cl.seq)),
                                 seller_fee_basis_points,
                             ),
+                            chain_mutability: Some(Updated::new(
+                                bundle.slot,
+                                Some(UpdateVersion::Sequence(cl.seq)),
+                                chain_mutability,
+                            )),
                             ..Default::default()
                         }),
                     });
-                    let task = Task {
-                        ofd_metadata_url: uri.clone(),
-                        ofd_locked_until: Some(chrono::Utc::now()),
-                        ofd_attempts: 0,
-                        ofd_max_attempts: 10,
-                        ofd_error: None,
-                        ..Default::default()
+                    let task = if !uri.is_empty() {
+                        Some(Task {
+                            ofd_metadata_url: uri.clone(),
+                            ofd_locked_until: Some(chrono::Utc::now()),
+                            ofd_attempts: 0,
+                            ofd_max_attempts: 10,
+                            ofd_error: None,
+                            ..Default::default()
+                        })
+                    } else {
+                        None
                     };
 
                     Ok((asset_update, task))
@@ -958,6 +1059,68 @@ impl BubblegumTxProcessor {
         Err(IngesterError::ParsingError(
             "Ix not parsed correctly".to_string(),
         ))
+    }
+
+    pub async fn store_rollup_update(
+        slot: u64,
+        batch_mint_instruction: &BatchMintInstruction, // TODO: use BubblegumInstruction instead
+        rollup_downloader: impl RollupDownloader,
+        rocks_db: Arc<Storage>,
+        signature: Signature,
+    ) -> Result<(), IngesterError> {
+        let rollup = rollup_downloader
+            .download_rollup(&batch_mint_instruction.metadata_url)
+            .await?;
+        let mut transaction_result = TransactionResult {
+            instruction_results: vec![],
+            transaction_signature: Some((
+                mpl_bubblegum::programs::MPL_BUBBLEGUM_ID,
+                SignatureWithSlot { signature, slot },
+            )),
+        };
+        for rolled_mint in rollup.rolled_mints.into_iter() {
+            let seq = rolled_mint.tree_update.seq;
+            let event = (&blockbuster::programs::bubblegum::ChangeLogEventV1::from(
+                &rolled_mint.tree_update,
+            ))
+                .into();
+            let (mut update, mut task_option) =
+                Self::get_mint_v1_update(&rolled_mint.into(), slot)?;
+            if let Some(ref mut task) = task_option {
+                if let Some(metadata) = rollup.raw_metadata_map.get(&task.ofd_metadata_url) {
+                    task.ofd_status = TaskStatus::Success;
+                    update.offchain_data_update = Some(OffChainData {
+                        url: task.ofd_metadata_url.clone(),
+                        metadata: metadata.to_string(),
+                    });
+                }
+            }
+
+            let mut ix: InstructionResult = (update, task_option).into();
+            ix.tree_update = Some(TreeUpdate {
+                tree: rollup.tree_id,
+                seq,
+                slot,
+                event,
+                instruction: "".to_string(),
+                tx: signature.to_string(),
+            });
+
+            transaction_result.instruction_results.push(ix);
+            if transaction_result.instruction_results.len() >= ROLLUP_BATCH_FLUSH_SIZE {
+                // TODO: add retry
+                rocks_db
+                    .store_transaction_result(&transaction_result, false)
+                    .await?;
+                transaction_result.instruction_results.clear();
+            }
+        }
+        // TODO: add retry
+        rocks_db
+            .store_transaction_result(&transaction_result, true)
+            .await?;
+
+        Ok(())
     }
 }
 
@@ -971,12 +1134,12 @@ fn use_method_from_mpl_bubblegum_state(
     }
 }
 
-fn get_delegate(delegate: Pubkey, owner: Pubkey, slot: u64, seq: u64) -> Option<Updated<Pubkey>> {
+fn get_delegate(delegate: Pubkey, owner: Pubkey, slot: u64, seq: u64) -> Updated<Option<Pubkey>> {
     let delegate = if owner == delegate || delegate.to_bytes() == [0; 32] {
         None
     } else {
         Some(delegate)
     };
 
-    delegate.map(|delegate| Updated::new(slot, Some(seq), delegate))
+    Updated::new(slot, Some(UpdateVersion::Sequence(seq)), delegate)
 }

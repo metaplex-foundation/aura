@@ -1,47 +1,52 @@
 use entities::models::TreeState;
 use interface::sequence_consistent::SequenceConsistentManager;
+use interface::slot_getter::FinalizedSlotGetter;
 use interface::slots_dumper::SlotsDumper;
 use metrics_utils::SequenceConsistentGapfillMetricsConfig;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
 use tracing::{info, warn};
-use usecase::slots_collector::{RowKeysGetter, SlotsCollector};
+use usecase::slots_collector::{SlotsCollector, SlotsGetter};
 
-pub struct SequenceConsistentGapfiller<T, R, S>
+pub struct SequenceConsistentGapfiller<T, R, S, F>
 where
     T: SlotsDumper + Sync + Send + 'static,
-    R: RowKeysGetter + Sync + Send + 'static,
+    R: SlotsGetter + Sync + Send + 'static,
     S: SequenceConsistentManager,
+    F: FinalizedSlotGetter,
 {
     sequence_consistent_manager: Arc<S>,
     slots_collector: Arc<SlotsCollector<T, R>>,
     metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
-    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    finalized_slot_getter: Arc<F>,
 }
 
-impl<T, R, S> SequenceConsistentGapfiller<T, R, S>
+impl<T, R, S, F> SequenceConsistentGapfiller<T, R, S, F>
 where
     T: SlotsDumper + Sync + Send + 'static,
-    R: RowKeysGetter + Sync + Send + 'static,
+    R: SlotsGetter + Sync + Send + 'static,
     S: SequenceConsistentManager,
+    F: FinalizedSlotGetter,
 {
     pub fn new(
         sequence_consistent_manager: Arc<S>,
         slots_collector: SlotsCollector<T, R>,
         metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
-        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+        finalized_slot_getter: Arc<F>,
     ) -> Self {
         Self {
             sequence_consistent_manager,
             slots_collector: Arc::new(slots_collector),
             metrics,
-            tasks,
+            finalized_slot_getter,
         }
     }
 
     pub async fn collect_sequences_gaps(&self, rx: Receiver<()>) {
+        let last_slot_to_look_for_gaps = self
+            .finalized_slot_getter
+            .get_finalized_slot_no_error()
+            .await;
         let mut last_consistent_seq = 0;
         let mut prev_state = TreeState::default();
         let mut gap_found = false;
@@ -49,6 +54,10 @@ where
             if !rx.is_empty() {
                 info!("Stop iteration over tree iterator...");
                 return;
+            }
+            // Skip the most recent slots to avoid gaps in recent slots.
+            if current_state.slot > last_slot_to_look_for_gaps {
+                continue;
             }
             if current_state.tree == prev_state.tree && current_state.seq != prev_state.seq + 1 {
                 warn!(
@@ -62,17 +71,14 @@ where
                 gap_found = true;
 
                 let slots_collector = self.slots_collector.clone();
-                let rx_clone = rx.resubscribe();
-                self.tasks.lock().await.spawn(tokio::spawn(async move {
-                    slots_collector
-                        .collect_slots(
-                            &format!("{}/", current_state.tree),
-                            current_state.slot,
-                            prev_state.slot,
-                            &rx_clone,
-                        )
-                        .await;
-                }));
+                slots_collector
+                    .collect_slots(
+                        &current_state.tree,
+                        current_state.slot,
+                        prev_state.slot,
+                        &rx,
+                    )
+                    .await;
             };
             if prev_state.tree != current_state.tree {
                 self.save_tree_gap_analyze(prev_state.tree, last_consistent_seq, gap_found)
@@ -94,11 +100,11 @@ where
     async fn save_tree_gap_analyze(
         &self,
         tree: solana_program::pubkey::Pubkey,
-        last_consistent_seq: u64,
+        _last_consistent_seq: u64, // TODO: use this parameter if we need to optimize the runtime of the iterator to skip the already consistent sequences. For example, store it with a tree in a separate column family.
         gap_found: bool,
     ) {
         self.sequence_consistent_manager
-            .process_tree_gap(tree, gap_found, last_consistent_seq)
+            .process_tree_gap(tree, gap_found)
             .await;
         self.metrics
             .set_total_tree_with_gaps(self.sequence_consistent_manager.gaps_count());

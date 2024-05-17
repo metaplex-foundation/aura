@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use bincode::deserialize;
-use log::error;
+use entities::models::{AssetSignature, AssetSignatureKey};
+use log::{debug, error};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
@@ -11,13 +12,13 @@ use crate::asset::AssetLeaf;
 use crate::column::TypedColumn;
 use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64_pubkey, encode_u64_pubkey};
-use crate::transaction::{CopyableChangeLogEventV1, TreeWithSeqAndSlot};
+use crate::transaction::{CopyableChangeLogEventV1, TreeUpdate};
 use crate::tree_seq::TreeSeqIdx;
 use crate::{AssetDynamicDetails, Result, Storage};
 
 /// This column family stores change log items for asset proof construction.
 /// Basically, it stores all nodes of the tree.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ClItem {
     pub cli_node_idx: u64,
     pub cli_tree_key: Pubkey,
@@ -60,11 +61,11 @@ impl ClItem {
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
         let mut result = vec![];
-        let mut cli_seq = 0;
+        let mut cli_seq = -1;
         if let Some(existing_val) = existing_val {
             match deserialize::<ClItem>(existing_val) {
                 Ok(value) => {
-                    cli_seq = value.cli_seq;
+                    cli_seq = value.cli_seq as i64;
                     result = existing_val.to_vec();
                 }
                 Err(e) => {
@@ -73,16 +74,22 @@ impl ClItem {
             }
         }
 
-        for op in operands {
+        let len = operands.len();
+
+        for (i, op) in operands.iter().enumerate() {
             match deserialize::<ClItem>(op) {
                 Ok(new_val) => {
-                    if new_val.cli_seq > cli_seq {
-                        cli_seq = new_val.cli_seq;
+                    if new_val.cli_seq as i64 > cli_seq {
+                        cli_seq = new_val.cli_seq as i64;
                         result = op.to_vec();
                     }
                 }
                 Err(e) => {
-                    error!("RocksDB: ClItem deserialize new_val: {}", e)
+                    if i == len - 1 && result.is_empty() {
+                        error!("RocksDB: last operand in ClItem new_val could not be deserialized. Empty array will be saved: {}", e)
+                    } else {
+                        debug!("RocksDB: ClItem deserialize new_val: {}", e);
+                    }
                 }
             }
         }
@@ -158,11 +165,7 @@ impl Storage {
         }
     }
 
-    pub(crate) fn save_tree_with_batch(
-        &self,
-        batch: &mut rocksdb::WriteBatch,
-        tree: TreeWithSeqAndSlot,
-    ) {
+    pub(crate) fn save_tree_with_batch(&self, batch: &mut rocksdb::WriteBatch, tree: &TreeUpdate) {
         if let Err(e) = self.tree_seq_idx.put_with_batch(
             batch,
             (tree.tree, tree.seq),
@@ -231,20 +234,42 @@ impl Storage {
         }
     }
 
+    pub(crate) fn save_asset_signature_with_batch(
+        &self,
+        batch: &mut rocksdb::WriteBatch,
+        tree: &TreeUpdate,
+    ) {
+        if let Err(e) = self.asset_signature.put_with_batch(
+            batch,
+            AssetSignatureKey {
+                tree: tree.tree,
+                leaf_idx: tree.event.index as u64,
+                seq: tree.seq,
+            },
+            &AssetSignature {
+                tx: tree.tx.clone(),
+                instruction: tree.instruction.clone(),
+                slot: tree.slot,
+            },
+        ) {
+            error!("Error while saving tree update: {}", e);
+        };
+    }
+
     pub(crate) fn save_tx_data_and_asset_updated_with_batch(
         &self,
         batch: &mut rocksdb::WriteBatch,
         pk: Pubkey,
         slot: u64,
-        leaf: Option<AssetLeaf>,
-        dynamic_data: Option<AssetDynamicDetails>,
+        leaf: &Option<AssetLeaf>,
+        dynamic_data: &Option<AssetDynamicDetails>,
     ) -> Result<()> {
         if let Some(leaf) = leaf {
-            self.asset_leaf_data.merge_with_batch(batch, pk, &leaf)?
+            self.asset_leaf_data.merge_with_batch(batch, pk, leaf)?
         };
         if let Some(dynamic_data) = dynamic_data {
             self.asset_dynamic_data
-                .merge_with_batch(batch, pk, &dynamic_data)?;
+                .merge_with_batch(batch, pk, dynamic_data)?;
         }
         self.asset_updated_with_batch(batch, slot, pk)?;
         Ok(())
@@ -254,8 +279,8 @@ impl Storage {
         &self,
         pk: Pubkey,
         slot: u64,
-        leaf: Option<AssetLeaf>,
-        dynamic_data: Option<AssetDynamicDetails>,
+        leaf: &Option<AssetLeaf>,
+        dynamic_data: &Option<AssetDynamicDetails>,
     ) -> Result<()> {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         self.save_tx_data_and_asset_updated_with_batch(&mut batch, pk, slot, leaf, dynamic_data)?;

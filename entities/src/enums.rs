@@ -33,6 +33,8 @@ pub enum SpecificationAssetClass {
     TransferRestrictedNft,
     NonTransferableNft,
     IdentityNft,
+    MplCoreAsset,
+    MplCoreCollection,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Default)]
@@ -53,11 +55,44 @@ pub enum TokenStandard {
     ProgrammableNonFungibleEdition, // NonFungible with programmable configuration
 }
 
+impl From<blockbuster::token_metadata::types::TokenStandard> for TokenStandard {
+    fn from(value: blockbuster::token_metadata::types::TokenStandard) -> Self {
+        match value {
+            blockbuster::token_metadata::types::TokenStandard::NonFungible => {
+                TokenStandard::NonFungible
+            }
+            blockbuster::token_metadata::types::TokenStandard::FungibleAsset => {
+                TokenStandard::FungibleAsset
+            }
+            blockbuster::token_metadata::types::TokenStandard::Fungible => TokenStandard::Fungible,
+            blockbuster::token_metadata::types::TokenStandard::NonFungibleEdition => {
+                TokenStandard::NonFungibleEdition
+            }
+            blockbuster::token_metadata::types::TokenStandard::ProgrammableNonFungible => {
+                TokenStandard::ProgrammableNonFungible
+            }
+            blockbuster::token_metadata::types::TokenStandard::ProgrammableNonFungibleEdition => {
+                TokenStandard::ProgrammableNonFungibleEdition
+            }
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
 pub enum UseMethod {
     Burn,
     Multiple,
     Single,
+}
+
+impl From<blockbuster::token_metadata::types::UseMethod> for UseMethod {
+    fn from(value: blockbuster::token_metadata::types::UseMethod) -> Self {
+        match value {
+            blockbuster::token_metadata::types::UseMethod::Burn => UseMethod::Burn,
+            blockbuster::token_metadata::types::UseMethod::Multiple => UseMethod::Multiple,
+            blockbuster::token_metadata::types::UseMethod::Single => UseMethod::Single,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, Copy)]
@@ -93,6 +128,10 @@ pub enum Interface {
     Executable,
     #[serde(rename = "ProgrammableNFT")]
     ProgrammableNFT,
+    #[serde(rename = "MplCoreAsset")]
+    MplCoreAsset,
+    #[serde(rename = "MplCoreCollection")]
+    MplCoreCollection,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
@@ -132,4 +171,13 @@ pub enum TaskStatus {
     Running,
     Success,
     Failed,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
+pub enum RollupState {
+    Uploaded,
+    Processing,
+    ValidationFail,
+    TransactionSent,
+    Complete,
 }

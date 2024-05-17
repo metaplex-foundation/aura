@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
 use bincode::{deserialize, serialize};
-use entities::enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::Updated;
+use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
+use entities::models::{EditionData, OffChainData, Updated};
 use log::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
+use std::cmp::Ordering;
 
 use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
 use crate::Result;
@@ -20,8 +21,9 @@ pub struct AssetSelectedMaps {
     pub assets_collection: HashMap<Pubkey, AssetCollection>,
     pub assets_owner: HashMap<Pubkey, AssetOwner>,
     pub assets_leaf: HashMap<Pubkey, AssetLeaf>,
-    pub offchain_data: HashMap<String, crate::offchain_data::OffChainData>,
+    pub offchain_data: HashMap<String, OffChainData>,
     pub urls: HashMap<String, String>,
+    pub editions: HashMap<Pubkey, EditionData>,
 }
 
 // The following structures are used to store the asset data in the rocksdb database. The data is spread across multiple columns based on the update pattern.
@@ -29,6 +31,15 @@ pub struct AssetSelectedMaps {
 // Some values, like slot_updated should be calculated based on the latest update to the asset.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AssetStaticDetails {
+    pub pubkey: Pubkey,
+    pub specification_asset_class: SpecificationAssetClass,
+    pub royalty_target_type: RoyaltyTargetType,
+    pub created_at: i64,
+    pub edition_address: Option<Pubkey>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AssetStaticDetailsDeprecated {
     pub pubkey: Pubkey,
     pub specification_asset_class: SpecificationAssetClass,
     pub royalty_target_type: RoyaltyTargetType,
@@ -49,6 +60,41 @@ pub struct AssetDynamicDetails {
     pub creators: Updated<Vec<entities::models::Creator>>,
     pub royalty_amount: Updated<u16>,
     pub url: Updated<String>,
+    pub chain_mutability: Option<Updated<ChainMutability>>,
+    pub lamports: Option<Updated<u64>>,
+    pub executable: Option<Updated<bool>>,
+    pub metadata_owner: Option<Updated<String>>,
+    pub raw_name: Option<Updated<String>>,
+    pub plugins: Option<Updated<String>>,
+    pub unknown_plugins: Option<Updated<String>>,
+    pub rent_epoch: Option<Updated<u64>>,
+    pub num_minted: Option<Updated<u32>>,
+    pub current_size: Option<Updated<u32>>,
+    pub plugins_json_version: Option<Updated<u32>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AssetDynamicDetailsDeprecated {
+    pub pubkey: Pubkey,
+    pub is_compressible: Updated<bool>,
+    pub is_compressed: Updated<bool>,
+    pub is_frozen: Updated<bool>,
+    pub supply: Option<Updated<u64>>,
+    pub seq: Option<Updated<u64>>,
+    pub is_burnt: Updated<bool>,
+    pub was_decompressed: Updated<bool>,
+    pub onchain_data: Option<Updated<String>>,
+    pub creators: Updated<Vec<entities::models::Creator>>,
+    pub royalty_amount: Updated<u16>,
+    pub url: Updated<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct MetadataMintMap {
+    // this is Metadata acc pubkey
+    // it's PDA with next seeds ["metadata", metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s, mint_key]
+    pub pubkey: Pubkey,
+    pub mint_key: Pubkey,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -56,10 +102,27 @@ pub struct AssetAuthority {
     pub pubkey: Pubkey,
     pub authority: Pubkey,
     pub slot_updated: u64,
+    pub write_version: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct AssetAuthorityDeprecated {
+    pub pubkey: Pubkey,
+    pub authority: Pubkey,
+    pub slot_updated: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AssetOwner {
+    pub pubkey: Pubkey,
+    pub owner: Updated<Option<Pubkey>>,
+    pub delegate: Updated<Option<Pubkey>>,
+    pub owner_type: Updated<OwnerType>,
+    pub owner_delegate_seq: Updated<Option<u64>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AssetOwner {
+pub struct AssetOwnerDeprecated {
     pub pubkey: Pubkey,
     pub owner: Updated<Pubkey>,
     pub delegate: Option<Updated<Pubkey>>,
@@ -89,14 +152,33 @@ pub struct AssetCollection {
     pub is_collection_verified: bool,
     pub collection_seq: Option<u64>,
     pub slot_updated: u64,
+    pub write_version: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AssetCollectionDeprecated {
+    pub pubkey: Pubkey,
+    pub collection: Pubkey,
+    pub is_collection_verified: bool,
+    pub collection_seq: Option<u64>,
+    pub slot_updated: u64,
 }
 
 fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
-    if current.seq.is_some() && new.seq.is_some() {
-        if new.seq.unwrap() > current.seq.unwrap() {
-            *current = new.clone();
+    if current.update_version.is_some() && new.update_version.is_some() {
+        match current
+            .update_version
+            .clone()
+            .unwrap()
+            .partial_cmp(&new.update_version.clone().unwrap())
+        {
+            Some(Ordering::Less) => {
+                *current = new.clone();
+                return;
+            }
+            Some(Ordering::Greater) => return,
+            _ => {} // types are different need to check slot
         }
-        return;
     }
 
     if new.slot_updated > current.slot_updated {
@@ -108,15 +190,23 @@ fn update_optional_field<T: Clone + Default>(
     current: &mut Option<Updated<T>>,
     new: &Option<Updated<T>>,
 ) {
-    if new.clone().unwrap_or_default().seq.is_some()
-        && current.clone().unwrap_or_default().seq.is_some()
+    if current.clone().unwrap_or_default().update_version.is_some()
+        && new.clone().unwrap_or_default().update_version.is_some()
     {
-        if new.clone().unwrap_or_default().seq.unwrap()
-            > current.clone().unwrap_or_default().seq.unwrap()
+        match current
+            .clone()
+            .unwrap_or_default()
+            .update_version
+            .unwrap()
+            .partial_cmp(&new.clone().unwrap_or_default().update_version.unwrap())
         {
-            *current = new.clone();
+            Some(Ordering::Less) => {
+                *current = new.clone();
+                return;
+            }
+            Some(Ordering::Greater) => return,
+            _ => {} // types are different need to check slot
         }
-        return;
     }
 
     if new.clone().unwrap_or_default().slot_updated
@@ -127,6 +217,21 @@ fn update_optional_field<T: Clone + Default>(
 }
 
 impl TypedColumn for AssetStaticDetails {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    // The value type is the Asset struct itself
+    const NAME: &'static str = "ASSET_STATIC_V2"; // Name of the column family
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetStaticDetailsDeprecated {
     type KeyType = Pubkey;
     type ValueType = Self;
     // The value type is the Asset struct itself
@@ -141,7 +246,7 @@ impl TypedColumn for AssetStaticDetails {
     }
 }
 
-impl TypedColumn for AssetDynamicDetails {
+impl TypedColumn for AssetDynamicDetailsDeprecated {
     type KeyType = Pubkey;
     type ValueType = Self;
     const NAME: &'static str = "ASSET_DYNAMIC";
@@ -155,7 +260,35 @@ impl TypedColumn for AssetDynamicDetails {
     }
 }
 
-impl TypedColumn for AssetAuthority {
+impl TypedColumn for AssetDynamicDetails {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_DYNAMIC_V2";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for MetadataMintMap {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "METADATA_MINT_MAP";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetAuthorityDeprecated {
     type KeyType = Pubkey;
     type ValueType = Self;
     const NAME: &'static str = "ASSET_AUTHORITY";
@@ -169,10 +302,24 @@ impl TypedColumn for AssetAuthority {
     }
 }
 
+impl TypedColumn for AssetAuthority {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_AUTHORITY_V2";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
 /// Not a real merge operation. We just check if static info
 /// already exist and if so we don't overwrite it.
 impl AssetStaticDetails {
-    pub fn merge_static_details(
+    pub fn merge_keep_existing(
         _new_key: &[u8],
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
@@ -230,6 +377,29 @@ impl AssetDynamicDetails {
                         update_field(&mut current_val.was_decompressed, &new_val.was_decompressed);
                         update_optional_field(&mut current_val.onchain_data, &new_val.onchain_data);
                         update_field(&mut current_val.url, &new_val.url);
+                        update_optional_field(
+                            &mut current_val.chain_mutability,
+                            &new_val.chain_mutability,
+                        );
+                        update_optional_field(&mut current_val.lamports, &new_val.lamports);
+                        update_optional_field(&mut current_val.executable, &new_val.executable);
+                        update_optional_field(
+                            &mut current_val.metadata_owner,
+                            &new_val.metadata_owner,
+                        );
+                        update_optional_field(&mut current_val.raw_name, &new_val.raw_name);
+                        update_optional_field(&mut current_val.plugins, &new_val.plugins);
+                        update_optional_field(
+                            &mut current_val.unknown_plugins,
+                            &new_val.unknown_plugins,
+                        );
+                        update_optional_field(&mut current_val.num_minted, &new_val.num_minted);
+                        update_optional_field(&mut current_val.current_size, &new_val.current_size);
+                        update_optional_field(&mut current_val.rent_epoch, &new_val.rent_epoch);
+                        update_optional_field(
+                            &mut current_val.plugins_json_version,
+                            &new_val.plugins_json_version,
+                        );
 
                         current_val
                     } else {
@@ -259,6 +429,18 @@ impl AssetDynamicDetails {
                 .map_or(0, |onchain_data| onchain_data.slot_updated),
             self.creators.slot_updated,
             self.royalty_amount.slot_updated,
+            self.chain_mutability
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.lamports
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.executable
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.metadata_owner
+                .clone()
+                .map_or(0, |onchain_data| onchain_data.slot_updated),
         ]
         .into_iter()
         .max()
@@ -274,10 +456,12 @@ impl AssetAuthority {
     ) -> Option<Vec<u8>> {
         let mut result = vec![];
         let mut slot = 0;
+        let mut write_version = None;
         if let Some(existing_val) = existing_val {
             match deserialize::<AssetAuthority>(existing_val) {
                 Ok(value) => {
                     slot = value.slot_updated;
+                    write_version = value.write_version;
                     result = existing_val.to_vec();
                 }
                 Err(e) => {
@@ -289,8 +473,15 @@ impl AssetAuthority {
         for op in operands {
             match deserialize::<AssetAuthority>(op) {
                 Ok(new_val) => {
-                    if new_val.slot_updated > slot {
+                    if write_version.is_some() && new_val.write_version.is_some() {
+                        if new_val.write_version.unwrap() > write_version.unwrap() {
+                            slot = new_val.slot_updated;
+                            write_version = new_val.write_version;
+                            result = op.to_vec();
+                        }
+                    } else if new_val.slot_updated > slot {
                         slot = new_val.slot_updated;
+                        write_version = new_val.write_version;
                         result = op.to_vec();
                     }
                 }
@@ -304,10 +495,24 @@ impl AssetAuthority {
     }
 }
 
-impl TypedColumn for AssetOwner {
+impl TypedColumn for AssetOwnerDeprecated {
     type KeyType = Pubkey;
     type ValueType = Self;
     const NAME: &'static str = "ASSET_OWNER";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetOwner {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_OWNER_v2";
 
     fn encode_key(pubkey: Pubkey) -> Vec<u8> {
         encode_pubkey(pubkey)
@@ -342,11 +547,11 @@ impl AssetOwner {
                     result = Some(if let Some(mut current_val) = result {
                         update_field(&mut current_val.owner_type, &new_val.owner_type);
                         update_field(&mut current_val.owner, &new_val.owner);
-                        update_optional_field(
+                        update_field(
                             &mut current_val.owner_delegate_seq,
                             &new_val.owner_delegate_seq,
                         );
-                        update_optional_field(&mut current_val.delegate, &new_val.delegate);
+                        update_field(&mut current_val.delegate, &new_val.delegate);
 
                         current_val
                     } else {
@@ -365,13 +570,9 @@ impl AssetOwner {
     pub fn get_slot_updated(&self) -> u64 {
         [
             self.owner.slot_updated,
-            self.delegate
-                .clone()
-                .map_or(0, |delegate| delegate.slot_updated),
+            self.delegate.slot_updated,
             self.owner_type.slot_updated,
-            self.owner_delegate_seq
-                .clone()
-                .map_or(0, |owner_delegate_seq| owner_delegate_seq.slot_updated),
+            self.owner_delegate_seq.slot_updated,
         ]
         .into_iter()
         .max()
@@ -442,10 +643,24 @@ impl AssetLeaf {
     }
 }
 
-impl TypedColumn for AssetCollection {
+impl TypedColumn for AssetCollectionDeprecated {
     type KeyType = Pubkey;
     type ValueType = Self;
     const NAME: &'static str = "ASSET_COLLECTION";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetCollection {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_COLLECTION_v2";
 
     fn encode_key(pubkey: Pubkey) -> Vec<u8> {
         encode_pubkey(pubkey)
@@ -465,11 +680,13 @@ impl AssetCollection {
         let mut result = vec![];
         let mut slot = 0;
         let mut collection_seq = None;
+        let mut write_version = None;
         if let Some(existing_val) = existing_val {
             match deserialize::<AssetCollection>(existing_val) {
                 Ok(value) => {
                     slot = value.slot_updated;
                     collection_seq = value.collection_seq;
+                    write_version = value.write_version;
                     result = existing_val.to_vec();
                 }
                 Err(e) => {
@@ -481,17 +698,24 @@ impl AssetCollection {
         for op in operands {
             match deserialize::<AssetCollection>(op) {
                 Ok(new_val) => {
-                    if let Some(current_seq) = collection_seq {
-                        if let Some(new_seq) = new_val.collection_seq {
-                            if new_seq > current_seq {
-                                collection_seq = new_val.collection_seq;
-                                result = op.to_vec();
-                            }
-                        } else {
-                            warn!("RocksDB: AssetCollection deserialize new_val: new collection_seq is None");
+                    if write_version.is_some() && new_val.write_version.is_some() {
+                        if new_val.write_version.unwrap() > write_version.unwrap() {
+                            slot = new_val.slot_updated;
+                            write_version = new_val.write_version;
+                            collection_seq = new_val.collection_seq;
+                            result = op.to_vec();
+                        }
+                    } else if collection_seq.is_some() && new_val.collection_seq.is_some() {
+                        if new_val.collection_seq.unwrap() > collection_seq.unwrap() {
+                            slot = new_val.slot_updated;
+                            write_version = new_val.write_version;
+                            collection_seq = new_val.collection_seq;
+                            result = op.to_vec();
                         }
                     } else if new_val.slot_updated > slot {
                         slot = new_val.slot_updated;
+                        write_version = new_val.write_version;
+                        collection_seq = new_val.collection_seq;
                         result = op.to_vec();
                     }
                 }

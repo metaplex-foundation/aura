@@ -1,20 +1,7 @@
 use crate::column::TypedColumn;
 use crate::key_encoders::{decode_string, encode_string};
 use crate::Result;
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum ChainDataMutability {
-    Immutable,
-    Mutable,
-    Unknown,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct OffChainData {
-    pub url: String,
-    pub metadata: String,
-}
+use entities::models::OffChainData;
 
 impl TypedColumn for OffChainData {
     type KeyType = String;

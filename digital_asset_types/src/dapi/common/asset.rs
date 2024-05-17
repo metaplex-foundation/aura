@@ -2,7 +2,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 
-use entities::api_req_params::{AssetSortBy, AssetSortDirection, AssetSorting};
+use entities::models::AssetSignatureWithPagination;
+use entities::models::TokenAccResponse;
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
@@ -14,13 +15,13 @@ use url::Url;
 use crate::dao::sea_orm_active_enums::SpecificationAssetClass;
 use crate::dao::sea_orm_active_enums::SpecificationVersions;
 use crate::dao::FullAsset;
-use crate::dao::Pagination;
 use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_grouping};
-use crate::rpc::response::{AssetError, AssetList};
+use crate::rpc::response::{AssetError, TokenAccountsList, TransactionSignatureList};
 use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
-    MetadataMap, Ownership, Royalty, Scope, Supply, Uses,
+    MetadataMap, MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
 };
+use entities::api_req_params::Pagination;
 
 pub fn to_uri(uri: String) -> Option<Url> {
     Url::parse(uri.as_str()).ok()
@@ -44,59 +45,6 @@ pub fn file_from_str(str: String) -> File {
         mime: Some(mime),
         quality: None,
         contexts: None,
-    }
-}
-
-pub fn build_asset_response(
-    assets: Vec<FullAsset>,
-    limit: u64,
-    pagination: &Pagination,
-) -> AssetList {
-    let (page, before, after) = match pagination {
-        Pagination::Keyset { before, after } => {
-            let bef = before.clone().and_then(|x| String::from_utf8(x).ok());
-            let aft = after.clone().and_then(|x| String::from_utf8(x).ok());
-            (None, bef, aft)
-        }
-        Pagination::Page { page } => (Some(*page), None, None),
-    };
-    let (items, errors) = asset_list_to_rpc(assets);
-    let total = items.len() as u32;
-
-    AssetList {
-        total,
-        limit: limit as u32,
-        page: page.map(|x| x as u32),
-        before,
-        after,
-        items,
-        errors,
-    }
-}
-
-pub fn create_sorting(sorting: AssetSorting) -> (sea_orm::query::Order, Option<asset::Column>) {
-    let sort_column = match sorting.sort_by {
-        AssetSortBy::Created => Some(asset::Column::CreatedAt),
-        AssetSortBy::Updated => Some(asset::Column::SlotUpdated),
-        AssetSortBy::RecentAction => Some(asset::Column::SlotUpdated),
-        AssetSortBy::None => None,
-    };
-    let sort_direction = match sorting.sort_direction.unwrap_or_default() {
-        AssetSortDirection::Desc => sea_orm::query::Order::Desc,
-        AssetSortDirection::Asc => sea_orm::query::Order::Asc,
-    };
-    (sort_direction, sort_column)
-}
-
-pub fn create_pagination(
-    before: Option<Vec<u8>>,
-    after: Option<Vec<u8>>,
-    page: Option<u64>,
-) -> Result<Pagination, DbErr> {
-    match (&before, &after, &page) {
-        (_, _, None) => Ok(Pagination::Keyset { before, after }),
-        (None, None, Some(p)) => Ok(Pagination::Page { page: *p }),
-        _ => Err(DbErr::Custom("Invalid Pagination".to_string())),
     }
 }
 
@@ -135,22 +83,32 @@ pub fn v1_content_from_json(asset_data: &asset_data::Model) -> Result<Content, D
     let selector = &mut selector_fn;
     let chain_data_selector = &mut chain_data_selector_fn;
     let mut meta: MetadataMap = MetadataMap::new();
+
     let name = safe_select(chain_data_selector, "$.name");
     if let Some(name) = name {
         meta.set_item("name", name.clone());
     }
+
     let symbol = safe_select(chain_data_selector, "$.symbol");
     if let Some(symbol) = symbol {
         meta.set_item("symbol", symbol.clone());
     }
+
     let desc = safe_select(selector, "$.description");
     if let Some(desc) = desc {
         meta.set_item("description", desc.clone());
     }
+
     let symbol = safe_select(selector, "$.attributes");
     if let Some(symbol) = symbol {
         meta.set_item("attributes", symbol.clone());
     }
+
+    let token_standard = safe_select(chain_data_selector, "$.token_standard");
+    if let Some(standard) = token_standard {
+        meta.set_item("token_standard", standard.clone());
+    }
+
     let mut links = HashMap::new();
     let link_fields = vec!["image", "animation_url", "external_url"];
     for f in link_fields {
@@ -159,6 +117,7 @@ pub fn v1_content_from_json(asset_data: &asset_data::Model) -> Result<Content, D
             links.insert(f.to_string(), l.to_owned());
         }
     }
+
     let _metadata = safe_select(selector, "description");
     let mut actual_files: HashMap<String, File> = HashMap::new();
     if let Some(files) = selector("$.properties.files[*]")
@@ -173,6 +132,7 @@ pub fn v1_content_from_json(asset_data: &asset_data::Model) -> Result<Content, D
                     uri = v.get("url");
                 }
                 let mime_type = v.get("type");
+
                 match (uri, mime_type) {
                     (Some(u), Some(m)) => {
                         if let Some(str_uri) = u.as_str() {
@@ -267,6 +227,7 @@ pub fn to_grouping(groups: Vec<asset_grouping::Model>) -> Result<Vec<Group>, DbE
         Ok(Group {
             group_key: model.group_key.clone(),
             group_value: model.group_value.clone(),
+            verified: model.verified,
         })
     }
 
@@ -294,25 +255,53 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         authorities,
         creators,
         groups,
+        edition_data,
     } = asset;
     let rpc_authorities = to_authority(authorities);
     let rpc_creators = to_creators(creators);
     let rpc_groups = to_grouping(groups)?;
     let interface = get_interface(&asset)?;
-    let content = get_content(&asset, &data)?;
-    let mut chain_data_selector_fn = jsonpath_lib::selector(&data.chain_data);
+
+    let mut owner = asset
+        .owner
+        .clone()
+        .map(|o| bs58::encode(o).into_string())
+        .unwrap_or("".to_string());
+    let mut grouping = Some(rpc_groups);
+    let mut frozen = asset.frozen;
+
+    match interface {
+        Interface::FungibleAsset | Interface::FungibleToken => {
+            owner = "".to_string();
+            grouping = Some(vec![]);
+            frozen = false;
+        }
+        _ => {}
+    }
+
+    let content = get_content(&asset, &data.asset)?;
+    let mut chain_data_selector_fn = jsonpath_lib::selector(&data.asset.chain_data);
     let chain_data_selector = &mut chain_data_selector_fn;
     let basis_points = safe_select(chain_data_selector, "$.primary_sale_happened")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
     let edition_nonce =
         safe_select(chain_data_selector, "$.edition_nonce").and_then(|v| v.as_u64());
+    let mpl_core_info = match interface {
+        Interface::MplCoreAsset | Interface::MplCoreCollection => Some(MplCoreInfo {
+            num_minted: asset.num_minted,
+            current_size: asset.current_supply,
+            plugins_json_version: asset.plugins_json_version,
+        }),
+        _ => None,
+    };
+
     Ok(Some(RpcAsset {
         interface: interface.clone(),
         id: bs58::encode(asset.id).into_string(),
         content: Some(content),
         authorities: Some(rpc_authorities),
-        mutable: data.chain_data_mutability.into(),
+        mutable: data.asset.chain_data_mutability.into(),
         compression: Some(Compression {
             eligible: asset.compressible,
             compressed: asset.compressed,
@@ -335,7 +324,7 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
                 .map(|e| e.trim().to_string())
                 .unwrap_or_default(),
         }),
-        grouping: Some(rpc_groups),
+        grouping,
         royalty: Some(Royalty {
             royalty_model: asset.royalty_target_type.into(),
             target: asset.royalty_target.map(|s| bs58::encode(s).into_string()),
@@ -346,24 +335,22 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
         }),
         creators: Some(rpc_creators),
         ownership: Ownership {
-            frozen: asset.frozen,
+            frozen,
             delegated: asset.delegate.is_some(),
             delegate: asset.delegate.map(|s| bs58::encode(s).into_string()),
             ownership_model: asset.owner_type.into(),
-            owner: asset
-                .owner
-                .map(|o| bs58::encode(o).into_string())
-                .unwrap_or("".to_string()),
+            owner,
         },
         supply: match interface {
-            Interface::V1NFT => Some(Supply {
+            Interface::V1NFT => edition_data.map(|e| Supply {
                 edition_nonce,
-                print_current_supply: 0,
-                print_max_supply: 0,
+                print_current_supply: e.supply,
+                print_max_supply: e.max_supply,
+                edition_number: e.edition_number,
             }),
             _ => None,
         },
-        uses: data.chain_data.get("uses").map(|u| Uses {
+        uses: data.asset.chain_data.get("uses").map(|u| Uses {
             use_method: u
                 .get("use_method")
                 .and_then(|s| s.as_str())
@@ -374,7 +361,34 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
             remaining: u.get("remaining").and_then(|t| t.as_u64()).unwrap_or(0),
         }),
         burnt: asset.burnt,
+        lamports: data.lamports,
+        executable: data.executable,
+        metadata_owner: data.metadata_owner,
+        rent_epoch: data.rent_epoch,
+        plugins: asset.plugins,
+        unknown_plugins: asset.unknown_plugins,
+        mpl_core_info,
     }))
+}
+
+pub fn build_transaction_signatures_response(
+    signatures: AssetSignatureWithPagination,
+    limit: u64,
+    page: Option<u64>,
+) -> TransactionSignatureList {
+    let items = signatures
+        .asset_signatures
+        .into_iter()
+        .map(|sig| sig.into())
+        .collect::<Vec<_>>();
+    TransactionSignatureList {
+        total: items.len() as u32,
+        limit: limit as u32,
+        page: page.map(|x| x as u32),
+        before: signatures.before.map(|before| before.to_string()),
+        after: signatures.after.map(|after| after.to_string()),
+        items,
+    }
 }
 
 pub fn asset_list_to_rpc(asset_list: Vec<FullAsset>) -> (Vec<RpcAsset>, Vec<AssetError>) {
@@ -393,4 +407,59 @@ pub fn asset_list_to_rpc(asset_list: Vec<FullAsset>) -> (Vec<RpcAsset>, Vec<Asse
             }
             (assets, errors)
         })
+}
+
+pub fn build_token_accounts_response(
+    token_accounts: Vec<TokenAccResponse>,
+    limit: u64,
+    page: Option<u64>,
+    cursor_enabled: bool,
+) -> Result<TokenAccountsList, String> {
+    let pagination = get_pagination_values(&token_accounts, &page, cursor_enabled)?;
+
+    Ok(TokenAccountsList {
+        total: token_accounts.len() as u32,
+        limit: limit as u32,
+        page: pagination.page,
+        after: pagination.after,
+        before: pagination.before,
+        cursor: pagination.cursor,
+        token_accounts: token_accounts.into_iter().map(|t| t.token_acc).collect(),
+    })
+}
+
+fn get_pagination_values(
+    token_accounts: &[TokenAccResponse],
+    page: &Option<u64>,
+    cursor_enabled: bool,
+) -> Result<Pagination, String> {
+    if cursor_enabled {
+        if let Some(token_acc) = token_accounts.last() {
+            Ok(Pagination {
+                cursor: Some(token_acc.sorting_id.clone()),
+                ..Default::default()
+            })
+        } else {
+            Ok(Pagination::default())
+        }
+    } else if let Some(p) = page {
+        Ok(Pagination {
+            page: Some(*p as u32),
+            ..Default::default()
+        })
+    } else {
+        let first_row = token_accounts
+            .first()
+            .map(|token_acc| token_acc.sorting_id.clone());
+
+        let last_row = token_accounts
+            .last()
+            .map(|token_acc| token_acc.sorting_id.clone());
+
+        Ok(Pagination {
+            after: last_row,
+            before: first_row,
+            ..Default::default()
+        })
+    }
 }

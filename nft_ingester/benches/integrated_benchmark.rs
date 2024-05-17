@@ -1,16 +1,20 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use entities::api_req_params::SearchAssets;
-use nft_ingester::index_syncronizer::Synchronizer;
+use nft_ingester::{api::middleware::JsonDownloaderMiddleware, index_syncronizer::Synchronizer};
 use rocks_db::storage_traits::AssetIndexReader;
 use setup::TestEnvironment;
 use std::sync::Arc;
+use usecase::proofs::MaybeProofChecker;
 
 use metrics_utils::ApiMetricsConfig;
 use testcontainers::clients::Cli;
 
 const SLOT_UPDATED: u64 = 100;
 
-async fn benchmark_search_assets(api: Arc<nft_ingester::api::api_impl::DasApi>, limit: u32) {
+async fn benchmark_search_assets(
+    api: Arc<nft_ingester::api::api_impl::DasApi<MaybeProofChecker, JsonDownloaderMiddleware>>,
+    limit: u32,
+) {
     let payload = SearchAssets {
         limit: Some(limit),
         ..Default::default()
@@ -35,6 +39,9 @@ fn search_assets_benchmark(c: &mut Criterion) {
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
         Arc::new(ApiMetricsConfig::new()),
+        None,
+        100,
+        None,
     );
 
     let api = Arc::new(api);

@@ -6,6 +6,8 @@ components are responsible for the aggregation of Solana Validator Data into an 
 api provides a nice interface on top of the Metaplex programs. It abstracts the byte layout on chain, allows for 
 super-fast querying and searching, as well as serves the merkle proofs needed to operate over compressed nfts. 
 
+See the [application main flow](doc/flow.md).
+
 ## DAS API architecture
 
 The project is based on the [Clean Architecture Principles](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)

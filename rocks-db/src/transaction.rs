@@ -1,8 +1,6 @@
 use async_trait::async_trait;
-use entities::{
-    enums::TaskStatus,
-    models::{BufferedTransaction, SignatureWithSlot},
-};
+use entities::models::{BufferedTransaction, SignatureWithSlot};
+use entities::models::{OffChainData, Task};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
@@ -13,16 +11,6 @@ use crate::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
 };
 
-#[derive(Debug, Clone, Default)]
-pub struct Task {
-    pub ofd_metadata_url: String,
-    pub ofd_locked_until: Option<chrono::DateTime<chrono::Utc>>,
-    pub ofd_attempts: i32,
-    pub ofd_max_attempts: i32,
-    pub ofd_error: Option<String>,
-    pub ofd_status: TaskStatus,
-}
-
 pub trait TransactionProcessor: Sync + Send + 'static {
     fn get_ingest_transaction_results(
         &self,
@@ -32,25 +20,27 @@ pub trait TransactionProcessor: Sync + Send + 'static {
 
 #[async_trait]
 pub trait TransactionResultPersister: Sync + Send + 'static {
-    async fn store_block(&self, txs: Vec<TransactionResult>) -> Result<(), StorageError>;
+    async fn store_block(&self, slot: u64, txs: &[TransactionResult]) -> Result<(), StorageError>;
 }
 
 #[derive(Clone, Default)]
 pub struct AssetUpdateEvent {
-    pub event: CopyableChangeLogEventV1,
-    pub slot: u64,
     pub update: Option<AssetDynamicUpdate>,
     pub static_update: Option<AssetUpdate<AssetStaticDetails>>,
     pub owner_update: Option<AssetUpdate<AssetOwner>>,
     pub authority_update: Option<AssetUpdate<AssetAuthority>>,
     pub collection_update: Option<AssetUpdate<AssetCollection>>,
+    pub offchain_data_update: Option<OffChainData>,
 }
 
 #[derive(Clone, Default)]
-pub struct TreeWithSeqAndSlot {
+pub struct TreeUpdate {
     pub tree: Pubkey,
     pub seq: u64,
     pub slot: u64,
+    pub event: CopyableChangeLogEventV1,
+    pub instruction: String,
+    pub tx: String,
 }
 
 #[derive(Clone, Default)]
@@ -96,7 +86,7 @@ pub struct InstructionResult {
     pub update: Option<AssetUpdateEvent>,
     pub task: Option<Task>,
     pub decompressed: Option<AssetUpdate<AssetDynamicDetails>>,
-    pub tree_update: Option<TreeWithSeqAndSlot>,
+    pub tree_update: Option<TreeUpdate>,
 }
 
 impl From<AssetUpdateEvent> for InstructionResult {
@@ -108,11 +98,11 @@ impl From<AssetUpdateEvent> for InstructionResult {
     }
 }
 
-impl From<(AssetUpdateEvent, Task)> for InstructionResult {
-    fn from((update, task): (AssetUpdateEvent, Task)) -> Self {
+impl From<(AssetUpdateEvent, Option<Task>)> for InstructionResult {
+    fn from((update, task): (AssetUpdateEvent, Option<Task>)) -> Self {
         Self {
             update: Some(update),
-            task: Some(task),
+            task,
             ..Default::default()
         }
     }
@@ -127,6 +117,7 @@ impl From<AssetUpdate<AssetDynamicDetails>> for InstructionResult {
     }
 }
 
+#[derive(Clone)]
 pub struct TransactionResult {
     pub instruction_results: Vec<InstructionResult>,
     pub transaction_signature: Option<(Pubkey, SignatureWithSlot)>,

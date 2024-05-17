@@ -1,5 +1,6 @@
 use plerkle_serialization::error::PlerkleSerializationError;
 use solana_client::client_error::ClientError;
+use solana_program::pubkey::ParsePubkeyError;
 use solana_sdk::signature::ParseSignatureError;
 use solana_storage_bigtable::Error;
 use thiserror::Error;
@@ -25,6 +26,14 @@ pub enum UsecaseError {
     InvalidGroupingKey(String),
     #[error("Bigtable: {0}")]
     Bigtable(String),
+    #[error("InvalidParameters: {0}")]
+    InvalidParameters(String),
+    #[error("Storage: {0}")]
+    Storage(String),
+    #[error("Reqwest: {0}")]
+    Reqwest(String),
+    #[error("Json: {0}")]
+    Json(String),
 }
 
 impl From<ClientError> for UsecaseError {
@@ -32,7 +41,16 @@ impl From<ClientError> for UsecaseError {
         Self::SolanaRPC(value.kind.to_string())
     }
 }
-
+impl From<reqwest::Error> for UsecaseError {
+    fn from(value: reqwest::Error) -> Self {
+        Self::Reqwest(value.to_string())
+    }
+}
+impl From<serde_json::Error> for UsecaseError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::Reqwest(value.to_string())
+    }
+}
 #[derive(Error, Debug, PartialEq)]
 pub enum StorageError {
     #[error("common error: {0}")]
@@ -45,4 +63,39 @@ impl From<Error> for UsecaseError {
     fn from(value: Error) -> Self {
         Self::Bigtable(value.to_string())
     }
+}
+
+#[derive(Error, Debug)]
+pub enum IntegrityVerificationError {
+    #[error("Json {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("Reqwest {0}")]
+    Reqwest(#[from] reqwest::Error),
+    #[error("IO {0}")]
+    IO(#[from] std::io::Error),
+    #[error("FetchKeys {0}")]
+    FetchKeys(String),
+    #[error("RPC {0}")]
+    Rpc(#[from] ClientError),
+    #[error("Cannot get response field {0}")]
+    CannotGetResponseField(String),
+    #[error("ParsePubkey {0}")]
+    ParsePubkey(#[from] ParsePubkeyError),
+    #[error("Anchor {0}")]
+    Anchor(#[from] anchor_lang::error::Error),
+    #[error("CannotCreateMerkleTree: depth [{0}], size [{1}]")]
+    CannotCreateMerkleTree(u32, u32),
+    #[error("TreeAccountNotFound {0}")]
+    TreeAccountNotFound(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum JsonDownloaderError {
+    GotNotJsonFile,
+    CouldNotDeserialize,
+    CouldNotReadHeader,
+    ErrorStatusCode(String),
+    ErrorDownloading(String),
+    IndexStorageError(String),
+    MainStorageError(String),
 }

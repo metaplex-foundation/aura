@@ -12,7 +12,8 @@
     "grouping": [
         {
             "group_key": "collection",
-            "group_value": "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG"
+            "group_value": "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG",
+            "verified": false
         }
     ],
     "royalty": {
@@ -42,11 +43,7 @@
         "ownership_model": "single",
         "owner": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM"
     },
-    "supply": {
-        "print_max_supply": 0,
-        "print_current_supply": 0,
-        "edition_nonce": 255
-    },
+    "supply": null,
     "mutable": true,
     "burnt": false
 }

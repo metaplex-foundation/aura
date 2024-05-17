@@ -7,6 +7,7 @@ use std::{
 use figment::{providers::Env, Figment};
 use interface::asset_streaming_and_discovery::PeerDiscovery;
 use serde::Deserialize;
+use solana_sdk::commitment_config::CommitmentLevel;
 use tracing_subscriber::fmt;
 
 use crate::error::IngesterError;
@@ -15,39 +16,8 @@ const INGESTER_CONSUMERS_COUNT: usize = 2;
 pub const INGESTER_BACKUP_NAME: &str = "snapshot.tar.lz4";
 
 pub const INGESTER_CONFIG_PREFIX: &str = "INGESTER_";
+pub const SYNCHRONIZER_CONFIG_PREFIX: &str = "SYNCHRONIZER_";
 pub const JSON_MIGRATOR_CONFIG_PREFIX: &str = "JSON_MIGRATOR_";
-
-#[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct BackgroundTaskRunnerConfig {
-    pub delete_interval: Option<u64>,
-    pub retry_interval: Option<u64>,
-    pub purge_time: Option<u64>,
-    pub batch_size: Option<u64>,
-    pub lock_duration: Option<i64>,
-    pub max_attempts: Option<i16>,
-    pub timeout: Option<u64>,
-}
-
-impl Default for BackgroundTaskRunnerConfig {
-    fn default() -> Self {
-        BackgroundTaskRunnerConfig {
-            delete_interval: Some(5),
-            retry_interval: Some(5),
-            purge_time: Some(5),
-            batch_size: Some(5),
-            lock_duration: Some(5),
-            max_attempts: Some(5),
-            timeout: Some(3),
-        }
-    }
-}
-
-#[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct BackgroundTaskConfig {
-    pub background_task_runner_config: Option<BackgroundTaskRunnerConfig>,
-    pub database_config: DatabaseConfig,
-    pub bg_task_runner_metrics_port: Option<u16>,
-}
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct BackfillerConfig {
@@ -64,21 +34,27 @@ pub struct BackfillerConfig {
     pub permitted_tasks: usize,
     #[serde(default = "default_wait_period_sec")]
     pub wait_period_sec: u64,
+    #[serde(default)]
+    pub should_reingest: bool,
 }
-fn default_wait_period_sec() -> u64 {
+const fn default_wait_period_sec() -> u64 {
     60
 }
 
-fn default_workers_count() -> usize {
+const fn default_workers_count() -> usize {
     100
 }
 
-fn default_chunk_size() -> usize {
+const fn default_chunk_size() -> usize {
     5
 }
 
-fn default_permitted_tasks() -> usize {
+const fn default_permitted_tasks() -> usize {
     500
+}
+
+const fn default_mpl_core_buffer_size() -> usize {
+    10
 }
 
 impl BackfillerConfig {
@@ -97,6 +73,13 @@ pub enum BackfillerMode {
     IngestDirectly,
 }
 
+#[derive(Deserialize, Default, PartialEq, Debug, Clone, Copy)]
+pub enum BackfillerSourceMode {
+    Bigtable,
+    #[default]
+    RPC,
+}
+
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct RawBackfillConfig {
     #[serde(default = "default_log_level")]
@@ -106,6 +89,8 @@ pub struct RawBackfillConfig {
     #[serde(default)]
     pub run_profiling: bool,
     pub profiling_file_path_container: Option<String>,
+    #[serde(default = "default_heap_path")]
+    pub heap_path: String,
 }
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {
@@ -118,11 +103,11 @@ pub struct IngesterConfig {
     pub mplx_workers: u32,
     pub spl_buffer_size: usize,
     pub spl_workers: u32,
-    pub env: Option<String>,
+    #[serde(default = "default_mpl_core_buffer_size")]
+    pub mpl_core_buffer_size: usize,
     pub metrics_port_first_consumer: Option<u16>,
     pub metrics_port_second_consumer: Option<u16>,
     pub backfill_consumer_metrics_port: Option<u16>,
-    pub background_task_runner_config: Option<BackgroundTaskRunnerConfig>,
     pub is_snapshot: Option<bool>,
     pub consumer_number: Option<usize>,
     pub migration_batch_size: Option<u32>,
@@ -133,6 +118,16 @@ pub struct IngesterConfig {
     pub rocks_backup_dir: String,
     pub run_bubblegum_backfiller: bool,
     pub synchronizer_batch_size: usize,
+    #[serde(default = "default_dump_synchronizer_batch_size")]
+    pub dump_synchronizer_batch_size: usize,
+    #[serde(default = "default_dump_path")]
+    pub dump_path: String,
+    #[serde(default = "default_dump_sync_threshold")]
+    pub dump_sync_threshold: i64,
+    #[serde(default)]
+    pub run_dump_synchronize_on_start: bool,
+    #[serde(default)]
+    pub disable_synchronizer: bool,
     pub gapfiller_peer_addr: String,
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
@@ -145,6 +140,53 @@ pub struct IngesterConfig {
     pub rpc_retry_interval_millis: u64,
     #[serde(default)]
     pub run_sequence_consistent_checker: bool,
+    #[serde(default = "default_sequence_consistent_checker_wait_period_sec")]
+    pub sequence_consistent_checker_wait_period_sec: u64,
+    #[serde(default = "default_sequence_consister_skip_check_slots_offset")]
+    pub sequence_consister_skip_check_slots_offset: u64, // TODO: remove in future if there no need in that env
+    pub rpc_host: Option<String>,
+    #[serde(default = "default_check_proofs_probability")]
+    pub check_proofs_probability: f64,
+    #[serde(default = "default_check_proofs_commitment")]
+    pub check_proofs_commitment: CommitmentLevel,
+    #[serde(default)]
+    pub backfiller_source_mode: BackfillerSourceMode,
+    #[serde(default = "default_synchronizer_parallel_tasks")]
+    pub synchronizer_parallel_tasks: usize,
+    #[serde(default)]
+    pub run_temp_sync_during_dump: bool,
+    #[serde(default = "default_parallel_json_downloaders")]
+    pub parallel_json_downloaders: i32,
+    pub json_middleware_config: Option<JsonMiddlewareConfig>,
+    #[serde(default = "default_heap_path")]
+    pub heap_path: String,
+}
+
+const fn default_parallel_json_downloaders() -> i32 {
+    100
+}
+
+const fn default_synchronizer_parallel_tasks() -> usize {
+    20
+}
+
+const fn default_dump_sync_threshold() -> i64 {
+    100_000_000
+}
+fn default_dump_path() -> String {
+    "/tmp/sync_dump".to_string()
+}
+
+const fn default_dump_synchronizer_batch_size() -> usize {
+    200_000
+}
+
+const fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
+    60
+}
+
+const fn default_sequence_consister_skip_check_slots_offset() -> u64 {
+    20
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
@@ -173,6 +215,100 @@ impl JsonMigratorConfig {
 
 fn default_log_level() -> String {
     "warn".to_string()
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct SynchronizerConfig {
+    pub database_config: DatabaseConfig,
+    pub rocks_db_path_container: Option<String>,
+    pub rocks_db_secondary_path_container: Option<String>,
+    pub metrics_port: Option<u16>,
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+    #[serde(default)]
+    pub run_profiling: bool,
+    pub profiling_file_path_container: Option<String>,
+    #[serde(default = "default_dump_synchronizer_batch_size")]
+    pub dump_synchronizer_batch_size: usize,
+    #[serde(default = "default_dump_path")]
+    pub dump_path: String,
+    #[serde(default = "default_dump_sync_threshold")]
+    pub dump_sync_threshold: i64,
+    #[serde(default)]
+    pub timeout_between_syncs_sec: u64,
+    #[serde(default = "default_synchronizer_parallel_tasks")]
+    pub parallel_tasks: usize,
+    #[serde(default)]
+    pub run_temp_sync_during_dump: bool,
+    #[serde(default = "default_heap_path")]
+    pub heap_path: String,
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct ApiConfig {
+    pub database_config: DatabaseConfig,
+    pub rocks_db_path_container: Option<String>,
+    pub rocks_db_secondary_path_container: Option<String>,
+    pub rocks_sync_interval_seconds: u64,
+    pub metrics_port: Option<u16>,
+    pub server_port: u16,
+    pub batch_mint_service_port: Option<u16>,
+    pub file_storage_path_container: String,
+    pub rust_log: Option<String>,
+    pub peer_grpc_port: u16,
+    pub peer_grpc_max_gap_slots: u64,
+    #[serde(default)]
+    pub run_profiling: bool,
+    pub profiling_file_path_container: Option<String>,
+    pub rpc_host: Option<String>,
+    #[serde(default = "default_check_proofs_probability")]
+    pub check_proofs_probability: f64,
+    #[serde(default = "default_check_proofs_commitment")]
+    pub check_proofs_commitment: CommitmentLevel,
+    #[serde(default = "default_max_page_limit")]
+    pub max_page_limit: usize,
+    pub json_middleware_config: Option<JsonMiddlewareConfig>,
+    pub archives_dir: String,
+    #[serde(default = "default_synchronization_api_threshold")]
+    pub consistence_synchronization_api_threshold: u64,
+    #[serde(default = "default_heap_path")]
+    pub heap_path: String,
+    #[serde(default = "default_consistence_backfilling_slots_threshold")]
+    pub consistence_backfilling_slots_threshold: u64,
+}
+
+const fn default_synchronization_api_threshold() -> u64 {
+    1_000_000
+}
+const fn default_consistence_backfilling_slots_threshold() -> u64 {
+    500
+}
+fn default_heap_path() -> String {
+    "/usr/src/app/heaps".to_string()
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone, Default)]
+pub struct JsonMiddlewareConfig {
+    pub is_enabled: bool,
+    pub max_urls_to_parse: usize,
+}
+
+const fn default_check_proofs_probability() -> f64 {
+    0.1
+}
+
+const fn default_check_proofs_commitment() -> CommitmentLevel {
+    CommitmentLevel::Finalized
+}
+
+pub const fn default_max_page_limit() -> usize {
+    50
+}
+
+impl ApiConfig {
+    pub fn get_log_level(&self) -> String {
+        self.rust_log.clone().unwrap_or("warn".to_string())
+    }
 }
 
 impl IngesterConfig {
@@ -503,6 +639,7 @@ mod tests {
                 chunk_size: 5,
                 permitted_tasks: 500,
                 wait_period_sec: 60,
+                should_reingest: false,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");
@@ -531,6 +668,7 @@ mod tests {
                 chunk_size: 5,
                 permitted_tasks: 500,
                 wait_period_sec: 60,
+                should_reingest: false,
             }
         );
         std::env::remove_var("INGESTER_DATABASE_CONFIG");

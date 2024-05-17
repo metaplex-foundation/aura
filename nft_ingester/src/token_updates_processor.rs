@@ -1,26 +1,30 @@
 use crate::buffer::Buffer;
-use crate::db_v2::DBClient;
-use crate::mplx_updates_processor::{
-    result_to_metrics, FLUSH_INTERVAL_SEC, WORKER_IDLE_TIMEOUT_MS,
-};
+use crate::process_accounts;
 use entities::enums::OwnerType;
-use entities::models::Updated;
+use entities::models::{
+    PubkeyWithSlot, TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey, UpdateVersion, Updated,
+};
+use futures::future;
 use log::error;
 use metrics_utils::IngesterMetricsConfig;
+use num_traits::Zero;
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
-use rocks_db::columns::{Mint, TokenAccount};
+use rocks_db::columns::{Mint, TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
+use rocks_db::errors::StorageError;
 use rocks_db::Storage;
+use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::future::Future;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::time::Instant;
+use usecase::save_metrics::result_to_metrics;
 
 #[derive(Clone)]
 pub struct TokenAccsProcessor {
     pub rocks_db: Arc<Storage>,
     pub batch_size: usize,
-    pub db_client: Arc<DBClient>,
 
     pub buffer: Arc<Buffer>,
     pub metrics: Arc<IngesterMetricsConfig>,
@@ -28,10 +32,15 @@ pub struct TokenAccsProcessor {
     last_received_token_acc_at: Option<SystemTime>,
 }
 
+#[derive(Default)]
+struct DynamicAndAssetOwnerDetails {
+    pub asset_dynamic_details: HashMap<Pubkey, AssetDynamicDetails>,
+    pub asset_owner_details: HashMap<Pubkey, AssetOwner>,
+}
+
 impl TokenAccsProcessor {
     pub fn new(
         rocks_db: Arc<Storage>,
-        db_client: Arc<DBClient>,
         buffer: Arc<Buffer>,
         metrics: Arc<IngesterMetricsConfig>,
         batch_size: usize,
@@ -41,205 +50,243 @@ impl TokenAccsProcessor {
             buffer,
             metrics,
             batch_size,
-            db_client,
             last_received_mint_at: None,
             last_received_token_acc_at: None,
         }
     }
 
-    pub async fn process_token_accs(&mut self, keep_running: Arc<AtomicBool>) {
-        while keep_running.load(Ordering::SeqCst) {
-            let buffer_len = self.buffer.token_accs.lock().await.len();
-            if buffer_len < self.batch_size {
-                // sleep only in case when buffer is empty or n seconds passed since last insert
-                if buffer_len == 0
-                    || self.last_received_token_acc_at.is_some_and(|t| {
-                        t.elapsed().is_ok_and(|e| e.as_secs() < FLUSH_INTERVAL_SEC)
-                    })
-                {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(WORKER_IDLE_TIMEOUT_MS))
-                        .await;
-                    continue;
-                }
-            }
-
-            let mut max_slot = 0;
-            let accs_to_save = {
-                let mut token_accounts = self.buffer.token_accs.lock().await;
-                let mut elems = Vec::new();
-
-                for key in token_accounts
-                    .keys()
-                    .take(self.batch_size)
-                    .cloned()
-                    .collect::<Vec<Vec<u8>>>()
-                {
-                    if let Some(value) = token_accounts.remove(&key) {
-                        if value.slot_updated > max_slot {
-                            max_slot = value.slot_updated;
-                        }
-                        elems.push(value);
-                    }
-                }
-
-                elems
-            };
-
-            self.transform_and_save_token_accs(&accs_to_save).await;
-
-            self.metrics
-                .set_last_processed_slot("spl_token_acc", max_slot);
-        }
-
-        self.last_received_token_acc_at = Some(SystemTime::now());
+    pub async fn process_mint_accs(&mut self, keep_running: Arc<AtomicBool>) {
+        process_accounts!(
+            self,
+            keep_running,
+            self.buffer.mints,
+            self.batch_size,
+            |s: Mint| s,
+            self.last_received_mint_at,
+            Self::transform_and_save_mint_accs,
+            "spl_mint"
+        );
     }
 
-    pub async fn transform_and_save_token_accs(&self, accs_to_save: &[TokenAccount]) {
-        let save_values = accs_to_save.to_owned().clone().into_iter().fold(
-            HashMap::new(),
-            |mut acc: HashMap<_, _>, token_account| {
-                acc.insert(
+    pub async fn process_token_accs(&mut self, keep_running: Arc<AtomicBool>) {
+        process_accounts!(
+            self,
+            keep_running,
+            self.buffer.token_accs,
+            self.batch_size,
+            |s: TokenAccount| s,
+            self.last_received_token_acc_at,
+            Self::transform_and_save_token_accs,
+            "spl_token_acc"
+        );
+    }
+
+    async fn finalize_processing<T, F>(
+        &self,
+        operation: F,
+        asset_updates: Vec<(u64, Pubkey)>,
+        metric_name: &str,
+    ) where
+        F: Future<Output = Result<T, StorageError>>,
+    {
+        let begin_processing = Instant::now();
+        let result = operation.await;
+
+        if let Err(e) = self.rocks_db.asset_updated_batch(
+            asset_updates
+                .into_iter()
+                .map(|(slot, pubkey)| PubkeyWithSlot { slot, pubkey })
+                .collect(),
+        ) {
+            error!("Error while updating assets update idx: {}", e);
+        }
+
+        self.metrics
+            .set_latency(metric_name, begin_processing.elapsed().as_millis() as f64);
+        result_to_metrics(self.metrics.clone(), &result, metric_name);
+    }
+
+    pub async fn transform_and_save_token_accs(
+        &self,
+        accs_to_save: &HashMap<Pubkey, TokenAccount>,
+    ) {
+        self.save_token_accounts_with_idxs(accs_to_save).await;
+        let dynamic_and_asset_owner_details = accs_to_save.clone().into_values().fold(
+            DynamicAndAssetOwnerDetails::default(),
+            |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, token_account| {
+                // geyser can send us old accounts with zero token balances for some reason
+                // we should not process it
+                // asset supply we track at mint update
+                if token_account.amount.is_zero() {
+                    return accumulated_asset_info;
+                }
+                accumulated_asset_info.asset_owner_details.insert(
                     token_account.mint,
                     AssetOwner {
                         pubkey: token_account.mint,
                         owner: Updated::new(
                             token_account.slot_updated as u64,
-                            None,
-                            token_account.owner,
+                            Some(UpdateVersion::WriteVersion(token_account.write_version)),
+                            Some(token_account.owner),
                         ),
-                        delegate: token_account.delegate.map(|delegate| {
-                            Updated::new(token_account.slot_updated as u64, None, delegate)
-                        }),
-                        owner_type: Updated::new(
+                        delegate: Updated::new(
                             token_account.slot_updated as u64,
-                            None,
-                            OwnerType::Single,
+                            Some(UpdateVersion::WriteVersion(token_account.write_version)),
+                            token_account.delegate,
                         ),
-                        owner_delegate_seq: None,
+                        owner_type: Updated::default(),
+                        owner_delegate_seq: Updated::new(
+                            token_account.slot_updated as u64,
+                            Some(UpdateVersion::WriteVersion(token_account.write_version)),
+                            None,
+                        ),
                     },
                 );
-                acc
+
+                accumulated_asset_info.asset_dynamic_details.insert(
+                    token_account.mint,
+                    AssetDynamicDetails {
+                        pubkey: token_account.mint,
+                        is_frozen: Updated::new(
+                            token_account.slot_updated as u64,
+                            Some(UpdateVersion::WriteVersion(token_account.write_version)),
+                            token_account.frozen,
+                        ),
+                        ..Default::default()
+                    },
+                );
+
+                accumulated_asset_info
             },
         );
 
-        let begin_processing = Instant::now();
-        let res = self
-            .rocks_db
-            .asset_owner_data
-            .merge_batch(save_values)
-            .await;
-
-        result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
-
-        accs_to_save.iter().for_each(|acc| {
-            let upd_res = self
-                .rocks_db
-                .asset_updated(acc.slot_updated as u64, acc.mint);
-
-            if let Err(e) = upd_res {
-                error!("Error while updating assets update idx: {}", e);
-            }
-        });
-
-        self.metrics.set_latency(
-            "token_accounts_saving",
-            begin_processing.elapsed().as_millis() as f64,
-        );
+        self.finalize_processing(
+            future::try_join(
+                self.rocks_db
+                    .asset_owner_data
+                    .merge_batch(dynamic_and_asset_owner_details.asset_owner_details),
+                self.rocks_db
+                    .asset_dynamic_data
+                    .merge_batch(dynamic_and_asset_owner_details.asset_dynamic_details),
+            ),
+            accs_to_save
+                .values()
+                .map(|a| (a.slot_updated as u64, a.mint))
+                .collect::<Vec<_>>(),
+            "token_accounts_asset_saving",
+        )
+        .await
     }
 
-    pub async fn process_mint_accs(&mut self, keep_running: Arc<AtomicBool>) {
-        while keep_running.load(Ordering::SeqCst) {
-            let buffer_len = self.buffer.mints.lock().await.len();
-            // batch_size for flushing mint 5 times smaller than batch_size for token accounts
-            if buffer_len < self.batch_size / 5 {
-                // sleep only in case when buffer is empty or n seconds passed since last insert
-                if buffer_len == 0
-                    || self.last_received_mint_at.is_some_and(|t| {
-                        t.elapsed().is_ok_and(|e| e.as_secs() < FLUSH_INTERVAL_SEC)
-                    })
-                {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(WORKER_IDLE_TIMEOUT_MS))
-                        .await;
-                    continue;
-                }
-            }
-
-            let mut max_slot = 0;
-            let mint_accs_to_save = {
-                let mut mint_accounts = self.buffer.mints.lock().await;
-                let mut elems = Vec::new();
-
-                for key in mint_accounts
-                    .keys()
-                    .take(self.batch_size)
-                    .cloned()
-                    .collect::<Vec<Vec<u8>>>()
-                {
-                    if let Some(value) = mint_accounts.remove(&key) {
-                        if value.slot_updated > max_slot {
-                            max_slot = value.slot_updated;
-                        }
-                        elems.push(value);
-                    }
-                }
-                elems
-            };
-
-            self.transform_and_save_mint_accs(&mint_accs_to_save).await;
-
-            self.metrics.set_last_processed_slot("spl_mint", max_slot);
-
-            self.last_received_mint_at = Some(SystemTime::now());
-        }
-    }
-
-    pub async fn transform_and_save_mint_accs(&self, mint_accs_to_save: &[Mint]) {
-        let save_values = mint_accs_to_save.to_owned().clone().into_iter().fold(
-            HashMap::new(),
-            |mut acc: HashMap<_, _>, mint| {
-                acc.insert(
+    pub async fn transform_and_save_mint_accs(&self, mint_accs_to_save: &HashMap<Vec<u8>, Mint>) {
+        let dynamic_and_asset_owner_details = mint_accs_to_save.clone().into_values().fold(
+            DynamicAndAssetOwnerDetails::default(),
+            |mut accumulated_asset_info: DynamicAndAssetOwnerDetails, mint| {
+                accumulated_asset_info.asset_dynamic_details.insert(
                     mint.pubkey,
                     AssetDynamicDetails {
                         pubkey: mint.pubkey,
                         supply: Some(Updated::new(
                             mint.slot_updated as u64,
-                            None,
+                            Some(UpdateVersion::WriteVersion(mint.write_version)),
                             mint.supply as u64,
-                        )),
-                        seq: Some(Updated::new(
-                            mint.slot_updated as u64,
-                            None,
-                            mint.slot_updated as u64,
                         )),
                         ..Default::default()
                     },
                 );
-                acc
+
+                let owner_type_value = if mint.supply > 1 {
+                    OwnerType::Token
+                } else {
+                    OwnerType::Single
+                };
+
+                accumulated_asset_info.asset_owner_details.insert(
+                    mint.pubkey,
+                    AssetOwner {
+                        pubkey: mint.pubkey,
+                        owner_type: Updated::new(
+                            mint.slot_updated as u64,
+                            Some(UpdateVersion::WriteVersion(mint.write_version)),
+                            owner_type_value,
+                        ),
+                        ..Default::default()
+                    },
+                );
+
+                accumulated_asset_info
             },
         );
 
-        let begin_processing = Instant::now();
-        let res = self
-            .rocks_db
-            .asset_dynamic_data
-            .merge_batch(save_values)
-            .await;
-
-        result_to_metrics(self.metrics.clone(), &res, "accounts_saving_owner");
-
-        mint_accs_to_save.iter().for_each(|mint| {
-            let upd_res = self
-                .rocks_db
-                .asset_updated(mint.slot_updated as u64, mint.pubkey);
-
-            if let Err(e) = upd_res {
-                error!("Error while updating assets update idx: {}", e);
-            }
-        });
-
-        self.metrics.set_latency(
+        self.finalize_processing(
+            future::try_join(
+                self.rocks_db
+                    .asset_dynamic_data
+                    .merge_batch(dynamic_and_asset_owner_details.asset_dynamic_details),
+                self.rocks_db
+                    .asset_owner_data
+                    .merge_batch(dynamic_and_asset_owner_details.asset_owner_details),
+            ),
+            mint_accs_to_save
+                .values()
+                .map(|a| (a.slot_updated as u64, a.pubkey))
+                .collect::<Vec<_>>(),
             "mint_accounts_saving",
-            begin_processing.elapsed().as_millis() as f64,
-        );
+        )
+        .await
+    }
+
+    pub async fn save_token_accounts_with_idxs(
+        &self,
+        accs_to_save: &HashMap<Pubkey, TokenAccount>,
+    ) {
+        self.finalize_processing(
+            future::try_join3(
+                self.rocks_db
+                    .token_accounts
+                    .merge_batch(accs_to_save.clone()),
+                self.rocks_db.token_account_owner_idx.merge_batch(
+                    accs_to_save
+                        .values()
+                        .map(|ta| {
+                            (
+                                TokenAccountOwnerIdxKey {
+                                    owner: ta.owner,
+                                    token_account: ta.pubkey,
+                                },
+                                TokenAccountOwnerIdx {
+                                    is_zero_balance: ta.amount.is_zero(),
+                                    write_version: ta.write_version,
+                                },
+                            )
+                        })
+                        .collect(),
+                ),
+                self.rocks_db.token_account_mint_owner_idx.merge_batch(
+                    accs_to_save
+                        .values()
+                        .map(|ta| {
+                            (
+                                TokenAccountMintOwnerIdxKey {
+                                    mint: ta.mint,
+                                    owner: ta.owner,
+                                    token_account: ta.pubkey,
+                                },
+                                TokenAccountMintOwnerIdx {
+                                    is_zero_balance: ta.amount.is_zero(),
+                                    write_version: ta.write_version,
+                                },
+                            )
+                        })
+                        .collect(),
+                ),
+            ),
+            accs_to_save
+                .values()
+                .map(|a| (a.slot_updated as u64, a.mint))
+                .collect::<Vec<_>>(),
+            "token_accounts_saving",
+        )
+        .await;
     }
 }

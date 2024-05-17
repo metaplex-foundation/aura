@@ -1,5 +1,13 @@
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateVersionValue {
+    #[prost(enumeration = "UpdateVersion", tag = "1")]
+    pub r#type: i32,
+    #[prost(uint64, tag = "2")]
+    pub value: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Uses {
     #[prost(enumeration = "UseMethod", tag = "1")]
     pub use_method: i32,
@@ -25,7 +33,7 @@ pub struct ChainDataV1 {
     #[prost(message, optional, tag = "6")]
     pub uses: ::core::option::Option<Uses>,
     #[prost(message, optional, tag = "7")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "8")]
     pub slot_updated: u64,
 }
@@ -45,7 +53,7 @@ pub struct AssetLeaf {
     #[prost(message, optional, tag = "6")]
     pub leaf_seq: ::core::option::Option<u64>,
     #[prost(message, optional, tag = "7")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "8")]
     pub slot_updated: u64,
 }
@@ -59,7 +67,7 @@ pub struct AssetCollection {
     #[prost(message, optional, tag = "3")]
     pub collection_seq: ::core::option::Option<u64>,
     #[prost(message, optional, tag = "4")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "5")]
     pub slot_updated: u64,
 }
@@ -86,45 +94,78 @@ pub struct AssetDetails {
     pub royalty_target_type: i32,
     #[prost(uint64, tag = "4")]
     pub slot_created: u64,
-    /// From AssetDynamicDetails as Tuples
     #[prost(message, optional, tag = "5")]
-    pub is_compressible: ::core::option::Option<DynamicBoolField>,
+    pub edition_address: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+    /// From AssetDynamicDetails as Tuples
     #[prost(message, optional, tag = "6")]
-    pub is_compressed: ::core::option::Option<DynamicBoolField>,
+    pub is_compressible: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "7")]
-    pub is_frozen: ::core::option::Option<DynamicBoolField>,
+    pub is_compressed: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "8")]
-    pub supply: ::core::option::Option<DynamicUint64Field>,
+    pub is_frozen: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "9")]
-    pub seq: ::core::option::Option<DynamicUint64Field>,
+    pub supply: ::core::option::Option<DynamicUint64Field>,
     #[prost(message, optional, tag = "10")]
-    pub is_burnt: ::core::option::Option<DynamicBoolField>,
+    pub seq: ::core::option::Option<DynamicUint64Field>,
     #[prost(message, optional, tag = "11")]
-    pub was_decompressed: ::core::option::Option<DynamicBoolField>,
+    pub is_burnt: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "12")]
-    pub creators: ::core::option::Option<DynamicCreatorsField>,
+    pub was_decompressed: ::core::option::Option<DynamicBoolField>,
     #[prost(message, optional, tag = "13")]
-    pub royalty_amount: ::core::option::Option<DynamicUint32Field>,
+    pub creators: ::core::option::Option<DynamicCreatorsField>,
     #[prost(message, optional, tag = "14")]
-    pub authority: ::core::option::Option<DynamicBytesField>,
+    pub royalty_amount: ::core::option::Option<DynamicUint32Field>,
     #[prost(message, optional, tag = "15")]
-    pub owner: ::core::option::Option<DynamicBytesField>,
+    pub authority: ::core::option::Option<DynamicBytesField>,
     #[prost(message, optional, tag = "16")]
-    pub delegate: ::core::option::Option<DynamicBytesField>,
+    pub owner: ::core::option::Option<DynamicBytesField>,
     #[prost(message, optional, tag = "17")]
-    pub owner_type: ::core::option::Option<DynamicEnumField>,
+    pub delegate: ::core::option::Option<DynamicBytesField>,
     #[prost(message, optional, tag = "18")]
-    pub owner_delegate_seq: ::core::option::Option<DynamicUint64Field>,
+    pub owner_type: ::core::option::Option<DynamicEnumField>,
     #[prost(message, optional, tag = "19")]
-    pub asset_leaf: ::core::option::Option<AssetLeaf>,
+    pub owner_delegate_seq: ::core::option::Option<DynamicUint64Field>,
     #[prost(message, optional, tag = "20")]
-    pub collection: ::core::option::Option<AssetCollection>,
+    pub chain_mutability: ::core::option::Option<DynamicChainMutability>,
     #[prost(message, optional, tag = "21")]
-    pub chain_data: ::core::option::Option<ChainDataV1>,
+    pub lamports: ::core::option::Option<DynamicUint64Field>,
     #[prost(message, optional, tag = "22")]
+    pub executable: ::core::option::Option<DynamicBoolField>,
+    #[prost(message, optional, tag = "23")]
+    pub metadata_owner: ::core::option::Option<DynamicStringField>,
+    #[prost(message, optional, tag = "24")]
+    pub url: ::core::option::Option<DynamicStringField>,
+    #[prost(message, optional, tag = "25")]
+    pub raw_name: ::core::option::Option<DynamicStringField>,
+    #[prost(message, optional, tag = "26")]
+    pub plugins: ::core::option::Option<DynamicStringField>,
+    #[prost(message, optional, tag = "27")]
+    pub unknown_plugins: ::core::option::Option<DynamicStringField>,
+    #[prost(message, optional, tag = "28")]
+    pub rent_epoch: ::core::option::Option<DynamicUint64Field>,
+    #[prost(message, optional, tag = "29")]
+    pub num_minted: ::core::option::Option<DynamicUint32Field>,
+    #[prost(message, optional, tag = "30")]
+    pub current_size: ::core::option::Option<DynamicUint32Field>,
+    #[prost(message, optional, tag = "31")]
+    pub plugins_json_version: ::core::option::Option<DynamicUint32Field>,
+    #[prost(message, optional, tag = "32")]
+    pub asset_leaf: ::core::option::Option<AssetLeaf>,
+    #[prost(message, optional, tag = "33")]
+    pub collection: ::core::option::Option<AssetCollection>,
+    #[prost(message, optional, tag = "34")]
+    pub chain_data: ::core::option::Option<ChainDataV1>,
+    #[prost(message, optional, tag = "35")]
     pub cl_leaf: ::core::option::Option<ClLeaf>,
-    #[prost(message, repeated, tag = "23")]
+    #[prost(message, repeated, tag = "36")]
     pub cl_items: ::prost::alloc::vec::Vec<ClItem>,
+    /// From TokenMetadataEdition
+    #[prost(message, optional, tag = "37")]
+    pub edition: ::core::option::Option<EditionV1>,
+    #[prost(message, optional, tag = "38")]
+    pub master_edition: ::core::option::Option<MasterEdition>,
+    #[prost(message, optional, tag = "39")]
+    pub offchain_data: ::core::option::Option<OffchainData>,
 }
 /// Dynamic field messages
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -133,7 +174,7 @@ pub struct DynamicBoolField {
     #[prost(bool, tag = "1")]
     pub value: bool,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -143,7 +184,7 @@ pub struct DynamicUint64Field {
     #[prost(uint64, tag = "1")]
     pub value: u64,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -153,7 +194,7 @@ pub struct DynamicUint32Field {
     #[prost(uint32, tag = "1")]
     pub value: u32,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -163,7 +204,27 @@ pub struct DynamicBytesField {
     #[prost(bytes = "vec", tag = "1")]
     pub value: ::prost::alloc::vec::Vec<u8>,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
+    #[prost(uint64, tag = "3")]
+    pub slot_updated: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DynamicStringField {
+    #[prost(string, tag = "1")]
+    pub value: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
+    #[prost(uint64, tag = "3")]
+    pub slot_updated: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DynamicChainMutability {
+    #[prost(enumeration = "ChainMutability", tag = "1")]
+    pub value: i32,
+    #[prost(message, optional, tag = "2")]
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -173,7 +234,7 @@ pub struct DynamicEnumField {
     #[prost(enumeration = "OwnerType", tag = "1")]
     pub value: i32,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -183,7 +244,7 @@ pub struct DynamicCreatorsField {
     #[prost(message, repeated, tag = "1")]
     pub creators: ::prost::alloc::vec::Vec<Creator>,
     #[prost(message, optional, tag = "2")]
-    pub seq_updated: ::core::option::Option<u64>,
+    pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "3")]
     pub slot_updated: u64,
 }
@@ -214,6 +275,38 @@ pub struct ClItem {
     pub cli_hash: ::prost::alloc::vec::Vec<u8>,
     #[prost(uint64, tag = "7")]
     pub slot_updated: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EditionV1 {
+    #[prost(bytes = "vec", tag = "1")]
+    pub key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "2")]
+    pub parent: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint64, tag = "3")]
+    pub edition: u64,
+    #[prost(uint64, tag = "4")]
+    pub write_version: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MasterEdition {
+    #[prost(bytes = "vec", tag = "1")]
+    pub key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint64, tag = "2")]
+    pub supply: u64,
+    #[prost(message, optional, tag = "3")]
+    pub max_supply: ::core::option::Option<u64>,
+    #[prost(uint64, tag = "4")]
+    pub write_version: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OffchainData {
+    #[prost(string, tag = "1")]
+    pub url: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub metadata: ::prost::alloc::string::String,
 }
 /// RangeRequest and AssetDetailsResponse for data synchronization
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -301,6 +394,8 @@ pub enum SpecificationAssetClass {
     TransferRestrictedNft = 7,
     NonTransferableNft = 8,
     IdentityNft = 9,
+    MplCoreAsset = 10,
+    MplCoreCollection = 11,
 }
 impl SpecificationAssetClass {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -325,6 +420,10 @@ impl SpecificationAssetClass {
                 "SPECIFICATION_ASSET_CLASS_NON_TRANSFERABLE_NFT"
             }
             SpecificationAssetClass::IdentityNft => "SPECIFICATION_ASSET_CLASS_IDENTITY_NFT",
+            SpecificationAssetClass::MplCoreAsset => "SPECIFICATION_ASSET_CLASS_MPL_CORE_ASSET",
+            SpecificationAssetClass::MplCoreCollection => {
+                "SPECIFICATION_ASSET_CLASS_MPL_CORE_COLLECTION"
+            }
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -342,6 +441,8 @@ impl SpecificationAssetClass {
             }
             "SPECIFICATION_ASSET_CLASS_NON_TRANSFERABLE_NFT" => Some(Self::NonTransferableNft),
             "SPECIFICATION_ASSET_CLASS_IDENTITY_NFT" => Some(Self::IdentityNft),
+            "SPECIFICATION_ASSET_CLASS_MPL_CORE_ASSET" => Some(Self::MplCoreAsset),
+            "SPECIFICATION_ASSET_CLASS_MPL_CORE_COLLECTION" => Some(Self::MplCoreCollection),
             _ => None,
         }
     }
@@ -371,6 +472,32 @@ impl OwnerType {
             "OWNER_TYPE_UNKNOWN" => Some(Self::Unknown),
             "OWNER_TYPE_TOKEN" => Some(Self::Token),
             "OWNER_TYPE_SINGLE" => Some(Self::Single),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ChainMutability {
+    Immutable = 0,
+    Mutable = 1,
+}
+impl ChainMutability {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            ChainMutability::Immutable => "CHAIN_MUTABILITY_IMMUTABLE",
+            ChainMutability::Mutable => "CHAIN_MUTABILITY_MUTABLE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "CHAIN_MUTABILITY_IMMUTABLE" => Some(Self::Immutable),
+            "CHAIN_MUTABILITY_MUTABLE" => Some(Self::Mutable),
             _ => None,
         }
     }
@@ -438,6 +565,32 @@ impl UseMethod {
             "BURN" => Some(Self::Burn),
             "MULTIPLE" => Some(Self::Multiple),
             "SINGLE" => Some(Self::Single),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum UpdateVersion {
+    Sequence = 0,
+    WriteVersion = 1,
+}
+impl UpdateVersion {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            UpdateVersion::Sequence => "SEQUENCE",
+            UpdateVersion::WriteVersion => "WRITE_VERSION",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SEQUENCE" => Some(Self::Sequence),
+            "WRITE_VERSION" => Some(Self::WriteVersion),
             _ => None,
         }
     }

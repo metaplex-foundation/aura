@@ -1,5 +1,4 @@
 use crate::api::IntegrityVerificationApi;
-use crate::error::IntegrityVerificationError;
 use crate::params::{
     generate_get_asset_params, generate_get_asset_proof_params,
     generate_get_assets_by_authority_params, generate_get_assets_by_creator_params,
@@ -8,15 +7,22 @@ use crate::params::{
 use crate::requests::Body;
 use crate::slots_dumper::FileSlotsDumper;
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
+use interface::error::IntegrityVerificationError;
+use interface::proofs::ProofChecker;
 use metrics_utils::{BackfillerMetricsConfig, IntegrityVerificationMetricsConfig};
 use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
 use regex::Regex;
 use serde_json::{json, Value};
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_program::pubkey::Pubkey;
+use solana_sdk::commitment_config::CommitmentLevel;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
 use usecase::bigtable::BigTableClient;
+use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::SlotsCollector;
 
 pub const GET_ASSET_METHOD: &str = "getAsset";
@@ -28,13 +34,12 @@ pub const GET_ASSET_BY_CREATOR_METHOD: &str = "getAssetsByCreator";
 
 const REQUESTS_INTERVAL_MILLIS: u64 = 1500;
 const BIGTABLE_TIMEOUT: u32 = 1000;
-const GET_SLOT_METHOD: &str = "getSlot";
-const TEST_RETRIES: usize = 10;
 
 #[derive(Default)]
-struct DiffWithReferenceResponse {
+struct DiffWithResponses {
     diff: Option<String>,
     reference_response: Value,
+    testing_response: Value,
 }
 
 struct CollectSlotsTools {
@@ -53,7 +58,10 @@ where
     keys_fetcher: T,
     metrics: Arc<IntegrityVerificationMetricsConfig>,
     collect_slots_tools: Option<CollectSlotsTools>,
+    rpc_client: Arc<RpcClient>,
+    proof_checker: MaybeProofChecker,
     regexes: Vec<Regex>,
+    test_retries: u64,
 }
 
 impl<T> DiffChecker<T>
@@ -70,6 +78,8 @@ where
         bigtable_creds: Option<String>,
         slots_collect_path: Option<String>,
         collect_slots_for_proofs: bool,
+        test_retries: u64,
+        commitment_level: CommitmentLevel,
     ) -> Self {
         // Regular expressions, that purposed to filter out some difference between
         // testing and reference hosts that we already know about
@@ -104,8 +114,10 @@ where
                 metrics: slot_collect_metrics,
             })
         }
-
+        let rpc_client = Arc::new(RpcClient::new(reference_host.clone()));
+        let proof_checker = MaybeProofChecker::new(rpc_client.clone(), 1.0, commitment_level);
         Self {
+            rpc_client,
             reference_host,
             testing_host,
             api: IntegrityVerificationApi::new(),
@@ -113,6 +125,8 @@ where
             metrics: test_metrics,
             collect_slots_tools,
             regexes,
+            test_retries,
+            proof_checker,
         }
     }
 }
@@ -145,7 +159,7 @@ where
         None
     }
 
-    async fn check_request(&self, req: &Body) -> DiffWithReferenceResponse {
+    async fn check_request(&self, req: &Body) -> DiffWithResponses {
         let request = json!(req).to_string();
         let reference_response_fut = self.api.make_request(&self.reference_host, &request);
         let testing_response_fut = self.api.make_request(&self.testing_host, &request);
@@ -157,7 +171,7 @@ where
             Err(e) => {
                 self.metrics.inc_network_errors_reference_host();
                 error!("Reference host network error: {}", e);
-                return DiffWithReferenceResponse::default();
+                return DiffWithResponses::default();
             }
         };
         let testing_response = match testing_response {
@@ -165,13 +179,14 @@ where
             Err(e) => {
                 self.metrics.inc_network_errors_testing_host();
                 error!("Testing host network error: {}", e);
-                return DiffWithReferenceResponse::default();
+                return DiffWithResponses::default();
             }
         };
 
-        DiffWithReferenceResponse {
+        DiffWithResponses {
             diff: self.compare_responses(&reference_response, &testing_response),
             reference_response,
+            testing_response,
         }
     }
 
@@ -186,26 +201,50 @@ where
     {
         for req in requests.iter() {
             metrics_inc_total_fn();
-            let mut diff_with_reference_response = DiffWithReferenceResponse::default();
-            for _ in 0..TEST_RETRIES {
-                diff_with_reference_response = self.check_request(req).await;
-                if diff_with_reference_response.diff.is_none() {
+            let mut diff_with_responses = DiffWithResponses::default();
+            for _ in 0..self.test_retries {
+                diff_with_responses = self.check_request(req).await;
+                if diff_with_responses.diff.is_none() {
                     break;
                 }
                 // Prevent rate-limit errors
                 tokio::time::sleep(Duration::from_millis(REQUESTS_INTERVAL_MILLIS)).await;
             }
 
-            if let Some(diff) = diff_with_reference_response.diff {
-                metrics_inc_failed_fn();
+            let mut test_failed = false;
+            if let Some(diff) = diff_with_responses.diff {
+                test_failed = true;
                 error!(
                     "{}: mismatch responses: req: {:#?}, diff: {}",
                     req.method, req, diff
                 );
                 let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
-                self.try_collect_slots(req, &diff_with_reference_response.reference_response, &rx)
+                self.try_collect_slots(req, &diff_with_responses.reference_response, &rx)
                     .await;
             }
+
+            if req.method == GET_ASSET_PROOF_METHOD {
+                let asset_id = req.params["id"].as_str().unwrap_or_default();
+                test_failed = match self
+                    .check_proof_valid(asset_id, diff_with_responses.testing_response)
+                    .await
+                {
+                    Ok(proof_valid) => {
+                        if !proof_valid {
+                            error!("Invalid proof for {} asset", asset_id)
+                        };
+                        !proof_valid
+                    }
+                    Err(e) => {
+                        error!("Check proof valid: {}", e);
+                        test_failed
+                    }
+                };
+            }
+            if test_failed {
+                metrics_inc_failed_fn();
+            }
+
             // Prevent rate-limit errors
             tokio::time::sleep(Duration::from_millis(REQUESTS_INTERVAL_MILLIS)).await;
         }
@@ -403,40 +442,72 @@ where
                 return;
             }
         };
-        collect_tools
-            .collect_slots(asset_id, tree_id, slot, rx)
-            .await;
+        if let Ok(tree_id) = Pubkey::from_str(tree_id) {
+            collect_tools
+                .collect_slots(asset_id, tree_id, slot, rx)
+                .await
+        }
     }
 
     async fn get_slot(&self) -> Result<u64, IntegrityVerificationError> {
-        let resp = self
-            .api
-            .make_request(
-                &self.reference_host,
-                &json!(Body::new(GET_SLOT_METHOD, json!([]),)).to_string(),
-            )
-            .await?;
-        let slot = match resp["result"].as_u64() {
-            None => return Err(IntegrityVerificationError::CannotGetSlot(resp.to_string())),
-            Some(slot) => slot,
-        };
+        Ok(self.rpc_client.get_slot().await?)
+    }
 
-        Ok(slot)
+    async fn check_proof_valid(
+        &self,
+        asset_id: &str,
+        response: Value,
+    ) -> Result<bool, IntegrityVerificationError> {
+        let tree_id = response["result"]["tree_id"].as_str().ok_or(
+            IntegrityVerificationError::CannotGetResponseField("tree_id".to_string()),
+        )?;
+        let leaf = Pubkey::from_str(response["result"]["leaf"].as_str().ok_or(
+            IntegrityVerificationError::CannotGetResponseField("leaf".to_string()),
+        )?)?
+        .to_bytes();
+
+        let initial_proofs = response["result"]["proof"]
+            .as_array()
+            .ok_or(IntegrityVerificationError::CannotGetResponseField(
+                "proof".to_string(),
+            ))?
+            .iter()
+            .filter_map(|proof| proof.as_str().and_then(|v| Pubkey::from_str(v).ok()))
+            .collect::<Vec<_>>();
+
+        let get_asset_req = json!(&Body::new(
+            GET_ASSET_METHOD,
+            json!(generate_get_asset_params(asset_id.to_string()))
+        ))
+        .to_string();
+        let get_asset = self
+            .api
+            .make_request(&self.reference_host, &get_asset_req)
+            .await?;
+        let tree_id_pk: Pubkey = Pubkey::from_str(tree_id)?;
+        let leaf_index = get_asset["result"]["compression"]["leaf_id"]
+            .as_u64()
+            .ok_or(IntegrityVerificationError::CannotGetResponseField(
+                "leaf_id".to_string(),
+            ))? as u32;
+        self.proof_checker
+            .check_proof(tree_id_pk, initial_proofs, leaf_index, leaf)
+            .await
     }
 }
 
 impl CollectSlotsTools {
-    async fn collect_slots(&self, asset: &str, tree_key: &str, slot: u64, rx: &Receiver<()>) {
+    async fn collect_slots(&self, asset: &str, tree_key: Pubkey, slot: u64, rx: &Receiver<()>) {
         let slots_collector = SlotsCollector::new(
-            Arc::new(FileSlotsDumper::new(self.format_filename(tree_key, asset))),
+            Arc::new(FileSlotsDumper::new(
+                self.format_filename(&tree_key.to_string(), asset),
+            )),
             self.bigtable_client.big_table_inner_client.clone(),
             self.metrics.clone(),
         );
 
         info!("Start collecting slots for {}", tree_key);
-        slots_collector
-            .collect_slots(&format!("{}/", tree_key), slot, 0, rx)
-            .await;
+        slots_collector.collect_slots(&tree_key, slot, 0, rx).await;
         info!("Collected slots for {}", tree_key);
     }
 
@@ -451,20 +522,15 @@ mod tests {
     use crate::file_keys_fetcher::FileKeysFetcher;
     use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
     use metrics_utils::utils::start_metrics;
-    use metrics_utils::{
-        BackfillerMetricsConfig, IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig,
-        MetricsTrait,
-    };
+    use metrics_utils::{IntegrityVerificationMetrics, MetricsTrait};
     use regex::Regex;
     use serde_json::json;
+    use solana_sdk::commitment_config::CommitmentLevel;
 
     // this function used only inside tests under rpc_tests and bigtable_tests features, that do not running in our CI
     #[allow(dead_code)]
     async fn create_test_diff_checker() -> DiffChecker<FileKeysFetcher> {
-        let mut metrics = IntegrityVerificationMetrics::new(
-            IntegrityVerificationMetricsConfig::new(),
-            BackfillerMetricsConfig::new(),
-        );
+        let mut metrics = IntegrityVerificationMetrics::new();
         metrics.register_metrics();
         start_metrics(metrics.registry, Some(6001)).await;
 
@@ -477,6 +543,8 @@ mod tests {
             Some(String::from("../../creds.json")),
             Some("./".to_string()),
             true,
+            20,
+            CommitmentLevel::Processed,
         )
         .await
     }
@@ -492,14 +560,19 @@ mod tests {
     #[cfg(feature = "bigtable_tests")]
     #[tokio::test]
     async fn test_save_slots_to_file() {
+        use solana_program::pubkey::Pubkey;
+        use std::str::FromStr;
+
+        let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
         create_test_diff_checker()
             .await
             .collect_slots_tools
             .unwrap()
             .collect_slots(
                 "BAtEs7TuGm2hP2owc9cTit2TNfVzpPFyQAAvkDWs6tDm",
-                "4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE",
+                Pubkey::from_str("4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE").unwrap(),
                 244259062,
+                &rx,
             )
             .await;
     }

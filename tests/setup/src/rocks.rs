@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
-use entities::models::Updated;
+use entities::models::{OffChainData, Updated};
 use rand::{random, Rng};
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 
+use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::{
-    asset::AssetCollection, offchain_data::OffChainData, AssetAuthority, AssetDynamicDetails,
-    AssetOwner, AssetStaticDetails, Storage,
+    asset::AssetCollection, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+    Storage,
 };
 use tokio::{sync::Mutex, task::JoinSet};
 
@@ -29,8 +30,13 @@ impl RocksTestEnvironment {
     pub fn new(keys: &[(u64, Pubkey)]) -> Self {
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
         let join_set = Arc::new(Mutex::new(JoinSet::new()));
-        let storage = Storage::open(temp_dir.path().to_str().unwrap(), join_set)
-            .expect("Failed to create a database");
+        let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+        let storage = Storage::open(
+            temp_dir.path().to_str().unwrap(),
+            join_set,
+            red_metrics.clone(),
+        )
+        .expect("Failed to create a database");
         for &(slot, ref pubkey) in keys {
             storage.asset_updated(slot, *pubkey).unwrap();
         }
@@ -94,10 +100,6 @@ impl RocksTestEnvironment {
                 .put(*pk, authority_data.clone())
                 .unwrap();
             self.storage
-                .asset_owner_data
-                .put(*pk, owner_data.clone())
-                .unwrap();
-            self.storage
                 .asset_static_data
                 .put(*pk, static_data.clone())
                 .unwrap();
@@ -142,6 +144,11 @@ pub fn create_test_dynamic_data(pubkey: Pubkey, slot: u64, url: String) -> Asset
         creators: Updated::new(slot, None, vec![generate_test_creator()]),
         royalty_amount: Updated::new(slot, None, 0),
         url: Updated::new(slot, None, url),
+        chain_mutability: Default::default(),
+        lamports: None,
+        executable: None,
+        metadata_owner: None,
+        ..Default::default()
     }
 }
 
@@ -159,6 +166,7 @@ pub fn generate_test_static_data(pubkey: Pubkey, slot: u64) -> AssetStaticDetail
         created_at: slot as i64,
         specification_asset_class: entities::enums::SpecificationAssetClass::Nft,
         royalty_target_type: entities::enums::RoyaltyTargetType::Creators,
+        edition_address: Default::default(),
     }
 }
 
@@ -167,16 +175,17 @@ pub fn generate_test_authority(pubkey: Pubkey) -> AssetAuthority {
         pubkey,
         authority: Pubkey::new_unique(),
         slot_updated: rand::thread_rng().gen_range(0..100),
+        write_version: None,
     }
 }
 
 pub fn generate_test_owner(pubkey: Pubkey) -> AssetOwner {
     AssetOwner {
         pubkey,
-        owner: generate_test_updated(Pubkey::new_unique()),
+        owner: generate_test_updated(Some(Pubkey::new_unique())),
         owner_type: generate_test_updated(entities::enums::OwnerType::Single),
-        owner_delegate_seq: Some(generate_test_updated(rand::thread_rng().gen_range(0..100))),
-        delegate: Some(generate_test_updated(Pubkey::new_unique())),
+        owner_delegate_seq: generate_test_updated(Some(rand::thread_rng().gen_range(0..100))),
+        delegate: generate_test_updated(Some(Pubkey::new_unique())),
     }
 }
 
@@ -188,8 +197,9 @@ fn generate_test_collection(pubkey: Pubkey) -> AssetCollection {
     AssetCollection {
         pubkey,
         collection: Pubkey::new_unique(),
-        slot_updated: random(),
+        slot_updated: rand::thread_rng().gen_range(0..100),
         is_collection_verified: random(),
         collection_seq: random(),
+        write_version: None,
     }
 }

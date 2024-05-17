@@ -24,6 +24,8 @@ pub enum SpecificationAssetClass {
     TransferRestrictedNft,
     NonTransferableNft,
     IdentityNft,
+    MplCoreAsset,
+    MplCoreCollection,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, sqlx::Type)]
@@ -41,6 +43,16 @@ pub enum OwnerType {
     Unknown,
     Token,
     Single,
+}
+
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, sqlx::Type)]
+#[sqlx(type_name = "rollup_state", rename_all = "snake_case")]
+pub enum RollupState {
+    Uploaded,
+    Processing,
+    ValidationFail,
+    TransactionSent,
+    Complete,
 }
 
 // Structure to fetch the last synced key
@@ -67,7 +79,7 @@ pub struct SearchAssetsFilter {
     pub collection: Option<Vec<u8>>,
     pub delegate: Option<Vec<u8>>,
     pub frozen: Option<bool>,
-    pub supply: Option<u64>,
+    pub supply: Option<AssetSupply>,
     pub supply_mint: Option<Vec<u8>>,
     pub compressed: Option<bool>,
     pub compressible: Option<bool>,
@@ -78,14 +90,31 @@ pub struct SearchAssetsFilter {
     pub json_uri: Option<String>,
 }
 
+pub enum AssetSupply {
+    Greater(u64),
+    Equal(u64),
+}
+
 pub struct AssetSorting {
     pub sort_by: AssetSortBy,
     pub sort_direction: AssetSortDirection,
 }
 
+// As a value for enum variants DB column used
 pub enum AssetSortBy {
     SlotCreated,
     SlotUpdated,
+    Key,
+}
+
+impl Display for AssetSortBy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AssetSortBy::SlotCreated => write!(f, "ast_slot_created"),
+            AssetSortBy::SlotUpdated => write!(f, "ast_slot_updated"),
+            AssetSortBy::Key => write!(f, "ast_pubkey"),
+        }
+    }
 }
 
 pub enum AssetSortDirection {
@@ -108,7 +137,9 @@ impl From<entities::api_req_params::AssetSortBy> for AssetSortBy {
     fn from(sort_by: entities::api_req_params::AssetSortBy) -> Self {
         match sort_by {
             entities::api_req_params::AssetSortBy::Created => Self::SlotCreated,
-            _ => Self::SlotUpdated,
+            entities::api_req_params::AssetSortBy::RecentAction
+            | entities::api_req_params::AssetSortBy::Updated => Self::SlotUpdated,
+            _ => Self::Key,
         }
     }
 }
@@ -118,6 +149,18 @@ impl From<entities::api_req_params::AssetSortDirection> for AssetSortDirection {
         match sort_direction {
             entities::api_req_params::AssetSortDirection::Asc => Self::Asc,
             entities::api_req_params::AssetSortDirection::Desc => Self::Desc,
+        }
+    }
+}
+
+impl From<RollupState> for entities::enums::RollupState {
+    fn from(value: RollupState) -> Self {
+        match value {
+            RollupState::Uploaded => entities::enums::RollupState::Uploaded,
+            RollupState::Processing => entities::enums::RollupState::Processing,
+            RollupState::ValidationFail => entities::enums::RollupState::ValidationFail,
+            RollupState::TransactionSent => entities::enums::RollupState::TransactionSent,
+            RollupState::Complete => entities::enums::RollupState::Complete,
         }
     }
 }

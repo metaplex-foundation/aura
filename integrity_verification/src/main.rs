@@ -3,13 +3,12 @@ use crate::diff_checker::{
     DiffChecker, GET_ASSET_BY_AUTHORITY_METHOD, GET_ASSET_BY_CREATOR_METHOD,
     GET_ASSET_BY_GROUP_METHOD, GET_ASSET_BY_OWNER_METHOD, GET_ASSET_METHOD, GET_ASSET_PROOF_METHOD,
 };
-use crate::error::IntegrityVerificationError;
 use crate::file_keys_fetcher::FileKeysFetcher;
 use clap::Parser;
+use interface::error::IntegrityVerificationError;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
-    BackfillerMetricsConfig, IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig,
-    MetricsTrait,
+    IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig, MetricsTrait,
 };
 use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
 use postgre_client::PgClient;
@@ -22,7 +21,6 @@ use tracing::{error, info};
 mod api;
 mod config;
 mod diff_checker;
-mod error;
 mod file_keys_fetcher;
 mod params;
 mod requests;
@@ -43,10 +41,7 @@ async fn main() -> Result<(), IntegrityVerificationError> {
     env_logger::init();
     info!("IntegrityVerification start");
 
-    let mut metrics = IntegrityVerificationMetrics::new(
-        IntegrityVerificationMetricsConfig::new(),
-        BackfillerMetricsConfig::new(),
-    );
+    let mut metrics = IntegrityVerificationMetrics::new();
     metrics.register_metrics();
     start_metrics(metrics.registry, Some(config.metrics_port)).await;
 
@@ -65,6 +60,8 @@ async fn main() -> Result<(), IntegrityVerificationError> {
                 config.big_table_creds_path.clone(),
                 config.slots_collect_path_container.clone(),
                 config.collect_slots,
+                config.test_retries,
+                config.check_proofs_commitment,
             )
             .await;
             run_tests(
@@ -82,12 +79,21 @@ async fn main() -> Result<(), IntegrityVerificationError> {
             let diff_checker = DiffChecker::new(
                 config.reference_host.clone(),
                 config.testing_host.clone(),
-                PgClient::new(&config.database_url.clone().unwrap(), 100, 500).await,
+                PgClient::new(
+                    &config.database_url.clone().unwrap(),
+                    100,
+                    500,
+                    metrics.red_metrics,
+                )
+                .await
+                .unwrap(),
                 metrics.integrity_verification_metrics.clone(),
                 metrics.slot_collector_metrics.clone(),
                 config.big_table_creds_path.clone(),
                 config.slots_collect_path_container.clone(),
                 config.collect_slots,
+                config.test_retries,
+                config.check_proofs_commitment,
             )
             .await;
             run_tests(

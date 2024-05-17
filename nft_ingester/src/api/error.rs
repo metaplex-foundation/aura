@@ -11,12 +11,12 @@ const STANDARD_ERROR_CODE: i64 = -32000;
 pub enum DasApiError {
     #[error("Config Missing or Error: {0}")]
     ConfigurationError(String),
-    #[error("Database Connection Failed")]
-    DatabaseConnectionError(#[from] sqlx::Error),
+    #[error("Database Error: {0}")]
+    DatabaseError(#[from] sqlx::Error),
     #[error("Pubkey Validation Err: {0} is invalid")]
     PubkeyValidationError(String),
     #[error("Database Error: {0}")]
-    DatabaseError(#[from] sea_orm::DbErr),
+    DatabaseErrorOrm(#[from] sea_orm::DbErr),
     #[error("Pagination Error. Only one pagination parameter supported per query.")]
     PaginationError,
     #[error("Pagination Error. No Pagination Method Selected")]
@@ -33,14 +33,20 @@ pub enum DasApiError {
     Usecase(String),
     #[error("ProofNotFound")]
     ProofNotFound,
+    #[error("Validation: {0}")]
+    Validation(String),
+    #[error("Page number is too big. Up to {0} pages are supported with this kind of pagination. Please use a different pagination(before/after/cursor).")]
+    PageTooBig(usize),
+    #[error("Internal DB error")]
+    InternalDdError,
 }
 
 impl From<DasApiError> for jsonrpc_core::Error {
     fn from(value: DasApiError) -> Self {
         match value {
-            DasApiError::PubkeyValidationError { 0: key } => jsonrpc_core::Error {
+            DasApiError::PubkeyValidationError(key) => jsonrpc_core::Error {
                 code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
-                message: format!("Pubkey Validation Error: {} is invalid", key),
+                message: format!("Pubkey Validation Error: {key} is invalid"),
                 data: None,
             },
             DasApiError::PaginationError => jsonrpc_core::Error {
@@ -59,22 +65,24 @@ impl From<DasApiError> for jsonrpc_core::Error {
                 message: "Database Error: RecordNotFound Error: Asset Not Found".to_string(),
                 data: None,
             },
-            DasApiError::InvalidGroupingKey { 0: key } => jsonrpc_core::Error {
+            DasApiError::InvalidGroupingKey(key) => jsonrpc_core::Error {
                 code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
-                message: format!("Invalid Grouping Key: {}", key),
+                message: format!("Invalid Grouping Key: {key}"),
                 data: None,
             },
-            DasApiError::BatchSizeError { 0: size } => jsonrpc_core::Error {
+            DasApiError::BatchSizeError(size) => jsonrpc_core::Error {
                 code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
-                message: format!(
-                    "Batch Size Error. Batch size should not be greater than {}.",
-                    size
-                ),
+                message: format!("Batch Size Error. Batch size should not be greater than {size}."),
                 data: None,
             },
             DasApiError::ProofNotFound => jsonrpc_core::Error {
                 code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
                 message: "Database Error: RecordNotFound Error: Asset Proof Not Found".to_string(),
+                data: None,
+            },
+            DasApiError::Validation(msg) => jsonrpc_core::Error {
+                code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
+                message: format!("Validation Error: {msg}"),
                 data: None,
             },
             _ => jsonrpc_core::Error::new(ErrorCode::InternalError),

@@ -7,13 +7,12 @@ use nft_ingester::{
 };
 use rocks_db::Storage;
 use setup::TestEnvironment;
-use std::{
-    fs::File,
-    sync::{atomic::AtomicBool, Arc},
-};
+use std::{fs::File, sync::Arc};
 use tokio::{sync::Mutex, task::JoinSet};
 
+use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
+use rocks_db::bubblegum_slots::BubblegumSlotGetter;
 use testcontainers::clients::Cli;
 
 async fn setup_environment<'a>(
@@ -35,7 +34,6 @@ async fn bench_ingest(
         rocks_dest.clone(),
         Arc::new(IngesterMetricsConfig::new()),
         buffer.json_tasks.clone(),
-        true,
     ));
 
     let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
@@ -50,15 +48,16 @@ async fn bench_ingest(
 
     let transactions_parser = Arc::new(TransactionsParser::new(
         rocks_client_raw.clone(),
+        Arc::new(BubblegumSlotGetter::new(rocks_client_raw.clone())),
         consumer,
         rocks_client_raw,
         Arc::new(BackfillerMetricsConfig::new()),
         workers_count,
         chunk_size,
     ));
-
+    let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
     transactions_parser
-        .parse_raw_transactions(Arc::new(AtomicBool::new(true)), permits)
+        .parse_raw_transactions(rx, permits, None)
         .await;
 }
 
@@ -70,7 +69,7 @@ fn ingest_benchmark(c: &mut Criterion) {
     zip_extract::extract(storage_archieve, tx_storage_dir.path(), false).unwrap();
     let tasks = JoinSet::new();
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
-
+    let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let transactions_storage = Storage::open(
         &format!(
             "{}{}",
@@ -78,6 +77,7 @@ fn ingest_benchmark(c: &mut Criterion) {
             "/test_rocks"
         ),
         mutexed_tasks.clone(),
+        red_metrics,
     )
     .unwrap();
 
