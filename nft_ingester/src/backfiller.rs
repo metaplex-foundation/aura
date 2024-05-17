@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
 use futures::future::join_all;
+use interface::error::BlockConsumeError;
 use interface::signature_persistence::{BlockConsumer, BlockProducer};
 use interface::slot_getter::FinalizedSlotGetter;
 use interface::slots_dumper::{SlotGetter, SlotsDumper};
@@ -474,6 +475,7 @@ where
         tracing::info!("Transactions parser has finished working");
     }
 
+    // TODO: replace String with more meaningful error type
     async fn process_slots(
         &self,
         slots_to_parse_vec: &[u64],
@@ -513,6 +515,7 @@ where
         Ok(len)
     }
 
+    // TODO: replace String with more meaningful error type
     pub async fn parse_slots(
         consumer: Arc<C>,
         producer: Arc<P>,
@@ -633,7 +636,7 @@ where
         &self,
         slot: u64,
         block: solana_transaction_status::UiConfirmedBlock,
-    ) -> Result<(), String> {
+    ) -> Result<(), BlockConsumeError> {
         if block.transactions.is_none() {
             return Ok(());
         }
@@ -704,7 +707,7 @@ where
         Ok(())
     }
 
-    async fn already_processed_slot(&self, _slot: u64) -> Result<bool, String> {
+    async fn already_processed_slot(&self, _slot: u64) -> Result<bool, BlockConsumeError> {
         Ok(false)
     }
 }
@@ -759,12 +762,14 @@ where
             .filter_map(|k| k.ok())
     }
 
-    async fn mark_slots_processed(&self, slots: Vec<u64>) -> core::result::Result<(), String> {
+    async fn mark_slots_processed(
+        &self,
+        slots: Vec<u64>,
+    ) -> core::result::Result<(), interface::error::StorageError> {
         self.rocks_client
             .force_reingestable_slots
             .delete_batch(slots.clone())
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
         Ok(())
     }
 }
@@ -803,12 +808,12 @@ where
         &self,
         slot: u64,
         block: solana_transaction_status::UiConfirmedBlock,
-    ) -> Result<(), String> {
+    ) -> Result<(), BlockConsumeError> {
         self.rocks_client.consume_block(slot, block.clone()).await?;
         self.direct_block_parser.consume_block(slot, block).await
     }
 
-    async fn already_processed_slot(&self, _slot: u64) -> Result<bool, String> {
+    async fn already_processed_slot(&self, _slot: u64) -> Result<bool, BlockConsumeError> {
         return Ok(false);
     }
 }

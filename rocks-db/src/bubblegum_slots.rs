@@ -75,20 +75,21 @@ impl SlotGetter for BubblegumSlotGetter {
             .map(bubblegum_slots_key_to_value)
     }
 
-    async fn mark_slots_processed(&self, slots: Vec<u64>) -> core::result::Result<(), String> {
+    async fn mark_slots_processed(
+        &self,
+        slots: Vec<u64>,
+    ) -> core::result::Result<(), interface::error::StorageError> {
         self.rocks_client
             .ingestable_slots
             .put_batch(slots.iter().fold(HashMap::new(), |mut acc, slot| {
                 acc.insert(*slot, IngestableSlots {});
                 acc
             }))
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
         self.rocks_client
             .bubblegum_slots
             .delete_batch(slots.iter().map(|k| form_bubblegum_slots_key(*k)).collect())
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
 
         Ok(())
     }
@@ -115,12 +116,14 @@ impl SlotGetter for IngestableSlotGetter {
             .filter_map(|k| k.ok())
     }
 
-    async fn mark_slots_processed(&self, slots: Vec<u64>) -> core::result::Result<(), String> {
+    async fn mark_slots_processed(
+        &self,
+        slots: Vec<u64>,
+    ) -> core::result::Result<(), interface::error::StorageError> {
         self.rocks_client
             .ingestable_slots
             .delete_batch(slots.clone())
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
         Ok(())
     }
 }

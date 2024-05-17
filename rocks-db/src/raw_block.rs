@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use crate::{column::TypedColumn, key_encoders, Storage};
 use async_trait::async_trait;
-use interface::signature_persistence::{BlockConsumer, BlockProducer};
+use interface::{
+    error::BlockConsumeError,
+    signature_persistence::{BlockConsumer, BlockProducer},
+};
 use log::error;
 use serde::{Deserialize, Serialize};
 
@@ -33,37 +36,29 @@ impl BlockConsumer for Storage {
         &self,
         slot: u64,
         block: solana_transaction_status::UiConfirmedBlock,
-    ) -> Result<(), String> {
+    ) -> Result<(), BlockConsumeError> {
         let raw_block = RawBlock { slot, block };
-        let res = self
-            .raw_blocks_cbor
+        self.raw_blocks_cbor
             .put_cbor_encoded(raw_block.slot, raw_block.clone())
             .await
-            .map_err(|e| e.to_string());
-        if let Err(e) = res {
-            error!(
-                "Failed to put raw block for slot: {}, error: {}",
-                raw_block.slot, e
-            );
-            return Err(e);
-        }
-        Ok(())
+            .map_err(|e| {
+                error!(
+                    "Failed to put raw block for slot: {}, error: {}",
+                    raw_block.slot, e
+                );
+                BlockConsumeError::PersistenceErr(e.into())
+            })
     }
 
-    async fn already_processed_slot(&self, slot: u64) -> Result<bool, String> {
-        let res = self
-            .raw_blocks_cbor
+    async fn already_processed_slot(&self, slot: u64) -> Result<bool, BlockConsumeError> {
+        self.raw_blocks_cbor
             .get_cbor_encoded(slot)
             .await
-            .map_err(|e| e.to_string());
-        match res {
-            Ok(Some(_)) => Ok(true),
-            Ok(None) => Ok(false),
-            Err(e) => {
+            .map(|r| r.is_some())
+            .map_err(|e| {
                 tracing::error!("Failed to get raw block for slot: {}, error: {}", slot, e);
-                Err(e)
-            }
-        }
+                BlockConsumeError::PersistenceErr(e.into())
+            })
     }
 }
 

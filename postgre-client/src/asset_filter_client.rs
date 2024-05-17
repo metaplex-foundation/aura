@@ -7,6 +7,7 @@ use solana_sdk::{bs58, pubkey::Pubkey};
 use sqlx::{Postgres, QueryBuilder};
 
 use crate::{
+    error::IndexDbError,
     model::{
         AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, AssetSupply,
         SearchAssetsFilter,
@@ -31,7 +32,7 @@ impl PgClient {
         before: Option<String>,
         after: Option<String>,
         options: &'a Options,
-    ) -> Result<(QueryBuilder<'a, Postgres>, bool), String> {
+    ) -> Result<(QueryBuilder<'a, Postgres>, bool), IndexDbError> {
         // todo: remove the inner join with tasks and only perform it if the metadata_url_id is present in the filter
         let mut query_builder = QueryBuilder::new(
             "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 ",
@@ -260,8 +261,10 @@ fn add_slot_and_key_comparison(
     comparison: &str,
     order_field: &AssetSortBy,
     query_builder: &mut QueryBuilder<'_, Postgres>,
-) -> Result<(), String> {
+) -> Result<(), IndexDbError> {
     let res = AssetRawResponse::decode_sorting_key(key);
+    // TODO-XXX: is that OK that we just ignore the error from the call above?
+
     if let Ok((slot, pubkey)) = res {
         let order_field = order_field.to_string();
 
@@ -282,8 +285,9 @@ fn add_key_comparison(
     comparison: &str,
     order_field: &AssetSortBy,
     query_builder: &mut QueryBuilder<'_, Postgres>,
-) -> Result<(), String> {
-    let after = Pubkey::from_str(key).map_err(|e| e.to_string())?;
+) -> Result<(), IndexDbError> {
+    let after =
+        Pubkey::from_str(key).map_err(|_| IndexDbError::PubkeyParsingError(key.to_string()))?;
 
     query_builder.push(format!(" AND ({}{}", order_field, comparison));
     query_builder.push_bind(after.to_bytes());
@@ -294,6 +298,7 @@ fn add_key_comparison(
 
 #[async_trait]
 impl AssetPubkeyFilteredFetcher for PgClient {
+    // TODO: replace String with something that reflexes arguments and Postgre related problems
     async fn get_asset_pubkeys_filtered(
         &self,
         filter: &SearchAssetsFilter,
@@ -303,7 +308,7 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         before: Option<String>,
         after: Option<String>,
         options: &Options,
-    ) -> Result<Vec<AssetSortedIndex>, String> {
+    ) -> Result<Vec<AssetSortedIndex>, IndexDbError> {
         let (mut query_builder, order_reversed) =
             Self::build_search_query(filter, order, limit, page, before, after, options)?;
         let query = query_builder.build_query_as::<AssetRawResponse>();
@@ -314,7 +319,7 @@ impl AssetPubkeyFilteredFetcher for PgClient {
             .map_err(|e: sqlx::Error| {
                 self.metrics
                     .observe_error(SQL_COMPONENT, SELECT_ACTION, "assets_v3");
-                e.to_string()
+                e
             })?;
         self.metrics
             .observe_request(SQL_COMPONENT, SELECT_ACTION, "assets_v3", start_time);
@@ -346,14 +351,14 @@ impl AssetRawResponse {
         }
     }
 
-    pub fn decode_sorting_key(encoded_key: &str) -> Result<(i64, Vec<u8>), String> {
+    pub fn decode_sorting_key(encoded_key: &str) -> Result<(i64, Vec<u8>), IndexDbError> {
         let key = match general_purpose::STANDARD_NO_PAD.decode(encoded_key) {
             Ok(k) => k,
-            Err(_) => return Err("Failed to decode Base64".to_string()),
+            Err(_) => return Err(IndexDbError::Base64DecodingErr),
         };
 
         if key.len() < 8 {
-            return Err("Invalid sorting key".to_string());
+            return Err(IndexDbError::InvalidSortingKeyErr);
         }
 
         let slot = i64::from_be_bytes(key[0..8].try_into().unwrap());

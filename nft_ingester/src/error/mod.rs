@@ -5,6 +5,7 @@ use flatbuffers::InvalidFlatbuffer;
 use interface::error::UsecaseError;
 use plerkle_messenger::MessengerError;
 use plerkle_serialization::error::PlerkleSerializationError;
+use postgre_client::error::IndexDbError;
 use sea_orm::{DbErr, TransactionError};
 use solana_sdk::pubkey::ParsePubkeyError;
 use solana_sdk::signature::ParseSignatureError;
@@ -91,7 +92,7 @@ pub enum IngesterError {
     #[error("Error to deserialise transaction {0}")]
     TransactionParsingError(String),
     #[error("Error to convert data into PubKey {0}")]
-    PubKeyParsingError(String),
+    PubKeyParsingError(String), // TODO-XXX: looks like a duplicate for IngesterError::ParsePubkeyError
     #[error("Transaction was not processed {0}")]
     TransactionNotProcessedError(String),
     #[error("backup service {0}")]
@@ -258,6 +259,19 @@ impl From<interface::error::StorageError> for IngesterError {
 impl From<String> for IngesterError {
     fn from(e: String) -> Self {
         IngesterError::DatabaseError(e)
+    }
+}
+
+impl From<IndexDbError> for IngesterError {
+    fn from(value: IndexDbError) -> Self {
+        match value {
+            a @ IndexDbError::Base64DecodingErr => IngesterError::DatabaseError(a.to_string()),
+            a @ IndexDbError::InvalidSortingKeyErr => IngesterError::DatabaseError(a.to_string()),
+            IndexDbError::QueryExecErr(sqlx_err) => IngesterError::SqlxError(sqlx_err.to_string()),
+            IndexDbError::PubkeyParsingError(s) => IngesterError::ParsePubkeyError(s),
+            IndexDbError::NoImplemented(s) => IngesterError::DatabaseError(s),
+            a @ IndexDbError::BadArgument(_) => IngesterError::DatabaseError(a.to_string()),
+        }
     }
 }
 
