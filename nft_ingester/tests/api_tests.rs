@@ -15,7 +15,7 @@ mod tests {
         AssetList, TokenAccountsList, TransactionSignatureList,
     };
     use entities::api_req_params::{
-        DisplayOptions, GetAssetProof, GetAssetSignatures, GetTokenAccounts,
+        DisplayOptions, GetAssetProof, GetAssetSignatures, GetTokenAccounts, Options,
     };
     use entities::models::{AssetSignature, AssetSignatureKey, OffChainData};
     use entities::{
@@ -2232,7 +2232,7 @@ mod tests {
     async fn test_cannot_service_gaped_tree() {
         let cnt = 20;
         let cli = Cli::default();
-        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
         let api =
             nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
                 env.pg_env.client.clone(),
@@ -2274,7 +2274,6 @@ mod tests {
             id: asset_id.to_string(),
         };
         let res = api.get_asset_proof(payload).await.err().unwrap();
-
-        assert_eq!(res, DasApiError::CannotServiceRequest);
+        assert!(matches!(res, DasApiError::CannotServiceRequest));
     }
 }
