@@ -2048,7 +2048,6 @@ dependencies = [
  "futures",
  "interface",
  "jsonpath_lib",
- "jsonrpc-core 19.0.0",
  "log",
  "metrics-utils",
  "mime_guess",
