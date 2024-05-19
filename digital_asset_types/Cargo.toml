@@ -31,3 +31,4 @@ usecase = { path = "../usecase" }
 interface = { path = "../interface" }
 metrics-utils = { path = "../metrics_utils" }
 futures = "0.3.30"
+jsonrpc-core = {version = "19.0.0", git = "https://github.com/RequescoS/jsonrpc-response-middleware.git"}

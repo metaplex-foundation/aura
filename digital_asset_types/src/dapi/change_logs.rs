@@ -1,6 +1,4 @@
 use std::sync::Arc;
-use std::collections::HashMap;
-use std::panic;
 use std::{collections::HashMap, str::FromStr};
 
 use interface::proofs::ProofChecker;
@@ -11,6 +9,7 @@ use solana_sdk::pubkey::Pubkey;
 use interface::processing_possibility::ProcessingPossibilityChecker;
 use rocks_db::asset_streaming_client::get_required_nodes_for_proof;
 use rocks_db::Storage;
+use usecase::error::DasApiError;
 use {
     crate::dao::cl_items,
     crate::rpc::AssetProof,
@@ -34,9 +33,9 @@ pub async fn get_proof_for_assets(
     asset_ids: Vec<Pubkey>,
     proof_checker: Option<Arc<impl ProofChecker + Sync + Send + 'static>>,
     metrics: Arc<ApiMetricsConfig>,
-) -> Result<HashMap<String, Option<AssetProof>>, DbErr> {
-    if !rocks_db.can_process_assets(asset_ids.clone()).await {
-        panic!()
+) -> Result<HashMap<String, Option<AssetProof>>, DasApiError> {
+    if !rocks_db.can_process_assets(asset_ids.as_slice()).await {
+        return Err(DasApiError::CannotServiceRequest);
     }
     let mut results: HashMap<String, Option<AssetProof>> =
         asset_ids.iter().map(|id| (id.to_string(), None)).collect();
@@ -60,7 +59,8 @@ pub async fn get_proof_for_assets(
                 .collect::<Vec<_>>(),
         )
         .await
-        .map_err(|e| DbErr::Custom(e.to_string()))?
+        .map_err(|e| DbErr::Custom(e.to_string()))
+        .map_err(Into::<DasApiError>::into)?
         .into_iter()
         .filter_map(|cl_leaf| cl_leaf.map(|leaf| (leaf.cli_node_idx, leaf.cli_tree_key)))
         .collect::<Vec<_>>();
@@ -68,7 +68,8 @@ pub async fn get_proof_for_assets(
         .cl_items
         .batch_get(keys.clone())
         .await
-        .map_err(|e| DbErr::Custom(e.to_string()))?;
+        .map_err(|e| DbErr::Custom(e.to_string()))
+        .map_err(Into::<DasApiError>::into)?;
 
     if cl_items_first_leaf.is_empty() {
         return Ok(HashMap::new());
@@ -111,7 +112,8 @@ pub async fn get_proof_for_assets(
         .cl_items
         .batch_get(all_req_keys)
         .await
-        .map_err(|e| DbErr::Custom(e.to_string()))?
+        .map_err(|e| DbErr::Custom(e.to_string()))
+        .map_err(Into::<DasApiError>::into)?
         .into_iter()
         .flatten()
         .map(|node| SimpleChangeLog {

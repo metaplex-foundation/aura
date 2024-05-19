@@ -25,6 +25,7 @@ use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
+use usecase::error::DasApiError;
 use usecase::validation::{validate_opt_pubkey, validate_pubkey};
 use {crate::api::*, sqlx::postgres::PgPoolOptions};
 
@@ -190,8 +191,7 @@ where
             .ok_or(DasApiError::ProofNotFound)?
             .as_ref()
             .ok_or::<DasApiError>(not_found())
-            .cloned()
-            .map_err(Into::<DasApiError>::into);
+            .cloned();
 
         Ok(json!(res?))
     }
@@ -250,8 +250,7 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
         )
-        .await
-        .map_err(Into::<DasApiError>::into)?;
+        .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -295,8 +294,7 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
         )
-        .await
-        .map_err(Into::<DasApiError>::into)?;
+        .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);

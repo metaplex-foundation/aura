@@ -5,11 +5,11 @@ use solana_sdk::pubkey::Pubkey;
 
 #[async_trait]
 impl ProcessingPossibilityChecker for Storage {
-    async fn can_process_assets(&self, pubkeys: Vec<Pubkey>) -> bool {
+    async fn can_process_assets(&self, pubkeys: &[Pubkey]) -> bool {
         if pubkeys.is_empty() {
             return true;
         }
-        let trees = match self.asset_leaf_data.batch_get(pubkeys).await {
+        let trees = match self.asset_leaf_data.batch_get(pubkeys.to_vec()).await {
             Ok(asset_leafs) => asset_leafs
                 .into_iter()
                 .flat_map(|leaf| leaf.map(|l| l.tree_id))

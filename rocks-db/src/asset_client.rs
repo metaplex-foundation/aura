@@ -8,7 +8,6 @@ use crate::editions::TokenMetadataEdition;
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
-use interface::processing_possibility::ProcessingPossibilityChecker;
 use entities::models::{EditionData, PubkeyWithSlot};
 use std::collections::HashMap;
 
@@ -88,9 +87,6 @@ impl Storage {
         &self,
         asset_ids: Vec<Pubkey>,
     ) -> Result<AssetSelectedMaps> {
-        if !self.can_process_assets(asset_ids.clone()).await {
-            panic!();
-        }
         let assets_dynamic_fut = self.asset_dynamic_data.batch_get(asset_ids.clone());
         let assets_static_fut = self.asset_static_data.batch_get(asset_ids.clone());
         let assets_authority_fut = self.asset_authority_data.batch_get(asset_ids.clone());

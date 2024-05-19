@@ -29,6 +29,11 @@ serde = "1.0.136"
 anchor-lang = "0.29.0"
 plerkle_serialization = { version = "1.8.0" }
 async-recursion = "1.1.1"
+jsonrpc-core = {version = "19.0.0", git = "https://github.com/RequescoS/jsonrpc-response-middleware.git"}
+sea-orm = { version = "0.10.6", features = ["macros", "runtime-tokio-rustls", "sqlx-postgres", "with-chrono", "mock"] }
+log = "0.4.17"
+thiserror = "1.0.31"
+sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json"] }
 
 [dev-dependencies]
 futures = "0.3.30"

@@ -9,6 +9,7 @@ use jsonrpc_core::types::params::Params;
 use jsonrpc_core::MetaIoHandler;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
+use usecase::error::DasApiError;
 use usecase::proofs::MaybeProofChecker;
 
 use crate::api::meta_middleware::RpcMetaMiddleware;

@@ -2,12 +2,14 @@ use crate::dao::{scopes, ConversionError, SearchAssetsQuery};
 use crate::rpc::response::AssetList;
 use entities::api_req_params::{AssetSorting, Options};
 use interface::json::{JsonDownloader, JsonPersister};
+use interface::processing_possibility::ProcessingPossibilityChecker;
 use rocks_db::Storage;
 use sea_orm::DbErr;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
+use usecase::error::DasApiError;
 
 use super::common::asset_list_to_rpc;
 
@@ -27,7 +29,7 @@ pub async fn search_assets(
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-) -> Result<AssetList, DbErr> {
+) -> Result<AssetList, DasApiError> {
     let filter_result: &Result<postgre_client::model::SearchAssetsFilter, ConversionError> =
         &filter.try_into();
     if let Err(ConversionError::IncompatibleGroupingKey(_)) = filter_result {
@@ -40,7 +42,8 @@ pub async fn search_assets(
     }
     let filter = filter_result
         .as_ref()
-        .map_err(|e| DbErr::Custom(e.to_string()))?;
+        .map_err(|e| DbErr::Custom(e.to_string()))
+        .map_err(Into::<DasApiError>::into)?;
 
     let cursor_enabled = before.is_none() && after.is_none() && page.is_none();
 
@@ -64,11 +67,15 @@ pub async fn search_assets(
             &options,
         )
         .await
-        .map_err(DbErr::Custom)?;
+        .map_err(DbErr::Custom)
+        .map_err(Into::<DasApiError>::into)?;
     let asset_ids = keys
         .iter()
         .filter_map(|k| Pubkey::try_from(k.pubkey.clone()).ok())
         .collect::<Vec<Pubkey>>();
+    if !rocks_db.can_process_assets(asset_ids.as_slice()).await {
+        return Err(DasApiError::CannotServiceRequest);
+    }
     //todo: there is an additional round trip to the db here, this should be optimized
     let assets = scopes::asset::get_by_ids(
         rocks_db,
@@ -79,7 +86,8 @@ pub async fn search_assets(
         max_json_to_download,
         tasks,
     )
-    .await?;
+    .await
+    .map_err(Into::<DasApiError>::into)?;
     let assets = assets.into_iter().flatten().collect::<Vec<_>>();
     let (items, errors) = asset_list_to_rpc(assets);
     let total = items.len() as u32;
