@@ -106,6 +106,9 @@ impl BubblegumTxProcessor {
             .store_transaction_result(&result, true)
             .await
             .map_err(|e| IngesterError::DatabaseError(e.to_string()))?;
+
+        // TODO: save updates with batch to Postgre
+
         Ok(())
     }
 
@@ -157,6 +160,7 @@ impl BubblegumTxProcessor {
             InstructionName::SetAndVerifyCollection => "SetAndVerifyCollection",
             InstructionName::SetDecompressibleState => "SetDecompressibleState",
             InstructionName::UpdateMetadata => "UpdateMetadata",
+            InstructionName::CreateTreeWithRoot => "CreateTreeWithRoot",
         }
     }
 
@@ -266,6 +270,7 @@ impl BubblegumTxProcessor {
                 tx: bundle.txn_id.to_string(),
             });
         };
+        // TODO: add new match branch
         let instruction: Result<InstructionResult, IngesterError> = match ix_type {
             InstructionName::Transfer
             | InstructionName::CancelRedeem

@@ -28,11 +28,11 @@ assert-json-diff = "2.0.2"
 regex = "1.10.2"
 async-trait = "0.1.77"
 spl-account-compression = "0.3.0"
-solana-client = "~1.17"
-solana-program = "~1.17"
+solana-client = "~1.18.11"
+solana-program = "~1.18.11"
 spl-concurrent-merkle-tree = "0.2.0"
 anchor-lang = "0.29.0"
-solana-sdk = { version = "~1.17" }
+solana-sdk = { version = "~1.18.11" }
 
 [features]
 rpc_tests = []

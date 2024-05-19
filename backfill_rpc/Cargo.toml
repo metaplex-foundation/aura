@@ -9,13 +9,13 @@ edition = "2021"
 async-trait="0.1.74"
 futures="0.3.29"
 entities = { path = "../entities" }
-solana-sdk = "~1.17"
-solana-client = "~1.17"
-solana-program = "~1.17"
-solana-transaction-status = "~1.17"
+solana-sdk = "~1.18.11"
+solana-client = "~1.18.11"
+solana-program = "~1.18.11"
+solana-transaction-status = "~1.18.11"
 interface = { path = "../interface" }
 tokio = { version = "1.26.0", features = ["full"] }
-plerkle_serialization = "1.8.0"
+plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
 flatbuffers = "23.1.21"
 tracing = "0.1.40"
 usecase = { path = "../usecase" }
