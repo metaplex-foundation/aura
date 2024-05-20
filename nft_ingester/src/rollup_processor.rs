@@ -62,18 +62,35 @@ impl RollupDownloader for RollupDownloaderImpl {
         url: &str,
         checksum: &str,
     ) -> Result<Box<Rollup>, UsecaseError> {
+        let rollup_to_process = self.pg_client.get_rollup_by_url(url).await.ok().flatten();
+        if let Some(rollup_to_process) = rollup_to_process {
+            if let Ok(Ok(rollup)) = tokio::fs::read(format!(
+                "{}/{}",
+                self.file_storage_path, &rollup_to_process.file_name
+            ))
+            .await
+            .map(|json_file| {
+                let file_hash = xxhash_rust::xxh3::xxh3_128(&json_file);
+                let hash_hex = hex::encode(file_hash.to_be_bytes());
+                if hash_hex != checksum {
+                    return Err(UsecaseError::InvalidParameters(
+                        "File checksum mismatch".to_string(),
+                    ));
+                }
+                serde_json::from_slice::<Rollup>(&json_file)
+                    .map_err(|e| UsecaseError::Storage(e.to_string()))
+            }) {
+                return Ok(Box::new(rollup));
+            };
+        }
         let response = reqwest::get(url).await?.bytes().await?;
-
         let file_hash = xxhash_rust::xxh3::xxh3_128(&response);
-
         let hash_hex = hex::encode(file_hash.to_be_bytes());
-
         if hash_hex != checksum {
             return Err(UsecaseError::InvalidParameters(
                 "File checksum mismatch".to_string(),
             ));
         }
-
         Ok(Box::new(serde_json::from_slice(&response)?))
     }
 }
@@ -167,7 +184,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         mut rollup_to_process: RollupWithState,
     ) -> Result<(), IngesterError> {
         info!("Processing {} rollup file", &rollup_to_process.file_name);
-        let (rollup, file_size) = self.read_rollup_file(&rollup_to_process).await?;
+        let (rollup, file_size, file_checksum) = self.read_rollup_file(&rollup_to_process).await?;
         let mut metadata_url = String::new();
         while rx.is_empty() {
             match &rollup_to_process.state {
@@ -187,6 +204,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                         &mut rollup_to_process,
                         &metadata_url,
                         &rollup,
+                        &file_checksum,
                     )
                     .await?;
                 }
@@ -269,9 +287,15 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         rollup_to_process: &mut RollupWithState,
         metadata_url: &str,
         rollup: &Rollup,
+        file_checksum: &str,
     ) -> Result<(), IngesterError> {
-        self.send_rollup_tx_with_retry(&rollup_to_process.file_name, rollup, metadata_url)
-            .await?;
+        self.send_rollup_tx_with_retry(
+            &rollup_to_process.file_name,
+            rollup,
+            metadata_url,
+            file_checksum,
+        )
+        .await?;
         if let Err(err) = self
             .pg_client
             .update_rollup_state(&rollup_to_process.file_name, RollupState::Complete)
@@ -289,8 +313,8 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
     async fn read_rollup_file(
         &self,
         rollup_to_process: &RollupWithState,
-    ) -> Result<(Rollup, usize), IngesterError> {
-        let json_file = match tokio::fs::read_to_string(format!(
+    ) -> Result<(Rollup, usize, String), IngesterError> {
+        let json_file = match tokio::fs::read(format!(
             "{}/{}",
             self.file_storage_path, &rollup_to_process.file_name
         ))
@@ -305,7 +329,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                 return Err(e.into());
             }
         };
-        let rollup = match serde_json::from_str::<Rollup>(&json_file) {
+        let rollup = match serde_json::from_slice::<Rollup>(&json_file) {
             Ok(rollup) => rollup,
             Err(e) => {
                 if let Err(e) = self
@@ -325,8 +349,10 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                 return Err(e.into());
             }
         };
+        let file_hash = xxhash_rust::xxh3::xxh3_128(&json_file);
+        let hash_hex = hex::encode(file_hash.to_be_bytes());
 
-        Ok((rollup, json_file.len()))
+        Ok((rollup, json_file.len(), hash_hex))
     }
 
     async fn upload_file_with_retry(
@@ -376,6 +402,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         file_name: &str,
         rollup: &Rollup,
         metadata_url: &str,
+        file_checksum: &str,
     ) -> Result<(), IngesterError> {
         let mut last_error = UsecaseError::Storage("".to_string());
         let instruction = BatchMintInstruction {
@@ -386,6 +413,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
             leaf: rollup.last_leaf_hash,
             index: rollup.rolled_mints.len().saturating_sub(1) as u32, // TODO
             metadata_url: metadata_url.to_string(),
+            file_checksum: file_checksum.to_string(),
         };
 
         for _ in 0..MAX_ROLLUP_RETRIES {
