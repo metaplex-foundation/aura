@@ -76,9 +76,7 @@ multer = "3.0.0"
 xxhash-rust = { version = "0.8.10", features = ["xxh3"] }
 hex = "0.4.3"
 jemallocator = { version = "*", features = ["profiling", "debug"] }
-
-[profile.release]
-debug = true
+arweave-rs = {version = "0.2.0", git = "https://github.com/RequescoS/arweave-rs.git", rev = "d8f5ef76f06c96afdf013fe5b62301790631b33f"}
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

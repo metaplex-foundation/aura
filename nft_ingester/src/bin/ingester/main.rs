@@ -1,4 +1,8 @@
+use arweave_rs::consts::ARWEAVE_BASE_URL;
+use arweave_rs::Arweave;
 use async_trait::async_trait;
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -51,6 +55,7 @@ use nft_ingester::backfiller::{
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::gapfiller::process_asset_details_stream;
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
+use nft_ingester::rollup_processor::{NoopRollupTxSender, RollupProcessor};
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
@@ -62,6 +67,7 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const PG_MIGRATIONS_PATH: &str = "./migrations";
+pub const ARWEAVE_WALLET_PATH: &str = "./arweave_wallet.json";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 
@@ -460,6 +466,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let api_config: ApiConfig = setup_config(INGESTER_CONFIG_PREFIX);
 
     let cloned_index_storage = index_storage.clone();
+    let file_storage_path = api_config.file_storage_path_container.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
             cloned_index_storage,
@@ -854,6 +861,26 @@ pub async fn main() -> Result<(), IngesterError> {
                     }
                 };
             }
+        }));
+    }
+
+    if let Ok(arweave) = Arweave::from_keypair_path(
+        PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(),
+        ARWEAVE_BASE_URL.parse().unwrap(),
+    ) {
+        let arweave = Arc::new(arweave);
+        let rollup_processor = Arc::new(RollupProcessor::new(
+            index_storage.clone(),
+            Arc::new(NoopRollupTxSender {}),
+            arweave,
+            file_storage_path,
+        ));
+        let rx = shutdown_rx.resubscribe();
+        let processor_clone = rollup_processor.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            info!("Start processing rollups...");
+            processor_clone.process_rollups(rx).await;
+            info!("Finish processing rollups...");
         }));
     }
 
