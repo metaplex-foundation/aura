@@ -19,7 +19,7 @@ blockbuster = { path = "../blockbuster/blockbuster" }
 sha2 = "0.10.0"
 mpl-bubblegum = {path = "../blockbuster/mpl-bubblegum/clients/rust", features = ["serde"] }
 serde_json = "1.0.81"
-spl-account-compression = "0.3.0"
+spl-account-compression = { path = "../blockbuster/mpl-bubblegum/solana-program-library/account-compression/programs/account-compression", features = ["no-entrypoint"] }
 
 [dev-dependencies]
 hex = "0.4.3"

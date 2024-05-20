@@ -1073,6 +1073,7 @@ impl BubblegumTxProcessor {
         rocks_db: Arc<Storage>,
         signature: Signature,
     ) -> Result<(), IngesterError> {
+        // TODO: refactor, it will already accept Rollup because this method will be called by Rollup verifier
         let rollup = rollup_downloader
             .download_rollup(&batch_mint_instruction.metadata_url)
             .await?;

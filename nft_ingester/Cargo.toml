@@ -21,7 +21,7 @@ plerkle_messenger = { version = "1.5.2", features = ['redis'] }
 plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
 flatbuffers = "23.1.21"
 mpl-bubblegum = {path = "../blockbuster/mpl-bubblegum/clients/rust", features = ["serde"] }
-spl-account-compression = "0.3.0"
+spl-account-compression = { path = "../blockbuster/mpl-bubblegum/solana-program-library/account-compression/programs/account-compression", features = ["no-entrypoint"] }
 num-traits = "0.2.15"
 blockbuster = { path = "../blockbuster/blockbuster" }
 figment = { version = "0.10.6", features = ["env", "toml", "yaml"] }
@@ -68,7 +68,7 @@ heck = "0.5.0"
 "lazy_static" = "1.4.0"
 tempfile = "3.8.1"
 anchor-lang = "0.29.0"
-spl-concurrent-merkle-tree = "0.2.0"
+spl-concurrent-merkle-tree = { path = "../blockbuster/mpl-bubblegum/solana-program-library/libraries/concurrent-merkle-tree" }
 uuid = { version = "1.6.1" }
 multer = "3.0.0"
 jemallocator = { version = "*", features = ["profiling", "debug"] }

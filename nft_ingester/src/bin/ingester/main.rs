@@ -1,6 +1,7 @@
 use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
 use async_trait::async_trait;
+use nft_ingester::rollup::rollup_verifier::RollupVerifier;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -55,7 +56,7 @@ use nft_ingester::backfiller::{
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::gapfiller::process_asset_details_stream;
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
-use nft_ingester::rollup_processor::{NoopRollupTxSender, RollupProcessor};
+use nft_ingester::rollup::rollup_processor::{NoopRollupTxSender, RollupProcessor};
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
@@ -872,6 +873,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let rollup_processor = Arc::new(RollupProcessor::new(
             index_storage.clone(),
             Arc::new(NoopRollupTxSender {}),
+            RollupVerifier{},
             arweave,
             file_storage_path,
         ));

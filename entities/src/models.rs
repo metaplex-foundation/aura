@@ -391,6 +391,14 @@ pub struct RollupWithState {
     pub created_at: u64,
 }
 
+#[derive(Debug, Clone)]
+pub struct RollupToVerify {
+    pub file_hash: String,
+    pub file_name: String,
+    pub url: Option<String>,
+    pub created_at: u64,
+}
+
 impl Default for JsonDownloadTask {
     fn default() -> Self {
         Self {

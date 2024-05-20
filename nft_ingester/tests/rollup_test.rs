@@ -17,7 +17,7 @@ use interface::error::UsecaseError;
 use interface::rollup::RollupDownloader;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::error::{IngesterError, RollupValidationError};
-use nft_ingester::rollup_processor::{MockPermanentStorageClient, RollupProcessor};
+use nft_ingester::rollup::rollup_processor::{MockPermanentStorageClient, RollupProcessor};
 use postgre_client::PgClient;
 use rand::{thread_rng, Rng};
 use serde_json::json;
