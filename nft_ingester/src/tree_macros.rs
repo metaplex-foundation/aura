@@ -1,7 +1,6 @@
 use crate::error::RollupValidationError;
 use entities::rollup::Rollup;
 use solana_program::keccak::Hash;
-#[macro_export]
 macro_rules! _validate_change_logs {
     ($max_depth:literal, $max_size:literal, $leafs:ident, $rollup:ident) => {{
         let mut tree = Box::new(
@@ -40,18 +39,19 @@ macro_rules! _validate_change_logs {
                             .collect::<Vec<_>>()
                     {
                         return Err(RollupValidationError::WrongAssetPath(
-                            mint.tree_update.id.to_string(),
+                            mint.leaf_update.id().to_string(),
                         ));
                     }
                     if mint.tree_update.id != $rollup.tree_id {
                         return Err(RollupValidationError::WrongTreeIdForChangeLog(
-                            mint.tree_update.id.to_string(),
+                            mint.leaf_update.id().to_string(),
                             $rollup.tree_id.to_string(),
                             mint.tree_update.id.to_string(),
                         ));
                     }
                     if mint.tree_update.index != changelog.index {
                         return Err(RollupValidationError::WrongChangeLogIndex(
+                            mint.leaf_update.id().to_string(),
                             changelog.index,
                             mint.tree_update.index,
                         ));
@@ -61,7 +61,7 @@ macro_rules! _validate_change_logs {
             }
         }
         if tree.get_root() != $rollup.merkle_root {
-            return Err(RollupValidationError::InvalidLRoot(
+            return Err(RollupValidationError::InvalidRoot(
                 Hash::new(tree.get_root().as_slice()).to_string(),
                 Hash::new($rollup.merkle_root.as_slice()).to_string(),
             ));
@@ -70,7 +70,6 @@ macro_rules! _validate_change_logs {
     }};
 }
 
-#[macro_export]
 macro_rules! validate_change_logs {
     ($max_depth:ident, $max_buffer_size:ident, $leafs:ident, $rollup:ident) => {{
         // Note: max_buffer_size MUST be a power of 2

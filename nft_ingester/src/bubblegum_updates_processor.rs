@@ -229,12 +229,14 @@ impl BubblegumTxProcessor {
                         transaction_result.instruction_results.push(ix_result);
                     }
                     Err(e) => {
-                        // we should not persist the signature if we have unhandled instructions
-                        transaction_result.transaction_signature = None;
                         error!(
                             "Failed to handle bubblegum instruction for txn {}: {:?}",
                             sig, e
                         );
+                        return Err(IngesterError::TransactionParsingError(format!(
+                            "Failed to parse transaction: {:?}",
+                            sig
+                        )));
                     }
                 };
             }
@@ -1087,8 +1089,12 @@ impl BubblegumTxProcessor {
         signature: Signature,
     ) -> Result<(), IngesterError> {
         let rollup = rollup_downloader
-            .download_rollup(&batch_mint_instruction.metadata_url)
+            .download_rollup_and_check_checksum(
+                &batch_mint_instruction.metadata_url,
+                &batch_mint_instruction.file_checksum,
+            )
             .await?;
+
         let mut transaction_result = TransactionResult {
             instruction_results: vec![],
             transaction_signature: Some((

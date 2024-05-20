@@ -34,6 +34,7 @@ pub struct RolledMintInstruction {
     pub authority: Pubkey,
 }
 
+#[derive(Default, Clone)]
 pub struct BatchMintInstruction {
     pub max_depth: u32,
     pub max_buffer_size: u32,
@@ -42,6 +43,7 @@ pub struct BatchMintInstruction {
     pub leaf: [u8; 32],
     pub index: u32,
     pub metadata_url: String,
+    pub file_checksum: String,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -1509,6 +1509,9 @@ mod tests {
             owner: Some(first_owner.to_string()),
             mint: None,
             options: None,
+            after: None,
+            before: None,
+            cursor: None,
         };
         let response = api.get_token_accounts(payload).await.unwrap();
         let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
@@ -1521,6 +1524,9 @@ mod tests {
             owner: Some(first_owner.to_string()),
             mint: None,
             options: None,
+            after: None,
+            before: None,
+            cursor: None,
         };
         let response = api.get_token_accounts(payload).await.unwrap();
         let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
@@ -1535,6 +1541,9 @@ mod tests {
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
+            after: None,
+            before: None,
+            cursor: None,
         };
         let response = api.get_token_accounts(payload).await.unwrap();
         let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
@@ -1549,6 +1558,9 @@ mod tests {
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
+            after: None,
+            before: None,
+            cursor: None,
         };
         let response = api.get_token_accounts(payload).await.unwrap();
         let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
@@ -1566,6 +1578,9 @@ mod tests {
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
+            after: None,
+            before: None,
+            cursor: None,
         };
         let response = api.get_token_accounts(payload).await.unwrap();
         let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
@@ -1573,6 +1588,246 @@ mod tests {
         assert_eq!(parsed_response.token_accounts.len(), 0);
 
         env.teardown().await;
+    }
+
+    #[tokio::test]
+    async fn test_token_accounts_pagination() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+
+        let buffer = Arc::new(Buffer::new());
+        let token_updates_processor = TokenAccsProcessor::new(
+            env.rocks_env.storage.clone(),
+            buffer.clone(),
+            Arc::new(IngesterMetricsConfig::new()),
+            1,
+        );
+
+        let mut token_accounts = HashMap::new();
+
+        let first_owner = Pubkey::new_unique();
+        let second_owner = Pubkey::new_unique();
+        let third_owner = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        for _ in 0..1000 {
+            let pk = Pubkey::new_unique();
+            token_accounts.insert(
+                pk,
+                TokenAccount {
+                    pubkey: pk,
+                    mint: Pubkey::new_unique(),
+                    delegate: None,
+                    owner: first_owner,
+                    frozen: false,
+                    delegated_amount: 0,
+                    slot_updated: 10,
+                    amount: 1050,
+                    write_version: 10,
+                },
+            );
+            let pk = Pubkey::new_unique();
+            token_accounts.insert(
+                pk,
+                TokenAccount {
+                    pubkey: pk,
+                    mint: Pubkey::new_unique(),
+                    delegate: None,
+                    owner: second_owner,
+                    frozen: false,
+                    delegated_amount: 0,
+                    slot_updated: 10,
+                    amount: 1050,
+                    write_version: 10,
+                },
+            );
+            let pk = Pubkey::new_unique();
+            token_accounts.insert(
+                pk,
+                TokenAccount {
+                    pubkey: pk,
+                    mint,
+                    delegate: None,
+                    owner: third_owner,
+                    frozen: false,
+                    delegated_amount: 0,
+                    slot_updated: 10,
+                    amount: 1050,
+                    write_version: 10,
+                },
+            );
+        }
+
+        token_updates_processor
+            .transform_and_save_token_accs(&token_accounts)
+            .await;
+
+        check_pagination(&api, Some(first_owner.to_string()), None).await;
+
+        check_pagination(&api, Some(third_owner.to_string()), Some(mint.to_string())).await;
+
+        check_pagination(&api, None, Some(mint.to_string())).await;
+    }
+
+    async fn check_pagination(
+        api: &nft_ingester::api::api_impl::DasApi<MaybeProofChecker, JsonWorker, JsonWorker>,
+        owner: Option<String>,
+        mint: Option<String>,
+    ) {
+        let payload = GetTokenAccounts {
+            limit: Some(10),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: None,
+            before: None,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_10: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let payload = GetTokenAccounts {
+            limit: Some(10),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: None,
+            before: None,
+            cursor: first_10.cursor.clone(),
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let second_10: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let payload = GetTokenAccounts {
+            limit: Some(20),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: None,
+            before: None,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_20: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let mut first_two_resp = first_10.token_accounts;
+        first_two_resp.extend(second_10.token_accounts.clone());
+
+        assert_eq!(first_20.token_accounts, first_two_resp);
+
+        let payload = GetTokenAccounts {
+            limit: Some(9),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: None,
+            // it's safe to do it in test because we want to check how reverse work
+            before: first_20.cursor.clone(),
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_10_reverse: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let reversed = first_10_reverse.token_accounts;
+        let mut second_10_resp = second_10.token_accounts.clone();
+        // pop because we select 9 assets
+        // select 9 because request with before do not return asset which is in before parameter
+        second_10_resp.pop();
+        assert_eq!(reversed, second_10_resp);
+
+        let payload = GetTokenAccounts {
+            limit: None,
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            // it's safe to do it in test because we want to check how reverse work
+            after: first_10.cursor.clone(),
+            before: first_20.cursor,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_10_before_after: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(
+            first_10_before_after.token_accounts,
+            second_10.token_accounts
+        );
+
+        let payload = GetTokenAccounts {
+            limit: Some(10),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: first_10.cursor,
+            before: None,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let after_first_10: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let payload = GetTokenAccounts {
+            limit: Some(10),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: after_first_10.after,
+            before: None,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let after_first_20: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let payload = GetTokenAccounts {
+            limit: Some(30),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: None,
+            before: None,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_30: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let mut combined_10_30 = after_first_10.token_accounts;
+        combined_10_30.extend(after_first_20.token_accounts.clone());
+
+        assert_eq!(combined_10_30, first_30.token_accounts[10..]);
     }
 
     #[tokio::test]
