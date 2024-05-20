@@ -1,15 +1,18 @@
 use crate::asset::AssetCollection;
+use crate::column::TypedColumn;
 use crate::errors::StorageError;
+use crate::key_encoders::{decode_u64, encode_u64};
 use crate::Result;
 use crate::Storage;
+use async_trait::async_trait;
 use bincode::deserialize;
 use entities::models::{UpdateVersion, Updated};
-use interface::migration_version_manager::MigrationVersionManager;
+use interface::migration_version_manager::PrimaryStorageMigrationVersionManager;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -114,7 +117,7 @@ impl AssetCollectionVersion0 {
 impl Storage {
     pub async fn apply_all_migrations(
         db_path: &str,
-        migration_version_manager: Arc<impl MigrationVersionManager>,
+        migration_version_manager: Arc<impl PrimaryStorageMigrationVersionManager>,
     ) -> Result<()> {
         let applied_migrations = migration_version_manager
             .get_all_applied_migrations()
@@ -122,30 +125,22 @@ impl Storage {
             .map_err(StorageError::Common)?;
         for version in 0..=CURRENT_MIGRATION_VERSION {
             if !applied_migrations.contains(&version) {
-                Storage::apply_migration(db_path, version, migration_version_manager.clone())
-                    .await?;
+                Storage::apply_migration(db_path, version).await?;
             }
         }
         Ok(())
     }
 
-    async fn apply_migration(
-        db_path: &str,
-        version: u64,
-        migration_version_manager: Arc<impl MigrationVersionManager>,
-    ) -> Result<()> {
+    async fn apply_migration(db_path: &str, version: u64) -> Result<()> {
         match version {
-            0 => Storage::apply_migration_v0(db_path, migration_version_manager).await?,
+            0 => Storage::apply_migration_v0(db_path).await?,
             _ => return Err(StorageError::InvalidMigrationVersion(version)),
         }
 
         Ok(())
     }
 
-    async fn apply_migration_v0(
-        db_path: &str,
-        migration_version_manager: Arc<impl MigrationVersionManager>,
-    ) -> Result<()> {
+    async fn apply_migration_v0(db_path: &str) -> Result<()> {
         info!("Start execute migration V0");
         {
             let old_storage = Storage::open(
@@ -195,10 +190,42 @@ impl Storage {
         new_storage.asset_collection_data.put_batch(batch).await?;
         info!("Finish migration V0");
 
-        migration_version_manager
-            .apply_migration(0)
-            .await
-            .map_err(StorageError::Common)?;
+        new_storage
+            .migration_version
+            .put_async(0, MigrationVersions {})
+            .await?;
         Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MigrationVersions {}
+
+impl TypedColumn for MigrationVersions {
+    type KeyType = u64;
+    type ValueType = Self;
+    const NAME: &'static str = "MIGRATION_VERSIONS";
+
+    fn encode_key(version: u64) -> Vec<u8> {
+        encode_u64(version)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_u64(bytes)
+    }
+}
+
+#[async_trait]
+impl PrimaryStorageMigrationVersionManager for Storage {
+    async fn get_all_applied_migrations(&self) -> std::result::Result<HashSet<u64>, String> {
+        Ok(self
+            .migration_version
+            .iter_start()
+            .filter_map(std::result::Result::ok)
+            .flat_map(|(key, _)| MigrationVersions::decode_key(key.as_ref().to_vec()))
+            .fold(HashSet::new(), |mut acc, version| {
+                acc.insert(version);
+                acc
+            }))
     }
 }

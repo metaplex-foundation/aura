@@ -8,7 +8,7 @@ use asset::{
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
-use crate::column_migrator::{AssetCollectionVersion0, MigrationState};
+use crate::column_migrator::{AssetCollectionVersion0, MigrationState, MigrationVersions};
 use crate::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::editions::TokenMetadataEdition;
 pub use asset::{
@@ -93,6 +93,7 @@ pub struct Storage {
     pub token_account_owner_idx: Column<TokenAccountOwnerIdx>,
     pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
     pub asset_signature: Column<AssetSignature>,
+    pub migration_version: Column<MigrationVersions>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -134,6 +135,7 @@ impl Storage {
         let token_accounts = Self::column(db.clone(), red_metrics.clone());
         let token_account_owner_idx = Self::column(db.clone(), red_metrics.clone());
         let token_account_mint_owner_idx = Self::column(db.clone(), red_metrics.clone());
+        let migration_version = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -168,6 +170,7 @@ impl Storage {
             red_metrics,
             asset_signature,
             token_account_mint_owner_idx,
+            migration_version,
         }
     }
 
@@ -235,6 +238,7 @@ impl Storage {
             Self::new_cf_descriptor::<TokenAccount>(migration_state),
             Self::new_cf_descriptor::<TokenAccountOwnerIdx>(migration_state),
             Self::new_cf_descriptor::<TokenAccountMintOwnerIdx>(migration_state),
+            Self::new_cf_descriptor::<MigrationVersions>(migration_state),
         ]
     }
 
@@ -485,6 +489,12 @@ impl Storage {
             TokenAccountMintOwnerIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_accounts_mint_owner_idx",
+                    TokenAccountMintOwnerIdx::merge_values,
+                );
+            }
+            MigrationVersions::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_migration_versions",
                     TokenAccountMintOwnerIdx::merge_values,
                 );
             }

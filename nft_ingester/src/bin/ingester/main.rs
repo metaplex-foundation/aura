@@ -12,6 +12,7 @@ use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_transaction_status::UiConfirmedBlock;
+use tempfile::TempDir;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -176,12 +177,24 @@ pub async fn main() -> Result<(), IngesterError> {
     let tasks = JoinSet::new();
 
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
+    let migration_version_manager_dir = TempDir::new().unwrap();
+    let migration_version_manager = Storage::open_secondary(
+        &config
+            .rocks_db_path_container
+            .clone()
+            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        migration_version_manager_dir.path().to_str().unwrap(),
+        mutexed_tasks.clone(),
+        metrics_state.red_metrics.clone(),
+        MigrationState::Last,
+    )
+    .unwrap();
     Storage::apply_all_migrations(
         &config
             .rocks_db_path_container
             .clone()
             .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
-        index_storage.clone(),
+        Arc::new(migration_version_manager),
     )
     .await
     .unwrap();

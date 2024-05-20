@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use interface::migration_version_manager::MigrationVersionManager;
+    use interface::migration_version_manager::PrimaryStorageMigrationVersionManager;
     use setup::TestEnvironment;
     use std::collections::HashSet;
     use testcontainers::clients::Cli;
