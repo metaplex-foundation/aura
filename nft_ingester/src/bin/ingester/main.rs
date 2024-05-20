@@ -876,6 +876,7 @@ pub async fn main() -> Result<(), IngesterError> {
             RollupVerifier{},
             arweave,
             file_storage_path,
+            metrics_state.rollup_processor_metrics.clone(),
         ));
         let rx = shutdown_rx.resubscribe();
         let processor_clone = rollup_processor.clone();

@@ -55,3 +55,19 @@ impl std::fmt::Display for StorageError {
         write!(f, "storage error: {:?}", self)
     }
 }
+
+impl From<StorageError> for interface::error::StorageError {
+    fn from(val: StorageError) -> Self {
+        use interface::error::StorageError as InterfaceStorageError;
+        match val {
+            StorageError::Common(s) => InterfaceStorageError::Common(s),
+            StorageError::RocksDb(e) => InterfaceStorageError::Common(e.to_string()),
+            StorageError::Serialize(e) => InterfaceStorageError::Common(e.to_string()),
+            StorageError::TryFromSliceError(e) => InterfaceStorageError::Common(e.to_string()),
+            StorageError::NoAssetOwner(s) => InterfaceStorageError::Common(s),
+            StorageError::InvalidKeyLength => {
+                InterfaceStorageError::Common(String::from("InvalidKeyLength"))
+            }
+        }
+    }
+}

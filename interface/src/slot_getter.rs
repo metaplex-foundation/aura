@@ -1,4 +1,4 @@
-use crate::error::UsecaseError;
+use crate::error::{StorageError, UsecaseError};
 use async_trait::async_trait;
 use mockall::automock;
 
@@ -11,5 +11,5 @@ pub trait FinalizedSlotGetter {
 
 #[async_trait]
 pub trait LastProcessedSlotGetter {
-    async fn get_last_ingested_slot(&self) -> Result<Option<u64>, String>;
+    async fn get_last_ingested_slot(&self) -> Result<Option<u64>, StorageError>;
 }

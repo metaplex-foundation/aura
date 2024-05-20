@@ -43,6 +43,7 @@ pub struct BatchMintInstruction {
     pub leaf: [u8; 32],
     pub index: u32,
     pub metadata_url: String,
+    pub file_checksum: String,
 }
 
 #[derive(Serialize, Deserialize)]

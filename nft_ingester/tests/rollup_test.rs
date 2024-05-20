@@ -15,6 +15,7 @@ use entities::rollup::{
 };
 use interface::error::UsecaseError;
 use interface::rollup::RollupDownloader;
+use metrics_utils::RollupProcessorMetricsConfig;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::error::{IngesterError, RollupValidationError};
 use nft_ingester::rollup::rollup_processor::{MockPermanentStorageClient, RollupProcessor};
@@ -234,6 +235,14 @@ impl RollupDownloader for TestRollupCreator {
 
         Ok(Box::new(generate_rollup(ROLLUP_ASSETS_TO_SAVE)))
     }
+
+    async fn download_rollup_and_check_checksum(
+        &self,
+        _url: &str,
+        _checksum: &str,
+    ) -> std::result::Result<Box<Rollup>, UsecaseError> {
+        Ok(Box::new(generate_rollup(ROLLUP_ASSETS_TO_SAVE)))
+    }
 }
 
 fn _generate() -> ConcurrentMerkleTree<10, 32> {
@@ -295,6 +304,7 @@ async fn store_rollup_test() {
             leaf: [0u8; 32],
             index: 0,
             metadata_url: "ff".to_string(),
+            file_checksum: "ff".to_string(),
         },
         TestRollupCreator {},
         env.rocks_env.storage.clone(),
@@ -305,6 +315,17 @@ async fn store_rollup_test() {
 
     let static_iter = env.rocks_env.storage.asset_static_data.iter_start();
     assert_eq!(static_iter.count(), ROLLUP_ASSETS_TO_SAVE);
+}
+
+#[tokio::test]
+async fn xxhash_test() {
+    let file_data = vec![43, 2, 5, 4, 76, 34, 123, 42, 73, 81, 47];
+
+    let file_hash = xxhash_rust::xxh3::xxh3_128(&file_data);
+
+    let hash_hex = hex::encode(file_hash.to_be_bytes());
+
+    assert_eq!(&hash_hex, "4f299160368d57dccbb6deec075d5083");
 }
 
 async fn save_temp_rollup(dir: &TempDir, client: Arc<PgClient>, rollup: &Rollup) -> String {
@@ -339,6 +360,7 @@ async fn rollup_processing_validation_test() {
         Arc::new(nft_ingester::rollup_processor::NoopRollupTxSender {}),
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
+        Arc::new(RollupProcessorMetricsConfig::new()),
     );
     let (_, shutdown_rx) = broadcast::channel::<()>(1);
     let processing_result = rollup_processor
@@ -610,6 +632,7 @@ async fn rollup_upload_test() {
         Arc::new(nft_ingester::rollup_processor::NoopRollupTxSender {}),
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
+        Arc::new(RollupProcessorMetricsConfig::new()),
     );
 
     let (_, shutdown_rx) = broadcast::channel::<()>(1);
@@ -642,6 +665,7 @@ async fn rollup_upload_test() {
         Arc::new(nft_ingester::rollup_processor::NoopRollupTxSender {}),
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
+        Arc::new(RollupProcessorMetricsConfig::new()),
     );
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
     let processing_result = rollup_processor
