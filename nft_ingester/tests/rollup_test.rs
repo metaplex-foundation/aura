@@ -15,6 +15,7 @@ use entities::rollup::{
 };
 use interface::error::UsecaseError;
 use interface::rollup::RollupDownloader;
+use metrics_utils::RollupProcessorMetricsConfig;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::error::{IngesterError, RollupValidationError};
 use nft_ingester::rollup_processor::{MockPermanentStorageClient, RollupProcessor};
@@ -359,6 +360,7 @@ async fn rollup_processing_validation_test() {
         Arc::new(nft_ingester::rollup_processor::NoopRollupTxSender {}),
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
+        Arc::new(RollupProcessorMetricsConfig::new()),
     );
     let (_, shutdown_rx) = broadcast::channel::<()>(1);
     let processing_result = rollup_processor
@@ -630,6 +632,7 @@ async fn rollup_upload_test() {
         Arc::new(nft_ingester::rollup_processor::NoopRollupTxSender {}),
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
+        Arc::new(RollupProcessorMetricsConfig::new()),
     );
 
     let (_, shutdown_rx) = broadcast::channel::<()>(1);
@@ -662,6 +665,7 @@ async fn rollup_upload_test() {
         Arc::new(nft_ingester::rollup_processor::NoopRollupTxSender {}),
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
+        Arc::new(RollupProcessorMetricsConfig::new()),
     );
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
     let processing_result = rollup_processor
