@@ -10,9 +10,7 @@ use interface::slots_dumper::{SlotGetter, SlotsDumper};
 use log::{error, info, warn};
 use metrics_utils::BackfillerMetricsConfig;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
-use rocks_db::bubblegum_slots::{
-    BubblegumSlotGetter, ForceReingestableSlots, PeerForceReingestableSlots,
-};
+use rocks_db::bubblegum_slots::{BubblegumSlotGetter, ForceReingestableSlots};
 use rocks_db::column::TypedColumn;
 use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
 use rocks_db::Storage;
@@ -797,118 +795,6 @@ where
 
 #[async_trait]
 impl<T, P> BlockConsumer for ForceReingestableSlotGetter<T, P>
-where
-    T: TransactionProcessor,
-    P: TransactionResultPersister,
-{
-    async fn consume_block(
-        &self,
-        slot: u64,
-        block: solana_transaction_status::UiConfirmedBlock,
-    ) -> Result<(), String> {
-        self.rocks_client.consume_block(slot, block.clone()).await?;
-        self.direct_block_parser.consume_block(slot, block).await
-    }
-
-    async fn already_processed_slot(&self, _slot: u64) -> Result<bool, String> {
-        return Ok(false);
-    }
-}
-
-pub struct PeerForceReingestableSlotGetter<T, P>
-where
-    T: TransactionProcessor,
-    P: TransactionResultPersister,
-{
-    rocks_client: Arc<Storage>,
-    direct_block_parser: Arc<DirectBlockParser<T, P>>,
-}
-
-impl<T, P> PeerForceReingestableSlotGetter<T, P>
-where
-    T: TransactionProcessor,
-    P: TransactionResultPersister,
-{
-    pub fn new(
-        rocks_client: Arc<Storage>,
-        direct_block_parser: Arc<DirectBlockParser<T, P>>,
-    ) -> PeerForceReingestableSlotGetter<T, P> {
-        PeerForceReingestableSlotGetter {
-            rocks_client,
-            direct_block_parser,
-        }
-    }
-}
-
-#[async_trait]
-impl<T, P> SlotGetter for PeerForceReingestableSlotGetter<T, P>
-where
-    T: TransactionProcessor,
-    P: TransactionResultPersister,
-{
-    fn get_unprocessed_slots_iter(&self) -> impl Iterator<Item = u64> {
-        self.rocks_client
-            .peer_force_reingestable_slots
-            .iter_start()
-            .filter_map(|k| k.ok())
-            .map(|(k, _)| PeerForceReingestableSlots::decode_key(k.to_vec()))
-            .filter_map(|k| k.ok())
-    }
-
-    async fn mark_slots_processed(&self, slots: Vec<u64>) -> core::result::Result<(), String> {
-        self.rocks_client
-            .peer_force_reingestable_slots
-            .put_batch(
-                slots
-                    .into_iter()
-                    .map(|slot| {
-                        (
-                            slot,
-                            PeerForceReingestableSlots {
-                                slot,
-                                processed: true,
-                            },
-                        )
-                    })
-                    .collect(),
-            )
-            .await
-            .map_err(|e| e.to_string())
-    }
-}
-
-#[async_trait]
-impl<T, P> SlotsDumper for PeerForceReingestableSlotGetter<T, P>
-where
-    T: TransactionProcessor,
-    P: TransactionResultPersister,
-{
-    async fn dump_slots(&self, slots: &[u64]) {
-        if slots.is_empty() {
-            return;
-        }
-        if let Err(e) = self
-            .rocks_client
-            .peer_force_reingestable_slots
-            .merge_batch(slots.iter().fold(HashMap::new(), |mut acc, slot| {
-                acc.insert(
-                    *slot,
-                    PeerForceReingestableSlots {
-                        slot: *slot,
-                        processed: false,
-                    },
-                );
-                acc
-            }))
-            .await
-        {
-            tracing::error!("Error merge force-reingestable slots: {}", e);
-        }
-    }
-}
-
-#[async_trait]
-impl<T, P> BlockConsumer for PeerForceReingestableSlotGetter<T, P>
 where
     T: TransactionProcessor,
     P: TransactionResultPersister,

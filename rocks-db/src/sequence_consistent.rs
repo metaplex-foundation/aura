@@ -1,5 +1,3 @@
-use crate::bubblegum_slots::{ForceReingestableSlots, PeerForceReingestableSlots};
-use crate::column::TypedColumn;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 use crate::{key_encoders, Storage};
 use async_trait::async_trait;
@@ -43,75 +41,6 @@ impl SequenceConsistentManager for Storage {
                 e
             );
         }
-    }
-
-    async fn all_processed_reingestable_slots(&self) -> Vec<u64> {
-        let processed_reingestable_slots = self
-            .peer_force_reingestable_slots
-            .iter_start()
-            .filter_map(Result::ok)
-            .flat_map(|(key, value)| {
-                let processed =
-                    bincode::deserialize::<PeerForceReingestableSlots>(value.to_vec().as_slice())
-                        .ok()?
-                        .processed;
-                if !processed {
-                    return None;
-                }
-                ForceReingestableSlots::decode_key(key.to_vec()).ok()
-            })
-            .fold(Vec::new(), |mut acc, slot| {
-                acc.push(slot);
-                acc
-            });
-        // Delete all these slots, so we can check will we find them second time
-        if let Err(e) = self
-            .peer_force_reingestable_slots
-            .delete_batch(processed_reingestable_slots.clone())
-            .await
-        {
-            error!("Delete peer force reingestable slots: {}", e);
-        }
-        processed_reingestable_slots
-    }
-
-    async fn manage_ingestable_slots(&self, processed_reingestable_slots: Vec<u64>) {
-        let secondly_find_non_consistent_slots = match self
-            .peer_force_reingestable_slots
-            .batch_get(processed_reingestable_slots.clone())
-            .await
-            .map(|slots| {
-                slots
-                    .into_iter()
-                    .flatten()
-                    .map(|r| r.slot)
-                    .collect::<Vec<_>>()
-            }) {
-            Ok(slots) => slots,
-            Err(e) => {
-                error!("Batch get peer force reingestable slots: {}", e);
-                return;
-            }
-        };
-        if let Err(e) = self
-            .peer_force_reingestable_slots
-            .delete_batch(secondly_find_non_consistent_slots.clone())
-            .await
-        {
-            error!("Delete peer force reingestable slots: {}", e);
-        };
-        if let Err(e) = self
-            .force_reingestable_slots
-            .put_batch(
-                secondly_find_non_consistent_slots
-                    .into_iter()
-                    .map(|slot| (slot, ForceReingestableSlots {}))
-                    .collect(),
-            )
-            .await
-        {
-            error!("Delete peer force reingestable slots: {}", e);
-        };
     }
 }
 

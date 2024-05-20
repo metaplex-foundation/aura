@@ -55,7 +55,7 @@ use tonic::transport::Server;
 
 use nft_ingester::backfiller::{
     connect_new_bigtable_from_config, DirectBlockParser, ForceReingestableSlotGetter,
-    PeerForceReingestableSlotGetter, TransactionsParser,
+    TransactionsParser,
 };
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
@@ -805,88 +805,59 @@ pub async fn main() -> Result<(), IngesterError> {
                 metrics_state.backfiller_metrics.clone(),
             )),
         ));
-        let peer_force_reingestable_slot_processor =
-            Arc::new(PeerForceReingestableSlotGetter::new(
-                rocks_storage.clone(),
-                Arc::new(DirectBlockParser::new(
-                    tx_ingester.clone(),
-                    rocks_storage.clone(),
-                    metrics_state.backfiller_metrics.clone(),
-                )),
-            ));
-
-        if grpc_client.is_some() {
-            run_sequence_consistent_gapfiller(
-                SlotsCollector::new(
-                    peer_force_reingestable_slot_processor.clone(),
-                    backfiller_source.clone(),
-                    metrics_state.backfiller_metrics.clone(),
-                ),
-                rocks_storage.clone(),
-                metrics_state.sequence_consistent_gapfill_metrics.clone(),
-                shutdown_rx.resubscribe(),
-                rpc_backfiller.clone(),
-                mutexed_tasks.clone(),
-                config.sequence_consistent_checker_wait_period_sec,
-            )
-            .await;
-        } else {
-            // If grpc_client is none, use force_reingestable_slot_processor as slots_dumper
-            run_sequence_consistent_gapfiller(
-                SlotsCollector::new(
-                    force_reingestable_slot_processor.clone(),
-                    backfiller_source.clone(),
-                    metrics_state.backfiller_metrics.clone(),
-                ),
-                rocks_storage.clone(),
-                metrics_state.sequence_consistent_gapfill_metrics.clone(),
-                shutdown_rx.resubscribe(),
-                rpc_backfiller.clone(),
-                mutexed_tasks.clone(),
-                config.sequence_consistent_checker_wait_period_sec,
-            )
-            .await;
-        }
+        run_sequence_consistent_gapfiller(
+            SlotsCollector::new(
+                force_reingestable_slot_processor.clone(),
+                backfiller_source.clone(),
+                metrics_state.backfiller_metrics.clone(),
+            ),
+            rocks_storage.clone(),
+            metrics_state.sequence_consistent_gapfill_metrics.clone(),
+            shutdown_rx.resubscribe(),
+            rpc_backfiller.clone(),
+            mutexed_tasks.clone(),
+            config.sequence_consistent_checker_wait_period_sec,
+        )
+        .await;
 
         // run an additional direct slot persister
         let rx = shutdown_rx.resubscribe();
         let producer = backfiller_source.clone();
         let metrics = Arc::new(BackfillerMetricsConfig::new());
         metrics.register_with_prefix(&mut metrics_state.registry, "force_slot_persister_");
-        let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
-            rocks_storage.clone(),
-            force_reingestable_slot_processor.clone(),
-            force_reingestable_slot_processor.clone(),
-            producer.clone(),
-            metrics.clone(),
-            backfiller_config.workers_count,
-            backfiller_config.chunk_size,
-        ));
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-            info!("Running slot force persister...");
-            force_reingestable_transactions_parser
-                .parse_transactions(rx)
-                .await;
-            info!("Force slot persister finished working");
-        }));
-
         if let Some(client) = grpc_client {
-            let rx = shutdown_rx.resubscribe();
-            let peer_force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
+            let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
                 rocks_storage.clone(),
-                peer_force_reingestable_slot_processor.clone(),
-                peer_force_reingestable_slot_processor.clone(),
+                force_reingestable_slot_processor.clone(),
+                force_reingestable_slot_processor.clone(),
                 Arc::new(client),
                 metrics.clone(),
                 backfiller_config.workers_count,
                 backfiller_config.chunk_size,
             ));
             mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-                info!("Running slot peer force persister...");
-                peer_force_reingestable_transactions_parser
+                info!("Running slot force persister...");
+                force_reingestable_transactions_parser
                     .parse_transactions(rx)
                     .await;
-                info!("Force slot peer persister finished working");
+                info!("Force slot persister finished working");
+            }));
+        } else {
+            let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
+                rocks_storage.clone(),
+                force_reingestable_slot_processor.clone(),
+                force_reingestable_slot_processor.clone(),
+                producer.clone(),
+                metrics.clone(),
+                backfiller_config.workers_count,
+                backfiller_config.chunk_size,
+            ));
+            mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                info!("Running slot force persister...");
+                force_reingestable_transactions_parser
+                    .parse_transactions(rx)
+                    .await;
+                info!("Force slot persister finished working");
             }));
         }
 
