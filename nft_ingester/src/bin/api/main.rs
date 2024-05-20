@@ -4,20 +4,25 @@ use std::sync::Arc;
 
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use log::{error, info};
-use nft_ingester::api::service::start_api_v2;
+use nft_ingester::api::service::start_api;
 use nft_ingester::config::{init_logger, setup_config, ApiConfig};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
+use nft_ingester::json_worker::JsonWorker;
 use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
-use metrics_utils::ApiMetricsConfig;
+use metrics_utils::{ApiMetricsConfig, JsonDownloaderMetricsConfig};
 use rocks_db::Storage;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tonic::transport::Server;
 use usecase::proofs::MaybeProofChecker;
+
+#[cfg(feature = "profiling")]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
@@ -45,6 +50,8 @@ pub async fn main() -> Result<(), IngesterError> {
     metrics.register(&mut registry);
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     red_metrics.register(&mut registry);
+    let json_downloader_metrics = Arc::new(JsonDownloaderMetricsConfig::new());
+    json_downloader_metrics.register(&mut registry);
     tokio::spawn(async move {
         match setup_metrics(registry, config.metrics_port).await {
             Ok(_) => {
@@ -92,9 +99,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rocks_storage = Arc::new(storage);
 
-    let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
-
     let proof_checker = config.rpc_host.map(|host| {
         Arc::new(MaybeProofChecker::new(
             Arc::new(RpcClient::new(host)),
@@ -102,15 +107,47 @@ pub async fn main() -> Result<(), IngesterError> {
             config.check_proofs_commitment,
         ))
     });
+
+    let json_worker = {
+        if let Some(middleware_config) = &config.json_middleware_config {
+            if middleware_config.is_enabled {
+                Some(Arc::new(
+                    JsonWorker::new(
+                        pg_client.clone(),
+                        rocks_storage.clone(),
+                        json_downloader_metrics.clone(),
+                    )
+                    .await,
+                ))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
+
+    let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
+    let cloned_tasks = mutexed_tasks.clone();
+    let cloned_rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        match start_api_v2(
+        match start_api(
             pg_client.clone(),
             cloned_rocks_storage.clone(),
-            cloned_keep_running,
+            cloned_rx,
             metrics.clone(),
             config.server_port,
             proof_checker,
             config.max_page_limit,
+            json_worker,
+            None,
+            config.json_middleware_config.clone(),
+            cloned_tasks,
+            config.archives_dir.as_ref(),
+            config.consistence_synchronization_api_threshold,
+            config.consistence_backfilling_slots_threshold,
+            config.batch_mint_service_port,
+            config.file_storage_path_container.as_str(),
         )
         .await
         {
@@ -121,7 +158,6 @@ pub async fn main() -> Result<(), IngesterError> {
         };
     }));
 
-    let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
     // setup dependencies for grpc server
     let uc = usecase::asset_streamer::AssetStreamer::new(
         config.peer_grpc_max_gap_slots,
@@ -171,6 +207,7 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         guard,
         config.profiling_file_path_container,
+        &config.heap_path,
     )
     .await;
 

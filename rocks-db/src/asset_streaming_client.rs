@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use entities::models::{CompleteAssetDetails, UpdateVersion, Updated};
+use entities::models::{CompleteAssetDetails, OffChainData, UpdateVersion, Updated};
 use interface::asset_streaming_and_discovery::{
     AssetDetailsStream, AssetDetailsStreamer, AsyncError,
 };
@@ -187,7 +187,7 @@ async fn get_complete_asset_details(
             (Some(edition), master_edition)
         }
     };
-
+    let url = dynamic_data.url.clone();
     Ok(CompleteAssetDetails {
         pubkey: static_data.pubkey,
         specification_asset_class: static_data.specification_asset_class,
@@ -204,7 +204,7 @@ async fn get_complete_asset_details(
         onchain_data,
         creators: dynamic_data.creators,
         royalty_amount: dynamic_data.royalty_amount,
-        url: dynamic_data.url,
+        url: url.clone(),
         chain_mutability: dynamic_data.chain_mutability,
         lamports: dynamic_data.lamports,
         executable: dynamic_data.executable,
@@ -270,6 +270,8 @@ async fn get_complete_asset_details(
             .collect(),
         edition,
         master_edition,
+        offchain_data: Storage::column::<OffChainData>(backend.clone(), metrics.clone())
+            .get(url.value)?,
     })
 }
 

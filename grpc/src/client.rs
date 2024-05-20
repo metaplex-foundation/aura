@@ -10,7 +10,8 @@ use interface::asset_streaming_and_discovery::{
 use interface::error::StorageError;
 use interface::signature_persistence::BlockProducer;
 use std::sync::Arc;
-use tonic::transport::{Channel, Error};
+use tonic::transport::{Channel, Error,Uri};
+use std::str::FromStr;
 use tonic::{Code, Status};
 
 #[derive(Clone)]
@@ -19,12 +20,10 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn connect(peer_discovery: impl PeerDiscovery) -> Result<Self, Error> {
-        let channel = Channel::from_static(Box::leak(
-            peer_discovery.get_gapfiller_peer_addr().into_boxed_str(),
-        ))
-        .connect()
-        .await?;
+    pub async fn connect(peer_discovery: impl PeerDiscovery) -> Result<Self, GrpcError> {
+        let url = Uri::from_str(peer_discovery.get_gapfiller_peer_addr().as_str())
+            .map_err(|e| GrpcError::UriCreate(e.to_string()))?;
+        let channel = Channel::builder(url).connect().await?;
 
         Ok(Self {
             inner: GapFillerServiceClient::new(channel),

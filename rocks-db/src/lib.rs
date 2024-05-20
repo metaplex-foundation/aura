@@ -15,7 +15,7 @@ pub use asset::{
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
-use entities::models::{AssetSignature, RawBlock};
+use entities::models::{AssetSignature, OffChainData, RawBlock};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -75,7 +75,7 @@ pub struct Storage {
     pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_collection_data: Column<asset::AssetCollection>,
     pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
-    pub asset_offchain_data: Column<offchain_data::OffChainData>,
+    pub asset_offchain_data: Column<OffChainData>,
     pub cl_items: Column<cl_items::ClItem>,
     pub cl_leafs: Column<cl_items::ClLeaf>,
     pub bubblegum_slots: Column<bubblegum_slots::BubblegumSlots>,
@@ -205,7 +205,7 @@ impl Storage {
 
     fn create_cf_descriptors() -> Vec<ColumnFamilyDescriptor> {
         vec![
-            Self::new_cf_descriptor::<offchain_data::OffChainData>(),
+            Self::new_cf_descriptor::<OffChainData>(),
             Self::new_cf_descriptor::<AssetStaticDetails>(),
             Self::new_cf_descriptor::<AssetDynamicDetails>(),
             Self::new_cf_descriptor::<AssetDynamicDetailsDeprecated>(),
@@ -384,7 +384,7 @@ impl Storage {
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
-            offchain_data::OffChainData::NAME => {
+            OffChainData::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_off_chain_data_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,

@@ -1,6 +1,6 @@
 use crate::enums::{
-    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
-    TaskStatus, TokenStandard, UseMethod,
+    ChainMutability, OwnerType, RollupState, RoyaltyTargetType, SpecificationAssetClass,
+    SpecificationVersions, TaskStatus, TokenStandard, UseMethod,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -68,6 +68,12 @@ pub struct Creator {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct OffChainData {
+    pub url: String,
+    pub metadata: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct CompleteAssetDetails {
     // From AssetStaticDetails
     pub pubkey: Pubkey,
@@ -120,6 +126,9 @@ pub struct CompleteAssetDetails {
     // TokenMetadataEdition
     pub edition: Option<EditionV1>,
     pub master_edition: Option<MasterEdition>,
+
+    // OffChainData
+    pub offchain_data: Option<OffChainData>,
 }
 
 /// Leaf information about compressed asset
@@ -247,7 +256,7 @@ pub struct BufferedTransaction {
     pub map_flatbuffer: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Copy)]
 pub struct SignatureWithSlot {
     pub signature: Signature,
     pub slot: u64,
@@ -350,6 +359,11 @@ pub struct TokenAccount {
     pub frozen: bool,
 }
 
+pub struct TokenAccResponse {
+    pub token_acc: TokenAccount,
+    pub sorting_id: String,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Task {
     pub ofd_metadata_url: String,
@@ -369,6 +383,33 @@ pub struct RawBlock {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SerializedRawBlock {
     pub block: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct JsonDownloadTask {
+    pub metadata_url: String,
+    pub status: TaskStatus,
+    pub attempts: i16,
+    pub max_attempts: i16,
+}
+
+pub struct RollupWithState {
+    pub file_name: String,
+    pub state: RollupState,
+    pub error: Option<String>,
+    pub url: Option<String>,
+    pub created_at: u64,
+}
+
+impl Default for JsonDownloadTask {
+    fn default() -> Self {
+        Self {
+            metadata_url: "".to_string(),
+            status: TaskStatus::Pending,
+            attempts: 1,
+            max_attempts: 10,
+        }
+    }
 }
 
 #[cfg(test)]

@@ -422,6 +422,13 @@ impl Storage {
                 &TokenMetadataEdition::MasterEdition(master_edition),
             )?;
         }
+        if let Some(offchain_data) = data.offchain_data {
+            self.asset_offchain_data.merge_with_batch_cbor(
+                &mut batch,
+                offchain_data.url.clone(),
+                &offchain_data,
+            )?;
+        }
         self.write_batch(batch).await?;
         Ok(())
     }

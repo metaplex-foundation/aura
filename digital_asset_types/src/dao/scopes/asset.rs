@@ -4,19 +4,22 @@ use std::string::ToString;
 use std::sync::Arc;
 
 use entities::api_req_params::{AssetSortDirection, Options};
-use entities::models::AssetSignatureWithPagination;
+use entities::models::{AssetSignatureWithPagination, OffChainData};
 use interface::asset_sigratures::AssetSignaturesGetter;
+use interface::json::{JsonDownloader, JsonPersister};
 use log::error;
 use sea_orm::prelude::Json;
 use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult};
 use solana_sdk::pubkey::Pubkey;
 
+use futures::{stream, StreamExt};
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetSelectedMaps,
     AssetStaticDetails,
 };
-use rocks_db::offchain_data::OffChainData;
 use rocks_db::Storage;
+use tokio::sync::Mutex;
+use tokio::task::{JoinError, JoinSet};
 
 use crate::dao::sea_orm_active_enums::{
     ChainMutability, Mutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
@@ -73,6 +76,7 @@ fn convert_rocks_offchain_data(
 ) -> Result<AssetDataModel, DbErr> {
     let mut metadata = offchain_data.metadata.clone();
 
+    // TODO: PROCESSING_METADATA_STATE may be already deprecated code
     if metadata == PROCESSING_METADATA_STATE || metadata.is_empty() {
         metadata = "{}".to_string();
     }
@@ -424,6 +428,10 @@ pub async fn get_by_ids(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
     options: Options,
+    json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
+    json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
+    max_json_to_download: usize,
+    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 ) -> Result<Vec<Option<FullAsset>>, DbErr> {
     if asset_ids.is_empty() {
         return Ok(vec![]);
@@ -439,10 +447,64 @@ pub async fn get_by_ids(
     }
 
     let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
-    let asset_selected_maps = rocks_db
+    let mut asset_selected_maps = rocks_db
         .get_asset_selected_maps_async(unique_asset_ids.clone())
         .await
         .map_err(|e| DbErr::Custom(e.to_string()))?;
+
+    if let Some(json_downloader) = json_downloader {
+        let mut urls_to_download = Vec::new();
+
+        for (_, url) in asset_selected_maps.urls.iter() {
+            if urls_to_download.len() >= max_json_to_download {
+                break;
+            }
+            if !asset_selected_maps.offchain_data.contains_key(url) && !url.is_empty() {
+                urls_to_download.push(url.clone());
+            }
+        }
+
+        let num_of_tasks = urls_to_download.len();
+
+        if num_of_tasks != 0 {
+            let download_results = stream::iter(urls_to_download)
+                .map(|url| {
+                    let json_downloader = json_downloader.clone();
+
+                    async move {
+                        let response = json_downloader.download_file(url.clone()).await;
+                        (url, response)
+                    }
+                })
+                .buffered(num_of_tasks)
+                .collect::<Vec<_>>()
+                .await;
+
+            for (json_url, res) in download_results.iter() {
+                if let Ok(metadata) = res {
+                    asset_selected_maps.offchain_data.insert(
+                        json_url.clone(),
+                        OffChainData {
+                            url: json_url.clone(),
+                            metadata: metadata.clone(),
+                        },
+                    );
+                }
+            }
+
+            if let Some(json_persister) = json_persister {
+                if !download_results.is_empty() {
+                    let download_results = download_results.clone();
+                    tasks.lock().await.spawn(async move {
+                        if let Err(e) = json_persister.persist_response(download_results).await {
+                            error!("Could not persist downloaded JSONs: {:?}", e);
+                        }
+                        Ok(())
+                    });
+                }
+            }
+        }
+    }
 
     let mut results = vec![None; asset_ids.len()];
     for id in unique_asset_ids {

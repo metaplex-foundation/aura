@@ -15,7 +15,7 @@ mod tests {
         AssetList, TokenAccountsList, TransactionSignatureList,
     };
     use entities::api_req_params::{DisplayOptions, GetAssetSignatures, GetTokenAccounts, Options};
-    use entities::models::{AssetSignature, AssetSignatureKey};
+    use entities::models::{AssetSignature, AssetSignatureKey, OffChainData};
     use entities::{
         api_req_params::{
             AssetSortBy, AssetSortDirection, AssetSorting, GetAsset, GetAssetsByAuthority,
@@ -27,22 +27,26 @@ mod tests {
         },
         models::{ChainDataV1, UpdateVersion, Updated},
     };
+    use interface::json::{MockJsonDownloader, MockJsonPersister};
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig};
+    use mockall::predicate;
     use mpl_token_metadata::accounts::MasterEdition;
     use nft_ingester::{
         buffer::Buffer,
+        config::JsonMiddlewareConfig,
+        json_worker::JsonWorker,
         mplx_updates_processor::{BurntMetadataSlot, MetadataInfo, MplxAccsProcessor},
         token_updates_processor::TokenAccsProcessor,
     };
     use rocks_db::{
         columns::{Mint, TokenAccount},
-        offchain_data::OffChainData,
         AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
     };
     use serde_json::{json, Value};
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
     use testcontainers::clients::Cli;
+    use tokio::{sync::Mutex, task::JoinSet};
     use usecase::proofs::MaybeProofChecker;
 
     const SLOT_UPDATED: u64 = 100;
@@ -52,13 +56,19 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let limit = 10;
         let before: Option<String>;
         let after: Option<String>;
@@ -71,7 +81,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             assert!(res.is_object());
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             after = res_obj.cursor.clone();
@@ -108,7 +121,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -128,7 +144,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -148,7 +167,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert!(res_obj.items.is_empty(), "items should be empty");
         }
@@ -162,7 +184,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -182,7 +207,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert!(res_obj.items.is_empty(), "items should be empty");
         }
@@ -209,7 +237,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -230,7 +261,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -251,7 +285,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -272,7 +309,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             // calculate the number of assets with creator verified true
             let mut cnt = 0;
@@ -294,7 +334,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -315,7 +358,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -336,7 +382,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -357,7 +406,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -380,7 +432,10 @@ mod tests {
                 }),
                 ..Default::default()
             };
-            let res = api.search_assets(payload).await.unwrap();
+            let res = api
+                .search_assets(payload, mutexed_tasks.clone())
+                .await
+                .unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
             assert_eq!(res_obj.total, 1, "total should be 1");
@@ -400,13 +455,19 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let pb = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
@@ -515,7 +576,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["grouping"], Value::Array(vec![]));
         assert_eq!(
@@ -532,13 +593,19 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let pb = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
@@ -623,7 +690,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["id"], pb.to_string());
         assert_eq!(response["grouping"], Value::Array(vec![]));
@@ -642,13 +709,19 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let buffer = Arc::new(Buffer::new());
 
@@ -751,7 +824,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "single");
         assert_eq!(response["ownership"]["owner"], "");
@@ -777,7 +850,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "token");
         assert_eq!(response["ownership"]["owner"], "");
@@ -792,13 +865,19 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let buffer = Arc::new(Buffer::new());
 
@@ -925,7 +1004,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["id"], mint_accs[0].pubkey.to_string());
         assert_eq!(response["interface"], "ProgrammableNFT".to_string());
@@ -936,7 +1015,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["id"], mint_accs[1].pubkey.to_string());
         assert_eq!(response["interface"], "ProgrammableNFT".to_string());
@@ -950,13 +1029,19 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let keep_running = Arc::new(AtomicBool::new(true));
 
@@ -1075,7 +1160,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let response = api.get_asset(payload).await.unwrap();
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "single");
         assert_eq!(response["ownership"]["owner"], "");
@@ -1092,13 +1177,17 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let first_tree = Pubkey::new_unique();
         let second_tree = Pubkey::new_unique();
@@ -1298,13 +1387,17 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
         let token_updates_processor = TokenAccsProcessor::new(
@@ -1413,6 +1506,9 @@ mod tests {
             owner: Some(first_owner.to_string()),
             mint: None,
             options: None,
+            after: None,
+            before: None,
+            cursor: None,
         };
         let response = api.get_token_accounts(payload).await.unwrap();
         let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
@@ -1425,6 +1521,9 @@ mod tests {
             owner: Some(first_owner.to_string()),
             mint: None,
             options: None,
+            after: None,
+            before: None,
+            cursor: None,
         };
         let response = api.get_token_accounts(payload).await.unwrap();
         let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
@@ -1439,6 +1538,9 @@ mod tests {
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
+            after: None,
+            before: None,
+            cursor: None,
         };
         let response = api.get_token_accounts(payload).await.unwrap();
         let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
@@ -1453,6 +1555,9 @@ mod tests {
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
+            after: None,
+            before: None,
+            cursor: None,
         };
         let response = api.get_token_accounts(payload).await.unwrap();
         let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
@@ -1470,6 +1575,9 @@ mod tests {
             options: Some(DisplayOptions {
                 show_zero_balance: true,
             }),
+            after: None,
+            before: None,
+            cursor: None,
         };
         let response = api.get_token_accounts(payload).await.unwrap();
         let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
@@ -1480,18 +1588,264 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_token_accounts_pagination() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+
+        let buffer = Arc::new(Buffer::new());
+        let token_updates_processor = TokenAccsProcessor::new(
+            env.rocks_env.storage.clone(),
+            buffer.clone(),
+            Arc::new(IngesterMetricsConfig::new()),
+            1,
+        );
+
+        let mut token_accounts = HashMap::new();
+
+        let first_owner = Pubkey::new_unique();
+        let second_owner = Pubkey::new_unique();
+        let third_owner = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        for _ in 0..1000 {
+            let pk = Pubkey::new_unique();
+            token_accounts.insert(
+                pk,
+                TokenAccount {
+                    pubkey: pk,
+                    mint: Pubkey::new_unique(),
+                    delegate: None,
+                    owner: first_owner,
+                    frozen: false,
+                    delegated_amount: 0,
+                    slot_updated: 10,
+                    amount: 1050,
+                    write_version: 10,
+                },
+            );
+            let pk = Pubkey::new_unique();
+            token_accounts.insert(
+                pk,
+                TokenAccount {
+                    pubkey: pk,
+                    mint: Pubkey::new_unique(),
+                    delegate: None,
+                    owner: second_owner,
+                    frozen: false,
+                    delegated_amount: 0,
+                    slot_updated: 10,
+                    amount: 1050,
+                    write_version: 10,
+                },
+            );
+            let pk = Pubkey::new_unique();
+            token_accounts.insert(
+                pk,
+                TokenAccount {
+                    pubkey: pk,
+                    mint,
+                    delegate: None,
+                    owner: third_owner,
+                    frozen: false,
+                    delegated_amount: 0,
+                    slot_updated: 10,
+                    amount: 1050,
+                    write_version: 10,
+                },
+            );
+        }
+
+        token_updates_processor
+            .transform_and_save_token_accs(&token_accounts)
+            .await;
+
+        check_pagination(&api, Some(first_owner.to_string()), None).await;
+
+        check_pagination(&api, Some(third_owner.to_string()), Some(mint.to_string())).await;
+
+        check_pagination(&api, None, Some(mint.to_string())).await;
+    }
+
+    async fn check_pagination(
+        api: &nft_ingester::api::api_impl::DasApi<MaybeProofChecker, JsonWorker, JsonWorker>,
+        owner: Option<String>,
+        mint: Option<String>,
+    ) {
+        let payload = GetTokenAccounts {
+            limit: Some(10),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: None,
+            before: None,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_10: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let payload = GetTokenAccounts {
+            limit: Some(10),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: None,
+            before: None,
+            cursor: first_10.cursor.clone(),
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let second_10: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let payload = GetTokenAccounts {
+            limit: Some(20),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: None,
+            before: None,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_20: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let mut first_two_resp = first_10.token_accounts;
+        first_two_resp.extend(second_10.token_accounts.clone());
+
+        assert_eq!(first_20.token_accounts, first_two_resp);
+
+        let payload = GetTokenAccounts {
+            limit: Some(9),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: None,
+            // it's safe to do it in test because we want to check how reverse work
+            before: first_20.cursor.clone(),
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_10_reverse: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let reversed = first_10_reverse.token_accounts;
+        let mut second_10_resp = second_10.token_accounts.clone();
+        // pop because we select 9 assets
+        // select 9 because request with before do not return asset which is in before parameter
+        second_10_resp.pop();
+        assert_eq!(reversed, second_10_resp);
+
+        let payload = GetTokenAccounts {
+            limit: None,
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            // it's safe to do it in test because we want to check how reverse work
+            after: first_10.cursor.clone(),
+            before: first_20.cursor,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_10_before_after: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        assert_eq!(
+            first_10_before_after.token_accounts,
+            second_10.token_accounts
+        );
+
+        let payload = GetTokenAccounts {
+            limit: Some(10),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: first_10.cursor,
+            before: None,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let after_first_10: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let payload = GetTokenAccounts {
+            limit: Some(10),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: after_first_10.after,
+            before: None,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let after_first_20: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let payload = GetTokenAccounts {
+            limit: Some(30),
+            page: None,
+            owner: owner.clone(),
+            mint: mint.clone(),
+            options: Some(DisplayOptions {
+                show_zero_balance: true,
+            }),
+            after: None,
+            before: None,
+            cursor: None,
+        };
+        let response = api.get_token_accounts(payload).await.unwrap();
+        let first_30: TokenAccountsList = serde_json::from_value(response).unwrap();
+
+        let mut combined_10_30 = after_first_10.token_accounts;
+        combined_10_30.extend(after_first_20.token_accounts.clone());
+
+        assert_eq!(combined_10_30, first_30.token_accounts[10..]);
+    }
+
+    #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_get_assets_by_owner() {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let ref_value = generated_assets.owners[8].clone();
         let payload = GetAssetsByOwner {
@@ -1510,7 +1864,10 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let res = api.get_assets_by_owner(payload).await.unwrap();
+        let res = api
+            .get_assets_by_owner(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -1528,13 +1885,19 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let ref_value = generated_assets.collections[12].clone();
         let payload = GetAssetsByGroup {
@@ -1550,7 +1913,10 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let res = api.get_assets_by_group(payload).await.unwrap();
+        let res = api
+            .get_assets_by_group(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -1568,13 +1934,19 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let ref_value = generated_assets.dynamic_details[5].clone();
         let payload = GetAssetsByCreator {
@@ -1590,7 +1962,10 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let res = api.get_assets_by_creator(payload).await.unwrap();
+        let res = api
+            .get_assets_by_creator(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -1608,13 +1983,19 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let ref_value = generated_assets.authorities[9].clone();
         let payload = GetAssetsByAuthority {
@@ -1629,7 +2010,10 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let res = api.get_assets_by_authority(payload).await.unwrap();
+        let res = api
+            .get_assets_by_authority(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -1639,5 +2023,203 @@ mod tests {
             ref_value.pubkey.to_string(),
             "asset should match the pubkey"
         );
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_json_middleware() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+
+        let url = "http://someUrl.com".to_string();
+
+        let offchain_data = r#"
+        {
+            "name": "5554",
+            "symbol": "SYM",
+            "description": "5555 asset",
+            "external_url": "https://twitter.com",
+            "seller_fee_basis_points": 0,
+            "image": "https://arweave.net/",
+            "attributes": [
+                {
+                "trait_type": "Background",
+                "value": "Varden"
+            },
+            {
+                "trait_type": "Body",
+                "value": "Robot"
+            },
+            {
+                "trait_type": "Clothes",
+                "value": "White Space Doodle Sweater"
+            }
+            ],
+            "properties": {
+            "files": [
+                {
+                "uri": "https://arweave.net",
+                "type": "image/png"
+                }
+            ],
+            "category": "image"
+            }
+        }
+        "#;
+
+        let mut mock_middleware = MockJsonDownloader::new();
+        mock_middleware
+            .expect_download_file()
+            .with(predicate::eq(url))
+            .times(1)
+            .returning(move |_| Ok(offchain_data.to_string()));
+
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            MockJsonDownloader,
+            MockJsonPersister,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            Some(Arc::new(mock_middleware)),
+            None,
+            JsonMiddlewareConfig {
+                is_enabled: true,
+                max_urls_to_parse: 10,
+            },
+        );
+
+        let pb = Pubkey::new_unique();
+        let authority = Pubkey::new_unique();
+
+        let mut chain_data = ChainDataV1 {
+            name: "name".to_string(),
+            symbol: "symbol".to_string(),
+            edition_nonce: Some(1),
+            primary_sale_happened: false,
+            token_standard: Some(TokenStandard::NonFungible),
+            uses: None,
+        };
+        chain_data.sanitize();
+
+        let chain_data = json!(chain_data);
+        let asset_static_details = AssetStaticDetails {
+            pubkey: pb,
+            specification_asset_class: SpecificationAssetClass::Nft,
+            royalty_target_type: RoyaltyTargetType::Creators,
+            created_at: 12 as i64,
+            edition_address: Some(MasterEdition::find_pda(&pb).0),
+        };
+
+        let json_uri = "http://someUrl.com".to_string();
+
+        let dynamic_details = AssetDynamicDetails {
+            pubkey: pb,
+            is_compressed: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            is_compressible: Updated::new(12, Some(UpdateVersion::Sequence(12)), false),
+            supply: Some(Updated::new(12, Some(UpdateVersion::Sequence(12)), 1)),
+            seq: Some(Updated::new(12, Some(UpdateVersion::Sequence(12)), 12)),
+            onchain_data: Some(Updated::new(
+                12,
+                Some(UpdateVersion::Sequence(12)),
+                chain_data.to_string(),
+            )),
+            creators: Updated::new(12, Some(UpdateVersion::Sequence(12)), vec![]),
+            royalty_amount: Updated::new(12, Some(UpdateVersion::Sequence(12)), 5),
+            url: Updated::new(12, Some(UpdateVersion::Sequence(12)), json_uri.clone()),
+            ..Default::default()
+        };
+
+        let asset_authority = AssetAuthority {
+            pubkey: pb,
+            authority,
+            slot_updated: 12,
+            write_version: Some(1),
+        };
+
+        let owner = AssetOwner {
+            pubkey: pb,
+            owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(authority)),
+            delegate: Updated::new(12, Some(UpdateVersion::Sequence(12)), None),
+            owner_type: Updated::new(12, Some(UpdateVersion::Sequence(12)), OwnerType::Single),
+            owner_delegate_seq: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(12)),
+        };
+
+        env.rocks_env
+            .storage
+            .asset_static_data
+            .put(pb, asset_static_details)
+            .unwrap();
+        env.rocks_env
+            .storage
+            .asset_dynamic_data
+            .put(pb, dynamic_details)
+            .unwrap();
+        env.rocks_env
+            .storage
+            .asset_authority_data
+            .put(pb, asset_authority)
+            .unwrap();
+        env.rocks_env
+            .storage
+            .asset_owner_data
+            .put(pb, owner)
+            .unwrap();
+
+        let payload = GetAsset {
+            id: pb.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+            }),
+        };
+
+        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+
+        let expected_content: Value = serde_json::from_str(
+            r#"
+        {
+            "$schema": "https://schema.metaplex.com/nft1.0.json",
+            "json_uri": "http://someUrl.com",
+            "files": [
+                { "uri": "https://arweave.net/", "mime": "image/png" },
+                { "uri": "https://arweave.net", "mime": "image/png" }
+            ],
+            "metadata": {
+            "attributes": [
+                { "trait_type": "Background", "value": "Varden" },
+                { "trait_type": "Body", "value": "Robot" },
+                { "trait_type": "Clothes", "value": "White Space Doodle Sweater" }
+                ],
+                "description": "5555 asset",
+                "name": "name",
+                "symbol": "symbol",
+                "token_standard": "NonFungible"
+            },
+            "links": {
+                "image": "https://arweave.net/",
+                "external_url": "https://twitter.com"
+            }
+        }
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(response["id"], pb.to_string());
+        assert_eq!(response["grouping"], Value::Array(vec![]));
+        assert_eq!(
+            response["content"]["metadata"]["token_standard"],
+            "NonFungible"
+        );
+        assert_eq!(response["content"]["json_uri"], json_uri);
+
+        assert_eq!(response["content"], expected_content);
+
+        env.teardown().await;
     }
 }

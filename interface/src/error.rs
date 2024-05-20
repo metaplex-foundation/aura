@@ -30,6 +30,10 @@ pub enum UsecaseError {
     InvalidParameters(String),
     #[error("Storage: {0}")]
     Storage(String),
+    #[error("Reqwest: {0}")]
+    Reqwest(String),
+    #[error("Json: {0}")]
+    Json(String),
 }
 
 impl From<ClientError> for UsecaseError {
@@ -37,7 +41,16 @@ impl From<ClientError> for UsecaseError {
         Self::SolanaRPC(value.kind.to_string())
     }
 }
-
+impl From<reqwest::Error> for UsecaseError {
+    fn from(value: reqwest::Error) -> Self {
+        Self::Reqwest(value.to_string())
+    }
+}
+impl From<serde_json::Error> for UsecaseError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::Reqwest(value.to_string())
+    }
+}
 #[derive(Error, Debug, PartialEq)]
 pub enum StorageError {
     #[error("common error: {0}")]
@@ -74,4 +87,15 @@ pub enum IntegrityVerificationError {
     CannotCreateMerkleTree(u32, u32),
     #[error("TreeAccountNotFound {0}")]
     TreeAccountNotFound(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum JsonDownloaderError {
+    GotNotJsonFile,
+    CouldNotDeserialize,
+    CouldNotReadHeader,
+    ErrorStatusCode(String),
+    ErrorDownloading(String),
+    IndexStorageError(String),
+    MainStorageError(String),
 }

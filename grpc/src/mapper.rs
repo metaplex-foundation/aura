@@ -3,10 +3,10 @@ use crate::gapfiller::{
     AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ChainMutability, ClItem, ClLeaf,
     Creator, DynamicBoolField, DynamicBytesField, DynamicChainMutability, DynamicCreatorsField,
     DynamicEnumField, DynamicStringField, DynamicUint32Field, DynamicUint64Field, EditionV1,
-    MasterEdition, OwnerType, RawBlock, RoyaltyTargetType, SpecificationAssetClass,
+    MasterEdition, OwnerType, RawBlock, OffchainData, RoyaltyTargetType, SpecificationAssetClass,
     SpecificationVersions, TokenStandard, UpdateVersionValue, UseMethod, Uses,
 };
-use entities::models::{CompleteAssetDetails, SerializedRawBlock, UpdateVersion, Updated};
+use entities::models::{CompleteAssetDetails, OffChainData, SerializedRawBlock, UpdateVersion, Updated};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 
@@ -74,6 +74,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
             cl_items: value.cl_items.into_iter().map(ClItem::from).collect(),
             edition: value.edition.map(|e| e.into()),
             master_edition: value.master_edition.map(|e| e.into()),
+            offchain_data: value.offchain_data.map(|e| e.into()),
         }
     }
 }
@@ -190,7 +191,20 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 .collect::<Result<Vec<_>, _>>()?,
             edition: value.edition.map(TryInto::try_into).transpose()?,
             master_edition: value.master_edition.map(TryInto::try_into).transpose()?,
+            offchain_data: value.offchain_data.map(|e| OffChainData {
+                url: e.url,
+                metadata: e.metadata,
+            }),
         })
+    }
+}
+
+impl From<entities::models::OffChainData> for OffchainData {
+    fn from(value: OffChainData) -> Self {
+        Self {
+            url: value.url,
+            metadata: value.metadata,
+        }
     }
 }
 

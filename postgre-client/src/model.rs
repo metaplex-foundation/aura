@@ -45,6 +45,16 @@ pub enum OwnerType {
     Single,
 }
 
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, sqlx::Type)]
+#[sqlx(type_name = "rollup_state", rename_all = "snake_case")]
+pub enum RollupState {
+    Uploaded,
+    Processing,
+    ValidationFail,
+    TransactionSent,
+    Complete,
+}
+
 // Structure to fetch the last synced key
 #[derive(Serialize, Deserialize, Debug, FromRow)]
 pub struct LastSyncedKey {
@@ -139,6 +149,18 @@ impl From<entities::api_req_params::AssetSortDirection> for AssetSortDirection {
         match sort_direction {
             entities::api_req_params::AssetSortDirection::Asc => Self::Asc,
             entities::api_req_params::AssetSortDirection::Desc => Self::Desc,
+        }
+    }
+}
+
+impl From<RollupState> for entities::enums::RollupState {
+    fn from(value: RollupState) -> Self {
+        match value {
+            RollupState::Uploaded => entities::enums::RollupState::Uploaded,
+            RollupState::Processing => entities::enums::RollupState::Processing,
+            RollupState::ValidationFail => entities::enums::RollupState::ValidationFail,
+            RollupState::TransactionSent => entities::enums::RollupState::TransactionSent,
+            RollupState::Complete => entities::enums::RollupState::Complete,
         }
     }
 }

@@ -108,6 +108,38 @@ pub enum IngesterError {
     SolanaDeserializer(String),
 }
 
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum RollupValidationError {
+    #[error("PDACheckFail: expected: {0}, got: {1}")]
+    PDACheckFail(String, String),
+    #[error("InvalidDataHash: expected: {0}, got: {1}")]
+    InvalidDataHash(String, String),
+    #[error("InvalidCreatorsHash: expected: {0}, got: {1}")]
+    InvalidCreatorsHash(String, String),
+    #[error("InvalidLRoot: expected: {0}, got: {1}")]
+    InvalidLRoot(String, String),
+    #[error("CannotCreateMerkleTree: depth [{0}], size [{1}]")]
+    CannotCreateMerkleTree(u32, u32),
+    #[error("NoRelevantRolledMint: index {0}")]
+    NoRelevantRolledMint(u64),
+    #[error("WrongAssetPath: id {0}")]
+    WrongAssetPath(String),
+    #[error("StdIo {0}")]
+    StdIo(String),
+    #[error("WrongTreeIdForChangeLog: asset: {0}, expected: {1}, got: {2}")]
+    WrongTreeIdForChangeLog(String, String, String),
+    #[error("WrongChangeLogIndex: expected: {0}, got: {1}")]
+    WrongChangeLogIndex(u32, u32),
+    #[error("SplCompression: {0}")]
+    SplCompression(#[from] spl_account_compression::ConcurrentMerkleTreeError),
+}
+
+impl From<std::io::Error> for RollupValidationError {
+    fn from(err: std::io::Error) -> Self {
+        RollupValidationError::StdIo(err.to_string())
+    }
+}
+
 impl From<reqwest::Error> for IngesterError {
     fn from(err: reqwest::Error) -> Self {
         IngesterError::BatchInitNetworkingError(err.to_string())
@@ -212,6 +244,12 @@ impl From<BackupServiceError> for IngesterError {
 
 impl From<StorageError> for IngesterError {
     fn from(e: StorageError) -> Self {
+        IngesterError::DatabaseError(e.to_string())
+    }
+}
+
+impl From<interface::error::StorageError> for IngesterError {
+    fn from(e: interface::error::StorageError) -> Self {
         IngesterError::DatabaseError(e.to_string())
     }
 }

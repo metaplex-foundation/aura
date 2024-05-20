@@ -2,15 +2,18 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use entities::api_req_params::{GetAsset, GetAssetProof, Options};
+    use entities::models::OffChainData;
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
+    use nft_ingester::config::JsonMiddlewareConfig;
+    use nft_ingester::json_worker::JsonWorker;
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
         buffer::Buffer,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
-    use rocks_db::{bubblegum_slots::BubblegumSlotGetter, offchain_data::OffChainData, Storage};
+    use rocks_db::{bubblegum_slots::BubblegumSlotGetter, Storage};
     use std::fs::File;
     use std::io::{self, Read};
     use std::sync::Arc;
@@ -24,7 +27,7 @@ mod tests {
     #[tracing_test::traced_test]
     async fn test_bubblegum_proofs() {
         // write slots we need to parse because backfiller dropped it during raw transactions saving
-        let slots_to_parse: Vec<u64> = vec![
+        let slots_to_parse = &[
             242049108, 242049247, 242049255, 242050728, 242050746, 242143893, 242143906, 242239091,
             242239108, 242248687, 242560746, 242847845, 242848373, 242853752, 242856151, 242943141,
             242943774, 242947970, 242948187, 242949333, 242949940, 242951695, 242952638,
@@ -56,13 +59,17 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -137,7 +144,7 @@ mod tests {
     #[tracing_test::traced_test]
     async fn test_asset_compression_info() {
         // write slots we need to parse because backfiller dropped it during raw transactions saving
-        let slots_to_parse: Vec<u64> = vec![
+        let slots_to_parse = &[
             242049108, 242049247, 242049255, 242050728, 242050746, 242143893, 242143906, 242239091,
             242239108, 242248687, 242560746, 242847845, 242848373, 242853752, 242856151, 242943141,
             242943774, 242947970, 242948187, 242949333, 242949940, 242951695, 242952638,
@@ -169,13 +176,17 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -261,7 +272,7 @@ mod tests {
                     show_unverified_collections: true,
                 }),
             };
-            let asset_info = api.get_asset(payload).await.unwrap();
+            let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
             assert_eq!(asset_info["compression"], expected_results[*asset]);
         }

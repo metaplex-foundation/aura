@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use clap::{arg, Parser};
+use entities::models::OffChainData;
 use entities::models::RawBlock;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::config::init_logger;
@@ -57,10 +58,7 @@ pub async fn main() -> Result<(), IngesterError> {
         .for_each(|(k, v)| target_storage.db.put_cf(cf, k, v).unwrap());
     info!("Done copying raw blocks");
 
-    let cf = &target_storage
-        .db
-        .cf_handle(rocks_db::offchain_data::OffChainData::NAME)
-        .unwrap();
+    let cf = &target_storage.db.cf_handle(OffChainData::NAME).unwrap();
     info!("Copying offchain data...");
     source_storage
         .asset_offchain_data

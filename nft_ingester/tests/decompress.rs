@@ -4,8 +4,11 @@ mod tests {
     use blockbuster::token_metadata::accounts::Metadata;
     use blockbuster::token_metadata::types::{Collection, Creator, Key};
     use entities::api_req_params::{GetAsset, Options};
+    use entities::models::OffChainData;
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
+    use nft_ingester::config::JsonMiddlewareConfig;
+    use nft_ingester::json_worker::JsonWorker;
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
@@ -18,7 +21,6 @@ mod tests {
     use rocks_db::{
         bubblegum_slots::BubblegumSlotGetter,
         columns::{Mint, TokenAccount},
-        offchain_data::OffChainData,
         Storage,
     };
     use solana_sdk::pubkey::Pubkey;
@@ -43,7 +45,7 @@ mod tests {
         buffer: Arc<Buffer>,
     ) {
         // write slots we need to parse because backfiller dropped it during raw transactions saving
-        let slots_to_parse: Vec<u64> = vec![
+        let slots_to_parse = &[
             242049108, 242049247, 242049255, 242050728, 242050746, 242143893, 242143906, 242239091,
             242239108, 242248687, 242560746, 242847845, 242848373, 242853752, 242856151, 242943141,
             242943774, 242947970, 242948187, 242949333, 242949940, 242951695, 242952638,
@@ -236,13 +238,17 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -278,7 +284,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let asset_info = api.get_asset(payload).await.unwrap();
+        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);
@@ -312,13 +318,17 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -354,7 +364,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let asset_info = api.get_asset(payload).await.unwrap();
+        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);
@@ -388,13 +398,17 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -430,7 +444,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let asset_info = api.get_asset(payload).await.unwrap();
+        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);
@@ -464,13 +478,17 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-        );
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -506,7 +524,7 @@ mod tests {
                 show_unverified_collections: true,
             }),
         };
-        let asset_info = api.get_asset(payload).await.unwrap();
+        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);

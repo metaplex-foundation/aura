@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use entities::models::Task;
 use entities::models::{BufferedTransaction, SignatureWithSlot};
+use entities::models::{OffChainData, Task};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
@@ -20,7 +20,7 @@ pub trait TransactionProcessor: Sync + Send + 'static {
 
 #[async_trait]
 pub trait TransactionResultPersister: Sync + Send + 'static {
-    async fn store_block(&self, txs: Vec<TransactionResult>) -> Result<(), StorageError>;
+    async fn store_block(&self, slot: u64, txs: &[TransactionResult]) -> Result<(), StorageError>;
 }
 
 #[derive(Clone, Default)]
@@ -30,6 +30,7 @@ pub struct AssetUpdateEvent {
     pub owner_update: Option<AssetUpdate<AssetOwner>>,
     pub authority_update: Option<AssetUpdate<AssetAuthority>>,
     pub collection_update: Option<AssetUpdate<AssetCollection>>,
+    pub offchain_data_update: Option<OffChainData>,
 }
 
 #[derive(Clone, Default)]
@@ -116,6 +117,7 @@ impl From<AssetUpdate<AssetDynamicDetails>> for InstructionResult {
     }
 }
 
+#[derive(Clone)]
 pub struct TransactionResult {
     pub instruction_results: Vec<InstructionResult>,
     pub transaction_signature: Option<(Pubkey, SignatureWithSlot)>,
