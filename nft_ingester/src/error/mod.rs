@@ -106,6 +106,14 @@ pub enum IngesterError {
     Usecase(String),
     #[error("SolanaDeserializer: {0}")]
     SolanaDeserializer(String),
+    #[error("Arweave: {0}")]
+    Arweave(String),
+    #[error("Infallible: {0}")]
+    Infallible(String),
+    #[error("RollupValidation: {0}")]
+    RollupValidation(#[from] RollupValidationError),
+    #[error("SendTransaction: {0}")]
+    SendTransaction(String),
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -116,8 +124,8 @@ pub enum RollupValidationError {
     InvalidDataHash(String, String),
     #[error("InvalidCreatorsHash: expected: {0}, got: {1}")]
     InvalidCreatorsHash(String, String),
-    #[error("InvalidLRoot: expected: {0}, got: {1}")]
-    InvalidLRoot(String, String),
+    #[error("InvalidRoot: expected: {0}, got: {1}")]
+    InvalidRoot(String, String),
     #[error("CannotCreateMerkleTree: depth [{0}], size [{1}]")]
     CannotCreateMerkleTree(u32, u32),
     #[error("NoRelevantRolledMint: index {0}")]
@@ -128,8 +136,8 @@ pub enum RollupValidationError {
     StdIo(String),
     #[error("WrongTreeIdForChangeLog: asset: {0}, expected: {1}, got: {2}")]
     WrongTreeIdForChangeLog(String, String, String),
-    #[error("WrongChangeLogIndex: expected: {0}, got: {1}")]
-    WrongChangeLogIndex(u32, u32),
+    #[error("WrongChangeLogIndex: asset: {0}, expected: {0}, got: {1}")]
+    WrongChangeLogIndex(String, u32, u32),
     #[error("SplCompression: {0}")]
     SplCompression(#[from] spl_account_compression::ConcurrentMerkleTreeError),
 }
@@ -282,5 +290,17 @@ impl From<UsecaseError> for IngesterError {
 impl From<PlerkleDeserializerError> for IngesterError {
     fn from(e: PlerkleDeserializerError) -> Self {
         IngesterError::SolanaDeserializer(e.to_string())
+    }
+}
+
+impl From<arweave_rs::error::Error> for IngesterError {
+    fn from(err: arweave_rs::error::Error) -> Self {
+        IngesterError::Arweave(err.to_string())
+    }
+}
+
+impl From<std::convert::Infallible> for IngesterError {
+    fn from(err: std::convert::Infallible) -> Self {
+        IngesterError::Infallible(err.to_string())
     }
 }

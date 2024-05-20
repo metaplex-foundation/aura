@@ -49,12 +49,13 @@ pub enum OwnerType {
 #[sqlx(type_name = "rollup_state", rename_all = "snake_case")]
 pub enum RollupState {
     Uploaded,
-    Processing,
     ValidationFail,
-    TransactionSent,
+    ValidationComplete,
+    UploadedToArweave,
+    FailUploadToArweave,
+    FailSendingTransaction,
     Complete,
 }
-
 // Structure to fetch the last synced key
 #[derive(Serialize, Deserialize, Debug, FromRow)]
 pub struct LastSyncedKey {
@@ -157,9 +158,13 @@ impl From<RollupState> for entities::enums::RollupState {
     fn from(value: RollupState) -> Self {
         match value {
             RollupState::Uploaded => entities::enums::RollupState::Uploaded,
-            RollupState::Processing => entities::enums::RollupState::Processing,
             RollupState::ValidationFail => entities::enums::RollupState::ValidationFail,
-            RollupState::TransactionSent => entities::enums::RollupState::TransactionSent,
+            RollupState::ValidationComplete => entities::enums::RollupState::ValidationComplete,
+            RollupState::UploadedToArweave => entities::enums::RollupState::UploadedToArweave,
+            RollupState::FailUploadToArweave => entities::enums::RollupState::FailUploadToArweave,
+            RollupState::FailSendingTransaction => {
+                entities::enums::RollupState::FailSendingTransaction
+            }
             RollupState::Complete => entities::enums::RollupState::Complete,
         }
     }

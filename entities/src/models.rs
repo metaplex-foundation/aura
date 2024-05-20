@@ -393,6 +393,7 @@ pub struct JsonDownloadTask {
     pub max_attempts: i16,
 }
 
+#[derive(Debug, Clone)]
 pub struct RollupWithState {
     pub file_name: String,
     pub state: RollupState,
