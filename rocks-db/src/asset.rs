@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bincode::{deserialize, serialize};
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::{EditionData, Updated};
+use entities::models::{EditionData, OffChainData, Updated};
 use log::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
@@ -21,7 +21,7 @@ pub struct AssetSelectedMaps {
     pub assets_collection: HashMap<Pubkey, AssetCollection>,
     pub assets_owner: HashMap<Pubkey, AssetOwner>,
     pub assets_leaf: HashMap<Pubkey, AssetLeaf>,
-    pub offchain_data: HashMap<String, crate::offchain_data::OffChainData>,
+    pub offchain_data: HashMap<String, OffChainData>,
     pub urls: HashMap<String, String>,
     pub editions: HashMap<Pubkey, EditionData>,
 }

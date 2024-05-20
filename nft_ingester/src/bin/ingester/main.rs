@@ -1,4 +1,8 @@
+use arweave_rs::consts::ARWEAVE_BASE_URL;
+use arweave_rs::Arweave;
 use async_trait::async_trait;
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,6 +21,7 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 
 use backfill_rpc::rpc::BackfillRPC;
+use grpc::client::Client;
 use interface::error::{StorageError, UsecaseError};
 use interface::signature_persistence::{BlockProducer, ProcessingDataGetter};
 use metrics_utils::utils::start_metrics;
@@ -48,12 +53,17 @@ use nft_ingester::backfiller::{
     TransactionsParser,
 };
 use nft_ingester::fork_cleaner::ForkCleaner;
+use nft_ingester::gapfiller::process_asset_details_stream;
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
 use nft_ingester::rollup_processor::{NoopRollupTxSender, RollupProcessor};
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::{SlotsCollector, SlotsGetter};
+
+#[cfg(feature = "profiling")]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const PG_MIGRATIONS_PATH: &str = "./migrations";
@@ -183,6 +193,7 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let rocks_storage = Arc::new(storage);
+    let last_saved_slot = rocks_storage.last_saved_slot()?.unwrap_or_default();
     let synchronizer = Synchronizer::new(
         rocks_storage.clone(),
         index_storage.clone(),
@@ -272,8 +283,6 @@ pub async fn main() -> Result<(), IngesterError> {
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
     }));
-
-    let newest_restored_slot = rocks_storage.last_saved_slot()?.unwrap_or(0);
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;
@@ -380,7 +389,7 @@ pub async fn main() -> Result<(), IngesterError> {
             match slot {
                 Ok(slot) => {
                     if let Some(slot) = slot {
-                        if slot != newest_restored_slot {
+                        if slot != last_saved_slot {
                             first_processed_slot_clone.store(slot, Ordering::SeqCst);
                             break;
                         }
@@ -407,6 +416,35 @@ pub async fn main() -> Result<(), IngesterError> {
         .await,
     );
 
+    match Client::connect(config.clone()).await {
+        Ok(gaped_data_client) => {
+            while first_processed_slot.load(Ordering::SeqCst) == 0
+                && keep_running.load(Ordering::SeqCst)
+            {
+                tokio::time::sleep(Duration::from_millis(100)).await
+            }
+            if keep_running.load(Ordering::SeqCst) {
+                let cloned_keep_running = keep_running.clone();
+                let cloned_rocks_storage = rocks_storage.clone();
+                mutexed_tasks.lock().await.spawn(async move {
+                    info!(
+                        "Processed {} gaped assets",
+                        process_asset_details_stream(
+                            cloned_keep_running,
+                            cloned_rocks_storage,
+                            last_saved_slot,
+                            first_processed_slot.load(Ordering::SeqCst),
+                            gaped_data_client,
+                        )
+                        .await
+                    );
+                    Ok(())
+                });
+            }
+        }
+        Err(e) => error!("GRPC Client new: {}", e),
+    };
+
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_api_metrics = metrics_state.api_metrics.clone();
     let proof_checker = config.rpc_host.clone().map(|host| {
@@ -428,6 +466,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let api_config: ApiConfig = setup_config(INGESTER_CONFIG_PREFIX);
 
     let cloned_index_storage = index_storage.clone();
+    let file_storage_path = api_config.file_storage_path_container.clone();
     mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
         match start_api(
             cloned_index_storage,
@@ -443,6 +482,7 @@ pub async fn main() -> Result<(), IngesterError> {
             tasks_clone,
             &api_config.archives_dir,
             api_config.consistence_synchronization_api_threshold,
+            api_config.consistence_backfilling_slots_threshold,
             api_config.batch_mint_service_port,
             api_config.file_storage_path_container.as_str(),
         )
@@ -824,30 +864,25 @@ pub async fn main() -> Result<(), IngesterError> {
         }));
     }
 
-    let rollup_processor = Arc::new(RollupProcessor::new(
-        index_storage.clone(),
-        rocks_storage.clone(),
-        Arc::new(NoopRollupTxSender {}),
-        ARWEAVE_WALLET_PATH,
-    ));
-    let rx = shutdown_rx.resubscribe();
-    let processor_clone = rollup_processor.clone();
-    let rollup_metrics = metrics_state.rollup_processor_metrics.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        info!("Start processing rollups...");
-        processor_clone.process_rollups(rx, rollup_metrics).await;
-        info!("Finish processing rollups...");
-    }));
-    let rx = shutdown_rx.resubscribe();
-    let processor_clone = rollup_processor.clone();
-    let rollup_metrics = metrics_state.rollup_processor_metrics.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-        info!("Start moving rollups to storage...");
-        processor_clone
-            .move_rollups_to_storage(rx, rollup_metrics)
-            .await;
-        info!("Finish moving rollups to storage...");
-    }));
+    if let Ok(arweave) = Arweave::from_keypair_path(
+        PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(),
+        ARWEAVE_BASE_URL.parse().unwrap(),
+    ) {
+        let arweave = Arc::new(arweave);
+        let rollup_processor = Arc::new(RollupProcessor::new(
+            index_storage.clone(),
+            Arc::new(NoopRollupTxSender {}),
+            arweave,
+            file_storage_path,
+        ));
+        let rx = shutdown_rx.resubscribe();
+        let processor_clone = rollup_processor.clone();
+        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            info!("Start processing rollups...");
+            processor_clone.process_rollups(rx).await;
+            info!("Finish processing rollups...");
+        }));
+    }
 
     start_metrics(
         metrics_state.registry,
@@ -862,6 +897,7 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         guard,
         config.profiling_file_path_container,
+        &config.heap_path,
     )
     .await;
 

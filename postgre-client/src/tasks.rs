@@ -118,7 +118,7 @@ impl PgClient {
             QueryBuilder::new("WITH cte AS (
                                         SELECT tsk_id
                                         FROM tasks
-                                        WHERE tsk_status != 'success' AND tsk_locked_until < NOW() AND tsk_attempts < tsk_max_attempts
+                                        WHERE (tsk_status = 'running' OR tsk_status = 'pending') AND tsk_locked_until < NOW() AND tsk_attempts < tsk_max_attempts
                                         LIMIT ");
 
         query_builder.push_bind(tasks_count);
@@ -128,7 +128,7 @@ impl PgClient {
             )
             UPDATE tasks t
             SET tsk_status = 'running',
-            tsk_locked_until = NOW() + INTERVAL '20 seconds'
+            tsk_locked_until = NOW() + INTERVAL '90 seconds'
             FROM cte
             WHERE t.tsk_id = cte.tsk_id
             RETURNING t.tsk_metadata_url, t.tsk_status, t.tsk_attempts, t.tsk_max_attempts;",

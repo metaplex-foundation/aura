@@ -110,6 +110,10 @@ pub enum IngesterError {
     Arweave(String),
     #[error("Infallible: {0}")]
     Infallible(String),
+    #[error("RollupValidation: {0}")]
+    RollupValidation(#[from] RollupValidationError),
+    #[error("SendTransaction: {0}")]
+    SendTransaction(String),
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -120,8 +124,8 @@ pub enum RollupValidationError {
     InvalidDataHash(String, String),
     #[error("InvalidCreatorsHash: expected: {0}, got: {1}")]
     InvalidCreatorsHash(String, String),
-    #[error("InvalidLRoot: expected: {0}, got: {1}")]
-    InvalidLRoot(String, String),
+    #[error("InvalidRoot: expected: {0}, got: {1}")]
+    InvalidRoot(String, String),
     #[error("CannotCreateMerkleTree: depth [{0}], size [{1}]")]
     CannotCreateMerkleTree(u32, u32),
     #[error("NoRelevantRolledMint: index {0}")]
@@ -132,8 +136,8 @@ pub enum RollupValidationError {
     StdIo(String),
     #[error("WrongTreeIdForChangeLog: asset: {0}, expected: {1}, got: {2}")]
     WrongTreeIdForChangeLog(String, String, String),
-    #[error("WrongChangeLogIndex: expected: {0}, got: {1}")]
-    WrongChangeLogIndex(u32, u32),
+    #[error("WrongChangeLogIndex: asset: {0}, expected: {0}, got: {1}")]
+    WrongChangeLogIndex(String, u32, u32),
     #[error("SplCompression: {0}")]
     SplCompression(#[from] spl_account_compression::ConcurrentMerkleTreeError),
 }

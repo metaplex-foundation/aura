@@ -68,6 +68,12 @@ pub struct Creator {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct OffChainData {
+    pub url: String,
+    pub metadata: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct CompleteAssetDetails {
     // From AssetStaticDetails
     pub pubkey: Pubkey,
@@ -92,6 +98,13 @@ pub struct CompleteAssetDetails {
     pub lamports: Option<Updated<u64>>,
     pub executable: Option<Updated<bool>>,
     pub metadata_owner: Option<Updated<String>>,
+    pub raw_name: Option<Updated<String>>,
+    pub plugins: Option<Updated<String>>,
+    pub unknown_plugins: Option<Updated<String>>,
+    pub rent_epoch: Option<Updated<u64>>,
+    pub num_minted: Option<Updated<u32>>,
+    pub current_size: Option<Updated<u32>>,
+    pub plugins_json_version: Option<Updated<u32>>,
 
     // From AssetAuthority as Tuple
     pub authority: Updated<Pubkey>,
@@ -113,6 +126,9 @@ pub struct CompleteAssetDetails {
     // TokenMetadataEdition
     pub edition: Option<EditionV1>,
     pub master_edition: Option<MasterEdition>,
+
+    // OffChainData
+    pub offchain_data: Option<OffChainData>,
 }
 
 /// Leaf information about compressed asset
@@ -240,7 +256,7 @@ pub struct BufferedTransaction {
     pub map_flatbuffer: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Copy)]
 pub struct SignatureWithSlot {
     pub signature: Signature,
     pub slot: u64,
@@ -343,6 +359,11 @@ pub struct TokenAccount {
     pub frozen: bool,
 }
 
+pub struct TokenAccResponse {
+    pub token_acc: TokenAccount,
+    pub sorting_id: String,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Task {
     pub ofd_metadata_url: String,
@@ -361,8 +382,9 @@ pub struct JsonDownloadTask {
     pub max_attempts: i16,
 }
 
+#[derive(Debug, Clone)]
 pub struct RollupWithState {
-    pub file_path: String,
+    pub file_name: String,
     pub state: RollupState,
     pub error: Option<String>,
     pub url: Option<String>,

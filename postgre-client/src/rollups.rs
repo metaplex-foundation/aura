@@ -1,6 +1,6 @@
 use crate::model::RollupState;
-use crate::{PgClient, SELECT_ACTION, SQL_COMPONENT, UPDATE_ACTION};
-use chrono::{DateTime, Utc};
+use crate::{PgClient, INSERT_ACTION, SELECT_ACTION, SQL_COMPONENT, UPDATE_ACTION};
+use chrono::Utc;
 use entities::models::RollupWithState;
 use sqlx::database::HasArguments;
 use sqlx::query::Query;
@@ -8,6 +8,7 @@ use sqlx::{Postgres, QueryBuilder, Row};
 
 impl PgClient {
     pub async fn insert_new_rollup(&self, file_path: &str) -> Result<(), String> {
+        let start_time = Utc::now();
         let mut query_builder = QueryBuilder::new(
             "INSERT INTO rollups (
                 rlp_file_name,
@@ -21,22 +22,24 @@ impl PgClient {
             .bind(RollupState::Uploaded)
             .execute(&self.pool)
             .await
-            .map_err(|err| format!("Insert rollup: {}", err))?;
+            .map_err(|err| {
+                self.metrics
+                    .observe_error(SQL_COMPONENT, INSERT_ACTION, "rollups");
+                format!("Insert rollup: {}", err)
+            })?;
+
+        self.metrics
+            .observe_request(SQL_COMPONENT, INSERT_ACTION, "rollups", start_time);
 
         Ok(())
     }
 
-    pub async fn fetch_rollup_for_processing(
-        &self,
-        state: RollupState,
-    ) -> Result<Option<RollupWithState>, String> {
+    pub async fn fetch_rollup_for_processing(&self) -> Result<Option<RollupWithState>, String> {
         let mut query_builder = QueryBuilder::new(
             "SELECT rlp_file_name, rlp_state, rlp_error, rlp_url, EXTRACT(EPOCH FROM rlp_created_at) as created_at FROM rollups
-            WHERE rlp_state = $1 ORDER BY rlp_created_at ASC"
+            WHERE rlp_state in ('uploaded', 'validation_complete', 'fail_upload_to_arweave', 'uploaded_to_arweave', 'fail_sending_transaction') ORDER BY rlp_created_at ASC"
         );
-        let start_time = chrono::Utc::now();
-        let query = query_builder.build();
-        self.fetch_rollup(query.bind(state), start_time).await
+        self.fetch_rollup(query_builder.build()).await
     }
 
     pub async fn get_rollup_by_url(&self, url: &str) -> Result<Option<RollupWithState>, String> {
@@ -44,9 +47,7 @@ impl PgClient {
             "SELECT rlp_file_name, rlp_state, rlp_error, rlp_url, EXTRACT(EPOCH FROM rlp_created_at) as created_at FROM rollups
             WHERE rlp_url = $1"
         );
-        let start_time = chrono::Utc::now();
-        let query = query_builder.build();
-        self.fetch_rollup(query.bind(url), start_time).await
+        self.fetch_rollup(query_builder.build().bind(url)).await
     }
 
     pub async fn mark_rollup_as_failed(
@@ -58,11 +59,12 @@ impl PgClient {
         let mut query_builder = QueryBuilder::new(
             "UPDATE rollups SET rlp_state = $1, rlp_error = $2 WHERE rlp_file_name = $3",
         );
-        let start_time = chrono::Utc::now();
-        let query = query_builder.build();
         self.update_rollup(
-            query.bind(state).bind(error_message).bind(file_path),
-            start_time,
+            query_builder
+                .build()
+                .bind(state)
+                .bind(error_message)
+                .bind(file_path),
         )
         .await
     }
@@ -74,12 +76,17 @@ impl PgClient {
         reward: i64,
     ) -> Result<(), String> {
         let mut query_builder = QueryBuilder::new(
-            "UPDATE rollups SET rlp_url = $1, rlp_tx_reward = $2 WHERE rlp_file_name = $3",
+            "UPDATE rollups SET rlp_url = $1, rlp_tx_reward = $2, rlp_state = $3 WHERE rlp_file_name = $4",
         );
-        let start_time = chrono::Utc::now();
-        let query = query_builder.build();
-        self.update_rollup(query.bind(url).bind(reward).bind(file_path), start_time)
-            .await
+        self.update_rollup(
+            query_builder
+                .build()
+                .bind(url)
+                .bind(reward)
+                .bind(RollupState::UploadedToArweave)
+                .bind(file_path),
+        )
+        .await
     }
 
     pub async fn update_rollup_state(
@@ -89,23 +96,21 @@ impl PgClient {
     ) -> Result<(), String> {
         let mut query_builder =
             QueryBuilder::new("UPDATE rollups SET rlp_state = $1 WHERE rlp_file_name = $2");
-        let start_time = chrono::Utc::now();
-        let query = query_builder.build();
-        self.update_rollup(query.bind(state).bind(file_path), start_time)
+        self.update_rollup(query_builder.build().bind(state).bind(file_path))
             .await
     }
 
     async fn fetch_rollup(
         &self,
         query: Query<'_, Postgres, <Postgres as HasArguments<'_>>::Arguments>,
-        start_time: DateTime<Utc>,
     ) -> Result<Option<RollupWithState>, String> {
+        let start_time = chrono::Utc::now();
         let result = query
             .fetch_optional(&self.pool)
             .await
             .map(|row| {
                 row.map(|row| RollupWithState {
-                    file_path: row.try_get("rlp_file_name").unwrap_or_default(),
+                    file_name: row.try_get("rlp_file_name").unwrap_or_default(),
                     state: row
                         .try_get::<RollupState, _>("rlp_state")
                         .unwrap_or(RollupState::Uploaded)
@@ -133,8 +138,8 @@ impl PgClient {
     async fn update_rollup(
         &self,
         query: Query<'_, Postgres, <Postgres as HasArguments<'_>>::Arguments>,
-        start_time: DateTime<Utc>,
     ) -> Result<(), String> {
+        let start_time = chrono::Utc::now();
         let result = query.execute(&self.pool).await.map_err(|e| {
             self.metrics
                 .observe_error(SQL_COMPONENT, UPDATE_ACTION, "rollups");

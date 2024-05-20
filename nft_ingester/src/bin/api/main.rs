@@ -20,6 +20,10 @@ use tokio::task::JoinSet;
 use tonic::transport::Server;
 use usecase::proofs::MaybeProofChecker;
 
+#[cfg(feature = "profiling")]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
 
@@ -141,6 +145,7 @@ pub async fn main() -> Result<(), IngesterError> {
             cloned_tasks,
             config.archives_dir.as_ref(),
             config.consistence_synchronization_api_threshold,
+            config.consistence_backfilling_slots_threshold,
             config.batch_mint_service_port,
             config.file_storage_path_container.as_str(),
         )
@@ -194,6 +199,7 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         guard,
         config.profiling_file_path_container,
+        &config.heap_path,
     )
     .await;
 
