@@ -3,10 +3,12 @@ use crate::gapfiller::{
     AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ChainMutability, ClItem, ClLeaf,
     Creator, DynamicBoolField, DynamicBytesField, DynamicChainMutability, DynamicCreatorsField,
     DynamicEnumField, DynamicStringField, DynamicUint32Field, DynamicUint64Field, EditionV1,
-    MasterEdition, OwnerType, RawBlock, OffchainData, RoyaltyTargetType, SpecificationAssetClass,
+    MasterEdition, OffchainData, OwnerType, RawBlock, RoyaltyTargetType, SpecificationAssetClass,
     SpecificationVersions, TokenStandard, UpdateVersionValue, UseMethod, Uses,
 };
-use entities::models::{CompleteAssetDetails, OffChainData, SerializedRawBlock, UpdateVersion, Updated};
+use entities::models::{
+    CompleteAssetDetails, OffChainData, SerializedRawBlock, UpdateVersion, Updated,
+};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 

@@ -9,9 +9,9 @@ use interface::asset_streaming_and_discovery::{
 };
 use interface::error::StorageError;
 use interface::signature_persistence::BlockProducer;
-use std::sync::Arc;
-use tonic::transport::{Channel, Error,Uri};
 use std::str::FromStr;
+use std::sync::Arc;
+use tonic::transport::{Channel, Uri};
 use tonic::{Code, Status};
 
 #[derive(Clone)]

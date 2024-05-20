@@ -412,7 +412,7 @@ pub async fn main() -> Result<(), IngesterError> {
             rocks_storage.clone(),
             metrics_state.json_downloader_metrics.clone(),
         )
-            .await,
+        .await,
     );
     let grpc_client = match Client::connect(config.clone()).await {
         Ok(client) => Some(client),
@@ -433,7 +433,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 process_asset_details_stream(
                     cloned_keep_running.clone(),
                     cloned_rocks_storage.clone(),
-                    newest_restored_slot,
+                    last_saved_slot,
                     first_processed_slot.load(Ordering::SeqCst),
                     gaped_data_client.clone(),
                 )
@@ -444,7 +444,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 process_raw_blocks_stream(
                     cloned_keep_running,
                     cloned_rocks_storage,
-                    newest_restored_slot,
+                    last_saved_slot,
                     first_processed_slot.load(Ordering::SeqCst),
                     gaped_data_client,
                 )
