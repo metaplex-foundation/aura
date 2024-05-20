@@ -14,7 +14,6 @@ serde = "1.0.193"
 base64 = "0.21.5"
 entities = { path = "../entities" }
 solana-sdk = "~1.17"
-solana-program = "~1.17"
 tracing  ="0.1.40"
 log = "0.4.20"
 metrics-utils = { path = "../metrics_utils" }

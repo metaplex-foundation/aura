@@ -269,7 +269,7 @@ impl From<IndexDbError> for IngesterError {
             a @ IndexDbError::InvalidSortingKeyErr => IngesterError::DatabaseError(a.to_string()),
             IndexDbError::QueryExecErr(sqlx_err) => IngesterError::SqlxError(sqlx_err.to_string()),
             IndexDbError::PubkeyParsingError(s) => IngesterError::ParsePubkeyError(s),
-            IndexDbError::NoImplemented(s) => IngesterError::DatabaseError(s),
+            IndexDbError::NotImplemented(s) => IngesterError::DatabaseError(s),
             a @ IndexDbError::BadArgument(_) => IngesterError::DatabaseError(a.to_string()),
         }
     }

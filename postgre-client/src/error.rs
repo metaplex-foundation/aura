@@ -12,7 +12,7 @@ pub enum IndexDbError {
     #[error("Malformed PubKey: {0}")]
     PubkeyParsingError(String),
     #[error("No implemented: {0}")]
-    NoImplemented(String),
+    NotImplemented(String),
     #[error("Bad argument: {0}")]
     BadArgument(String),
 }

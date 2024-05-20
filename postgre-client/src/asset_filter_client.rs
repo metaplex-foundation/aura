@@ -298,7 +298,6 @@ fn add_key_comparison(
 
 #[async_trait]
 impl AssetPubkeyFilteredFetcher for PgClient {
-    // TODO: replace String with something that reflexes arguments and Postgre related problems
     async fn get_asset_pubkeys_filtered(
         &self,
         filter: &SearchAssetsFilter,

@@ -230,7 +230,7 @@ impl AssetIndexStorage for TempClient {
         _base_path: &std::path::Path,
         _last_key: &[u8],
     ) -> Result<(), IndexDbError> {
-        Err(IndexDbError::NoImplemented(
+        Err(IndexDbError::NotImplemented(
             "Temporary client does not support batch load from file".to_string(),
         ))
     }

@@ -40,7 +40,6 @@ pub trait ProcessingDataGetter {
     async fn get_processing_transaction(&self) -> Option<BufferedTransaction>;
 }
 
-// FIXME: Replace String error with more meningful one
 #[async_trait]
 pub trait BlockConsumer: Send + Sync + 'static {
     async fn consume_block(

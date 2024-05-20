@@ -475,7 +475,6 @@ where
         tracing::info!("Transactions parser has finished working");
     }
 
-    // TODO: replace String with more meaningful error type
     async fn process_slots(
         &self,
         slots_to_parse_vec: &[u64],
