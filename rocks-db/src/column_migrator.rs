@@ -147,6 +147,8 @@ impl Storage {
                 Arc::new(RequestErrorDurationMetrics::new()),
                 MigrationState::Version(0),
             )?;
+            // "force-merge" logic: the merge is happening only on read operations,
+            // so we iterate over all records inside column in order to merge them
             for _ in old_storage.asset_collection_data.iter_start() {}
             // close db connection in the end of the scope
         }
