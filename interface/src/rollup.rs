@@ -7,6 +7,11 @@ use mockall::automock;
 #[async_trait]
 pub trait RollupDownloader {
     async fn download_rollup(&self, url: &str) -> Result<Box<Rollup>, UsecaseError>;
+    async fn download_rollup_and_check_checksum(
+        &self,
+        url: &str,
+        checksum: &str,
+    ) -> Result<Box<Rollup>, UsecaseError>;
 }
 
 #[async_trait]
