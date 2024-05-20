@@ -15,7 +15,7 @@ pub use asset::{
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
-use entities::models::{AssetSignature, OffChainData};
+use entities::models::{AssetSignature, OffChainData, RollupToVerify};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -42,6 +42,7 @@ pub mod key_encoders;
 pub mod offchain_data;
 pub mod parameters;
 pub mod raw_block;
+pub mod rollup;
 pub mod sequence_consistent;
 pub mod signature_client;
 pub mod slots_dumper;
@@ -91,6 +92,7 @@ pub struct Storage {
     pub token_account_owner_idx: Column<TokenAccountOwnerIdx>,
     pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
     pub asset_signature: Column<AssetSignature>,
+    pub rollup_to_verify: Column<RollupToVerify>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -132,6 +134,7 @@ impl Storage {
         let token_accounts = Self::column(db.clone(), red_metrics.clone());
         let token_account_owner_idx = Self::column(db.clone(), red_metrics.clone());
         let token_account_mint_owner_idx = Self::column(db.clone(), red_metrics.clone());
+        let rollup_to_verify = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -166,6 +169,7 @@ impl Storage {
             red_metrics,
             asset_signature,
             token_account_mint_owner_idx,
+            rollup_to_verify,
         }
     }
 

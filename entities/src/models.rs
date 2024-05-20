@@ -391,7 +391,7 @@ pub struct RollupWithState {
     pub created_at: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RollupToVerify {
     pub file_hash: String,
     pub file_name: String,

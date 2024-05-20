@@ -1,7 +1,10 @@
 use anchor_lang::AnchorSerialize;
 use entities::rollup::{RolledMintInstruction, Rollup};
 use mpl_bubblegum::utils::get_asset_id;
-use solana_sdk::{keccak::{self, Hash}, pubkey::Pubkey};
+use solana_sdk::{
+    keccak::{self, Hash},
+    pubkey::Pubkey,
+};
 
 use crate::{error::RollupValidationError, tree_macros::validate_change_logs};
 

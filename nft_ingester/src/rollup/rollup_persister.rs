@@ -3,7 +3,8 @@
 
 use std::{sync::Arc, time::Duration};
 
-use entities::models::RollupWithState;
+use entities::models::RollupToVerify;
+use interface::rollup::RollupDownloader;
 use log::{error, info};
 use tokio::sync::broadcast::Receiver;
 
@@ -11,19 +12,22 @@ use crate::error::IngesterError;
 
 use super::rollup_verifier::RollupVerifier;
 
-pub struct RollupPersister {
+pub struct RollupPersister<D: RollupDownloader> {
     rocks_client: Arc<rocks_db::Storage>,
     rollup_verifier: RollupVerifier,
+    rollup_downloader: Arc<D>,
 }
 
-impl RollupPersister {
+impl<D: RollupDownloader> RollupPersister<D> {
     pub fn new(
         rocks_client: Arc<rocks_db::Storage>,
         rollup_verifier: RollupVerifier,
+        rollup_downloader: Arc<D>,
     ) -> Self {
         Self {
             rocks_client,
             rollup_verifier,
+            rollup_downloader,
         }
     }
 
@@ -55,7 +59,7 @@ impl RollupPersister {
     pub async fn verify_rollup(
         &self,
         rx: Receiver<()>,
-        mut rollup_to_process: RollupWithState,
+        mut rollup_to_process: RollupToVerify,
     ) -> Result<(), IngesterError> {
         // using RollupDownloader download rollup file
         // verify it

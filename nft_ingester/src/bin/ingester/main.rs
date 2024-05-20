@@ -873,7 +873,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let rollup_processor = Arc::new(RollupProcessor::new(
             index_storage.clone(),
             Arc::new(NoopRollupTxSender {}),
-            RollupVerifier{},
+            RollupVerifier {},
             arweave,
             file_storage_path,
             metrics_state.rollup_processor_metrics.clone(),
