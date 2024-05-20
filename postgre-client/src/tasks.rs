@@ -1,3 +1,4 @@
+use crate::error::IndexDbError;
 use crate::PgClient;
 use entities::enums::TaskStatus;
 use entities::models::{JsonDownloadTask, Task, UrlWithStatus};
@@ -18,7 +19,7 @@ pub struct UpdatedTask {
 }
 
 impl PgClient {
-    async fn insert_new_tasks(&self, data: &mut Vec<Task>) -> Result<(), String> {
+    async fn insert_new_tasks(&self, data: &mut Vec<Task>) -> Result<(), IndexDbError> {
         data.sort_by(|a, b| a.ofd_metadata_url.cmp(&b.ofd_metadata_url));
 
         let mut query_builder = QueryBuilder::new(
@@ -47,10 +48,7 @@ impl PgClient {
         query_builder.push("ON CONFLICT (tsk_id) DO NOTHING;");
 
         let query = query_builder.build();
-        query
-            .execute(&self.pool)
-            .await
-            .map_err(|err| format!("Insert tasks: {}", err))?;
+        query.execute(&self.pool).await?;
 
         Ok(())
     }
@@ -88,7 +86,10 @@ impl PgClient {
         }
     }
 
-    pub async fn update_tasks_and_attempts(&self, data: Vec<UpdatedTask>) -> Result<(), String> {
+    pub async fn update_tasks_and_attempts(
+        &self,
+        data: Vec<UpdatedTask>,
+    ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("UPDATE tasks SET tsk_status = tmp.tsk_status, tsk_attempts = tsk_attempts+1, tsk_error = tmp.tsk_error FROM (");
 
@@ -102,10 +103,7 @@ impl PgClient {
         query_builder.push(") as tmp (tsk_metadata_url, tsk_status, tsk_error) WHERE tasks.tsk_metadata_url = tmp.tsk_metadata_url;");
 
         let query = query_builder.build();
-        query
-            .execute(&self.pool)
-            .await
-            .map_err(|err| err.to_string())?;
+        query.execute(&self.pool).await?;
 
         Ok(())
     }
@@ -113,7 +111,7 @@ impl PgClient {
     pub async fn get_pending_tasks(
         &self,
         tasks_count: i32,
-    ) -> Result<Vec<JsonDownloadTask>, String> {
+    ) -> Result<Vec<JsonDownloadTask>, IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("WITH cte AS (
                                         SELECT tsk_id
@@ -135,10 +133,7 @@ impl PgClient {
         );
 
         let query = query_builder.build();
-        let rows = query
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|err| err.to_string())?;
+        let rows = query.fetch_all(&self.pool).await?;
 
         let mut tasks = Vec::new();
 
@@ -159,7 +154,10 @@ impl PgClient {
         Ok(tasks)
     }
 
-    pub async fn insert_json_download_tasks(&self, data: &mut Vec<Task>) -> Result<(), String> {
+    pub async fn insert_json_download_tasks(
+        &self,
+        data: &mut Vec<Task>,
+    ) -> Result<(), IndexDbError> {
         data.sort_by(|a, b| a.ofd_metadata_url.cmp(&b.ofd_metadata_url));
 
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
@@ -188,10 +186,7 @@ impl PgClient {
         query_builder.push("ON CONFLICT (tsk_id) DO NOTHING;");
 
         let query = query_builder.build();
-        query
-            .execute(&self.pool)
-            .await
-            .map_err(|err| err.to_string())?;
+        query.execute(&self.pool).await?;
 
         Ok(())
     }

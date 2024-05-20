@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     asset_index_client::{split_assets_into_components, TableNames},
+    error::IndexDbError,
     storage_traits::{AssetIndexStorage, TempClientProvider},
     PgClient, BATCH_UPSERT_ACTION, CREATE_ACTION, DROP_ACTION, INSERT_ACTION, UPDATE_ACTION,
 };
@@ -64,9 +65,9 @@ impl TempClient {
         Ok(())
     }
 
-    pub async fn copy_to_main(&self) -> Result<(), String> {
+    pub async fn copy_to_main(&self) -> Result<(), IndexDbError> {
         let mut c = self.pooled_connection.lock().await;
-        let mut tx = c.begin().await.map_err(|e| e.to_string())?;
+        let mut tx = c.begin().await?;
 
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("INSERT INTO tasks SELECT * FROM ");
@@ -125,7 +126,7 @@ impl TempClient {
             // Fetch a batch of rows from the cursor
             let query: sqlx::query::QueryAs<'_, Postgres, _, sqlx::postgres::PgArguments> =
                 query_builder.build_query_as::<AssetPubkeyRawResponse>();
-            let rows = query.fetch_all(&mut tx).await.map_err(|e| e.to_string())?;
+            let rows = query.fetch_all(&mut tx).await?;
 
             // If no rows were fetched, we are done
             if rows.is_empty() {
@@ -182,9 +183,9 @@ impl TempClient {
 
 #[async_trait]
 impl AssetIndexStorage for TempClient {
-    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, String> {
+    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError> {
         let mut c = self.pooled_connection.lock().await;
-        let mut tx = c.begin().await.map_err(|e| e.to_string())?;
+        let mut tx = c.begin().await?;
         self.pg_client
             .fetch_last_synced_id_impl(
                 format!("{}last_synced_key", TEMP_INDEXING_TABLE_PREFIX).as_str(),
@@ -193,10 +194,13 @@ impl AssetIndexStorage for TempClient {
             .await
     }
 
-    async fn update_asset_indexes_batch(&self, asset_indexes: &[AssetIndex]) -> Result<(), String> {
+    async fn update_asset_indexes_batch(
+        &self,
+        asset_indexes: &[AssetIndex],
+    ) -> Result<(), IndexDbError> {
         let updated_components = split_assets_into_components(asset_indexes);
         let mut c = self.pooled_connection.lock().await;
-        let mut transaction = c.begin().await.map_err(|e| e.to_string())?;
+        let mut transaction = c.begin().await?;
         let table_names = TableNames {
             metadata_table: format!("{}tasks", TEMP_INDEXING_TABLE_PREFIX),
             assets_table: format!("{}assets_v3", TEMP_INDEXING_TABLE_PREFIX),
@@ -208,9 +212,9 @@ impl AssetIndexStorage for TempClient {
         self.pg_client.commit_transaction(transaction).await
     }
 
-    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), String> {
+    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError> {
         let mut c = self.pooled_connection.lock().await;
-        let mut transaction = c.begin().await.map_err(|e| e.to_string())?;
+        let mut transaction = c.begin().await?;
         self.pg_client
             .update_last_synced_key(
                 last_key,
@@ -225,16 +229,18 @@ impl AssetIndexStorage for TempClient {
         &self,
         _base_path: &std::path::Path,
         _last_key: &[u8],
-    ) -> Result<(), String> {
-        Err("Temporary client does not support batch load from file".to_string())
+    ) -> Result<(), IndexDbError> {
+        Err(IndexDbError::NotImplemented(
+            "Temporary client does not support batch load from file".to_string(),
+        ))
     }
 }
 
 #[async_trait]
 impl TempClientProvider for Arc<PgClient> {
-    async fn create_temp_client(&self) -> Result<TempClient, String> {
+    async fn create_temp_client(&self) -> Result<TempClient, IndexDbError> {
         TempClient::create_new(self.clone())
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.into())
     }
 }
