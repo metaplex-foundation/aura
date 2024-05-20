@@ -4,7 +4,6 @@ use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64, encode_u64};
 use crate::Result;
 use crate::Storage;
-use async_trait::async_trait;
 use bincode::deserialize;
 use entities::models::{UpdateVersion, Updated};
 use interface::migration_version_manager::PrimaryStorageMigrationVersionManager;
@@ -121,7 +120,6 @@ impl Storage {
     ) -> Result<()> {
         let applied_migrations = migration_version_manager
             .get_all_applied_migrations()
-            .await
             .map_err(StorageError::Common)?;
         for version in 0..=CURRENT_MIGRATION_VERSION {
             if !applied_migrations.contains(&version) {
@@ -215,9 +213,8 @@ impl TypedColumn for MigrationVersions {
     }
 }
 
-#[async_trait]
 impl PrimaryStorageMigrationVersionManager for Storage {
-    async fn get_all_applied_migrations(&self) -> std::result::Result<HashSet<u64>, String> {
+    fn get_all_applied_migrations(&self) -> std::result::Result<HashSet<u64>, String> {
         Ok(self
             .migration_version
             .iter_start()
