@@ -89,6 +89,6 @@ pub fn validate_proofs(
         &mut initial_proofs,
     )?;
 
-    crate::merkle_tree::check_proof(&header, &tree_bytes, initial_proofs, leaf, leaf_index)
+    crate::merkle_tree::check_proof(&header, tree_bytes, initial_proofs, leaf, leaf_index)
         .map_err(|e| IntegrityVerificationError::RollupValidation(e.to_string()))
 }
