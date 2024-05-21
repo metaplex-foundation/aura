@@ -159,6 +159,8 @@ message AssetDetails {
     OffchainData offchain_data = 39;
 }
 
+// This field is a cbor encoded object of RawBlock type depending on
+// a "~1.17" version of the solana-transaction-status package
 message RawBlock {
     bytes block = 1;
 }

@@ -168,6 +168,8 @@ pub struct AssetDetails {
     #[prost(message, optional, tag = "39")]
     pub offchain_data: ::core::option::Option<OffchainData>,
 }
+/// This field is a cbor encoded object of RawBlock type depending on
+/// a "~1.17" version of the solana-transaction-status package
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RawBlock {
