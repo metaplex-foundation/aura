@@ -12,7 +12,6 @@ thiserror = "1.0.31"
 serde_json = "1.0.81"
 tokio = { version = "1.37.0", features = ["full", "tracing", "sync"] }
 sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json"] }
-sea-orm = { version = "0.10.6", features = ["macros", "runtime-tokio-rustls", "sqlx-postgres", "with-chrono", "mock"] }
 chrono = "0.4.19"
 serde = "1.0.136"
 bs58 = "0.4.0"

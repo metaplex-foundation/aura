@@ -40,6 +40,7 @@ impl From<reqwest::Error> for BackupServiceError {
     }
 }
 
+// TODO-XXX: probably it is good to come up with a common StorageError for pg and rocks
 #[derive(Error, Debug)]
 pub enum StorageError {
     Common(String),

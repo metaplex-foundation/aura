@@ -15,10 +15,10 @@ pub enum DasApiError {
     DatabaseError(#[from] sqlx::Error),
     #[error("Pubkey Validation Err: {0} is invalid")]
     PubkeyValidationError(String),
-    #[error("Database Error: {0}")]
-    DatabaseErrorOrm(#[from] sea_orm::DbErr),
     #[error("Pagination Error. Only one pagination parameter supported per query.")]
     PaginationError,
+    #[error("Database Error: {0}")]
+    DatabaseErrorOther(String),
     #[error("Pagination Error. No Pagination Method Selected")]
     PaginationEmptyError,
     #[error("Batch Size Error. Batch size should not be greater than {0}.")]

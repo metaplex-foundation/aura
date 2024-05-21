@@ -1,20 +1,20 @@
-use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_grouping};
+use crate::dao::scopes::model;
 use entities::models::EditionData;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FullAsset {
-    pub asset: asset::Model,
+    pub asset: model::AssetModel,
     pub data: AssetDataModel,
-    pub authorities: Vec<asset_authority::Model>,
-    pub creators: Vec<asset_creators::Model>,
-    pub groups: Vec<asset_grouping::Model>,
+    pub authorities: Vec<model::AssetAuthorityModel>,
+    pub creators: Vec<model::AssetCreatorsModel>,
+    pub groups: Vec<model::AssetGroupingModel>,
     pub edition_data: Option<EditionData>,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssetRelated {
-    pub authorities: Vec<asset_authority::Model>,
-    pub creators: Vec<asset_creators::Model>,
-    pub groups: Vec<asset_grouping::Model>,
+    pub authorities: Vec<model::AssetAuthorityModel>,
+    pub creators: Vec<model::AssetCreatorsModel>,
+    pub groups: Vec<model::AssetGroupingModel>,
 }
 
 pub struct FullAssetList {
@@ -23,7 +23,7 @@ pub struct FullAssetList {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssetDataModel {
-    pub asset: asset_data::Model,
+    pub asset: model::AssetDataModel,
     pub lamports: Option<u64>,
     pub rent_epoch: Option<u64>,
     pub executable: Option<bool>,

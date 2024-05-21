@@ -9,9 +9,9 @@ use {
     std::collections::HashMap,
 };
 
-use crate::dao::sea_orm_active_enums::ChainMutability;
-use crate::dao::sea_orm_active_enums::{
-    OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
+use crate::dao::scopes::{
+    model,
+    model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -374,11 +374,11 @@ impl From<String> for UseMethod {
 
 pub type Mutability = bool;
 
-impl From<ChainMutability> for Mutability {
-    fn from(s: ChainMutability) -> Self {
+impl From<model::ChainMutability> for Mutability {
+    fn from(s: model::ChainMutability) -> Self {
         match s {
-            ChainMutability::Mutable => true,
-            ChainMutability::Immutable => false,
+            model::ChainMutability::Mutable => true,
+            model::ChainMutability::Immutable => false,
             _ => true,
         }
     }
