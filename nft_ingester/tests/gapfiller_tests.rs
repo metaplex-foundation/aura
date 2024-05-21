@@ -96,7 +96,7 @@ async fn test_process_raw_blocks_stream() {
     };
     let mut mock = MockRawBlocksConsumer::new();
     mock.expect_get_raw_blocks_consumable_stream_in_range()
-        .returning(move |_, _| Ok(Box::pin(stream::iter(vec![Ok(block)]))));
+        .returning(move |_, _| Ok(Box::pin(stream::iter(vec![Ok(block.clone())]))));
     let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
     process_raw_blocks_stream(rx, storage.clone(), 100, 200, mock).await;
 
