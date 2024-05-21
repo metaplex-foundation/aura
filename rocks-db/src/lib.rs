@@ -479,6 +479,12 @@ impl Storage {
                     TokenAccountMintOwnerIdx::merge_values,
                 );
             }
+            RollupToVerify::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_rollup_to_verify",
+                    rollup::merge_rollup,
+                );
+            }
             _ => {}
         }
         cf_options

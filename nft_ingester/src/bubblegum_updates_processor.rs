@@ -14,12 +14,11 @@ use entities::enums::{
     TokenStandard, UseMethod,
 };
 use entities::models::{
-    BufferedTransaction, OffChainData, SignatureWithSlot, Task, UpdateVersion, Updated,
-    UrlWithStatus,
+    BufferedTransaction, OffChainData, RollupToVerify, SignatureWithSlot, Task, UpdateVersion,
+    Updated, UrlWithStatus,
 };
 use entities::models::{ChainDataV1, Creator, Uses};
-use entities::rollup::BatchMintInstruction;
-use interface::rollup::RollupDownloader;
+use entities::rollup::Rollup;
 use lazy_static::lazy_static;
 use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
@@ -40,6 +39,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::{HashSet, VecDeque};
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -270,7 +270,7 @@ impl BubblegumTxProcessor {
                 tx: bundle.txn_id.to_string(),
             });
         };
-        // TODO: add new match branch
+
         let instruction: Result<InstructionResult, IngesterError> = match ix_type {
             InstructionName::Transfer
             | InstructionName::CancelRedeem
@@ -306,6 +306,11 @@ impl BubblegumTxProcessor {
                     .map(From::from)
                     .map(Ok)?
             }
+            InstructionName::CreateTreeWithRoot => {
+                Self::get_create_tree_with_root_update(parsing_result, bundle)
+                    .map(From::from)
+                    .map(Ok)?
+            }
             _ => {
                 debug!("Bubblegum: Not Implemented Instruction");
                 Ok(InstructionResult::default())
@@ -317,6 +322,35 @@ impl BubblegumTxProcessor {
         let mut instruction = instruction?;
         instruction.tree_update = tree_update;
         Ok(instruction)
+    }
+
+    pub fn get_create_tree_with_root_update(
+        parsing_result: &BubblegumInstruction,
+        bundle: &InstructionBundle,
+    ) -> Result<AssetUpdateEvent, IngesterError> {
+        if let Some(payload) = &parsing_result.payload {
+            match payload {
+                Payload::CreateTreeWithRoot { args, tree_id } => {
+                    let upd = AssetUpdateEvent {
+                        rollup_creation_update: Some(RollupToVerify {
+                            file_hash: args.metadata_hash.clone(),
+                            url: Some(args.metadata_url.clone()),
+                            created_at_slot: bundle.slot,
+                            signature: Signature::from_str(bundle.txn_id)
+                                .map_err(|e| IngesterError::ParseSignatureError(e.to_string()))?,
+                        }),
+                        ..Default::default()
+                    };
+
+                    return Ok(upd);
+                }
+                _ => {}
+            }
+        }
+
+        Err(IngesterError::ParsingError(
+            "Ix not parsed correctly".to_string(),
+        ))
     }
 
     pub fn get_update_owner_update(
@@ -1068,19 +1102,10 @@ impl BubblegumTxProcessor {
 
     pub async fn store_rollup_update(
         slot: u64,
-        batch_mint_instruction: &BatchMintInstruction, // TODO: use BubblegumInstruction instead
-        rollup_downloader: impl RollupDownloader,
+        rollup: Box<Rollup>,
         rocks_db: Arc<Storage>,
         signature: Signature,
     ) -> Result<(), IngesterError> {
-        // TODO: refactor, it will already accept Rollup because this method will be called by Rollup verifier
-        let rollup = rollup_downloader
-            .download_rollup_and_check_checksum(
-                &batch_mint_instruction.metadata_url,
-                &batch_mint_instruction.file_checksum,
-            )
-            .await?;
-
         let mut transaction_result = TransactionResult {
             instruction_results: vec![],
             transaction_signature: Some((

@@ -1,7 +1,8 @@
 use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
 use async_trait::async_trait;
-use nft_ingester::rollup::rollup_verifier::RollupVerifier;
+use nft_ingester::rollup::rollup_persister::RollupPersister;
+use nft_ingester::rollup::rollup_verifier::{self, RollupVerifier};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -886,6 +887,14 @@ pub async fn main() -> Result<(), IngesterError> {
             info!("Finish processing rollups...");
         }));
     }
+
+    let rollup_persister =
+        RollupPersister::new(rocks_storage.clone(), rollup_verifier::RollupVerifier {});
+    let rx = shutdown_rx.resubscribe();
+    mutexed_tasks.lock().await.spawn(async move {
+        info!("Start rollup perisster...");
+        rollup_persister.persist_rollups(rx).await
+    });
 
     start_metrics(
         metrics_state.registry,
