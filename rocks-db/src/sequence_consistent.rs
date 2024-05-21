@@ -46,9 +46,9 @@ impl SequenceConsistentManager for Storage {
 
 #[async_trait]
 impl LastProcessedSlotGetter for Storage {
-    async fn get_last_ingested_slot(&self) -> Result<Option<u64>, String> {
+    async fn get_last_ingested_slot(&self) -> Result<Option<u64>, interface::error::StorageError> {
         self.get_parameter::<u64>(crate::parameters::Parameter::TopSeenSlot)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.into())
     }
 }

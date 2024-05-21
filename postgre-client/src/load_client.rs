@@ -1,8 +1,8 @@
 use sqlx::{Execute, Postgres, QueryBuilder, Transaction};
 
 use crate::{
-    PgClient, ALTER_ACTION, COPY_ACTION, CREATE_ACTION, DROP_ACTION, INSERT_ACTION, SQL_COMPONENT,
-    TEMP_TABLE_PREFIX, TRUNCATE_ACTION,
+    error::IndexDbError, PgClient, ALTER_ACTION, COPY_ACTION, CREATE_ACTION, DROP_ACTION,
+    INSERT_ACTION, SQL_COMPONENT, TEMP_TABLE_PREFIX, TRUNCATE_ACTION,
 };
 
 impl PgClient {
@@ -12,7 +12,7 @@ impl PgClient {
         path: String,
         table: &str,
         columns: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("COPY ");
         query_builder.push(table);
         query_builder.push(" (");
@@ -29,7 +29,7 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
         query_builder.push(table);
         query_builder.push(" SELECT * FROM ");
@@ -46,7 +46,7 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("TRUNCATE ");
         query_builder.push(table);
         query_builder.push(";");
@@ -60,7 +60,7 @@ impl PgClient {
         query_builder: &mut QueryBuilder<'_, Postgres>,
         action: &str,
         endpoint: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let query = query_builder.build();
         tracing::trace!("Executing query: {:?}", query.sql());
         let start_time = chrono::Utc::now();
@@ -72,7 +72,7 @@ impl PgClient {
             }
             Err(err) => {
                 self.metrics.observe_error(SQL_COMPONENT, action, endpoint);
-                Err(err.to_string())
+                Err(err.into())
             }
         }
     }
@@ -81,7 +81,7 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         index: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("DROP INDEX ");
         query_builder.push(index);
         query_builder.push(";");
@@ -92,7 +92,7 @@ impl PgClient {
     pub async fn drop_indexes(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("ALTER TABLE assets_v3 DISABLE TRIGGER ALL;");
         self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "assets_v3")
@@ -127,7 +127,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         name: &str,
         on_query_string: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("CREATE INDEX ");
         query_builder.push(name);
         query_builder.push(" ON ");
@@ -139,7 +139,7 @@ impl PgClient {
     pub async fn recreate_indexes(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("ALTER TABLE assets_v3 ENABLE TRIGGER ALL;");
         self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "assets_v3")
@@ -176,7 +176,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         drop_on_commit: bool,
         prefix: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("CREATE TEMP TABLE ");
         query_builder.push(prefix);
         query_builder.push(main_table);
@@ -200,7 +200,7 @@ impl PgClient {
         asset_creators_copy_path: String,
         assets_copy_path: String,
         transaction: &mut Transaction<'_, Postgres>,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         self.drop_indexes(transaction).await?;
         for table in ["assets_v3", "asset_creators_v3"] {
             self.truncate_table(transaction, table).await?;

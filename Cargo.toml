@@ -15,6 +15,9 @@ members = [
   "integrity_verification"
 ]
 
+[workspace.dependencies]
+thiserror = { version = "1"}
+
 [profile.release]
 lto = true
 codegen-units = 1

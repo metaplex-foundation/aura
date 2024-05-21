@@ -9,6 +9,7 @@ use entities::models::RollupWithState;
 use entities::rollup::{BatchMintInstruction, RolledMintInstruction, Rollup};
 use interface::error::UsecaseError;
 use interface::rollup::{RollupDownloader, RollupTxSender};
+use metrics_utils::RollupProcessorMetricsConfig;
 use mockall::automock;
 use mpl_bubblegum::utils::get_asset_id;
 use postgre_client::model::RollupState;
@@ -21,9 +22,17 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
+use tokio::time::Instant;
 use tracing::{error, info};
 
 pub const MAX_ROLLUP_RETRIES: usize = 5;
+const SUCCESS_METRICS_LABEL: &str = "success";
+const VALIDATION_FAIL_METRICS_LABEL: &str = "validation_fail";
+const FAIL_READ_FILE_METRICS_LABEL: &str = "fail_read_file";
+const FAIL_BUILD_JSON_FROM_FILE_METRICS_LABEL: &str = "fail_build_json_from_file";
+const TRANSACTION_FAIL_METRICS_LABEL: &str = "transaction_fail";
+const ARWEAVE_UPLOAD_FAIL_METRICS_LABEL: &str = "arweave_upload_fail";
+const FILE_PROCESSING_METRICS_LABEL: &str = "rollup_file_processing";
 
 pub struct RollupDownloaderImpl {
     pg_client: Arc<PgClient>,
@@ -137,6 +146,7 @@ pub struct RollupProcessor<R: RollupTxSender, P: PermanentStorageClient> {
     permanent_storage_client: Arc<P>,
     rollup_tx_sender: Arc<R>,
     file_storage_path: String,
+    metrics: Arc<RollupProcessorMetricsConfig>,
 }
 
 impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
@@ -145,12 +155,14 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         rollup_tx_sender: Arc<R>,
         permanent_storage_client: Arc<P>,
         file_storage_path: String,
+        metrics: Arc<RollupProcessorMetricsConfig>,
     ) -> Self {
         Self {
             pg_client,
             permanent_storage_client,
             rollup_tx_sender,
             file_storage_path,
+            metrics,
         }
     }
 
@@ -184,6 +196,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         mut rollup_to_process: RollupWithState,
     ) -> Result<(), IngesterError> {
         info!("Processing {} rollup file", &rollup_to_process.file_name);
+        let start_time = Instant::now();
         let (rollup, file_size, file_checksum) = self.read_rollup_file(&rollup_to_process).await?;
         let mut metadata_url = String::new();
         while rx.is_empty() {
@@ -213,6 +226,11 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                         "Finish processing {} rollup file with {:?} state",
                         &rollup_to_process.file_name, &rollup_to_process.state
                     );
+                    self.metrics.inc_total_rollups(SUCCESS_METRICS_LABEL);
+                    self.metrics.set_processing_latency(
+                        FILE_PROCESSING_METRICS_LABEL,
+                        start_time.elapsed().as_millis() as f64,
+                    );
                     return Ok(());
                 }
             }
@@ -240,6 +258,8 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                     &rollup_to_process.file_name, err
                 );
             }
+            self.metrics
+                .inc_total_rollups(VALIDATION_FAIL_METRICS_LABEL);
             return Err(e.into());
         }
         if let Err(err) = self
@@ -264,9 +284,21 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         rollup_to_process: &mut RollupWithState,
         file_size: usize,
     ) -> Result<String, IngesterError> {
-        let (tx_id, reward) = self
+        let (tx_id, reward) = match self
             .upload_file_with_retry(&rollup_to_process.file_name, file_size)
-            .await?;
+            .await
+        {
+            Ok(response) => response,
+            Err(e) => {
+                self.metrics
+                    .inc_total_rollups(ARWEAVE_UPLOAD_FAIL_METRICS_LABEL);
+                error!(
+                    "Failed upload file to arweave: file_path: {}, error: {}",
+                    &rollup_to_process.file_name, e
+                );
+                return Err(e);
+            }
+        };
         let metadata_url = self.permanent_storage_client.get_metadata_url(&tx_id);
         if let Err(e) = self
             .pg_client
@@ -289,13 +321,23 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         rollup: &Rollup,
         file_checksum: &str,
     ) -> Result<(), IngesterError> {
-        self.send_rollup_tx_with_retry(
-            &rollup_to_process.file_name,
-            rollup,
-            metadata_url,
-            file_checksum,
-        )
-        .await?;
+        if let Err(e) = self
+            .send_rollup_tx_with_retry(
+                &rollup_to_process.file_name,
+                rollup,
+                metadata_url,
+                file_checksum,
+            )
+            .await
+        {
+            self.metrics
+                .inc_total_rollups(TRANSACTION_FAIL_METRICS_LABEL);
+            error!(
+                "Failed send solana transaction: file_path: {}, error: {}",
+                &rollup_to_process.file_name, e
+            );
+            return Err(e);
+        };
         if let Err(err) = self
             .pg_client
             .update_rollup_state(&rollup_to_process.file_name, RollupState::Complete)
@@ -326,6 +368,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                     "Failed to read file to string: file_path: {}, error: {}",
                     &rollup_to_process.file_name, e
                 );
+                self.metrics.inc_total_rollups(FAIL_READ_FILE_METRICS_LABEL);
                 return Err(e.into());
             }
         };
@@ -346,6 +389,8 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                         &rollup_to_process.file_name, e
                     );
                 }
+                self.metrics
+                    .inc_total_rollups(FAIL_BUILD_JSON_FROM_FILE_METRICS_LABEL);
                 return Err(e.into());
             }
         };

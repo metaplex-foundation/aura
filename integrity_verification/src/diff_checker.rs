@@ -255,7 +255,7 @@ where
             .keys_fetcher
             .get_verification_required_assets_keys()
             .await
-            .map_err(IntegrityVerificationError::FetchKeys)?;
+            .map_err(|e| IntegrityVerificationError::FetchKeys(e.to_string()))?;
 
         let requests = verification_required_keys
             .into_iter()
@@ -277,7 +277,7 @@ where
             .keys_fetcher
             .get_verification_required_assets_proof_keys()
             .await
-            .map_err(IntegrityVerificationError::FetchKeys)?;
+            .map_err(|e| IntegrityVerificationError::FetchKeys(e.to_string()))?;
 
         let requests = verification_required_keys
             .into_iter()
@@ -304,7 +304,7 @@ where
             .keys_fetcher
             .get_verification_required_authorities_keys()
             .await
-            .map_err(IntegrityVerificationError::FetchKeys)?;
+            .map_err(|e| IntegrityVerificationError::FetchKeys(e.to_string()))?;
 
         let requests = verification_required_keys
             .into_iter()
@@ -331,7 +331,7 @@ where
             .keys_fetcher
             .get_verification_required_owners_keys()
             .await
-            .map_err(IntegrityVerificationError::FetchKeys)?;
+            .map_err(|e| IntegrityVerificationError::FetchKeys(e.to_string()))?;
 
         let requests = verification_required_keys
             .into_iter()
@@ -358,7 +358,7 @@ where
             .keys_fetcher
             .get_verification_required_groups_keys()
             .await
-            .map_err(IntegrityVerificationError::FetchKeys)?;
+            .map_err(|e| IntegrityVerificationError::FetchKeys(e.to_string()))?;
 
         let requests = verification_required_keys
             .into_iter()
@@ -385,7 +385,7 @@ where
             .keys_fetcher
             .get_verification_required_creators_keys()
             .await
-            .map_err(IntegrityVerificationError::FetchKeys)?;
+            .map_err(|e| IntegrityVerificationError::FetchKeys(e.to_string()))?;
 
         let requests = verification_required_keys
             .into_iter()
