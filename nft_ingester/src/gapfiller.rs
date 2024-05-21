@@ -1,13 +1,12 @@
-use entities::models::RawBlock;
 use futures::StreamExt;
 use interface::asset_streaming_and_discovery::{AssetDetailsConsumer, RawBlocksConsumer};
 use log::error;
 use rocks_db::Storage;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use tokio::sync::broadcast::Receiver;
 
 pub async fn process_raw_blocks_stream(
-    keep_running: Arc<AtomicBool>,
+    rx: Receiver<()>,
     storage: Arc<Storage>,
     start_slot: u64,
     end_slot: u64,
@@ -26,20 +25,11 @@ pub async fn process_raw_blocks_stream(
 
     let mut processed_slots = 0;
     while let Some(result) = raw_blocks_streamer.next().await {
-        if !keep_running.load(Ordering::SeqCst) {
+        if !rx.is_empty() {
             break;
         }
         match result {
-            Ok(serialized_block) => {
-                // Deserialize block in order to check if all data transferred correctly
-                let block =
-                    match serde_cbor::from_slice::<RawBlock>(serialized_block.block.as_slice()) {
-                        Ok(block) => block,
-                        Err(e) => {
-                            error!("Error deserialize block: {}", e);
-                            continue;
-                        }
-                    };
+            Ok(block) => {
                 if let Some(e) = storage
                     .raw_blocks_cbor
                     .put_cbor_encoded(block.slot, block)
@@ -61,7 +51,7 @@ pub async fn process_raw_blocks_stream(
 }
 
 pub async fn process_asset_details_stream(
-    keep_running: Arc<AtomicBool>,
+    rx: Receiver<()>,
     storage: Arc<Storage>,
     start_slot: u64,
     end_slot: u64,
@@ -80,7 +70,7 @@ pub async fn process_asset_details_stream(
 
     let mut processed_assets = 0;
     while let Some(result) = asset_details_stream.next().await {
-        if !keep_running.load(Ordering::SeqCst) {
+        if !rx.is_empty() {
             break;
         }
         match result {

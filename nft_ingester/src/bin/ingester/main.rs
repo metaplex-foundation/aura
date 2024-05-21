@@ -431,13 +431,13 @@ pub async fn main() -> Result<(), IngesterError> {
         while first_processed_slot.load(Ordering::SeqCst) == 0 {
             tokio::time::sleep(Duration::from_millis(100)).await
         }
-        let cloned_keep_running = keep_running.clone();
+        let cloned_rx = shutdown_rx.resubscribe();
         let cloned_rocks_storage = rocks_storage.clone();
         mutexed_tasks.lock().await.spawn(async move {
             info!(
                 "Processed {} gaped slots",
                 process_asset_details_stream(
-                    cloned_keep_running.clone(),
+                    cloned_rx.resubscribe(),
                     cloned_rocks_storage.clone(),
                     last_saved_slot,
                     first_processed_slot.load(Ordering::SeqCst),
@@ -448,7 +448,7 @@ pub async fn main() -> Result<(), IngesterError> {
             info!(
                 "Processed {} raw blocks",
                 process_raw_blocks_stream(
-                    cloned_keep_running,
+                    cloned_rx,
                     cloned_rocks_storage,
                     last_saved_slot,
                     first_processed_slot.load(Ordering::SeqCst),

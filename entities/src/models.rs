@@ -380,11 +380,6 @@ pub struct RawBlock {
     pub block: solana_transaction_status::UiConfirmedBlock,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SerializedRawBlock {
-    pub block: Vec<u8>,
-}
-
 #[derive(Debug, Clone)]
 pub struct JsonDownloadTask {
     pub metadata_url: String,

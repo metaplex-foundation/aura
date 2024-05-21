@@ -6,7 +6,7 @@ use crate::gapfiller::{
 };
 use futures::{stream::Stream, StreamExt};
 use interface::asset_streaming_and_discovery::{
-    AssetDetailsStreamer, RawBlockGetter, RawBlocksStreamer,
+    AssetDetailsStreamer, AsyncError, RawBlockGetter, RawBlocksStreamer,
 };
 use interface::error::UsecaseError;
 use tonic::{async_trait, Request, Response, Status};
@@ -103,7 +103,11 @@ impl GapFillerService for PeerGapFillerServiceImpl {
 
         let response_stream = raw_blocks_stream.map(|result| {
             result
-                .map(|serialized_raw_block| serialized_raw_block.into())
+                .and_then(|serialized_raw_block| {
+                    serialized_raw_block
+                        .try_into()
+                        .map_err(|e| Box::new(e) as AsyncError)
+                })
                 .map_err(|e| Status::internal(format!("Streaming error: {}", e)))
         });
         Ok(Response::new(Box::pin(response_stream)))
@@ -115,7 +119,13 @@ impl GapFillerService for PeerGapFillerServiceImpl {
     ) -> Result<Response<RawBlock>, Status> {
         self.raw_block_getter
             .get_raw_block(request.into_inner().slot)
-            .map(|serialized_raw_block| Response::new(serialized_raw_block.into()))
+            .and_then(|serialized_raw_block| {
+                Ok(Response::new(
+                    serialized_raw_block
+                        .try_into()
+                        .map_err(|e| Box::new(e) as AsyncError)?,
+                ))
+            })
             .map_err(|e| Status::internal(format!("Get RawBlock error: {}", e)))
     }
 }

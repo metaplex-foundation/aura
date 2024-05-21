@@ -2,7 +2,7 @@ use crate::column::TypedColumn;
 use crate::errors::StorageError;
 use crate::Storage;
 use async_trait::async_trait;
-use entities::models::{RawBlock, SerializedRawBlock};
+use entities::models::RawBlock;
 use interface::asset_streaming_and_discovery::{
     AsyncError, RawBlockGetter, RawBlocksStream, RawBlocksStreamer,
 };
@@ -41,25 +41,21 @@ async fn process_raw_blocks_range(
     start_slot: u64,
     end_slot: u64,
     metrics: Arc<RequestErrorDurationMetrics>,
-    tx: tokio::sync::mpsc::Sender<Result<SerializedRawBlock, AsyncError>>,
+    tx: tokio::sync::mpsc::Sender<Result<RawBlock, AsyncError>>,
 ) -> Result<(), AsyncError> {
     let raw_blocks = Storage::column::<RawBlock>(backend.clone(), metrics.clone());
     let iterator = raw_blocks.iter(start_slot);
 
     for pair in iterator {
         let (key, value) = pair.map_err(|e| Box::new(e) as AsyncError)?;
+        let block = serde_cbor::from_slice::<RawBlock>(value.as_ref())
+            .map_err(|e| Box::new(e) as AsyncError)?;
         let slot = RawBlock::decode_key(key.to_vec()).map_err(|e| Box::new(e) as AsyncError)?;
         if slot > end_slot {
             break;
         }
 
-        if tx
-            .send(Ok(SerializedRawBlock {
-                block: value.to_vec(),
-            }))
-            .await
-            .is_err()
-        {
+        if tx.send(Ok(block)).await.is_err() {
             break; // Receiver is dropped
         }
     }
@@ -68,7 +64,7 @@ async fn process_raw_blocks_range(
 }
 
 impl RawBlockGetter for Storage {
-    fn get_raw_block(&self, slot: u64) -> Result<SerializedRawBlock, AsyncError> {
+    fn get_raw_block(&self, slot: u64) -> Result<RawBlock, AsyncError> {
         self.db
             .get_cf(
                 &self.db.cf_handle(RawBlock::NAME).unwrap(),
@@ -76,7 +72,7 @@ impl RawBlockGetter for Storage {
             )
             .map_err(|e| Box::new(e) as AsyncError)
             .and_then(|res| {
-                res.map(|r| SerializedRawBlock { block: r })
+                res.and_then(|r| serde_cbor::from_slice::<RawBlock>(r.as_slice()).ok())
                     .ok_or(Box::new(StorageError::NotFound) as AsyncError)
             })
     }

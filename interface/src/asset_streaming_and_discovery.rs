@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use entities::models::{CompleteAssetDetails, SerializedRawBlock};
+use entities::models::{CompleteAssetDetails, RawBlock};
 use futures::stream::Stream;
 use mockall::automock;
 use std::pin::Pin;
@@ -8,7 +8,7 @@ pub type AsyncError = Box<dyn std::error::Error + Send + Sync>;
 type AssetResult = Result<CompleteAssetDetails, AsyncError>;
 pub type AssetDetailsStream = Pin<Box<dyn Stream<Item = AssetResult> + Send + Sync>>;
 pub type AssetDetailsStreamNonSync = Pin<Box<dyn Stream<Item = AssetResult> + Send>>;
-type RawBlocksResult = Result<SerializedRawBlock, AsyncError>;
+type RawBlocksResult = Result<RawBlock, AsyncError>;
 pub type RawBlocksStream = Pin<Box<dyn Stream<Item = RawBlocksResult> + Send + Sync>>;
 pub type RawBlocksStreamNonSync = Pin<Box<dyn Stream<Item = RawBlocksResult> + Send>>;
 
@@ -59,5 +59,5 @@ pub trait RawBlocksConsumer: Send {
 
 #[automock]
 pub trait RawBlockGetter: Send + Sync {
-    fn get_raw_block(&self, slot: u64) -> Result<SerializedRawBlock, AsyncError>;
+    fn get_raw_block(&self, slot: u64) -> Result<RawBlock, AsyncError>;
 }

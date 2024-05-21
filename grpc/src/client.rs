@@ -78,7 +78,11 @@ impl RawBlocksConsumer for Client {
                 .into_inner()
                 .map(|stream| {
                     stream
-                        .map(|raw_block| raw_block.into())
+                        .and_then(|raw_block| {
+                            raw_block
+                                .try_into()
+                                .map_err(|e: GrpcError| Status::internal(e.to_string()))
+                        })
                         .map_err(|e| Box::new(e) as AsyncError)
                 }),
         ))

@@ -6,9 +6,7 @@ use crate::gapfiller::{
     MasterEdition, OffchainData, OwnerType, RawBlock, RoyaltyTargetType, SpecificationAssetClass,
     SpecificationVersions, TokenStandard, UpdateVersionValue, UseMethod, Uses,
 };
-use entities::models::{
-    CompleteAssetDetails, OffChainData, SerializedRawBlock, UpdateVersion, Updated,
-};
+use entities::models::{CompleteAssetDetails, OffChainData, UpdateVersion, Updated};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 
@@ -709,15 +707,21 @@ impl TryFrom<Uses> for entities::models::Uses {
     }
 }
 
-impl From<SerializedRawBlock> for RawBlock {
-    fn from(value: SerializedRawBlock) -> Self {
-        Self { block: value.block }
+impl TryFrom<entities::models::RawBlock> for RawBlock {
+    type Error = GrpcError;
+
+    fn try_from(value: entities::models::RawBlock) -> Result<Self, Self::Error> {
+        Ok(Self {
+            block: serde_cbor::to_vec(&value).map_err(Into::<GrpcError>::into)?,
+        })
     }
 }
 
-impl From<RawBlock> for SerializedRawBlock {
-    fn from(value: RawBlock) -> Self {
-        Self { block: value.block }
+impl TryFrom<RawBlock> for entities::models::RawBlock {
+    type Error = GrpcError;
+
+    fn try_from(value: RawBlock) -> Result<Self, Self::Error> {
+        serde_cbor::from_slice(value.block.as_slice()).map_err(Into::<GrpcError>::into)
     }
 }
 
