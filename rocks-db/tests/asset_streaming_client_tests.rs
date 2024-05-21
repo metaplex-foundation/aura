@@ -134,8 +134,7 @@ mod tests {
         let mut stream = response.unwrap();
         let resp = stream.next().await.unwrap().unwrap();
 
-        let block = serde_cbor::from_slice::<RawBlock>(resp.block.as_slice()).unwrap();
-        assert_eq!(block.slot, slot);
-        assert_eq!(block.block.blockhash, blockhash.to_string());
+        assert_eq!(resp.slot, slot);
+        assert_eq!(resp.block.blockhash, blockhash.to_string());
     }
 }

@@ -9,6 +9,7 @@ use interface::asset_streaming_and_discovery::{
 };
 use interface::error::StorageError;
 use interface::signature_persistence::BlockProducer;
+use rocks_db::Storage;
 use std::str::FromStr;
 use std::sync::Arc;
 use tonic::transport::{Channel, Uri};
@@ -94,9 +95,10 @@ impl BlockProducer for Client {
     async fn get_block(
         &self,
         slot: u64,
-        _backup_provider: Option<Arc<impl BlockProducer>>,
+        backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<solana_transaction_status::UiConfirmedBlock, StorageError> {
-        self.inner
+        if let Ok(block) = self
+            .inner
             .clone()
             .get_raw_block(GetRawBlockRequest { slot })
             .await
@@ -108,5 +110,15 @@ impl BlockProducer for Client {
                 .map_err(|e| StorageError::Common(e.to_string()))
                 .map(|raw_block| raw_block.block)
             })
+        {
+            return Ok(block);
+        }
+        if let Some(backup_provider) = backup_provider {
+            let none_bp: Option<Arc<Storage>> = None;
+            let block = backup_provider.get_block(slot, none_bp).await?;
+            tracing::info!("Got block from backup provider for slot: {}", slot);
+            return Ok(block);
+        }
+        Err(StorageError::NotFound)
     }
 }

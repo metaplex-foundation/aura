@@ -2880,6 +2880,7 @@ dependencies = [
  "interface",
  "mockall 0.12.1",
  "prost 0.12.6",
+ "rocks-db",
  "serde_cbor",
  "solana-sdk",
  "solana-transaction-status",
@@ -2887,6 +2888,7 @@ dependencies = [
  "tokio",
  "tonic 0.10.2",
  "tonic-build 0.10.2",
+ "tracing",
 ]
 
 [[package]]

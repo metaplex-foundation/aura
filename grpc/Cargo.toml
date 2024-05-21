@@ -17,6 +17,8 @@ async-trait = "0.1.74"
 thiserror = "1.0.31"
 solana-transaction-status = "~1.17"
 serde_cbor = "0.11.2"
+tracing = "0.1.40"
+rocks-db = { path = "../rocks-db" }
 
 [dev-dependencies]
 mockall = "0.12.0"
