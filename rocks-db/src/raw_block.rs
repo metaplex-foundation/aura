@@ -2,12 +2,11 @@ use std::sync::Arc;
 
 use crate::{column::TypedColumn, key_encoders, Storage};
 use async_trait::async_trait;
+use entities::models::RawBlock;
 use interface::{
     error::BlockConsumeError,
     signature_persistence::{BlockConsumer, BlockProducer},
 };
-use entities::models::RawBlock;
-use interface::signature_persistence::{BlockConsumer, BlockProducer};
 use log::error;
 
 impl TypedColumn for RawBlock {

@@ -69,6 +69,7 @@ impl From<StorageError> for interface::error::StorageError {
             StorageError::InvalidKeyLength => {
                 InterfaceStorageError::Common(String::from("InvalidKeyLength"))
             }
+            StorageError::NotFound => InterfaceStorageError::Common(String::from("NotFound")),
         }
     }
 }
