@@ -86,8 +86,8 @@ pub enum IntegrityVerificationError {
     ParsePubkey(#[from] ParsePubkeyError),
     #[error("Anchor {0}")]
     Anchor(#[from] anchor_lang::error::Error),
-    #[error("CannotCreateMerkleTree: depth [{0}], size [{1}]")]
-    CannotCreateMerkleTree(u32, u32),
+    #[error("RollupValidation: {0}")]
+    RollupValidation(String),
     #[error("TreeAccountNotFound {0}")]
     TreeAccountNotFound(String),
 }

@@ -1,4 +1,3 @@
-use crate::{_check_proof, check_proof};
 use async_trait::async_trait;
 use interface::proofs::ProofChecker;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -8,7 +7,6 @@ use spl_account_compression::canopy::fill_in_proof_from_canopy;
 use spl_account_compression::state::{
     merkle_tree_get_size, ConcurrentMerkleTreeHeader, CONCURRENT_MERKLE_TREE_HEADER_SIZE_V1,
 };
-use spl_account_compression::zero_copy::ZeroCopy;
 use std::sync::Arc;
 
 use anchor_lang::prelude::*;
@@ -91,5 +89,6 @@ pub fn validate_proofs(
         &mut initial_proofs,
     )?;
 
-    check_proof!(&header, &tree_bytes, initial_proofs, leaf, leaf_index)
+    crate::merkle_tree::check_proof(&header, &tree_bytes, initial_proofs, leaf, leaf_index)
+        .map_err(|e| IntegrityVerificationError::RollupValidation(e.to_string()))
 }

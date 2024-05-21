@@ -4949,7 +4949,6 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "setup",
- "solana-program",
  "solana-sdk",
  "sqlx",
  "testcontainers",
@@ -9053,6 +9052,7 @@ dependencies = [
  "solana-transaction-status",
  "spl-account-compression",
  "spl-concurrent-merkle-tree",
+ "thiserror",
  "tokio",
  "tracing",
 ]
