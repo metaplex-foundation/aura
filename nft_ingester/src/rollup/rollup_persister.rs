@@ -4,19 +4,24 @@ use async_trait::async_trait;
 use entities::{models::RollupToVerify, rollup::Rollup};
 use interface::{error::UsecaseError, rollup::RollupDownloader};
 use log::{error, info};
-use tokio::{sync::broadcast::Receiver, task::JoinError};
+use metrics_utils::{MetricStatus, RollupPersisterMetricsConfig};
+use tokio::{sync::broadcast::Receiver, task::JoinError, time::Instant};
 
 use crate::{bubblegum_updates_processor::BubblegumTxProcessor, error::IngesterError};
 
 use super::rollup_verifier::RollupVerifier;
 
-pub struct RollupPersister {
+pub struct RollupPersister<D: RollupDownloader> {
     rocks_client: Arc<rocks_db::Storage>,
     rollup_verifier: RollupVerifier,
+    downloader: D,
+    metrics: Arc<RollupPersisterMetricsConfig>,
 }
 
+pub struct RollupDownloaderForPersister{}
+
 #[async_trait]
-impl RollupDownloader for RollupPersister {
+impl RollupDownloader for RollupDownloaderForPersister {
     async fn download_rollup(&self, url: &str) -> Result<Box<Rollup>, UsecaseError> {
         let response = reqwest::get(url).await?.bytes().await?;
         Ok(Box::new(serde_json::from_slice(&response)?))
@@ -39,11 +44,13 @@ impl RollupDownloader for RollupPersister {
     }
 }
 
-impl RollupPersister {
-    pub fn new(rocks_client: Arc<rocks_db::Storage>, rollup_verifier: RollupVerifier) -> Self {
+impl<D: RollupDownloader> RollupPersister<D> {
+    pub fn new(rocks_client: Arc<rocks_db::Storage>, rollup_verifier: RollupVerifier, downloader: D, metrics: Arc<RollupPersisterMetricsConfig>,) -> Self {
         Self {
             rocks_client,
             rollup_verifier,
+            downloader,
+            metrics,
         }
     }
 
@@ -58,11 +65,21 @@ impl RollupPersister {
                                 continue;
                             }
                             Err(e) => {
+                                self.metrics.inc_total_rollups("rollup_fetch", MetricStatus::FAILURE);
                                 error!("Failed to fetch rollup for verifying: {}", e);
                                 continue;
                             }
                         };
-                        let _ = self.verify_rollup(rollup_to_verify).await;
+                        let start_time = Instant::now();
+                        if let Err(e) = self.verify_rollup(rollup_to_verify).await {
+                            error!("Error during rollup verification: {}", e.to_string());
+                            continue;
+                        }
+                        self.metrics.set_persisting_latency(
+                            "rollup_persisting",
+                            start_time.elapsed().as_millis() as f64,
+                        );
+                        self.metrics.inc_total_rollups("rollup_persisting", MetricStatus::SUCCESS);
                     },
                 _ = rx.recv() => {
                     info!("Received stop signal, stopping ...");
@@ -76,46 +93,42 @@ impl RollupPersister {
         &self,
         rollup_to_process: RollupToVerify,
     ) -> Result<(), IngesterError> {
-        // TODO: add retry
-        let rollup = self
-            .download_rollup_and_check_checksum(
-                rollup_to_process.url.unwrap().as_ref(),
-                &rollup_to_process.file_hash,
-            )
-            .await
-            .unwrap();
-
-        if let Err(e) = self.rollup_verifier.validate_rollup(rollup.as_ref()).await {
-            error!("Error while validating rollup: {}", e.to_string());
-        } else {
-            if let Err(e) = BubblegumTxProcessor::store_rollup_update(
-                rollup_to_process.created_at_slot,
-                rollup,
-                self.rocks_client.clone(),
-                rollup_to_process.signature,
-            )
-            .await
-            {
-                error!(
-                    "Error while saving rollup data to RocksDB: {}",
-                    e.to_string()
-                );
-            } else {
-                info!("All good, rollup is saved");
+        match self.downloader
+        .download_rollup_and_check_checksum(
+            rollup_to_process.url.unwrap().as_ref(),
+            &rollup_to_process.file_hash,
+        )
+        .await {
+            Ok(rollup) => {
+                if let Err(e) = self.rollup_verifier.validate_rollup(rollup.as_ref()).await {
+                    self.metrics.inc_total_rollups("rollup_validating", MetricStatus::FAILURE);
+                    error!("Error while validating rollup: {}", e.to_string());
+                } else {
+                    if let Err(e) = BubblegumTxProcessor::store_rollup_update(
+                        rollup_to_process.created_at_slot,
+                        rollup,
+                        self.rocks_client.clone(),
+                        rollup_to_process.signature,
+                    )
+                    .await {
+                        self.metrics.inc_total_rollups("rollup_persist", MetricStatus::FAILURE);
+                        return Err(IngesterError::DatabaseError(e.to_string()));
+                    }
+                }
+        
+                if let Err(e) = self
+                    .rocks_client
+                    .drop_rollup_from_queue(rollup_to_process.file_hash)
+                    .await
+                {
+                    self.metrics.inc_total_rollups("rollup_queue_clear", MetricStatus::FAILURE);
+                    return Err(IngesterError::DatabaseError(e.to_string()));
+                }
             }
-        }
-        // TODO: do not drop if there was error during rollup saving
-        if let Err(e) = self
-            .rocks_client
-            .drop_rollup_from_queue(rollup_to_process.file_hash)
-            .await
-        {
-            error!(
-                "Error while deleting rollup from the RocksDB queue: {}",
-                e.to_string()
-            );
-        } else {
-            info!("Rollup is successfully dropped from the queue");
+            Err(e) => {
+                self.metrics.inc_total_rollups("rollup_download", MetricStatus::FAILURE);
+                return Err(IngesterError::Usecase(e.to_string()));
+            }
         }
 
         Ok(())

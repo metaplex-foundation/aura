@@ -102,6 +102,7 @@ impl BubblegumTxProcessor {
             self.transaction_parser.clone(),
             self.metrics.clone(),
         )?;
+
         self.rocks_client
             .store_transaction_result(&result, true)
             .await
@@ -188,6 +189,7 @@ impl BubblegumTxProcessor {
                 SignatureWithSlot { signature, slot },
             )),
         };
+
         for (outer_ix, inner_ix) in instructions {
             let (program, instruction) = outer_ix;
             if program != mpl_bubblegum::programs::MPL_BUBBLEGUM_ID {
