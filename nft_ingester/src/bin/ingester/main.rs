@@ -888,8 +888,12 @@ pub async fn main() -> Result<(), IngesterError> {
         }));
     }
 
-    let rollup_persister =
-        RollupPersister::new(rocks_storage.clone(), rollup_verifier::RollupVerifier {}, rollup_persister::RollupDownloaderForPersister{}, metrics_state.rollup_persisting_metrics.clone());
+    let rollup_persister = RollupPersister::new(
+        rocks_storage.clone(),
+        rollup_verifier::RollupVerifier {},
+        rollup_persister::RollupDownloaderForPersister {},
+        metrics_state.rollup_persisting_metrics.clone(),
+    );
     let rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
         info!("Start rollup perisster...");

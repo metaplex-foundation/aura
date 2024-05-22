@@ -143,7 +143,7 @@ impl Storage {
                 if let Err(e) = self.rollup_to_verify.merge_with_batch(
                     batch,
                     rollup_update.file_hash.clone(),
-                    &rollup_update,
+                    rollup_update,
                 ) {
                     tracing::error!("Failed to merge rollup update data: {}", e);
                 }

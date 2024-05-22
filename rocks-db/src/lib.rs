@@ -235,7 +235,7 @@ impl Storage {
             Self::new_cf_descriptor::<TokenAccount>(),
             Self::new_cf_descriptor::<TokenAccountOwnerIdx>(),
             Self::new_cf_descriptor::<TokenAccountMintOwnerIdx>(),
-            Self::new_cf_descriptor::<RollupToVerify>()
+            Self::new_cf_descriptor::<RollupToVerify>(),
         ]
     }
 

@@ -330,24 +330,19 @@ impl BubblegumTxProcessor {
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
     ) -> Result<AssetUpdateEvent, IngesterError> {
-        if let Some(payload) = &parsing_result.payload {
-            match payload {
-                Payload::CreateTreeWithRoot { args, tree_id } => {
-                    let upd = AssetUpdateEvent {
-                        rollup_creation_update: Some(RollupToVerify {
-                            file_hash: args.metadata_hash.clone(),
-                            url: Some(args.metadata_url.clone()),
-                            created_at_slot: bundle.slot,
-                            signature: Signature::from_str(bundle.txn_id)
-                                .map_err(|e| IngesterError::ParseSignatureError(e.to_string()))?,
-                        }),
-                        ..Default::default()
-                    };
+        if let Some(Payload::CreateTreeWithRoot { args, .. }) = &parsing_result.payload {
+            let upd = AssetUpdateEvent {
+                rollup_creation_update: Some(RollupToVerify {
+                    file_hash: args.metadata_hash.clone(),
+                    url: Some(args.metadata_url.clone()),
+                    created_at_slot: bundle.slot,
+                    signature: Signature::from_str(bundle.txn_id)
+                        .map_err(|e| IngesterError::ParseSignatureError(e.to_string()))?,
+                }),
+                ..Default::default()
+            };
 
-                    return Ok(upd);
-                }
-                _ => {}
-            }
+            return Ok(upd);
         }
 
         Err(IngesterError::ParsingError(

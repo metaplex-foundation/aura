@@ -10,54 +10,54 @@ use async_trait::async_trait;
 use itertools::Itertools;
 use mpl_bubblegum::types::{LeafSchema, MetadataArgs};
 
+use digital_asset_types::rpc::AssetProof;
+use entities::api_req_params::GetAssetProof;
 use entities::enums::RollupState;
+use entities::models::BufferedTransaction;
 use entities::models::{RollupToVerify, RollupWithState};
 use entities::rollup::{
     BatchMintInstruction, ChangeLogEventV1, PathNode, RolledMintInstruction, Rollup,
 };
+use flatbuffers::FlatBufferBuilder;
 use interface::error::UsecaseError;
+use interface::rollup::MockRollupDownloader;
 use interface::rollup::RollupDownloader;
+use metrics_utils::ApiMetricsConfig;
+use metrics_utils::IngesterMetricsConfig;
+use metrics_utils::RollupPersisterMetricsConfig;
 use metrics_utils::RollupProcessorMetricsConfig;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
+use nft_ingester::config::JsonMiddlewareConfig;
 use nft_ingester::error::{IngesterError, RollupValidationError};
+use nft_ingester::json_worker::JsonWorker;
+use nft_ingester::rollup::rollup_persister::RollupPersister;
+use nft_ingester::rollup::rollup_processor;
 use nft_ingester::rollup::rollup_processor::{MockPermanentStorageClient, RollupProcessor};
+use nft_ingester::rollup::rollup_verifier::RollupVerifier;
+use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
 use rand::{thread_rng, Rng};
+use rocks_db::column::TypedColumn;
 use serde_json::json;
+use solana_program::instruction::CompiledInstruction;
+use solana_program::message::Message;
+use solana_program::message::MessageHeader;
 use solana_sdk::keccak;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
+use solana_sdk::transaction::SanitizedTransaction;
+use solana_sdk::transaction::Transaction;
+use solana_transaction_status::TransactionStatusMeta;
+use solana_transaction_status::{InnerInstruction, InnerInstructions};
 use spl_account_compression::ConcurrentMerkleTree;
+use std::collections::VecDeque;
 use tempfile::TempDir;
 use testcontainers::clients::Cli;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::broadcast;
-use uuid::Uuid;
-use solana_sdk::transaction::SanitizedTransaction;
-use solana_program::message::MessageHeader;
-use solana_program::instruction::CompiledInstruction;
-use plerkle_serialization::serializer::serialize_transaction;
-use nft_ingester::rollup::rollup_verifier::RollupVerifier;
-use nft_ingester::rollup::rollup_processor;
-use flatbuffers::FlatBufferBuilder;
-use solana_transaction_status::TransactionStatusMeta;
-use solana_program::message::Message;
-use solana_sdk::transaction::Transaction;
-use entities::models::BufferedTransaction;
 use tokio::sync::Mutex;
-use std::collections::VecDeque;
-use metrics_utils::IngesterMetricsConfig;
-use solana_transaction_status::{InnerInstructions, InnerInstruction};
-use rocks_db::column::TypedColumn;
-use interface::rollup::MockRollupDownloader;
-use nft_ingester::rollup::rollup_persister::RollupPersister;
 use usecase::proofs::MaybeProofChecker;
-use nft_ingester::json_worker::JsonWorker;
-use metrics_utils::ApiMetricsConfig;
-use nft_ingester::config::JsonMiddlewareConfig;
-use entities::api_req_params::GetAssetProof;
-use digital_asset_types::rpc::AssetProof;
-use metrics_utils::RollupPersisterMetricsConfig;
+use uuid::Uuid;
 
 fn generate_rollup(size: usize) -> Rollup {
     let authority = Pubkey::from_str("3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM").unwrap();
@@ -321,18 +321,22 @@ async fn save_rollup_to_queue_test() {
 
     let tasks = Arc::new(Mutex::new(VecDeque::new()));
 
-    let bubblegum_updates_processor = BubblegumTxProcessor::new(env.rocks_env.storage.clone(), Arc::new(IngesterMetricsConfig::new()), tasks.clone());
+    let bubblegum_updates_processor = BubblegumTxProcessor::new(
+        env.rocks_env.storage.clone(),
+        Arc::new(IngesterMetricsConfig::new()),
+        tasks.clone(),
+    );
 
     let metadata_url = "url".to_string();
     let metadata_hash = "hash".to_string();
 
     // arbitrary data
-    let rollup_instruction_data = mpl_bubblegum::instructions::CreateTreeWithRootInstructionArgs{
+    let rollup_instruction_data = mpl_bubblegum::instructions::CreateTreeWithRootInstructionArgs {
         max_depth: 8,
         max_buffer_size: 16,
         num_minted: 100,
-        root: [1;32],
-        leaf: [1;32],
+        root: [1; 32],
+        leaf: [1; 32],
         index: 99,
         metadata_url: metadata_url.clone(),
         metadata_hash: metadata_hash.clone(),
@@ -344,17 +348,22 @@ async fn save_rollup_to_queue_test() {
     let mut instruction_data = vec![101, 214, 253, 135, 176, 170, 11, 235];
     instruction_data.extend(rollup_instruction_data.try_to_vec().unwrap().iter());
 
-    let transaction = SanitizedTransaction::from_transaction_for_tests(Transaction{
+    let transaction = SanitizedTransaction::from_transaction_for_tests(Transaction {
         signatures: vec![Signature::new_unique()],
-        message: Message{
-            header: MessageHeader{
+        message: Message {
+            header: MessageHeader {
                 num_required_signatures: 1,
                 num_readonly_signed_accounts: 0,
                 num_readonly_unsigned_accounts: 0,
             },
-            account_keys: vec![Pubkey::new_unique(), Pubkey::from_str("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY").unwrap(), Pubkey::new_unique(), Pubkey::new_unique()],
-            recent_blockhash: [1;32].into(),
-            instructions: vec![CompiledInstruction{
+            account_keys: vec![
+                Pubkey::new_unique(),
+                Pubkey::from_str("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY").unwrap(),
+                Pubkey::new_unique(),
+                Pubkey::new_unique(),
+            ],
+            recent_blockhash: [1; 32].into(),
+            instructions: vec![CompiledInstruction {
                 program_id_index: 1,
                 accounts: vec![2, 3],
                 data: instruction_data,
@@ -363,11 +372,11 @@ async fn save_rollup_to_queue_test() {
     });
 
     // inner instruction is useless here but required by transaction parser
-    let transaction_status_meta = TransactionStatusMeta{
-        inner_instructions: Some(vec![InnerInstructions{
+    let transaction_status_meta = TransactionStatusMeta {
+        inner_instructions: Some(vec![InnerInstructions {
             index: 0,
-            instructions: vec![InnerInstruction{
-                instruction: CompiledInstruction{
+            instructions: vec![InnerInstruction {
+                instruction: CompiledInstruction {
                     program_id_index: 2,
                     accounts: vec![],
                     data: vec![],
@@ -378,24 +387,34 @@ async fn save_rollup_to_queue_test() {
         ..Default::default()
     };
 
-    let transaction_info = plerkle_serialization::solana_geyser_plugin_interface_shims::ReplicaTransactionInfoV2{
-        signature: &Signature::new_unique(),
-        is_vote: false,
-        transaction: &transaction,
-        transaction_status_meta: &transaction_status_meta,
-        index: 0,
-    };
+    let transaction_info =
+        plerkle_serialization::solana_geyser_plugin_interface_shims::ReplicaTransactionInfoV2 {
+            signature: &Signature::new_unique(),
+            is_vote: false,
+            transaction: &transaction,
+            transaction_status_meta: &transaction_status_meta,
+            index: 0,
+        };
     let builder = FlatBufferBuilder::new();
     let builder = serialize_transaction(builder, &transaction_info, 10);
 
-    let buffered_transaction = BufferedTransaction{
+    let buffered_transaction = BufferedTransaction {
         transaction: builder.finished_data().to_vec(),
         map_flatbuffer: false,
     };
 
-    bubblegum_updates_processor.process_transaction(buffered_transaction).await.unwrap();
+    bubblegum_updates_processor
+        .process_transaction(buffered_transaction)
+        .await
+        .unwrap();
 
-    let r = env.rocks_env.storage.rollup_to_verify.get(metadata_hash.clone()).unwrap().unwrap();
+    let r = env
+        .rocks_env
+        .storage
+        .rollup_to_verify
+        .get(metadata_hash.clone())
+        .unwrap()
+        .unwrap();
 
     assert_eq!(r.file_hash, metadata_hash);
     assert_eq!(r.url, Some(metadata_url));
@@ -423,38 +442,63 @@ async fn rollup_persister_test() {
         signature: Signature::new_unique(),
     };
 
-    env.rocks_env.storage.rollup_to_verify.put(metadata_hash.clone(), rollup_to_verify.clone()).unwrap();
+    env.rocks_env
+        .storage
+        .rollup_to_verify
+        .put(metadata_hash.clone(), rollup_to_verify.clone())
+        .unwrap();
 
     let mut mocked_downloader = MockRollupDownloader::new();
-    mocked_downloader.expect_download_rollup_and_check_checksum().returning(move |url, hash| {
-        let json_file = std::fs::read_to_string(tmp_dir.path().join("rollup-10.json")).unwrap();
-        Ok(Box::new(serde_json::from_str(&json_file).unwrap()))
-    });
+    mocked_downloader
+        .expect_download_rollup_and_check_checksum()
+        .returning(move |url, hash| {
+            let json_file = std::fs::read_to_string(tmp_dir.path().join("rollup-10.json")).unwrap();
+            Ok(Box::new(serde_json::from_str(&json_file).unwrap()))
+        });
 
-    let rollup_persister = RollupPersister::new(env.rocks_env.storage.clone(), RollupVerifier{}, mocked_downloader, Arc::new(RollupPersisterMetricsConfig::new()));
+    let rollup_persister = RollupPersister::new(
+        env.rocks_env.storage.clone(),
+        RollupVerifier {},
+        mocked_downloader,
+        Arc::new(RollupPersisterMetricsConfig::new()),
+    );
 
-    let rollup_to_verify = env.rocks_env.storage.fetch_rollup_for_verifying().await.unwrap().unwrap();
+    let rollup_to_verify = env
+        .rocks_env
+        .storage
+        .fetch_rollup_for_verifying()
+        .await
+        .unwrap()
+        .unwrap();
 
-    rollup_persister.verify_rollup(rollup_to_verify).await.unwrap();
+    rollup_persister
+        .verify_rollup(rollup_to_verify)
+        .await
+        .unwrap();
 
     let merkle_tree = generate_merkle_tree_from_rollup(&test_rollup);
 
-    let api =
-        nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-        );
+    let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+        env.pg_env.client.clone(),
+        env.rocks_env.storage.clone(),
+        Arc::new(ApiMetricsConfig::new()),
+        None,
+        50,
+        None,
+        None,
+        JsonMiddlewareConfig::default(),
+    );
 
     let leaf_index = 4u32;
 
     let payload = GetAssetProof {
-        id: test_rollup.rolled_mints.get(leaf_index as usize).unwrap().leaf_update.id().to_string(),
+        id: test_rollup
+            .rolled_mints
+            .get(leaf_index as usize)
+            .unwrap()
+            .leaf_update
+            .id()
+            .to_string(),
     };
     let proof_result = api.get_asset_proof(payload).await.unwrap();
     let asset_proof: AssetProof = serde_json::from_value(proof_result).unwrap();
@@ -465,10 +509,36 @@ async fn rollup_persister_test() {
         proofs[i] = Pubkey::from_str(s).unwrap().to_bytes();
     }
 
-    assert_eq!(merkle_tree.check_valid_proof(Pubkey::from_str(asset_proof.leaf.as_str()).unwrap().to_bytes(), &proofs, leaf_index), true);
-    assert_eq!(merkle_tree.check_valid_proof(Pubkey::from_str(asset_proof.leaf.as_str()).unwrap().to_bytes(), &proofs, leaf_index+1), false);
+    assert_eq!(
+        merkle_tree.check_valid_proof(
+            Pubkey::from_str(asset_proof.leaf.as_str())
+                .unwrap()
+                .to_bytes(),
+            &proofs,
+            leaf_index
+        ),
+        true
+    );
+    assert_eq!(
+        merkle_tree.check_valid_proof(
+            Pubkey::from_str(asset_proof.leaf.as_str())
+                .unwrap()
+                .to_bytes(),
+            &proofs,
+            leaf_index + 1
+        ),
+        false
+    );
 
-    assert_eq!(env.rocks_env.storage.rollup_to_verify.get(metadata_hash.clone()).unwrap().is_none(), true);
+    assert_eq!(
+        env.rocks_env
+            .storage
+            .rollup_to_verify
+            .get(metadata_hash.clone())
+            .unwrap()
+            .is_none(),
+        true
+    );
 }
 
 #[tokio::test]
@@ -512,7 +582,7 @@ async fn rollup_processing_validation_test() {
     let rollup_processor = RollupProcessor::new(
         env.pg_env.client.clone(),
         Arc::new(nft_ingester::rollup::rollup_processor::NoopRollupTxSender {}),
-        RollupVerifier{},
+        RollupVerifier {},
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
         Arc::new(RollupProcessorMetricsConfig::new()),
@@ -785,7 +855,7 @@ async fn rollup_upload_test() {
     let rollup_processor = RollupProcessor::new(
         env.pg_env.client.clone(),
         Arc::new(nft_ingester::rollup::rollup_processor::NoopRollupTxSender {}),
-        RollupVerifier{},
+        RollupVerifier {},
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
         Arc::new(RollupProcessorMetricsConfig::new()),
@@ -819,12 +889,12 @@ async fn rollup_upload_test() {
     let rollup_processor = RollupProcessor::new(
         env.pg_env.client.clone(),
         Arc::new(nft_ingester::rollup::rollup_processor::NoopRollupTxSender {}),
-        RollupVerifier{},
+        RollupVerifier {},
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
         Arc::new(RollupProcessorMetricsConfig::new()),
     );
-    
+
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
     let processing_result = rollup_processor
         .process_rollup(

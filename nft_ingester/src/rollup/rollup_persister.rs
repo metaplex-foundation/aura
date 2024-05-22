@@ -18,7 +18,7 @@ pub struct RollupPersister<D: RollupDownloader> {
     metrics: Arc<RollupPersisterMetricsConfig>,
 }
 
-pub struct RollupDownloaderForPersister{}
+pub struct RollupDownloaderForPersister {}
 
 #[async_trait]
 impl RollupDownloader for RollupDownloaderForPersister {
@@ -45,7 +45,12 @@ impl RollupDownloader for RollupDownloaderForPersister {
 }
 
 impl<D: RollupDownloader> RollupPersister<D> {
-    pub fn new(rocks_client: Arc<rocks_db::Storage>, rollup_verifier: RollupVerifier, downloader: D, metrics: Arc<RollupPersisterMetricsConfig>,) -> Self {
+    pub fn new(
+        rocks_client: Arc<rocks_db::Storage>,
+        rollup_verifier: RollupVerifier,
+        downloader: D,
+        metrics: Arc<RollupPersisterMetricsConfig>,
+    ) -> Self {
         Self {
             rocks_client,
             rollup_verifier,
@@ -93,40 +98,45 @@ impl<D: RollupDownloader> RollupPersister<D> {
         &self,
         rollup_to_process: RollupToVerify,
     ) -> Result<(), IngesterError> {
-        match self.downloader
-        .download_rollup_and_check_checksum(
-            rollup_to_process.url.unwrap().as_ref(),
-            &rollup_to_process.file_hash,
-        )
-        .await {
+        match self
+            .downloader
+            .download_rollup_and_check_checksum(
+                rollup_to_process.url.unwrap().as_ref(),
+                &rollup_to_process.file_hash,
+            )
+            .await
+        {
             Ok(rollup) => {
                 if let Err(e) = self.rollup_verifier.validate_rollup(rollup.as_ref()).await {
-                    self.metrics.inc_total_rollups("rollup_validating", MetricStatus::FAILURE);
+                    self.metrics
+                        .inc_total_rollups("rollup_validating", MetricStatus::FAILURE);
                     error!("Error while validating rollup: {}", e.to_string());
-                } else {
-                    if let Err(e) = BubblegumTxProcessor::store_rollup_update(
-                        rollup_to_process.created_at_slot,
-                        rollup,
-                        self.rocks_client.clone(),
-                        rollup_to_process.signature,
-                    )
-                    .await {
-                        self.metrics.inc_total_rollups("rollup_persist", MetricStatus::FAILURE);
-                        return Err(IngesterError::DatabaseError(e.to_string()));
-                    }
+                } else if let Err(e) = BubblegumTxProcessor::store_rollup_update(
+                    rollup_to_process.created_at_slot,
+                    rollup,
+                    self.rocks_client.clone(),
+                    rollup_to_process.signature,
+                )
+                .await
+                {
+                    self.metrics
+                        .inc_total_rollups("rollup_persist", MetricStatus::FAILURE);
+                    return Err(IngesterError::DatabaseError(e.to_string()));
                 }
-        
+
                 if let Err(e) = self
                     .rocks_client
                     .drop_rollup_from_queue(rollup_to_process.file_hash)
                     .await
                 {
-                    self.metrics.inc_total_rollups("rollup_queue_clear", MetricStatus::FAILURE);
+                    self.metrics
+                        .inc_total_rollups("rollup_queue_clear", MetricStatus::FAILURE);
                     return Err(IngesterError::DatabaseError(e.to_string()));
                 }
             }
             Err(e) => {
-                self.metrics.inc_total_rollups("rollup_download", MetricStatus::FAILURE);
+                self.metrics
+                    .inc_total_rollups("rollup_download", MetricStatus::FAILURE);
                 return Err(IngesterError::Usecase(e.to_string()));
             }
         }
