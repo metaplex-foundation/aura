@@ -61,11 +61,10 @@ impl Storage {
     pub async fn fetch_rollup_for_verifying(&self) -> Result<Option<RollupToVerify>> {
         let mut iter = self.rollup_to_verify.iter_start();
 
-        // TODO: change error
         let first_value = iter
             .next()
             .transpose()
-            .map_err(|e| StorageError::Common(e.to_string()))?
+            .map_err(StorageError::RocksDb)?
             .map(|(_, value)| bincode::deserialize::<RollupToVerify>(value.as_ref()))
             .transpose()?;
 

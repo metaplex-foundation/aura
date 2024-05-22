@@ -896,7 +896,7 @@ pub async fn main() -> Result<(), IngesterError> {
     );
     let rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
-        info!("Start rollup perisster...");
+        info!("Start rollup persister...");
         rollup_persister.persist_rollups(rx).await
     });
 

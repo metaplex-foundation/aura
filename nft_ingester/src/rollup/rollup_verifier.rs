@@ -8,7 +8,6 @@ use solana_sdk::{
 
 use crate::{error::RollupValidationError, tree_macros::validate_change_logs};
 
-// TODO: make an interface
 pub struct RollupVerifier;
 
 impl RollupVerifier {
