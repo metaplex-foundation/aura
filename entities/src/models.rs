@@ -394,9 +394,10 @@ pub struct RollupWithState {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RollupToVerify {
     pub file_hash: String,
-    pub url: Option<String>, // TODO: not sure it should be Option
+    pub url: String,
     pub created_at_slot: u64,
     pub signature: Signature,
+    pub download_attempts: u8,
 }
 
 impl Default for JsonDownloadTask {

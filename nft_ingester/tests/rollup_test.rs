@@ -30,7 +30,7 @@ use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::config::JsonMiddlewareConfig;
 use nft_ingester::error::{IngesterError, RollupValidationError};
 use nft_ingester::json_worker::JsonWorker;
-use nft_ingester::rollup::rollup_persister::RollupPersister;
+use nft_ingester::rollup::rollup_persister::{RollupPersister, MAX_ROLLUP_DOWNLOAD_ATTEMPTS};
 use nft_ingester::rollup::rollup_processor;
 use nft_ingester::rollup::rollup_processor::{MockPermanentStorageClient, RollupProcessor};
 use nft_ingester::rollup::rollup_verifier::RollupVerifier;
@@ -417,7 +417,7 @@ async fn save_rollup_to_queue_test() {
         .unwrap();
 
     assert_eq!(r.file_hash, metadata_hash);
-    assert_eq!(r.url, Some(metadata_url));
+    assert_eq!(r.url, metadata_url);
 }
 
 #[tokio::test]
@@ -430,16 +430,17 @@ async fn rollup_persister_test() {
 
     let tmp_dir = tempfile::TempDir::new().unwrap();
 
-    let mut tmp_file = File::create(tmp_dir.path().join("rollup-10.json")).unwrap();
+    let tmp_file = File::create(tmp_dir.path().join("rollup-10.json")).unwrap();
     serde_json::to_writer(tmp_file, &test_rollup).unwrap();
 
     let metadata_url = "url".to_string();
     let metadata_hash = "hash".to_string();
     let rollup_to_verify = RollupToVerify {
         file_hash: metadata_hash.clone(),
-        url: Some(metadata_url.clone()),
+        url: metadata_url.clone(),
         created_at_slot: 10,
         signature: Signature::new_unique(),
+        download_attempts: 0,
     };
 
     env.rocks_env
@@ -451,7 +452,7 @@ async fn rollup_persister_test() {
     let mut mocked_downloader = MockRollupDownloader::new();
     mocked_downloader
         .expect_download_rollup_and_check_checksum()
-        .returning(move |url, hash| {
+        .returning(move |_, _| {
             let json_file = std::fs::read_to_string(tmp_dir.path().join("rollup-10.json")).unwrap();
             Ok(Box::new(serde_json::from_str(&json_file).unwrap()))
         });
@@ -539,6 +540,135 @@ async fn rollup_persister_test() {
             .is_none(),
         true
     );
+}
+
+#[tokio::test]
+async fn rollup_persister_download_fail_test() {
+    let cnt = 0;
+    let cli = Cli::default();
+    let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+
+    let test_rollup = generate_rollup(10);
+
+    let tmp_dir = tempfile::TempDir::new().unwrap();
+
+    let tmp_file = File::create(tmp_dir.path().join("rollup-10.json")).unwrap();
+    serde_json::to_writer(tmp_file, &test_rollup).unwrap();
+
+    let download_attempts = 0;
+
+    let metadata_url = "url".to_string();
+    let metadata_hash = "hash".to_string();
+    let rollup_to_verify = RollupToVerify {
+        file_hash: metadata_hash.clone(),
+        url: metadata_url.clone(),
+        created_at_slot: 10,
+        signature: Signature::new_unique(),
+        download_attempts,
+    };
+
+    env.rocks_env
+        .storage
+        .rollup_to_verify
+        .put(metadata_hash.clone(), rollup_to_verify.clone())
+        .unwrap();
+
+    let mut mocked_downloader = MockRollupDownloader::new();
+    mocked_downloader
+        .expect_download_rollup_and_check_checksum()
+        .returning(move |_, _| Err(UsecaseError::Reqwest("Could not download file".to_string())));
+
+    let rollup_persister = RollupPersister::new(
+        env.rocks_env.storage.clone(),
+        RollupVerifier {},
+        mocked_downloader,
+        Arc::new(RollupPersisterMetricsConfig::new()),
+    );
+
+    let rollup_to_verify = env
+        .rocks_env
+        .storage
+        .fetch_rollup_for_verifying()
+        .await
+        .unwrap()
+        .unwrap();
+
+    // ignoring error here because check the result later
+    let _ = rollup_persister.verify_rollup(rollup_to_verify).await;
+
+    let r = env
+        .rocks_env
+        .storage
+        .rollup_to_verify
+        .get(metadata_hash.clone())
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(r.download_attempts, download_attempts + 1);
+}
+
+#[tokio::test]
+async fn rollup_persister_drop_from_queue_after_download_fail_test() {
+    let cnt = 0;
+    let cli = Cli::default();
+    let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+
+    let test_rollup = generate_rollup(10);
+
+    let tmp_dir = tempfile::TempDir::new().unwrap();
+
+    let tmp_file = File::create(tmp_dir.path().join("rollup-10.json")).unwrap();
+    serde_json::to_writer(tmp_file, &test_rollup).unwrap();
+
+    let download_attempts = MAX_ROLLUP_DOWNLOAD_ATTEMPTS;
+
+    let metadata_url = "url".to_string();
+    let metadata_hash = "hash".to_string();
+    let rollup_to_verify = RollupToVerify {
+        file_hash: metadata_hash.clone(),
+        url: metadata_url.clone(),
+        created_at_slot: 10,
+        signature: Signature::new_unique(),
+        download_attempts,
+    };
+
+    env.rocks_env
+        .storage
+        .rollup_to_verify
+        .put(metadata_hash.clone(), rollup_to_verify.clone())
+        .unwrap();
+
+    let mut mocked_downloader = MockRollupDownloader::new();
+    mocked_downloader
+        .expect_download_rollup_and_check_checksum()
+        .returning(move |_, _| Err(UsecaseError::Reqwest("Could not download file".to_string())));
+
+    let rollup_persister = RollupPersister::new(
+        env.rocks_env.storage.clone(),
+        RollupVerifier {},
+        mocked_downloader,
+        Arc::new(RollupPersisterMetricsConfig::new()),
+    );
+
+    let rollup_to_verify = env
+        .rocks_env
+        .storage
+        .fetch_rollup_for_verifying()
+        .await
+        .unwrap()
+        .unwrap();
+
+    // ignoring error here because check the result later
+    let _ = rollup_persister.verify_rollup(rollup_to_verify).await;
+
+    let r = env
+        .rocks_env
+        .storage
+        .rollup_to_verify
+        .get(metadata_hash.clone())
+        .unwrap();
+
+    assert_eq!(r.is_none(), true);
 }
 
 #[tokio::test]

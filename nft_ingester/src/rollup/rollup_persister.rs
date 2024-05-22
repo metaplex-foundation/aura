@@ -11,6 +11,8 @@ use crate::{bubblegum_updates_processor::BubblegumTxProcessor, error::IngesterEr
 
 use super::rollup_verifier::RollupVerifier;
 
+pub const MAX_ROLLUP_DOWNLOAD_ATTEMPTS: u8 = 5;
+
 pub struct RollupPersister<D: RollupDownloader> {
     rocks_client: Arc<rocks_db::Storage>,
     rollup_verifier: RollupVerifier,
@@ -101,7 +103,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
         match self
             .downloader
             .download_rollup_and_check_checksum(
-                rollup_to_process.url.unwrap().as_ref(),
+                rollup_to_process.url.as_ref(),
                 &rollup_to_process.file_hash,
             )
             .await
@@ -126,7 +128,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
 
                 if let Err(e) = self
                     .rocks_client
-                    .drop_rollup_from_queue(rollup_to_process.file_hash)
+                    .drop_rollup_from_queue(rollup_to_process.file_hash.clone())
                     .await
                 {
                     self.metrics
@@ -137,6 +139,33 @@ impl<D: RollupDownloader> RollupPersister<D> {
             Err(e) => {
                 self.metrics
                     .inc_total_rollups("rollup_download", MetricStatus::FAILURE);
+
+                if rollup_to_process.download_attempts + 1 > MAX_ROLLUP_DOWNLOAD_ATTEMPTS {
+                    if let Err(e) = self
+                        .rocks_client
+                        .drop_rollup_from_queue(rollup_to_process.file_hash)
+                        .await
+                    {
+                        self.metrics
+                            .inc_total_rollups("rollup_queue_clear", MetricStatus::FAILURE);
+                        return Err(IngesterError::DatabaseError(e.to_string()));
+                    }
+                } else {
+                    if let Err(e) = self.rocks_client.rollup_to_verify.put(
+                        rollup_to_process.file_hash.clone(),
+                        RollupToVerify {
+                            download_attempts: rollup_to_process.download_attempts + 1,
+                            ..rollup_to_process
+                        },
+                    ) {
+                        self.metrics
+                            .inc_total_rollups("rollup_attempts_update", MetricStatus::FAILURE);
+                        return Err(IngesterError::DatabaseError(e.to_string()));
+                    }
+                    self.metrics
+                        .inc_total_rollups("rollup_attempts_update", MetricStatus::SUCCESS);
+                }
+
                 return Err(IngesterError::Usecase(e.to_string()));
             }
         }

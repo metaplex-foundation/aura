@@ -334,10 +334,11 @@ impl BubblegumTxProcessor {
             let upd = AssetUpdateEvent {
                 rollup_creation_update: Some(RollupToVerify {
                     file_hash: args.metadata_hash.clone(),
-                    url: Some(args.metadata_url.clone()),
+                    url: args.metadata_url.clone(),
                     created_at_slot: bundle.slot,
                     signature: Signature::from_str(bundle.txn_id)
                         .map_err(|e| IngesterError::ParseSignatureError(e.to_string()))?,
+                    download_attempts: 0,
                 }),
                 ..Default::default()
             };
