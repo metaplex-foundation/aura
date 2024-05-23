@@ -5,6 +5,7 @@ use rocks_db::Storage;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
 
+/// Method returns the number of successfully processed assets
 pub async fn process_raw_blocks_stream(
     rx: Receiver<()>,
     storage: Arc<Storage>,
@@ -50,6 +51,7 @@ pub async fn process_raw_blocks_stream(
     processed_slots
 }
 
+/// Method returns the number of successfully processed slots
 pub async fn process_asset_details_stream(
     rx: Receiver<()>,
     storage: Arc<Storage>,

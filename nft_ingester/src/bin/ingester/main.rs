@@ -428,36 +428,34 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     };
     if let Some(gaped_data_client) = grpc_client.clone() {
-        while first_processed_slot.load(Ordering::SeqCst) == 0 {
+        let cloned_rx = shutdown_rx.resubscribe();
+        while first_processed_slot.load(Ordering::SeqCst) == 0 && cloned_rx.is_empty() {
             tokio::time::sleep(Duration::from_millis(100)).await
         }
-        let cloned_rx = shutdown_rx.resubscribe();
         let cloned_rocks_storage = rocks_storage.clone();
-        mutexed_tasks.lock().await.spawn(async move {
-            info!(
-                "Processed {} gaped slots",
-                process_asset_details_stream(
+        if cloned_rx.is_empty() {
+            mutexed_tasks.lock().await.spawn(async move {
+                let processed_assets = process_asset_details_stream(
                     cloned_rx.resubscribe(),
                     cloned_rocks_storage.clone(),
                     last_saved_slot,
                     first_processed_slot.load(Ordering::SeqCst),
                     gaped_data_client.clone(),
                 )
-                .await
-            );
-            info!(
-                "Processed {} raw blocks",
-                process_raw_blocks_stream(
+                .await;
+                info!("Processed {} gaped slots", processed_assets);
+                let processed_raw_blocks = process_raw_blocks_stream(
                     cloned_rx,
                     cloned_rocks_storage,
                     last_saved_slot,
                     first_processed_slot.load(Ordering::SeqCst),
                     gaped_data_client,
                 )
-                .await
-            );
-            Ok(())
-        });
+                .await;
+                info!("Processed {} raw blocks", processed_raw_blocks);
+                Ok(())
+            });
+        }
     };
 
     let cloned_rocks_storage = rocks_storage.clone();
