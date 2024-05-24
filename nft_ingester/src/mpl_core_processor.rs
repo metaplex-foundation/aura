@@ -5,7 +5,6 @@ use crate::process_accounts;
 use blockbuster::mpl_core::types::{Plugin, PluginAuthority, PluginType, UpdateAuthority};
 use blockbuster::programs::mpl_core_program::MplCoreAccountData;
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::Task;
 use entities::models::{ChainDataV1, UpdateVersion, Updated};
 use heck::ToSnakeCase;
 use metrics_utils::IngesterMetricsConfig;
@@ -96,15 +95,9 @@ impl MplCoreProcessor {
         };
 
         let begin_processing = Instant::now();
-        let _ = tokio::join!(
-            self.rocks_db
-                .store_metadata_models(&metadata_models, self.metrics.clone()),
-            self.pg_client.store_tasks(
-                self.buffer.json_tasks.clone(),
-                &metadata_models.tasks,
-                self.metrics.clone()
-            )
-        );
+        self.rocks_db
+            .store_metadata_models(&metadata_models, self.metrics.clone())
+            .await;
         self.metrics.set_latency(
             "mpl_core_asset",
             begin_processing.elapsed().as_millis() as f64,
@@ -299,16 +292,6 @@ impl MplCoreProcessor {
                 ),
                 ..Default::default()
             });
-            if !uri.is_empty() {
-                models.tasks.push(Task {
-                    ofd_metadata_url: uri.clone(),
-                    ofd_locked_until: Some(chrono::Utc::now()),
-                    ofd_attempts: 0,
-                    ofd_max_attempts: 10,
-                    ofd_error: None,
-                    ofd_status: Default::default(),
-                });
-            }
             models.asset_dynamic.push(AssetDynamicDetails {
                 pubkey: *asset_key,
                 is_compressible: Updated::new(

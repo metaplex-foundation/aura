@@ -15,7 +15,7 @@ use tokio::time::Instant;
 use crate::buffer::Buffer;
 use entities::enums::{ChainMutability, RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::Updated;
-use entities::models::{ChainDataV1, Creator, Task, UpdateVersion, Uses};
+use entities::models::{ChainDataV1, Creator, UpdateVersion, Uses};
 use metrics_utils::IngesterMetricsConfig;
 use postgre_client::PgClient;
 use rocks_db::asset::{
@@ -205,15 +205,9 @@ impl MplxAccsProcessor {
         let metadata_models = self.create_rocks_metadata_models(metadata_info).await;
 
         let begin_processing = Instant::now();
-        let _ = tokio::join!(
-            self.rocks_db
-                .store_metadata_models(&metadata_models, self.metrics.clone()),
-            self.pg_client.store_tasks(
-                self.buffer.json_tasks.clone(),
-                &metadata_models.tasks,
-                self.metrics.clone()
-            )
-        );
+        self.rocks_db
+            .store_metadata_models(&metadata_models, self.metrics.clone())
+            .await;
         self.metrics.set_latency(
             "accounts_saving",
             begin_processing.elapsed().as_millis() as f64,
@@ -381,15 +375,6 @@ impl MplxAccsProcessor {
                     Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
                     metadata_info.rent_epoch,
                 )),
-                ..Default::default()
-            });
-
-            models.tasks.push(Task {
-                ofd_metadata_url: uri.clone(),
-                ofd_locked_until: Some(chrono::Utc::now()),
-                ofd_attempts: 0,
-                ofd_max_attempts: 10,
-                ofd_error: None,
                 ..Default::default()
             });
 
