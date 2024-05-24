@@ -9,7 +9,6 @@ use interface::asset_streaming_and_discovery::{
 };
 use interface::error::StorageError;
 use interface::signature_persistence::BlockProducer;
-use rocks_db::Storage;
 use std::str::FromStr;
 use std::sync::Arc;
 use tonic::transport::{Channel, Uri};
@@ -114,7 +113,7 @@ impl BlockProducer for Client {
             return Ok(block);
         }
         if let Some(backup_provider) = backup_provider {
-            let none_bp: Option<Arc<Storage>> = None;
+            let none_bp: Option<Arc<Client>> = None;
             let block = backup_provider.get_block(slot, none_bp).await?;
             tracing::info!("Got block from backup provider for slot: {}", slot);
             return Ok(block);
