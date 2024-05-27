@@ -347,7 +347,6 @@ mod tests {
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
         let mpl_core_parser = MplCoreProcessor::new(
             env.rocks_env.storage.clone(),
-            env.pg_env.client.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,

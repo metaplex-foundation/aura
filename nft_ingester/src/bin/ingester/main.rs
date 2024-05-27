@@ -312,7 +312,6 @@ pub async fn main() -> Result<(), IngesterError> {
     );
     let mpl_core_parser = MplCoreProcessor::new(
         rocks_storage.clone(),
-        index_storage.clone(),
         buffer.clone(),
         metrics_state.ingester_metrics.clone(),
         config.mpl_core_buffer_size,

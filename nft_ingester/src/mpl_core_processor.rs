@@ -8,7 +8,6 @@ use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, Specificati
 use entities::models::{ChainDataV1, UpdateVersion, Updated};
 use heck::ToSnakeCase;
 use metrics_utils::IngesterMetricsConfig;
-use postgre_client::PgClient;
 use rocks_db::asset::AssetCollection;
 use rocks_db::batch_savers::MetadataModels;
 use rocks_db::errors::StorageError;
@@ -28,7 +27,6 @@ use usecase::save_metrics::result_to_metrics;
 #[derive(Clone)]
 pub struct MplCoreProcessor {
     pub rocks_db: Arc<Storage>,
-    pub pg_client: Arc<PgClient>,
     pub batch_size: usize,
 
     pub buffer: Arc<Buffer>,
@@ -40,14 +38,12 @@ pub struct MplCoreProcessor {
 impl MplCoreProcessor {
     pub fn new(
         rocks_db: Arc<Storage>,
-        pg_client: Arc<PgClient>,
         buffer: Arc<Buffer>,
         metrics: Arc<IngesterMetricsConfig>,
         batch_size: usize,
     ) -> Self {
         Self {
             rocks_db,
-            pg_client,
             buffer,
             metrics,
             batch_size,
