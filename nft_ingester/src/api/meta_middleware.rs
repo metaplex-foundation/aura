@@ -22,7 +22,7 @@ impl RpcMetaMiddleware {
     fn cannot_service_request() -> Option<Output> {
         Some(Output::Failure(Failure {
             jsonrpc: Some(Version::V2),
-            error: usecase::error::cannot_service_request_error(),
+            error: crate::api::error::cannot_service_request_error(),
             id: jsonrpc_core::types::id::Id::Null,
         }))
     }

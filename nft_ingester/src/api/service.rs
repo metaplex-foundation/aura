@@ -19,7 +19,7 @@ use interface::consistency_check::ConsistencyChecker;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 
-use usecase::error::DasApiError;
+use crate::api::error::DasApiError;
 use {crate::api::DasApi, std::net::SocketAddr};
 use {
     jsonrpc_http_server::cors::AccessControlAllowHeaders,

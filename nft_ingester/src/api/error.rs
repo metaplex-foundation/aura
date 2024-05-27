@@ -1,6 +1,6 @@
-use anchor_lang::prelude::thiserror::Error;
 use jsonrpc_core::ErrorCode;
 use log::error;
+use thiserror::Error;
 
 use interface::error::UsecaseError;
 

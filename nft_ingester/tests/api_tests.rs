@@ -33,6 +33,7 @@ mod tests {
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig};
     use mockall::predicate;
     use mpl_token_metadata::accounts::MasterEdition;
+    use nft_ingester::api::error::DasApiError;
     use nft_ingester::{
         buffer::Buffer,
         config::JsonMiddlewareConfig,
@@ -51,7 +52,6 @@ mod tests {
     use solana_sdk::signature::Signature;
     use testcontainers::clients::Cli;
     use tokio::{sync::Mutex, task::JoinSet};
-    use usecase::error::DasApiError;
     use usecase::proofs::MaybeProofChecker;
 
     const SLOT_UPDATED: u64 = 100;

@@ -13,6 +13,7 @@ use serde_json::Value as Json;
 use solana_sdk::pubkey::Pubkey;
 
 use futures::{stream, StreamExt};
+use interface::processing_possibility::ProcessingPossibilityChecker;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetSelectedMaps,
     AssetStaticDetails,
@@ -396,6 +397,9 @@ pub async fn get_by_ids(
 ) -> Result<Vec<Option<FullAsset>>, StorageError> {
     if asset_ids.is_empty() {
         return Ok(vec![]);
+    }
+    if !rocks_db.can_process_assets(asset_ids.as_slice()).await {
+        return Err(StorageError::CannotServiceRequest);
     }
     // need to pass only unique asset_ids to select query
     // index need to save order of IDs in response

@@ -3,6 +3,7 @@ use jsonrpc_core::{ErrorCode, Response};
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::api::error::CANNOT_SERVICE_REQUEST_ERROR_CODE;
 use jsonrpc_http_server::hyper::header::HeaderValue;
 use jsonrpc_http_server::hyper::StatusCode;
 use jsonrpc_http_server::jsonrpc_core::futures::TryStreamExt;
@@ -11,7 +12,6 @@ use jsonrpc_http_server::{hyper, RequestMiddleware, RequestMiddlewareAction};
 use log::info;
 use serde_json::json;
 use tokio_util::codec::{BytesCodec, FramedRead};
-use usecase::error::CANNOT_SERVICE_REQUEST_ERROR_CODE;
 
 const FULL_BACKUP_REQUEST_PATH: &str = "/snapshot";
 

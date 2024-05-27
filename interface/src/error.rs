@@ -60,6 +60,8 @@ pub enum StorageError {
     Common(String),
     #[error("not found")]
     NotFound,
+    #[error("CannotServiceRequest")]
+    CannotServiceRequest,
 }
 
 impl From<Error> for UsecaseError {

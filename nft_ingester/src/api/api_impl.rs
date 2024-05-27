@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
 use self::util::ApiRequest;
+use crate::api::error::DasApiError;
 use crate::config::{ApiConfig, JsonMiddlewareConfig};
 use digital_asset_types::dapi::get_asset_signatures::get_asset_signatures;
 use digital_asset_types::dapi::get_token_accounts::get_token_accounts;
@@ -25,7 +26,6 @@ use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
-use usecase::error::DasApiError;
 use usecase::validation::{validate_opt_pubkey, validate_pubkey};
 use {crate::api::*, sqlx::postgres::PgPoolOptions};
 
@@ -181,7 +181,8 @@ where
             self.proof_checker.clone(),
             self.metrics.clone(),
         )
-        .await?;
+        .await
+        .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -250,7 +251,8 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
         )
-        .await?;
+        .await
+        .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -294,7 +296,8 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
         )
-        .await?;
+        .await
+        .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -447,7 +450,8 @@ where
             pagination.cursor,
             options.map(|op| op.show_zero_balance).unwrap_or_default(),
         )
-        .await?;
+        .await
+        .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -534,7 +538,8 @@ where
             before,
             if cursor.is_some() { cursor } else { after },
         )
-        .await?;
+        .await
+        .map_err(Into::<DasApiError>::into)?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -611,7 +616,8 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
         )
-        .await?;
+        .await
+        .map_err(Into::<DasApiError>::into)?;
 
         Ok(res)
     }
