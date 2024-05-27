@@ -5,7 +5,6 @@ use crate::diff_checker::{
 };
 use crate::file_keys_fetcher::FileKeysFetcher;
 use clap::Parser;
-use interface::error::IntegrityVerificationError;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
     IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig, MetricsTrait,
@@ -35,7 +34,7 @@ struct Args {
 const TESTS_INTERVAL_SEC: u64 = 15;
 
 #[tokio::main(flavor = "multi_thread")]
-async fn main() -> Result<(), IntegrityVerificationError> {
+async fn main() {
     let args = Args::parse();
     let config = setup_config(args.env_file.as_str());
     env_logger::init();
@@ -112,8 +111,6 @@ async fn main() -> Result<(), IntegrityVerificationError> {
     usecase::graceful_stop::listen_shutdown().await;
     cancel_token.cancel();
     usecase::graceful_stop::graceful_stop(&mut tasks).await;
-
-    Ok(())
 }
 
 macro_rules! spawn_test {

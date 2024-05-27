@@ -5,7 +5,7 @@ use flatbuffers::InvalidFlatbuffer;
 use interface::error::UsecaseError;
 use plerkle_messenger::MessengerError;
 use plerkle_serialization::error::PlerkleSerializationError;
-use sea_orm::{DbErr, TransactionError};
+use postgre_client::error::IndexDbError;
 use solana_sdk::pubkey::ParsePubkeyError;
 use solana_sdk::signature::ParseSignatureError;
 use solana_transaction_status::EncodeError;
@@ -64,8 +64,6 @@ pub enum IngesterError {
     BackfillSenderError(String),
     #[error("Slot doesn't have tree signatures {0}")]
     SlotDoesntHaveTreeSignatures(String),
-    #[error("DB error {0}")]
-    DbError(String),
     #[error("Error getting data from BigTable {0}")]
     BigTableError(String),
     #[error("Missing flatbuffers field {0}")]
@@ -91,7 +89,7 @@ pub enum IngesterError {
     #[error("Error to deserialise transaction {0}")]
     TransactionParsingError(String),
     #[error("Error to convert data into PubKey {0}")]
-    PubKeyParsingError(String),
+    PubKeyParsingError(String), // TODO-XXX: looks like a duplicate for IngesterError::ParsePubkeyError
     #[error("Transaction was not processed {0}")]
     TransactionNotProcessedError(String),
     #[error("backup service {0}")]
@@ -178,18 +176,6 @@ impl From<std::io::Error> for IngesterError {
     }
 }
 
-impl From<DbErr> for IngesterError {
-    fn from(e: DbErr) -> Self {
-        IngesterError::StorageWriteError(e.to_string())
-    }
-}
-
-impl From<TransactionError<IngesterError>> for IngesterError {
-    fn from(e: TransactionError<IngesterError>) -> Self {
-        IngesterError::StorageWriteError(e.to_string())
-    }
-}
-
 impl From<MessengerError> for IngesterError {
     fn from(e: MessengerError) -> Self {
         IngesterError::MessengerError(e.to_string())
@@ -266,6 +252,19 @@ impl From<interface::error::StorageError> for IngesterError {
 impl From<String> for IngesterError {
     fn from(e: String) -> Self {
         IngesterError::DatabaseError(e)
+    }
+}
+
+impl From<IndexDbError> for IngesterError {
+    fn from(value: IndexDbError) -> Self {
+        match value {
+            a @ IndexDbError::Base64DecodingErr => IngesterError::DatabaseError(a.to_string()),
+            a @ IndexDbError::InvalidSortingKeyErr => IngesterError::DatabaseError(a.to_string()),
+            IndexDbError::QueryExecErr(sqlx_err) => IngesterError::SqlxError(sqlx_err.to_string()),
+            IndexDbError::PubkeyParsingError(s) => IngesterError::ParsePubkeyError(s),
+            IndexDbError::NotImplemented(s) => IngesterError::DatabaseError(s),
+            a @ IndexDbError::BadArgument(_) => IngesterError::DatabaseError(a.to_string()),
+        }
     }
 }
 

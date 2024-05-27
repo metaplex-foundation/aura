@@ -2,8 +2,8 @@ use crate::dao::{scopes, ConversionError, SearchAssetsQuery};
 use crate::rpc::response::AssetList;
 use entities::api_req_params::{AssetSorting, Options};
 use interface::json::{JsonDownloader, JsonPersister};
+use rocks_db::errors::StorageError;
 use rocks_db::Storage;
-use sea_orm::DbErr;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -27,7 +27,7 @@ pub async fn search_assets(
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-) -> Result<AssetList, DbErr> {
+) -> Result<AssetList, StorageError> {
     let filter_result: &Result<postgre_client::model::SearchAssetsFilter, ConversionError> =
         &filter.try_into();
     if let Err(ConversionError::IncompatibleGroupingKey(_)) = filter_result {
@@ -40,7 +40,7 @@ pub async fn search_assets(
     }
     let filter = filter_result
         .as_ref()
-        .map_err(|e| DbErr::Custom(e.to_string()))?;
+        .map_err(|e| StorageError::Common(e.to_string()))?; // TODO: change error
 
     let cursor_enabled = before.is_none() && after.is_none() && page.is_none();
 
@@ -64,7 +64,7 @@ pub async fn search_assets(
             &options,
         )
         .await
-        .map_err(DbErr::Custom)?;
+        .map_err(|e| StorageError::Common(e.to_string()))?;
     let asset_ids = keys
         .iter()
         .filter_map(|k| Pubkey::try_from(k.pubkey.clone()).ok())

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::error::StorageError;
+use crate::error::{BlockConsumeError, StorageError};
 use async_trait::async_trait;
 use entities::models::{BufferedTransaction, SignatureWithSlot};
 use mockall::automock;
@@ -46,10 +46,11 @@ pub trait BlockConsumer: Send + Sync + 'static {
         &self,
         slot: u64,
         block: solana_transaction_status::UiConfirmedBlock,
-    ) -> Result<(), String>;
-    async fn already_processed_slot(&self, slot: u64) -> Result<bool, String>;
+    ) -> Result<(), BlockConsumeError>;
+    async fn already_processed_slot(&self, slot: u64) -> Result<bool, BlockConsumeError>;
 }
 
+// TODO-XXX: is StorageError is sufficient type to cover all possible problems?
 #[async_trait]
 pub trait BlockProducer: Send + Sync + 'static {
     async fn get_block(
