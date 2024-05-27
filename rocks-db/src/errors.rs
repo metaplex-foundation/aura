@@ -70,6 +70,9 @@ impl From<StorageError> for interface::error::StorageError {
             StorageError::InvalidKeyLength => {
                 InterfaceStorageError::Common(String::from("InvalidKeyLength"))
             }
+            StorageError::InvalidMigrationVersion(v) => {
+                InterfaceStorageError::Common(format!("InvalidMigrationVersion: {}", v))
+            }
         }
     }
 }
