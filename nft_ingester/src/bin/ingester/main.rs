@@ -299,7 +299,6 @@ pub async fn main() -> Result<(), IngesterError> {
     let mplx_accs_parser = MplxAccsProcessor::new(
         config.mplx_buffer_size,
         buffer.clone(),
-        index_storage.clone(),
         rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
     );

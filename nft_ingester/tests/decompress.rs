@@ -118,7 +118,6 @@ mod tests {
         let mplx_accs_parser = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            pg_client.clone(),
             env_rocks.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );

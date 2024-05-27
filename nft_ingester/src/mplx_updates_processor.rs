@@ -17,7 +17,6 @@ use entities::enums::{ChainMutability, RoyaltyTargetType, SpecificationAssetClas
 use entities::models::Updated;
 use entities::models::{ChainDataV1, Creator, UpdateVersion, Uses};
 use metrics_utils::IngesterMetricsConfig;
-use postgre_client::PgClient;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails, MetadataMintMap,
 };
@@ -67,7 +66,6 @@ pub struct IndexableAssetWithAccountInfo {
 #[derive(Clone)]
 pub struct MplxAccsProcessor {
     pub batch_size: usize,
-    pub pg_client: Arc<PgClient>,
     pub rocks_db: Arc<Storage>,
     pub buffer: Arc<Buffer>,
     pub metrics: Arc<IngesterMetricsConfig>,
@@ -129,14 +127,12 @@ impl MplxAccsProcessor {
     pub fn new(
         batch_size: usize,
         buffer: Arc<Buffer>,
-        pg_client: Arc<PgClient>,
         rocks_db: Arc<Storage>,
         metrics: Arc<IngesterMetricsConfig>,
     ) -> Self {
         Self {
             batch_size,
             buffer,
-            pg_client,
             rocks_db,
             metrics,
             last_received_metadata_at: None,
