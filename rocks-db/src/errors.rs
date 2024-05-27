@@ -70,9 +70,7 @@ impl From<StorageError> for interface::error::StorageError {
             StorageError::InvalidKeyLength => {
                 InterfaceStorageError::Common(String::from("InvalidKeyLength"))
             }
-            StorageError::CannotServiceRequest => {
-                InterfaceStorageError::CannotServiceRequest
-            }
+            StorageError::CannotServiceRequest => InterfaceStorageError::CannotServiceRequest,
         }
     }
 }

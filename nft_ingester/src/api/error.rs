@@ -3,6 +3,7 @@ use log::error;
 use thiserror::Error;
 
 use interface::error::UsecaseError;
+use rocks_db::errors::StorageError;
 
 const STANDARD_ERROR_CODE: i64 = -32000;
 pub const CANNOT_SERVICE_REQUEST_ERROR_CODE: i64 = -32050;
@@ -23,6 +24,8 @@ pub enum DasApiError {
     PaginationEmptyError,
     #[error("Batch Size Error. Batch size should not be greater than {0}.")]
     BatchSizeError(usize),
+    #[error("RocksDB error: {0}")]
+    RocksError(String),
     #[error("No data found.")]
     NoDataFoundError,
     #[error("Invalid Grouping Key: {0}")]
@@ -97,6 +100,15 @@ impl From<UsecaseError> for DasApiError {
             UsecaseError::PubkeyValidationError(e) => Self::PubkeyValidationError(e),
             UsecaseError::InvalidGroupingKey(e) => Self::InvalidGroupingKey(e),
             e => Self::Usecase(e.to_string()),
+        }
+    }
+}
+
+impl From<StorageError> for DasApiError {
+    fn from(value: StorageError) -> Self {
+        match value {
+            StorageError::CannotServiceRequest => Self::CannotServiceRequest,
+            e => Self::RocksError(e.to_string()),
         }
     }
 }

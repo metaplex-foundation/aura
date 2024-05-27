@@ -181,8 +181,7 @@ where
             self.proof_checker.clone(),
             self.metrics.clone(),
         )
-        .await
-        .map_err(Into::<DasApiError>::into)?;
+        .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -221,8 +220,7 @@ where
             self.proof_checker.clone(),
             self.metrics.clone(),
         )
-        .await
-        .map_err(Into::<DasApiError>::into);
+        .await;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -251,8 +249,7 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
         )
-        .await
-        .map_err(Into::<DasApiError>::into)?;
+        .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -296,8 +293,7 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
         )
-        .await
-        .map_err(Into::<DasApiError>::into)?;
+        .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -450,8 +446,7 @@ where
             pagination.cursor,
             options.map(|op| op.show_zero_balance).unwrap_or_default(),
         )
-        .await
-        .map_err(Into::<DasApiError>::into)?;
+        .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -538,8 +533,7 @@ where
             before,
             if cursor.is_some() { cursor } else { after },
         )
-        .await
-        .map_err(Into::<DasApiError>::into)?;
+        .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -616,8 +610,7 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
         )
-        .await
-        .map_err(Into::<DasApiError>::into)?;
+        .await?;
 
         Ok(res)
     }
