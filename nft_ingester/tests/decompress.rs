@@ -109,7 +109,6 @@ mod tests {
     }
 
     async fn process_accounts(
-        pg_client: Arc<PgClient>,
         buffer: Arc<Buffer>,
         env_rocks: Arc<Storage>,
         nft_created_slot: i64,
@@ -261,7 +260,6 @@ mod tests {
         .await;
 
         process_accounts(
-            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             242856151,
@@ -334,7 +332,6 @@ mod tests {
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
         process_accounts(
-            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             242856151,
@@ -414,7 +411,6 @@ mod tests {
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
         process_accounts(
-            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             252856151,
@@ -501,7 +497,6 @@ mod tests {
         .await;
 
         process_accounts(
-            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             252856151,
