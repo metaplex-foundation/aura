@@ -49,6 +49,7 @@ pub enum StorageError {
     TryFromSliceError(#[from] TryFromSliceError),
     NoAssetOwner(String),
     InvalidKeyLength,
+    CannotServiceRequest,
 }
 
 impl std::fmt::Display for StorageError {
@@ -69,6 +70,7 @@ impl From<StorageError> for interface::error::StorageError {
             StorageError::InvalidKeyLength => {
                 InterfaceStorageError::Common(String::from("InvalidKeyLength"))
             }
+            StorageError::CannotServiceRequest => InterfaceStorageError::CannotServiceRequest,
         }
     }
 }

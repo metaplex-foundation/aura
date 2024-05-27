@@ -4,6 +4,7 @@ pub mod consistency_check;
 pub mod error;
 pub mod fork_cleaner;
 pub mod json;
+pub mod processing_possibility;
 pub mod proofs;
 pub mod rollup;
 pub mod sequence_consistent;

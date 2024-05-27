@@ -1,11 +1,12 @@
 use jsonrpc_core::ErrorCode;
 use log::error;
+use thiserror::Error;
 
 use interface::error::UsecaseError;
 use rocks_db::errors::StorageError;
-use thiserror::Error;
 
 const STANDARD_ERROR_CODE: i64 = -32000;
+pub const CANNOT_SERVICE_REQUEST_ERROR_CODE: i64 = -32050;
 
 #[derive(Error, Debug)]
 pub enum DasApiError {
@@ -24,7 +25,7 @@ pub enum DasApiError {
     #[error("Batch Size Error. Batch size should not be greater than {0}.")]
     BatchSizeError(usize),
     #[error("RocksDB error: {0}")]
-    RocksError(#[from] StorageError),
+    RocksError(String),
     #[error("No data found.")]
     NoDataFoundError,
     #[error("Invalid Grouping Key: {0}")]
@@ -39,6 +40,8 @@ pub enum DasApiError {
     PageTooBig(usize),
     #[error("Internal DB error")]
     InternalDdError,
+    #[error("CannotServiceRequest")]
+    CannotServiceRequest,
 }
 
 impl From<DasApiError> for jsonrpc_core::Error {
@@ -85,6 +88,7 @@ impl From<DasApiError> for jsonrpc_core::Error {
                 message: format!("Validation Error: {msg}"),
                 data: None,
             },
+            DasApiError::CannotServiceRequest => cannot_service_request_error(),
             _ => jsonrpc_core::Error::new(ErrorCode::InternalError),
         }
     }
@@ -97,5 +101,22 @@ impl From<UsecaseError> for DasApiError {
             UsecaseError::InvalidGroupingKey(e) => Self::InvalidGroupingKey(e),
             e => Self::Usecase(e.to_string()),
         }
+    }
+}
+
+impl From<StorageError> for DasApiError {
+    fn from(value: StorageError) -> Self {
+        match value {
+            StorageError::CannotServiceRequest => Self::CannotServiceRequest,
+            e => Self::RocksError(e.to_string()),
+        }
+    }
+}
+
+pub fn cannot_service_request_error() -> jsonrpc_core::types::error::Error {
+    jsonrpc_core::types::error::Error {
+        code: ErrorCode::ServerError(CANNOT_SERVICE_REQUEST_ERROR_CODE),
+        message: "Cannot service request".to_string(),
+        data: None,
     }
 }
