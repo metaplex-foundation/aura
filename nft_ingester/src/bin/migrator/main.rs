@@ -16,7 +16,7 @@ use nft_ingester::config::{
 };
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
-use rocks_db::column_migrator::MigrationState;
+use rocks_db::migrator::MigrationState;
 use rocks_db::{AssetDynamicDetails, Storage};
 
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;

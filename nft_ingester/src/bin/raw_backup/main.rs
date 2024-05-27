@@ -11,7 +11,7 @@ use tokio::task::JoinSet;
 use tracing::info;
 
 use nft_ingester::error::IngesterError;
-use rocks_db::column_migrator::MigrationState;
+use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
 
 #[derive(Parser, Debug)]

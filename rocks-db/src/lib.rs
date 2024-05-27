@@ -8,9 +8,9 @@ use asset::{
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
-use crate::column_migrator::{AssetCollectionVersion0, MigrationState, MigrationVersions};
 use crate::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::editions::TokenMetadataEdition;
+use crate::migrator::{MigrationState, MigrationVersions};
 pub use asset::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
 };
@@ -22,6 +22,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 use crate::errors::StorageError;
+use crate::migrations::collection_authority::AssetCollectionVersion0;
 use crate::parameters::ParameterColumn;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
@@ -35,12 +36,13 @@ pub mod batch_savers;
 pub mod bubblegum_slots;
 pub mod cl_items;
 pub mod column;
-pub mod column_migrator;
 pub mod dump_client;
 pub mod editions;
 pub mod errors;
 pub mod fork_cleaner;
 pub mod key_encoders;
+pub mod migrations;
+pub mod migrator;
 pub mod offchain_data;
 pub mod parameters;
 pub mod raw_block;
@@ -360,17 +362,12 @@ impl Storage {
                 );
             }
             asset::AssetCollection::NAME => {
-                if matches!(migration_state, &MigrationState::Version(0)) {
-                    cf_options.set_merge_operator_associative(
-                        "merge_fn_asset_collection",
-                        AssetCollectionVersion0::merge_asset_collection,
-                    );
+                let mf = if matches!(migration_state, &MigrationState::Version(0)) {
+                    AssetCollectionVersion0::merge_asset_collection
                 } else {
-                    cf_options.set_merge_operator_associative(
-                        "merge_fn_asset_collection",
-                        asset::AssetCollection::merge_asset_collection,
-                    );
-                }
+                    asset::AssetCollection::merge_asset_collection
+                };
+                cf_options.set_merge_operator_associative("merge_fn_asset_collection", mf);
             }
             cl_items::ClItem::NAME => {
                 cf_options.set_merge_operator_associative(

@@ -13,7 +13,7 @@ mod tests {
         buffer::Buffer,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
-    use rocks_db::column_migrator::MigrationState;
+    use rocks_db::migrator::MigrationState;
     use rocks_db::{bubblegum_slots::BubblegumSlotGetter, Storage};
     use std::fs::File;
     use std::io::{self, Read};

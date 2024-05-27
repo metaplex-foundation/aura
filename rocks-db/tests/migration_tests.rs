@@ -4,7 +4,8 @@ mod tests {
     use metrics_utils::red::RequestErrorDurationMetrics;
     use rocks_db::asset::AssetCollection;
     use rocks_db::column::TypedColumn;
-    use rocks_db::column_migrator::{AssetCollectionVersion0, MigrationState};
+    use rocks_db::migrations::collection_authority::AssetCollectionVersion0;
+    use rocks_db::migrator::MigrationState;
     use rocks_db::Storage;
     use solana_sdk::pubkey::Pubkey;
     use std::sync::Arc;

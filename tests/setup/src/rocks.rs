@@ -6,7 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::column_migrator::MigrationState;
+use rocks_db::migrator::MigrationState;
 use rocks_db::{
     asset::AssetCollection, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
     Storage,

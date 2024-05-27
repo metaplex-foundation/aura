@@ -3,7 +3,7 @@ use futures::stream;
 use interface::asset_streaming_and_discovery::{AsyncError, MockAssetDetailsConsumer};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::gapfiller::process_asset_details_stream;
-use rocks_db::column_migrator::MigrationState;
+use rocks_db::migrator::MigrationState;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;

@@ -9,8 +9,8 @@ mod tests {
     use tempfile::TempDir;
 
     use metrics_utils::red::RequestErrorDurationMetrics;
-    use rocks_db::column_migrator::MigrationState;
     use rocks_db::key_encoders::encode_u64x2_pubkey;
+    use rocks_db::migrator::MigrationState;
     use rocks_db::storage_traits::{AssetUpdateIndexStorage, AssetUpdatedKey};
     use rocks_db::{AssetDynamicDetails, AssetOwner, Storage};
     use tokio::sync::Mutex;

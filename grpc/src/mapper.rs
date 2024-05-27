@@ -670,14 +670,14 @@ impl TryFrom<AssetCollection> for entities::models::AssetCollection {
         Ok(Self {
             collection: value
                 .collection
-                .map(|v| {
+                .ok_or(GrpcError::MissingField("collection".to_string()))
+                .and_then(|v| {
                     Ok::<Updated<Pubkey>, GrpcError>(Updated::new(
                         v.slot_updated,
                         v.update_version.map(Into::into),
                         Pubkey::try_from(v.value).map_err(GrpcError::PubkeyFrom)?,
                     ))
-                })
-                .ok_or(GrpcError::MissingField("collection".to_string()))??,
+                })?,
             is_collection_verified: value.is_collection_verified.map(|v| v.into()).ok_or(
                 GrpcError::MissingField("is_collection_verified".to_string()),
             )?,
