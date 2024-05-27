@@ -5,7 +5,7 @@ use flatbuffers::InvalidFlatbuffer;
 use interface::error::UsecaseError;
 use plerkle_messenger::MessengerError;
 use plerkle_serialization::error::PlerkleSerializationError;
-use sea_orm::{DbErr, TransactionError};
+use postgre_client::error::IndexDbError;
 use solana_sdk::pubkey::ParsePubkeyError;
 use solana_sdk::signature::ParseSignatureError;
 use solana_transaction_status::EncodeError;
@@ -64,8 +64,6 @@ pub enum IngesterError {
     BackfillSenderError(String),
     #[error("Slot doesn't have tree signatures {0}")]
     SlotDoesntHaveTreeSignatures(String),
-    #[error("DB error {0}")]
-    DbError(String),
     #[error("Error getting data from BigTable {0}")]
     BigTableError(String),
     #[error("Missing flatbuffers field {0}")]
@@ -91,7 +89,7 @@ pub enum IngesterError {
     #[error("Error to deserialise transaction {0}")]
     TransactionParsingError(String),
     #[error("Error to convert data into PubKey {0}")]
-    PubKeyParsingError(String),
+    PubKeyParsingError(String), // TODO-XXX: looks like a duplicate for IngesterError::ParsePubkeyError
     #[error("Transaction was not processed {0}")]
     TransactionNotProcessedError(String),
     #[error("backup service {0}")]
@@ -106,6 +104,14 @@ pub enum IngesterError {
     Usecase(String),
     #[error("SolanaDeserializer: {0}")]
     SolanaDeserializer(String),
+    #[error("Arweave: {0}")]
+    Arweave(String),
+    #[error("Infallible: {0}")]
+    Infallible(String),
+    #[error("RollupValidation: {0}")]
+    RollupValidation(#[from] RollupValidationError),
+    #[error("SendTransaction: {0}")]
+    SendTransaction(String),
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -116,8 +122,8 @@ pub enum RollupValidationError {
     InvalidDataHash(String, String),
     #[error("InvalidCreatorsHash: expected: {0}, got: {1}")]
     InvalidCreatorsHash(String, String),
-    #[error("InvalidLRoot: expected: {0}, got: {1}")]
-    InvalidLRoot(String, String),
+    #[error("InvalidRoot: expected: {0}, got: {1}")]
+    InvalidRoot(String, String),
     #[error("CannotCreateMerkleTree: depth [{0}], size [{1}]")]
     CannotCreateMerkleTree(u32, u32),
     #[error("NoRelevantRolledMint: index {0}")]
@@ -128,8 +134,8 @@ pub enum RollupValidationError {
     StdIo(String),
     #[error("WrongTreeIdForChangeLog: asset: {0}, expected: {1}, got: {2}")]
     WrongTreeIdForChangeLog(String, String, String),
-    #[error("WrongChangeLogIndex: expected: {0}, got: {1}")]
-    WrongChangeLogIndex(u32, u32),
+    #[error("WrongChangeLogIndex: asset: {0}, expected: {0}, got: {1}")]
+    WrongChangeLogIndex(String, u32, u32),
     #[error("SplCompression: {0}")]
     SplCompression(#[from] spl_account_compression::ConcurrentMerkleTreeError),
 }
@@ -167,18 +173,6 @@ impl From<BlockbusterError> for IngesterError {
 impl From<std::io::Error> for IngesterError {
     fn from(_err: std::io::Error) -> Self {
         IngesterError::BatchInitIOError
-    }
-}
-
-impl From<DbErr> for IngesterError {
-    fn from(e: DbErr) -> Self {
-        IngesterError::StorageWriteError(e.to_string())
-    }
-}
-
-impl From<TransactionError<IngesterError>> for IngesterError {
-    fn from(e: TransactionError<IngesterError>) -> Self {
-        IngesterError::StorageWriteError(e.to_string())
     }
 }
 
@@ -261,6 +255,19 @@ impl From<String> for IngesterError {
     }
 }
 
+impl From<IndexDbError> for IngesterError {
+    fn from(value: IndexDbError) -> Self {
+        match value {
+            a @ IndexDbError::Base64DecodingErr => IngesterError::DatabaseError(a.to_string()),
+            a @ IndexDbError::InvalidSortingKeyErr => IngesterError::DatabaseError(a.to_string()),
+            IndexDbError::QueryExecErr(sqlx_err) => IngesterError::SqlxError(sqlx_err.to_string()),
+            IndexDbError::PubkeyParsingError(s) => IngesterError::ParsePubkeyError(s),
+            IndexDbError::NotImplemented(s) => IngesterError::DatabaseError(s),
+            a @ IndexDbError::BadArgument(_) => IngesterError::DatabaseError(a.to_string()),
+        }
+    }
+}
+
 impl From<AddrParseError> for IngesterError {
     fn from(e: AddrParseError) -> Self {
         IngesterError::ConfigurationParsingError(e.to_string())
@@ -282,5 +289,17 @@ impl From<UsecaseError> for IngesterError {
 impl From<PlerkleDeserializerError> for IngesterError {
     fn from(e: PlerkleDeserializerError) -> Self {
         IngesterError::SolanaDeserializer(e.to_string())
+    }
+}
+
+impl From<arweave_rs::error::Error> for IngesterError {
+    fn from(err: arweave_rs::error::Error) -> Self {
+        IngesterError::Arweave(err.to_string())
+    }
+}
+
+impl From<std::convert::Infallible> for IngesterError {
+    fn from(err: std::convert::Infallible) -> Self {
+        IngesterError::Infallible(err.to_string())
     }
 }

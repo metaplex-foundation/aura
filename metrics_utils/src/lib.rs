@@ -49,6 +49,7 @@ pub struct MetricState {
     pub sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
     pub red_metrics: Arc<RequestErrorDurationMetrics>,
     pub fork_cleaner_metrics: Arc<ForkCleanerMetricsConfig>,
+    pub rollup_processor_metrics: Arc<RollupProcessorMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -72,6 +73,7 @@ impl MetricState {
                 SequenceConsistentGapfillMetricsConfig::new(),
             ),
             fork_cleaner_metrics: Arc::new(ForkCleanerMetricsConfig::new()),
+            rollup_processor_metrics: Arc::new(RollupProcessorMetricsConfig::new()),
             red_metrics: Arc::new(RequestErrorDurationMetrics::new()),
             registry: Registry::default(),
         }
@@ -416,6 +418,7 @@ impl MetricsTrait for MetricState {
         self.json_downloader_metrics.start_time();
         self.sequence_consistent_gapfill_metrics.start_time();
         self.fork_cleaner_metrics.start_time();
+        self.rollup_processor_metrics.start_time();
 
         self.api_metrics.register(&mut self.registry);
         self.ingester_metrics.register(&mut self.registry);
@@ -454,6 +457,7 @@ impl MetricsTrait for MetricState {
             .register(&mut self.registry);
         self.red_metrics.register(&mut self.registry);
         self.fork_cleaner_metrics.register(&mut self.registry);
+        self.rollup_processor_metrics.register(&mut self.registry);
     }
 }
 
@@ -1120,6 +1124,67 @@ impl ForkCleanerMetricsConfig {
             "deleted_items",
             "Total count of deleted cl items",
             self.deleted_items.clone(),
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RollupProcessorMetricsConfig {
+    start_time: Gauge,
+    total_rollups: Family<MetricLabel, Counter>,
+    processing_latency: Family<MetricLabel, Histogram>,
+}
+
+impl Default for RollupProcessorMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RollupProcessorMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            start_time: Default::default(),
+            total_rollups: Default::default(),
+            processing_latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(1.0, 2.0, 12))
+            }),
+        }
+    }
+    pub fn start_time(&self) -> i64 {
+        self.start_time.set(Utc::now().timestamp())
+    }
+    pub fn inc_total_rollups(&self, label: &str) -> u64 {
+        self.total_rollups
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc()
+    }
+    pub fn set_processing_latency(&self, label: &str, duration: f64) {
+        self.processing_latency
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .observe(duration);
+    }
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "rollup_processor_start_time",
+            "Rollup processor start time",
+            self.start_time.clone(),
+        );
+
+        registry.register(
+            "total_rollups",
+            "Total rollups processed",
+            self.total_rollups.clone(),
+        );
+
+        registry.register(
+            "rollups_processing_latency",
+            "A histogram of fork rollups processing latency",
+            self.processing_latency.clone(),
         );
     }
 }

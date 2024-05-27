@@ -1,3 +1,4 @@
+use crate::error::IndexDbError;
 use crate::storage_traits::IntegrityVerificationKeysFetcher;
 use crate::{model::VerificationRequiredField, SQL_COMPONENT};
 use crate::{PgClient, SELECT_ACTION};
@@ -9,7 +10,7 @@ impl PgClient {
     async fn get_verification_required_keys_by_field(
         &self,
         field: VerificationRequiredField,
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<Vec<String>, IndexDbError> {
         // Select 50 newer keys and 50 random ones
         let mut query_builder = QueryBuilder::new("WITH sorted AS (SELECT DISTINCT ON (");
         query_builder.push(&field);
@@ -35,7 +36,7 @@ impl PgClient {
         let rows = query.fetch_all(&self.pool).await.map_err(|e| {
             self.metrics
                 .observe_error(SQL_COMPONENT, SELECT_ACTION, "integrity_asset_by_field");
-            e.to_string()
+            e
         })?;
         self.metrics.observe_request(
             SQL_COMPONENT,
@@ -56,7 +57,7 @@ impl PgClient {
     async fn get_verification_required_keys(
         &self,
         proof_check: bool,
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<Vec<String>, IndexDbError> {
         // select 50 newer keys and 50 random ones
         let mut query_builder =
             QueryBuilder::new("WITH sorted AS (SELECT ast_pubkey FROM assets_v3 ");
@@ -77,7 +78,7 @@ impl PgClient {
             .map_err(|e| {
                 self.metrics
                     .observe_error(SQL_COMPONENT, SELECT_ACTION, "integrity_asset");
-                e.to_string()
+                e
             })?;
         self.metrics
             .observe_request(SQL_COMPONENT, SELECT_ACTION, "integrity_asset", start_time);
@@ -94,12 +95,12 @@ impl PgClient {
 
 #[async_trait]
 impl IntegrityVerificationKeysFetcher for PgClient {
-    async fn get_verification_required_owners_keys(&self) -> Result<Vec<String>, String> {
+    async fn get_verification_required_owners_keys(&self) -> Result<Vec<String>, IndexDbError> {
         self.get_verification_required_keys_by_field(VerificationRequiredField::Owner)
             .await
     }
 
-    async fn get_verification_required_creators_keys(&self) -> Result<Vec<String>, String> {
+    async fn get_verification_required_creators_keys(&self) -> Result<Vec<String>, IndexDbError> {
         // Select 50 newer keys and 50 random ones
         let query = "WITH sorted AS (
                 SELECT DISTINCT ON (asc_creator) asc_creator
@@ -133,7 +134,7 @@ impl IntegrityVerificationKeysFetcher for PgClient {
                     SELECT_ACTION,
                     "integrity_asset_creators",
                 );
-                e.to_string()
+                e
             })?;
         self.metrics.observe_request(
             SQL_COMPONENT,
@@ -151,21 +152,25 @@ impl IntegrityVerificationKeysFetcher for PgClient {
             .collect::<Vec<_>>())
     }
 
-    async fn get_verification_required_authorities_keys(&self) -> Result<Vec<String>, String> {
+    async fn get_verification_required_authorities_keys(
+        &self,
+    ) -> Result<Vec<String>, IndexDbError> {
         self.get_verification_required_keys_by_field(VerificationRequiredField::Authority)
             .await
     }
 
-    async fn get_verification_required_groups_keys(&self) -> Result<Vec<String>, String> {
+    async fn get_verification_required_groups_keys(&self) -> Result<Vec<String>, IndexDbError> {
         self.get_verification_required_keys_by_field(VerificationRequiredField::Group)
             .await
     }
 
-    async fn get_verification_required_assets_keys(&self) -> Result<Vec<String>, String> {
+    async fn get_verification_required_assets_keys(&self) -> Result<Vec<String>, IndexDbError> {
         self.get_verification_required_keys(false).await
     }
 
-    async fn get_verification_required_assets_proof_keys(&self) -> Result<Vec<String>, String> {
+    async fn get_verification_required_assets_proof_keys(
+        &self,
+    ) -> Result<Vec<String>, IndexDbError> {
         self.get_verification_required_keys(true).await
     }
 }

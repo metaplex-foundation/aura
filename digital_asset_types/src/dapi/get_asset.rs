@@ -2,15 +2,12 @@ use std::sync::Arc;
 
 use entities::api_req_params::Options;
 use interface::json::{JsonDownloader, JsonPersister};
+use rocks_db::{errors::StorageError, Storage};
 use solana_sdk::pubkey::Pubkey;
-
-use interface::processing_possibility::ProcessingPossibilityChecker;
-use rocks_db::Storage;
 use tokio::{
     sync::Mutex,
     task::{JoinError, JoinSet},
 };
-use usecase::error::DasApiError;
 
 use crate::{dao::scopes, rpc::Asset};
 
@@ -24,10 +21,7 @@ pub async fn get_asset(
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-) -> Result<Option<Asset>, DasApiError> {
-    if !rocks_db.can_process_assets(&[id]).await {
-        return Err(DasApiError::CannotServiceRequest);
-    }
+) -> Result<Option<Asset>, StorageError> {
     let assets = scopes::asset::get_by_ids(
         rocks_db,
         vec![id],
@@ -37,11 +31,10 @@ pub async fn get_asset(
         max_json_to_download,
         tasks,
     )
-    .await
-    .map_err(Into::<DasApiError>::into)?;
+    .await?;
 
     match &assets[0] {
-        Some(asset) => asset_to_rpc(asset.clone()).map_err(Into::<DasApiError>::into),
+        Some(asset) => asset_to_rpc(asset.clone()),
         None => Ok(None),
     }
 }

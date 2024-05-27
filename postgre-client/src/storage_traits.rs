@@ -1,3 +1,4 @@
+use crate::error::IndexDbError;
 use crate::model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter};
 use crate::temp_index_client::TempClient;
 use async_trait::async_trait;
@@ -7,31 +8,34 @@ use mockall::{automock, mock};
 
 #[async_trait]
 pub trait AssetIndexStorage {
-    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, String>;
-    async fn update_asset_indexes_batch(&self, asset_indexes: &[AssetIndex]) -> Result<(), String>;
-    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), String>;
+    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError>;
+    async fn update_asset_indexes_batch(
+        &self,
+        asset_indexes: &[AssetIndex],
+    ) -> Result<(), IndexDbError>;
+    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError>;
     async fn load_from_dump(
         &self,
         base_path: &std::path::Path,
         last_key: &[u8],
-    ) -> Result<(), String>;
+    ) -> Result<(), IndexDbError>;
 }
 
 mock!(
     pub AssetIndexStorageMock {}
     #[async_trait]
     impl AssetIndexStorage for AssetIndexStorageMock {
-        async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, String>;
+        async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError>;
         async fn update_asset_indexes_batch(
             &self,
             asset_indexes: &[AssetIndex],
-        ) -> Result<(), String>;
+        ) -> Result<(), IndexDbError>;
         async fn load_from_dump(
             &self,
             base_path: &std::path::Path,
             last_key: &[u8],
-        ) -> Result<(), String>;
-        async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), String>;
+        ) -> Result<(), IndexDbError>;
+        async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError>;
     }
 
     impl Clone for AssetIndexStorageMock {
@@ -52,23 +56,26 @@ pub trait AssetPubkeyFilteredFetcher {
         before: Option<String>,
         after: Option<String>,
         options: &Options,
-    ) -> Result<Vec<AssetSortedIndex>, String>;
+    ) -> Result<Vec<AssetSortedIndex>, IndexDbError>;
 }
 
 #[automock]
 #[async_trait]
 pub trait IntegrityVerificationKeysFetcher {
-    async fn get_verification_required_owners_keys(&self) -> Result<Vec<String>, String>;
-    async fn get_verification_required_creators_keys(&self) -> Result<Vec<String>, String>;
-    async fn get_verification_required_authorities_keys(&self) -> Result<Vec<String>, String>;
-    async fn get_verification_required_groups_keys(&self) -> Result<Vec<String>, String>;
-    async fn get_verification_required_assets_keys(&self) -> Result<Vec<String>, String>;
-    async fn get_verification_required_assets_proof_keys(&self) -> Result<Vec<String>, String>;
+    async fn get_verification_required_owners_keys(&self) -> Result<Vec<String>, IndexDbError>;
+    async fn get_verification_required_creators_keys(&self) -> Result<Vec<String>, IndexDbError>;
+    async fn get_verification_required_authorities_keys(&self)
+        -> Result<Vec<String>, IndexDbError>;
+    async fn get_verification_required_groups_keys(&self) -> Result<Vec<String>, IndexDbError>;
+    async fn get_verification_required_assets_keys(&self) -> Result<Vec<String>, IndexDbError>;
+    async fn get_verification_required_assets_proof_keys(
+        &self,
+    ) -> Result<Vec<String>, IndexDbError>;
 }
 
 #[async_trait]
 pub trait TempClientProvider {
-    async fn create_temp_client(&self) -> Result<TempClient, String>;
+    async fn create_temp_client(&self) -> Result<TempClient, IndexDbError>;
 }
 
 mockall::mock!(
@@ -78,6 +85,6 @@ impl Clone for TempClientProviderMock {
 }
 #[async_trait]
 impl TempClientProvider for TempClientProviderMock {
-    async fn create_temp_client(&self) -> Result<TempClient, String>;
+    async fn create_temp_client(&self) -> Result<TempClient, IndexDbError>;
 }
 );

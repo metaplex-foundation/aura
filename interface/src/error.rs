@@ -51,6 +51,9 @@ impl From<serde_json::Error> for UsecaseError {
         Self::Reqwest(value.to_string())
     }
 }
+
+// TODO: Probably need to expand this to cover all error cases.
+//       e.g. by making fully compliant with rocks_db::error::StorageError
 #[derive(Error, Debug, PartialEq)]
 pub enum StorageError {
     #[error("common error: {0}")]
@@ -98,4 +101,12 @@ pub enum JsonDownloaderError {
     ErrorDownloading(String),
     IndexStorageError(String),
     MainStorageError(String),
+}
+
+/// Errors that may occur during the block consuming.
+#[derive(Error, Debug)]
+pub enum BlockConsumeError {
+    #[error("{0}")]
+    PersistenceErr(#[from] StorageError),
+    // TODO: think of other possible scenarios
 }
