@@ -7,6 +7,7 @@ use metrics_utils::ApiMetricsConfig;
 use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
+use interface::processing_possibility::ProcessingPossibilityChecker;
 use rocks_db::asset_streaming_client::get_required_nodes_for_proof;
 use rocks_db::Storage;
 use {
@@ -30,6 +31,9 @@ pub async fn get_proof_for_assets(
     proof_checker: Option<Arc<impl ProofChecker + Sync + Send + 'static>>,
     metrics: Arc<ApiMetricsConfig>,
 ) -> Result<HashMap<String, Option<AssetProof>>, StorageError> {
+    if !rocks_db.can_process_assets(asset_ids.as_slice()).await {
+        return Err(StorageError::CannotServiceRequest);
+    }
     let mut results: HashMap<String, Option<AssetProof>> =
         asset_ids.iter().map(|id| (id.to_string(), None)).collect();
 

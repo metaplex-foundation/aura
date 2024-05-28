@@ -45,6 +45,7 @@ pub mod migrations;
 pub mod migrator;
 pub mod offchain_data;
 pub mod parameters;
+pub mod processing_possibility;
 pub mod raw_block;
 pub mod sequence_consistent;
 pub mod signature_client;

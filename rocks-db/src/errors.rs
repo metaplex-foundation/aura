@@ -49,6 +49,7 @@ pub enum StorageError {
     TryFromSliceError(#[from] TryFromSliceError),
     NoAssetOwner(String),
     InvalidKeyLength,
+    CannotServiceRequest,
     InvalidMigrationVersion(u64),
 }
 
@@ -70,6 +71,7 @@ impl From<StorageError> for interface::error::StorageError {
             StorageError::InvalidKeyLength => {
                 InterfaceStorageError::Common(String::from("InvalidKeyLength"))
             }
+            StorageError::CannotServiceRequest => InterfaceStorageError::CannotServiceRequest,
             StorageError::InvalidMigrationVersion(v) => {
                 InterfaceStorageError::Common(format!("InvalidMigrationVersion: {}", v))
             }

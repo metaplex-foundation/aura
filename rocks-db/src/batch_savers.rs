@@ -1,7 +1,7 @@
 use crate::asset::{AssetCollection, MetadataMintMap};
 use crate::Result;
 use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
-use entities::models::{PubkeyWithSlot, Task};
+use entities::models::PubkeyWithSlot;
 use metrics_utils::IngesterMetricsConfig;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -15,7 +15,6 @@ pub struct MetadataModels {
     pub asset_authority: Vec<AssetAuthority>,
     pub asset_owner: Vec<AssetOwner>,
     pub asset_collection: Vec<AssetCollection>,
-    pub tasks: Vec<Task>,
     pub metadata_mint: Vec<MetadataMintMap>,
 }
 

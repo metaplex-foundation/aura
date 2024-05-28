@@ -8700,6 +8700,7 @@ dependencies = [
  "solana-transaction-status",
  "spl-account-compression",
  "spl-concurrent-merkle-tree",
+ "thiserror",
  "tokio",
  "tracing",
 ]
