@@ -17,6 +17,7 @@ mod tests {
         token_updates_processor::TokenAccsProcessor,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
+    use rocks_db::migrator::MigrationState;
     use rocks_db::{
         bubblegum_slots::BubblegumSlotGetter,
         columns::{Mint, TokenAccount},
@@ -65,6 +66,7 @@ mod tests {
             ),
             mutexed_tasks.clone(),
             red_metrics.clone(),
+            MigrationState::Last,
         )
         .unwrap();
 

@@ -50,6 +50,7 @@ pub enum StorageError {
     NoAssetOwner(String),
     InvalidKeyLength,
     CannotServiceRequest,
+    InvalidMigrationVersion(u64),
 }
 
 impl std::fmt::Display for StorageError {
@@ -71,6 +72,9 @@ impl From<StorageError> for interface::error::StorageError {
                 InterfaceStorageError::Common(String::from("InvalidKeyLength"))
             }
             StorageError::CannotServiceRequest => InterfaceStorageError::CannotServiceRequest,
+            StorageError::InvalidMigrationVersion(v) => {
+                InterfaceStorageError::Common(format!("InvalidMigrationVersion: {}", v))
+            }
         }
     }
 }

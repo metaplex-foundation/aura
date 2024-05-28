@@ -3,6 +3,7 @@ use futures::stream;
 use interface::asset_streaming_and_discovery::{AsyncError, MockAssetDetailsConsumer};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::gapfiller::process_asset_details_stream;
+use rocks_db::migrator::MigrationState;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -28,6 +29,7 @@ async fn test_process_asset_details_stream() {
             temp_dir.path().to_str().unwrap(),
             Arc::new(Mutex::new(JoinSet::new())),
             red_metrics.clone(),
+            MigrationState::Last,
         )
         .expect("Failed to create a database"),
     );

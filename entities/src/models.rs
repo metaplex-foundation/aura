@@ -117,7 +117,7 @@ pub struct CompleteAssetDetails {
 
     // Separate fields
     pub asset_leaf: Option<Updated<AssetLeaf>>,
-    pub collection: Option<Updated<AssetCollection>>,
+    pub collection: Option<AssetCollection>,
 
     // Cl elements
     pub cl_leaf: Option<ClLeaf>,
@@ -173,9 +173,9 @@ impl ChainDataV1 {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AssetCollection {
-    pub collection: Pubkey,
-    pub is_collection_verified: bool,
-    pub collection_seq: Option<u64>,
+    pub collection: Updated<Pubkey>,
+    pub is_collection_verified: Updated<bool>,
+    pub authority: Updated<Option<Pubkey>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]

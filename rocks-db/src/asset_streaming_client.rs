@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use entities::models::{CompleteAssetDetails, OffChainData, UpdateVersion, Updated};
+use entities::models::{CompleteAssetDetails, OffChainData, Updated};
 use interface::asset_streaming_and_discovery::{
     AssetDetailsStream, AssetDetailsStreamer, AsyncError,
 };
@@ -221,21 +221,10 @@ async fn get_complete_asset_details(
         delegate: owner.delegate,
         owner_type: owner.owner_type,
         owner_delegate_seq: owner.owner_delegate_seq,
-        collection: collection.map(|collection| {
-            let update_version = if let Some(seq) = collection.collection_seq {
-                Some(UpdateVersion::Sequence(seq))
-            } else {
-                collection.write_version.map(UpdateVersion::WriteVersion)
-            };
-            Updated::new(
-                collection.slot_updated,
-                update_version,
-                entities::models::AssetCollection {
-                    collection: collection.collection,
-                    is_collection_verified: collection.is_collection_verified,
-                    collection_seq: collection.collection_seq,
-                },
-            )
+        collection: collection.map(|collection| entities::models::AssetCollection {
+            collection: collection.collection,
+            is_collection_verified: collection.is_collection_verified,
+            authority: collection.authority,
         }),
         cl_leaf: cl_leaf.map(|leaf| entities::models::ClLeaf {
             cli_leaf_idx: leaf.cli_leaf_idx,

@@ -16,6 +16,7 @@ use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_transaction_status::UiConfirmedBlock;
+use tempfile::TempDir;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -57,6 +58,7 @@ use nft_ingester::gapfiller::process_asset_details_stream;
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
 use nft_ingester::rollup_processor::{NoopRollupTxSender, RollupProcessor};
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
+use rocks_db::migrator::MigrationState;
 use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::{SlotsCollector, SlotsGetter};
@@ -181,6 +183,27 @@ pub async fn main() -> Result<(), IngesterError> {
     let tasks = JoinSet::new();
 
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
+    let migration_version_manager_dir = TempDir::new().unwrap();
+    let migration_version_manager = Storage::open_secondary(
+        &config
+            .rocks_db_path_container
+            .clone()
+            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        migration_version_manager_dir.path().to_str().unwrap(),
+        mutexed_tasks.clone(),
+        metrics_state.red_metrics.clone(),
+        MigrationState::Last,
+    )
+    .unwrap();
+    Storage::apply_all_migrations(
+        &config
+            .rocks_db_path_container
+            .clone()
+            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        Arc::new(migration_version_manager),
+    )
+    .await
+    .unwrap();
     // start parsers
     let storage = Storage::open(
         &config
@@ -189,6 +212,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
         mutexed_tasks.clone(),
         metrics_state.red_metrics.clone(),
+        MigrationState::Last,
     )
     .unwrap();
 
