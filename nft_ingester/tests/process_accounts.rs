@@ -214,7 +214,6 @@ mod tests {
         let mplx_accs_parser = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -347,7 +346,6 @@ mod tests {
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
         let mpl_core_parser = MplCoreProcessor::new(
             env.rocks_env.storage.clone(),
-            env.pg_env.client.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,

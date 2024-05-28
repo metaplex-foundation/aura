@@ -739,7 +739,6 @@ mod tests {
         let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -895,7 +894,6 @@ mod tests {
         let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -1061,7 +1059,6 @@ mod tests {
         let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
