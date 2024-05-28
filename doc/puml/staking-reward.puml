@@ -1,0 +1,82 @@
+@startuml
+title MPLX staker rewarding
+scale 1.5
+' ##################
+' ### components ###
+' ##################
+
+actor "Staker" as Staker
+control "MPLX staking\ncontract" as StakingContract
+control "MPLX reward\ncontract" as RewardContract
+database "Reward\npool" as RewardPool
+database "Rollup\nfees" as RollupFees
+control "Rollup fees\ncontract" as RollupFeesContract
+control "Bubblegum\ncontract"  as Bubblegum
+actor  "NFT tree creator" as TreeCreator
+actor "Metaplex DAO" as Metaplex
+
+' ####################
+' ### interactions ###
+' ####################
+
+== Obtaining MPLX reward share ==
+Staker -> StakingContract : Make a stake
+activate StakingContract
+    StakingContract -> StakingContract : Calculate reward share\nfor Staker
+deactivate StakingContract
+
+note right
+  Reward share multiplier depends on the stake period: 5 days - 1X, 3 months - 2X, 6 months - 4X, 1 year - 6X
+end note
+
+== Reward fund from Rollups ==
+
+TreeCreator -> Bubblegum : Create tree,\npay fee in SOL
+Bubblegum -> RollupFees : Collect fees from Rollups
+
+== Reward fund from Metaplex foundation ==
+
+Metaplex -> RewardPool : fund
+
+note over RewardPool
+  On the early stages, the rewarding is going to be additionally funded by Metaplex
+end note
+
+== Forming rewarding ==
+
+Metaplex -> RollupFeesContract : initiate rewards funding from rollup fees
+note left
+  Fill up the rewards pool funded from the collected rollup fees.
+  The pool will be filled up for some time, ie for a month.
+  And it will be refilled periodically (e.g. monthly)
+end note
+activate RollupFeesContract
+    RollupFeesContract <-> RollupFees : Conver SOL into MPLX
+    RollupFeesContract -> RewardPool : Fund rewards with MPLX
+deactivate RollupFeesContract
+
+== Perfrom rewarding ==
+
+Metaplex -> RewardContract : initiate rewarding
+
+note left
+This is done periodically and more often
+than the filling up of the reward pool, e.g. daily.
+end note
+
+activate RewardContract
+    RewardContract <-> RewardPool : Take MPLXs
+    note right
+Take MPLXs that should be unlocked (1/30th of the pool, if the reward pool was
+filled up for 30 days and the last reward distribution happened exactly 24 hours ago)
+    end note
+    RewardContract -> StakingContract : Share among stakers
+deactivate RewardContract
+
+note over RewardPool
+MLPXs from the Reward pool are shared among stakers based on their stake share and reward share multiplier
+end note
+
+Staker <-> StakingContract : collect the reward\n(claim_reward)
+
+@enduml

@@ -1,0 +1,59 @@
+@startuml
+title Metagrid 0.1 - Merkel tree rollup
+scale 1.5
+' ##################
+' ### components ###
+' ##################
+
+box "Same actor in 0.1"
+    actor "Staker" as Staker
+    actor  "Tree creator" as TreeCreator
+end box
+box "Solana network"
+    control "Bubblegum\ncontract"  as Bubblegum
+    control "spl_account_compression\ncontract" as SplAccountCompression
+    database "Tree\naccounts" as Solana
+    control "MPLX staking\ncontract" as StakingContract
+    control "MPLX reward\ncontract" as RewardContract
+    database "Reward\npool" as RewardPool
+end box
+database "Arweave" as Arweave
+participant "DAS Node\nOperator" as DASNode #yellow
+
+' ####################
+' ### interactions ###
+' ####################
+
+Staker -> StakingContract : Make a stake
+note right
+  Rollup operation requires a stake in MPLX
+end note
+
+
+TreeCreator -> SplAccountCompression : Prepare uninitialized tree\n(spl::prepare_tree)
+Bubblegum -> Solana : Create_account\n(spl_acount_compression)
+
+TreeCreator -> TreeCreator : Generate tree\n(Rolled Mint Instruction)
+TreeCreator -> Arweave : Upload rollup tree in form of JSON
+
+loop
+  TreeCreator -> Bubblegum: append_canopy_nodes
+  Bubblegum -> SplAccountCompression : setup canopy\n(append_canopy_nodes)
+end
+TreeCreator -> Bubblegum : Finalize tree\n(finilize_tree_with_root)
+note right
+  Signed by both tree creator and staker
+end note
+
+Bubblegum -> StakingContract : Check stake
+Bubblegum -> SplAccountCompression : init_merkle_tree_with_root
+Bubblegum -> RewardPool : Adding fee to the reward pool
+
+Bubblegum -> DASNode : Event create_rollup_tree
+DASNode -> Arweave : Raw JSON request
+
+note over Bubblegum
+Resulting Merkle tree is fully compatible with all existing bubblegum instructions
+end note
+
+@enduml
