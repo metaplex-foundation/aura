@@ -17,7 +17,6 @@ mod tests {
         token_updates_processor::TokenAccsProcessor,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
-    use postgre_client::PgClient;
     use rocks_db::{
         bubblegum_slots::BubblegumSlotGetter,
         columns::{Mint, TokenAccount},
