@@ -102,7 +102,7 @@ impl AssetCollectionVersion0 {
 }
 
 pub(crate) async fn apply_migration(db_path: &str) -> crate::Result<()> {
-    info!("Start execute migration V0");
+    info!("Start executing migration V0");
     {
         let old_storage = Storage::open(
             db_path,
@@ -143,7 +143,7 @@ pub(crate) async fn apply_migration(db_path: &str) -> crate::Result<()> {
             }
         };
         batch.insert(key_decoded, value_decoded.into());
-        if batch.len() > BATCH_SIZE {
+        if batch.len() >= BATCH_SIZE {
             new_storage
                 .asset_collection_data
                 .put_batch(std::mem::take(&mut batch))
