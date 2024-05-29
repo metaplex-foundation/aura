@@ -153,10 +153,18 @@ pub(crate) async fn apply_migration(db_path: &str) -> crate::Result<()> {
         if batch.len() >= BATCH_SIZE {
             new_storage
                 .asset_collection_data
+                .delete_batch(batch.keys().cloned().collect::<Vec<_>>())
+                .await?;
+            new_storage
+                .asset_collection_data
                 .put_batch(std::mem::take(&mut batch))
                 .await?;
         }
     }
+    new_storage
+        .asset_collection_data
+        .delete_batch(batch.keys().cloned().collect::<Vec<_>>())
+        .await?;
     new_storage.asset_collection_data.put_batch(batch).await?;
     info!("Finish migration V0");
 
