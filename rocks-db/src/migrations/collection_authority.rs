@@ -117,8 +117,8 @@ pub(crate) async fn apply_migration(db_path: &str) -> crate::Result<()> {
             .iter_start()
             .filter_map(std::result::Result::ok)
         {
-            let _key = key;
-            let _value = value;
+            let _key = key.to_vec();
+            let _value = value.to_vec();
         }
         // close db connection in the end of the scope
     }
