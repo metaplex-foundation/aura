@@ -168,11 +168,11 @@ fn convert_rocks_asset_model(
         was_decompressed: dynamic_data.was_decompressed.value,
         leaf_seq: leaf.leaf_seq.map(|seq| seq as i64),
         plugins: dynamic_data
-            .plugins
+            .mpl_core_plugins
             .clone()
             .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
         unknown_plugins: dynamic_data
-            .unknown_plugins
+            .mpl_core_unknown_plugins
             .clone()
             .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
         num_minted: dynamic_data
@@ -187,6 +187,14 @@ fn convert_rocks_asset_model(
             .plugins_json_version
             .clone()
             .map(|plugins_json_version| plugins_json_version.value),
+        external_plugins: dynamic_data
+            .mpl_core_plugins
+            .clone()
+            .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
+        unknown_external_plugins: dynamic_data
+            .mpl_core_unknown_plugins
+            .clone()
+            .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
     })
 }
 

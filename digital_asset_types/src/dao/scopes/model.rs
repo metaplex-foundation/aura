@@ -82,6 +82,8 @@ pub struct AssetModel {
     pub num_minted: Option<u32>,
     pub current_supply: Option<u32>,
     pub plugins_json_version: Option<u32>,
+    pub external_plugins: Option<serde_json::Value>,
+    pub unknown_external_plugins: Option<serde_json::Value>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

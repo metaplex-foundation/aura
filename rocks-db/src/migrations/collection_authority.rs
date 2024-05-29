@@ -120,7 +120,7 @@ pub(crate) async fn apply_migration(db_path: &str) -> crate::Result<()> {
         db_path,
         Arc::new(Mutex::new(JoinSet::new())),
         Arc::new(RequestErrorDurationMetrics::new()),
-        MigrationState::Last,
+        MigrationState::Version(1),
     )?;
     let mut batch = HashMap::new();
     for (key, value) in new_storage

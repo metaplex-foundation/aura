@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-const CURRENT_MIGRATION_VERSION: u64 = 0;
+const CURRENT_MIGRATION_VERSION: u64 = 1;
 pub(crate) const BATCH_SIZE: usize = 100_000;
 
 pub enum MigrationState {
@@ -35,6 +35,7 @@ impl Storage {
     async fn apply_migration(db_path: &str, version: u64) -> Result<()> {
         match version {
             0 => crate::migrations::collection_authority::apply_migration(db_path).await?,
+            1 => crate::migrations::external_plugins::apply_migration(db_path).await?,
             _ => return Err(StorageError::InvalidMigrationVersion(version)),
         }
 

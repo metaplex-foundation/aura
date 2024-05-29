@@ -22,7 +22,7 @@ flatbuffers = "23.1.21"
 mpl-bubblegum = {version = "1.2.0", features = ["serde"] }
 spl-account-compression = "0.3.0"
 num-traits = "0.2.15"
-blockbuster = "2.2.1"
+blockbuster = { path = "../blockbuster" }
 figment = { version = "0.10.6", features = ["env", "toml", "yaml"] }
 solana-sdk = "~1.17"
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
@@ -53,7 +53,7 @@ mockall = "0.11.4"
 entities = { path = "../entities" }
 usecase = { path = "../usecase" }
 grpc = { path = "../grpc" }
-mpl-token-metadata = { version = "3.2.3"}
+mpl-token-metadata = { version = "4.1.1"}
 async-trait = "0.1.74"
 futures = "0.3.29"
 interface = { path = "../interface" }
@@ -76,6 +76,7 @@ xxhash-rust = { version = "0.8.10", features = ["xxh3"] }
 hex = "0.4.3"
 jemallocator = { version = "*", features = ["profiling", "debug"] }
 arweave-rs = {version = "0.2.0", git = "https://github.com/RequescoS/arweave-rs.git", rev = "d8f5ef76f06c96afdf013fe5b62301790631b33f"}
+triomphe = "=0.1.9"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

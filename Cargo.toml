@@ -12,7 +12,8 @@ members = [
   "usecase",
   "tests/setup",
   "backfill_rpc",
-  "integrity_verification"
+  "integrity_verification",
+  "blockbuster"
 ]
 
 [workspace.dependencies]

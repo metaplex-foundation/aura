@@ -61,8 +61,12 @@ impl From<CompleteAssetDetails> for AssetDetails {
             metadata_owner: value.metadata_owner.map(|v| v.into()),
             url: Some(value.url.into()),
             raw_name: value.raw_name.map(Into::into),
-            plugins: value.plugins.map(Into::into),
-            unknown_plugins: value.unknown_plugins.map(Into::into),
+            mpl_core_plugins: value.mpl_core_plugins.map(Into::into),
+            mpl_core_unknown_plugins: value.mpl_core_unknown_plugins.map(Into::into),
+            mpl_core_external_plugins: value.mpl_core_external_plugins.map(Into::into),
+            mpl_core_unknown_external_plugins: value
+                .mpl_core_unknown_external_plugins
+                .map(Into::into),
             rent_epoch: value.rent_epoch.map(Into::into),
             num_minted: value.num_minted.map(Into::into),
             current_size: value.current_size.map(Into::into),
@@ -152,8 +156,12 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
             executable: value.executable.map(Into::into),
             metadata_owner: value.metadata_owner.map(Into::into),
             raw_name: value.raw_name.map(Into::into),
-            plugins: value.plugins.map(Into::into),
-            unknown_plugins: value.unknown_plugins.map(Into::into),
+            mpl_core_plugins: value.mpl_core_plugins.map(Into::into),
+            mpl_core_unknown_plugins: value.mpl_core_unknown_plugins.map(Into::into),
+            mpl_core_external_plugins: value.mpl_core_external_plugins.map(Into::into),
+            mpl_core_unknown_external_plugins: value
+                .mpl_core_unknown_external_plugins
+                .map(Into::into),
             rent_epoch: value.rent_epoch.map(Into::into),
             num_minted: value.num_minted.map(Into::into),
             current_size: value.current_size.map(Into::into),
