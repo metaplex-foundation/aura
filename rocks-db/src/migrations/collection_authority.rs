@@ -62,7 +62,7 @@ impl AssetCollectionVersion0 {
                     result = existing_val.to_vec();
                 }
                 Err(e) => {
-                    error!("RocksDB: AssetCollection deserialize existing_val: {}", e)
+                    error!("RocksDB: AssetCollectionV0 deserialize existing_val: {}", e)
                 }
             }
         }
@@ -92,7 +92,7 @@ impl AssetCollectionVersion0 {
                     }
                 }
                 Err(e) => {
-                    error!("RocksDB: AssetCollection deserialize new_val: {}", e)
+                    error!("RocksDB: AssetCollectionV0 deserialize new_val: {}", e)
                 }
             }
         }
