@@ -112,7 +112,11 @@ pub(crate) async fn apply_migration(db_path: &str) -> crate::Result<()> {
         )?;
         // "force-merge" logic: the merge is happening only on read operations,
         // so we iterate over all records inside column in order to merge them
-        for (key, value) in old_storage.asset_collection_data.iter_start().filter_map(std::result::Result::ok) {
+        for (key, value) in old_storage
+            .asset_collection_data
+            .iter_start()
+            .filter_map(std::result::Result::ok)
+        {
             let _key = key;
             let _value = value;
         }
