@@ -1,7 +1,7 @@
 use crate::config::BackfillerConfig;
 use crate::error::IngesterError;
 use async_trait::async_trait;
-use entities::models::BufferedTransaction;
+use entities::models::{BufferedTransaction, RawBlock};
 use flatbuffers::FlatBufferBuilder;
 use futures::future::join_all;
 use interface::error::BlockConsumeError;
@@ -282,7 +282,7 @@ where
                 }
             };
 
-            let key = match rocks_db::raw_block::RawBlock::decode_key(key_box.to_vec()) {
+            let key = match RawBlock::decode_key(key_box.to_vec()) {
                 Ok(key) => key,
                 Err(e) => {
                     tracing::error!("Error decoding key: {}", e);

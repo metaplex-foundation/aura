@@ -16,6 +16,7 @@ use nft_ingester::config::{
 };
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
+use rocks_db::migrator::MigrationState;
 use rocks_db::{AssetDynamicDetails, Storage};
 
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
@@ -58,6 +59,7 @@ pub async fn main() -> Result<(), IngesterError> {
         &config.json_target_db.clone(),
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        MigrationState::Last,
     )
     .unwrap();
 
@@ -67,6 +69,7 @@ pub async fn main() -> Result<(), IngesterError> {
         &config.json_source_db,
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        MigrationState::Last,
     )
     .unwrap();
     let source_storage = Arc::new(source_storage);

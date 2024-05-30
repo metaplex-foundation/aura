@@ -5,11 +5,9 @@ use crate::process_accounts;
 use blockbuster::mpl_core::types::{Plugin, PluginAuthority, PluginType, UpdateAuthority};
 use blockbuster::programs::mpl_core_program::MplCoreAccountData;
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::Task;
 use entities::models::{ChainDataV1, UpdateVersion, Updated};
 use heck::ToSnakeCase;
 use metrics_utils::IngesterMetricsConfig;
-use postgre_client::PgClient;
 use rocks_db::asset::AssetCollection;
 use rocks_db::batch_savers::MetadataModels;
 use rocks_db::errors::StorageError;
@@ -29,7 +27,6 @@ use usecase::save_metrics::result_to_metrics;
 #[derive(Clone)]
 pub struct MplCoreProcessor {
     pub rocks_db: Arc<Storage>,
-    pub pg_client: Arc<PgClient>,
     pub batch_size: usize,
 
     pub buffer: Arc<Buffer>,
@@ -41,14 +38,12 @@ pub struct MplCoreProcessor {
 impl MplCoreProcessor {
     pub fn new(
         rocks_db: Arc<Storage>,
-        pg_client: Arc<PgClient>,
         buffer: Arc<Buffer>,
         metrics: Arc<IngesterMetricsConfig>,
         batch_size: usize,
     ) -> Self {
         Self {
             rocks_db,
-            pg_client,
             buffer,
             metrics,
             batch_size,
@@ -96,15 +91,9 @@ impl MplCoreProcessor {
         };
 
         let begin_processing = Instant::now();
-        let _ = tokio::join!(
-            self.rocks_db
-                .store_metadata_models(&metadata_models, self.metrics.clone()),
-            self.pg_client.store_tasks(
-                self.buffer.json_tasks.clone(),
-                &metadata_models.tasks,
-                self.metrics.clone()
-            )
-        );
+        self.rocks_db
+            .store_metadata_models(&metadata_models, self.metrics.clone())
+            .await;
         self.metrics.set_latency(
             "mpl_core_asset",
             begin_processing.elapsed().as_millis() as f64,
@@ -245,11 +234,17 @@ impl MplCoreProcessor {
             if let UpdateAuthority::Collection(address) = asset.update_authority {
                 models.asset_collection.push(AssetCollection {
                     pubkey: *asset_key,
-                    collection: address,
-                    is_collection_verified: true,
-                    slot_updated: account_data.slot_updated,
-                    collection_seq: None,
-                    write_version: Some(account_data.write_version),
+                    collection: Updated::new(
+                        account_data.slot_updated,
+                        Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                        address,
+                    ),
+                    is_collection_verified: Updated::new(
+                        account_data.slot_updated,
+                        Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                        true,
+                    ),
+                    authority: Default::default(),
                 });
             }
 
@@ -299,16 +294,6 @@ impl MplCoreProcessor {
                 ),
                 ..Default::default()
             });
-            if !uri.is_empty() {
-                models.tasks.push(Task {
-                    ofd_metadata_url: uri.clone(),
-                    ofd_locked_until: Some(chrono::Utc::now()),
-                    ofd_attempts: 0,
-                    ofd_max_attempts: 10,
-                    ofd_error: None,
-                    ofd_status: Default::default(),
-                });
-            }
             models.asset_dynamic.push(AssetDynamicDetails {
                 pubkey: *asset_key,
                 is_compressible: Updated::new(

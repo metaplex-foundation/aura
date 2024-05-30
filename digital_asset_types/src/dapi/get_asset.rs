@@ -2,10 +2,8 @@ use std::sync::Arc;
 
 use entities::api_req_params::Options;
 use interface::json::{JsonDownloader, JsonPersister};
-use sea_orm::DbErr;
+use rocks_db::{errors::StorageError, Storage};
 use solana_sdk::pubkey::Pubkey;
-
-use rocks_db::Storage;
 use tokio::{
     sync::Mutex,
     task::{JoinError, JoinSet},
@@ -23,7 +21,7 @@ pub async fn get_asset(
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-) -> Result<Option<Asset>, DbErr> {
+) -> Result<Option<Asset>, StorageError> {
     let assets = scopes::asset::get_by_ids(
         rocks_db,
         vec![id],

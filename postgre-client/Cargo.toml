@@ -20,6 +20,7 @@ metrics-utils = { path = "../metrics_utils" }
 chrono = "0.4.31"
 usecase = { path = "../usecase" }
 thiserror = { workspace = true }
+interface = { path = "../interface" }
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

@@ -18,16 +18,22 @@ use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_transaction_status::UiConfirmedBlock;
+use tempfile::TempDir;
+use tokio::sync::broadcast::Receiver;
 use tokio::sync::{broadcast, Mutex};
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinSet};
 use tokio::time::Instant;
 
 use backfill_rpc::rpc::BackfillRPC;
 use grpc::client::Client;
 use interface::error::{StorageError, UsecaseError};
 use interface::signature_persistence::{BlockProducer, ProcessingDataGetter};
+use interface::slots_dumper::SlotsDumper;
 use metrics_utils::utils::start_metrics;
-use metrics_utils::{BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait};
+use metrics_utils::{
+    BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait,
+    SequenceConsistentGapfillMetricsConfig,
+};
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
@@ -55,10 +61,11 @@ use nft_ingester::backfiller::{
     TransactionsParser,
 };
 use nft_ingester::fork_cleaner::ForkCleaner;
-use nft_ingester::gapfiller::process_asset_details_stream;
+use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
 use nft_ingester::rollup::rollup_processor::{NoopRollupTxSender, RollupProcessor};
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
+use rocks_db::migrator::MigrationState;
 use usecase::bigtable::BigTableClient;
 use usecase::proofs::MaybeProofChecker;
 use usecase::slots_collector::{SlotsCollector, SlotsGetter};
@@ -183,6 +190,28 @@ pub async fn main() -> Result<(), IngesterError> {
     let tasks = JoinSet::new();
 
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
+    let migration_version_manager_dir = TempDir::new().unwrap();
+    let migration_version_manager = Storage::open_secondary(
+        &config
+            .rocks_db_path_container
+            .clone()
+            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        migration_version_manager_dir.path().to_str().unwrap(),
+        mutexed_tasks.clone(),
+        metrics_state.red_metrics.clone(),
+        MigrationState::Last,
+    )
+    .unwrap();
+    Storage::apply_all_migrations(
+        &config
+            .rocks_db_path_container
+            .clone()
+            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        &config.migration_storage_path,
+        Arc::new(migration_version_manager),
+    )
+    .await
+    .unwrap();
     // start parsers
     let storage = Storage::open(
         &config
@@ -191,6 +220,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
         mutexed_tasks.clone(),
         metrics_state.red_metrics.clone(),
+        MigrationState::Last,
     )
     .unwrap();
 
@@ -301,7 +331,6 @@ pub async fn main() -> Result<(), IngesterError> {
     let mplx_accs_parser = MplxAccsProcessor::new(
         config.mplx_buffer_size,
         buffer.clone(),
-        index_storage.clone(),
         rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
     );
@@ -314,7 +343,6 @@ pub async fn main() -> Result<(), IngesterError> {
     );
     let mpl_core_parser = MplCoreProcessor::new(
         rocks_storage.clone(),
-        index_storage.clone(),
         buffer.clone(),
         metrics_state.ingester_metrics.clone(),
         config.mpl_core_buffer_size,
@@ -417,34 +445,49 @@ pub async fn main() -> Result<(), IngesterError> {
         )
         .await,
     );
-
-    match Client::connect(config.clone()).await {
-        Ok(gaped_data_client) => {
-            while first_processed_slot.load(Ordering::SeqCst) == 0
-                && keep_running.load(Ordering::SeqCst)
-            {
-                tokio::time::sleep(Duration::from_millis(100)).await
-            }
-            if keep_running.load(Ordering::SeqCst) {
-                let cloned_keep_running = keep_running.clone();
-                let cloned_rocks_storage = rocks_storage.clone();
-                mutexed_tasks.lock().await.spawn(async move {
-                    info!(
-                        "Processed {} gaped assets",
-                        process_asset_details_stream(
-                            cloned_keep_running,
-                            cloned_rocks_storage,
-                            last_saved_slot,
-                            first_processed_slot.load(Ordering::SeqCst),
-                            gaped_data_client,
-                        )
-                        .await
-                    );
-                    Ok(())
-                });
-            }
+    let grpc_client = match Client::connect(config.clone()).await {
+        Ok(client) => Some(client),
+        Err(e) => {
+            error!("GRPC Client new: {}", e);
+            None
         }
-        Err(e) => error!("GRPC Client new: {}", e),
+    };
+    if let Some(gaped_data_client) = grpc_client.clone() {
+        while first_processed_slot.load(Ordering::SeqCst) == 0 && shutdown_rx.is_empty() {
+            tokio::time::sleep(Duration::from_millis(100)).await
+        }
+        let cloned_rocks_storage = rocks_storage.clone();
+        if shutdown_rx.is_empty() {
+            let gaped_data_client_clone = gaped_data_client.clone();
+            let first_processed_slot_value = first_processed_slot.load(Ordering::SeqCst);
+            let cloned_rx = shutdown_rx.resubscribe();
+            mutexed_tasks.lock().await.spawn(async move {
+                let processed_assets = process_asset_details_stream(
+                    cloned_rx,
+                    cloned_rocks_storage.clone(),
+                    last_saved_slot,
+                    first_processed_slot_value,
+                    gaped_data_client_clone,
+                )
+                .await;
+                info!("Processed {} gaped assets", processed_assets);
+                Ok(())
+            });
+            let cloned_rocks_storage = rocks_storage.clone();
+            let cloned_rx = shutdown_rx.resubscribe();
+            mutexed_tasks.lock().await.spawn(async move {
+                let processed_raw_blocks = process_raw_blocks_stream(
+                    cloned_rx,
+                    cloned_rocks_storage,
+                    last_saved_slot,
+                    first_processed_slot_value,
+                    gaped_data_client,
+                )
+                .await;
+                info!("Processed {} raw blocks", processed_raw_blocks);
+                Ok(())
+            });
+        }
     };
 
     let cloned_rocks_storage = rocks_storage.clone();
@@ -722,7 +765,15 @@ pub async fn main() -> Result<(), IngesterError> {
         config.peer_grpc_max_gap_slots,
         rocks_storage.clone(),
     );
-    let serv = grpc::service::PeerGapFillerServiceImpl::new(Arc::new(uc));
+    let bs = usecase::raw_blocks_streamer::BlocksStreamer::new(
+        config.peer_grpc_max_gap_slots,
+        rocks_storage.clone(),
+    );
+    let serv = grpc::service::PeerGapFillerServiceImpl::new(
+        Arc::new(uc),
+        Arc::new(bs),
+        rocks_storage.clone(),
+    );
     let addr = format!("0.0.0.0:{}", config.peer_grpc_port).parse()?;
     // Spawn the gRPC server task and add to JoinSet
     let mut rx = shutdown_rx.resubscribe();
@@ -784,60 +835,61 @@ pub async fn main() -> Result<(), IngesterError> {
                 metrics_state.backfiller_metrics.clone(),
             )),
         ));
-
-        let slots_collector = SlotsCollector::new(
-            force_reingestable_slot_processor.clone(),
-            backfiller_source.clone(),
-            metrics_state.backfiller_metrics.clone(),
-        );
-        let sequence_consistent_gapfiller = SequenceConsistentGapfiller::new(
+        run_sequence_consistent_gapfiller(
+            SlotsCollector::new(
+                force_reingestable_slot_processor.clone(),
+                backfiller_source.clone(),
+                metrics_state.backfiller_metrics.clone(),
+            ),
             rocks_storage.clone(),
-            slots_collector,
             metrics_state.sequence_consistent_gapfill_metrics.clone(),
+            shutdown_rx.resubscribe(),
             rpc_backfiller.clone(),
-        );
-        let mut rx = shutdown_rx.resubscribe();
-        let metrics = metrics_state.sequence_consistent_gapfill_metrics.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-            info!("Start collecting sequences gaps...");
-            loop {
-                let start = Instant::now();
-                sequence_consistent_gapfiller
-                    .collect_sequences_gaps(rx.resubscribe())
-                    .await;
-                metrics.set_scans_latency(start.elapsed().as_secs_f64());
-                metrics.inc_total_scans();
-                tokio::select! {
-                    _ = tokio::time::sleep(Duration::from_secs(config.sequence_consistent_checker_wait_period_sec)) => {},
-                    _ = rx.recv() => {
-                        info!("Received stop signal, stopping collecting sequences gaps");
-                        return;
-                    }
-                };
-            }
-        }));
+            mutexed_tasks.clone(),
+            config.sequence_consistent_checker_wait_period_sec,
+        )
+        .await;
 
         // run an additional direct slot persister
         let rx = shutdown_rx.resubscribe();
         let producer = backfiller_source.clone();
         let metrics = Arc::new(BackfillerMetricsConfig::new());
         metrics.register_with_prefix(&mut metrics_state.registry, "force_slot_persister_");
-
-        let transactions_parser = Arc::new(TransactionsParser::new(
-            rocks_storage.clone(),
-            force_reingestable_slot_processor.clone(),
-            force_reingestable_slot_processor.clone(),
-            producer.clone(),
-            metrics.clone(),
-            backfiller_config.workers_count,
-            backfiller_config.chunk_size,
-        ));
-
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-            info!("Running slot force persister...");
-            transactions_parser.parse_transactions(rx).await;
-            info!("Force slot persister finished working");
-        }));
+        if let Some(client) = grpc_client {
+            let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
+                rocks_storage.clone(),
+                force_reingestable_slot_processor.clone(),
+                force_reingestable_slot_processor.clone(),
+                Arc::new(client),
+                metrics.clone(),
+                backfiller_config.workers_count,
+                backfiller_config.chunk_size,
+            ));
+            mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                info!("Running slot force persister...");
+                force_reingestable_transactions_parser
+                    .parse_transactions(rx)
+                    .await;
+                info!("Force slot persister finished working");
+            }));
+        } else {
+            let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
+                rocks_storage.clone(),
+                force_reingestable_slot_processor.clone(),
+                force_reingestable_slot_processor.clone(),
+                producer.clone(),
+                metrics.clone(),
+                backfiller_config.workers_count,
+                backfiller_config.chunk_size,
+            ));
+            mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                info!("Running slot force persister...");
+                force_reingestable_transactions_parser
+                    .parse_transactions(rx)
+                    .await;
+                info!("Force slot persister finished working");
+            }));
+        }
 
         let fork_cleaner = ForkCleaner::new(
             rocks_storage.clone(),
@@ -919,6 +971,46 @@ pub async fn main() -> Result<(), IngesterError> {
     .await;
 
     Ok(())
+}
+
+async fn run_sequence_consistent_gapfiller<T, R>(
+    slots_collector: SlotsCollector<T, R>,
+    rocks_storage: Arc<Storage>,
+    sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
+    rx: Receiver<()>,
+    rpc_backfiller: Arc<BackfillRPC>,
+    mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    sequence_consistent_checker_wait_period_sec: u64,
+) where
+    T: SlotsDumper + Sync + Send + 'static,
+    R: SlotsGetter + Sync + Send + 'static,
+{
+    let sequence_consistent_gapfiller = SequenceConsistentGapfiller::new(
+        rocks_storage.clone(),
+        slots_collector,
+        sequence_consistent_gapfill_metrics.clone(),
+        rpc_backfiller.clone(),
+    );
+    let mut rx = rx.resubscribe();
+    let metrics = sequence_consistent_gapfill_metrics.clone();
+    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        info!("Start collecting sequences gaps...");
+        loop {
+            let start = Instant::now();
+            sequence_consistent_gapfiller
+                .collect_sequences_gaps(rx.resubscribe())
+                .await;
+            metrics.set_scans_latency(start.elapsed().as_secs_f64());
+            metrics.inc_total_scans();
+            tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_secs(sequence_consistent_checker_wait_period_sec)) => {},
+                    _ = rx.recv() => {
+                        info!("Received stop signal, stopping collecting sequences gaps");
+                        return;
+                    }
+                };
+        }
+    }));
 }
 
 async fn restore_rocksdb(config: &IngesterConfig) -> Result<(), BackupServiceError> {

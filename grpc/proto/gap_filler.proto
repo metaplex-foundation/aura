@@ -97,11 +97,9 @@ message AssetLeaf {
 }
 
 message AssetCollection {
-    bytes collection = 1;
-    bool is_collection_verified = 2;
-    google.protobuf.UInt64Value collection_seq = 3;
-    UpdateVersionValue update_version = 4;
-    uint64 slot_updated = 5;
+    DynamicBytesField collection = 1;
+    DynamicBoolField is_collection_verified = 2;
+    DynamicBytesField authority = 3;
 }
 
 message Creator {
@@ -157,6 +155,12 @@ message AssetDetails {
     EditionV1 edition = 37;
     MasterEdition master_edition = 38;
     OffchainData offchain_data = 39;
+}
+
+// This field is a cbor encoded object of RawBlock type depending on
+// a "~1.17" version of the solana-transaction-status package
+message RawBlock {
+    bytes block = 1;
 }
 
 // Dynamic field messages
@@ -249,7 +253,13 @@ message RangeRequest {
     uint64 end_slot = 2;
 }
 
+message GetRawBlockRequest {
+    uint64 slot = 1;
+}
+
 // Define the gRPC service
 service GapFillerService {
     rpc GetAssetsUpdatedWithin(RangeRequest) returns (stream AssetDetails);
+    rpc GetRawBlocksWithin(RangeRequest) returns (stream RawBlock);
+    rpc GetRawBlock(GetRawBlockRequest) returns (RawBlock);
 }

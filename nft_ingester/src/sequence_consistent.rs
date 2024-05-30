@@ -94,7 +94,7 @@ where
         }
         // Handle last tree keys
         self.save_tree_gap_analyze(prev_state.tree, last_consistent_seq, gap_found)
-            .await
+            .await;
     }
 
     async fn save_tree_gap_analyze(

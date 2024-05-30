@@ -160,6 +160,7 @@ pub struct IngesterConfig {
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
     #[serde(default = "default_heap_path")]
     pub heap_path: String,
+    pub migration_storage_path: String,
 }
 
 const fn default_parallel_json_downloaders() -> i32 {

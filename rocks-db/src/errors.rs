@@ -40,6 +40,7 @@ impl From<reqwest::Error> for BackupServiceError {
     }
 }
 
+// TODO-XXX: probably it is good to come up with a common StorageError for pg and rocks
 #[derive(Error, Debug)]
 pub enum StorageError {
     Common(String),
@@ -48,6 +49,9 @@ pub enum StorageError {
     TryFromSliceError(#[from] TryFromSliceError),
     NoAssetOwner(String),
     InvalidKeyLength,
+    NotFound,
+    CannotServiceRequest,
+    InvalidMigrationVersion(u64),
 }
 
 impl std::fmt::Display for StorageError {
@@ -68,6 +72,11 @@ impl From<StorageError> for interface::error::StorageError {
             StorageError::InvalidKeyLength => {
                 InterfaceStorageError::Common(String::from("InvalidKeyLength"))
             }
+            StorageError::CannotServiceRequest => InterfaceStorageError::CannotServiceRequest,
+            StorageError::InvalidMigrationVersion(v) => {
+                InterfaceStorageError::Common(format!("InvalidMigrationVersion: {}", v))
+            }
+            StorageError::NotFound => InterfaceStorageError::Common(String::from("NotFound")),
         }
     }
 }

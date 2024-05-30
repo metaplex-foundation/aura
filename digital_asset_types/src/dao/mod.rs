@@ -1,16 +1,12 @@
 pub use full_asset::*;
-pub use generated::*;
 
 use self::{
     scopes::asset::COLLECTION_GROUP_KEY,
-    sea_orm_active_enums::{
-        OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
-    },
+    scopes::model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
 };
 
 mod converters;
 mod full_asset;
-mod generated;
 pub mod scopes;
 pub use converters::*;
 use entities::api_req_params::{

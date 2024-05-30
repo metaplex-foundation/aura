@@ -8,11 +8,12 @@ use entities::models::{AssetSignatureWithPagination, OffChainData};
 use interface::asset_sigratures::AssetSignaturesGetter;
 use interface::json::{JsonDownloader, JsonPersister};
 use log::error;
-use sea_orm::prelude::Json;
-use sea_orm::{entity::*, query::*, ConnectionTrait, DbErr, FromQueryResult};
+use rocks_db::errors::StorageError;
+use serde_json::Value as Json;
 use solana_sdk::pubkey::Pubkey;
 
 use futures::{stream, StreamExt};
+use interface::processing_possibility::ProcessingPossibilityChecker;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetSelectedMaps,
     AssetStaticDetails,
@@ -21,59 +22,21 @@ use rocks_db::Storage;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
-use crate::dao::sea_orm_active_enums::{
+use crate::dao::scopes::model;
+use crate::dao::scopes::model::{
     ChainMutability, Mutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
     SpecificationVersions,
 };
-use crate::dao::{
-    asset, asset_authority, asset_creators, asset_data, asset_grouping, AssetDataModel, FullAsset,
-    GroupingSize,
-};
+use crate::dao::{AssetDataModel, FullAsset};
 
 pub const PROCESSING_METADATA_STATE: &str = "processing";
 pub const COLLECTION_GROUP_KEY: &str = "collection";
-
-pub async fn get_grouping(
-    conn: &impl ConnectionTrait,
-    group_key: String,
-    group_value: &[u8],
-) -> Result<GroupingSize, DbErr> {
-    if group_key != COLLECTION_GROUP_KEY {
-        return Ok(GroupingSize { size: 0 });
-    }
-
-    let query = "SELECT COUNT(*) FROM assets_v3 WHERE ast_collection = $1 AND ast_is_collection_verified = true";
-
-    let size = conn
-        .query_one(Statement::from_sql_and_values(
-            sea_orm::DatabaseBackend::Postgres,
-            query,
-            [Set(group_value)
-                .into_value()
-                .ok_or(DbErr::Custom("cannot get rows count".to_string()))?],
-        ))
-        .await?
-        .map(|res| res.try_get::<i64>("", "count").unwrap_or_default())
-        .unwrap_or_default();
-
-    Ok(GroupingSize { size: size as u64 })
-}
-
-#[derive(FromQueryResult, Debug, Clone, PartialEq)]
-struct AssetID {
-    ast_pubkey: Vec<u8>,
-}
-
-#[derive(FromQueryResult, Debug, Clone, PartialEq)]
-struct AssetPubkey {
-    ast_pubkey: Vec<u8>,
-}
 
 fn convert_rocks_offchain_data(
     asset_pubkey: &Pubkey,
     offchain_data: &OffChainData,
     asset_dynamic_data: &HashMap<Pubkey, AssetDynamicDetails>,
-) -> Result<AssetDataModel, DbErr> {
+) -> Result<AssetDataModel, StorageError> {
     let mut metadata = offchain_data.metadata.clone();
 
     // TODO: PROCESSING_METADATA_STATE may be already deprecated code
@@ -82,7 +45,9 @@ fn convert_rocks_offchain_data(
     }
     let dynamic_data = asset_dynamic_data
         .get(asset_pubkey)
-        .ok_or(DbErr::Custom("No relevant asset_dynamic_data".to_string()))?;
+        .ok_or(StorageError::Common(
+            "No relevant asset_dynamic_data".to_string(),
+        ))?;
 
     let ch_data: serde_json::Value = serde_json::from_str(
         dynamic_data
@@ -95,7 +60,7 @@ fn convert_rocks_offchain_data(
     .unwrap_or(serde_json::Value::Null);
 
     Ok(AssetDataModel {
-        asset: asset_data::Model {
+        asset: model::AssetDataModel {
             id: dynamic_data.pubkey.to_bytes().to_vec(),
             chain_data_mutability: dynamic_data
                 .chain_mutability
@@ -106,7 +71,7 @@ fn convert_rocks_offchain_data(
             metadata_url: dynamic_data.url.value.clone(),
             metadata_mutability: Mutability::Immutable,
             metadata: Json::from_str(metadata.as_str())
-                .map_err(|e| DbErr::Custom(e.to_string()))?,
+                .map_err(|e| StorageError::Common(e.to_string()))?,
             slot_updated: dynamic_data.get_slot_updated() as i64,
             reindex: None,
         },
@@ -123,16 +88,20 @@ fn convert_rocks_asset_model(
     assets_owners: &HashMap<Pubkey, AssetOwner>,
     assets_dynamic_data: &HashMap<Pubkey, AssetDynamicDetails>,
     assets_leaf: &HashMap<Pubkey, AssetLeaf>,
-) -> Result<asset::Model, DbErr> {
+) -> Result<model::AssetModel, StorageError> {
     let static_data = assets_static_data
         .get(asset_pubkey)
-        .ok_or(DbErr::Custom("No relevant assets_static_data".to_string()))?;
+        .ok_or(StorageError::Common(
+            "No relevant assets_static_data".to_string(),
+        ))?;
     let dynamic_data = assets_dynamic_data
         .get(asset_pubkey)
-        .ok_or(DbErr::Custom("No relevant asset_dynamic_data".to_string()))?;
-    let owner = assets_owners
-        .get(asset_pubkey)
-        .ok_or(DbErr::Custom("No relevant assets_owners".to_string()))?;
+        .ok_or(StorageError::Common(
+            "No relevant asset_dynamic_data".to_string(),
+        ))?;
+    let owner = assets_owners.get(asset_pubkey).ok_or(StorageError::Common(
+        "No relevant assets_owners".to_string(),
+    ))?;
 
     let leaf = assets_leaf
         .get(asset_pubkey)
@@ -165,7 +134,7 @@ fn convert_rocks_asset_model(
         }
     };
 
-    Ok(asset::Model {
+    Ok(model::AssetModel {
         id: static_data.pubkey.to_bytes().to_vec(),
         alt_id: None,
         specification_version: Some(SpecificationVersions::V1),
@@ -283,13 +252,13 @@ impl From<entities::enums::RoyaltyTargetType> for RoyaltyTargetType {
 fn convert_rocks_authority_model(
     asset_pubkey: &Pubkey,
     assets_authority: &HashMap<Pubkey, AssetAuthority>,
-) -> asset_authority::Model {
+) -> model::AssetAuthorityModel {
     let authority = assets_authority
         .get(asset_pubkey)
         .cloned()
         .unwrap_or(AssetAuthority::default());
 
-    asset_authority::Model {
+    model::AssetAuthorityModel {
         id: 0,
         asset_id: asset_pubkey.to_bytes().to_vec(),
         scopes: None,
@@ -302,25 +271,25 @@ fn convert_rocks_authority_model(
 fn convert_rocks_grouping_model(
     asset_pubkey: &Pubkey,
     assets_collection: &HashMap<Pubkey, AssetCollection>,
-) -> Option<asset_grouping::Model> {
+) -> Option<model::AssetGroupingModel> {
     assets_collection
         .get(asset_pubkey)
-        .map(|ast| asset_grouping::Model {
+        .map(|ast| model::AssetGroupingModel {
             id: 0,
             asset_id: asset_pubkey.to_bytes().to_vec(),
             group_key: COLLECTION_GROUP_KEY.to_string(),
-            group_value: Some(ast.collection.to_string()),
-            seq: ast.collection_seq.map(|s| s as i64),
-            slot_updated: Some(ast.slot_updated as i64),
-            verified: Some(ast.is_collection_verified),
-            group_info_seq: ast.collection_seq.map(|s| s as i64),
+            group_value: Some(ast.collection.value.to_string()),
+            seq: ast.get_seq().map(|s| s as i64),
+            slot_updated: Some(ast.get_slot_updated() as i64),
+            verified: Some(ast.is_collection_verified.value),
+            group_info_seq: ast.get_seq().map(|s| s as i64),
         })
 }
 
 fn convert_rocks_creators_model(
     asset_pubkey: &Pubkey,
     assets_dynamic_data: &HashMap<Pubkey, AssetDynamicDetails>,
-) -> Vec<asset_creators::Model> {
+) -> Vec<model::AssetCreatorsModel> {
     let dynamic_data = assets_dynamic_data
         .get(asset_pubkey)
         .cloned()
@@ -331,7 +300,7 @@ fn convert_rocks_creators_model(
         .value
         .iter()
         .enumerate()
-        .map(|(position, creator)| asset_creators::Model {
+        .map(|(position, creator)| model::AssetCreatorsModel {
             id: 0,
             asset_id: asset_pubkey.to_bytes().to_vec(),
             creator: creator.creator.to_bytes().to_vec(),
@@ -344,20 +313,13 @@ fn convert_rocks_creators_model(
         .collect::<Vec<_>>()
 }
 
-#[derive(FromQueryResult, Debug, Clone, PartialEq)]
-struct AssetWithURL {
-    ast_pubkey: Vec<u8>,
-    ast_metadata_url: Option<String>,
-}
-
 // Use macros to reduce code duplications
 #[macro_export]
 macro_rules! fetch_asset_data {
     ($db:expr, $field:ident, $asset_ids:expr) => {{
         $db.$field
             .batch_get($asset_ids.clone())
-            .await
-            .map_err(|e| DbErr::Custom(e.to_string()))?
+            .await?
             .into_iter()
             .filter_map(|asset| asset.map(|a| (a.pubkey, a)))
             .collect::<HashMap<_, _>>()
@@ -371,7 +333,7 @@ fn asset_selected_maps_into_full_asset(
 ) -> Option<FullAsset> {
     if !options.show_unverified_collections {
         if let Some(collection_data) = asset_selected_maps.assets_collection.get(id) {
-            if !collection_data.is_collection_verified {
+            if !collection_data.is_collection_verified.value {
                 return None;
             }
         } else {
@@ -432,9 +394,12 @@ pub async fn get_by_ids(
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-) -> Result<Vec<Option<FullAsset>>, DbErr> {
+) -> Result<Vec<Option<FullAsset>>, StorageError> {
     if asset_ids.is_empty() {
         return Ok(vec![]);
+    }
+    if !rocks_db.can_process_assets(asset_ids.as_slice()).await {
+        return Err(StorageError::CannotServiceRequest);
     }
     // need to pass only unique asset_ids to select query
     // index need to save order of IDs in response
@@ -449,8 +414,7 @@ pub async fn get_by_ids(
     let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
     let mut asset_selected_maps = rocks_db
         .get_asset_selected_maps_async(unique_asset_ids.clone())
-        .await
-        .map_err(|e| DbErr::Custom(e.to_string()))?;
+        .await?;
 
     if let Some(json_downloader) = json_downloader {
         let mut urls_to_download = Vec::new();
@@ -531,7 +495,7 @@ pub async fn get_asset_signatures(
     after: &Option<String>,
     limit: u64,
     sort_direction: Option<AssetSortDirection>,
-) -> Result<AssetSignatureWithPagination, DbErr> {
+) -> Result<AssetSignatureWithPagination, StorageError> {
     let before_sequence = before.as_ref().and_then(|b| b.parse::<u64>().ok());
     let after_sequence = after.as_ref().and_then(|a| a.parse::<u64>().ok());
     if let (Some(before_sequence), Some(after_sequence)) = (before_sequence, after_sequence) {
@@ -554,19 +518,19 @@ pub async fn get_asset_signatures(
             // and use them to fetch transactions
             let asset_leaf = storage
                 .asset_leaf_data
-                .get(asset_id)
-                .map_err(|e| DbErr::Custom(e.to_string()))?
-                .ok_or_else(|| DbErr::RecordNotFound("Leaf ID does not exist".to_string()))?;
+                .get(asset_id)?
+                .ok_or_else(|| StorageError::Common("Leaf ID does not exist".to_string()))?; // Not found error
             (
                 asset_leaf.tree_id,
                 asset_leaf.nonce.ok_or_else(|| {
-                    DbErr::RecordNotFound("Leaf nonce does not exist".to_string())
+                    StorageError::Common("Leaf nonce does not exist".to_string())
+                    // Not found error
                 })?,
             )
         }
         _ => {
             // If neither set of parameters is provided, return an error
-            return Err(DbErr::Custom(
+            return Err(StorageError::Common(
                 "Either 'id' or both 'tree' and 'leafIndex' must be provided".to_string(),
             ));
         }

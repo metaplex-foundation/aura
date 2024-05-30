@@ -19,6 +19,7 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
 use rocks_db::bubblegum_slots::BubblegumSlotGetter;
+use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
@@ -79,6 +80,7 @@ pub async fn main() -> Result<(), IngesterError> {
         &primary_storage_path,
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        MigrationState::Last,
     )
     .unwrap();
 

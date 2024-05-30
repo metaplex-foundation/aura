@@ -2,11 +2,9 @@ use futures::future::Either;
 use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::futures_util::future;
 use jsonrpc_core::middleware::{NoopCallFuture, NoopFuture};
-use jsonrpc_core::{Call, ErrorCode, Failure, Metadata, Middleware, Output, Version};
+use jsonrpc_core::{Call, Failure, Metadata, Middleware, Output, Version};
 use std::future::Future;
 use std::sync::Arc;
-
-pub const CANNOT_SERVICE_REQUEST_ERROR_CODE: i64 = -32050;
 
 #[derive(Default, Clone)]
 pub struct RpcMetaMiddleware {
@@ -24,11 +22,7 @@ impl RpcMetaMiddleware {
     fn cannot_service_request() -> Option<Output> {
         Some(Output::Failure(Failure {
             jsonrpc: Some(Version::V2),
-            error: jsonrpc_core::types::error::Error {
-                code: ErrorCode::ServerError(CANNOT_SERVICE_REQUEST_ERROR_CODE),
-                message: "Cannot service request".to_string(),
-                data: None,
-            },
+            error: crate::api::error::cannot_service_request_error(),
             id: jsonrpc_core::types::id::Id::Null,
         }))
     }

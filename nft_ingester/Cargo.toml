@@ -12,7 +12,6 @@ thiserror = "1.0.31"
 serde_json = "1.0.81"
 tokio = { version = "1.37.0", features = ["full", "tracing", "sync"] }
 sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json"] }
-sea-orm = { version = "0.10.6", features = ["macros", "runtime-tokio-rustls", "sqlx-postgres", "with-chrono", "mock"] }
 chrono = "0.4.19"
 serde = "1.0.136"
 bs58 = "0.4.0"
@@ -77,6 +76,8 @@ xxhash-rust = { version = "0.8.10", features = ["xxh3"] }
 hex = "0.4.3"
 jemallocator = { version = "*", features = ["profiling", "debug"] }
 arweave-rs = {version = "0.2.0", git = "https://github.com/RequescoS/arweave-rs.git", rev = "d8f5ef76f06c96afdf013fe5b62301790631b33f"}
+serde_cbor = "0.11.2"
+triomphe = "=0.1.9"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

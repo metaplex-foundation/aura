@@ -2,9 +2,7 @@ use entities::api_req_params::SearchConditionType;
 use thiserror::Error;
 
 use super::{
-    sea_orm_active_enums::{
-        OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
-    },
+    scopes::model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
     AssetSupply, ConditionType, SearchAssetsQuery,
 };
 

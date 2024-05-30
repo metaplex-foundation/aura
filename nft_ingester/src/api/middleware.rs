@@ -3,7 +3,7 @@ use jsonrpc_core::{ErrorCode, Response};
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::api::meta_middleware::CANNOT_SERVICE_REQUEST_ERROR_CODE;
+use crate::api::error::CANNOT_SERVICE_REQUEST_ERROR_CODE;
 use jsonrpc_http_server::hyper::header::HeaderValue;
 use jsonrpc_http_server::hyper::StatusCode;
 use jsonrpc_http_server::jsonrpc_core::futures::TryStreamExt;

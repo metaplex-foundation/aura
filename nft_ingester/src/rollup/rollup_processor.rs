@@ -18,6 +18,7 @@ use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tokio::time::Instant;
 use tracing::{error, info};
+use usecase::error::RollupValidationError;
 
 use super::rollup_verifier::RollupVerifier;
 
