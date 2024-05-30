@@ -2,24 +2,18 @@ use std::sync::Arc;
 
 use crate::{column::TypedColumn, key_encoders, Storage};
 use async_trait::async_trait;
+use entities::models::RawBlock;
 use interface::{
     error::BlockConsumeError,
     signature_persistence::{BlockConsumer, BlockProducer},
 };
 use log::error;
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RawBlock {
-    pub slot: u64,
-    pub block: solana_transaction_status::UiConfirmedBlock,
-}
 
 impl TypedColumn for RawBlock {
-    const NAME: &'static str = "RAW_BLOCK_CBOR_ENCODED";
-
     type KeyType = u64;
+
     type ValueType = Self;
+    const NAME: &'static str = "RAW_BLOCK_CBOR_ENCODED";
 
     fn encode_key(slot: u64) -> Vec<u8> {
         key_encoders::encode_u64(slot)

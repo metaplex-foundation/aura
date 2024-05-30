@@ -16,7 +16,7 @@ pub use asset::{
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
-use entities::models::{AssetSignature, OffChainData};
+use entities::models::{AssetSignature, OffChainData, RawBlock};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -48,6 +48,7 @@ pub mod offchain_data;
 pub mod parameters;
 pub mod processing_possibility;
 pub mod raw_block;
+pub mod raw_blocks_streaming_client;
 pub mod sequence_consistent;
 pub mod signature_client;
 pub mod slots_dumper;
@@ -86,7 +87,7 @@ pub struct Storage {
     pub bubblegum_slots: Column<bubblegum_slots::BubblegumSlots>,
     pub ingestable_slots: Column<bubblegum_slots::IngestableSlots>,
     pub force_reingestable_slots: Column<bubblegum_slots::ForceReingestableSlots>,
-    pub raw_blocks_cbor: Column<raw_block::RawBlock>,
+    pub raw_blocks_cbor: Column<RawBlock>,
     pub db: Arc<DB>,
     pub assets_update_idx: Column<AssetsUpdateIdx>,
     pub slot_asset_idx: Column<SlotAssetIdx>,
@@ -229,7 +230,7 @@ impl Storage {
             Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(migration_state),
             Self::new_cf_descriptor::<asset::SlotAssetIdx>(migration_state),
             Self::new_cf_descriptor::<signature_client::SignatureIdx>(migration_state),
-            Self::new_cf_descriptor::<raw_block::RawBlock>(migration_state),
+            Self::new_cf_descriptor::<RawBlock>(migration_state),
             Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(migration_state),
             Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(migration_state),
             Self::new_cf_descriptor::<bubblegum_slots::ForceReingestableSlots>(migration_state),
@@ -432,7 +433,7 @@ impl Storage {
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
-            raw_block::RawBlock::NAME => {
+            RawBlock::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_raw_block_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
@@ -501,7 +502,7 @@ impl Storage {
             MigrationVersions::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_migration_versions",
-                    TokenAccountMintOwnerIdx::merge_values,
+                    asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             _ => {}

@@ -3,7 +3,7 @@ use crate::gapfiller::{
     AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ChainMutability, ClItem, ClLeaf,
     Creator, DynamicBoolField, DynamicBytesField, DynamicChainMutability, DynamicCreatorsField,
     DynamicEnumField, DynamicStringField, DynamicUint32Field, DynamicUint64Field, EditionV1,
-    MasterEdition, OffchainData, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
+    MasterEdition, OffchainData, OwnerType, RawBlock, RoyaltyTargetType, SpecificationAssetClass,
     SpecificationVersions, TokenStandard, UpdateVersionValue, UseMethod, Uses,
 };
 use entities::models::{CompleteAssetDetails, OffChainData, UpdateVersion, Updated};
@@ -741,6 +741,25 @@ impl TryFrom<Uses> for entities::models::Uses {
         })
     }
 }
+
+impl TryFrom<entities::models::RawBlock> for RawBlock {
+    type Error = GrpcError;
+
+    fn try_from(value: entities::models::RawBlock) -> Result<Self, Self::Error> {
+        Ok(Self {
+            block: serde_cbor::to_vec(&value).map_err(Into::<GrpcError>::into)?,
+        })
+    }
+}
+
+impl TryFrom<RawBlock> for entities::models::RawBlock {
+    type Error = GrpcError;
+
+    fn try_from(value: RawBlock) -> Result<Self, Self::Error> {
+        serde_cbor::from_slice(value.block.as_slice()).map_err(Into::<GrpcError>::into)
+    }
+}
+
 macro_rules! impl_from_enum {
     ($src:ty, $dst:ident, $($variant:ident),*) => {
         impl From<$src> for $dst {

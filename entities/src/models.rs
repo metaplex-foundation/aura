@@ -376,6 +376,12 @@ pub struct Task {
     pub ofd_status: TaskStatus,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RawBlock {
+    pub slot: u64,
+    pub block: solana_transaction_status::UiConfirmedBlock,
+}
+
 #[derive(Debug, Clone)]
 pub struct JsonDownloadTask {
     pub metadata_url: String,
