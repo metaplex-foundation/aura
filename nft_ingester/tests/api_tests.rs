@@ -14,7 +14,9 @@ mod tests {
     use digital_asset_types::rpc::response::{
         AssetList, TokenAccountsList, TransactionSignatureList,
     };
-    use entities::api_req_params::{DisplayOptions, GetAssetSignatures, GetTokenAccounts, Options};
+    use entities::api_req_params::{
+        DisplayOptions, GetAssetProof, GetAssetSignatures, GetTokenAccounts, Options,
+    };
     use entities::models::{AssetSignature, AssetSignatureKey, OffChainData};
     use entities::{
         api_req_params::{
@@ -31,6 +33,7 @@ mod tests {
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig};
     use mockall::predicate;
     use mpl_token_metadata::accounts::MasterEdition;
+    use nft_ingester::api::error::DasApiError;
     use nft_ingester::{
         buffer::Buffer,
         config::JsonMiddlewareConfig,
@@ -38,6 +41,8 @@ mod tests {
         mplx_updates_processor::{BurntMetadataSlot, MetadataInfo, MplxAccsProcessor},
         token_updates_processor::TokenAccsProcessor,
     };
+    use rocks_db::asset::AssetLeaf;
+    use rocks_db::tree_seq::TreesGaps;
     use rocks_db::{
         columns::{Mint, TokenAccount},
         AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
@@ -352,7 +357,10 @@ mod tests {
             let ref_value = generated_assets.collections[12].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
-                grouping: Some(("collection".to_string(), ref_value.collection.to_string())),
+                grouping: Some((
+                    "collection".to_string(),
+                    ref_value.collection.value.to_string(),
+                )),
                 options: Some(Options {
                     show_unverified_collections: true,
                 }),
@@ -734,7 +742,6 @@ mod tests {
         let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -890,7 +897,6 @@ mod tests {
         let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -1056,7 +1062,6 @@ mod tests {
         let mplx_updates_processor = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -1902,7 +1907,7 @@ mod tests {
         let ref_value = generated_assets.collections[12].clone();
         let payload = GetAssetsByGroup {
             group_key: "collection".to_string(),
-            group_value: ref_value.collection.to_string(),
+            group_value: ref_value.collection.value.to_string(),
             sort_by: None,
             limit: None,
             page: None,
@@ -2221,5 +2226,54 @@ mod tests {
         assert_eq!(response["content"], expected_content);
 
         env.teardown().await;
+    }
+
+    #[tokio::test]
+    async fn test_cannot_service_gaped_tree() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let asset_id = Pubkey::new_unique();
+        let tree_id = Pubkey::new_unique();
+        env.rocks_env
+            .storage
+            .asset_leaf_data
+            .put_async(
+                asset_id,
+                AssetLeaf {
+                    pubkey: asset_id,
+                    tree_id,
+                    leaf: None,
+                    nonce: None,
+                    data_hash: None,
+                    creator_hash: None,
+                    leaf_seq: None,
+                    slot_updated: 0,
+                },
+            )
+            .await
+            .unwrap();
+        env.rocks_env
+            .storage
+            .trees_gaps
+            .put_async(tree_id, TreesGaps {})
+            .await
+            .unwrap();
+        let payload = GetAssetProof {
+            id: asset_id.to_string(),
+        };
+        let res = api.get_asset_proof(payload).await.err().unwrap();
+        assert!(matches!(res, DasApiError::CannotServiceRequest));
     }
 }

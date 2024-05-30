@@ -17,7 +17,7 @@ use interface::error::UsecaseError;
 use interface::rollup::RollupDownloader;
 use metrics_utils::RollupProcessorMetricsConfig;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
-use nft_ingester::error::{IngesterError, RollupValidationError};
+use nft_ingester::error::IngesterError;
 use nft_ingester::rollup_processor::{MockPermanentStorageClient, RollupProcessor};
 use postgre_client::PgClient;
 use rand::{thread_rng, Rng};
@@ -30,6 +30,7 @@ use tempfile::TempDir;
 use testcontainers::clients::Cli;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::broadcast;
+use usecase::error::RollupValidationError;
 use uuid::Uuid;
 
 fn generate_rollup(size: usize) -> Rollup {

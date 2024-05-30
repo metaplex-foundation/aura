@@ -10,6 +10,7 @@ mod tests {
 
     use metrics_utils::red::RequestErrorDurationMetrics;
     use rocks_db::key_encoders::encode_u64x2_pubkey;
+    use rocks_db::migrator::MigrationState;
     use rocks_db::storage_traits::{AssetUpdateIndexStorage, AssetUpdatedKey};
     use rocks_db::{AssetDynamicDetails, AssetOwner, Storage};
     use tokio::sync::Mutex;
@@ -27,6 +28,7 @@ mod tests {
             temp_dir.path().to_str().unwrap(),
             Arc::new(Mutex::new(JoinSet::new())),
             red_metrics.clone(),
+            MigrationState::Last,
         )
         .expect("Failed to create a database");
 

@@ -4,6 +4,7 @@ use interface::asset_streaming_and_discovery::{
     AsyncError, MockAssetDetailsConsumer, MockRawBlocksConsumer,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
+use rocks_db::migrator::MigrationState;
 use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
 use solana_sdk::pubkey::Pubkey;
 use solana_transaction_status::UiConfirmedBlock;
@@ -30,6 +31,7 @@ async fn test_process_asset_details_stream() {
             temp_dir.path().to_str().unwrap(),
             Arc::new(Mutex::new(JoinSet::new())),
             red_metrics.clone(),
+            MigrationState::Last,
         )
         .expect("Failed to create a database"),
     );
@@ -76,6 +78,7 @@ async fn test_process_raw_blocks_stream() {
             temp_dir.path().to_str().unwrap(),
             Arc::new(Mutex::new(JoinSet::new())),
             red_metrics.clone(),
+            MigrationState::Last,
         )
         .expect("Failed to create a database"),
     );

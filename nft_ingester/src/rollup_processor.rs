@@ -1,5 +1,4 @@
-use crate::error::{IngesterError, RollupValidationError};
-use crate::tree_macros::validate_change_logs;
+use crate::error::IngesterError;
 use anchor_lang::AnchorSerialize;
 use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::crypto::base64::Base64;
@@ -24,6 +23,7 @@ use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tokio::time::Instant;
 use tracing::{error, info};
+use usecase::error::RollupValidationError;
 
 pub const MAX_ROLLUP_RETRIES: usize = 5;
 const SUCCESS_METRICS_LABEL: &str = "success";
@@ -508,7 +508,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
             leaf_hashes.push(leaf_hash);
         }
 
-        validate_change_logs(
+        usecase::merkle_tree::validate_change_logs(
             rollup.max_depth,
             rollup.max_buffer_size,
             &leaf_hashes,

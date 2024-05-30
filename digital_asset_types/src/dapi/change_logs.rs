@@ -4,20 +4,19 @@ use std::{collections::HashMap, str::FromStr};
 use interface::proofs::ProofChecker;
 use log::{debug, warn};
 use metrics_utils::ApiMetricsConfig;
+use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
+use interface::processing_possibility::ProcessingPossibilityChecker;
 use rocks_db::asset_streaming_client::get_required_nodes_for_proof;
 use rocks_db::Storage;
 use {
-    crate::dao::cl_items,
-    crate::rpc::AssetProof,
-    sea_orm::{DbErr, FromQueryResult},
-    spl_concurrent_merkle_tree::node::empty_node,
+    crate::dao::scopes::model, crate::rpc::AssetProof, spl_concurrent_merkle_tree::node::empty_node,
 };
 
 use crate::fetch_asset_data;
 
-#[derive(FromQueryResult, Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
 struct SimpleChangeLog {
     cli_hash: Vec<u8>,
     cli_level: i64,
@@ -31,7 +30,10 @@ pub async fn get_proof_for_assets(
     asset_ids: Vec<Pubkey>,
     proof_checker: Option<Arc<impl ProofChecker + Sync + Send + 'static>>,
     metrics: Arc<ApiMetricsConfig>,
-) -> Result<HashMap<String, Option<AssetProof>>, DbErr> {
+) -> Result<HashMap<String, Option<AssetProof>>, StorageError> {
+    if !rocks_db.can_process_assets(asset_ids.as_slice()).await {
+        return Err(StorageError::CannotServiceRequest);
+    }
     let mut results: HashMap<String, Option<AssetProof>> =
         asset_ids.iter().map(|id| (id.to_string(), None)).collect();
 
@@ -53,22 +55,17 @@ pub async fn get_proof_for_assets(
                 .map(|(tree, (_, nonce))| (nonce, tree))
                 .collect::<Vec<_>>(),
         )
-        .await
-        .map_err(|e| DbErr::Custom(e.to_string()))?
+        .await?
         .into_iter()
         .filter_map(|cl_leaf| cl_leaf.map(|leaf| (leaf.cli_node_idx, leaf.cli_tree_key)))
         .collect::<Vec<_>>();
-    let cl_items_first_leaf = rocks_db
-        .cl_items
-        .batch_get(keys.clone())
-        .await
-        .map_err(|e| DbErr::Custom(e.to_string()))?;
+    let cl_items_first_leaf = rocks_db.cl_items.batch_get(keys.clone()).await?;
 
     if cl_items_first_leaf.is_empty() {
         return Ok(HashMap::new());
     }
 
-    let leaves: HashMap<_, (cl_items::Model, u64)> = cl_items_first_leaf
+    let leaves: HashMap<_, (model::ClItemsModel, u64)> = cl_items_first_leaf
         .into_iter()
         .filter_map(|leaf| {
             leaf.and_then(|leaf| {
@@ -76,7 +73,7 @@ pub async fn get_proof_for_assets(
                     (
                         pubkey.to_bytes().to_vec(),
                         (
-                            cl_items::Model {
+                            model::ClItemsModel {
                                 id: 0,
                                 tree: leaf.cli_tree_key.to_bytes().to_vec(),
                                 node_idx: leaf.cli_node_idx as i64,
@@ -104,8 +101,7 @@ pub async fn get_proof_for_assets(
     let all_nodes = rocks_db
         .cl_items
         .batch_get(all_req_keys)
-        .await
-        .map_err(|e| DbErr::Custom(e.to_string()))?
+        .await?
         .into_iter()
         .flatten()
         .map(|node| SimpleChangeLog {
@@ -134,7 +130,7 @@ pub async fn get_proof_for_assets(
 fn get_asset_proof(
     asset_id: &Pubkey,
     nodes: &[SimpleChangeLog],
-    leaves: &HashMap<Vec<u8>, (cl_items::Model, u64)>,
+    leaves: &HashMap<Vec<u8>, (model::ClItemsModel, u64)>,
     proof_checker: Option<Arc<impl ProofChecker + Sync + Send + 'static>>,
     metrics: Arc<ApiMetricsConfig>,
 ) -> Option<AssetProof> {

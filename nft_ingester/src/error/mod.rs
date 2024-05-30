@@ -6,7 +6,6 @@ use interface::error::UsecaseError;
 use plerkle_messenger::MessengerError;
 use plerkle_serialization::error::PlerkleSerializationError;
 use postgre_client::error::IndexDbError;
-use sea_orm::{DbErr, TransactionError};
 use solana_sdk::pubkey::ParsePubkeyError;
 use solana_sdk::signature::ParseSignatureError;
 use solana_transaction_status::EncodeError;
@@ -14,6 +13,7 @@ use thiserror::Error;
 
 use crate::plerkle::PlerkleDeserializerError;
 use rocks_db::errors::{BackupServiceError, StorageError};
+use usecase::error::RollupValidationError;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum IngesterError {
@@ -65,8 +65,6 @@ pub enum IngesterError {
     BackfillSenderError(String),
     #[error("Slot doesn't have tree signatures {0}")]
     SlotDoesntHaveTreeSignatures(String),
-    #[error("DB error {0}")]
-    DbError(String),
     #[error("Error getting data from BigTable {0}")]
     BigTableError(String),
     #[error("Missing flatbuffers field {0}")]
@@ -117,38 +115,6 @@ pub enum IngesterError {
     SendTransaction(String),
 }
 
-#[derive(Error, Debug, PartialEq, Eq)]
-pub enum RollupValidationError {
-    #[error("PDACheckFail: expected: {0}, got: {1}")]
-    PDACheckFail(String, String),
-    #[error("InvalidDataHash: expected: {0}, got: {1}")]
-    InvalidDataHash(String, String),
-    #[error("InvalidCreatorsHash: expected: {0}, got: {1}")]
-    InvalidCreatorsHash(String, String),
-    #[error("InvalidRoot: expected: {0}, got: {1}")]
-    InvalidRoot(String, String),
-    #[error("CannotCreateMerkleTree: depth [{0}], size [{1}]")]
-    CannotCreateMerkleTree(u32, u32),
-    #[error("NoRelevantRolledMint: index {0}")]
-    NoRelevantRolledMint(u64),
-    #[error("WrongAssetPath: id {0}")]
-    WrongAssetPath(String),
-    #[error("StdIo {0}")]
-    StdIo(String),
-    #[error("WrongTreeIdForChangeLog: asset: {0}, expected: {1}, got: {2}")]
-    WrongTreeIdForChangeLog(String, String, String),
-    #[error("WrongChangeLogIndex: asset: {0}, expected: {0}, got: {1}")]
-    WrongChangeLogIndex(String, u32, u32),
-    #[error("SplCompression: {0}")]
-    SplCompression(#[from] spl_account_compression::ConcurrentMerkleTreeError),
-}
-
-impl From<std::io::Error> for RollupValidationError {
-    fn from(err: std::io::Error) -> Self {
-        RollupValidationError::StdIo(err.to_string())
-    }
-}
-
 impl From<reqwest::Error> for IngesterError {
     fn from(err: reqwest::Error) -> Self {
         IngesterError::BatchInitNetworkingError(err.to_string())
@@ -176,18 +142,6 @@ impl From<BlockbusterError> for IngesterError {
 impl From<std::io::Error> for IngesterError {
     fn from(_err: std::io::Error) -> Self {
         IngesterError::BatchInitIOError
-    }
-}
-
-impl From<DbErr> for IngesterError {
-    fn from(e: DbErr) -> Self {
-        IngesterError::StorageWriteError(e.to_string())
-    }
-}
-
-impl From<TransactionError<IngesterError>> for IngesterError {
-    fn from(e: TransactionError<IngesterError>) -> Self {
-        IngesterError::StorageWriteError(e.to_string())
     }
 }
 

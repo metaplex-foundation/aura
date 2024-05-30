@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
 use self::util::ApiRequest;
+use crate::api::error::DasApiError;
 use crate::config::{ApiConfig, JsonMiddlewareConfig};
 use digital_asset_types::dapi::get_asset_signatures::get_asset_signatures;
 use digital_asset_types::dapi::get_token_accounts::get_token_accounts;
@@ -190,8 +191,7 @@ where
             .ok_or(DasApiError::ProofNotFound)?
             .as_ref()
             .ok_or::<DasApiError>(not_found())
-            .cloned()
-            .map_err(Into::<DasApiError>::into);
+            .cloned();
 
         Ok(json!(res?))
     }
@@ -220,8 +220,7 @@ where
             self.proof_checker.clone(),
             self.metrics.clone(),
         )
-        .await
-        .map_err(Into::<DasApiError>::into);
+        .await;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -250,8 +249,7 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
         )
-        .await
-        .map_err(Into::<DasApiError>::into)?;
+        .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -295,8 +293,7 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
         )
-        .await
-        .map_err(Into::<DasApiError>::into)?;
+        .await?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);

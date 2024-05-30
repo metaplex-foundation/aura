@@ -17,7 +17,7 @@ mod tests {
         token_updates_processor::TokenAccsProcessor,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
-    use postgre_client::PgClient;
+    use rocks_db::migrator::MigrationState;
     use rocks_db::{
         bubblegum_slots::BubblegumSlotGetter,
         columns::{Mint, TokenAccount},
@@ -66,6 +66,7 @@ mod tests {
             ),
             mutexed_tasks.clone(),
             red_metrics.clone(),
+            MigrationState::Last,
         )
         .unwrap();
 
@@ -109,7 +110,6 @@ mod tests {
     }
 
     async fn process_accounts(
-        pg_client: Arc<PgClient>,
         buffer: Arc<Buffer>,
         env_rocks: Arc<Storage>,
         nft_created_slot: i64,
@@ -118,7 +118,6 @@ mod tests {
         let mplx_accs_parser = MplxAccsProcessor::new(
             1,
             buffer.clone(),
-            pg_client.clone(),
             env_rocks.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -262,7 +261,6 @@ mod tests {
         .await;
 
         process_accounts(
-            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             242856151,
@@ -335,7 +333,6 @@ mod tests {
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
         process_accounts(
-            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             242856151,
@@ -415,7 +412,6 @@ mod tests {
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
         process_accounts(
-            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             252856151,
@@ -502,7 +498,6 @@ mod tests {
         .await;
 
         process_accounts(
-            env.pg_env.client.clone(),
             buffer.clone(),
             env.rocks_env.storage.clone(),
             252856151,

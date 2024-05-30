@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::api::error::DasApiError;
 use entities::api_req_params::{
     GetAssetBatchV0, GetAssetV0, GetAssetsByAuthorityV0, GetAssetsByCreatorV0, GetAssetsByGroupV0,
     GetAssetsByOwnerV0, SearchAssetsV0,

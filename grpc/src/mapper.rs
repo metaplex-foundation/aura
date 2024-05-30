@@ -535,14 +535,24 @@ impl From<entities::models::ClItem> for ClItem {
     }
 }
 
-impl From<Updated<entities::models::AssetCollection>> for AssetCollection {
-    fn from(value: Updated<entities::models::AssetCollection>) -> Self {
+impl From<entities::models::AssetCollection> for AssetCollection {
+    fn from(value: entities::models::AssetCollection) -> Self {
         Self {
-            collection: value.value.collection.to_bytes().to_vec(),
-            is_collection_verified: value.value.is_collection_verified,
-            collection_seq: value.value.collection_seq,
-            slot_updated: value.slot_updated,
-            update_version: value.update_version.map(Into::into),
+            collection: Some(DynamicBytesField {
+                value: value.collection.value.to_bytes().to_vec(),
+                slot_updated: value.collection.slot_updated,
+                update_version: value.collection.update_version.map(Into::into),
+            }),
+            is_collection_verified: Some(DynamicBoolField {
+                value: value.is_collection_verified.value,
+                slot_updated: value.is_collection_verified.slot_updated,
+                update_version: value.is_collection_verified.update_version.map(Into::into),
+            }),
+            authority: value.authority.value.map(|v| DynamicBytesField {
+                value: v.to_bytes().to_vec(),
+                slot_updated: value.authority.slot_updated,
+                update_version: value.authority.update_version.map(Into::into),
+            }),
         }
     }
 }
@@ -653,18 +663,35 @@ impl TryFrom<ClItem> for entities::models::ClItem {
     }
 }
 
-impl TryFrom<AssetCollection> for Updated<entities::models::AssetCollection> {
+impl TryFrom<AssetCollection> for entities::models::AssetCollection {
     type Error = GrpcError;
 
     fn try_from(value: AssetCollection) -> Result<Self, Self::Error> {
         Ok(Self {
-            value: entities::models::AssetCollection {
-                collection: Pubkey::try_from(value.collection).map_err(GrpcError::PubkeyFrom)?,
-                is_collection_verified: value.is_collection_verified,
-                collection_seq: value.collection_seq,
-            },
-            slot_updated: value.slot_updated,
-            update_version: value.update_version.map(Into::into),
+            collection: value
+                .collection
+                .ok_or(GrpcError::MissingField("collection".to_string()))
+                .and_then(|v| {
+                    Ok::<Updated<Pubkey>, GrpcError>(Updated::new(
+                        v.slot_updated,
+                        v.update_version.map(Into::into),
+                        Pubkey::try_from(v.value).map_err(GrpcError::PubkeyFrom)?,
+                    ))
+                })?,
+            is_collection_verified: value.is_collection_verified.map(|v| v.into()).ok_or(
+                GrpcError::MissingField("is_collection_verified".to_string()),
+            )?,
+            authority: value
+                .authority
+                .map(|v| {
+                    Ok::<Updated<Option<Pubkey>>, GrpcError>(Updated::new(
+                        v.slot_updated,
+                        v.update_version.map(Into::into),
+                        Some(Pubkey::try_from(v.value).map_err(GrpcError::PubkeyFrom)?),
+                    ))
+                })
+                .transpose()?
+                .unwrap_or_default(),
         })
     }
 }
