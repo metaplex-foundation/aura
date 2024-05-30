@@ -26,6 +26,8 @@ pub enum RollupValidationError {
     SplCompression(#[from] spl_account_compression::ConcurrentMerkleTreeError),
     #[error("Anchor {0}")]
     Anchor(#[from] anchor_lang::error::Error),
+    #[error("FileChecksumMismatch: {0}")]
+    FileChecksumMismatch(String),
 }
 
 impl From<std::io::Error> for RollupValidationError {

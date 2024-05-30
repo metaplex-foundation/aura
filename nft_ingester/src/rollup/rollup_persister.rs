@@ -12,10 +12,8 @@ use metrics_utils::{MetricStatus, RollupPersisterMetricsConfig};
 use postgre_client::PgClient;
 use tokio::{sync::broadcast::Receiver, task::JoinError, time::Instant};
 
-use crate::{
-    bubblegum_updates_processor::BubblegumTxProcessor,
-    error::{IngesterError, RollupValidationError},
-};
+use crate::{bubblegum_updates_processor::BubblegumTxProcessor, error::IngesterError};
+use usecase::error::RollupValidationError;
 
 use super::rollup_verifier::RollupVerifier;
 

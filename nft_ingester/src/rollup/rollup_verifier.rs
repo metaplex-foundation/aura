@@ -6,7 +6,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 
-use crate::{error::RollupValidationError, tree_macros::validate_change_logs};
+use usecase::error::RollupValidationError;
 
 pub struct RollupVerifier;
 
@@ -23,7 +23,7 @@ impl RollupVerifier {
             leaf_hashes.push(leaf_hash);
         }
 
-        validate_change_logs(
+        usecase::merkle_tree::validate_change_logs(
             rollup.max_depth,
             rollup.max_buffer_size,
             &leaf_hashes,

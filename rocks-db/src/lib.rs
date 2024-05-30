@@ -17,7 +17,7 @@ pub use asset::{
 pub use column::columns;
 use column::{Column, TypedColumn};
 use entities::models::{
-    AssetSignature, DownloadedRollupData, FailedRollup, OffChainData, RollupToVerify, RawBlock,
+    AssetSignature, DownloadedRollupData, FailedRollup, OffChainData, RawBlock, RollupToVerify,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
@@ -49,8 +49,8 @@ pub mod offchain_data;
 pub mod parameters;
 pub mod processing_possibility;
 pub mod raw_block;
-pub mod rollup;
 pub mod raw_blocks_streaming_client;
+pub mod rollup;
 pub mod sequence_consistent;
 pub mod signature_client;
 pub mod slots_dumper;
