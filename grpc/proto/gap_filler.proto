@@ -157,6 +157,12 @@ message AssetDetails {
     OffchainData offchain_data = 39;
 }
 
+// This field is a cbor encoded object of RawBlock type depending on
+// a "~1.17" version of the solana-transaction-status package
+message RawBlock {
+    bytes block = 1;
+}
+
 // Dynamic field messages
 message DynamicBoolField {
     bool value = 1;
@@ -247,7 +253,13 @@ message RangeRequest {
     uint64 end_slot = 2;
 }
 
+message GetRawBlockRequest {
+    uint64 slot = 1;
+}
+
 // Define the gRPC service
 service GapFillerService {
     rpc GetAssetsUpdatedWithin(RangeRequest) returns (stream AssetDetails);
+    rpc GetRawBlocksWithin(RangeRequest) returns (stream RawBlock);
+    rpc GetRawBlock(GetRawBlockRequest) returns (RawBlock);
 }

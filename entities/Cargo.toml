@@ -20,6 +20,7 @@ sha2 = "0.10.0"
 mpl-bubblegum = {version = "1.2.0", features = ["serde"] }
 serde_json = "1.0.81"
 spl-account-compression = "0.3.0"
+solana-transaction-status = "~1.17"
 
 [dev-dependencies]
 hex = "0.4.3"
