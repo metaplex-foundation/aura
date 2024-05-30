@@ -450,27 +450,34 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     };
     if let Some(gaped_data_client) = grpc_client.clone() {
-        let cloned_rx = shutdown_rx.resubscribe();
-        while first_processed_slot.load(Ordering::SeqCst) == 0 && cloned_rx.is_empty() {
+        while first_processed_slot.load(Ordering::SeqCst) == 0 && shutdown_rx.is_empty() {
             tokio::time::sleep(Duration::from_millis(100)).await
         }
         let cloned_rocks_storage = rocks_storage.clone();
-        if cloned_rx.is_empty() {
+        if shutdown_rx.is_empty() {
+            let gaped_data_client_clone = gaped_data_client.clone();
+            let first_processed_slot_value = first_processed_slot.load(Ordering::SeqCst);
+            let cloned_rx = shutdown_rx.resubscribe();
             mutexed_tasks.lock().await.spawn(async move {
                 let processed_assets = process_asset_details_stream(
-                    cloned_rx.resubscribe(),
+                    cloned_rx,
                     cloned_rocks_storage.clone(),
                     last_saved_slot,
-                    first_processed_slot.load(Ordering::SeqCst),
-                    gaped_data_client.clone(),
+                    first_processed_slot_value,
+                    gaped_data_client_clone,
                 )
                 .await;
-                info!("Processed {} gaped slots", processed_assets);
+                info!("Processed {} gaped assets", processed_assets);
+                Ok(())
+            });
+            let cloned_rocks_storage = rocks_storage.clone();
+            let cloned_rx = shutdown_rx.resubscribe();
+            mutexed_tasks.lock().await.spawn(async move {
                 let processed_raw_blocks = process_raw_blocks_stream(
                     cloned_rx,
                     cloned_rocks_storage,
                     last_saved_slot,
-                    first_processed_slot.load(Ordering::SeqCst),
+                    first_processed_slot_value,
                     gaped_data_client,
                 )
                 .await;

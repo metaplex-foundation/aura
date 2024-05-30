@@ -2265,6 +2265,7 @@ dependencies = [
  "sha2 0.10.8",
  "solana-program",
  "solana-sdk",
+ "solana-transaction-status",
  "spl-account-compression",
  "sqlx",
 ]
@@ -2787,11 +2788,14 @@ dependencies = [
  "interface",
  "mockall 0.12.1",
  "prost 0.12.3",
+ "serde_cbor",
  "solana-sdk",
+ "solana-transaction-status",
  "thiserror",
  "tokio",
  "tonic 0.10.2",
  "tonic-build 0.10.2",
+ "tracing",
 ]
 
 [[package]]
@@ -4069,6 +4073,7 @@ dependencies = [
  "rocks-db",
  "schemars",
  "serde",
+ "serde_cbor",
  "serde_derive",
  "serde_json",
  "setup",

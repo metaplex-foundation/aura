@@ -4,8 +4,8 @@ use interface::asset_streaming_and_discovery::{
     AsyncError, MockAssetDetailsConsumer, MockRawBlocksConsumer,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::migrator::MigrationState;
 use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
+use rocks_db::migrator::MigrationState;
 use solana_sdk::pubkey::Pubkey;
 use solana_transaction_status::UiConfirmedBlock;
 use std::sync::Arc;
