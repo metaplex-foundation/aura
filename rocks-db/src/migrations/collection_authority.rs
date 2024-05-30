@@ -1,10 +1,12 @@
 use crate::asset::AssetCollection;
+use crate::column::TypedColumn;
+use crate::errors::StorageError;
 use crate::migrator::{MigrationState, MigrationVersions, BATCH_SIZE};
 use crate::Storage;
 use bincode::deserialize;
 use entities::models::{UpdateVersion, Updated};
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocksdb::MergeOperands;
+use rocksdb::{IteratorMode, MergeOperands};
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
@@ -101,8 +103,17 @@ impl AssetCollectionVersion0 {
     }
 }
 
-pub(crate) async fn apply_migration(db_path: &str) -> crate::Result<()> {
+pub(crate) async fn apply_migration(
+    db_path: &str,
+    migration_storage_path: &str,
+) -> crate::Result<()> {
     info!("Start executing migration V0");
+    let temporary_migration_storage = Storage::open(
+        migration_storage_path,
+        Arc::new(Mutex::new(JoinSet::new())),
+        Arc::new(RequestErrorDurationMetrics::new()),
+        MigrationState::Version(0),
+    )?;
     {
         let old_storage = Storage::open(
             db_path,
@@ -110,17 +121,38 @@ pub(crate) async fn apply_migration(db_path: &str) -> crate::Result<()> {
             Arc::new(RequestErrorDurationMetrics::new()),
             MigrationState::Version(0),
         )?;
-        // "force-merge" logic: the merge is happening only on read operations,
-        // so we iterate over all records inside column in order to merge them
-        for (key, value) in old_storage
-            .asset_collection_data
-            .iter_start()
-            .filter_map(std::result::Result::ok)
-        {
-            let _key = key.to_vec();
-            let _value = value.to_vec();
+        let iter = old_storage.db.iterator_cf(
+            &old_storage
+                .db
+                .cf_handle(AssetCollection::NAME)
+                .ok_or(StorageError::Common(
+                    "Cannot get cf_handle for AssetCollection".to_string(),
+                ))?,
+            IteratorMode::Start,
+        );
+
+        info!("Start coping data into temporary storage");
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        for (key, value) in iter.flatten() {
+            batch.put_cf(
+                &temporary_migration_storage
+                    .db
+                    .cf_handle(AssetCollection::NAME)
+                    .ok_or(StorageError::Common(
+                        "Cannot get cf_handle for AssetCollection".to_string(),
+                    ))?,
+                key,
+                value,
+            );
+            if batch.len() >= BATCH_SIZE {
+                temporary_migration_storage.db.write(batch)?;
+                batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+            }
         }
-        // close db connection in the end of the scope
+        temporary_migration_storage.db.write(batch)?;
+
+        info!("Finish coping data into temporary storage");
+        old_storage.db.drop_cf(AssetCollection::NAME)?;
     }
 
     let new_storage = Storage::open(
@@ -130,12 +162,15 @@ pub(crate) async fn apply_migration(db_path: &str) -> crate::Result<()> {
         MigrationState::Last,
     )?;
     let mut batch = HashMap::new();
-    for (key, value) in new_storage
+    for (key, value) in temporary_migration_storage
         .asset_collection_data
         .iter_start()
         .filter_map(std::result::Result::ok)
     {
-        let key_decoded = match new_storage.asset_collection_data.decode_key(key.to_vec()) {
+        let key_decoded = match temporary_migration_storage
+            .asset_collection_data
+            .decode_key(key.to_vec())
+        {
             Ok(key_decoded) => key_decoded,
             Err(e) => {
                 error!("collection data decode_key: {:?}, {}", key.to_vec(), e);
@@ -153,18 +188,10 @@ pub(crate) async fn apply_migration(db_path: &str) -> crate::Result<()> {
         if batch.len() >= BATCH_SIZE {
             new_storage
                 .asset_collection_data
-                .delete_batch(batch.keys().cloned().collect::<Vec<_>>())
-                .await?;
-            new_storage
-                .asset_collection_data
                 .put_batch(std::mem::take(&mut batch))
                 .await?;
         }
     }
-    new_storage
-        .asset_collection_data
-        .delete_batch(batch.keys().cloned().collect::<Vec<_>>())
-        .await?;
     new_storage.asset_collection_data.put_batch(batch).await?;
     info!("Finish migration V0");
 
@@ -172,5 +199,8 @@ pub(crate) async fn apply_migration(db_path: &str) -> crate::Result<()> {
         .migration_version
         .put_async(0, MigrationVersions {})
         .await?;
+    temporary_migration_storage
+        .db
+        .drop_cf(AssetCollection::NAME)?;
     Ok(())
 }

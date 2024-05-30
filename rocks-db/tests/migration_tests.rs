@@ -102,6 +102,7 @@ mod tests {
         .unwrap();
         Storage::apply_all_migrations(
             dir.path().to_str().unwrap(),
+            TempDir::new().unwrap().path().to_str().unwrap(),
             Arc::new(migration_version_manager),
         )
         .await

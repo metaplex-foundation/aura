@@ -200,6 +200,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .rocks_db_path_container
             .clone()
             .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        &config.migration_storage_path,
         Arc::new(migration_version_manager),
     )
     .await

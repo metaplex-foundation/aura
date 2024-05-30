@@ -19,6 +19,7 @@ pub enum MigrationState {
 impl Storage {
     pub async fn apply_all_migrations(
         db_path: &str,
+        migration_storage_path: &str,
         migration_version_manager: Arc<impl PrimaryStorageMigrationVersionManager>,
     ) -> Result<()> {
         let applied_migrations = migration_version_manager
@@ -26,15 +27,25 @@ impl Storage {
             .map_err(StorageError::Common)?;
         for version in 0..=CURRENT_MIGRATION_VERSION {
             if !applied_migrations.contains(&version) {
-                Storage::apply_migration(db_path, version).await?;
+                Storage::apply_migration(db_path, migration_storage_path, version).await?;
             }
         }
         Ok(())
     }
 
-    async fn apply_migration(db_path: &str, version: u64) -> Result<()> {
+    async fn apply_migration(
+        db_path: &str,
+        migration_storage_path: &str,
+        version: u64,
+    ) -> Result<()> {
         match version {
-            0 => crate::migrations::collection_authority::apply_migration(db_path).await?,
+            0 => {
+                crate::migrations::collection_authority::apply_migration(
+                    db_path,
+                    migration_storage_path,
+                )
+                .await?
+            }
             _ => return Err(StorageError::InvalidMigrationVersion(version)),
         }
 
