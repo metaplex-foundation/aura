@@ -188,11 +188,11 @@ fn convert_rocks_asset_model(
             .clone()
             .map(|plugins_json_version| plugins_json_version.value),
         external_plugins: dynamic_data
-            .mpl_core_plugins
+            .mpl_core_external_plugins
             .clone()
             .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
         unknown_external_plugins: dynamic_data
-            .mpl_core_unknown_plugins
+            .mpl_core_unknown_external_plugins
             .clone()
             .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
     })

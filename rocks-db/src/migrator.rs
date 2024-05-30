@@ -46,7 +46,13 @@ impl Storage {
                 )
                 .await?
             }
-            1 => crate::migrations::external_plugins::apply_migration(db_path).await?,
+            1 => {
+                crate::migrations::external_plugins::apply_migration(
+                    db_path,
+                    migration_storage_path,
+                )
+                .await?
+            }
             _ => return Err(StorageError::InvalidMigrationVersion(version)),
         }
 

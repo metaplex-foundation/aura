@@ -131,7 +131,7 @@ pub(crate) async fn apply_migration(
             IteratorMode::Start,
         );
 
-        info!("Start coping data into temporary storage");
+        info!("Start coping data into temporary storage V1");
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for (key, value) in iter.flatten() {
             batch.put_cf(
@@ -151,10 +151,9 @@ pub(crate) async fn apply_migration(
         }
         temporary_migration_storage.db.write(batch)?;
 
-        info!("Finish coping data into temporary storage");
+        info!("Finish coping data into temporary storage V1");
         old_storage.db.drop_cf(AssetCollection::NAME)?;
     }
-
     let new_storage = Storage::open(
         db_path,
         Arc::new(Mutex::new(JoinSet::new())),
