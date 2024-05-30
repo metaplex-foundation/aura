@@ -9,28 +9,9 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use std::cmp::Ordering;
 
-use crate::key_encoders::{
-    decode_pubkey, decode_u64, decode_u64_pubkey, encode_pubkey, encode_u64, encode_u64_pubkey,
-};
+use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
 use crate::Result;
 use crate::TypedColumn;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MigrationVersions {}
-
-impl TypedColumn for MigrationVersions {
-    type KeyType = u64;
-    type ValueType = Self;
-    const NAME: &'static str = "MIGRATION_VERSIONS";
-
-    fn encode_key(version: u64) -> Vec<u8> {
-        encode_u64(version)
-    }
-
-    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        decode_u64(bytes)
-    }
-}
 
 #[derive(Debug)]
 pub struct AssetSelectedMaps {
