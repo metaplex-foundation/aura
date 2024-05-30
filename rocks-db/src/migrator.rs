@@ -13,6 +13,7 @@ pub(crate) const BATCH_SIZE: usize = 100_000;
 
 pub enum MigrationState {
     Last,
+    CreateColumnFamilies,
     Version(u64),
 }
 

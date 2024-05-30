@@ -1,3 +1,4 @@
+use inflector::Inflector;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
@@ -314,6 +315,13 @@ impl Storage {
         cf_options.set_max_bytes_for_level_base(total_size_base);
         cf_options.set_target_file_size_base(file_size_base);
 
+        if matches!(migration_state, &MigrationState::CreateColumnFamilies) {
+            cf_options.set_merge_operator_associative(
+                &format!("merge_fn_merge_{}", C::NAME.to_snake_case()),
+                asset::AssetStaticDetails::merge_keep_existing,
+            );
+            return cf_options;
+        }
         // Optional merges
         match C::NAME {
             AssetStaticDetails::NAME => {
@@ -332,6 +340,9 @@ impl Storage {
                         }
                     }
                     MigrationState::Last => asset::AssetDynamicDetails::merge_dynamic_details,
+                    MigrationState::CreateColumnFamilies => {
+                        asset::AssetStaticDetails::merge_keep_existing
+                    }
                 };
                 cf_options.set_merge_operator_associative("merge_fn_merge_dynamic_details", mf);
             }
