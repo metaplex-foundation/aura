@@ -494,7 +494,7 @@ impl Storage {
             MigrationVersions::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_migration_versions",
-                    TokenAccountMintOwnerIdx::merge_values,
+                    asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             _ => {}

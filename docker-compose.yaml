@@ -17,6 +17,7 @@ services:
       - ${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:rw
       - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
       - ${INGESTER_FILE_STORAGE_PATH}:${INGESTER_FILE_STORAGE_PATH_CONTAINER}:rw
+      - ${INGESTER_MIGRATION_STORAGE_PATH}:${INGESTER_MIGRATION_STORAGE_PATH}:rw
       - ./creds.json:/usr/src/app/creds.json
       - ./migrations:/usr/src/app/migrations
       - ./arweave_wallet.json:/usr/src/app/arweave_wallet.json
