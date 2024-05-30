@@ -219,14 +219,14 @@ pub(crate) async fn apply_migration(
         {
             Ok(key_decoded) => key_decoded,
             Err(e) => {
-                error!("collection data decode_key: {:?}, {}", key.to_vec(), e);
+                error!("dynamic data decode_key: {:?}, {}", key.to_vec(), e);
                 continue;
             }
         };
         let value_decoded = match deserialize::<AssetDynamicDetailsV0>(&value) {
             Ok(value_decoded) => value_decoded,
             Err(e) => {
-                error!("collection data deserialize: {}, {}", key_decoded, e);
+                error!("dynamic data deserialize: {}, {}", key_decoded, e);
                 continue;
             }
         };
