@@ -406,16 +406,10 @@ impl SpecificationAssetClass {
     pub fn as_str_name(&self) -> &'static str {
         match self {
             SpecificationAssetClass::Unknown => "SPECIFICATION_ASSET_CLASS_UNKNOWN",
-            SpecificationAssetClass::FungibleToken => {
-                "SPECIFICATION_ASSET_CLASS_FUNGIBLE_TOKEN"
-            }
-            SpecificationAssetClass::FungibleAsset => {
-                "SPECIFICATION_ASSET_CLASS_FUNGIBLE_ASSET"
-            }
+            SpecificationAssetClass::FungibleToken => "SPECIFICATION_ASSET_CLASS_FUNGIBLE_TOKEN",
+            SpecificationAssetClass::FungibleAsset => "SPECIFICATION_ASSET_CLASS_FUNGIBLE_ASSET",
             SpecificationAssetClass::Nft => "SPECIFICATION_ASSET_CLASS_NFT",
-            SpecificationAssetClass::PrintableNft => {
-                "SPECIFICATION_ASSET_CLASS_PRINTABLE_NFT"
-            }
+            SpecificationAssetClass::PrintableNft => "SPECIFICATION_ASSET_CLASS_PRINTABLE_NFT",
             SpecificationAssetClass::ProgrammableNft => {
                 "SPECIFICATION_ASSET_CLASS_PROGRAMMABLE_NFT"
             }
@@ -426,12 +420,8 @@ impl SpecificationAssetClass {
             SpecificationAssetClass::NonTransferableNft => {
                 "SPECIFICATION_ASSET_CLASS_NON_TRANSFERABLE_NFT"
             }
-            SpecificationAssetClass::IdentityNft => {
-                "SPECIFICATION_ASSET_CLASS_IDENTITY_NFT"
-            }
-            SpecificationAssetClass::MplCoreAsset => {
-                "SPECIFICATION_ASSET_CLASS_MPL_CORE_ASSET"
-            }
+            SpecificationAssetClass::IdentityNft => "SPECIFICATION_ASSET_CLASS_IDENTITY_NFT",
+            SpecificationAssetClass::MplCoreAsset => "SPECIFICATION_ASSET_CLASS_MPL_CORE_ASSET",
             SpecificationAssetClass::MplCoreCollection => {
                 "SPECIFICATION_ASSET_CLASS_MPL_CORE_COLLECTION"
             }
@@ -450,14 +440,10 @@ impl SpecificationAssetClass {
             "SPECIFICATION_ASSET_CLASS_TRANSFER_RESTRICTED_NFT" => {
                 Some(Self::TransferRestrictedNft)
             }
-            "SPECIFICATION_ASSET_CLASS_NON_TRANSFERABLE_NFT" => {
-                Some(Self::NonTransferableNft)
-            }
+            "SPECIFICATION_ASSET_CLASS_NON_TRANSFERABLE_NFT" => Some(Self::NonTransferableNft),
             "SPECIFICATION_ASSET_CLASS_IDENTITY_NFT" => Some(Self::IdentityNft),
             "SPECIFICATION_ASSET_CLASS_MPL_CORE_ASSET" => Some(Self::MplCoreAsset),
-            "SPECIFICATION_ASSET_CLASS_MPL_CORE_COLLECTION" => {
-                Some(Self::MplCoreCollection)
-            }
+            "SPECIFICATION_ASSET_CLASS_MPL_CORE_COLLECTION" => Some(Self::MplCoreCollection),
             _ => None,
         }
     }
@@ -539,9 +525,7 @@ impl TokenStandard {
             TokenStandard::Fungible => "FUNGIBLE",
             TokenStandard::NonFungibleEdition => "NON_FUNGIBLE_EDITION",
             TokenStandard::ProgrammableNonFungible => "PROGRAMMABLE_NON_FUNGIBLE",
-            TokenStandard::ProgrammableNonFungibleEdition => {
-                "PROGRAMMABLE_NON_FUNGIBLE_EDITION"
-            }
+            TokenStandard::ProgrammableNonFungibleEdition => "PROGRAMMABLE_NON_FUNGIBLE_EDITION",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -552,9 +536,7 @@ impl TokenStandard {
             "FUNGIBLE" => Some(Self::Fungible),
             "NON_FUNGIBLE_EDITION" => Some(Self::NonFungibleEdition),
             "PROGRAMMABLE_NON_FUNGIBLE" => Some(Self::ProgrammableNonFungible),
-            "PROGRAMMABLE_NON_FUNGIBLE_EDITION" => {
-                Some(Self::ProgrammableNonFungibleEdition)
-            }
+            "PROGRAMMABLE_NON_FUNGIBLE_EDITION" => Some(Self::ProgrammableNonFungibleEdition),
             _ => None,
         }
     }
@@ -617,8 +599,8 @@ impl UpdateVersion {
 /// Generated client implementations.
 pub mod gap_filler_service_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
-    use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    use tonic::codegen::*;
     /// Define the gRPC service
     #[derive(Debug, Clone)]
     pub struct GapFillerServiceClient<T> {
@@ -663,9 +645,8 @@ pub mod gap_filler_service_client {
                     <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
-            >>::Error: Into<StdError> + Send + Sync,
+            <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
+                Into<StdError> + Send + Sync,
         {
             GapFillerServiceClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -707,27 +688,21 @@ pub mod gap_filler_service_client {
             tonic::Response<tonic::codec::Streaming<super::AssetDetails>>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/gapfiller.GapFillerService/GetAssetsUpdatedWithin",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "gapfiller.GapFillerService",
-                        "GetAssetsUpdatedWithin",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "gapfiller.GapFillerService",
+                "GetAssetsUpdatedWithin",
+            ));
             self.inner.server_streaming(req, path, codec).await
         }
     }
@@ -742,16 +717,12 @@ pub mod gap_filler_service_server {
         /// Server streaming response type for the GetAssetsUpdatedWithin method.
         type GetAssetsUpdatedWithinStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<super::AssetDetails, tonic::Status>,
-            >
-            + Send
+            > + Send
             + 'static;
         async fn get_assets_updated_within(
             &self,
             request: tonic::Request<super::RangeRequest>,
-        ) -> std::result::Result<
-            tonic::Response<Self::GetAssetsUpdatedWithinStream>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<Self::GetAssetsUpdatedWithinStream>, tonic::Status>;
     }
     /// Define the gRPC service
     #[derive(Debug)]
@@ -777,10 +748,7 @@ pub mod gap_filler_service_server {
                 max_encoding_message_size: None,
             }
         }
-        pub fn with_interceptor<F>(
-            inner: T,
-            interceptor: F,
-        ) -> InterceptedService<Self, F>
+        pub fn with_interceptor<F>(inner: T, interceptor: F) -> InterceptedService<Self, F>
         where
             F: tonic::service::Interceptor,
         {
@@ -836,26 +804,21 @@ pub mod gap_filler_service_server {
                 "/gapfiller.GapFillerService/GetAssetsUpdatedWithin" => {
                     #[allow(non_camel_case_types)]
                     struct GetAssetsUpdatedWithinSvc<T: GapFillerService>(pub Arc<T>);
-                    impl<
-                        T: GapFillerService,
-                    > tonic::server::ServerStreamingService<super::RangeRequest>
-                    for GetAssetsUpdatedWithinSvc<T> {
+                    impl<T: GapFillerService>
+                        tonic::server::ServerStreamingService<super::RangeRequest>
+                        for GetAssetsUpdatedWithinSvc<T>
+                    {
                         type Response = super::AssetDetails;
                         type ResponseStream = T::GetAssetsUpdatedWithinStream;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::ResponseStream>,
-                            tonic::Status,
-                        >;
+                        type Future =
+                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::RangeRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as GapFillerService>::get_assets_updated_within(
-                                        &inner,
-                                        request,
-                                    )
+                                <T as GapFillerService>::get_assets_updated_within(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -884,18 +847,14 @@ pub mod gap_filler_service_server {
                     };
                     Box::pin(fut)
                 }
-                _ => {
-                    Box::pin(async move {
-                        Ok(
-                            http::Response::builder()
-                                .status(200)
-                                .header("grpc-status", "12")
-                                .header("content-type", "application/grpc")
-                                .body(empty_body())
-                                .unwrap(),
-                        )
-                    })
-                }
+                _ => Box::pin(async move {
+                    Ok(http::Response::builder()
+                        .status(200)
+                        .header("grpc-status", "12")
+                        .header("content-type", "application/grpc")
+                        .body(empty_body())
+                        .unwrap())
+                }),
             }
         }
     }
