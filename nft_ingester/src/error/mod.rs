@@ -141,6 +141,8 @@ pub enum RollupValidationError {
     WrongChangeLogIndex(String, u32, u32),
     #[error("SplCompression: {0}")]
     SplCompression(#[from] spl_account_compression::ConcurrentMerkleTreeError),
+    #[error("FileChecksumMismatch: {0}")]
+    FileChecksumMismatch(String),
 }
 
 impl From<std::io::Error> for RollupValidationError {

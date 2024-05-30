@@ -183,3 +183,36 @@ pub enum RollupState {
     FailSendingTransaction,
     Complete,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
+pub enum FailedRollupState {
+    DownloadFailed,
+    ChecksumVerifyFailed,
+    RollupVerifyFailed,
+    FileSerialization,
+}
+
+impl From<FailedRollupState> for u8 {
+    fn from(value: FailedRollupState) -> Self {
+        match value {
+            FailedRollupState::DownloadFailed => 0,
+            FailedRollupState::ChecksumVerifyFailed => 1,
+            FailedRollupState::RollupVerifyFailed => 2,
+            FailedRollupState::FileSerialization => 3,
+        }
+    }
+}
+
+impl TryFrom<u8> for FailedRollupState {
+    type Error = String;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(FailedRollupState::DownloadFailed),
+            1 => Ok(FailedRollupState::ChecksumVerifyFailed),
+            2 => Ok(FailedRollupState::RollupVerifyFailed),
+            3 => Ok(FailedRollupState::FileSerialization),
+            _ => Err("Wrong enum value".to_string()),
+        }
+    }
+}

@@ -1194,7 +1194,8 @@ impl RollupProcessorMetricsConfig {
 #[derive(Debug, Clone)]
 pub struct RollupPersisterMetricsConfig {
     start_time: Gauge,
-    total_rollups: Family<MetricLabelWithStatus, Counter>,
+    rollups_with_status: Family<MetricLabelWithStatus, Counter>,
+    rollups: Family<MetricLabel, Counter>,
     persisting_latency: Family<MetricLabel, Histogram>,
 }
 
@@ -1208,7 +1209,8 @@ impl RollupPersisterMetricsConfig {
     pub fn new() -> Self {
         Self {
             start_time: Default::default(),
-            total_rollups: Default::default(),
+            rollups_with_status: Default::default(),
+            rollups: Default::default(),
             persisting_latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(1.0, 2.0, 12))
             }),
@@ -1217,11 +1219,18 @@ impl RollupPersisterMetricsConfig {
     pub fn start_time(&self) -> i64 {
         self.start_time.set(Utc::now().timestamp())
     }
-    pub fn inc_total_rollups(&self, label: &str, status: MetricStatus) -> u64 {
-        self.total_rollups
+    pub fn inc_rollups_with_status(&self, label: &str, status: MetricStatus) -> u64 {
+        self.rollups_with_status
             .get_or_create(&MetricLabelWithStatus {
                 name: label.to_owned(),
                 status,
+            })
+            .inc()
+    }
+    pub fn inc_rollups(&self, label: &str) -> u64 {
+        self.rollups
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
             })
             .inc()
     }
@@ -1240,9 +1249,15 @@ impl RollupPersisterMetricsConfig {
         );
 
         registry.register(
-            "total_rollups",
-            "Total rollups processed",
-            self.total_rollups.clone(),
+            "rollups_with_status",
+            "Rollups counter with status",
+            self.rollups_with_status.clone(),
+        );
+
+        registry.register(
+            "rollups",
+            "Rollups counter without status",
+            self.rollups_with_status.clone(),
         );
 
         registry.register(

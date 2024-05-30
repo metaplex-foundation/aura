@@ -1,4 +1,7 @@
-use entities::models::AssetSignatureKey;
+use entities::{
+    enums::FailedRollupState,
+    models::{AssetSignatureKey, FailedRollupKey},
+};
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{storage_traits::AssetUpdatedKey, Result};
@@ -156,6 +159,22 @@ pub fn encode_pubkeyx3(ask: (Pubkey, Pubkey, Pubkey)) -> Vec<u8> {
     key.extend_from_slice(&ask.1.to_bytes());
     key.extend_from_slice(&ask.2.to_bytes());
     key
+}
+
+pub fn encode_failed_rollup_key(key: FailedRollupKey) -> Vec<u8> {
+    let state = key.status as u8;
+    let hash = key.hash.into_bytes();
+    [vec![state], hash].concat()
+}
+
+pub fn dencode_failed_rollup_key(key: Vec<u8>) -> Result<FailedRollupKey> {
+    Ok(FailedRollupKey {
+        status: FailedRollupState::try_from(
+            *key.get(0).ok_or(crate::StorageError::InvalidKeyLength)?,
+        )
+        .map_err(|e| crate::StorageError::Common(e))?,
+        hash: String::from_utf8(key[1..].to_vec()).unwrap_or_default(),
+    })
 }
 
 #[cfg(test)]

@@ -15,7 +15,9 @@ pub use asset::{
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
-use entities::models::{AssetSignature, OffChainData, RollupToVerify};
+use entities::models::{
+    AssetSignature, DownloadedRollupData, FailedRollup, OffChainData, RollupToVerify,
+};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -93,6 +95,8 @@ pub struct Storage {
     pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
     pub asset_signature: Column<AssetSignature>,
     pub rollup_to_verify: Column<RollupToVerify>,
+    pub failed_rollups: Column<FailedRollup>,
+    pub downloaded_rollups: Column<DownloadedRollupData>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -135,6 +139,8 @@ impl Storage {
         let token_account_owner_idx = Self::column(db.clone(), red_metrics.clone());
         let token_account_mint_owner_idx = Self::column(db.clone(), red_metrics.clone());
         let rollup_to_verify = Self::column(db.clone(), red_metrics.clone());
+        let failed_rollups = Self::column(db.clone(), red_metrics.clone());
+        let downloaded_rollups = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -170,6 +176,8 @@ impl Storage {
             asset_signature,
             token_account_mint_owner_idx,
             rollup_to_verify,
+            failed_rollups,
+            downloaded_rollups,
         }
     }
 
@@ -236,6 +244,8 @@ impl Storage {
             Self::new_cf_descriptor::<TokenAccountOwnerIdx>(),
             Self::new_cf_descriptor::<TokenAccountMintOwnerIdx>(),
             Self::new_cf_descriptor::<RollupToVerify>(),
+            Self::new_cf_descriptor::<FailedRollup>(),
+            Self::new_cf_descriptor::<DownloadedRollupData>(),
         ]
     }
 
@@ -484,6 +494,18 @@ impl Storage {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_rollup_to_verify",
                     rollup::merge_rollup,
+                );
+            }
+            FailedRollup::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_failed_rollup",
+                    rollup::merge_failed_rollup,
+                );
+            }
+            DownloadedRollupData::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_downloaded_rollup",
+                    rollup::merge_downloaded_rollup,
                 );
             }
             _ => {}

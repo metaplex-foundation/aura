@@ -10,7 +10,7 @@ async-trait = "0.1.75"
 entities = { path = "../entities" }
 interface = { path = "../interface" }
 tracing = "0.1.40"
-solana-sdk = { version = "~1.18.11" }
+solana-sdk = { workspace = true }
 metrics-utils = { path = "../metrics_utils" }
 tokio = { version = "1.26.0", features = ["full", "tracing"] }
 solana-storage-bigtable = "~1.18.11"

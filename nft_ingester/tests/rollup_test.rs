@@ -3,21 +3,17 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anchor_lang::prelude::*;
 use async_trait::async_trait;
-use itertools::Itertools;
 use mpl_bubblegum::types::{LeafSchema, MetadataArgs};
 
 use digital_asset_types::rpc::AssetProof;
 use entities::api_req_params::GetAssetProof;
-use entities::enums::RollupState;
-use entities::models::BufferedTransaction;
+use entities::enums::{FailedRollupState, RollupState};
+use entities::models::{BufferedTransaction, FailedRollupKey};
 use entities::models::{RollupToVerify, RollupWithState};
-use entities::rollup::{
-    BatchMintInstruction, ChangeLogEventV1, PathNode, RolledMintInstruction, Rollup,
-};
+use entities::rollup::{ChangeLogEventV1, PathNode, RolledMintInstruction, Rollup};
 use flatbuffers::FlatBufferBuilder;
 use interface::error::UsecaseError;
 use interface::rollup::MockRollupDownloader;
@@ -31,13 +27,11 @@ use nft_ingester::config::JsonMiddlewareConfig;
 use nft_ingester::error::{IngesterError, RollupValidationError};
 use nft_ingester::json_worker::JsonWorker;
 use nft_ingester::rollup::rollup_persister::{RollupPersister, MAX_ROLLUP_DOWNLOAD_ATTEMPTS};
-use nft_ingester::rollup::rollup_processor;
 use nft_ingester::rollup::rollup_processor::{MockPermanentStorageClient, RollupProcessor};
 use nft_ingester::rollup::rollup_verifier::RollupVerifier;
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
 use rand::{thread_rng, Rng};
-use rocks_db::column::TypedColumn;
 use serde_json::json;
 use solana_program::instruction::CompiledInstruction;
 use solana_program::message::Message;
@@ -459,21 +453,21 @@ async fn rollup_persister_test() {
 
     let rollup_persister = RollupPersister::new(
         env.rocks_env.storage.clone(),
+        env.pg_env.client.clone(),
         RollupVerifier {},
         mocked_downloader,
         Arc::new(RollupPersisterMetricsConfig::new()),
     );
 
-    let rollup_to_verify = env
+    let (rollup_to_verify, _) = env
         .rocks_env
         .storage
         .fetch_rollup_for_verifying()
         .await
-        .unwrap()
         .unwrap();
 
     rollup_persister
-        .verify_rollup(rollup_to_verify)
+        .verify_rollup(rollup_to_verify.unwrap(), None)
         .await
         .unwrap();
 
@@ -540,6 +534,16 @@ async fn rollup_persister_test() {
             .is_none(),
         true
     );
+
+    assert_eq!(
+        env.rocks_env
+            .storage
+            .downloaded_rollups
+            .get(metadata_hash.clone())
+            .unwrap()
+            .is_some(),
+        true
+    );
 }
 
 #[tokio::test]
@@ -580,21 +584,23 @@ async fn rollup_persister_download_fail_test() {
 
     let rollup_persister = RollupPersister::new(
         env.rocks_env.storage.clone(),
+        env.pg_env.client.clone(),
         RollupVerifier {},
         mocked_downloader,
         Arc::new(RollupPersisterMetricsConfig::new()),
     );
 
-    let rollup_to_verify = env
+    let (rollup_to_verify, _) = env
         .rocks_env
         .storage
         .fetch_rollup_for_verifying()
         .await
-        .unwrap()
         .unwrap();
 
     // ignoring error here because check the result later
-    let _ = rollup_persister.verify_rollup(rollup_to_verify).await;
+    let _ = rollup_persister
+        .verify_rollup(rollup_to_verify.unwrap(), None)
+        .await;
 
     let r = env
         .rocks_env
@@ -645,21 +651,23 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
 
     let rollup_persister = RollupPersister::new(
         env.rocks_env.storage.clone(),
+        env.pg_env.client.clone(),
         RollupVerifier {},
         mocked_downloader,
         Arc::new(RollupPersisterMetricsConfig::new()),
     );
 
-    let rollup_to_verify = env
+    let (rollup_to_verify, _) = env
         .rocks_env
         .storage
         .fetch_rollup_for_verifying()
         .await
-        .unwrap()
         .unwrap();
 
     // ignoring error here because check the result later
-    let _ = rollup_persister.verify_rollup(rollup_to_verify).await;
+    let _ = rollup_persister
+        .verify_rollup(rollup_to_verify.unwrap(), None)
+        .await;
 
     let r = env
         .rocks_env
@@ -669,6 +677,21 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
         .unwrap();
 
     assert_eq!(r.is_none(), true);
+
+    let key = FailedRollupKey {
+        status: FailedRollupState::DownloadFailed,
+        hash: metadata_hash.clone(),
+    };
+    let failed_rollup = env
+        .rocks_env
+        .storage
+        .failed_rollups
+        .get(key)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(failed_rollup.file_hash, metadata_hash.clone());
+    assert_eq!(failed_rollup.download_attempts, download_attempts + 1);
 }
 
 #[tokio::test]

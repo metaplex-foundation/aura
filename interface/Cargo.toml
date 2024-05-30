@@ -11,7 +11,7 @@ futures="0.3.29"
 mockall = "0.12.0"
 thiserror = "1.0.51"
 entities = { path = "../entities" }
-solana-sdk = "~1.18.11"
+solana-sdk = { workspace = true }
 solana-client = "~1.18.11"
 plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
 solana-transaction-status = "~1.18.11"
