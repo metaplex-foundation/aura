@@ -2,9 +2,13 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use blockbuster::mpl_core::types::{
+        DataStore, ExternalPluginAdapter, ExternalPluginAdapterSchema, ExternalPluginAdapterType,
         FreezeDelegate, Plugin, PluginAuthority, PluginType, TransferDelegate, UpdateAuthority,
     };
-    use blockbuster::mpl_core::{IndexableAsset, IndexablePluginSchemaV1};
+    use blockbuster::mpl_core::{
+        IndexableAsset, IndexableCheckResult, IndexableExternalPluginSchemaV1,
+        IndexablePluginSchemaV1, LifecycleChecks,
+    };
     use blockbuster::programs::mpl_core_program::MplCoreAccountData;
     use blockbuster::token_metadata::accounts::Metadata;
     use blockbuster::token_metadata::types::{Key, TokenStandard};
@@ -334,7 +338,29 @@ mod tests {
                 current_size: None,
                 plugins: second_plugins,
                 unknown_plugins: vec![],
-                external_plugins: vec![],
+                external_plugins: vec![IndexableExternalPluginSchemaV1 {
+                    index: 0,
+                    offset: 0,
+                    authority: PluginAuthority::UpdateAuthority,
+                    lifecycle_checks: Some(LifecycleChecks {
+                        create: vec![IndexableCheckResult::CanApprove],
+                        update: vec![IndexableCheckResult::CanListen],
+                        transfer: vec![IndexableCheckResult::CanReject],
+                        burn: vec![
+                            IndexableCheckResult::CanReject,
+                            IndexableCheckResult::CanApprove,
+                        ],
+                    }),
+                    unknown_lifecycle_checks: None,
+                    r#type: ExternalPluginAdapterType::LifecycleHook,
+                    adapter_config: ExternalPluginAdapter::DataStore(DataStore {
+                        data_authority: PluginAuthority::Owner,
+                        schema: ExternalPluginAdapterSchema::Binary,
+                    }),
+                    data_offset: Some(254),
+                    data_len: Some(500),
+                    data: Some("asdfasdf".to_string()),
+                }],
                 unknown_external_plugins: vec![],
             }),
             lamports: 1,
@@ -436,5 +462,12 @@ mod tests {
         assert_eq!(second_owner_from_db.owner.value.unwrap(), second_owner);
         assert_eq!(second_owner_from_db.delegate.value.unwrap(), second_owner);
         assert_eq!(second_authority_from_db.authority, second_owner);
+        assert_eq!(
+            second_dynamic_from_db
+                .mpl_core_external_plugins
+                .unwrap()
+                .value,
+            "".to_string()
+        );
     }
 }
