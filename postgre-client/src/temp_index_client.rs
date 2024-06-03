@@ -96,7 +96,7 @@ impl TempClient {
             ast_owner_type = EXCLUDED.ast_owner_type,
             ast_owner = EXCLUDED.ast_owner,
             ast_delegate = EXCLUDED.ast_delegate,
-            ast_authority_fk = EXCLUDED.ast_owner,
+            ast_authority_fk = EXCLUDED.ast_authority_fk,
             ast_collection = EXCLUDED.ast_collection,
             ast_is_collection_verified = EXCLUDED.ast_is_collection_verified,
             ast_is_burnt = EXCLUDED.ast_is_burnt,

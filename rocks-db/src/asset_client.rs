@@ -124,8 +124,6 @@ impl Storage {
             .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
             .collect::<HashMap<_, _>>();
         let assets_static = to_map!(assets_static);
-        let assets_collection =
-            assets_collection.map_err(|e| StorageError::Common(e.to_string()))?;
         Ok(AssetSelectedMaps {
             editions: self
                 .get_editions(
@@ -138,10 +136,7 @@ impl Storage {
             assets_static,
             assets_dynamic,
             assets_authority: to_map!(assets_authority),
-            assets_collection: assets_collection
-                .into_iter()
-                .filter_map(|asset| asset.map(|a| (a.pubkey, a)))
-                .collect::<HashMap<_, _>>(),
+            assets_collection: to_map!(assets_collection),
             assets_owner: to_map!(assets_owner),
             assets_leaf: to_map!(assets_leaf),
             offchain_data,
