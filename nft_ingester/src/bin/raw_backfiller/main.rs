@@ -123,13 +123,15 @@ pub async fn main() -> Result<(), IngesterError> {
             // run dev->null buffer consumer
             let cloned_keep_running = keep_running.clone();
             let clonned_json_deque = buffer.json_tasks.clone();
-            mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            mutexed_tasks.lock().await.spawn(async move {
                 info!("Running empty buffer consumer...");
                 while cloned_keep_running.load(std::sync::atomic::Ordering::Relaxed) {
                     clonned_json_deque.lock().await.clear();
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
-            }));
+
+                Ok(())
+            });
             let bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
                 rocks_storage.clone(),
                 ingester_metrics.clone(),
@@ -157,7 +159,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 backfiller_config.chunk_size,
             ));
 
-            mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            mutexed_tasks.lock().await.spawn(async move {
                 info!("Running transactions parser...");
 
                 transactions_parser
@@ -167,7 +169,9 @@ pub async fn main() -> Result<(), IngesterError> {
                         backfiller_config.slot_until,
                     )
                     .await;
-            }));
+
+                Ok(())
+            });
 
             info!("running backfiller on persisted raw data");
         }

@@ -185,7 +185,7 @@ impl<T: SlotsGetter + Send + Sync + 'static> Backfiller<T> {
         let parse_until = self.slot_parse_until;
         let rx1 = rx.resubscribe();
         let rx2 = rx.resubscribe();
-        tasks.lock().await.spawn(tokio::spawn(async move {
+        tasks.lock().await.spawn(async move {
             info!("Running slots parser...");
             slots_collector
                 .collect_slots(
@@ -195,7 +195,8 @@ impl<T: SlotsGetter + Send + Sync + 'static> Backfiller<T> {
                     &rx1,
                 )
                 .await;
-        }));
+            Ok(())
+        });
 
         let transactions_parser = Arc::new(TransactionsParser::new(
             self.rocks_client.clone(),
@@ -206,11 +207,12 @@ impl<T: SlotsGetter + Send + Sync + 'static> Backfiller<T> {
             self.workers_count,
             self.chunk_size,
         ));
-        tasks.lock().await.spawn(tokio::spawn(async move {
+        tasks.lock().await.spawn(async move {
             info!("Running transactions parser...");
 
             transactions_parser.parse_transactions(rx2).await;
-        }));
+            Ok(())
+        });
 
         Ok(())
     }
