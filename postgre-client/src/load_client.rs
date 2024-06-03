@@ -109,6 +109,7 @@ impl PgClient {
             "assets_v3_metadata_url",
             "assets_v3_owner",
             "assets_v3_delegate",
+            "ast_authority_fk",
             "assets_v3_collection_is_collection_verified",
             "assets_v3_is_burnt",
             "assets_v3_is_compressible",
@@ -157,6 +158,7 @@ impl PgClient {
 ("assets_v3_metadata_url", "assets_v3 (ast_metadata_url_id) WHERE ast_metadata_url_id IS NOT NULL"),
 ("assets_v3_owner", "assets_v3(ast_owner) WHERE ast_owner IS NOT NULL"),
 ("assets_v3_delegate", "assets_v3(ast_delegate) WHERE ast_delegate IS NOT NULL"),
+("assets_v3_authority_fk", "assets_v3(ast_authority_fk) WHERE ast_authority_fk IS NOT NULL"),
 ("assets_v3_collection_is_collection_verified", "assets_v3(ast_collection, ast_is_collection_verified) WHERE ast_collection IS NOT NULL"),
 ("assets_v3_is_burnt", "assets_v3(ast_is_burnt) WHERE ast_is_burnt IS TRUE"),
 ("assets_v3_is_compressible", "assets_v3(ast_is_compressible) WHERE ast_is_compressible IS TRUE"),
@@ -228,7 +230,7 @@ impl PgClient {
             (
                 "assets_v3",
                 assets_copy_path,
-                "ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated",
+                "ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_authority_fk, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated",
             ),
             (
                 "assets_authorities",

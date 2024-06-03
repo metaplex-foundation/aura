@@ -441,6 +441,20 @@ impl PgClient {
                 .push_bind(asset_index.owner_type.map(OwnerType::from))
                 .push_bind(asset_index.owner.map(|owner| owner.to_bytes().to_vec()))
                 .push_bind(asset_index.delegate.map(|k| k.to_bytes().to_vec()))
+                .push_bind(
+                    Some(if let Some(collection) = asset_index.collection {
+                        if asset_index.specification_asset_class
+                            == entities::enums::SpecificationAssetClass::MplCoreAsset
+                        {
+                            collection
+                        } else {
+                            asset_index.pubkey
+                        }
+                    } else {
+                        asset_index.pubkey
+                    })
+                    .map(|k| k.to_bytes().to_vec()),
+                )
                 .push_bind(asset_index.collection.map(|k| k.to_bytes().to_vec()))
                 .push_bind(asset_index.is_collection_verified)
                 .push_bind(asset_index.is_burnt)
@@ -462,6 +476,7 @@ impl PgClient {
             ast_owner_type = EXCLUDED.ast_owner_type,
             ast_owner = EXCLUDED.ast_owner,
             ast_delegate = EXCLUDED.ast_delegate,
+            ast_authority_fk = EXCLUDED.ast_authority_fk,
             ast_collection = EXCLUDED.ast_collection,
             ast_is_collection_verified = EXCLUDED.ast_is_collection_verified,
             ast_is_burnt = EXCLUDED.ast_is_burnt,
