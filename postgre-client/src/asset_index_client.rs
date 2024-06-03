@@ -245,7 +245,10 @@ impl AssetIndexStorage for PgClient {
             .to_str()
             .map(str::to_owned)
         else {
-            return Err("invalid path".to_string());
+            return Err(IndexDbError::BadArgument(format!(
+                "invalid path '{:?}'",
+                base_path
+            )));
         };
         let Some(assets_path) = base_path.join("assets.csv").to_str().map(str::to_owned) else {
             return Err(IndexDbError::BadArgument(format!(
@@ -490,7 +493,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         authorities: &[Authority],
         table: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         if authorities.is_empty() {
             return Ok(());
         }
