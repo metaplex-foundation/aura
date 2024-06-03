@@ -109,7 +109,7 @@ impl PgClient {
             "assets_v3_metadata_url",
             "assets_v3_owner",
             "assets_v3_delegate",
-            "ast_authority_fk",
+            "assets_v3_authority_fk",
             "assets_v3_collection_is_collection_verified",
             "assets_v3_is_burnt",
             "assets_v3_is_compressible",
