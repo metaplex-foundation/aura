@@ -1,5 +1,6 @@
 use entities::enums::TaskStatus;
 use entities::models::UrlWithStatus;
+use error::IndexDbError;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use sqlx::Row;
 use sqlx::{
@@ -13,10 +14,11 @@ use tracing::log::LevelFilter;
 pub mod asset_filter_client;
 pub mod asset_index_client;
 pub mod converters;
+pub mod error;
 pub mod integrity_verification_client;
 pub mod load_client;
-pub mod migration_manager;
 pub mod model;
+pub mod rollups;
 pub mod storage_traits;
 pub mod tasks;
 pub mod temp_index_client;
@@ -123,7 +125,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         metadata_urls: &[UrlWithStatus],
         table: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
         query_builder.push(table);
         query_builder.push(" (tsk_id, tsk_metadata_url, tsk_status) ");
@@ -141,12 +143,12 @@ impl PgClient {
             .await
     }
 
-    async fn start_transaction(&self) -> Result<Transaction<'_, Postgres>, String> {
+    async fn start_transaction(&self) -> Result<Transaction<'_, Postgres>, IndexDbError> {
         let start_time = chrono::Utc::now();
         let transaction = self.pool.begin().await.map_err(|e| {
             self.metrics
                 .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "begin");
-            e.to_string()
+            e
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "begin", start_time);
@@ -156,12 +158,12 @@ impl PgClient {
     async fn commit_transaction(
         &self,
         transaction: Transaction<'_, Postgres>,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let start_time = chrono::Utc::now();
         transaction.commit().await.map_err(|e| {
             self.metrics
                 .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "commit");
-            e.to_string()
+            e
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "commit", start_time);
@@ -170,12 +172,12 @@ impl PgClient {
     async fn rollback_transaction(
         &self,
         transaction: Transaction<'_, Postgres>,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let start_time = chrono::Utc::now();
         transaction.rollback().await.map_err(|e| {
             self.metrics
                 .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "rollback");
-            e.to_string()
+            e
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "rollback", start_time);

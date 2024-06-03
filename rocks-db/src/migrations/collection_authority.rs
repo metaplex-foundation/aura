@@ -1,12 +1,12 @@
 use crate::asset::AssetCollection;
+use crate::column::TypedColumn;
 use crate::errors::StorageError;
-use crate::Result;
+use crate::migrator::{MigrationState, MigrationVersions, BATCH_SIZE};
 use crate::Storage;
 use bincode::deserialize;
 use entities::models::{UpdateVersion, Updated};
-use interface::migration_version_manager::MigrationVersionManager;
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocksdb::MergeOperands;
+use rocksdb::{IteratorMode, MergeOperands};
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
@@ -14,14 +14,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use tracing::{error, info};
-
-const CURRENT_MIGRATION_VERSION: u64 = 0;
-const BATCH_SIZE: usize = 100_000;
-
-pub enum MigrationState {
-    Last,
-    Version(u64),
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AssetCollectionVersion0 {
@@ -72,7 +64,7 @@ impl AssetCollectionVersion0 {
                     result = existing_val.to_vec();
                 }
                 Err(e) => {
-                    error!("RocksDB: AssetCollection deserialize existing_val: {}", e)
+                    error!("RocksDB: AssetCollectionV0 deserialize existing_val: {}", e)
                 }
             }
         }
@@ -102,7 +94,7 @@ impl AssetCollectionVersion0 {
                     }
                 }
                 Err(e) => {
-                    error!("RocksDB: AssetCollection deserialize new_val: {}", e)
+                    error!("RocksDB: AssetCollectionV0 deserialize new_val: {}", e)
                 }
             }
         }
@@ -111,94 +103,104 @@ impl AssetCollectionVersion0 {
     }
 }
 
-impl Storage {
-    pub async fn apply_all_migrations(
-        db_path: &str,
-        migration_version_manager: Arc<impl MigrationVersionManager>,
-    ) -> Result<()> {
-        let applied_migrations = migration_version_manager
-            .get_all_applied_migrations()
-            .await
-            .map_err(StorageError::Common)?;
-        for version in 0..=CURRENT_MIGRATION_VERSION {
-            if !applied_migrations.contains(&version) {
-                Storage::apply_migration(db_path, version, migration_version_manager.clone())
-                    .await?;
-            }
-        }
-        Ok(())
-    }
-
-    async fn apply_migration(
-        db_path: &str,
-        version: u64,
-        migration_version_manager: Arc<impl MigrationVersionManager>,
-    ) -> Result<()> {
-        match version {
-            0 => Storage::apply_migration_v0(db_path, migration_version_manager).await?,
-            _ => return Err(StorageError::InvalidMigrationVersion(version)),
-        }
-
-        Ok(())
-    }
-
-    async fn apply_migration_v0(
-        db_path: &str,
-        migration_version_manager: Arc<impl MigrationVersionManager>,
-    ) -> Result<()> {
-        info!("Start execute migration V0");
-        {
-            let old_storage = Storage::open(
-                db_path,
-                Arc::new(Mutex::new(JoinSet::new())),
-                Arc::new(RequestErrorDurationMetrics::new()),
-                MigrationState::Version(0),
-            )?;
-            for _ in old_storage.asset_collection_data.iter_start() {}
-            // close db connection in the end of the scope
-        }
-
-        let new_storage = Storage::open(
+pub(crate) async fn apply_migration(
+    db_path: &str,
+    migration_storage_path: &str,
+) -> crate::Result<()> {
+    info!("Start executing migration V0");
+    let temporary_migration_storage = Storage::open(
+        migration_storage_path,
+        Arc::new(Mutex::new(JoinSet::new())),
+        Arc::new(RequestErrorDurationMetrics::new()),
+        MigrationState::Version(0),
+    )?;
+    {
+        let old_storage = Storage::open(
             db_path,
             Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
-            MigrationState::Last,
+            MigrationState::Version(0),
         )?;
-        let mut batch = HashMap::new();
-        for (key, value) in new_storage
-            .asset_collection_data
-            .iter_start()
-            .filter_map(std::result::Result::ok)
-        {
-            let key_decoded = match new_storage.asset_collection_data.decode_key(key.to_vec()) {
-                Ok(key_decoded) => key_decoded,
-                Err(e) => {
-                    error!("collection data decode_key: {:?}, {}", key.to_vec(), e);
-                    continue;
-                }
-            };
-            let value_decoded = match deserialize::<AssetCollectionVersion0>(&value) {
-                Ok(value_decoded) => value_decoded,
-                Err(e) => {
-                    error!("collection data deserialize: {}, {}", key_decoded, e);
-                    continue;
-                }
-            };
-            batch.insert(key_decoded, value_decoded.into());
-            if batch.len() > BATCH_SIZE {
-                new_storage
-                    .asset_collection_data
-                    .put_batch(std::mem::take(&mut batch))
-                    .await?;
+        let iter = old_storage.db.iterator_cf(
+            &old_storage
+                .db
+                .cf_handle(AssetCollection::NAME)
+                .ok_or(StorageError::Common(
+                    "Cannot get cf_handle for AssetCollection".to_string(),
+                ))?,
+            IteratorMode::Start,
+        );
+
+        info!("Start coping data into temporary storage");
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        for (key, value) in iter.flatten() {
+            batch.put_cf(
+                &temporary_migration_storage
+                    .db
+                    .cf_handle(AssetCollection::NAME)
+                    .ok_or(StorageError::Common(
+                        "Cannot get cf_handle for AssetCollection".to_string(),
+                    ))?,
+                key,
+                value,
+            );
+            if batch.len() >= BATCH_SIZE {
+                temporary_migration_storage.db.write(batch)?;
+                batch = rocksdb::WriteBatchWithTransaction::<false>::default();
             }
         }
-        new_storage.asset_collection_data.put_batch(batch).await?;
-        info!("Finish migration V0");
+        temporary_migration_storage.db.write(batch)?;
 
-        migration_version_manager
-            .apply_migration(0)
-            .await
-            .map_err(StorageError::Common)?;
-        Ok(())
+        info!("Finish coping data into temporary storage");
+        old_storage.db.drop_cf(AssetCollection::NAME)?;
     }
+
+    let new_storage = Storage::open(
+        db_path,
+        Arc::new(Mutex::new(JoinSet::new())),
+        Arc::new(RequestErrorDurationMetrics::new()),
+        MigrationState::Last,
+    )?;
+    let mut batch = HashMap::new();
+    for (key, value) in temporary_migration_storage
+        .asset_collection_data
+        .iter_start()
+        .filter_map(std::result::Result::ok)
+    {
+        let key_decoded = match temporary_migration_storage
+            .asset_collection_data
+            .decode_key(key.to_vec())
+        {
+            Ok(key_decoded) => key_decoded,
+            Err(e) => {
+                error!("collection data decode_key: {:?}, {}", key.to_vec(), e);
+                continue;
+            }
+        };
+        let value_decoded = match deserialize::<AssetCollectionVersion0>(&value) {
+            Ok(value_decoded) => value_decoded,
+            Err(e) => {
+                error!("collection data deserialize: {}, {}", key_decoded, e);
+                continue;
+            }
+        };
+        batch.insert(key_decoded, value_decoded.into());
+        if batch.len() >= BATCH_SIZE {
+            new_storage
+                .asset_collection_data
+                .put_batch(std::mem::take(&mut batch))
+                .await?;
+        }
+    }
+    new_storage.asset_collection_data.put_batch(batch).await?;
+    info!("Finish migration V0");
+
+    new_storage
+        .migration_version
+        .put_async(0, MigrationVersions {})
+        .await?;
+    temporary_migration_storage
+        .db
+        .drop_cf(AssetCollection::NAME)?;
+    Ok(())
 }

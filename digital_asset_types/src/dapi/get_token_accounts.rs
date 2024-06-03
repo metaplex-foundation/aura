@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::dapi::common::build_token_accounts_response;
 use interface::token_accounts::TokenAccountsGetter;
-use sea_orm::DbErr;
+use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::rpc::response::TokenAccountsList;
@@ -14,11 +14,27 @@ pub async fn get_token_accounts(
     mint: Option<Pubkey>,
     limit: u64,
     page: Option<u64>,
+    before: Option<String>,
+    after: Option<String>,
+    cursor: Option<String>,
     show_zero_balance: bool,
-) -> Result<TokenAccountsList, DbErr> {
+) -> Result<TokenAccountsList, StorageError> {
+    let cursor_enabled = before.is_none() && after.is_none() && page.is_none();
+
+    // if cursor is passed use it as 'after' parameter
+    let after = {
+        if cursor_enabled {
+            cursor
+        } else {
+            after
+        }
+    };
+
     let token_accounts = token_accounts_getter
-        .get_token_accounts(owner, mint, page, limit, show_zero_balance)
+        .get_token_accounts(owner, mint, before, after, page, limit, show_zero_balance)
         .await
-        .map_err(|e| DbErr::Custom(e.to_string()))?;
-    Ok(build_token_accounts_response(token_accounts, limit, page))
+        .map_err(|e| StorageError::Common(e.to_string()))?;
+
+    build_token_accounts_response(token_accounts, limit, page, cursor_enabled)
+        .map_err(|e| StorageError::Common(format!("Building response: {:?}", e)))
 }

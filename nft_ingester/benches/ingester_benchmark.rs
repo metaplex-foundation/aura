@@ -13,7 +13,7 @@ use tokio::{sync::Mutex, task::JoinSet};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
 use rocks_db::bubblegum_slots::BubblegumSlotGetter;
-use rocks_db::column_migrator::MigrationState;
+use rocks_db::migrator::MigrationState;
 use testcontainers::clients::Cli;
 
 async fn setup_environment<'a>(

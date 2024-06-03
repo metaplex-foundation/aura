@@ -13,13 +13,17 @@ use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{ApiMetricsConfig, JsonDownloaderMetricsConfig};
-use rocks_db::column_migrator::MigrationState;
+use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tonic::transport::Server;
 use usecase::proofs::MaybeProofChecker;
+
+#[cfg(feature = "profiling")]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
@@ -161,7 +165,15 @@ pub async fn main() -> Result<(), IngesterError> {
         config.peer_grpc_max_gap_slots,
         rocks_storage.clone(),
     );
-    let serv = grpc::service::PeerGapFillerServiceImpl::new(Arc::new(uc));
+    let bs = usecase::raw_blocks_streamer::BlocksStreamer::new(
+        config.peer_grpc_max_gap_slots,
+        rocks_storage.clone(),
+    );
+    let serv = grpc::service::PeerGapFillerServiceImpl::new(
+        Arc::new(uc),
+        Arc::new(bs),
+        rocks_storage.clone(),
+    );
     let addr = format!("0.0.0.0:{}", config.peer_grpc_port).parse()?;
     // Spawn the gRPC server task and add to JoinSet
     mutexed_tasks.lock().await.spawn(async move {
@@ -197,6 +209,7 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         guard,
         config.profiling_file_path_container,
+        &config.heap_path,
     )
     .await;
 

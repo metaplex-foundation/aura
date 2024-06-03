@@ -51,12 +51,17 @@ impl From<serde_json::Error> for UsecaseError {
         Self::Reqwest(value.to_string())
     }
 }
+
+// TODO: Probably need to expand this to cover all error cases.
+//       e.g. by making fully compliant with rocks_db::error::StorageError
 #[derive(Error, Debug, PartialEq)]
 pub enum StorageError {
     #[error("common error: {0}")]
     Common(String),
     #[error("not found")]
     NotFound,
+    #[error("CannotServiceRequest")]
+    CannotServiceRequest,
 }
 
 impl From<Error> for UsecaseError {
@@ -83,8 +88,8 @@ pub enum IntegrityVerificationError {
     ParsePubkey(#[from] ParsePubkeyError),
     #[error("Anchor {0}")]
     Anchor(#[from] anchor_lang::error::Error),
-    #[error("CannotCreateMerkleTree: depth [{0}], size [{1}]")]
-    CannotCreateMerkleTree(u32, u32),
+    #[error("RollupValidation: {0}")]
+    RollupValidation(String),
     #[error("TreeAccountNotFound {0}")]
     TreeAccountNotFound(String),
 }
@@ -98,4 +103,12 @@ pub enum JsonDownloaderError {
     ErrorDownloading(String),
     IndexStorageError(String),
     MainStorageError(String),
+}
+
+/// Errors that may occur during the block consuming.
+#[derive(Error, Debug)]
+pub enum BlockConsumeError {
+    #[error("{0}")]
+    PersistenceErr(#[from] StorageError),
+    // TODO: think of other possible scenarios
 }

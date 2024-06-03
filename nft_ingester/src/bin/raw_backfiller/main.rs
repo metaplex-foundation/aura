@@ -19,10 +19,14 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
 use rocks_db::bubblegum_slots::BubblegumSlotGetter;
-use rocks_db::column_migrator::MigrationState;
+use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
+
+#[cfg(feature = "profiling")]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 
@@ -179,6 +183,7 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         guard,
         config.profiling_file_path_container,
+        &config.heap_path,
     )
     .await;
 

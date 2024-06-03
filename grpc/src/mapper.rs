@@ -3,7 +3,7 @@ use crate::gapfiller::{
     AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ChainMutability, ClItem, ClLeaf,
     Creator, DynamicBoolField, DynamicBytesField, DynamicChainMutability, DynamicCreatorsField,
     DynamicEnumField, DynamicStringField, DynamicUint32Field, DynamicUint64Field, EditionV1,
-    MasterEdition, OffchainData, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
+    MasterEdition, OffchainData, OwnerType, RawBlock, RoyaltyTargetType, SpecificationAssetClass,
     SpecificationVersions, TokenStandard, UpdateVersionValue, UseMethod, Uses,
 };
 use entities::models::{CompleteAssetDetails, OffChainData, UpdateVersion, Updated};
@@ -670,14 +670,14 @@ impl TryFrom<AssetCollection> for entities::models::AssetCollection {
         Ok(Self {
             collection: value
                 .collection
-                .map(|v| {
+                .ok_or(GrpcError::MissingField("collection".to_string()))
+                .and_then(|v| {
                     Ok::<Updated<Pubkey>, GrpcError>(Updated::new(
                         v.slot_updated,
                         v.update_version.map(Into::into),
                         Pubkey::try_from(v.value).map_err(GrpcError::PubkeyFrom)?,
                     ))
-                })
-                .ok_or(GrpcError::MissingField("collection".to_string()))??,
+                })?,
             is_collection_verified: value.is_collection_verified.map(|v| v.into()).ok_or(
                 GrpcError::MissingField("is_collection_verified".to_string()),
             )?,
@@ -733,6 +733,25 @@ impl TryFrom<Uses> for entities::models::Uses {
         })
     }
 }
+
+impl TryFrom<entities::models::RawBlock> for RawBlock {
+    type Error = GrpcError;
+
+    fn try_from(value: entities::models::RawBlock) -> Result<Self, Self::Error> {
+        Ok(Self {
+            block: serde_cbor::to_vec(&value).map_err(Into::<GrpcError>::into)?,
+        })
+    }
+}
+
+impl TryFrom<RawBlock> for entities::models::RawBlock {
+    type Error = GrpcError;
+
+    fn try_from(value: RawBlock) -> Result<Self, Self::Error> {
+        serde_cbor::from_slice(value.block.as_slice()).map_err(Into::<GrpcError>::into)
+    }
+}
+
 macro_rules! impl_from_enum {
     ($src:ty, $dst:ident, $($variant:ident),*) => {
         impl From<$src> for $dst {

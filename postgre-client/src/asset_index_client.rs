@@ -8,6 +8,7 @@ use solana_sdk::pubkey::Pubkey;
 use sqlx::{Executor, Postgres, QueryBuilder, Transaction};
 
 use crate::{
+    error::IndexDbError,
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
     storage_traits::AssetIndexStorage,
     PgClient, BATCH_DELETE_ACTION, BATCH_SELECT_ACTION, BATCH_UPSERT_ACTION, CREATE_ACTION,
@@ -26,7 +27,7 @@ impl PgClient {
         &self,
         table_name: &str,
         executor: impl Executor<'_, Database = Postgres>,
-    ) -> Result<Option<Vec<u8>>, String> {
+    ) -> Result<Option<Vec<u8>>, IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("SELECT last_synced_asset_update_key FROM ");
         query_builder.push(table_name);
@@ -36,7 +37,7 @@ impl PgClient {
         let result = query.fetch_one(executor).await.map_err(|e| {
             self.metrics
                 .observe_error(SQL_COMPONENT, SELECT_ACTION, table_name);
-            e.to_string()
+            e
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, SELECT_ACTION, table_name, start_time);
@@ -47,7 +48,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         table_names: TableNames,
         updated_components: AssetComponenents,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         for chunk in updated_components
             .metadata_urls
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_TASK_PARAMETERS_COUNT)
@@ -96,7 +97,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         creator_updates: CreatorsUpdates,
         table_name: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         for chunk in creator_updates
             .to_remove
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / DELETE_ASSET_CREATOR_PARAMETERS_COUNT)
@@ -200,12 +201,15 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
 
 #[async_trait]
 impl AssetIndexStorage for PgClient {
-    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, String> {
+    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError> {
         self.fetch_last_synced_id_impl("last_synced_key", &self.pool)
             .await
     }
 
-    async fn update_asset_indexes_batch(&self, asset_indexes: &[AssetIndex]) -> Result<(), String> {
+    async fn update_asset_indexes_batch(
+        &self,
+        asset_indexes: &[AssetIndex],
+    ) -> Result<(), IndexDbError> {
         let updated_components = split_assets_into_components(asset_indexes);
         let mut transaction = self.start_transaction().await?;
         let table_names = TableNames {
@@ -223,12 +227,18 @@ impl AssetIndexStorage for PgClient {
         &self,
         base_path: &std::path::Path,
         last_key: &[u8],
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let Some(metadata_path) = base_path.join("metadata.csv").to_str().map(str::to_owned) else {
-            return Err("invalid path".to_string());
+            return Err(IndexDbError::BadArgument(format!(
+                "invalid path '{:?}'",
+                base_path
+            )));
         };
         let Some(creators_path) = base_path.join("creators.csv").to_str().map(str::to_owned) else {
-            return Err("invalid path".to_string());
+            return Err(IndexDbError::BadArgument(format!(
+                "invalid path '{:?}'",
+                base_path
+            )));
         };
         let Some(assets_authorities_path) = base_path
             .join("assets_authorities.csv")
@@ -238,7 +248,10 @@ impl AssetIndexStorage for PgClient {
             return Err("invalid path".to_string());
         };
         let Some(assets_path) = base_path.join("assets.csv").to_str().map(str::to_owned) else {
-            return Err("invalid path".to_string());
+            return Err(IndexDbError::BadArgument(format!(
+                "invalid path '{:?}'",
+                base_path
+            )));
         };
         let mut transaction = self.start_transaction().await?;
 
@@ -256,7 +269,7 @@ impl AssetIndexStorage for PgClient {
         Ok(())
     }
 
-    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), String> {
+    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
         self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
             .await?;
@@ -318,7 +331,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         creators: &[(Pubkey, Creator, i64)],
         table: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         if creators.is_empty() {
             return Ok(());
         }
@@ -351,7 +364,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         removed_creators: &[(Pubkey, Creator)],
         table: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         if removed_creators.is_empty() {
             return Ok(());
         }
@@ -379,7 +392,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         asset_indexes: &[AssetIndex],
         table: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         if asset_indexes.is_empty() {
             return Ok(());
         }
@@ -521,7 +534,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         pubkeys: &[Vec<u8>],
         table: &str,
-    ) -> Result<Vec<(Pubkey, Creator, i64)>, String> {
+    ) -> Result<Vec<(Pubkey, Creator, i64)>, IndexDbError> {
         if pubkeys.is_empty() {
             return Ok(vec![]);
         }
@@ -543,7 +556,7 @@ impl PgClient {
         let creators_result = query.fetch_all(transaction).await.map_err(|err| {
             self.metrics
                 .observe_error(SQL_COMPONENT, BATCH_SELECT_ACTION, table);
-            err.to_string()
+            err
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, BATCH_SELECT_ACTION, table, start_time);
@@ -611,7 +624,7 @@ impl PgClient {
         last_key: &[u8],
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("UPDATE ");
         query_builder.push(table);
         query_builder.push(" SET last_synced_asset_update_key = ");

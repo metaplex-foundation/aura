@@ -16,7 +16,7 @@ use nft_ingester::config::{
 };
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
-use rocks_db::column_migrator::MigrationState;
+use rocks_db::migrator::MigrationState;
 use rocks_db::{AssetDynamicDetails, Storage};
 
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
@@ -92,7 +92,15 @@ pub async fn main() -> Result<(), IngesterError> {
     // useless thing in this context
     let (shutdown_tx, _shutdown_rx) = broadcast::channel::<()>(1);
 
-    graceful_stop(mutexed_tasks, keep_running.clone(), shutdown_tx, None, None).await;
+    graceful_stop(
+        mutexed_tasks,
+        keep_running.clone(),
+        shutdown_tx,
+        None,
+        None,
+        "",
+    )
+    .await;
 
     Ok(())
 }

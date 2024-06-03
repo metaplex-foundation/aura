@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use clap::{arg, Parser};
 use entities::models::OffChainData;
+use entities::models::RawBlock;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::config::init_logger;
 use rocks_db::column::TypedColumn;
@@ -11,7 +12,7 @@ use tokio::task::JoinSet;
 use tracing::info;
 
 use nft_ingester::error::IngesterError;
-use rocks_db::column_migrator::MigrationState;
+use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
 
 #[derive(Parser, Debug)]
@@ -51,10 +52,7 @@ pub async fn main() -> Result<(), IngesterError> {
     )
     .unwrap();
 
-    let cf = &target_storage
-        .db
-        .cf_handle(rocks_db::raw_block::RawBlock::NAME)
-        .unwrap();
+    let cf = &target_storage.db.cf_handle(RawBlock::NAME).unwrap();
     info!("Copying raw blocks...");
     source_storage
         .raw_blocks_cbor

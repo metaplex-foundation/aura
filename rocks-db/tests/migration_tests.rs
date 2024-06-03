@@ -1,14 +1,13 @@
 #[cfg(test)]
 mod tests {
     use bincode::serialize;
-    use interface::migration_version_manager::MockMigrationVersionManager;
     use metrics_utils::red::RequestErrorDurationMetrics;
     use rocks_db::asset::AssetCollection;
     use rocks_db::column::TypedColumn;
-    use rocks_db::column_migrator::{AssetCollectionVersion0, MigrationState};
+    use rocks_db::migrations::collection_authority::AssetCollectionVersion0;
+    use rocks_db::migrator::MigrationState;
     use rocks_db::Storage;
     use solana_sdk::pubkey::Pubkey;
-    use std::collections::HashSet;
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::sync::Mutex;
@@ -92,16 +91,19 @@ mod tests {
     async fn test_migration() {
         let dir = TempDir::new().unwrap();
         let (key, val) = put_unmerged_value_to_storage(dir.path().to_str().unwrap());
-        let mut mock_migration_manager = MockMigrationVersionManager::new();
-        mock_migration_manager
-            .expect_apply_migration()
-            .returning(move |_| Box::pin(async { Ok(()) }));
-        mock_migration_manager
-            .expect_get_all_applied_migrations()
-            .returning(move || Box::pin(async { Ok(HashSet::new()) }));
+        let secondary_storage_dir = TempDir::new().unwrap();
+        let migration_version_manager = Storage::open_secondary(
+            dir.path().to_str().unwrap(),
+            secondary_storage_dir.path().to_str().unwrap(),
+            Arc::new(Mutex::new(JoinSet::new())),
+            Arc::new(RequestErrorDurationMetrics::new()),
+            MigrationState::Last,
+        )
+        .unwrap();
         Storage::apply_all_migrations(
             dir.path().to_str().unwrap(),
-            Arc::new(mock_migration_manager),
+            TempDir::new().unwrap().path().to_str().unwrap(),
+            Arc::new(migration_version_manager),
         )
         .await
         .unwrap();

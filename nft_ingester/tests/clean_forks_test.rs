@@ -1,8 +1,8 @@
+use entities::models::RawBlock;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{MetricState, MetricsTrait};
 use nft_ingester::fork_cleaner::ForkCleaner;
 use rocks_db::cl_items::ClItem;
-use rocks_db::raw_block::RawBlock;
 use rocks_db::tree_seq::TreeSeqIdx;
 use setup::rocks::RocksTestEnvironment;
 use solana_transaction_status::UiConfirmedBlock;

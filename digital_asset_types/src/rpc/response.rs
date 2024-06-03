@@ -107,5 +107,8 @@ pub struct TokenAccountsList {
     pub limit: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub cursor: Option<String>,
     pub token_accounts: Vec<TokenAccount>,
 }

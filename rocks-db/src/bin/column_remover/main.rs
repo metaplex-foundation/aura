@@ -19,9 +19,9 @@ use rustyline::DefaultEditor;
 
 use entities::models::AssetSignature;
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::column_migrator::MigrationState;
 use rocks_db::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use rocks_db::editions::TokenMetadataEdition;
+use rocks_db::migrator::MigrationState;
 use std::env;
 
 #[tokio::main(flavor = "multi_thread")]

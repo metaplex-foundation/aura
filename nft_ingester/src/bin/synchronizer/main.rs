@@ -12,10 +12,14 @@ use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::SynchronizerMetricsConfig;
-use rocks_db::column_migrator::MigrationState;
+use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
+
+#[cfg(feature = "profiling")]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
@@ -102,6 +106,7 @@ pub async fn main() -> Result<(), IngesterError> {
             shutdown_tx,
             guard,
             config.profiling_file_path_container,
+            &config.heap_path,
         )
         .await;
     }));

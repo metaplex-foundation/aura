@@ -2,21 +2,18 @@ use std::sync::Arc;
 
 use crate::{column::TypedColumn, key_encoders, Storage};
 use async_trait::async_trait;
-use interface::signature_persistence::{BlockConsumer, BlockProducer};
+use entities::models::RawBlock;
+use interface::{
+    error::BlockConsumeError,
+    signature_persistence::{BlockConsumer, BlockProducer},
+};
 use log::error;
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RawBlock {
-    pub slot: u64,
-    pub block: solana_transaction_status::UiConfirmedBlock,
-}
 
 impl TypedColumn for RawBlock {
-    const NAME: &'static str = "RAW_BLOCK_CBOR_ENCODED";
-
     type KeyType = u64;
+
     type ValueType = Self;
+    const NAME: &'static str = "RAW_BLOCK_CBOR_ENCODED";
 
     fn encode_key(slot: u64) -> Vec<u8> {
         key_encoders::encode_u64(slot)
@@ -33,37 +30,29 @@ impl BlockConsumer for Storage {
         &self,
         slot: u64,
         block: solana_transaction_status::UiConfirmedBlock,
-    ) -> Result<(), String> {
+    ) -> Result<(), BlockConsumeError> {
         let raw_block = RawBlock { slot, block };
-        let res = self
-            .raw_blocks_cbor
+        self.raw_blocks_cbor
             .put_cbor_encoded(raw_block.slot, raw_block.clone())
             .await
-            .map_err(|e| e.to_string());
-        if let Err(e) = res {
-            error!(
-                "Failed to put raw block for slot: {}, error: {}",
-                raw_block.slot, e
-            );
-            return Err(e);
-        }
-        Ok(())
+            .map_err(|e| {
+                error!(
+                    "Failed to put raw block for slot: {}, error: {}",
+                    raw_block.slot, e
+                );
+                BlockConsumeError::PersistenceErr(e.into())
+            })
     }
 
-    async fn already_processed_slot(&self, slot: u64) -> Result<bool, String> {
-        let res = self
-            .raw_blocks_cbor
+    async fn already_processed_slot(&self, slot: u64) -> Result<bool, BlockConsumeError> {
+        self.raw_blocks_cbor
             .get_cbor_encoded(slot)
             .await
-            .map_err(|e| e.to_string());
-        match res {
-            Ok(Some(_)) => Ok(true),
-            Ok(None) => Ok(false),
-            Err(e) => {
+            .map(|r| r.is_some())
+            .map_err(|e| {
                 tracing::error!("Failed to get raw block for slot: {}, error: {}", slot, e);
-                Err(e)
-            }
-        }
+                BlockConsumeError::PersistenceErr(e.into())
+            })
     }
 }
 

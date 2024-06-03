@@ -163,6 +163,14 @@ pub struct AssetDetails {
     #[prost(message, optional, tag = "39")]
     pub offchain_data: ::core::option::Option<OffchainData>,
 }
+/// This field is a cbor encoded object of RawBlock type depending on
+/// a "~1.17" version of the solana-transaction-status package
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RawBlock {
+    #[prost(bytes = "vec", tag = "1")]
+    pub block: ::prost::alloc::vec::Vec<u8>,
+}
 /// Dynamic field messages
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -312,6 +320,12 @@ pub struct RangeRequest {
     pub start_slot: u64,
     #[prost(uint64, tag = "2")]
     pub end_slot: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetRawBlockRequest {
+    #[prost(uint64, tag = "1")]
+    pub slot: u64,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -700,6 +714,48 @@ pub mod gap_filler_service_client {
             ));
             self.inner.server_streaming(req, path, codec).await
         }
+        pub async fn get_raw_blocks_within(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RangeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<tonic::codec::Streaming<super::RawBlock>>,
+            tonic::Status,
+        > {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/gapfiller.GapFillerService/GetRawBlocksWithin",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "gapfiller.GapFillerService",
+                "GetRawBlocksWithin",
+            ));
+            self.inner.server_streaming(req, path, codec).await
+        }
+        pub async fn get_raw_block(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetRawBlockRequest>,
+        ) -> std::result::Result<tonic::Response<super::RawBlock>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path =
+                http::uri::PathAndQuery::from_static("/gapfiller.GapFillerService/GetRawBlock");
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("gapfiller.GapFillerService", "GetRawBlock"));
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -718,6 +774,19 @@ pub mod gap_filler_service_server {
             &self,
             request: tonic::Request<super::RangeRequest>,
         ) -> std::result::Result<tonic::Response<Self::GetAssetsUpdatedWithinStream>, tonic::Status>;
+        /// Server streaming response type for the GetRawBlocksWithin method.
+        type GetRawBlocksWithinStream: tonic::codegen::tokio_stream::Stream<
+                Item = std::result::Result<super::RawBlock, tonic::Status>,
+            > + Send
+            + 'static;
+        async fn get_raw_blocks_within(
+            &self,
+            request: tonic::Request<super::RangeRequest>,
+        ) -> std::result::Result<tonic::Response<Self::GetRawBlocksWithinStream>, tonic::Status>;
+        async fn get_raw_block(
+            &self,
+            request: tonic::Request<super::GetRawBlockRequest>,
+        ) -> std::result::Result<tonic::Response<super::RawBlock>, tonic::Status>;
     }
     /// Define the gRPC service
     #[derive(Debug)]
@@ -838,6 +907,94 @@ pub mod gap_filler_service_server {
                                 max_encoding_message_size,
                             );
                         let res = grpc.server_streaming(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/gapfiller.GapFillerService/GetRawBlocksWithin" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetRawBlocksWithinSvc<T: GapFillerService>(pub Arc<T>);
+                    impl<T: GapFillerService>
+                        tonic::server::ServerStreamingService<super::RangeRequest>
+                        for GetRawBlocksWithinSvc<T>
+                    {
+                        type Response = super::RawBlock;
+                        type ResponseStream = T::GetRawBlocksWithinStream;
+                        type Future =
+                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RangeRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GapFillerService>::get_raw_blocks_within(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetRawBlocksWithinSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.server_streaming(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/gapfiller.GapFillerService/GetRawBlock" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetRawBlockSvc<T: GapFillerService>(pub Arc<T>);
+                    impl<T: GapFillerService> tonic::server::UnaryService<super::GetRawBlockRequest>
+                        for GetRawBlockSvc<T>
+                    {
+                        type Response = super::RawBlock;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetRawBlockRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as GapFillerService>::get_raw_block(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetRawBlockSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)

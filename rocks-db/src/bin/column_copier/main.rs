@@ -2,9 +2,9 @@ use entities::models::AssetSignature;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::asset::MetadataMintMap;
 use rocks_db::column::TypedColumn;
-use rocks_db::column_migrator::MigrationState;
 use rocks_db::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use rocks_db::editions::TokenMetadataEdition;
+use rocks_db::migrator::MigrationState;
 use rocks_db::tree_seq::{TreeSeqIdx, TreesGaps};
 use rocks_db::{
     asset, cl_items, signature_client, AssetAuthority, AssetDynamicDetails, AssetOwner,

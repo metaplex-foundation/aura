@@ -1,6 +1,6 @@
 use crate::enums::{
-    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
-    TaskStatus, TokenStandard, UseMethod,
+    ChainMutability, OwnerType, RollupState, RoyaltyTargetType, SpecificationAssetClass,
+    SpecificationVersions, TaskStatus, TokenStandard, UseMethod,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -360,6 +360,11 @@ pub struct TokenAccount {
     pub frozen: bool,
 }
 
+pub struct TokenAccResponse {
+    pub token_acc: TokenAccount,
+    pub sorting_id: String,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Task {
     pub ofd_metadata_url: String,
@@ -370,12 +375,27 @@ pub struct Task {
     pub ofd_status: TaskStatus,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RawBlock {
+    pub slot: u64,
+    pub block: solana_transaction_status::UiConfirmedBlock,
+}
+
 #[derive(Debug, Clone)]
 pub struct JsonDownloadTask {
     pub metadata_url: String,
     pub status: TaskStatus,
     pub attempts: i16,
     pub max_attempts: i16,
+}
+
+#[derive(Debug, Clone)]
+pub struct RollupWithState {
+    pub file_name: String,
+    pub state: RollupState,
+    pub error: Option<String>,
+    pub url: Option<String>,
+    pub created_at: u64,
 }
 
 impl Default for JsonDownloadTask {

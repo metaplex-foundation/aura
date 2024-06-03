@@ -8,20 +8,21 @@ use asset::{
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
-use crate::column_migrator::{AssetCollectionVersion0, MigrationState};
 use crate::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::editions::TokenMetadataEdition;
+use crate::migrator::{MigrationState, MigrationVersions};
 pub use asset::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
-use entities::models::{AssetSignature, OffChainData};
+use entities::models::{AssetSignature, OffChainData, RawBlock};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 use crate::errors::StorageError;
+use crate::migrations::collection_authority::AssetCollectionVersion0;
 use crate::parameters::ParameterColumn;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
@@ -35,15 +36,18 @@ pub mod batch_savers;
 pub mod bubblegum_slots;
 pub mod cl_items;
 pub mod column;
-pub mod column_migrator;
 pub mod dump_client;
 pub mod editions;
 pub mod errors;
 pub mod fork_cleaner;
 pub mod key_encoders;
+pub mod migrations;
+pub mod migrator;
 pub mod offchain_data;
 pub mod parameters;
+pub mod processing_possibility;
 pub mod raw_block;
+pub mod raw_blocks_streaming_client;
 pub mod sequence_consistent;
 pub mod signature_client;
 pub mod slots_dumper;
@@ -82,7 +86,7 @@ pub struct Storage {
     pub bubblegum_slots: Column<bubblegum_slots::BubblegumSlots>,
     pub ingestable_slots: Column<bubblegum_slots::IngestableSlots>,
     pub force_reingestable_slots: Column<bubblegum_slots::ForceReingestableSlots>,
-    pub raw_blocks_cbor: Column<raw_block::RawBlock>,
+    pub raw_blocks_cbor: Column<RawBlock>,
     pub db: Arc<DB>,
     pub assets_update_idx: Column<AssetsUpdateIdx>,
     pub slot_asset_idx: Column<SlotAssetIdx>,
@@ -93,6 +97,7 @@ pub struct Storage {
     pub token_account_owner_idx: Column<TokenAccountOwnerIdx>,
     pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
     pub asset_signature: Column<AssetSignature>,
+    pub migration_version: Column<MigrationVersions>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -134,6 +139,7 @@ impl Storage {
         let token_accounts = Self::column(db.clone(), red_metrics.clone());
         let token_account_owner_idx = Self::column(db.clone(), red_metrics.clone());
         let token_account_mint_owner_idx = Self::column(db.clone(), red_metrics.clone());
+        let migration_version = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -168,6 +174,7 @@ impl Storage {
             red_metrics,
             asset_signature,
             token_account_mint_owner_idx,
+            migration_version,
         }
     }
 
@@ -222,7 +229,7 @@ impl Storage {
             Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(migration_state),
             Self::new_cf_descriptor::<asset::SlotAssetIdx>(migration_state),
             Self::new_cf_descriptor::<signature_client::SignatureIdx>(migration_state),
-            Self::new_cf_descriptor::<raw_block::RawBlock>(migration_state),
+            Self::new_cf_descriptor::<RawBlock>(migration_state),
             Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(migration_state),
             Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(migration_state),
             Self::new_cf_descriptor::<bubblegum_slots::ForceReingestableSlots>(migration_state),
@@ -235,6 +242,7 @@ impl Storage {
             Self::new_cf_descriptor::<TokenAccount>(migration_state),
             Self::new_cf_descriptor::<TokenAccountOwnerIdx>(migration_state),
             Self::new_cf_descriptor::<TokenAccountMintOwnerIdx>(migration_state),
+            Self::new_cf_descriptor::<MigrationVersions>(migration_state),
         ]
     }
 
@@ -356,17 +364,12 @@ impl Storage {
                 );
             }
             asset::AssetCollection::NAME => {
-                if matches!(migration_state, &MigrationState::Version(0)) {
-                    cf_options.set_merge_operator_associative(
-                        "merge_fn_asset_collection",
-                        AssetCollectionVersion0::merge_asset_collection,
-                    );
+                let mf = if matches!(migration_state, &MigrationState::Version(0)) {
+                    AssetCollectionVersion0::merge_asset_collection
                 } else {
-                    cf_options.set_merge_operator_associative(
-                        "merge_fn_asset_collection",
-                        asset::AssetCollection::merge_asset_collection,
-                    );
-                }
+                    asset::AssetCollection::merge_asset_collection
+                };
+                cf_options.set_merge_operator_associative("merge_fn_asset_collection", mf);
             }
             cl_items::ClItem::NAME => {
                 cf_options.set_merge_operator_associative(
@@ -422,7 +425,7 @@ impl Storage {
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
-            raw_block::RawBlock::NAME => {
+            RawBlock::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_raw_block_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
@@ -486,6 +489,12 @@ impl Storage {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_accounts_mint_owner_idx",
                     TokenAccountMintOwnerIdx::merge_values,
+                );
+            }
+            MigrationVersions::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_migration_versions",
+                    asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             _ => {}

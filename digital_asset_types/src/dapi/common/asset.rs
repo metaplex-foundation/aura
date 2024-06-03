@@ -2,24 +2,23 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 
-use entities::models::{AssetSignatureWithPagination, TokenAccount};
+use entities::models::AssetSignatureWithPagination;
+use entities::models::TokenAccResponse;
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
 use mime_guess::Mime;
-use sea_orm::DbErr;
+use rocks_db::errors::StorageError;
 use serde_json::Value;
 use url::Url;
 
-use crate::dao::sea_orm_active_enums::SpecificationAssetClass;
-use crate::dao::sea_orm_active_enums::SpecificationVersions;
-use crate::dao::FullAsset;
-use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_grouping};
+use crate::dao::{scopes::model, FullAsset};
 use crate::rpc::response::{AssetError, TokenAccountsList, TransactionSignatureList};
 use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
     MetadataMap, MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
 };
+use entities::api_req_params::Pagination;
 
 pub fn to_uri(uri: String) -> Option<Url> {
     Url::parse(uri.as_str()).ok()
@@ -72,7 +71,7 @@ pub fn safe_select<'a>(
         .and_then(|v| v.pop())
 }
 
-pub fn v1_content_from_json(asset_data: &asset_data::Model) -> Result<Content, DbErr> {
+pub fn v1_content_from_json(asset_data: &model::AssetDataModel) -> Result<Content, StorageError> {
     // todo -> move this to the bg worker for pre processing
     let json_uri = asset_data.metadata_url.clone();
     let metadata = &asset_data.metadata;
@@ -189,17 +188,22 @@ pub fn v1_content_from_json(asset_data: &asset_data::Model) -> Result<Content, D
     })
 }
 
-pub fn get_content(asset: &asset::Model, data: &asset_data::Model) -> Result<Content, DbErr> {
+pub fn get_content(
+    asset: &model::AssetModel,
+    data: &model::AssetDataModel,
+) -> Result<Content, StorageError> {
     match asset.specification_version {
-        Some(SpecificationVersions::V1) | Some(SpecificationVersions::V0) => {
+        Some(model::SpecificationVersions::V1) | Some(model::SpecificationVersions::V0) => {
             v1_content_from_json(data)
         }
-        Some(_) => Err(DbErr::Custom("Version Not Implemented".to_string())),
-        None => Err(DbErr::Custom("Specification version not found".to_string())),
+        Some(_) => Err(StorageError::Common("Version Not Implemented".to_string())),
+        None => Err(StorageError::Common(
+            "Specification version not found".to_string(),
+        )),
     }
 }
 
-pub fn to_authority(authority: Vec<asset_authority::Model>) -> Vec<Authority> {
+pub fn to_authority(authority: Vec<model::AssetAuthorityModel>) -> Vec<Authority> {
     authority
         .iter()
         .map(|a| Authority {
@@ -209,7 +213,7 @@ pub fn to_authority(authority: Vec<asset_authority::Model>) -> Vec<Authority> {
         .collect()
 }
 
-pub fn to_creators(creators: Vec<asset_creators::Model>) -> Vec<Creator> {
+pub fn to_creators(creators: Vec<model::AssetCreatorsModel>) -> Vec<Creator> {
     creators
         .iter()
         .map(|a| Creator {
@@ -220,8 +224,8 @@ pub fn to_creators(creators: Vec<asset_creators::Model>) -> Vec<Creator> {
         .collect()
 }
 
-pub fn to_grouping(groups: Vec<asset_grouping::Model>) -> Result<Vec<Group>, DbErr> {
-    fn find_group(model: &asset_grouping::Model) -> Result<Group, DbErr> {
+pub fn to_grouping(groups: Vec<model::AssetGroupingModel>) -> Result<Vec<Group>, StorageError> {
+    fn find_group(model: &model::AssetGroupingModel) -> Result<Group, StorageError> {
         Ok(Group {
             group_key: model.group_key.clone(),
             group_value: model.group_value.clone(),
@@ -232,21 +236,23 @@ pub fn to_grouping(groups: Vec<asset_grouping::Model>) -> Result<Vec<Group>, DbE
     groups.iter().map(find_group).collect()
 }
 
-pub fn get_interface(asset: &asset::Model) -> Result<Interface, DbErr> {
+pub fn get_interface(asset: &model::AssetModel) -> Result<Interface, StorageError> {
     Ok(Interface::from((
         asset
             .specification_version
             .as_ref()
-            .ok_or(DbErr::Custom("Specification version not found".to_string()))?,
+            .ok_or(StorageError::Common(
+                "Specification version not found".to_string(),
+            ))?,
         asset
             .specification_asset_class
             .as_ref()
-            .unwrap_or(&SpecificationAssetClass::Unknown),
+            .unwrap_or(&model::SpecificationAssetClass::Unknown),
     )))
 }
 
 //TODO -> impl custom error type
-pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, DbErr> {
+pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, StorageError> {
     let FullAsset {
         asset,
         data,
@@ -408,14 +414,56 @@ pub fn asset_list_to_rpc(asset_list: Vec<FullAsset>) -> (Vec<RpcAsset>, Vec<Asse
 }
 
 pub fn build_token_accounts_response(
-    token_accounts: Vec<TokenAccount>,
+    token_accounts: Vec<TokenAccResponse>,
     limit: u64,
     page: Option<u64>,
-) -> TokenAccountsList {
-    TokenAccountsList {
+    cursor_enabled: bool,
+) -> Result<TokenAccountsList, String> {
+    let pagination = get_pagination_values(&token_accounts, &page, cursor_enabled)?;
+
+    Ok(TokenAccountsList {
         total: token_accounts.len() as u32,
         limit: limit as u32,
-        page: page.map(|x| x as u32),
-        token_accounts,
+        page: pagination.page,
+        after: pagination.after,
+        before: pagination.before,
+        cursor: pagination.cursor,
+        token_accounts: token_accounts.into_iter().map(|t| t.token_acc).collect(),
+    })
+}
+
+fn get_pagination_values(
+    token_accounts: &[TokenAccResponse],
+    page: &Option<u64>,
+    cursor_enabled: bool,
+) -> Result<Pagination, String> {
+    if cursor_enabled {
+        if let Some(token_acc) = token_accounts.last() {
+            Ok(Pagination {
+                cursor: Some(token_acc.sorting_id.clone()),
+                ..Default::default()
+            })
+        } else {
+            Ok(Pagination::default())
+        }
+    } else if let Some(p) = page {
+        Ok(Pagination {
+            page: Some(*p as u32),
+            ..Default::default()
+        })
+    } else {
+        let first_row = token_accounts
+            .first()
+            .map(|token_acc| token_acc.sorting_id.clone());
+
+        let last_row = token_accounts
+            .last()
+            .map(|token_acc| token_acc.sorting_id.clone());
+
+        Ok(Pagination {
+            after: last_row,
+            before: first_row,
+            ..Default::default()
+        })
     }
 }
