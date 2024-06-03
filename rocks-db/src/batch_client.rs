@@ -190,10 +190,10 @@ impl AssetIndexReader for Storage {
 
         for data in asset_authority_details.iter().flatten() {
             if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
-                existed_index.authority = mpl_collections
+                existed_index.authority = Some(data.authority);
+                existed_index.update_authority = mpl_collections
                     .get(&data.pubkey)
-                    .and_then(|update_authority| update_authority.authority.value)
-                    .or(Some(data.authority));
+                    .and_then(|update_authority| update_authority.authority.value);
                 if data.slot_updated as i64 > existed_index.slot_updated {
                     existed_index.slot_updated = data.slot_updated as i64;
                 }
@@ -201,6 +201,9 @@ impl AssetIndexReader for Storage {
                 let asset_index = AssetIndex {
                     pubkey: data.pubkey,
                     authority: Some(data.authority),
+                    update_authority: mpl_collections
+                        .get(&data.pubkey)
+                        .and_then(|update_authority| update_authority.authority.value),
                     slot_updated: data.slot_updated as i64,
                     ..Default::default()
                 };

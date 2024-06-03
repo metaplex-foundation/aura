@@ -33,6 +33,7 @@ impl UrlWithStatus {
 }
 
 // AssetIndex is the struct that is stored in the postgres database and is used to query the asset pubkeys.
+//
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct AssetIndex {
     // immutable fields

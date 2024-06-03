@@ -412,6 +412,7 @@ impl PgClient {
             ast_owner_type,
             ast_owner,
             ast_delegate,
+            ast_authority_fk,
             ast_collection,
             ast_is_collection_verified,
             ast_is_burnt,
