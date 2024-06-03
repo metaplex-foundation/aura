@@ -126,15 +126,6 @@ impl Storage {
         let assets_static = to_map!(assets_static);
         let assets_collection =
             assets_collection.map_err(|e| StorageError::Common(e.to_string()))?;
-        let mpl_collections = self
-            .asset_collection_data
-            .batch_get(
-                assets_collection
-                    .iter()
-                    .filter_map(|asset| asset.as_ref().map(|a| a.collection.value))
-                    .collect::<Vec<_>>(),
-            )
-            .await;
         Ok(AssetSelectedMaps {
             editions: self
                 .get_editions(
@@ -155,7 +146,6 @@ impl Storage {
             assets_leaf: to_map!(assets_leaf),
             offchain_data,
             urls,
-            mpl_collections: to_map!(mpl_collections),
         })
     }
 

@@ -253,15 +253,10 @@ fn convert_rocks_authority_model(
     asset_pubkey: &Pubkey,
     assets_authority: &HashMap<Pubkey, AssetAuthority>,
     asset_collections: &HashMap<Pubkey, AssetCollection>,
-    mpl_collections: &HashMap<Pubkey, AssetCollection>,
 ) -> model::AssetAuthorityModel {
     let update_authority = asset_collections
-        .get(asset_pubkey)
-        .and_then(|asset_collection| {
-            mpl_collections
-                .get(&asset_collection.collection.value)
-                .and_then(|update_authority| update_authority.authority.value)
-        });
+        .get(&asset_pubkey)
+        .and_then(|update_authority| update_authority.authority.value);
     let authority = assets_authority
         .get(asset_pubkey)
         .cloned()
@@ -375,7 +370,6 @@ fn asset_selected_maps_into_full_asset(
                 id,
                 &asset_selected_maps.assets_authority,
                 &asset_selected_maps.assets_collection,
-                &asset_selected_maps.mpl_collections,
             )],
             creators: convert_rocks_creators_model(id, &asset_selected_maps.assets_dynamic),
             groups: convert_rocks_grouping_model(id, &asset_selected_maps.assets_collection)
