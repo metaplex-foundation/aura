@@ -255,7 +255,7 @@ fn convert_rocks_authority_model(
     asset_collections: &HashMap<Pubkey, AssetCollection>,
 ) -> model::AssetAuthorityModel {
     let update_authority = asset_collections
-        .get(&asset_pubkey)
+        .get(asset_pubkey)
         .and_then(|update_authority| update_authority.authority.value);
     let authority = assets_authority
         .get(asset_pubkey)
