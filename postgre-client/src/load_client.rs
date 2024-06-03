@@ -147,7 +147,7 @@ impl PgClient {
             .await?;
 
         for (index, on_query_string) in [
-            ("assets_v3_authority_fk", "assets_authorities(auth_authority) WHERE auth_authority IS NOT NULL"),
+            ("assets_authority", "assets_authorities(auth_authority) WHERE auth_authority IS NOT NULL"),
 ("asset_creators_v3_creator", "asset_creators_v3(asc_creator, asc_verified)"),
 ("assets_v3_specification_version", "assets_v3 (ast_specification_version) WHERE ast_specification_version <> 'v1'::specification_versions"),
 ("assets_v3_specification_asset_class", "assets_v3 (ast_specification_asset_class) WHERE ast_specification_asset_class IS NOT NULL AND ast_specification_asset_class <> 'unknown'::specification_asset_class"),
