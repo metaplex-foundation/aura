@@ -51,7 +51,7 @@ impl PgClient {
             group_clause_required = true;
         }
         if filter.authority_address.is_some() {
-            query_builder.push(" LEFT JOIN assets_authorities ON assets_v3.ast_authority_fk = assets_authorities.auth_pubkey ");
+            query_builder.push(" INNER JOIN assets_authorities ON assets_v3.ast_authority_fk = assets_authorities.auth_pubkey ");
             group_clause_required = true;
         }
 

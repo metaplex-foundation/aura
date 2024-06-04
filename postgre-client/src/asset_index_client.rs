@@ -57,6 +57,13 @@ impl PgClient {
                 .await?;
         }
         for chunk in updated_components
+            .authorities
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_AUTHORITY_PARAMETERS_COUNT)
+        {
+            self.insert_authorities(transaction, chunk, table_names.authorities_table.as_str())
+                .await?;
+        }
+        for chunk in updated_components
             .asset_indexes
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_ASSET_PARAMETERS_COUNT)
         {
@@ -81,13 +88,6 @@ impl PgClient {
             table_names.creators_table.as_str(),
         )
         .await?;
-        for chunk in updated_components
-            .authorities
-            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_AUTHORITY_PARAMETERS_COUNT)
-        {
-            self.insert_authorities(transaction, chunk, table_names.authorities_table.as_str())
-                .await?;
-        }
 
         Ok(())
     }
@@ -527,7 +527,7 @@ impl PgClient {
         query_builder.push(
             " ON CONFLICT (auth_pubkey)
         DO UPDATE SET
-            auth_authority = EXCLUDED.auth_authority
+            auth_authority = EXCLUDED.auth_authority, auth_slot_updated = EXCLUDED.auth_slot_updated
             WHERE ",
         );
         query_builder.push(table);

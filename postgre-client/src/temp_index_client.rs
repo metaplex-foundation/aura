@@ -84,6 +84,24 @@ impl TempClient {
             .await?;
 
         let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("INSERT INTO assets_authorities SELECT * FROM ");
+        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
+        query_builder.push("assets_authorities ON CONFLICT (auth_pubkey)
+        DO UPDATE SET
+            auth_authority = EXCLUDED.auth_authority,
+            auth_slot_updated = EXCLUDED.auth_slot_updated,
+            WHERE assets_v3.auth_slot_updated <= EXCLUDED.auth_slot_updated OR assets_authorities.auth_slot_updated IS NULL;");
+
+        self.pg_client
+            .execute_query_with_metrics(
+                &mut tx,
+                &mut query_builder,
+                BATCH_UPSERT_ACTION,
+                "assets_authorities",
+            )
+            .await?;
+
+        let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("INSERT INTO assets_v3 SELECT * FROM ");
         query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
         query_builder.push("assets_v3 ON CONFLICT (ast_pubkey) 
@@ -169,24 +187,6 @@ impl TempClient {
         let creator_updates = PgClient::diff(new_creators, old_creators);
         self.pg_client
             .update_creators(&mut tx, creator_updates, "asset_creators_v3")
-            .await?;
-
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("INSERT INTO assets_authorities SELECT * FROM ");
-        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
-        query_builder.push("assets_authorities ON CONFLICT (auth_pubkey)
-        DO UPDATE SET
-            auth_authority = EXCLUDED.auth_authority,
-            auth_slot_updated = EXCLUDED.auth_slot_updated,
-            WHERE assets_v3.auth_slot_updated <= EXCLUDED.auth_slot_updated OR assets_authorities.auth_slot_updated IS NULL;");
-
-        self.pg_client
-            .execute_query_with_metrics(
-                &mut tx,
-                &mut query_builder,
-                BATCH_UPSERT_ACTION,
-                "assets_authorities",
-            )
             .await?;
 
         let mut query_builder: QueryBuilder<'_, Postgres> =
