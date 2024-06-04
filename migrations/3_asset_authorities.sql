@@ -19,7 +19,8 @@ WHERE
     ast_authority IS NOT NULL;
 
 ALTER TABLE assets_v3 ADD COLUMN ast_authority_fk bytea;
-ALTER TABLE assets_v3 ADD CONSTRAINT assets_v3_authority_fk FOREIGN KEY (ast_authority_fk) REFERENCES assets_authorities(auth_pubkey) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE assets_v3 ADD CONSTRAINT assets_v3_authority_fk_constraint FOREIGN KEY (ast_authority_fk) REFERENCES assets_authorities(auth_pubkey) ON DELETE SET NULL ON UPDATE CASCADE;
+CREATE INDEX assets_v3_authority_fk ON assets_v3(ast_authority_fk) WHERE ast_authority_fk IS NOT NULL;
 
 DROP INDEX IF EXISTS assets_v3_authority;
 ALTER TABLE assets_v3 DROP COLUMN IF EXISTS ast_authority;
