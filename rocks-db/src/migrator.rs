@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-const CURRENT_MIGRATION_VERSION: u64 = 1;
+const CURRENT_MIGRATION_VERSION: u64 = 2;
 pub(crate) const BATCH_SIZE: usize = 100_000;
 
 pub enum MigrationState {
@@ -26,7 +26,7 @@ impl Storage {
         let applied_migrations = migration_version_manager
             .get_all_applied_migrations()
             .map_err(StorageError::Common)?;
-        for version in 0..=CURRENT_MIGRATION_VERSION {
+        for version in 0..CURRENT_MIGRATION_VERSION {
             if !applied_migrations.contains(&version) {
                 Storage::apply_migration(db_path, migration_storage_path, version).await?;
             }
