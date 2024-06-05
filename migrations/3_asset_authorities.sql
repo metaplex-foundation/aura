@@ -19,7 +19,6 @@ WHERE
     ast_authority IS NOT NULL;
 
 ALTER TABLE assets_v3 ADD COLUMN ast_authority_fk bytea;
-CREATE INDEX assets_v3_authority_fk ON assets_v3(ast_authority_fk) WHERE ast_authority_fk IS NOT NULL;
 UPDATE assets_v3
 SET ast_authority_fk = CASE
                            WHEN ast_specification_asset_class = 'mpl_core_asset' AND ast_collection IS NOT NULL THEN ast_collection
