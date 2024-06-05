@@ -65,12 +65,14 @@ pub struct AssetDynamicDetails {
     pub executable: Option<Updated<bool>>,
     pub metadata_owner: Option<Updated<String>>,
     pub raw_name: Option<Updated<String>>,
-    pub plugins: Option<Updated<String>>,
-    pub unknown_plugins: Option<Updated<String>>,
+    pub mpl_core_plugins: Option<Updated<String>>,
+    pub mpl_core_unknown_plugins: Option<Updated<String>>,
     pub rent_epoch: Option<Updated<u64>>,
     pub num_minted: Option<Updated<u32>>,
     pub current_size: Option<Updated<u32>>,
     pub plugins_json_version: Option<Updated<u32>>,
+    pub mpl_core_external_plugins: Option<Updated<String>>,
+    pub mpl_core_unknown_external_plugins: Option<Updated<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -162,7 +164,7 @@ pub struct AssetCollectionDeprecated {
     pub slot_updated: u64,
 }
 
-fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
+pub(crate) fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
     if current.update_version.is_some() && new.update_version.is_some() {
         match current
             .update_version
@@ -184,7 +186,7 @@ fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
     }
 }
 
-fn update_optional_field<T: Clone + Default>(
+pub(crate) fn update_optional_field<T: Clone + Default>(
     current: &mut Option<Updated<T>>,
     new: &Option<Updated<T>>,
 ) {
@@ -386,10 +388,13 @@ impl AssetDynamicDetails {
                             &new_val.metadata_owner,
                         );
                         update_optional_field(&mut current_val.raw_name, &new_val.raw_name);
-                        update_optional_field(&mut current_val.plugins, &new_val.plugins);
                         update_optional_field(
-                            &mut current_val.unknown_plugins,
-                            &new_val.unknown_plugins,
+                            &mut current_val.mpl_core_plugins,
+                            &new_val.mpl_core_plugins,
+                        );
+                        update_optional_field(
+                            &mut current_val.mpl_core_unknown_plugins,
+                            &new_val.mpl_core_unknown_plugins,
                         );
                         update_optional_field(&mut current_val.num_minted, &new_val.num_minted);
                         update_optional_field(&mut current_val.current_size, &new_val.current_size);
@@ -397,6 +402,14 @@ impl AssetDynamicDetails {
                         update_optional_field(
                             &mut current_val.plugins_json_version,
                             &new_val.plugins_json_version,
+                        );
+                        update_optional_field(
+                            &mut current_val.mpl_core_external_plugins,
+                            &new_val.mpl_core_external_plugins,
+                        );
+                        update_optional_field(
+                            &mut current_val.mpl_core_unknown_external_plugins,
+                            &new_val.mpl_core_unknown_external_plugins,
                         );
 
                         current_val

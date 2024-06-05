@@ -188,6 +188,22 @@ pub async fn main() -> Result<(), IngesterError> {
     let tasks = JoinSet::new();
 
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
+    {
+        // storage in secondary mod cannot create new column families, that
+        // could be required for migration_version_manager, so firstly open
+        // storage with MigrationState::CreateColumnFamilies in order to create
+        // all column families
+        Storage::open(
+            &config
+                .rocks_db_path_container
+                .clone()
+                .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+            mutexed_tasks.clone(),
+            metrics_state.red_metrics.clone(),
+            MigrationState::CreateColumnFamilies,
+        )
+        .unwrap();
+    }
     let migration_version_manager_dir = TempDir::new().unwrap();
     let migration_version_manager = Storage::open_secondary(
         &config
