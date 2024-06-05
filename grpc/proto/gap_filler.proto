@@ -137,8 +137,8 @@ message AssetDetails {
     DynamicStringField metadata_owner = 23;
     DynamicStringField url = 24;
     DynamicStringField raw_name = 25;
-    DynamicStringField plugins = 26;
-    DynamicStringField unknown_plugins = 27;
+    DynamicStringField mpl_core_plugins = 26;
+    DynamicStringField mpl_core_unknown_plugins = 27;
     DynamicUint64Field rent_epoch = 28;
     DynamicUint32Field num_minted = 29;
     DynamicUint32Field current_size = 30;
@@ -155,6 +155,9 @@ message AssetDetails {
     EditionV1 edition = 37;
     MasterEdition master_edition = 38;
     OffchainData offchain_data = 39;
+
+    DynamicStringField mpl_core_external_plugins = 40;
+    DynamicStringField mpl_core_unknown_external_plugins = 41;
 }
 
 // This field is a cbor encoded object of RawBlock type depending on

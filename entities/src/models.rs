@@ -99,12 +99,14 @@ pub struct CompleteAssetDetails {
     pub executable: Option<Updated<bool>>,
     pub metadata_owner: Option<Updated<String>>,
     pub raw_name: Option<Updated<String>>,
-    pub plugins: Option<Updated<String>>,
-    pub unknown_plugins: Option<Updated<String>>,
+    pub mpl_core_plugins: Option<Updated<String>>,
+    pub mpl_core_unknown_plugins: Option<Updated<String>>,
     pub rent_epoch: Option<Updated<u64>>,
     pub num_minted: Option<Updated<u32>>,
     pub current_size: Option<Updated<u32>>,
     pub plugins_json_version: Option<Updated<u32>>,
+    pub mpl_core_external_plugins: Option<Updated<String>>,
+    pub mpl_core_unknown_external_plugins: Option<Updated<String>>,
 
     // From AssetAuthority as Tuple
     pub authority: Updated<Pubkey>,

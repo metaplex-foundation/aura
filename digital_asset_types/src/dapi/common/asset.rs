@@ -372,6 +372,8 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, StorageError> 
         plugins: asset.plugins,
         unknown_plugins: asset.unknown_plugins,
         mpl_core_info,
+        external_plugins: asset.external_plugins,
+        unknown_external_plugins: asset.unknown_external_plugins,
     }))
 }
 
