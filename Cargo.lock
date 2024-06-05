@@ -1104,7 +1104,7 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status",
  "solana-zk-token-sdk",
- "spl-account-compression 0.4.0",
+ "spl-account-compression 0.3.0",
  "spl-concurrent-merkle-tree 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "spl-noop 0.2.0",
  "spl-pod",
@@ -1303,9 +1303,9 @@ dependencies = [
 
 [[package]]
 name = "bytemuck"
-version = "1.15.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d6d68c57235a3a081186990eca2867354726650f42f7516ca50c28d6281fd15"
+checksum = "78834c15cb5d5efe3452d58b1e8ba890dd62d21907f867f383358198e56ebca5"
 dependencies = [
  "bytemuck_derive",
 ]
@@ -2355,7 +2355,7 @@ dependencies = [
  "solana-program",
  "solana-sdk",
  "solana-transaction-status",
- "spl-account-compression 0.4.0",
+ "spl-account-compression 0.3.0",
  "sqlx",
 ]
 
@@ -3423,7 +3423,7 @@ dependencies = [
  "solana-client",
  "solana-program",
  "solana-sdk",
- "spl-account-compression 0.3.0",
+ "spl-account-compression 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "spl-concurrent-merkle-tree 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
  "tokio",
@@ -4085,7 +4085,7 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
- "spl-account-compression 0.4.0",
+ "spl-account-compression 0.3.0",
  "spl-associated-token-account",
  "spl-concurrent-merkle-tree 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "spl-merkle-tree-reference 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4250,7 +4250,7 @@ dependencies = [
  "solana-sdk",
  "solana-storage-bigtable",
  "solana-transaction-status",
- "spl-account-compression 0.4.0",
+ "spl-account-compression 0.3.0",
  "spl-concurrent-merkle-tree 0.2.0",
  "spl-token",
  "sqlx",
@@ -5906,7 +5906,7 @@ dependencies = [
  "setup",
  "solana-sdk",
  "solana-transaction-status",
- "spl-account-compression 0.4.0",
+ "spl-account-compression 0.3.0",
  "tar",
  "tempfile",
  "thiserror",
@@ -7903,6 +7903,17 @@ dependencies = [
 [[package]]
 name = "spl-account-compression"
 version = "0.3.0"
+dependencies = [
+ "anchor-lang",
+ "bytemuck",
+ "solana-program",
+ "spl-concurrent-merkle-tree 0.2.0",
+ "spl-noop 0.2.0",
+]
+
+[[package]]
+name = "spl-account-compression"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85c43bd4455d9fb29b9e4f83c087ccffa2f6f41fecfc0549932ae391d00f3378"
 dependencies = [
@@ -7910,17 +7921,6 @@ dependencies = [
  "bytemuck",
  "spl-concurrent-merkle-tree 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "spl-noop 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "spl-account-compression"
-version = "0.4.0"
-dependencies = [
- "anchor-lang",
- "bytemuck",
- "solana-program",
- "spl-concurrent-merkle-tree 0.2.0",
- "spl-noop 0.2.0",
 ]
 
 [[package]]
@@ -9569,7 +9569,7 @@ dependencies = [
  "solana-sdk",
  "solana-storage-bigtable",
  "solana-transaction-status",
- "spl-account-compression 0.4.0",
+ "spl-account-compression 0.3.0",
  "spl-concurrent-merkle-tree 0.2.0",
  "thiserror",
  "tokio",

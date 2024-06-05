@@ -170,9 +170,9 @@ pub fn encode_failed_rollup_key(key: FailedRollupKey) -> Vec<u8> {
 pub fn dencode_failed_rollup_key(key: Vec<u8>) -> Result<FailedRollupKey> {
     Ok(FailedRollupKey {
         status: FailedRollupState::try_from(
-            *key.get(0).ok_or(crate::StorageError::InvalidKeyLength)?,
+            *key.first().ok_or(crate::StorageError::InvalidKeyLength)?,
         )
-        .map_err(|e| crate::StorageError::Common(e))?,
+        .map_err(crate::StorageError::Common)?,
         hash: String::from_utf8(key[1..].to_vec()).unwrap_or_default(),
     })
 }

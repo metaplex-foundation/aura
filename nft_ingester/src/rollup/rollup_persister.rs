@@ -113,7 +113,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
 
                 match res {
                     Ok(rollup_with_state) => {
-                        if let Some(_) = rollup_with_state {
+                        if rollup_with_state.is_some() {
                             self.drop_rollup_from_queue(rollup.file_hash.clone())
                                 .await?;
 
@@ -139,18 +139,16 @@ impl<D: RollupDownloader> RollupPersister<D> {
                     return Ok((Some(rollup), Some(deserialized)));
                 }
 
-                return Ok((Some(rollup), None));
+                Ok((Some(rollup), None))
             }
-            Ok((None, _)) => {
-                return Ok((None, None));
-            }
+            Ok((None, _)) => Ok((None, None)),
             Err(e) => {
                 self.metrics
                     .inc_rollups_with_status("rollup_fetch", MetricStatus::FAILURE);
                 error!("Failed to fetch rollup for verifying: {}", e);
-                return Err(e.into());
+                Err(e.into())
             }
-        };
+        }
     }
 
     pub async fn verify_rollup(
