@@ -85,9 +85,10 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_keep_running = keep_running.clone();
     let cloned_tasks = mutexed_tasks.clone();
 
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(async move {
         json_migrator.run(cloned_keep_running, cloned_tasks).await;
-    }));
+        Ok(())
+    });
 
     // useless thing in this context
     let (shutdown_tx, _shutdown_rx) = broadcast::channel::<()>(1);
@@ -226,11 +227,11 @@ impl JsonMigrator {
 
         let tasks_batch_to_insert = 1000;
 
-        tasks.lock().await.spawn(tokio::spawn(async move {
+        tasks.lock().await.spawn(async move {
             loop {
                 if !cloned_keep_running.load(Ordering::SeqCst) {
                     info!("Worker to clean tasks buffer is stopped");
-                    return;
+                    break;
                 }
 
                 let mut tasks_buffer = cloned_tasks_buffer.lock().await;
@@ -274,7 +275,9 @@ impl JsonMigrator {
                     }
                 }
             }
-        }));
+
+            Ok(())
+        });
 
         for dynamic_details in dynamic_asset_details {
             if !keep_running.load(Ordering::SeqCst) {

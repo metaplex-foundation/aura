@@ -1,3 +1,4 @@
+use inflector::Inflector;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
@@ -25,6 +26,7 @@ use tokio::task::JoinSet;
 
 use crate::errors::StorageError;
 use crate::migrations::collection_authority::AssetCollectionVersion0;
+use crate::migrations::external_plugins::AssetDynamicDetailsV0;
 use crate::parameters::ParameterColumn;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
@@ -328,6 +330,13 @@ impl Storage {
         cf_options.set_max_bytes_for_level_base(total_size_base);
         cf_options.set_target_file_size_base(file_size_base);
 
+        if matches!(migration_state, &MigrationState::CreateColumnFamilies) {
+            cf_options.set_merge_operator_associative(
+                &format!("merge_fn_merge_{}", C::NAME.to_snake_case()),
+                asset::AssetStaticDetails::merge_keep_existing,
+            );
+            return cf_options;
+        }
         // Optional merges
         match C::NAME {
             AssetStaticDetails::NAME => {
@@ -337,10 +346,20 @@ impl Storage {
                 );
             }
             asset::AssetDynamicDetails::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_merge_dynamic_details",
-                    asset::AssetDynamicDetails::merge_dynamic_details,
-                );
+                let mf = match migration_state {
+                    MigrationState::Version(version) => {
+                        if *version <= 1 {
+                            AssetDynamicDetailsV0::merge_dynamic_details
+                        } else {
+                            asset::AssetDynamicDetails::merge_dynamic_details
+                        }
+                    }
+                    MigrationState::Last => asset::AssetDynamicDetails::merge_dynamic_details,
+                    MigrationState::CreateColumnFamilies => {
+                        asset::AssetStaticDetails::merge_keep_existing
+                    }
+                };
+                cf_options.set_merge_operator_associative("merge_fn_merge_dynamic_details", mf);
             }
             asset::AssetDynamicDetailsDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
