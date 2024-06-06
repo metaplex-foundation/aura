@@ -465,8 +465,7 @@ async fn rollup_persister_test() {
     let (_, rx) = broadcast::channel::<()>(1);
     rollup_persister
         .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
-        .await
-        .unwrap();
+        .await;
 
     let merkle_tree = generate_merkle_tree_from_rollup(&test_rollup);
 
@@ -593,13 +592,10 @@ async fn rollup_persister_download_fail_test() {
         .await
         .unwrap();
 
-    // ignoring error here because check the result later
     let (_, rx) = broadcast::channel::<()>(1);
     rollup_persister
         .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
-        .await
-        .unwrap();
-
+        .await;
 
     let r = env
         .rocks_env
@@ -662,13 +658,10 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
         .await
         .unwrap();
 
-    // ignoring error here because check the result later
     let (_, rx) = broadcast::channel::<()>(1);
     rollup_persister
         .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
-        .await
-        .unwrap();
-
+        .await;
 
     let r = env
         .rocks_env

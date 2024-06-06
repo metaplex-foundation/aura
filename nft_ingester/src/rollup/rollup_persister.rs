@@ -42,10 +42,7 @@ impl RollupDownloader for RollupDownloaderForPersister {
         let file_hash = xxhash_rust::xxh3::xxh3_128(&response);
         let hash_hex = hex::encode(file_hash.to_be_bytes());
         if hash_hex != checksum {
-            return Err(UsecaseError::HashMismatch(format!(
-                "File checksum mismatch. Expected {:?} got {:?}",
-                checksum, hash_hex
-            )));
+            return Err(UsecaseError::HashMismatch(checksum.to_string(), hash_hex));
         }
         Ok(Box::new(serde_json::from_slice(&response)?))
     }
@@ -164,6 +161,8 @@ impl<D: RollupDownloader> RollupPersister<D> {
             .await
         {
             Ok(r) => {
+                self.metrics
+                    .inc_rollups_with_status("rollup_download", MetricStatus::SUCCESS);
                 if let Err(e) = self
                     .rocks_client
                     .rollups
@@ -177,7 +176,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
                 rollup_to_verify.persisting_state = PersistingRollupState::SuccessfullyDownload;
             }
             Err(e) => {
-                if let UsecaseError::HashMismatch(e) = e {
+                if let UsecaseError::HashMismatch(expected, actual) = e {
                     rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
                     self.metrics
                         .inc_rollups_with_status("rollup_checksum_verify", MetricStatus::FAILURE);
@@ -187,7 +186,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
                     )?;
 
                     return Err(IngesterError::RollupValidation(
-                        RollupValidationError::FileChecksumMismatch(e),
+                        RollupValidationError::FileChecksumMismatch(expected, actual),
                     ));
                 }
                 if let UsecaseError::Serialization(e) = e {
@@ -213,6 +212,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
                         rollup_to_verify,
                     )?;
                 } else {
+                    rollup_to_verify.download_attempts = rollup_to_verify.download_attempts + 1;
                     if let Err(e) = self.rocks_client.rollup_to_verify.put(
                         rollup_to_verify.file_hash.clone(),
                         RollupToVerify {
@@ -273,6 +273,8 @@ impl<D: RollupDownloader> RollupPersister<D> {
             rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
             return;
         }
+        self.metrics
+            .inc_rollups_with_status("rollup_persist", MetricStatus::SUCCESS);
         rollup_to_verify.persisting_state = PersistingRollupState::StoredUpdate;
     }
 

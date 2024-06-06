@@ -34,8 +34,8 @@ pub enum UsecaseError {
     Reqwest(String),
     #[error("Json: {0}")]
     Json(String),
-    #[error("HashMismatch: {0}")]
-    HashMismatch(String),
+    #[error("HashMismatch: expected {0}, actual file hash {1}")]
+    HashMismatch(String, String),
     #[error("Serialization: {0}")]
     Serialization(String),
 }
