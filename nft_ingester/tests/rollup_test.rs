@@ -10,7 +10,7 @@ use mpl_bubblegum::types::{LeafSchema, MetadataArgs};
 
 use digital_asset_types::rpc::AssetProof;
 use entities::api_req_params::GetAssetProof;
-use entities::enums::{FailedRollupState, RollupState};
+use entities::enums::{FailedRollupState, PersistingRollupState, RollupState};
 use entities::models::{BufferedTransaction, FailedRollupKey};
 use entities::models::{RollupToVerify, RollupWithState};
 use entities::rollup::{ChangeLogEventV1, PathNode, RolledMintInstruction, Rollup};
@@ -28,7 +28,6 @@ use nft_ingester::error::IngesterError;
 use nft_ingester::json_worker::JsonWorker;
 use nft_ingester::rollup::rollup_persister::{RollupPersister, MAX_ROLLUP_DOWNLOAD_ATTEMPTS};
 use nft_ingester::rollup::rollup_processor::{MockPermanentStorageClient, RollupProcessor};
-use nft_ingester::rollup::rollup_verifier::RollupVerifier;
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
 use rand::{thread_rng, Rng};
@@ -433,6 +432,7 @@ async fn rollup_persister_test() {
         created_at_slot: 10,
         signature: Signature::new_unique(),
         download_attempts: 0,
+        persisting_state: PersistingRollupState::ReceivedTransaction,
     };
 
     env.rocks_env
@@ -451,7 +451,6 @@ async fn rollup_persister_test() {
 
     let rollup_persister = RollupPersister::new(
         env.rocks_env.storage.clone(),
-        RollupVerifier {},
         mocked_downloader,
         Arc::new(RollupPersisterMetricsConfig::new()),
     );
@@ -463,8 +462,9 @@ async fn rollup_persister_test() {
         .await
         .unwrap();
 
+    let (_, rx) = broadcast::channel::<()>(1);
     rollup_persister
-        .verify_rollup(rollup_to_verify.unwrap(), None)
+        .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
         .await
         .unwrap();
 
@@ -566,6 +566,7 @@ async fn rollup_persister_download_fail_test() {
         created_at_slot: 10,
         signature: Signature::new_unique(),
         download_attempts,
+        persisting_state: PersistingRollupState::ReceivedTransaction,
     };
 
     env.rocks_env
@@ -581,7 +582,6 @@ async fn rollup_persister_download_fail_test() {
 
     let rollup_persister = RollupPersister::new(
         env.rocks_env.storage.clone(),
-        RollupVerifier {},
         mocked_downloader,
         Arc::new(RollupPersisterMetricsConfig::new()),
     );
@@ -594,9 +594,12 @@ async fn rollup_persister_download_fail_test() {
         .unwrap();
 
     // ignoring error here because check the result later
-    let _ = rollup_persister
-        .verify_rollup(rollup_to_verify.unwrap(), None)
-        .await;
+    let (_, rx) = broadcast::channel::<()>(1);
+    rollup_persister
+        .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
+        .await
+        .unwrap();
+
 
     let r = env
         .rocks_env
@@ -632,6 +635,7 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
         created_at_slot: 10,
         signature: Signature::new_unique(),
         download_attempts,
+        persisting_state: PersistingRollupState::ReceivedTransaction,
     };
 
     env.rocks_env
@@ -647,7 +651,6 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
 
     let rollup_persister = RollupPersister::new(
         env.rocks_env.storage.clone(),
-        RollupVerifier {},
         mocked_downloader,
         Arc::new(RollupPersisterMetricsConfig::new()),
     );
@@ -660,9 +663,12 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
         .unwrap();
 
     // ignoring error here because check the result later
-    let _ = rollup_persister
-        .verify_rollup(rollup_to_verify.unwrap(), None)
-        .await;
+    let (_, rx) = broadcast::channel::<()>(1);
+    rollup_persister
+        .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
+        .await
+        .unwrap();
+
 
     let r = env
         .rocks_env
@@ -731,7 +737,6 @@ async fn rollup_processing_validation_test() {
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
         Arc::new(nft_ingester::rollup::rollup_processor::NoopRollupTxSender {}),
-        RollupVerifier {},
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
         Arc::new(RollupProcessorMetricsConfig::new()),
@@ -1005,7 +1010,6 @@ async fn rollup_upload_test() {
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
         Arc::new(nft_ingester::rollup::rollup_processor::NoopRollupTxSender {}),
-        RollupVerifier {},
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
         Arc::new(RollupProcessorMetricsConfig::new()),
@@ -1040,7 +1044,6 @@ async fn rollup_upload_test() {
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
         Arc::new(nft_ingester::rollup::rollup_processor::NoopRollupTxSender {}),
-        RollupVerifier {},
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
         Arc::new(RollupProcessorMetricsConfig::new()),

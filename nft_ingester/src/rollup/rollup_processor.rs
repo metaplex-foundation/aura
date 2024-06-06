@@ -20,8 +20,6 @@ use tokio::sync::broadcast::Receiver;
 use tokio::time::Instant;
 use tracing::{error, info};
 
-use super::rollup_verifier::RollupVerifier;
-
 pub const MAX_ROLLUP_RETRIES: usize = 5;
 const SUCCESS_METRICS_LABEL: &str = "success";
 const VALIDATION_FAIL_METRICS_LABEL: &str = "validation_fail";
@@ -143,7 +141,6 @@ pub struct RollupProcessor<R: RollupTxSender, P: PermanentStorageClient> {
     rocks: Arc<Storage>,
     permanent_storage_client: Arc<P>,
     rollup_tx_sender: Arc<R>,
-    rollup_verifier: RollupVerifier,
     file_storage_path: String,
     metrics: Arc<RollupProcessorMetricsConfig>,
 }
@@ -153,7 +150,6 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         pg_client: Arc<PgClient>,
         rocks: Arc<Storage>,
         rollup_tx_sender: Arc<R>,
-        rollup_verifier: RollupVerifier,
         permanent_storage_client: Arc<P>,
         file_storage_path: String,
         metrics: Arc<RollupProcessorMetricsConfig>,
@@ -163,7 +159,6 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
             rocks,
             permanent_storage_client,
             rollup_tx_sender,
-            rollup_verifier,
             file_storage_path,
             metrics,
         }
@@ -246,7 +241,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         rollup: &Rollup,
         rollup_to_process: &mut RollupWithState,
     ) -> Result<(), IngesterError> {
-        if let Err(e) = self.rollup_verifier.validate_rollup(rollup).await {
+        if let Err(e) = crate::rollup::rollup_verifier::validate_rollup(rollup).await {
             if let Err(err) = self
                 .pg_client
                 .mark_rollup_as_failed(

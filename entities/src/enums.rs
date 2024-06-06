@@ -190,7 +190,7 @@ pub enum PersistingRollupState {
     FailedToPersist,
     SuccessfullyDownload,
     SuccessfullyValidate,
-    Complete,
+    StoredUpdate,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
