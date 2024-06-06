@@ -2,6 +2,7 @@ use std::ops::Deref;
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
+use entities::enums::PersistingRollupState;
 use entities::{
     enums::FailedRollupState,
     models::{FailedRollup, FailedRollupKey, RollupToVerify},
@@ -72,7 +73,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_secs(5)) => {
-                        if let Err(e) = self.process_rollup().await {
+                        if let Err(e) = self.persist_rollup(&rx).await {
                             error!("Error during rollup processing: {}", e.to_string());
                         }
                     },
@@ -84,25 +85,41 @@ impl<D: RollupDownloader> RollupPersister<D> {
         }
     }
 
-    async fn process_rollup(&self) -> Result<(), IngesterError> {
-        match self.get_rollup_to_verify().await {
-            Ok((rollup_to_verify, rollup_data)) => {
-                if let Some(rollup_to_verify) = rollup_to_verify {
-                    if let Err(e) = self.verify_rollup(rollup_to_verify, rollup_data).await {
-                        return Err(IngesterError::ProcessRollup(format!(
-                            "Error during rollup verification: {}",
-                            e.to_string()
-                        )));
-                    }
-                } else {
+    async fn persist_rollup(&self, rx: &Receiver<()>) -> Result<(), IngesterError> {
+        let start_time = Instant::now();
+        let (rollup_to_verify, mut rollup) = self.get_rollup_to_verify().await?;
+        let Some(mut rollup_to_verify) = rollup_to_verify else {
+            return Ok(());
+        };
+        info!("Persisting {} rollup", &rollup_to_verify.url);
+        while rx.is_empty() {
+            match (&rollup_to_verify.persisting_state, &rollup) {
+                (&PersistingRollupState::ReceivedTransaction, _) | (_, None) => {
+                    self.download_rollup(&mut rollup_to_verify, &mut rollup)
+                        .await?;
+                }
+                (&PersistingRollupState::SuccessfullyDownload, Some(r)) => {
+                    self.validate_rollup(&mut rollup_to_verify, r).await?;
+                }
+                (&PersistingRollupState::SuccessfullyValidate, Some(r)) => {
+                    self.store_rollup_update(&mut rollup_to_verify, r).await?;
+                }
+                (&PersistingRollupState::FailedToPersist, _)
+                | (&PersistingRollupState::Complete, _) => {
+                    self.drop_rollup_from_queue(rollup_to_verify.file_hash.clone())
+                        .await?;
+                    info!(
+                        "Finish processing {} rollup file with {:?} state",
+                        &rollup_to_verify.url, &rollup_to_verify.persisting_state
+                    );
+                    self.metrics
+                        .inc_rollups_with_status("rollup_validating", MetricStatus::SUCCESS);
+                    self.metrics.set_persisting_latency(
+                        "rollup_persisting",
+                        start_time.elapsed().as_millis() as f64,
+                    );
                     return Ok(());
                 }
-            }
-            Err(e) => {
-                return Err(IngesterError::ProcessRollup(format!(
-                    "Could not fetch rollup for verification from queue: {:?}",
-                    e.to_string()
-                )));
             }
         }
         Ok(())
@@ -113,7 +130,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
     ) -> Result<(Option<RollupToVerify>, Option<Box<Rollup>>), IngesterError> {
         match self.rocks_client.fetch_rollup_for_verifying().await {
             Ok((Some(rollup_to_verify), rollup_data)) => {
-                return Ok((Some(rollup_to_verify), rollup_data.map(Box::new)));
+                Ok((Some(rollup_to_verify), rollup_data.map(Box::new)))
             }
             Ok((None, _)) => Ok((None, None)),
             Err(e) => {
@@ -125,132 +142,136 @@ impl<D: RollupDownloader> RollupPersister<D> {
         }
     }
 
-    pub async fn verify_rollup(
+    async fn download_rollup(
         &self,
-        rollup_to_process: RollupToVerify,
-        rollup_data: Option<Box<Rollup>>,
+        rollup_to_verify: &mut RollupToVerify,
+        rollup: &mut Option<Box<Rollup>>,
     ) -> Result<(), IngesterError> {
-        let start_time = Instant::now();
-        let rollup = if let Some(rollup) = rollup_data {
-            rollup
-        } else {
-            match self
-                .downloader
-                .download_rollup_and_check_checksum(
-                    rollup_to_process.url.as_ref(),
-                    &rollup_to_process.file_hash,
-                )
-                .await
-            {
-                Ok(rollup) => {
-                    if let Err(e) = self
-                        .rocks_client
-                        .rollups
-                        .put(rollup_to_process.file_hash.clone(), rollup.deref().clone())
-                    {
-                        self.metrics
-                            .inc_rollups_with_status("persist_rollup", MetricStatus::FAILURE);
-                        return Err(e.into());
-                    }
-                    rollup
-                }
-                Err(e) => {
-                    if let UsecaseError::HashMismatch(e) = e {
-                        self.metrics.inc_rollups_with_status(
-                            "rollup_checksum_verify",
-                            MetricStatus::FAILURE,
-                        );
-                        self.save_rollup_as_failed(
-                            FailedRollupState::ChecksumVerifyFailed,
-                            &rollup_to_process,
-                        )?;
-                        self.drop_rollup_from_queue(rollup_to_process.file_hash.clone())
-                            .await?;
-
-                        return Err(IngesterError::RollupValidation(
-                            RollupValidationError::FileChecksumMismatch(e),
-                        ));
-                    }
-                    if let UsecaseError::Serialization(e) = e {
-                        self.metrics.inc_rollups_with_status(
-                            "rollup_file_deserialization",
-                            MetricStatus::FAILURE,
-                        );
-                        self.save_rollup_as_failed(
-                            FailedRollupState::FileSerialization,
-                            &rollup_to_process,
-                        )?;
-                        self.drop_rollup_from_queue(rollup_to_process.file_hash.clone())
-                            .await?;
-
-                        return Err(IngesterError::SerializatonError(e));
-                    }
-
+        if rollup.is_some() {
+            return Ok(());
+        }
+        match self
+            .downloader
+            .download_rollup_and_check_checksum(
+                rollup_to_verify.url.as_ref(),
+                &rollup_to_verify.file_hash,
+            )
+            .await
+        {
+            Ok(r) => {
+                if let Err(e) = self
+                    .rocks_client
+                    .rollups
+                    .put(rollup_to_verify.file_hash.clone(), r.deref().clone())
+                {
                     self.metrics
-                        .inc_rollups_with_status("rollup_download", MetricStatus::FAILURE);
-                    if rollup_to_process.download_attempts + 1 > MAX_ROLLUP_DOWNLOAD_ATTEMPTS {
-                        self.drop_rollup_from_queue(rollup_to_process.file_hash.clone())
-                            .await?;
-                        self.save_rollup_as_failed(
-                            FailedRollupState::DownloadFailed,
-                            &rollup_to_process,
-                        )?;
-                    } else {
-                        if let Err(e) = self.rocks_client.rollup_to_verify.put(
-                            rollup_to_process.file_hash.clone(),
-                            RollupToVerify {
-                                download_attempts: rollup_to_process.download_attempts + 1,
-                                ..rollup_to_process
-                            },
-                        ) {
-                            self.metrics.inc_rollups_with_status(
-                                "rollup_attempts_update",
-                                MetricStatus::FAILURE,
-                            );
-                            return Err(e.into());
-                        }
+                        .inc_rollups_with_status("persist_rollup", MetricStatus::FAILURE);
+                    return Err(e.into());
+                }
+                *rollup = Some(r);
+                rollup_to_verify.persisting_state = PersistingRollupState::SuccessfullyDownload;
+            }
+            Err(e) => {
+                if let UsecaseError::HashMismatch(e) = e {
+                    self.metrics
+                        .inc_rollups_with_status("rollup_checksum_verify", MetricStatus::FAILURE);
+                    self.save_rollup_as_failed(
+                        FailedRollupState::ChecksumVerifyFailed,
+                        rollup_to_verify,
+                    )?;
+
+                    rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
+                    return Err(IngesterError::RollupValidation(
+                        RollupValidationError::FileChecksumMismatch(e),
+                    ));
+                }
+                if let UsecaseError::Serialization(e) = e {
+                    self.metrics.inc_rollups_with_status(
+                        "rollup_file_deserialization",
+                        MetricStatus::FAILURE,
+                    );
+                    self.save_rollup_as_failed(
+                        FailedRollupState::FileSerialization,
+                        rollup_to_verify,
+                    )?;
+
+                    rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
+                    return Err(IngesterError::SerializatonError(e));
+                }
+
+                self.metrics
+                    .inc_rollups_with_status("rollup_download", MetricStatus::FAILURE);
+                if rollup_to_verify.download_attempts + 1 > MAX_ROLLUP_DOWNLOAD_ATTEMPTS {
+                    rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
+                    self.save_rollup_as_failed(
+                        FailedRollupState::DownloadFailed,
+                        rollup_to_verify,
+                    )?;
+                } else {
+                    if let Err(e) = self.rocks_client.rollup_to_verify.put(
+                        rollup_to_verify.file_hash.clone(),
+                        RollupToVerify {
+                            file_hash: rollup_to_verify.file_hash.clone(),
+                            url: rollup_to_verify.url.clone(),
+                            created_at_slot: rollup_to_verify.created_at_slot,
+                            signature: rollup_to_verify.signature,
+                            download_attempts: rollup_to_verify.download_attempts + 1,
+                            persisting_state: PersistingRollupState::FailedToPersist,
+                        },
+                    ) {
                         self.metrics.inc_rollups_with_status(
                             "rollup_attempts_update",
-                            MetricStatus::SUCCESS,
+                            MetricStatus::FAILURE,
                         );
+                        return Err(e.into());
                     }
-
-                    return Err(IngesterError::Usecase(e.to_string()));
+                    self.metrics
+                        .inc_rollups_with_status("rollup_attempts_update", MetricStatus::SUCCESS);
                 }
+                return Err(IngesterError::Usecase(e.to_string()));
             }
-        };
+        }
+        Ok(())
+    }
 
-        if let Err(e) = self.rollup_verifier.validate_rollup(rollup.as_ref()).await {
+    async fn validate_rollup(
+        &self,
+        rollup_to_verify: &mut RollupToVerify,
+        rollup: &Rollup,
+    ) -> Result<(), IngesterError> {
+        if let Err(e) = self.rollup_verifier.validate_rollup(rollup).await {
             self.metrics
                 .inc_rollups_with_status("rollup_validating", MetricStatus::FAILURE);
             error!("Error while validating rollup: {}", e.to_string());
 
-            self.save_rollup_as_failed(FailedRollupState::RollupVerifyFailed, &rollup_to_process)?;
-            self.drop_rollup_from_queue(rollup_to_process.file_hash.clone())
-                .await?;
-
+            self.save_rollup_as_failed(FailedRollupState::RollupVerifyFailed, rollup_to_verify)?;
+            rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
             return Err(e.into());
-        } else if let Err(e) = BubblegumTxProcessor::store_rollup_update(
-            rollup_to_process.created_at_slot,
+        }
+        rollup_to_verify.persisting_state = PersistingRollupState::SuccessfullyValidate;
+        Ok(())
+    }
+
+    async fn store_rollup_update(
+        &self,
+        rollup_to_verify: &mut RollupToVerify,
+        rollup: &Rollup,
+    ) -> Result<(), IngesterError> {
+        if let Err(e) = BubblegumTxProcessor::store_rollup_update(
+            rollup_to_verify.created_at_slot,
             rollup,
             self.rocks_client.clone(),
-            rollup_to_process.signature,
+            rollup_to_verify.signature,
         )
         .await
         {
             self.metrics
                 .inc_rollups_with_status("rollup_persist", MetricStatus::FAILURE);
+            rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
             return Err(e);
         }
-
-        self.metrics
-            .inc_rollups_with_status("rollup_validating", MetricStatus::SUCCESS);
-
-        self.metrics
-            .set_persisting_latency("rollup_persisting", start_time.elapsed().as_millis() as f64);
-
-        self.drop_rollup_from_queue(rollup_to_process.file_hash.clone())
-            .await
+        rollup_to_verify.persisting_state = PersistingRollupState::Complete;
+        Ok(())
     }
 
     fn save_rollup_as_failed(

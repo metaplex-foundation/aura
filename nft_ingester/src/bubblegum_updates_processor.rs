@@ -10,8 +10,8 @@ use blockbuster::{
 };
 use chrono::Utc;
 use entities::enums::{
-    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TaskStatus,
-    TokenStandard, UseMethod,
+    ChainMutability, OwnerType, PersistingRollupState, RoyaltyTargetType, SpecificationAssetClass,
+    TaskStatus, TokenStandard, UseMethod,
 };
 use entities::models::{
     BufferedTransaction, OffChainData, RollupToVerify, SignatureWithSlot, Task, UpdateVersion,
@@ -337,6 +337,7 @@ impl BubblegumTxProcessor {
                     signature: Signature::from_str(bundle.txn_id)
                         .map_err(|e| IngesterError::ParseSignatureError(e.to_string()))?,
                     download_attempts: 0,
+                    persisting_state: PersistingRollupState::ReceivedTransaction,
                 }),
                 ..Default::default()
             };
@@ -1118,7 +1119,7 @@ impl BubblegumTxProcessor {
 
     pub async fn store_rollup_update(
         slot: u64,
-        rollup: Box<Rollup>,
+        rollup: &Rollup,
         rocks_db: Arc<Storage>,
         signature: Signature,
     ) -> Result<(), IngesterError> {
@@ -1129,7 +1130,7 @@ impl BubblegumTxProcessor {
                 SignatureWithSlot { signature, slot },
             )),
         };
-        for rolled_mint in rollup.rolled_mints.into_iter() {
+        for rolled_mint in rollup.rolled_mints.iter() {
             let seq = rolled_mint.tree_update.seq;
             let event = (&blockbuster::programs::bubblegum::ChangeLogEventV1::from(
                 &rolled_mint.tree_update,

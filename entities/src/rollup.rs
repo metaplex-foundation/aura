@@ -98,15 +98,19 @@ impl From<blockbuster::programs::bubblegum::ChangeLogEventV1> for ChangeLogEvent
     }
 }
 
-impl From<RolledMintInstruction> for BubblegumInstruction {
-    fn from(value: RolledMintInstruction) -> Self {
+impl From<&RolledMintInstruction> for BubblegumInstruction {
+    fn from(value: &RolledMintInstruction) -> Self {
         let hash = value.leaf_update.hash();
         Self {
             instruction: InstructionName::MintV1,
             tree_update: Some((&value.tree_update).into()),
-            leaf_update: Some(LeafSchemaEvent::new(Version::V1, value.leaf_update, hash)),
+            leaf_update: Some(LeafSchemaEvent::new(
+                Version::V1,
+                value.leaf_update.clone(),
+                hash,
+            )),
             payload: Some(Payload::MintV1 {
-                args: value.mint_args,
+                args: value.mint_args.clone(),
                 authority: value.authority,
                 tree_id: value.tree_update.id,
             }),
