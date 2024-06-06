@@ -11,6 +11,7 @@ use metrics_utils::RollupProcessorMetricsConfig;
 use mockall::automock;
 use postgre_client::model::RollupState;
 use postgre_client::PgClient;
+use rocks_db::Storage;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -139,6 +140,7 @@ impl RollupTxSender for NoopRollupTxSender {
 
 pub struct RollupProcessor<R: RollupTxSender, P: PermanentStorageClient> {
     pg_client: Arc<PgClient>,
+    rocks: Arc<Storage>,
     permanent_storage_client: Arc<P>,
     rollup_tx_sender: Arc<R>,
     rollup_verifier: RollupVerifier,
@@ -149,6 +151,7 @@ pub struct RollupProcessor<R: RollupTxSender, P: PermanentStorageClient> {
 impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
     pub fn new(
         pg_client: Arc<PgClient>,
+        rocks: Arc<Storage>,
         rollup_tx_sender: Arc<R>,
         rollup_verifier: RollupVerifier,
         permanent_storage_client: Arc<P>,
@@ -157,6 +160,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
     ) -> Self {
         Self {
             pg_client,
+            rocks,
             permanent_storage_client,
             rollup_tx_sender,
             rollup_verifier,
@@ -347,6 +351,17 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                 &rollup_to_process.file_name, err
             );
         };
+        if let Err(err) = self
+            .rocks
+            .rollups
+            .put_async(file_checksum.to_string(), rollup.clone())
+            .await
+        {
+            error!(
+                "Failed to save rollup into rocks: file_checksum: {}, file_path: {}, error: {}",
+                file_checksum, &rollup_to_process.file_name, err
+            );
+        }
         rollup_to_process.state = entities::enums::RollupState::Complete;
         Ok(())
     }

@@ -1,6 +1,7 @@
 use crate::enums::{
-    ChainMutability, FailedRollupState, OwnerType, RollupState, RoyaltyTargetType,
-    SpecificationAssetClass, SpecificationVersions, TaskStatus, TokenStandard, UseMethod,
+    ChainMutability, FailedRollupState, OwnerType, PersistingRollupState, RollupState,
+    RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TaskStatus, TokenStandard,
+    UseMethod,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -406,6 +407,7 @@ pub struct RollupToVerify {
     pub created_at_slot: u64,
     pub signature: Signature,
     pub download_attempts: u8,
+    pub persisting_state: PersistingRollupState,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -422,13 +424,6 @@ pub struct FailedRollup {
     pub created_at_slot: u64,
     pub signature: Signature,
     pub download_attempts: u8,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct DownloadedRollupData {
-    pub hash: String,
-    // this is rollup::Rollup struct serialized with bincode
-    pub rollup: Vec<u8>,
 }
 
 impl Default for JsonDownloadTask {

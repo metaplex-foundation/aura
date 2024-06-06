@@ -975,6 +975,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let arweave = Arc::new(arweave);
         let rollup_processor = Arc::new(RollupProcessor::new(
             index_storage.clone(),
+            rocks_storage.clone(),
             Arc::new(NoopRollupTxSender {}),
             RollupVerifier {},
             arweave,
@@ -994,7 +995,6 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rollup_persister = RollupPersister::new(
         rocks_storage.clone(),
-        index_storage.clone(),
         rollup_verifier::RollupVerifier {},
         rollup_persister::RollupDownloaderForPersister {},
         metrics_state.rollup_persisting_metrics.clone(),

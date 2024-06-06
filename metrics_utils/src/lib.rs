@@ -1262,7 +1262,7 @@ impl RollupPersisterMetricsConfig {
 
         registry.register(
             "rollups_processing_latency",
-            "A histogram of fork rollups persisting latency",
+            "A histogram of rollups persisting latency",
             self.persisting_latency.clone(),
         );
     }

@@ -185,6 +185,15 @@ pub enum RollupState {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
+pub enum PersistingRollupState {
+    ReceivedTransaction,
+    FailedToPersist,
+    SuccessfullyDownload,
+    SuccessfullyValidate,
+    Complete,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
 pub enum FailedRollupState {
     DownloadFailed,
     ChecksumVerifyFailed,
