@@ -108,8 +108,6 @@ impl BubblegumTxProcessor {
             .await
             .map_err(|e| IngesterError::DatabaseError(e.to_string()))?;
 
-        // TODO: save updates with batch to Postgre
-
         Ok(())
     }
 
