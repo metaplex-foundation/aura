@@ -424,13 +424,6 @@ pub struct FailedRollup {
     pub download_attempts: u8,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct DownloadedRollupData {
-    pub hash: String,
-    // this is rollup::Rollup struct serialized with bincode
-    pub rollup: Vec<u8>,
-}
-
 impl Default for JsonDownloadTask {
     fn default() -> Self {
         Self {

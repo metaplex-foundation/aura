@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use solana_sdk::pubkey::Pubkey;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Rollup {
     #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
     pub tree_id: Pubkey,
@@ -21,7 +21,7 @@ pub struct Rollup {
     pub last_leaf_hash: [u8; 32], // validate
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RolledMintInstruction {
     pub tree_update: ChangeLogEventV1, // validate // derive from nonce
     pub leaf_update: LeafSchema,       // validate
@@ -46,7 +46,7 @@ pub struct BatchMintInstruction {
     pub file_checksum: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ChangeLogEventV1 {
     #[serde(with = "serde_with::As::<serde_with::DisplayFromStr>")]
     pub id: Pubkey,
@@ -55,7 +55,7 @@ pub struct ChangeLogEventV1 {
     pub index: u32,
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone)]
 pub struct PathNode {
     pub node: [u8; 32],
     pub index: u32,

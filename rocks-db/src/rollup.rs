@@ -5,7 +5,8 @@ use crate::key_encoders::{
 };
 use crate::{Result, Storage};
 use bincode::deserialize;
-use entities::models::{DownloadedRollupData, FailedRollup, FailedRollupKey, RollupToVerify};
+use entities::models::{FailedRollup, FailedRollupKey, RollupToVerify};
+use entities::rollup::Rollup;
 use log::error;
 use rocksdb::MergeOperands;
 
@@ -24,7 +25,7 @@ impl TypedColumn for RollupToVerify {
     }
 }
 
-pub fn merge_rollup(
+pub fn merge_rollup_to_verify(
     _new_key: &[u8],
     existing_val: Option<&[u8]>,
     operands: &MergeOperands,
@@ -110,10 +111,10 @@ pub fn merge_failed_rollup(
     Some(result)
 }
 
-impl TypedColumn for DownloadedRollupData {
+impl TypedColumn for Rollup {
     type KeyType = String;
     type ValueType = Self;
-    const NAME: &'static str = "PROCESSED_ROLLUPS"; // Name of the column family
+    const NAME: &'static str = "ROLLUPS"; // Name of the column family
 
     fn encode_key(key: String) -> Vec<u8> {
         encode_string(key)
@@ -124,31 +125,13 @@ impl TypedColumn for DownloadedRollupData {
     }
 }
 
-// do not deserialize rollup here because it may be memory intensive
-pub fn merge_downloaded_rollup(
-    _new_key: &[u8],
-    existing_val: Option<&[u8]>,
-    operands: &MergeOperands,
-) -> Option<Vec<u8>> {
-    let mut result = vec![];
-    if let Some(existing_val) = existing_val {
-        result = existing_val.to_vec();
-    }
-
-    for op in operands {
-        result = op.to_vec();
-    }
-
-    Some(result)
-}
-
 impl Storage {
     pub async fn fetch_rollup_for_verifying(
         &self,
-    ) -> Result<(Option<RollupToVerify>, Option<DownloadedRollupData>)> {
-        let mut iter = self.rollup_to_verify.iter_start();
-
-        let first_value = iter
+    ) -> Result<(Option<RollupToVerify>, Option<Rollup>)> {
+        let first_value = self
+            .rollup_to_verify
+            .iter_start()
             .next()
             .transpose()
             .map_err(StorageError::RocksDb)?
@@ -156,11 +139,9 @@ impl Storage {
             .transpose()?;
 
         if let Some(rollup) = &first_value {
-            let rollup_data = self.downloaded_rollups.get(rollup.file_hash.clone())?;
-
-            return Ok((first_value, rollup_data));
+            let rollup = self.rollups.get(rollup.file_hash.clone())?;
+            return Ok((first_value, rollup));
         }
-
         Ok((first_value, None))
     }
 

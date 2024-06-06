@@ -17,9 +17,8 @@ pub use asset::{
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
-use entities::models::{
-    AssetSignature, DownloadedRollupData, FailedRollup, OffChainData, RawBlock, RollupToVerify,
-};
+use entities::models::{AssetSignature, FailedRollup, OffChainData, RawBlock, RollupToVerify};
+use entities::rollup::Rollup;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -104,7 +103,7 @@ pub struct Storage {
     pub asset_signature: Column<AssetSignature>,
     pub rollup_to_verify: Column<RollupToVerify>,
     pub failed_rollups: Column<FailedRollup>,
-    pub downloaded_rollups: Column<DownloadedRollupData>,
+    pub rollups: Column<Rollup>,
     pub migration_version: Column<MigrationVersions>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
@@ -149,7 +148,7 @@ impl Storage {
         let token_account_mint_owner_idx = Self::column(db.clone(), red_metrics.clone());
         let rollup_to_verify = Self::column(db.clone(), red_metrics.clone());
         let failed_rollups = Self::column(db.clone(), red_metrics.clone());
-        let downloaded_rollups = Self::column(db.clone(), red_metrics.clone());
+        let rollups = Self::column(db.clone(), red_metrics.clone());
         let migration_version = Self::column(db.clone(), red_metrics.clone());
 
         Self {
@@ -187,7 +186,7 @@ impl Storage {
             token_account_mint_owner_idx,
             rollup_to_verify,
             failed_rollups,
-            downloaded_rollups,
+            rollups,
             migration_version,
         }
     }
@@ -259,7 +258,7 @@ impl Storage {
             Self::new_cf_descriptor::<MigrationVersions>(migration_state),
             Self::new_cf_descriptor::<RollupToVerify>(migration_state),
             Self::new_cf_descriptor::<FailedRollup>(migration_state),
-            Self::new_cf_descriptor::<DownloadedRollupData>(migration_state),
+            Self::new_cf_descriptor::<Rollup>(migration_state),
         ]
     }
 
@@ -528,7 +527,7 @@ impl Storage {
             RollupToVerify::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_rollup_to_verify",
-                    rollup::merge_rollup,
+                    rollup::merge_rollup_to_verify,
                 );
             }
             FailedRollup::NAME => {
@@ -537,10 +536,10 @@ impl Storage {
                     rollup::merge_failed_rollup,
                 );
             }
-            DownloadedRollupData::NAME => {
+            Rollup::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_downloaded_rollup",
-                    rollup::merge_downloaded_rollup,
+                    asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
             MigrationVersions::NAME => {

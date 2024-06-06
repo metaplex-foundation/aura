@@ -1,15 +1,15 @@
+use std::ops::Deref;
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use entities::{
     enums::FailedRollupState,
-    models::{DownloadedRollupData, FailedRollup, FailedRollupKey, RollupToVerify},
+    models::{FailedRollup, FailedRollupKey, RollupToVerify},
     rollup::Rollup,
 };
 use interface::{error::UsecaseError, rollup::RollupDownloader};
 use log::{error, info};
 use metrics_utils::{MetricStatus, RollupPersisterMetricsConfig};
-use postgre_client::PgClient;
 use tokio::{sync::broadcast::Receiver, task::JoinError, time::Instant};
 
 use crate::{bubblegum_updates_processor::BubblegumTxProcessor, error::IngesterError};
@@ -21,7 +21,6 @@ pub const MAX_ROLLUP_DOWNLOAD_ATTEMPTS: u8 = 5;
 
 pub struct RollupPersister<D: RollupDownloader> {
     rocks_client: Arc<rocks_db::Storage>,
-    postgre_client: Arc<PgClient>,
     rollup_verifier: RollupVerifier,
     downloader: D,
     metrics: Arc<RollupPersisterMetricsConfig>,
@@ -57,14 +56,12 @@ impl RollupDownloader for RollupDownloaderForPersister {
 impl<D: RollupDownloader> RollupPersister<D> {
     pub fn new(
         rocks_client: Arc<rocks_db::Storage>,
-        postgre_client: Arc<PgClient>,
         rollup_verifier: RollupVerifier,
         downloader: D,
         metrics: Arc<RollupPersisterMetricsConfig>,
     ) -> Self {
         Self {
             rocks_client,
-            postgre_client,
             rollup_verifier,
             downloader,
             metrics,
@@ -75,21 +72,8 @@ impl<D: RollupDownloader> RollupPersister<D> {
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_secs(5)) => {
-                        match self.get_rollup_to_verify().await {
-                            Ok((rollup_to_verify, rollup_data)) => {
-                                if let Some(rollup_to_verify) = rollup_to_verify {
-                                    if let Err(e) = self.verify_rollup(rollup_to_verify, rollup_data).await {
-                                        error!("Error during rollup verification: {}", e.to_string());
-                                        continue;
-                                    }
-                                } else {
-                                    continue;
-                                }
-                            }
-                            Err(e) => {
-                                error!("Could not fetch rollup for verification from queue: {:?}", e.to_string());
-                                continue;
-                            }
+                        if let Err(e) = self.process_rollup().await {
+                            error!("Error during rollup processing: {}", e.to_string());
                         }
                     },
                 _ = rx.recv() => {
@@ -100,46 +84,36 @@ impl<D: RollupDownloader> RollupPersister<D> {
         }
     }
 
+    async fn process_rollup(&self) -> Result<(), IngesterError> {
+        match self.get_rollup_to_verify().await {
+            Ok((rollup_to_verify, rollup_data)) => {
+                if let Some(rollup_to_verify) = rollup_to_verify {
+                    if let Err(e) = self.verify_rollup(rollup_to_verify, rollup_data).await {
+                        return Err(IngesterError::ProcessRollup(format!(
+                            "Error during rollup verification: {}",
+                            e.to_string()
+                        )));
+                    }
+                } else {
+                    return Ok(());
+                }
+            }
+            Err(e) => {
+                return Err(IngesterError::ProcessRollup(format!(
+                    "Could not fetch rollup for verification from queue: {:?}",
+                    e.to_string()
+                )));
+            }
+        }
+        Ok(())
+    }
+
     async fn get_rollup_to_verify(
         &self,
     ) -> Result<(Option<RollupToVerify>, Option<Box<Rollup>>), IngesterError> {
         match self.rocks_client.fetch_rollup_for_verifying().await {
-            Ok((Some(rollup), rollup_data)) => {
-                // check if this rollup was created with our instance
-                let res = self
-                    .postgre_client
-                    .get_rollup_by_url(rollup.url.as_ref())
-                    .await;
-
-                match res {
-                    Ok(rollup_with_state) => {
-                        if rollup_with_state.is_some() {
-                            self.drop_rollup_from_queue(rollup.file_hash.clone())
-                                .await?;
-
-                            self.metrics.inc_rollups("rollup_from_api_in_persister");
-
-                            return Ok((None, None));
-                        }
-                    }
-                    Err(e) => {
-                        self.metrics.inc_rollups_with_status(
-                            "rollup_check_in_postgre",
-                            MetricStatus::FAILURE,
-                        );
-                        error!("Failed to check if rollup exist in Postgre: {:?}", e);
-                        return Err(IngesterError::DatabaseError(e));
-                    }
-                }
-
-                if let Some(data) = rollup_data {
-                    let deserialized =
-                        Box::new(bincode::deserialize::<Rollup>(data.rollup.as_ref()).unwrap());
-
-                    return Ok((Some(rollup), Some(deserialized)));
-                }
-
-                Ok((Some(rollup), None))
+            Ok((Some(rollup_to_verify), rollup_data)) => {
+                return Ok((Some(rollup_to_verify), rollup_data.map(Box::new)));
             }
             Ok((None, _)) => Ok((None, None)),
             Err(e) => {
@@ -157,7 +131,6 @@ impl<D: RollupDownloader> RollupPersister<D> {
         rollup_data: Option<Box<Rollup>>,
     ) -> Result<(), IngesterError> {
         let start_time = Instant::now();
-
         let rollup = if let Some(rollup) = rollup_data {
             rollup
         } else {
@@ -170,21 +143,15 @@ impl<D: RollupDownloader> RollupPersister<D> {
                 .await
             {
                 Ok(rollup) => {
-                    let downloaded_rollup_data = DownloadedRollupData {
-                        hash: rollup_to_process.file_hash.clone(),
-                        rollup: bincode::serialize(&rollup)?,
-                    };
-
                     if let Err(e) = self
                         .rocks_client
-                        .downloaded_rollups
-                        .put(rollup_to_process.file_hash.clone(), downloaded_rollup_data)
+                        .rollups
+                        .put(rollup_to_process.file_hash.clone(), rollup.deref().clone())
                     {
                         self.metrics
                             .inc_rollups_with_status("persist_rollup", MetricStatus::FAILURE);
                         return Err(e.into());
                     }
-
                     rollup
                 }
                 Err(e) => {
@@ -193,12 +160,10 @@ impl<D: RollupDownloader> RollupPersister<D> {
                             "rollup_checksum_verify",
                             MetricStatus::FAILURE,
                         );
-
                         self.save_rollup_as_failed(
                             FailedRollupState::ChecksumVerifyFailed,
                             &rollup_to_process,
                         )?;
-
                         self.drop_rollup_from_queue(rollup_to_process.file_hash.clone())
                             .await?;
 
@@ -211,12 +176,10 @@ impl<D: RollupDownloader> RollupPersister<D> {
                             "rollup_file_deserialization",
                             MetricStatus::FAILURE,
                         );
-
                         self.save_rollup_as_failed(
                             FailedRollupState::FileSerialization,
                             &rollup_to_process,
                         )?;
-
                         self.drop_rollup_from_queue(rollup_to_process.file_hash.clone())
                             .await?;
 
@@ -225,11 +188,9 @@ impl<D: RollupDownloader> RollupPersister<D> {
 
                     self.metrics
                         .inc_rollups_with_status("rollup_download", MetricStatus::FAILURE);
-
                     if rollup_to_process.download_attempts + 1 > MAX_ROLLUP_DOWNLOAD_ATTEMPTS {
                         self.drop_rollup_from_queue(rollup_to_process.file_hash.clone())
                             .await?;
-
                         self.save_rollup_as_failed(
                             FailedRollupState::DownloadFailed,
                             &rollup_to_process,

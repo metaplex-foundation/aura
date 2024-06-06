@@ -113,6 +113,8 @@ pub enum IngesterError {
     RollupValidation(#[from] RollupValidationError),
     #[error("SendTransaction: {0}")]
     SendTransaction(String),
+    #[error("ProcessRollup: {0}")]
+    ProcessRollup(String),
 }
 
 impl From<reqwest::Error> for IngesterError {
