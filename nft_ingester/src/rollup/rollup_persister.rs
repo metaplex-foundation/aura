@@ -94,8 +94,8 @@ impl<D: RollupDownloader> RollupPersister<D> {
         let start_time = Instant::now();
         info!("Persisting {} rollup", &rollup_to_verify.url);
         while rx.is_empty() {
-            match (&rollup_to_verify.persisting_state, &rollup) {
-                (&PersistingRollupState::ReceivedTransaction, _) | (_, None) => {
+            match &rollup_to_verify.persisting_state {
+                &PersistingRollupState::ReceivedTransaction => {
                     if let Err(err) = self
                         .download_rollup(&mut rollup_to_verify, &mut rollup)
                         .await
@@ -103,14 +103,27 @@ impl<D: RollupDownloader> RollupPersister<D> {
                         error!("Error during rollup downloading: {}", err)
                     };
                 }
-                (&PersistingRollupState::SuccessfullyDownload, Some(r)) => {
-                    self.validate_rollup(&mut rollup_to_verify, r).await;
+                &PersistingRollupState::SuccessfullyDownload => {
+                    if let Some(r) = &rollup {
+                        self.validate_rollup(&mut rollup_to_verify, r).await;
+                    } else {
+                        error!(
+                            "Trying to validate non downloaded rollup: {:#?}",
+                            &rollup_to_verify
+                        )
+                    }
                 }
-                (&PersistingRollupState::SuccessfullyValidate, Some(r)) => {
-                    self.store_rollup_update(&mut rollup_to_verify, r).await;
+                &PersistingRollupState::SuccessfullyValidate => {
+                    if let Some(r) = &rollup {
+                        self.store_rollup_update(&mut rollup_to_verify, r).await;
+                    } else {
+                        error!(
+                            "Trying to store update for non downloaded rollup: {:#?}",
+                            &rollup_to_verify
+                        )
+                    }
                 }
-                (&PersistingRollupState::FailedToPersist, _)
-                | (&PersistingRollupState::StoredUpdate, _) => {
+                &PersistingRollupState::FailedToPersist | &PersistingRollupState::StoredUpdate => {
                     self.drop_rollup_from_queue(rollup_to_verify.file_hash.clone())
                         .await;
                     info!(
