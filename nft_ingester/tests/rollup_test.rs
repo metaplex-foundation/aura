@@ -602,10 +602,9 @@ async fn rollup_persister_download_fail_test() {
         .storage
         .rollup_to_verify
         .get(metadata_hash.clone())
-        .unwrap()
         .unwrap();
 
-    assert_eq!(r.download_attempts, download_attempts + 1);
+    assert_eq!(r.is_none(), true);
 }
 
 #[tokio::test]
