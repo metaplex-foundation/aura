@@ -4,6 +4,7 @@ use std::{collections::HashMap, str::FromStr};
 use interface::proofs::ProofChecker;
 use log::{debug, warn};
 use metrics_utils::ApiMetricsConfig;
+use rocks_db::cl_items::{ClItemKey, ClLeafKey};
 use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
@@ -52,12 +53,14 @@ pub async fn get_proof_for_assets(
             tree_ids
                 .clone()
                 .into_iter()
-                .map(|(tree, (_, nonce))| (nonce, tree))
+                .map(|(tree, (_, nonce))| ClLeafKey::new(nonce, tree))
                 .collect::<Vec<_>>(),
         )
         .await?
         .into_iter()
-        .filter_map(|cl_leaf| cl_leaf.map(|leaf| (leaf.cli_node_idx, leaf.cli_tree_key)))
+        .filter_map(|cl_leaf| {
+            cl_leaf.map(|leaf| ClItemKey::new(leaf.cli_node_idx, leaf.cli_tree_key))
+        })
         .collect::<Vec<_>>();
     let cl_items_first_leaf = rocks_db.cl_items.batch_get(keys.clone()).await?;
 
@@ -92,10 +95,10 @@ pub async fn get_proof_for_assets(
 
     let all_req_keys: Vec<_> = keys
         .into_iter()
-        .flat_map(|(node, tree)| {
-            get_required_nodes_for_proof(node as i64)
+        .flat_map(|ClItemKey { node_id, tree_id }| {
+            get_required_nodes_for_proof(node_id as i64)
                 .into_iter()
-                .map(move |node| (node as u64, tree))
+                .map(move |node| ClItemKey::new(node as u64, tree_id))
         })
         .collect();
     let all_nodes = rocks_db

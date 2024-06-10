@@ -10,7 +10,8 @@ use rocksdb::DB;
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::cl_items::{ClItem, ClLeaf};
+use crate::asset::SlotAssetIdxKey;
+use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
 use crate::editions::TokenMetadataEdition;
 use crate::{
     asset::{AssetCollection, AssetLeaf, SlotAssetIdx},
@@ -52,11 +53,14 @@ async fn process_asset_details_range(
     tx: tokio::sync::mpsc::Sender<Result<CompleteAssetDetails, AsyncError>>,
 ) -> Result<(), AsyncError> {
     let slot_asset_idx = Storage::column::<SlotAssetIdx>(backend.clone(), metrics.clone());
-    let iterator = slot_asset_idx.iter((start_slot, solana_sdk::pubkey::Pubkey::default()));
+    let iterator = slot_asset_idx.iter(SlotAssetIdxKey::new(
+        start_slot,
+        solana_sdk::pubkey::Pubkey::default(),
+    ));
 
     for pair in iterator {
         let (idx_key, _) = pair.map_err(|e| Box::new(e) as AsyncError)?;
-        let (slot, pubkey) =
+        let SlotAssetIdxKey { slot, pubkey } =
             SlotAssetIdx::decode_key(idx_key.to_vec()).map_err(|e| Box::new(e) as AsyncError)?;
         if slot > end_slot {
             break;
@@ -144,7 +148,7 @@ async fn get_complete_asset_details(
     let cl_leaf = match asset_leaf {
         None => None,
         Some(ref leaf) => Storage::column::<ClLeaf>(backend.clone(), metrics.clone())
-            .get((leaf.nonce.unwrap_or_default(), leaf.tree_id))?,
+            .get(ClLeafKey::new(leaf.nonce.unwrap_or_default(), leaf.tree_id))?,
     };
 
     let cl_items = match cl_leaf {
@@ -154,7 +158,7 @@ async fn get_complete_asset_details(
                 .batch_get(
                     get_required_nodes_for_proof(leaf.cli_node_idx as i64)
                         .into_iter()
-                        .map(move |node| (node as u64, leaf.cli_tree_key))
+                        .map(move |node| ClItemKey::new(node as u64, leaf.cli_tree_key))
                         .collect::<Vec<_>>(),
                 )
                 .await?

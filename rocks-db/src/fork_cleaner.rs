@@ -1,6 +1,6 @@
 use crate::{
-    Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION, RAW_BLOCKS_CBOR_ENDPOINT,
-    ROCKS_COMPONENT,
+    cl_items::ClItemKey, Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION,
+    RAW_BLOCKS_CBOR_ENDPOINT, ROCKS_COMPONENT,
 };
 use async_trait::async_trait;
 use entities::models::{ClItem, ForkedItem};
@@ -21,8 +21,11 @@ impl ClItemsManager for Storage {
     async fn delete_items(&self, keys: Vec<ForkedItem>) {
         let start_time = chrono::Utc::now();
         let (cl_items_res, tree_seq_idx_res) = tokio::join!(
-            self.cl_items
-                .delete_batch(keys.iter().map(|key| (key.node_idx, key.tree)).collect()),
+            self.cl_items.delete_batch(
+                keys.iter()
+                    .map(|key| ClItemKey::new(key.node_idx, key.tree))
+                    .collect()
+            ),
             // Indicate gap in sequences, so SequenceConsistentChecker will fill it in future
             self.tree_seq_idx
                 .delete_batch(keys.iter().map(|key| (key.tree, key.seq)).collect())
