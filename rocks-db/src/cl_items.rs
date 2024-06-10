@@ -40,17 +40,17 @@ pub struct ClLeaf {
 }
 
 impl TypedColumn for ClItem {
-    type KeyType = (u64, Pubkey);
+    type KeyType = ClItemKey;
     // The value type is the change log struct itself
     type ValueType = Self;
     const NAME: &'static str = "CL_ITEMS"; // Name of the column family
 
-    fn encode_key((node_id, tree_id): (u64, Pubkey)) -> Vec<u8> {
-        encode_u64_pubkey(node_id, tree_id)
+    fn encode_key(key: ClItemKey) -> Vec<u8> {
+        key.encode_to_bytes()
     }
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        decode_u64_pubkey(bytes)
+        ClItemKey::decode_from_bytes(bytes)
     }
 }
 
@@ -99,17 +99,35 @@ impl ClItem {
 }
 
 impl TypedColumn for ClLeaf {
-    type KeyType = (u64, Pubkey);
+    type KeyType = ClLeafKey;
     // The value type is the leaf node id
     type ValueType = Self;
     const NAME: &'static str = "CL_LEAF"; // Name of the column family
 
-    fn encode_key((node_id, tree_id): (u64, Pubkey)) -> Vec<u8> {
-        encode_u64_pubkey(node_id, tree_id)
+    fn encode_key(key: ClLeafKey) -> Vec<u8> {
+        encode_u64_pubkey(key.node_id, key.tree_id)
     }
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        decode_u64_pubkey(bytes)
+        ClLeafKey::decode_from_bytes(bytes)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Hash, PartialEq, Eq)]
+pub struct ClLeafKey {
+    pub node_id: u64,
+    pub tree_id: Pubkey,
+}
+
+impl ClLeafKey {
+    pub fn new(node_id: u64, tree_id: Pubkey) -> ClLeafKey {
+        ClLeafKey { node_id, tree_id }
+    }
+    pub fn encode_ty_bytes(&self) -> Vec<u8> {
+        encode_u64_pubkey(self.node_id, self.tree_id)
+    }
+    pub fn decode_from_bytes(bytes: Vec<u8>) -> Result<ClLeafKey> {
+        decode_u64_pubkey(bytes).map(|(node_id, tree_id)| ClLeafKey { node_id, tree_id })
     }
 }
 
@@ -142,7 +160,7 @@ impl Storage {
                 slot_updated: slot,
             };
 
-            items_map.insert((node_idx, tree), cl_item);
+            items_map.insert(ClItemKey::new(node_idx, tree), cl_item);
             // save leaf's node id
             if i == 1 {
                 if let Some(leaf_idx) = leaf_idx {
@@ -151,7 +169,7 @@ impl Storage {
                         cli_tree_key: tree,
                         cli_node_idx: node_idx,
                     };
-                    leaf_map.insert((leaf_idx, tree), cl_leaf);
+                    leaf_map.insert(ClLeafKey::new(leaf_idx, tree), cl_leaf);
                 }
             }
         }
@@ -207,9 +225,9 @@ impl Storage {
                 slot_updated: slot,
             };
 
-            if let Err(e) = self
-                .cl_items
-                .merge_with_batch(batch, (node_idx, tree), &cl_item)
+            if let Err(e) =
+                self.cl_items
+                    .merge_with_batch(batch, ClItemKey::new(node_idx, tree), &cl_item)
             {
                 error!("Error while saving change log for cNFT: {}", e);
             };
@@ -223,10 +241,11 @@ impl Storage {
                         cli_node_idx: node_idx,
                     };
                     leaf_map.insert((leaf_idx, tree), cl_leaf.clone());
-                    if let Err(e) = self
-                        .cl_leafs
-                        .put_with_batch(batch, (leaf_idx, tree), &cl_leaf)
-                    {
+                    if let Err(e) = self.cl_leafs.put_with_batch(
+                        batch,
+                        ClLeafKey::new(leaf_idx, tree),
+                        &cl_leaf,
+                    ) {
                         error!("Error while saving change log for cNFT: {}", e);
                     };
                 }
@@ -297,4 +316,24 @@ impl Storage {
 
 fn node_idx_to_leaf_idx(index: u64, tree_height: u32) -> u64 {
     index - 2u64.pow(tree_height)
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Hash, PartialEq, Eq)]
+pub struct ClItemKey {
+    pub node_id: u64,
+    pub tree_id: Pubkey,
+}
+
+impl ClItemKey {
+    pub fn new(node_id: u64, tree_id: Pubkey) -> ClItemKey {
+        ClItemKey { node_id, tree_id }
+    }
+
+    fn encode_to_bytes(&self) -> Vec<u8> {
+        encode_u64_pubkey(self.node_id, self.tree_id)
+    }
+
+    fn decode_from_bytes(bytes: Vec<u8>) -> Result<Self> {
+        decode_u64_pubkey(bytes).map(|(node_id, tree_id)| ClItemKey { node_id, tree_id })
+    }
 }

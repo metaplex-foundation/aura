@@ -2,7 +2,7 @@ use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::Ordering;
 
-use crate::asset::{AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx};
+use crate::asset::{AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey};
 use crate::column::Column;
 use crate::editions::TokenMetadataEdition;
 use crate::errors::StorageError;
@@ -65,7 +65,7 @@ impl Storage {
         let serialized_value = serialize(&SlotAssetIdx {})?;
         batch.put_cf(
             &self.slot_asset_idx.handle(),
-            Column::<SlotAssetIdx>::encode_key((slot, pubkey)),
+            Column::<SlotAssetIdx>::encode_key(SlotAssetIdxKey::new(slot, pubkey)),
             serialized_value,
         );
         Ok(())

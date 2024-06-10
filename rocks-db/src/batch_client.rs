@@ -5,8 +5,8 @@ use entities::enums::SpecificationVersions;
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::asset::{AssetCollection, AssetLeaf, AssetsUpdateIdx, SlotAssetIdx};
-use crate::cl_items::{ClItem, ClLeaf};
+use crate::asset::{AssetCollection, AssetLeaf, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey};
+use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
 use crate::column::TypedColumn;
 use crate::editions::TokenMetadataEdition;
 use crate::errors::StorageError;
@@ -250,7 +250,7 @@ impl AssetSlotStorage for Storage {
         let mut iter = self.slot_asset_idx.iter_end();
         if let Some(pair) = iter.next() {
             let (last_key, _) = pair?;
-            let (slot, _) = SlotAssetIdx::decode_key(last_key.to_vec())?;
+            let SlotAssetIdxKey { slot, .. } = SlotAssetIdx::decode_key(last_key.to_vec())?;
             return Ok(Some(slot));
         }
 
@@ -376,7 +376,7 @@ impl Storage {
         if let Some(leaf) = data.cl_leaf {
             self.cl_leafs.put_with_batch(
                 &mut batch,
-                (leaf.cli_leaf_idx, leaf.cli_tree_key),
+                ClLeafKey::new(leaf.cli_leaf_idx, leaf.cli_tree_key),
                 &ClLeaf {
                     cli_leaf_idx: leaf.cli_leaf_idx,
                     cli_tree_key: leaf.cli_tree_key,
@@ -387,7 +387,7 @@ impl Storage {
         for item in data.cl_items {
             self.cl_items.merge_with_batch(
                 &mut batch,
-                (item.cli_node_idx, item.cli_tree_key),
+                ClItemKey::new(item.cli_node_idx, item.cli_tree_key),
                 &ClItem {
                     cli_node_idx: item.cli_node_idx,
                     cli_tree_key: item.cli_tree_key,
