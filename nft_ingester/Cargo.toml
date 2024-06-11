@@ -78,6 +78,7 @@ jemallocator = { version = "*", features = ["profiling", "debug"] }
 arweave-rs = {version = "0.2.0", git = "https://github.com/RequescoS/arweave-rs.git", rev = "d8f5ef76f06c96afdf013fe5b62301790631b33f"}
 serde_cbor = "0.11.2"
 triomphe = "=0.1.9"
+csv = "1.3.0"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }
@@ -124,3 +125,6 @@ name = "synchronizer"
 
 [[bin]]
 name = "raw_backup"
+
+[[bin]]
+name = "collection_analizer"
