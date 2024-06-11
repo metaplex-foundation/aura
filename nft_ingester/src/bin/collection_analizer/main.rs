@@ -7,7 +7,7 @@ use csv::Writer;
 use itertools::Itertools;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::config::init_logger;
-use rocks_db::asset::AssetLeaf;
+use rocks_db::asset::{AssetCollection, AssetLeaf};
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 use tokio::sync::Mutex;
@@ -63,51 +63,36 @@ async fn process_assets(
     let zero_pubkey = Pubkey::default();
     let mut results: HashMap<Pubkey, HashMap<Pubkey, u64>> = HashMap::new();
 
-    let chunk_size = 10_000;
-    let chunks = source_storage
+    let asset_trees = source_storage
         .asset_leaf_data
         .iter_start()
         .filter_map(|k| k.ok())
         .filter_map(|(_, bytes)| deserialize::<AssetLeaf>(&bytes).ok())
         .map(|v| (v.pubkey, v.tree_id))
-        .chunks(chunk_size);
-    let mut cnt = 0;
-    for chunk in chunks.into_iter() {
-        let chunk: Vec<_> = chunk.collect();
-        let pubkeys: Vec<Pubkey> = chunk.iter().map(|(pubkey, _)| *pubkey).collect();
+        .collect_vec();
+    info!("Found {} assets", asset_trees.len());
 
-        let collections = source_storage
-            .asset_collection_data
-            .batch_get(pubkeys)
-            .await
-            .map_err(|e| e.to_string())?;
-        let collection_map: HashMap<Pubkey, Pubkey> = collections
-            .into_iter()
-            .enumerate()
-            .filter_map(|(_, collection_opt)| {
-                collection_opt
-                    .filter(|collection| collection.is_collection_verified.value)
-                    .map(|collection| (collection.pubkey, collection.collection.value))
-            })
-            .collect();
+    let collection_map: HashMap<Pubkey, Pubkey> = source_storage
+        .asset_collection_data
+        .iter_start()
+        .filter_map(|k| k.ok())
+        .filter_map(|(_, bytes)| deserialize::<AssetCollection>(&bytes).ok())
+        .filter(|collection| collection.is_collection_verified.value)
+        .map(|collection| (collection.pubkey, collection.collection.value))
+        .collect();
+    info!("Found {} collections", collection_map.len());
 
-        for (asset_pubkey, tree_id) in chunk {
-            let collection_pubkey = collection_map
-                .get(&asset_pubkey)
-                .copied()
-                .unwrap_or(zero_pubkey);
+    for (asset_pubkey, tree_id) in asset_trees {
+        let collection_pubkey = collection_map
+            .get(&asset_pubkey)
+            .copied()
+            .unwrap_or(zero_pubkey);
 
-            let tree_entry = results.entry(tree_id).or_insert_with(HashMap::new);
-            let count = tree_entry.entry(collection_pubkey).or_insert(0);
-            *count += 1;
-        }
-        // log the progress every handred's chunk
-        cnt += 1;
-        if cnt % 100 == 0 {
-            info!("Processed {} chunks", cnt);
-        }
+        let tree_entry = results.entry(tree_id).or_insert_with(HashMap::new);
+        let count = tree_entry.entry(collection_pubkey).or_insert(0);
+        *count += 1;
     }
-
+    info!("Processed all assets");
     Ok(results)
 }
 
