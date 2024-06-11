@@ -7,7 +7,7 @@ use csv::Writer;
 use itertools::Itertools;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::config::init_logger;
-use rocks_db::asset::{AssetCollection, AssetLeaf};
+use rocks_db::asset::AssetLeaf;
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 use tokio::sync::Mutex;
@@ -25,6 +25,8 @@ struct Args {
     pub target_csv: String,
     #[arg(short, long, default_value_t = String::from("info"))]
     log_level: String,
+    #[arg(short, long, default_value_t = 1000 as usize)]
+    chunk_size: usize,
 }
 
 /// This binary is used to analize trees and collections. It collects all the trees and collections and calculates the number of assets in each collection-tree pair. A special zeroed collection key is used to identify a no-collection.
@@ -49,7 +51,7 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     info!("starting processing assets over chunks...");
-    let results = process_assets(&source_storage).await.unwrap();
+    let results = process_assets(&source_storage, config.chunk_size).await.unwrap();
     info!("Writing results to csv...");
     write_results_to_csv(results, &config.target_csv).unwrap();
     info!("Done!");
@@ -59,40 +61,55 @@ pub async fn main() -> Result<(), IngesterError> {
 
 async fn process_assets(
     source_storage: &Storage,
+    chunk_size: usize
 ) -> Result<HashMap<Pubkey, HashMap<Pubkey, u64>>, String> {
     let zero_pubkey = Pubkey::default();
     let mut results: HashMap<Pubkey, HashMap<Pubkey, u64>> = HashMap::new();
 
-    let asset_trees = source_storage
+    let chunks = source_storage
         .asset_leaf_data
         .iter_start()
         .filter_map(|k| k.ok())
         .filter_map(|(_, bytes)| deserialize::<AssetLeaf>(&bytes).ok())
         .map(|v| (v.pubkey, v.tree_id))
-        .collect_vec();
-    info!("Found {} assets", asset_trees.len());
+        .chunks(chunk_size);
+    let mut cnt = 0;
+    for chunk in chunks.into_iter() {
+        let chunk: Vec<_> = chunk.collect();
+        let pubkeys: Vec<Pubkey> = chunk.iter().map(|(pubkey, _)| *pubkey).collect();
 
-    let collection_map: HashMap<Pubkey, Pubkey> = source_storage
-        .asset_collection_data
-        .iter_start()
-        .filter_map(|k| k.ok())
-        .filter_map(|(_, bytes)| deserialize::<AssetCollection>(&bytes).ok())
-        .filter(|collection| collection.is_collection_verified.value)
-        .map(|collection| (collection.pubkey, collection.collection.value))
-        .collect();
-    info!("Found {} collections", collection_map.len());
+        let collections = source_storage
+            .asset_collection_data
+            .batch_get(pubkeys)
+            .await
+            .map_err(|e| e.to_string())?;
+        let collection_map: HashMap<Pubkey, Pubkey> = collections
+            .into_iter()
+            .enumerate()
+            .filter_map(|(_, collection_opt)| {
+                collection_opt
+                    .filter(|collection| collection.is_collection_verified.value)
+                    .map(|collection| (collection.pubkey, collection.collection.value))
+            })
+            .collect();
 
-    for (asset_pubkey, tree_id) in asset_trees {
-        let collection_pubkey = collection_map
-            .get(&asset_pubkey)
-            .copied()
-            .unwrap_or(zero_pubkey);
+        for (asset_pubkey, tree_id) in chunk {
+            let collection_pubkey = collection_map
+                .get(&asset_pubkey)
+                .copied()
+                .unwrap_or(zero_pubkey);
 
-        let tree_entry = results.entry(tree_id).or_insert_with(HashMap::new);
-        let count = tree_entry.entry(collection_pubkey).or_insert(0);
-        *count += 1;
+            let tree_entry = results.entry(tree_id).or_insert_with(HashMap::new);
+            let count = tree_entry.entry(collection_pubkey).or_insert(0);
+            *count += 1;
+        }
+        // log the progress every handred's chunk
+        cnt += 1;
+        if cnt % 100 == 0 {
+            info!("Processed {} chunks", cnt);
+        }
     }
-    info!("Processed all assets");
+
     Ok(results)
 }
 
