@@ -90,7 +90,7 @@ impl TempClient {
         DO UPDATE SET
             auth_authority = EXCLUDED.auth_authority,
             auth_slot_updated = EXCLUDED.auth_slot_updated,
-            WHERE assets_v3.auth_slot_updated <= EXCLUDED.auth_slot_updated OR assets_authorities.auth_slot_updated IS NULL;");
+            WHERE assets_authorities.auth_slot_updated <= EXCLUDED.auth_slot_updated OR assets_authorities.auth_slot_updated IS NULL;");
 
         self.pg_client
             .execute_query_with_metrics(

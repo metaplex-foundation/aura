@@ -50,6 +50,10 @@ mod tests {
             pg_env.count_rows_in_assets().await.unwrap(),
             number_of_assets as i64
         );
+        assert_eq!(
+            pg_env.count_rows_in_authorities().await.unwrap(),
+            number_of_assets as i64
+        );
         let metadata_key_set = client.get_existing_metadata_keys().await.unwrap();
         assert_eq!(metadata_key_set.len(), 1);
         let key = metadata_key_set.iter().next().unwrap();

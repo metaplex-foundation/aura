@@ -126,6 +126,14 @@ impl<'a> TestEnvironment<'a> {
 
         Ok(count)
     }
+
+    pub async fn count_rows_in_authorities(&self) -> Result<i64, sqlx::Error> {
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM assets_authorities")
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(count)
+    }
 }
 
 pub async fn setup_database<T: Image>(node: &Container<'_, T>) -> (Pool<Postgres>, String) {
