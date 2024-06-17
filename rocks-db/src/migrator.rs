@@ -32,7 +32,6 @@ pub enum SerializationType {
 
 pub trait RocksMigration {
     const VERSION: u64;
-    const COLUMN_TO_MIGRATE: &'static str;
     const SERIALIZATION_TYPE: SerializationType;
     type NewDataType: Sync + Serialize + DeserializeOwned + Send + TypedColumn;
     type OldDataType: Sync
@@ -130,7 +129,9 @@ impl<'a> MigrationApplier<'a> {
         {
             let old_storage = Self::open_migration_storage(self.db_path, M::VERSION)?;
             Self::copy_data_to_temporary_storage::<M>(&old_storage, &temporary_migration_storage)?;
-            old_storage.db.drop_cf(M::COLUMN_TO_MIGRATE)?;
+            old_storage
+                .db
+                .drop_cf(<<M as RocksMigration>::NewDataType as TypedColumn>::NAME)?;
         }
         let new_storage = Self::open_migration_storage(self.db_path, M::VERSION + 1)?;
         let column_to_migrate = Storage::column::<M::NewDataType>(
@@ -146,7 +147,7 @@ impl<'a> MigrationApplier<'a> {
             .await?;
         temporary_migration_storage
             .db
-            .drop_cf(M::COLUMN_TO_MIGRATE)?;
+            .drop_cf(<<M as RocksMigration>::NewDataType as TypedColumn>::NAME)?;
 
         info!("Finish migration Version {}", M::VERSION);
 
@@ -173,10 +174,10 @@ impl<'a> MigrationApplier<'a> {
         let iter = old_storage.db.iterator_cf(
             &old_storage
                 .db
-                .cf_handle(M::COLUMN_TO_MIGRATE)
+                .cf_handle(<<M as RocksMigration>::NewDataType as TypedColumn>::NAME)
                 .ok_or(StorageError::Common(format!(
                     "Cannot get cf_handle for {}",
-                    M::COLUMN_TO_MIGRATE
+                    <<M as RocksMigration>::NewDataType as TypedColumn>::NAME
                 )))?,
             IteratorMode::Start,
         );
@@ -191,10 +192,10 @@ impl<'a> MigrationApplier<'a> {
             batch.put_cf(
                 &temporary_migration_storage
                     .db
-                    .cf_handle(M::COLUMN_TO_MIGRATE)
+                    .cf_handle(<<M as RocksMigration>::NewDataType as TypedColumn>::NAME)
                     .ok_or(StorageError::Common(format!(
                         "Cannot get cf_handle for {}",
-                        M::COLUMN_TO_MIGRATE
+                        <<M as RocksMigration>::NewDataType as TypedColumn>::NAME
                     )))?,
                 key,
                 value,
@@ -228,10 +229,10 @@ impl<'a> MigrationApplier<'a> {
             .iterator_cf(
                 &temporary_migration_storage
                     .db
-                    .cf_handle(M::COLUMN_TO_MIGRATE)
+                    .cf_handle(<<M as RocksMigration>::NewDataType as TypedColumn>::NAME)
                     .ok_or(StorageError::Common(format!(
                         "Cannot get cf_handle for {}",
-                        M::COLUMN_TO_MIGRATE
+                        <<M as RocksMigration>::NewDataType as TypedColumn>::NAME
                     )))?,
                 IteratorMode::Start,
             )
@@ -253,10 +254,10 @@ impl<'a> MigrationApplier<'a> {
                 Into::<<M::NewDataType as TypedColumn>::ValueType>::into(value_decoded),
             );
             if batch.len() >= BATCH_SIZE {
-                column.put_batch(std::mem::take(&mut batch)).await?;
+                Self::put_batch_value::<M>(&mut batch, column).await?;
             }
         }
-        column.put_batch(batch).await?;
+        Self::put_batch_value::<M>(&mut batch, column).await?;
 
         Ok(())
     }
@@ -279,6 +280,24 @@ impl<'a> MigrationApplier<'a> {
                 error!("migration data deserialize: {:?}, {}", key_decoded, e);
                 StorageError::Common(e.to_string())
             })
+        }
+    }
+
+    async fn put_batch_value<M: RocksMigration>(
+        batch: &mut HashMap<
+            <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType,
+            <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType,
+        >,
+        column: &Column<M::NewDataType>,
+    ) -> Result<()>
+    where
+        <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
+        <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
+    {
+        if M::SERIALIZATION_TYPE == SerializationType::Bincode {
+            column.put_batch(std::mem::take(batch)).await
+        } else {
+            column.put_batch_cbor(std::mem::take(batch)).await
         }
     }
 }

@@ -1,5 +1,4 @@
 use crate::asset::AssetCollection;
-use crate::column::TypedColumn;
 use crate::migrator::{RocksMigration, SerializationType};
 use bincode::deserialize;
 use entities::models::{UpdateVersion, Updated};
@@ -99,7 +98,6 @@ impl AssetCollectionVersion0 {
 pub(crate) struct CollectionAuthorityMigration;
 impl RocksMigration for CollectionAuthorityMigration {
     const VERSION: u64 = 0;
-    const COLUMN_TO_MIGRATE: &'static str = AssetCollection::NAME;
     const SERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
     type NewDataType = AssetCollection;
     type OldDataType = AssetCollectionVersion0;

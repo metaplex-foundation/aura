@@ -1,5 +1,4 @@
 use crate::asset::{update_field, update_optional_field};
-use crate::column::TypedColumn;
 use crate::migrator::{RocksMigration, SerializationType};
 use crate::AssetDynamicDetails;
 use bincode::{deserialize, serialize};
@@ -147,7 +146,6 @@ impl AssetDynamicDetailsV0 {
 pub(crate) struct ExternalPluginsMigration;
 impl RocksMigration for ExternalPluginsMigration {
     const VERSION: u64 = 1;
-    const COLUMN_TO_MIGRATE: &'static str = AssetDynamicDetails::NAME;
     const SERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
     type NewDataType = AssetDynamicDetails;
     type OldDataType = AssetDynamicDetailsV0;
