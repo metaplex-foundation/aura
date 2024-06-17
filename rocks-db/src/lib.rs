@@ -11,7 +11,7 @@ use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
 use crate::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::editions::TokenMetadataEdition;
-use crate::migrator::{MigrationState, MigrationVersions};
+use crate::migrator::{MigrationState, MigrationVersions, RocksMigration};
 pub use asset::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
 };
@@ -23,8 +23,10 @@ use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 use crate::errors::StorageError;
-use crate::migrations::collection_authority::AssetCollectionVersion0;
-use crate::migrations::external_plugins::AssetDynamicDetailsV0;
+use crate::migrations::collection_authority::{
+    AssetCollectionVersion0, CollectionAuthorityMigration,
+};
+use crate::migrations::external_plugins::{AssetDynamicDetailsV0, ExternalPluginsMigration};
 use crate::parameters::ParameterColumn;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
@@ -333,7 +335,7 @@ impl Storage {
             asset::AssetDynamicDetails::NAME => {
                 let mf = match migration_state {
                     MigrationState::Version(version) => {
-                        if *version <= 1 {
+                        if *version <= ExternalPluginsMigration::VERSION {
                             AssetDynamicDetailsV0::merge_dynamic_details
                         } else {
                             asset::AssetDynamicDetails::merge_dynamic_details
@@ -383,7 +385,10 @@ impl Storage {
                 );
             }
             asset::AssetCollection::NAME => {
-                let mf = if matches!(migration_state, &MigrationState::Version(0)) {
+                let mf = if matches!(
+                    migration_state,
+                    &MigrationState::Version(CollectionAuthorityMigration::VERSION)
+                ) {
                     AssetCollectionVersion0::merge_asset_collection
                 } else {
                     asset::AssetCollection::merge_asset_collection
