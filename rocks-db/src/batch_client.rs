@@ -302,12 +302,14 @@ impl Storage {
                 executable: data.executable,
                 metadata_owner: data.metadata_owner,
                 raw_name: data.raw_name,
-                plugins: data.plugins,
-                unknown_plugins: data.unknown_plugins,
+                mpl_core_plugins: data.mpl_core_plugins,
+                mpl_core_unknown_plugins: data.mpl_core_unknown_plugins,
                 rent_epoch: data.rent_epoch,
                 num_minted: data.num_minted,
                 current_size: data.current_size,
                 plugins_json_version: data.plugins_json_version,
+                mpl_core_external_plugins: data.mpl_core_external_plugins,
+                mpl_core_unknown_external_plugins: data.mpl_core_unknown_external_plugins,
             },
         )?;
 

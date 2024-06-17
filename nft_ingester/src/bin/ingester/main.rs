@@ -188,6 +188,22 @@ pub async fn main() -> Result<(), IngesterError> {
     let tasks = JoinSet::new();
 
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
+    {
+        // storage in secondary mod cannot create new column families, that
+        // could be required for migration_version_manager, so firstly open
+        // storage with MigrationState::CreateColumnFamilies in order to create
+        // all column families
+        Storage::open(
+            &config
+                .rocks_db_path_container
+                .clone()
+                .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+            mutexed_tasks.clone(),
+            metrics_state.red_metrics.clone(),
+            MigrationState::CreateColumnFamilies,
+        )
+        .unwrap();
+    }
     let migration_version_manager_dir = TempDir::new().unwrap();
     let migration_version_manager = Storage::open_secondary(
         &config
@@ -306,13 +322,15 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_buffer = buffer.clone();
     let cloned_keep_running = keep_running.clone();
     let cloned_metrics = metrics_state.ingester_metrics.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
             cloned_buffer.debug().await;
             cloned_buffer.capture_metrics(&cloned_metrics).await;
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
-    }));
+
+        Ok(())
+    });
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;
@@ -320,10 +338,11 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_metrics = metrics_state.ingester_metrics.clone();
 
     if config.store_db_backups() {
-        let cloned_keep_running = keep_running.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
-            backup_service.perform_backup(cloned_metrics, cloned_keep_running)
-        }));
+        let keep_running = keep_running.clone();
+        mutexed_tasks.lock().await.spawn(async move {
+            backup_service.perform_backup(cloned_metrics, keep_running);
+            Ok(())
+        });
     }
 
     let mplx_accs_parser = MplxAccsProcessor::new(
@@ -350,67 +369,74 @@ pub async fn main() -> Result<(), IngesterError> {
         let mut cloned_mplx_parser = mplx_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(async move {
             cloned_mplx_parser
                 .process_metadata_accs(cloned_keep_running)
                 .await;
-        }));
+            Ok(())
+        });
 
         let mut cloned_token_parser = token_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(async move {
             cloned_token_parser
                 .process_token_accs(cloned_keep_running)
                 .await;
-        }));
+            Ok(())
+        });
         let mut cloned_mplx_parser = mplx_accs_parser.clone();
         let cloned_keep_running = keep_running.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(async move {
             cloned_mplx_parser
                 .process_burnt_accs(cloned_keep_running)
                 .await;
-        }));
+            Ok(())
+        });
 
         let mut cloned_token_parser = token_accs_parser.clone();
 
         let cloned_keep_running = keep_running.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(async move {
             cloned_token_parser
                 .process_mint_accs(cloned_keep_running)
                 .await;
-        }));
+            Ok(())
+        });
 
         let mut cloned_mplx_parser = mplx_accs_parser.clone();
         let cloned_keep_running = keep_running.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(async move {
             cloned_mplx_parser
                 .process_edition_accs(cloned_keep_running)
                 .await;
-        }));
+            Ok(())
+        });
 
         let mut cloned_core_parser = mpl_core_parser.clone();
         let cloned_keep_running = keep_running.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(async move {
             cloned_core_parser
                 .process_mpl_assets(cloned_keep_running)
                 .await;
-        }));
+            Ok(())
+        });
 
         let mut cloned_core_parser = mpl_core_parser.clone();
         let cloned_keep_running = keep_running.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(async move {
             cloned_core_parser
                 .process_mpl_asset_burn(cloned_keep_running)
                 .await;
-        }));
+            Ok(())
+        });
     }
 
     let first_processed_slot = Arc::new(AtomicU64::new(0));
     let first_processed_slot_clone = first_processed_slot.clone();
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_keep_running = keep_running.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
             let slot = cloned_rocks_storage.last_saved_slot();
 
@@ -433,7 +459,9 @@ pub async fn main() -> Result<(), IngesterError> {
 
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
-    }));
+
+        Ok(())
+    });
 
     let json_processor = Arc::new(
         JsonWorker::new(
@@ -510,7 +538,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let cloned_index_storage = index_storage.clone();
     let file_storage_path = api_config.file_storage_path_container.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(async move {
         match start_api(
             cloned_index_storage,
             cloned_rocks_storage.clone(),
@@ -531,12 +559,13 @@ pub async fn main() -> Result<(), IngesterError> {
         )
         .await
         {
-            Ok(_) => {}
+            Ok(_) => Ok(()),
             Err(e) => {
                 error!("Start API: {}", e);
+                Ok(())
             }
-        };
-    }));
+        }
+    });
 
     let geyser_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
         rocks_storage.clone(),
@@ -546,7 +575,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let cloned_keep_running = keep_running.clone();
     let buffer_clone = buffer.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
             if let Some(tx) = buffer_clone.get_processing_transaction().await {
                 if let Err(e) = geyser_bubblegum_updates_processor
@@ -559,13 +588,16 @@ pub async fn main() -> Result<(), IngesterError> {
                 }
             }
         }
-    }));
+
+        Ok(())
+    });
 
     let cloned_keep_running = keep_running.clone();
     let cloned_js = json_processor.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(async move {
         json_worker::run(cloned_js, cloned_keep_running).await;
-    }));
+        Ok(())
+    });
 
     let backfill_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
         rocks_storage.clone(),
@@ -644,7 +676,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 ));
 
                 let cloned_rx = shutdown_rx.resubscribe();
-                mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                mutexed_tasks.lock().await.spawn(async move {
                     info!("Running transactions parser...");
 
                     transactions_parser
@@ -654,7 +686,9 @@ pub async fn main() -> Result<(), IngesterError> {
                             backfiller_config.slot_until,
                         )
                         .await;
-                }));
+
+                    Ok(())
+                });
 
                 info!("running backfiller on persisted raw data");
             }
@@ -664,7 +698,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_fetcher_");
                 let backfiller_clone = backfiller.clone();
                 let rpc_backfiller_clone = rpc_backfiller.clone();
-                mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                mutexed_tasks.lock().await.spawn(async move {
                     info!("Running slot fetcher...");
                     if let Err(e) = backfiller_clone
                         .run_perpetual_slot_collection(
@@ -678,7 +712,9 @@ pub async fn main() -> Result<(), IngesterError> {
                         error!("Error while running perpetual slot fetcher: {}", e);
                     }
                     info!("Slot fetcher finished working");
-                }));
+
+                    Ok(())
+                });
 
                 // run perpetual slot persister
                 let rx = shutdown_rx.resubscribe();
@@ -689,7 +725,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_persister_");
                 let slot_getter = Arc::new(BubblegumSlotGetter::new(rocks_storage.clone()));
                 let backfiller_clone = backfiller.clone();
-                mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                mutexed_tasks.lock().await.spawn(async move {
                     info!("Running slot persister...");
                     let none: Option<Arc<Storage>> = None;
                     if let Err(e) = backfiller_clone
@@ -707,7 +743,9 @@ pub async fn main() -> Result<(), IngesterError> {
                         error!("Error while running perpetual slot persister: {}", e);
                     }
                     info!("Slot persister finished working");
-                }));
+
+                    Ok(())
+                });
                 // run perpetual ingester
                 let rx = shutdown_rx.resubscribe();
                 let consumer = Arc::new(DirectBlockParser::new(
@@ -721,7 +759,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 let slot_getter = Arc::new(IngestableSlotGetter::new(rocks_storage.clone()));
                 let backfiller_clone = backfiller.clone();
                 let backup = backfiller_source.clone();
-                mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+                mutexed_tasks.lock().await.spawn(async move {
                     info!("Running slot ingester...");
                     if let Err(e) = backfiller_clone
                         .run_perpetual_slot_processing(
@@ -738,7 +776,9 @@ pub async fn main() -> Result<(), IngesterError> {
                         error!("Error while running perpetual slot ingester: {}", e);
                     }
                     info!("Slot ingester finished working");
-                }));
+
+                    Ok(())
+                });
             }
             config::BackfillerMode::None => {
                 info!("not running backfiller");
@@ -748,7 +788,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     if !config.disable_synchronizer {
         let rx = shutdown_rx.resubscribe();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(async move {
             synchronizer
                 .run(
                     &rx,
@@ -756,7 +796,9 @@ pub async fn main() -> Result<(), IngesterError> {
                     tokio::time::Duration::from_secs(5),
                 )
                 .await;
-        }));
+
+            Ok(())
+        });
     }
     // setup dependencies for grpc server
     let uc = usecase::asset_streamer::AssetStreamer::new(
@@ -796,7 +838,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_keep_running = keep_running.clone();
 
     let metrics_clone = metrics_state.rpc_backfiller_metrics.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(async move {
         let program_id = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
         while cloned_keep_running.load(Ordering::SeqCst) {
             let res = signature_fetcher
@@ -822,7 +864,9 @@ pub async fn main() -> Result<(), IngesterError> {
             }
             tokio::time::sleep(Duration::from_secs(60)).await;
         }
-    }));
+
+        Ok(())
+    });
 
     if config.run_sequence_consistent_checker {
         let force_reingestable_slot_processor = Arc::new(ForceReingestableSlotGetter::new(
@@ -863,13 +907,15 @@ pub async fn main() -> Result<(), IngesterError> {
                 backfiller_config.workers_count,
                 backfiller_config.chunk_size,
             ));
-            mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            mutexed_tasks.lock().await.spawn(async move {
                 info!("Running slot force persister...");
                 force_reingestable_transactions_parser
                     .parse_transactions(rx)
                     .await;
                 info!("Force slot persister finished working");
-            }));
+
+                Ok(())
+            });
         } else {
             let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
                 rocks_storage.clone(),
@@ -880,13 +926,15 @@ pub async fn main() -> Result<(), IngesterError> {
                 backfiller_config.workers_count,
                 backfiller_config.chunk_size,
             ));
-            mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+            mutexed_tasks.lock().await.spawn(async move {
                 info!("Running slot force persister...");
                 force_reingestable_transactions_parser
                     .parse_transactions(rx)
                     .await;
                 info!("Force slot persister finished working");
-            }));
+
+                Ok(())
+            });
         }
 
         let fork_cleaner = ForkCleaner::new(
@@ -896,7 +944,7 @@ pub async fn main() -> Result<(), IngesterError> {
         );
         let mut rx = shutdown_rx.resubscribe();
         let metrics = metrics_state.fork_cleaner_metrics.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(async move {
             info!("Start cleaning forks...");
             loop {
                 let start = Instant::now();
@@ -909,11 +957,13 @@ pub async fn main() -> Result<(), IngesterError> {
                     _ = tokio::time::sleep(Duration::from_secs(config.sequence_consistent_checker_wait_period_sec)) => {},
                     _ = rx.recv() => {
                         info!("Received stop signal, stopping cleaning forks");
-                        return;
+                        break;
                     }
                 };
             }
-        }));
+
+            Ok(())
+        });
     }
 
     if let Ok(arweave) = Arweave::from_keypair_path(
@@ -930,11 +980,13 @@ pub async fn main() -> Result<(), IngesterError> {
         ));
         let rx = shutdown_rx.resubscribe();
         let processor_clone = rollup_processor.clone();
-        mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+        mutexed_tasks.lock().await.spawn(async move {
             info!("Start processing rollups...");
             processor_clone.process_rollups(rx).await;
             info!("Finish processing rollups...");
-        }));
+
+            Ok(())
+        });
     }
 
     start_metrics(
@@ -977,7 +1029,7 @@ async fn run_sequence_consistent_gapfiller<T, R>(
     );
     let mut rx = rx.resubscribe();
     let metrics = sequence_consistent_gapfill_metrics.clone();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(async move {
         info!("Start collecting sequences gaps...");
         loop {
             let start = Instant::now();
@@ -990,11 +1042,13 @@ async fn run_sequence_consistent_gapfiller<T, R>(
                     _ = tokio::time::sleep(Duration::from_secs(sequence_consistent_checker_wait_period_sec)) => {},
                     _ = rx.recv() => {
                         info!("Received stop signal, stopping collecting sequences gaps");
-                        return;
+                        break;
                     }
                 };
         }
-    }));
+
+        Ok(())
+    });
 }
 
 async fn restore_rocksdb(config: &IngesterConfig) -> Result<(), BackupServiceError> {

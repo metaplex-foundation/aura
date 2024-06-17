@@ -132,7 +132,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
     let cloned_tasks = mutexed_tasks.clone();
     let cloned_rx = shutdown_rx.resubscribe();
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(async move {
         match start_api(
             pg_client.clone(),
             cloned_rocks_storage.clone(),
@@ -153,12 +153,14 @@ pub async fn main() -> Result<(), IngesterError> {
         )
         .await
         {
-            Ok(_) => {}
+            Ok(_) => Ok(()),
             Err(e) => {
                 error!("Start API: {}", e);
+                // cannot return JointError here
+                Ok(())
             }
-        };
-    }));
+        }
+    });
 
     // setup dependencies for grpc server
     let uc = usecase::asset_streamer::AssetStreamer::new(
@@ -193,14 +195,16 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_keep_running = keep_running.clone();
     let cloned_rocks_storage = rocks_storage.clone();
     let dur = tokio::time::Duration::from_secs(config.rocks_sync_interval_seconds);
-    mutexed_tasks.lock().await.spawn(tokio::spawn(async move {
+    mutexed_tasks.lock().await.spawn(async move {
         while cloned_keep_running.load(Ordering::SeqCst) {
             if let Err(e) = cloned_rocks_storage.db.try_catch_up_with_primary() {
                 error!("Sync rocksdb error: {}", e);
             }
             tokio::time::sleep(dur).await;
         }
-    }));
+
+        Ok(())
+    });
 
     // --stop
     graceful_stop(

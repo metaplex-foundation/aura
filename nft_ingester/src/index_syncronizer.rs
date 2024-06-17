@@ -287,7 +287,7 @@ where
                 let primary_storage = self.primary_storage.clone();
                 let index_storage = self.index_storage.clone();
                 let metrics = self.metrics.clone();
-                tasks.spawn(tokio::spawn(async move {
+                tasks.spawn(async move {
                     Self::syncronize_batch(
                         primary_storage.clone(),
                         index_storage.clone(),
@@ -295,7 +295,7 @@ where
                         metrics,
                     )
                     .await
-                }));
+                });
                 if updated_keys.len() < self.dump_synchronizer_batch_size {
                     end_reached = true;
                     break;
@@ -304,7 +304,7 @@ where
 
             while let Some(task) = tasks.join_next().await {
                 task.map_err(|e| e.to_string())?
-                    .map_err(|e| e.to_string())??;
+                    .map_err(|e| e.to_string())?;
             }
             if let Some(last_included_rocks_key) = last_included_rocks_key {
                 self.metrics.set_last_synchronized_slot(
