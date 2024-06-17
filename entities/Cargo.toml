@@ -15,7 +15,7 @@ serde_derive = "1.0.195"
 serde_with = "3.7.0"
 sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json", "chrono"] }
 solana-program = "~1.17"
-blockbuster = { git = "https://github.com/metaplex-foundation/blockbuster" }
+blockbuster = "2.3.1"
 sha2 = "0.10.0"
 mpl-bubblegum = {version = "1.2.0", features = ["serde"] }
 serde_json = "1.0.81"

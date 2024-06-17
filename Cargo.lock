@@ -1063,8 +1063,9 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "blockbuster"
-version = "2.3.0"
-source = "git+https://github.com/metaplex-foundation/blockbuster#4b22f184f6f4fc70b7b48ef859402727f5792251"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f9ffd4321fceb06e4d904ab39aada66f13628e6d8eb7b0e8f41f2e2226b17f8"
 dependencies = [
  "anchor-lang",
  "async-trait",
@@ -3942,9 +3943,9 @@ dependencies = [
 
 [[package]]
 name = "mpl-core"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69b314fcf76dc22cc42a02a208231c667d0c533ce140d6ba9985df5a2a50b0aa"
+checksum = "cefa4362d05dec8fb97ebebf20fb2dc5224228c8c9550d9da8f2d1b657b49954"
 dependencies = [
  "base64 0.22.1",
  "borsh 0.10.3",
