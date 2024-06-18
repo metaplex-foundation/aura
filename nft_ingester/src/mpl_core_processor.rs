@@ -269,7 +269,11 @@ impl MplCoreProcessor {
                         Some(UpdateVersion::WriteVersion(account_data.write_version)),
                         true,
                     ),
-                    authority: Default::default(),
+                    authority: Updated::new(
+                        account_data.slot_updated,
+                        Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                        Some(update_authority),
+                    ),
                 });
             }
 

@@ -36,7 +36,13 @@ impl TempClient {
     pub async fn initialize(&self, initial_key: &[u8]) -> Result<(), String> {
         let mut c = self.pooled_connection.lock().await;
         let mut tx = c.begin().await.map_err(|e| e.to_string())?;
-        for table in ["tasks", "asset_creators_v3", "assets_v3", "last_synced_key"] {
+        for table in [
+            "tasks",
+            "asset_creators_v3",
+            "assets_v3",
+            "assets_authorities",
+            "last_synced_key",
+        ] {
             self.pg_client
                 .create_temp_tables(table, &mut tx, false, TEMP_INDEXING_TABLE_PREFIX)
                 .await?;
@@ -78,6 +84,24 @@ impl TempClient {
             .await?;
 
         let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("INSERT INTO assets_authorities SELECT * FROM ");
+        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
+        query_builder.push("assets_authorities ON CONFLICT (auth_pubkey)
+        DO UPDATE SET
+            auth_authority = EXCLUDED.auth_authority,
+            auth_slot_updated = EXCLUDED.auth_slot_updated,
+            WHERE assets_authorities.auth_slot_updated <= EXCLUDED.auth_slot_updated OR assets_authorities.auth_slot_updated IS NULL;");
+
+        self.pg_client
+            .execute_query_with_metrics(
+                &mut tx,
+                &mut query_builder,
+                BATCH_UPSERT_ACTION,
+                "assets_authorities",
+            )
+            .await?;
+
+        let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("INSERT INTO assets_v3 SELECT * FROM ");
         query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
         query_builder.push("assets_v3 ON CONFLICT (ast_pubkey) 
@@ -90,7 +114,7 @@ impl TempClient {
             ast_owner_type = EXCLUDED.ast_owner_type,
             ast_owner = EXCLUDED.ast_owner,
             ast_delegate = EXCLUDED.ast_delegate,
-            ast_authority = EXCLUDED.ast_authority,
+            ast_authority_fk = EXCLUDED.ast_authority_fk,
             ast_collection = EXCLUDED.ast_collection,
             ast_is_collection_verified = EXCLUDED.ast_is_collection_verified,
             ast_is_burnt = EXCLUDED.ast_is_burnt,
@@ -205,6 +229,7 @@ impl AssetIndexStorage for TempClient {
             metadata_table: format!("{}tasks", TEMP_INDEXING_TABLE_PREFIX),
             assets_table: format!("{}assets_v3", TEMP_INDEXING_TABLE_PREFIX),
             creators_table: format!("{}asset_creators_v3", TEMP_INDEXING_TABLE_PREFIX),
+            authorities_table: format!("{}assets_authorities", TEMP_INDEXING_TABLE_PREFIX),
         };
         self.pg_client
             .upsert_batched(&mut transaction, table_names, updated_components)
