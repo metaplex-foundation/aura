@@ -20,6 +20,7 @@ use entities::models::{AssetIndex, Creator, UrlWithStatus};
 pub const INSERT_ASSET_PARAMETERS_COUNT: usize = 19;
 pub const DELETE_ASSET_CREATOR_PARAMETERS_COUNT: usize = 2;
 pub const INSERT_ASSET_CREATOR_PARAMETERS_COUNT: usize = 4;
+pub const INSERT_AUTHORITY_PARAMETERS_COUNT: usize = 3;
 
 impl PgClient {
     pub(crate) async fn fetch_last_synced_id_impl(
@@ -53,6 +54,13 @@ impl PgClient {
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_TASK_PARAMETERS_COUNT)
         {
             self.insert_tasks(transaction, chunk, table_names.metadata_table.as_str())
+                .await?;
+        }
+        for chunk in updated_components
+            .authorities
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_AUTHORITY_PARAMETERS_COUNT)
+        {
+            self.insert_authorities(transaction, chunk, table_names.authorities_table.as_str())
                 .await?;
         }
         for chunk in updated_components
@@ -106,16 +114,23 @@ impl PgClient {
     }
 }
 
+pub(crate) struct Authority {
+    pub key: Pubkey,
+    pub authority: Pubkey,
+    pub slot_updated: i64,
+}
 pub(crate) struct AssetComponenents {
     pub metadata_urls: Vec<UrlWithStatus>,
     pub asset_indexes: Vec<AssetIndex>,
     pub all_creators: Vec<(Pubkey, Creator, i64)>,
     pub updated_keys: Vec<Vec<u8>>,
+    pub authorities: Vec<Authority>,
 }
 pub(crate) struct TableNames {
     pub metadata_table: String,
     pub assets_table: String,
     pub creators_table: String,
+    pub authorities_table: String,
 }
 
 pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> AssetComponenents {
@@ -155,11 +170,32 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
         .iter()
         .map(|asset_index| asset_index.pubkey.to_bytes().to_vec())
         .collect::<Vec<Vec<u8>>>();
+    let authorities = asset_indexes
+        .iter()
+        .filter_map(|asset| {
+            asset.authority.map(|authority| Authority {
+                key: if let Some(collection) = asset.collection {
+                    if asset.specification_asset_class
+                        == entities::enums::SpecificationAssetClass::MplCoreAsset
+                    {
+                        collection
+                    } else {
+                        asset.pubkey
+                    }
+                } else {
+                    asset.pubkey
+                },
+                authority,
+                slot_updated: asset.slot_updated,
+            })
+        })
+        .collect::<Vec<_>>();
     AssetComponenents {
         metadata_urls,
         asset_indexes,
         all_creators,
         updated_keys,
+        authorities,
     }
 }
 
@@ -180,6 +216,7 @@ impl AssetIndexStorage for PgClient {
             metadata_table: "tasks".to_string(),
             assets_table: "assets_v3".to_string(),
             creators_table: "asset_creators_v3".to_string(),
+            authorities_table: "assets_authorities".to_string(),
         };
         self.upsert_batched(&mut transaction, table_names, updated_components)
             .await?;
@@ -203,6 +240,16 @@ impl AssetIndexStorage for PgClient {
                 base_path
             )));
         };
+        let Some(assets_authorities_path) = base_path
+            .join("assets_authorities.csv")
+            .to_str()
+            .map(str::to_owned)
+        else {
+            return Err(IndexDbError::BadArgument(format!(
+                "invalid path '{:?}'",
+                base_path
+            )));
+        };
         let Some(assets_path) = base_path.join("assets.csv").to_str().map(str::to_owned) else {
             return Err(IndexDbError::BadArgument(format!(
                 "invalid path '{:?}'",
@@ -211,8 +258,14 @@ impl AssetIndexStorage for PgClient {
         };
         let mut transaction = self.start_transaction().await?;
 
-        self.copy_all(metadata_path, creators_path, assets_path, &mut transaction)
-            .await?;
+        self.copy_all(
+            metadata_path,
+            creators_path,
+            assets_path,
+            assets_authorities_path,
+            &mut transaction,
+        )
+        .await?;
         self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
             .await?;
         self.commit_transaction(transaction).await?;
@@ -359,7 +412,7 @@ impl PgClient {
             ast_owner_type,
             ast_owner,
             ast_delegate,
-            ast_authority,
+            ast_authority_fk,
             ast_collection,
             ast_is_collection_verified,
             ast_is_burnt,
@@ -389,7 +442,17 @@ impl PgClient {
                 .push_bind(asset_index.owner_type.map(OwnerType::from))
                 .push_bind(asset_index.owner.map(|owner| owner.to_bytes().to_vec()))
                 .push_bind(asset_index.delegate.map(|k| k.to_bytes().to_vec()))
-                .push_bind(asset_index.authority.map(|k| k.to_bytes().to_vec()))
+                .push_bind(if let Some(collection) = asset_index.collection {
+                    if asset_index.specification_asset_class
+                        == entities::enums::SpecificationAssetClass::MplCoreAsset
+                    {
+                        collection.to_bytes().to_vec()
+                    } else {
+                        asset_index.pubkey.to_bytes().to_vec()
+                    }
+                } else {
+                    asset_index.pubkey.to_bytes().to_vec()
+                })
                 .push_bind(asset_index.collection.map(|k| k.to_bytes().to_vec()))
                 .push_bind(asset_index.is_collection_verified)
                 .push_bind(asset_index.is_burnt)
@@ -411,7 +474,7 @@ impl PgClient {
             ast_owner_type = EXCLUDED.ast_owner_type,
             ast_owner = EXCLUDED.ast_owner,
             ast_delegate = EXCLUDED.ast_delegate,
-            ast_authority = EXCLUDED.ast_authority,
+            ast_authority_fk = EXCLUDED.ast_authority_fk,
             ast_collection = EXCLUDED.ast_collection,
             ast_is_collection_verified = EXCLUDED.ast_is_collection_verified,
             ast_is_burnt = EXCLUDED.ast_is_burnt,
@@ -427,6 +490,50 @@ impl PgClient {
         query_builder.push(".ast_slot_updated <= EXCLUDED.ast_slot_updated OR ");
         query_builder.push(table);
         query_builder.push(".ast_slot_updated IS NULL;");
+
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            BATCH_UPSERT_ACTION,
+            table,
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn insert_authorities(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        authorities: &[Authority],
+        table: &str,
+    ) -> Result<(), IndexDbError> {
+        if authorities.is_empty() {
+            return Ok(());
+        }
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
+        query_builder.push(table);
+        query_builder.push(
+            " (
+            auth_pubkey,
+            auth_authority,
+            auth_slot_updated) ",
+        );
+        query_builder.push_values(authorities, |mut builder, authority| {
+            builder
+                .push_bind(authority.key.to_bytes().to_vec())
+                .push_bind(authority.authority.to_bytes().to_vec())
+                .push_bind(authority.slot_updated);
+        });
+        query_builder.push(
+            " ON CONFLICT (auth_pubkey)
+        DO UPDATE SET
+            auth_authority = EXCLUDED.auth_authority, auth_slot_updated = EXCLUDED.auth_slot_updated
+            WHERE ",
+        );
+        query_builder.push(table);
+        query_builder.push(".auth_slot_updated <= EXCLUDED.auth_slot_updated OR ");
+        query_builder.push(table);
+        query_builder.push(".auth_slot_updated IS NULL;");
 
         self.execute_query_with_metrics(
             transaction,

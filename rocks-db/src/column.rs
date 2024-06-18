@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::{collections::HashMap, marker::PhantomData, sync::Arc, vec};
 
 use bincode::{deserialize, serialize};
@@ -11,7 +12,7 @@ use solana_sdk::pubkey::Pubkey;
 use crate::key_encoders::{decode_pubkeyx2, decode_pubkeyx3, encode_pubkeyx2, encode_pubkeyx3};
 use crate::{Result, StorageError, BATCH_GET_ACTION, ROCKS_COMPONENT};
 pub trait TypedColumn {
-    type KeyType: Sync + Clone + Send;
+    type KeyType: Sync + Clone + Send + Debug;
     type ValueType: Sync + Serialize + DeserializeOwned + Send;
 
     const NAME: &'static str;

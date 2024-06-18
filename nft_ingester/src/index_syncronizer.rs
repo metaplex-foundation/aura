@@ -405,6 +405,7 @@ mod tests {
                 metadata_url: "https://www.google.com".to_string(),
                 is_downloaded: true,
             }),
+            update_authority: None,
             slot_updated: 123456,
         }
     }

@@ -220,6 +220,7 @@ impl AssetIndexReader for Storage {
             if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
                 existed_index.collection = Some(data.collection.value);
                 existed_index.is_collection_verified = Some(data.is_collection_verified.value);
+                existed_index.update_authority = data.authority.value;
                 if data.get_slot_updated() as i64 > existed_index.slot_updated {
                     existed_index.slot_updated = data.get_slot_updated() as i64;
                 }
@@ -228,6 +229,7 @@ impl AssetIndexReader for Storage {
                     pubkey: data.pubkey,
                     collection: Some(data.collection.value),
                     is_collection_verified: Some(data.is_collection_verified.value),
+                    update_authority: data.authority.value,
                     slot_updated: data.get_slot_updated() as i64,
                     ..Default::default()
                 };
