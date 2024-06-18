@@ -3,11 +3,7 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use entities::enums::PersistingRollupState;
-use entities::{
-    enums::FailedRollupState,
-    models::{FailedRollup, FailedRollupKey, RollupToVerify},
-    rollup::Rollup,
-};
+use entities::{enums::FailedRollupState, models::RollupToVerify, rollup::Rollup};
 use interface::{error::UsecaseError, rollup::RollupDownloader};
 use log::{error, info};
 use metrics_utils::{MetricStatus, RollupPersisterMetricsConfig};
@@ -73,7 +69,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
                         };
                         let Some(rollup_to_verify) = rollup_to_verify else {
                             // no rollups to persist
-                            return Ok(());
+                            continue;
                         };
                         self.persist_rollup(&rx, rollup_to_verify, rollup).await
                     },
@@ -196,7 +192,8 @@ impl<D: RollupDownloader> RollupPersister<D> {
                     self.save_rollup_as_failed(
                         FailedRollupState::ChecksumVerifyFailed,
                         rollup_to_verify,
-                    )?;
+                    )
+                    .await?;
 
                     return Err(IngesterError::RollupValidation(
                         RollupValidationError::FileChecksumMismatch(expected, actual),
@@ -211,7 +208,8 @@ impl<D: RollupDownloader> RollupPersister<D> {
                     self.save_rollup_as_failed(
                         FailedRollupState::FileSerialization,
                         rollup_to_verify,
-                    )?;
+                    )
+                    .await?;
 
                     return Err(IngesterError::SerializatonError(e));
                 }
@@ -220,23 +218,14 @@ impl<D: RollupDownloader> RollupPersister<D> {
                     .inc_rollups_with_status("rollup_download", MetricStatus::FAILURE);
                 if rollup_to_verify.download_attempts + 1 > MAX_ROLLUP_DOWNLOAD_ATTEMPTS {
                     rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
-                    self.save_rollup_as_failed(
-                        FailedRollupState::DownloadFailed,
-                        rollup_to_verify,
-                    )?;
+                    self.save_rollup_as_failed(FailedRollupState::DownloadFailed, rollup_to_verify)
+                        .await?;
                 } else {
-                    rollup_to_verify.download_attempts = rollup_to_verify.download_attempts + 1;
-                    if let Err(e) = self.rocks_client.rollup_to_verify.put(
-                        rollup_to_verify.file_hash.clone(),
-                        RollupToVerify {
-                            file_hash: rollup_to_verify.file_hash.clone(),
-                            url: rollup_to_verify.url.clone(),
-                            created_at_slot: rollup_to_verify.created_at_slot,
-                            signature: rollup_to_verify.signature,
-                            download_attempts: rollup_to_verify.download_attempts + 1,
-                            persisting_state: PersistingRollupState::FailedToPersist,
-                        },
-                    ) {
+                    if let Err(e) = self
+                        .rocks_client
+                        .inc_rollup_to_verify_download_attempts(rollup_to_verify)
+                        .await
+                    {
                         self.metrics.inc_rollups_with_status(
                             "rollup_attempts_update",
                             MetricStatus::FAILURE,
@@ -259,8 +248,9 @@ impl<D: RollupDownloader> RollupPersister<D> {
             error!("Error while validating rollup: {}", e.to_string());
 
             rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
-            if let Err(err) =
-                self.save_rollup_as_failed(FailedRollupState::RollupVerifyFailed, rollup_to_verify)
+            if let Err(err) = self
+                .save_rollup_as_failed(FailedRollupState::RollupVerifyFailed, rollup_to_verify)
+                .await
             {
                 error!("Save rollup as failed: {}", err);
             };
@@ -291,28 +281,20 @@ impl<D: RollupDownloader> RollupPersister<D> {
         rollup_to_verify.persisting_state = PersistingRollupState::StoredUpdate;
     }
 
-    fn save_rollup_as_failed(
+    async fn save_rollup_as_failed(
         &self,
         status: FailedRollupState,
         rollup: &RollupToVerify,
     ) -> Result<(), IngesterError> {
-        let key = FailedRollupKey {
-            status: status.clone(),
-            hash: rollup.file_hash.clone(),
-        };
-        let value = FailedRollup {
-            status,
-            file_hash: rollup.file_hash.clone(),
-            url: rollup.url.clone(),
-            created_at_slot: rollup.created_at_slot,
-            signature: rollup.signature,
-            download_attempts: rollup.download_attempts + 1,
-        };
-        if let Err(e) = self.rocks_client.failed_rollups.put(key, value) {
+        if let Err(e) = self
+            .rocks_client
+            .save_rollup_as_failed(status, rollup)
+            .await
+        {
             self.metrics
                 .inc_rollups_with_status("rollup_mark_as_failure", MetricStatus::FAILURE);
             return Err(e.into());
-        }
+        };
         Ok(())
     }
 

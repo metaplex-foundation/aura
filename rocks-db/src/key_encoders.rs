@@ -167,7 +167,7 @@ pub fn encode_failed_rollup_key(key: FailedRollupKey) -> Vec<u8> {
     [vec![state], hash].concat()
 }
 
-pub fn dencode_failed_rollup_key(key: Vec<u8>) -> Result<FailedRollupKey> {
+pub fn decode_failed_rollup_key(key: Vec<u8>) -> Result<FailedRollupKey> {
     Ok(FailedRollupKey {
         status: FailedRollupState::try_from(
             *key.first().ok_or(crate::StorageError::InvalidKeyLength)?,
@@ -276,5 +276,29 @@ mod tests {
         assert_eq!(decoded.seq, seq);
     }
 
+    #[test]
+    fn test_encode_decode_failed_rollup_key() {
+        let key = FailedRollupKey {
+            status: FailedRollupState::DownloadFailed,
+            hash: "".to_string(),
+        };
+
+        let encoded_key = encode_failed_rollup_key(key.clone());
+        let decoded_key = decode_failed_rollup_key(encoded_key).unwrap();
+
+        assert_eq!(decoded_key.status, key.status);
+        assert_eq!(decoded_key.hash, key.hash);
+
+        let key2 = FailedRollupKey {
+            status: FailedRollupState::RollupVerifyFailed,
+            hash: "asdfasdf".to_string(),
+        };
+
+        let encoded_key = encode_failed_rollup_key(key2.clone());
+        let decoded_key = decode_failed_rollup_key(encoded_key).unwrap();
+
+        assert_eq!(decoded_key.status, key2.status);
+        assert_eq!(decoded_key.hash, key2.hash);
+    }
     // Add more tests as needed...
 }

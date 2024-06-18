@@ -1,10 +1,11 @@
 use crate::column::TypedColumn;
 use crate::errors::StorageError;
 use crate::key_encoders::{
-    decode_string, dencode_failed_rollup_key, encode_failed_rollup_key, encode_string,
+    decode_failed_rollup_key, decode_string, encode_failed_rollup_key, encode_string,
 };
 use crate::{Result, Storage};
 use bincode::deserialize;
+use entities::enums::{FailedRollupState, PersistingRollupState};
 use entities::models::{FailedRollup, FailedRollupKey, RollupToVerify};
 use entities::rollup::Rollup;
 use log::error;
@@ -71,7 +72,7 @@ impl TypedColumn for FailedRollup {
     }
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        dencode_failed_rollup_key(bytes)
+        decode_failed_rollup_key(bytes)
     }
 }
 
@@ -147,5 +148,45 @@ impl Storage {
 
     pub async fn drop_rollup_from_queue(&self, file_hash: String) -> Result<()> {
         self.rollup_to_verify.delete(file_hash)
+    }
+
+    pub async fn save_rollup_as_failed(
+        &self,
+        status: FailedRollupState,
+        rollup: &RollupToVerify,
+    ) -> Result<()> {
+        let key = FailedRollupKey {
+            status: status.clone(),
+            hash: rollup.file_hash.clone(),
+        };
+        let value = FailedRollup {
+            status,
+            file_hash: rollup.file_hash.clone(),
+            url: rollup.url.clone(),
+            created_at_slot: rollup.created_at_slot,
+            signature: rollup.signature,
+            download_attempts: rollup.download_attempts + 1,
+        };
+        self.failed_rollups.put_async(key, value).await
+    }
+
+    pub async fn inc_rollup_to_verify_download_attempts(
+        &self,
+        rollup_to_verify: &mut RollupToVerify,
+    ) -> Result<()> {
+        rollup_to_verify.download_attempts = rollup_to_verify.download_attempts + 1;
+        self.rollup_to_verify
+            .put_async(
+                rollup_to_verify.file_hash.clone(),
+                RollupToVerify {
+                    file_hash: rollup_to_verify.file_hash.clone(),
+                    url: rollup_to_verify.url.clone(),
+                    created_at_slot: rollup_to_verify.created_at_slot,
+                    signature: rollup_to_verify.signature,
+                    download_attempts: rollup_to_verify.download_attempts + 1,
+                    persisting_state: PersistingRollupState::FailedToPersist,
+                },
+            )
+            .await
     }
 }

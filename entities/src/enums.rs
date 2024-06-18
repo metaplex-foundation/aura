@@ -193,7 +193,7 @@ pub enum PersistingRollupState {
     StoredUpdate,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
+#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive, PartialEq)]
 pub enum FailedRollupState {
     DownloadFailed,
     ChecksumVerifyFailed,
