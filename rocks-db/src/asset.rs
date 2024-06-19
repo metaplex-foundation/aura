@@ -165,6 +165,10 @@ pub struct AssetCollectionDeprecated {
 }
 
 pub(crate) fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>) {
+    if new.slot_updated > current.slot_updated {
+        *current = new.clone();
+        return;
+    }
     if current.update_version.is_some() && new.update_version.is_some() {
         match current
             .update_version
@@ -180,10 +184,6 @@ pub(crate) fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>)
             _ => {} // types are different need to check slot
         }
     }
-
-    if new.slot_updated > current.slot_updated {
-        *current = new.clone();
-    }
 }
 
 pub(crate) fn update_optional_field<T: Clone + Default>(
@@ -193,6 +193,15 @@ pub(crate) fn update_optional_field<T: Clone + Default>(
     if current.clone().unwrap_or_default().update_version.is_some()
         && new.clone().unwrap_or_default().update_version.is_some()
     {
+        if let (Some(new_slot), Some(current_slot)) = (
+            new.clone().map(|u| u.slot_updated),
+            current.clone().map(|u| u.slot_updated),
+        ) {
+            if new_slot > current_slot {
+                *current = new.clone();
+                return;
+            }
+        }
         match current
             .clone()
             .unwrap_or_default()
@@ -207,12 +216,6 @@ pub(crate) fn update_optional_field<T: Clone + Default>(
             Some(Ordering::Greater) => return,
             _ => {} // types are different need to check slot
         }
-    }
-
-    if new.clone().unwrap_or_default().slot_updated
-        > current.clone().unwrap_or_default().slot_updated
-    {
-        *current = new.clone();
     }
 }
 
