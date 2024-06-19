@@ -159,6 +159,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
         rollup: &mut Option<Box<Rollup>>,
     ) -> Result<(), IngesterError> {
         if rollup.is_some() {
+            rollup_to_verify.persisting_state = PersistingRollupState::SuccessfullyDownload;
             return Ok(());
         }
         match self

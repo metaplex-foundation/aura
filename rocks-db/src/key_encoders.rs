@@ -1,9 +1,7 @@
-use entities::{
-    enums::FailedRollupState,
-    models::{AssetSignatureKey, FailedRollupKey},
-};
+use entities::{enums::FailedRollupState, models::AssetSignatureKey};
 use solana_sdk::pubkey::Pubkey;
 
+use crate::rollup::FailedRollupKey;
 use crate::{storage_traits::AssetUpdatedKey, Result};
 
 pub fn encode_u64x2_pubkey(seq: u64, slot: u64, pubkey: Pubkey) -> Vec<u8> {
@@ -179,6 +177,7 @@ pub fn decode_failed_rollup_key(key: Vec<u8>) -> Result<FailedRollupKey> {
 
 #[cfg(test)]
 mod tests {
+    use crate::errors::StorageError;
     use solana_sdk::pubkey::Pubkey;
 
     // Import functions from the parent module
@@ -299,6 +298,14 @@ mod tests {
 
         assert_eq!(decoded_key.status, key2.status);
         assert_eq!(decoded_key.hash, key2.hash);
+
+        assert_eq!(
+            matches!(
+                decode_failed_rollup_key(vec![]),
+                Err(StorageError::InvalidKeyLength)
+            ),
+            true
+        )
     }
     // Add more tests as needed...
 }

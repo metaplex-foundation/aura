@@ -6,10 +6,17 @@ use crate::key_encoders::{
 use crate::{Result, Storage};
 use bincode::deserialize;
 use entities::enums::{FailedRollupState, PersistingRollupState};
-use entities::models::{FailedRollup, FailedRollupKey, RollupToVerify};
+use entities::models::{FailedRollup, RollupToVerify};
 use entities::rollup::Rollup;
 use log::error;
 use rocksdb::MergeOperands;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct FailedRollupKey {
+    pub status: FailedRollupState,
+    pub hash: String,
+}
 
 // queue
 impl TypedColumn for RollupToVerify {
@@ -174,7 +181,7 @@ impl Storage {
         &self,
         rollup_to_verify: &mut RollupToVerify,
     ) -> Result<()> {
-        rollup_to_verify.download_attempts = rollup_to_verify.download_attempts + 1;
+        rollup_to_verify.download_attempts += 1;
         self.rollup_to_verify
             .put_async(
                 rollup_to_verify.file_hash.clone(),

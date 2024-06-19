@@ -413,12 +413,6 @@ pub struct RollupToVerify {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct FailedRollupKey {
-    pub status: FailedRollupState,
-    pub hash: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FailedRollup {
     pub status: FailedRollupState,
     pub file_hash: String,
