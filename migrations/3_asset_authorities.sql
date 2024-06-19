@@ -16,7 +16,8 @@ SELECT
 FROM
     assets_v3
 WHERE
-    ast_authority IS NOT NULL;
+    ast_authority IS NOT NULL
+ON CONFLICT DO NOTHING;
 
 ALTER TABLE assets_v3 ADD COLUMN ast_authority_fk bytea;
 UPDATE assets_v3
