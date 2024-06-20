@@ -179,6 +179,7 @@ pub(crate) fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>)
             Some(Ordering::Greater) => return,
             _ => {} // types are different need to check slot
         }
+
         if new.slot_updated > current.slot_updated {
             *current = new.clone();
         }
@@ -206,6 +207,7 @@ pub(crate) fn update_optional_field<T: Clone + Default>(
             Some(Ordering::Greater) => return,
             _ => {} // types are different need to check slot
         }
+
         if new.clone().unwrap_or_default().slot_updated
             > current.clone().unwrap_or_default().slot_updated
         {
