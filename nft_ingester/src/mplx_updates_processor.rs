@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -26,6 +27,7 @@ use rocks_db::errors::StorageError;
 use rocks_db::{store_assets, Storage};
 use usecase::save_metrics::result_to_metrics;
 
+#[derive(Debug)]
 pub struct MetadataInfo {
     pub metadata: Metadata,
     pub slot_updated: u64,
@@ -249,6 +251,9 @@ impl MplxAccsProcessor {
                 });
             }
 
+            if mint == Pubkey::from_str("J7zg8jz9Vzg72255ExNQeDAMUAruQN3A2Gpw2d9g6Awg").unwrap() {
+                println!("FIND ACCOUNT FOR TEST: {:#?}", metadata_info.clone());
+            }
             let data = metadata.clone();
             let authority = metadata.update_authority;
             let uri = data.uri.trim().replace('\0', "");
