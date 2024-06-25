@@ -338,6 +338,7 @@ impl BubblegumTxProcessor {
                         .map_err(|e| IngesterError::ParseSignatureError(e.to_string()))?,
                     download_attempts: 0,
                     persisting_state: PersistingRollupState::ReceivedTransaction,
+                    staker: args.staker,
                 }),
                 ..Default::default()
             };

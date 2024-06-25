@@ -410,6 +410,7 @@ pub struct RollupToVerify {
     pub signature: Signature,
     pub download_attempts: u8,
     pub persisting_state: PersistingRollupState,
+    pub staker: Pubkey,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

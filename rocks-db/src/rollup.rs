@@ -192,6 +192,7 @@ impl Storage {
                     signature: rollup_to_verify.signature,
                     download_attempts: rollup_to_verify.download_attempts + 1,
                     persisting_state: PersistingRollupState::FailedToPersist,
+                    staker: rollup_to_verify.staker,
                 },
             )
             .await
