@@ -298,7 +298,9 @@ mod tests {
 
         assert_eq!(decoded_key.status, key2.status);
         assert_eq!(decoded_key.hash, key2.hash);
+    }
 
+    fn test_invalid_encode_decode_failed_rollup_key() {
         assert_eq!(
             matches!(
                 decode_failed_rollup_key(vec![]),
