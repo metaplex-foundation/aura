@@ -133,19 +133,15 @@ impl<D: RollupDownloader> RollupPersister<D> {
                     return;
                 }
             }
-            if rollup_to_verify.persisting_state != PersistingRollupState::FailedToPersist
-                && rollup_to_verify.persisting_state != PersistingRollupState::StoredUpdate
-            {
-                if let Err(e) = self
-                    .rocks_client
-                    .rollup_to_verify
-                    .put_async(rollup_to_verify.file_hash.clone(), rollup_to_verify.clone())
-                    .await
-                {
-                    error!("Update rollup to verify state: {}", e)
-                };
-            }
         }
+        if let Err(e) = self
+            .rocks_client
+            .rollup_to_verify
+            .put_async(rollup_to_verify.file_hash.clone(), rollup_to_verify.clone())
+            .await
+        {
+            error!("Update rollup to verify state: {}", e)
+        };
     }
 
     async fn get_rollup_to_verify(
