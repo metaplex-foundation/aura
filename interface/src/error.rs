@@ -34,6 +34,10 @@ pub enum UsecaseError {
     Reqwest(String),
     #[error("Json: {0}")]
     Json(String),
+    #[error("HashMismatch: expected {0}, actual file hash {1}")]
+    HashMismatch(String, String),
+    #[error("Serialization: {0}")]
+    Serialization(String),
 }
 
 impl From<ClientError> for UsecaseError {
@@ -48,7 +52,7 @@ impl From<reqwest::Error> for UsecaseError {
 }
 impl From<serde_json::Error> for UsecaseError {
     fn from(value: serde_json::Error) -> Self {
-        Self::Reqwest(value.to_string())
+        Self::Serialization(value.to_string())
     }
 }
 

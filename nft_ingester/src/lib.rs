@@ -14,7 +14,7 @@ pub mod message_handler;
 pub mod mpl_core_processor;
 pub mod mplx_updates_processor;
 pub mod plerkle;
-pub mod rollup_processor;
+pub mod rollup;
 pub mod sequence_consistent;
 pub mod tcp_receiver;
 pub mod token_updates_processor;

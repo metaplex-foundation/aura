@@ -17,6 +17,8 @@ members = [
 
 [workspace.dependencies]
 thiserror = { version = "1"}
+solana-sdk = { version = "~1.18.11" }
+solana-program = { version = "~1.18.11" }
 
 [profile.release]
 lto = true
