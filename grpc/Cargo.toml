@@ -9,13 +9,13 @@ edition = "2021"
 tonic = "0.10.2"
 prost = "0.12.3"
 futures = "0.3.29"
-solana-sdk = "~1.17"
+solana-sdk = "=1.17.29"
 interface = { path = "../interface" }
 entities = { path = "../entities" }
 tokio = { version = "1.35.1", features = ["full"] }
 async-trait = "0.1.74"
 thiserror = "1.0.31"
-solana-transaction-status = "~1.17"
+solana-transaction-status = "=1.17.29"
 serde_cbor = "0.11.2"
 tracing = "0.1.40"
 

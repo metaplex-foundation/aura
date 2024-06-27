@@ -24,10 +24,10 @@ spl-account-compression = "0.3.0"
 num-traits = "0.2.15"
 blockbuster = "2.3.1"
 figment = { version = "0.10.6", features = ["env", "toml", "yaml"] }
-solana-sdk = "~1.17"
+solana-sdk = "=1.17.29"
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
-solana-transaction-status = "~1.17"
-solana-storage-bigtable = "~1.17"
+solana-transaction-status = "=1.17.29"
+solana-storage-bigtable = "=1.17.29"
 solana-bigtable-connection = "1.10.31"
 stretto = { version = "0.8.4", features = ["async"] }
 # is not used directly in this crate but stretto needs it and it's better to use exactly 2.3.1
@@ -62,9 +62,9 @@ tracing = "0.1.40"
 backfill-rpc = { path = "../backfill_rpc" }
 prometheus-client = "0.21.2"
 pprof = { version = "0.13.0", features = ["_protobuf", "protobuf-codec"] }
-solana-program = "~1.17"
+solana-program = "=1.17.29"
 itertools = "0.12.1"
-solana-client = "~1.17"
+solana-client = "=1.17.29"
 heck = "0.5.0"
 "lazy_static" = "1.4.0"
 tempfile = "3.8.1"
