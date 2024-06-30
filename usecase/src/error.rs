@@ -28,6 +28,10 @@ pub enum RollupValidationError {
     Anchor(#[from] anchor_lang::error::Error),
     #[error("FileChecksumMismatch: expected {0}, actual file hash {1}")]
     FileChecksumMismatch(String, String),
+    #[error("Failed creator's signature verification: {0}")]
+    FailedCreatorVerification(String),
+    #[error("Missing creator's signature in rollup: {0}")]
+    MissingCreatorSignature(String),
 }
 
 impl From<std::io::Error> for RollupValidationError {
