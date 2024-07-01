@@ -28,9 +28,13 @@ async fn bench_synchronize(env: Arc<TestEnvironment<'_>>, batch_size: usize) {
         batch_size,
         "".to_string(),
         metrics.clone(),
+        1,
+        false,
     );
+
+    let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
     syncronizer
-        .synchronize_asset_indexes(Arc::new(AtomicBool::new(true)))
+        .synchronize_asset_indexes(&rx, 0)
         .await
         .unwrap();
 }
