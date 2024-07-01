@@ -4,7 +4,6 @@ use pprof::ProfilerGuard;
 use std::fs::File;
 use std::io::Write;
 use std::ops::DerefMut;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::process::Command;
 use tokio::sync::broadcast::Sender;
@@ -16,14 +15,12 @@ const MALLOC_CONF_ENV: &str = "MALLOC_CONF";
 
 pub async fn graceful_stop(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-    keep_running: Arc<AtomicBool>,
     shutdown_tx: Sender<()>,
     guard: Option<ProfilerGuard<'_>>,
     profile_path: Option<String>,
     heap_path: &str,
 ) {
     usecase::graceful_stop::listen_shutdown().await;
-    keep_running.store(false, Ordering::SeqCst);
     let _ = shutdown_tx.send(());
 
     if let Some(guard) = guard {

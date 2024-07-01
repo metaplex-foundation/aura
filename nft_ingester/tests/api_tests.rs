@@ -1,13 +1,7 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use std::{
-        collections::HashMap,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc,
-        },
-    };
+    use std::{collections::HashMap, sync::Arc};
 
     use blockbuster::token_metadata::accounts::Metadata;
     use blockbuster::token_metadata::types::{Key, TokenStandard as BLKTokenStandard};
@@ -1049,8 +1043,6 @@ mod tests {
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
-        let keep_running = Arc::new(AtomicBool::new(true));
-
         let buffer = Arc::new(Buffer::new());
 
         let token_updates_processor = TokenAccsProcessor::new(
@@ -1171,8 +1163,6 @@ mod tests {
         assert_eq!(response["ownership"]["owner"], "");
         assert_eq!(response["interface"], "FungibleToken".to_string());
         assert_eq!(response["burnt"], true);
-
-        keep_running.store(false, Ordering::SeqCst);
 
         env.teardown().await;
     }

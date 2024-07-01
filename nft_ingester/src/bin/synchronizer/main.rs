@@ -1,4 +1,3 @@
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use nft_ingester::config::{
@@ -98,11 +97,9 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_tasks = mutexed_tasks.clone();
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     mutexed_tasks.lock().await.spawn(async move {
-        let keep_running = Arc::new(AtomicBool::new(true));
         // --stop
         graceful_stop(
             cloned_tasks,
-            keep_running.clone(),
             shutdown_tx,
             guard,
             config.profiling_file_path_container,

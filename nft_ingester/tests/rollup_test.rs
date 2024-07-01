@@ -11,7 +11,7 @@ use mpl_bubblegum::types::{LeafSchema, MetadataArgs};
 use digital_asset_types::rpc::AssetProof;
 use entities::api_req_params::GetAssetProof;
 use entities::enums::{FailedRollupState, PersistingRollupState, RollupState};
-use entities::models::{BufferedTransaction, FailedRollupKey};
+use entities::models::BufferedTransaction;
 use entities::models::{RollupToVerify, RollupWithState};
 use entities::rollup::{ChangeLogEventV1, PathNode, RolledMintInstruction, Rollup};
 use flatbuffers::FlatBufferBuilder;
@@ -31,6 +31,7 @@ use nft_ingester::rollup::rollup_processor::{MockPermanentStorageClient, RollupP
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
 use rand::{thread_rng, Rng};
+use rocks_db::rollup::FailedRollupKey;
 use serde_json::json;
 use solana_program::instruction::CompiledInstruction;
 use solana_program::message::Message;
