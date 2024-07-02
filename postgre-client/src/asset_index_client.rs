@@ -58,13 +58,6 @@ impl PgClient {
         }
         for chunk in updated_components
             .authorities
-            .into_iter()
-            .map(|(key, authority)| AuthorityWithKey {
-                key,
-                authority: authority.authority,
-                slot_updated: authority.slot_updated,
-            })
-            .collect::<Vec<_>>()
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_AUTHORITY_PARAMETERS_COUNT)
         {
             self.insert_authorities(transaction, chunk, table_names.authorities_table.as_str())
@@ -123,11 +116,6 @@ impl PgClient {
 
 #[derive(Clone, Copy)]
 pub(crate) struct Authority {
-    pub authority: Pubkey,
-    pub slot_updated: i64,
-}
-#[derive(Clone, Copy)]
-pub(crate) struct AuthorityWithKey {
     pub key: Pubkey,
     pub authority: Pubkey,
     pub slot_updated: i64,
@@ -137,7 +125,7 @@ pub(crate) struct AssetComponenents {
     pub asset_indexes: Vec<AssetIndex>,
     pub all_creators: Vec<(Pubkey, Creator, i64)>,
     pub updated_keys: Vec<Vec<u8>>,
-    pub authorities: HashMap<Pubkey, Authority>,
+    pub authorities: Vec<Authority>,
 }
 pub(crate) struct TableNames {
     pub metadata_table: String,
@@ -193,6 +181,7 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
         };
         if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
             let new_entry = Authority {
+                key: authority_key,
                 authority,
                 slot_updated: asset.slot_updated,
             };
@@ -207,6 +196,8 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
                 .or_insert(new_entry);
         }
     }
+    let mut authorities = authorities.into_values().collect::<Vec<_>>();
+    authorities.sort_by(|a, b| a.key.cmp(&b.key));
     AssetComponenents {
         metadata_urls,
         asset_indexes,
@@ -529,7 +520,7 @@ impl PgClient {
     async fn insert_authorities(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
-        authorities: &[AuthorityWithKey],
+        authorities: &[Authority],
         table: &str,
     ) -> Result<(), IndexDbError> {
         if authorities.is_empty() {
