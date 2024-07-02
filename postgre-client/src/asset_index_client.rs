@@ -58,6 +58,13 @@ impl PgClient {
         }
         for chunk in updated_components
             .authorities
+            .into_iter()
+            .map(|(key, authority)| AuthorityWithKey {
+                key,
+                authority: authority.authority,
+                slot_updated: authority.slot_updated,
+            })
+            .collect::<Vec<_>>()
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_AUTHORITY_PARAMETERS_COUNT)
         {
             self.insert_authorities(transaction, chunk, table_names.authorities_table.as_str())
@@ -114,7 +121,13 @@ impl PgClient {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct Authority {
+    pub authority: Pubkey,
+    pub slot_updated: i64,
+}
+#[derive(Clone, Copy)]
+pub(crate) struct AuthorityWithKey {
     pub key: Pubkey,
     pub authority: Pubkey,
     pub slot_updated: i64,
@@ -124,7 +137,7 @@ pub(crate) struct AssetComponenents {
     pub asset_indexes: Vec<AssetIndex>,
     pub all_creators: Vec<(Pubkey, Creator, i64)>,
     pub updated_keys: Vec<Vec<u8>>,
-    pub authorities: Vec<Authority>,
+    pub authorities: HashMap<Pubkey, Authority>,
 }
 pub(crate) struct TableNames {
     pub metadata_table: String,
@@ -170,26 +183,30 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
         .iter()
         .map(|asset_index| asset_index.pubkey.to_bytes().to_vec())
         .collect::<Vec<Vec<u8>>>();
-    let authorities = asset_indexes
-        .iter()
-        .filter_map(|asset| {
-            let authority = asset.update_authority.or(asset.authority);
-            let authority_key = if asset.update_authority.is_some() {
-                asset.collection
-            } else {
-                Some(asset.pubkey)
+    let mut authorities: HashMap<Pubkey, Authority> = HashMap::new();
+    for asset in asset_indexes.iter() {
+        let authority = asset.update_authority.or(asset.authority);
+        let authority_key = if asset.update_authority.is_some() {
+            asset.collection
+        } else {
+            Some(asset.pubkey)
+        };
+        if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
+            let new_entry = Authority {
+                authority,
+                slot_updated: asset.slot_updated,
             };
-            if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
-                Some(Authority {
-                    key: authority_key,
-                    authority,
-                    slot_updated: asset.slot_updated,
+
+            authorities
+                .entry(authority_key)
+                .and_modify(|existing_entry| {
+                    if new_entry.slot_updated > existing_entry.slot_updated {
+                        *existing_entry = new_entry;
+                    }
                 })
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
+                .or_insert(new_entry);
+        }
+    }
     AssetComponenents {
         metadata_urls,
         asset_indexes,
@@ -512,7 +529,7 @@ impl PgClient {
     async fn insert_authorities(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
-        authorities: &[Authority],
+        authorities: &[AuthorityWithKey],
         table: &str,
     ) -> Result<(), IndexDbError> {
         if authorities.is_empty() {
