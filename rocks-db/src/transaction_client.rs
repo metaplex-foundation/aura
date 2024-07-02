@@ -139,6 +139,15 @@ impl Storage {
                     tracing::error!("Failed to merge offchain data: {}", e);
                 }
             }
+            if let Some(ref rollup_update) = update.rollup_creation_update {
+                if let Err(e) = self.rollup_to_verify.merge_with_batch(
+                    batch,
+                    rollup_update.file_hash.clone(),
+                    rollup_update,
+                ) {
+                    tracing::error!("Failed to merge rollup update data: {}", e);
+                }
+            }
         }
         //todo: this doesn't seem to be a correct way to handle this, as delete will have no effect after any "late" tx ingestion
         if let Some(ref decompressed) = ix.decompressed {

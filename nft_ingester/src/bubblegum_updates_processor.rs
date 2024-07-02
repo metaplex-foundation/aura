@@ -10,16 +10,15 @@ use blockbuster::{
 };
 use chrono::Utc;
 use entities::enums::{
-    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TaskStatus,
-    TokenStandard, UseMethod,
+    ChainMutability, OwnerType, PersistingRollupState, RoyaltyTargetType, SpecificationAssetClass,
+    TaskStatus, TokenStandard, UseMethod,
 };
 use entities::models::{
-    BufferedTransaction, OffChainData, SignatureWithSlot, Task, UpdateVersion, Updated,
-    UrlWithStatus,
+    BufferedTransaction, OffChainData, RollupToVerify, SignatureWithSlot, Task, UpdateVersion,
+    Updated, UrlWithStatus,
 };
 use entities::models::{ChainDataV1, Creator, Uses};
-use entities::rollup::BatchMintInstruction;
-use interface::rollup::RollupDownloader;
+use entities::rollup::Rollup;
 use lazy_static::lazy_static;
 use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
@@ -40,6 +39,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::collections::{HashSet, VecDeque};
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -102,10 +102,12 @@ impl BubblegumTxProcessor {
             self.transaction_parser.clone(),
             self.metrics.clone(),
         )?;
+
         self.rocks_client
             .store_transaction_result(&result, true)
             .await
             .map_err(|e| IngesterError::DatabaseError(e.to_string()))?;
+
         Ok(())
     }
 
@@ -157,6 +159,7 @@ impl BubblegumTxProcessor {
             InstructionName::SetAndVerifyCollection => "SetAndVerifyCollection",
             InstructionName::SetDecompressibleState => "SetDecompressibleState",
             InstructionName::UpdateMetadata => "UpdateMetadata",
+            InstructionName::CreateTreeWithRoot => "CreateTreeWithRoot",
         }
     }
 
@@ -184,6 +187,7 @@ impl BubblegumTxProcessor {
                 SignatureWithSlot { signature, slot },
             )),
         };
+
         for (outer_ix, inner_ix) in instructions {
             let (program, instruction) = outer_ix;
             if program != mpl_bubblegum::programs::MPL_BUBBLEGUM_ID {
@@ -266,6 +270,7 @@ impl BubblegumTxProcessor {
                 tx: bundle.txn_id.to_string(),
             });
         };
+
         let instruction: Result<InstructionResult, IngesterError> = match ix_type {
             InstructionName::Transfer
             | InstructionName::CancelRedeem
@@ -301,6 +306,11 @@ impl BubblegumTxProcessor {
                     .map(From::from)
                     .map(Ok)?
             }
+            InstructionName::CreateTreeWithRoot => {
+                Self::get_create_tree_with_root_update(parsing_result, bundle)
+                    .map(From::from)
+                    .map(Ok)?
+            }
             _ => {
                 debug!("Bubblegum: Not Implemented Instruction");
                 Ok(InstructionResult::default())
@@ -312,6 +322,32 @@ impl BubblegumTxProcessor {
         let mut instruction = instruction?;
         instruction.tree_update = tree_update;
         Ok(instruction)
+    }
+
+    pub fn get_create_tree_with_root_update(
+        parsing_result: &BubblegumInstruction,
+        bundle: &InstructionBundle,
+    ) -> Result<AssetUpdateEvent, IngesterError> {
+        if let Some(Payload::CreateTreeWithRoot { args, .. }) = &parsing_result.payload {
+            let upd = AssetUpdateEvent {
+                rollup_creation_update: Some(RollupToVerify {
+                    file_hash: args.metadata_hash.clone(),
+                    url: args.metadata_url.clone(),
+                    created_at_slot: bundle.slot,
+                    signature: Signature::from_str(bundle.txn_id)
+                        .map_err(|e| IngesterError::ParseSignatureError(e.to_string()))?,
+                    download_attempts: 0,
+                    persisting_state: PersistingRollupState::ReceivedTransaction,
+                }),
+                ..Default::default()
+            };
+
+            return Ok(upd);
+        }
+
+        Err(IngesterError::ParsingError(
+            "Ix not parsed correctly".to_string(),
+        ))
     }
 
     pub fn get_update_owner_update(
@@ -1083,18 +1119,10 @@ impl BubblegumTxProcessor {
 
     pub async fn store_rollup_update(
         slot: u64,
-        batch_mint_instruction: &BatchMintInstruction, // TODO: use BubblegumInstruction instead
-        rollup_downloader: impl RollupDownloader,
+        rollup: &Rollup,
         rocks_db: Arc<Storage>,
         signature: Signature,
     ) -> Result<(), IngesterError> {
-        let rollup = rollup_downloader
-            .download_rollup_and_check_checksum(
-                &batch_mint_instruction.metadata_url,
-                &batch_mint_instruction.file_checksum,
-            )
-            .await?;
-
         let mut transaction_result = TransactionResult {
             instruction_results: vec![],
             transaction_signature: Some((
@@ -1102,7 +1130,7 @@ impl BubblegumTxProcessor {
                 SignatureWithSlot { signature, slot },
             )),
         };
-        for rolled_mint in rollup.rolled_mints.into_iter() {
+        for rolled_mint in rollup.rolled_mints.iter() {
             let seq = rolled_mint.tree_update.seq;
             let event = (&blockbuster::programs::bubblegum::ChangeLogEventV1::from(
                 &rolled_mint.tree_update,

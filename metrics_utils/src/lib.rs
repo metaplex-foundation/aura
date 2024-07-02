@@ -50,6 +50,7 @@ pub struct MetricState {
     pub red_metrics: Arc<RequestErrorDurationMetrics>,
     pub fork_cleaner_metrics: Arc<ForkCleanerMetricsConfig>,
     pub rollup_processor_metrics: Arc<RollupProcessorMetricsConfig>,
+    pub rollup_persisting_metrics: Arc<RollupPersisterMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -74,6 +75,7 @@ impl MetricState {
             ),
             fork_cleaner_metrics: Arc::new(ForkCleanerMetricsConfig::new()),
             rollup_processor_metrics: Arc::new(RollupProcessorMetricsConfig::new()),
+            rollup_persisting_metrics: Arc::new(RollupPersisterMetricsConfig::new()),
             red_metrics: Arc::new(RequestErrorDurationMetrics::new()),
             registry: Registry::default(),
         }
@@ -1185,6 +1187,83 @@ impl RollupProcessorMetricsConfig {
             "rollups_processing_latency",
             "A histogram of fork rollups processing latency",
             self.processing_latency.clone(),
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RollupPersisterMetricsConfig {
+    start_time: Gauge,
+    rollups_with_status: Family<MetricLabelWithStatus, Counter>,
+    rollups: Family<MetricLabel, Counter>,
+    persisting_latency: Family<MetricLabel, Histogram>,
+}
+
+impl Default for RollupPersisterMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RollupPersisterMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            start_time: Default::default(),
+            rollups_with_status: Default::default(),
+            rollups: Default::default(),
+            persisting_latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(1.0, 2.0, 12))
+            }),
+        }
+    }
+    pub fn start_time(&self) -> i64 {
+        self.start_time.set(Utc::now().timestamp())
+    }
+    pub fn inc_rollups_with_status(&self, label: &str, status: MetricStatus) -> u64 {
+        self.rollups_with_status
+            .get_or_create(&MetricLabelWithStatus {
+                name: label.to_owned(),
+                status,
+            })
+            .inc()
+    }
+    pub fn inc_rollups(&self, label: &str) -> u64 {
+        self.rollups
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc()
+    }
+    pub fn set_persisting_latency(&self, label: &str, duration: f64) {
+        self.persisting_latency
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .observe(duration);
+    }
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "rollup_processor_start_time",
+            "Rollup processor start time",
+            self.start_time.clone(),
+        );
+
+        registry.register(
+            "rollups_with_status",
+            "Rollups counter with status",
+            self.rollups_with_status.clone(),
+        );
+
+        registry.register(
+            "rollups",
+            "Rollups counter without status",
+            self.rollups_with_status.clone(),
+        );
+
+        registry.register(
+            "rollups_processing_latency",
+            "A histogram of rollups persisting latency",
+            self.persisting_latency.clone(),
         );
     }
 }

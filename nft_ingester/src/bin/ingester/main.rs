@@ -1,6 +1,7 @@
 use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
 use async_trait::async_trait;
+use nft_ingester::rollup::rollup_persister::{self, RollupPersister};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -61,7 +62,7 @@ use nft_ingester::backfiller::{
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
-use nft_ingester::rollup_processor::{NoopRollupTxSender, RollupProcessor};
+use nft_ingester::rollup::rollup_processor::{NoopRollupTxSender, RollupProcessor};
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use rocks_db::migrator::MigrationState;
 use usecase::bigtable::BigTableClient;
@@ -973,6 +974,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let arweave = Arc::new(arweave);
         let rollup_processor = Arc::new(RollupProcessor::new(
             index_storage.clone(),
+            rocks_storage.clone(),
             Arc::new(NoopRollupTxSender {}),
             arweave,
             file_storage_path,
@@ -988,6 +990,17 @@ pub async fn main() -> Result<(), IngesterError> {
             Ok(())
         });
     }
+
+    let rollup_persister = RollupPersister::new(
+        rocks_storage.clone(),
+        rollup_persister::RollupDownloaderForPersister {},
+        metrics_state.rollup_persisting_metrics.clone(),
+    );
+    let rx = shutdown_rx.resubscribe();
+    mutexed_tasks.lock().await.spawn(async move {
+        info!("Start rollup persister...");
+        rollup_persister.persist_rollups(rx).await
+    });
 
     start_metrics(
         metrics_state.registry,
