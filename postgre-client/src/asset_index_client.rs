@@ -173,15 +173,24 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     let authorities = asset_indexes
         .iter()
         .filter_map(|asset| {
-            asset.authority.map(|authority| Authority {
-                key: if let Some(update_authority) = asset.update_authority {
-                    update_authority
-                } else {
-                    asset.pubkey
-                },
-                authority,
-                slot_updated: asset.slot_updated,
-            })
+            asset
+                .authority
+                .or(asset.update_authority)
+                .map(|authority| Authority {
+                    key: if let Some(collection) = asset.collection {
+                        if asset.specification_asset_class
+                            == entities::enums::SpecificationAssetClass::MplCoreAsset
+                        {
+                            collection
+                        } else {
+                            asset.pubkey
+                        }
+                    } else {
+                        asset.pubkey
+                    },
+                    authority,
+                    slot_updated: asset.slot_updated,
+                })
         })
         .collect::<Vec<_>>();
     AssetComponenents {
@@ -436,13 +445,17 @@ impl PgClient {
                 .push_bind(asset_index.owner_type.map(OwnerType::from))
                 .push_bind(asset_index.owner.map(|owner| owner.to_bytes().to_vec()))
                 .push_bind(asset_index.delegate.map(|k| k.to_bytes().to_vec()))
-                .push_bind(
-                    if let Some(update_authority) = asset_index.update_authority {
-                        update_authority.to_bytes().to_vec()
+                .push_bind(if let Some(collection) = asset_index.collection {
+                    if asset_index.specification_asset_class
+                        == entities::enums::SpecificationAssetClass::MplCoreAsset
+                    {
+                        collection.to_bytes().to_vec()
                     } else {
                         asset_index.pubkey.to_bytes().to_vec()
-                    },
-                )
+                    }
+                } else {
+                    asset_index.pubkey.to_bytes().to_vec()
+                })
                 .push_bind(asset_index.collection.map(|k| k.to_bytes().to_vec()))
                 .push_bind(asset_index.is_collection_verified)
                 .push_bind(asset_index.is_burnt)
