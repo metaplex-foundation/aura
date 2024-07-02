@@ -205,7 +205,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
         self.drop_indexes(transaction).await?;
-        for table in ["assets_v3", "asset_creators_v3"] {
+        for table in ["assets_v3", "asset_creators_v3", "assets_authorities"] {
             self.truncate_table(transaction, table).await?;
         }
 

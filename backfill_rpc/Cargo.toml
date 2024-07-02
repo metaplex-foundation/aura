@@ -9,10 +9,10 @@ edition = "2021"
 async-trait="0.1.74"
 futures="0.3.29"
 entities = { path = "../entities" }
-solana-sdk = "=1.17.29"
-solana-client = "=1.17.29"
-solana-program = "=1.17.29"
-solana-transaction-status = "=1.17.29"
+solana-sdk = "~1.17"
+solana-client = "~1.17"
+solana-program = "~1.17"
+solana-transaction-status = "~1.17"
 interface = { path = "../interface" }
 tokio = { version = "1.26.0", features = ["full"] }
 plerkle_serialization = "1.8.0"
