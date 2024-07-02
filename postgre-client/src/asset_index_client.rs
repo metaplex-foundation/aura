@@ -447,8 +447,10 @@ impl PgClient {
                         == entities::enums::SpecificationAssetClass::MplCoreAsset
                     {
                         Some(collection.to_bytes().to_vec())
-                    } else {
+                    } else if asset_index.authority.is_some() {
                         Some(asset_index.pubkey.to_bytes().to_vec())
+                    } else {
+                        None
                     }
                 } else if asset_index
                     .authority

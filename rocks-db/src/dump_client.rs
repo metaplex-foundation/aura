@@ -171,8 +171,10 @@ impl Storage {
                 ast_authority_fk: if let Some(collection) = index.collection {
                     if index.specification_asset_class == SpecificationAssetClass::MplCoreAsset {
                         Some(Self::encode(collection))
-                    } else {
+                    } else if index.authority.is_some() {
                         Some(Self::encode(index.pubkey))
+                    } else {
+                        None
                     }
                 } else if index.authority.or(index.update_authority).is_some() {
                     Some(Self::encode(index.pubkey))
