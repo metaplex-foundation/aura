@@ -173,24 +173,21 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     let authorities = asset_indexes
         .iter()
         .filter_map(|asset| {
-            asset
-                .authority
-                .or(asset.update_authority)
-                .map(|authority| Authority {
-                    key: if let Some(collection) = asset.collection {
-                        if asset.specification_asset_class
-                            == entities::enums::SpecificationAssetClass::MplCoreAsset
-                        {
-                            collection
-                        } else {
-                            asset.pubkey
-                        }
-                    } else {
-                        asset.pubkey
-                    },
+            let authority = asset.update_authority.or(asset.authority);
+            let authority_key = if asset.update_authority.is_some() {
+                asset.collection
+            } else {
+                Some(asset.pubkey)
+            };
+            if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
+                Some(Authority {
+                    key: authority_key,
                     authority,
                     slot_updated: asset.slot_updated,
                 })
+            } else {
+                None
+            }
         })
         .collect::<Vec<_>>();
     AssetComponenents {
