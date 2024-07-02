@@ -168,8 +168,12 @@ impl Storage {
                 ast_owner_type: index.owner_type,
                 ast_owner: index.owner.map(Self::encode),
                 ast_delegate: index.delegate.map(Self::encode),
-                ast_authority_fk: if let Some(update_authority) = index.update_authority {
-                    Self::encode(update_authority)
+                ast_authority_fk: if let Some(collection) = index.collection {
+                    if index.specification_asset_class == SpecificationAssetClass::MplCoreAsset {
+                        Self::encode(collection)
+                    } else {
+                        Self::encode(index.pubkey)
+                    }
                 } else {
                     Self::encode(index.pubkey)
                 },
