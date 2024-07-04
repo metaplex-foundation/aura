@@ -7,7 +7,6 @@ FROM chef AS planner
 WORKDIR /rust
 COPY Cargo.toml Cargo.toml
 COPY backfill_rpc ./backfill_rpc
-COPY digital_asset_types ./digital_asset_types
 COPY entities ./entities
 COPY grpc ./grpc
 COPY interface ./interface

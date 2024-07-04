@@ -1,5 +1,5 @@
-use crate::dao::{scopes, ConversionError, SearchAssetsQuery};
-use crate::rpc::response::AssetList;
+use crate::api::dao::{scopes, ConversionError, SearchAssetsQuery};
+use crate::api::rpc::response::AssetList;
 use entities::api_req_params::{AssetSorting, Options};
 use interface::json::{JsonDownloader, JsonPersister};
 use rocks_db::errors::StorageError;

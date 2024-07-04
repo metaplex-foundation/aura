@@ -12,7 +12,8 @@ use interface::processing_possibility::ProcessingPossibilityChecker;
 use rocks_db::asset_streaming_client::get_required_nodes_for_proof;
 use rocks_db::Storage;
 use {
-    crate::dao::scopes::model, crate::rpc::AssetProof, spl_concurrent_merkle_tree::node::empty_node,
+    crate::api::dao::scopes::model, crate::api::rpc::AssetProof,
+    spl_concurrent_merkle_tree::node::empty_node,
 };
 
 use crate::fetch_asset_data;

@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use crate::dapi::common::build_token_accounts_response;
+use crate::api::dapi::common::build_token_accounts_response;
 use interface::token_accounts::TokenAccountsGetter;
 use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::rpc::response::TokenAccountsList;
+use crate::api::rpc::response::TokenAccountsList;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn get_token_accounts(

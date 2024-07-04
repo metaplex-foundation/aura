@@ -76,7 +76,7 @@ impl TryFrom<SearchAssets> for SearchAssetsQuery {
             owner_address: validate_opt_pubkey_vec(&search_assets.owner_address)?,
             owner_type: search_assets
                 .owner_type
-                .map(|s| crate::rpc::OwnershipModel::from(s).into()),
+                .map(|s| crate::api::rpc::OwnershipModel::from(s).into()),
             creator_address: validate_opt_pubkey_vec(&search_assets.creator_address)?,
             creator_verified: search_assets.creator_verified,
             authority_address: validate_opt_pubkey_vec(&search_assets.authority_address)?,
@@ -89,7 +89,7 @@ impl TryFrom<SearchAssets> for SearchAssetsQuery {
             compressible: search_assets.compressible,
             royalty_target_type: search_assets
                 .royalty_target_type
-                .map(|s| crate::rpc::RoyaltyModel::from(s).into()),
+                .map(|s| crate::api::rpc::RoyaltyModel::from(s).into()),
             royalty_target: validate_opt_pubkey_vec(&search_assets.royalty_target)?,
             royalty_amount: search_assets.royalty_amount,
             burnt: search_assets.burnt,
@@ -97,10 +97,10 @@ impl TryFrom<SearchAssets> for SearchAssetsQuery {
             specification_version: search_assets
                 .interface
                 .clone()
-                .map(|s| (&crate::rpc::Interface::from(s)).into()),
+                .map(|s| (&crate::api::rpc::Interface::from(s)).into()),
             specification_asset_class: search_assets
                 .interface
-                .map(|s| (&crate::rpc::Interface::from(s)).into())
+                .map(|s| (&crate::api::rpc::Interface::from(s)).into())
                 .filter(|v| v != &SpecificationAssetClass::Unknown),
         })
     }

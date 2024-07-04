@@ -8,7 +8,7 @@ use tokio::{
     task::{JoinError, JoinSet},
 };
 
-use crate::{dao::scopes, rpc::Asset};
+use crate::{api::dao::scopes, api::rpc::Asset};
 
 use super::common::asset_to_rpc;
 

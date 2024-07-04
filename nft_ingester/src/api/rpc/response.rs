@@ -1,7 +1,7 @@
 use entities::models::{AssetSignature, TokenAccount};
 use schemars::JsonSchema;
 use {
-    crate::rpc::Asset,
+    crate::api::rpc::Asset,
     serde::{Deserialize, Serialize},
 };
 

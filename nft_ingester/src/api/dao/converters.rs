@@ -118,48 +118,50 @@ impl From<SearchConditionType> for ConditionType {
     }
 }
 
-impl From<crate::rpc::OwnershipModel> for OwnerType {
-    fn from(ownership_model: crate::rpc::OwnershipModel) -> Self {
+impl From<crate::api::rpc::OwnershipModel> for OwnerType {
+    fn from(ownership_model: crate::api::rpc::OwnershipModel) -> Self {
         match ownership_model {
-            crate::rpc::OwnershipModel::Single => Self::Single,
-            crate::rpc::OwnershipModel::Token => Self::Token,
+            crate::api::rpc::OwnershipModel::Single => Self::Single,
+            crate::api::rpc::OwnershipModel::Token => Self::Token,
         }
     }
 }
 
-impl From<&crate::rpc::Interface> for SpecificationAssetClass {
-    fn from(interface: &crate::rpc::Interface) -> Self {
+impl From<&crate::api::rpc::Interface> for SpecificationAssetClass {
+    fn from(interface: &crate::api::rpc::Interface) -> Self {
         match interface {
-            crate::rpc::Interface::FungibleAsset => Self::FungibleAsset,
-            crate::rpc::Interface::FungibleToken => Self::FungibleToken,
-            crate::rpc::Interface::Identity => Self::IdentityNft,
-            crate::rpc::Interface::Nft
-            | crate::rpc::Interface::V1NFT
-            | crate::rpc::Interface::LegacyNft => Self::Nft,
-            crate::rpc::Interface::V1PRINT => Self::Print,
-            crate::rpc::Interface::ProgrammableNFT => Self::ProgrammableNft,
-            crate::rpc::Interface::Custom | crate::rpc::Interface::Executable => Self::Unknown,
-            crate::rpc::Interface::MplCoreAsset => Self::MplCoreAsset,
-            crate::rpc::Interface::MplCoreCollection => Self::MplCoreCollection,
+            crate::api::rpc::Interface::FungibleAsset => Self::FungibleAsset,
+            crate::api::rpc::Interface::FungibleToken => Self::FungibleToken,
+            crate::api::rpc::Interface::Identity => Self::IdentityNft,
+            crate::api::rpc::Interface::Nft
+            | crate::api::rpc::Interface::V1NFT
+            | crate::api::rpc::Interface::LegacyNft => Self::Nft,
+            crate::api::rpc::Interface::V1PRINT => Self::Print,
+            crate::api::rpc::Interface::ProgrammableNFT => Self::ProgrammableNft,
+            crate::api::rpc::Interface::Custom | crate::api::rpc::Interface::Executable => {
+                Self::Unknown
+            }
+            crate::api::rpc::Interface::MplCoreAsset => Self::MplCoreAsset,
+            crate::api::rpc::Interface::MplCoreCollection => Self::MplCoreCollection,
         }
     }
 }
 
-impl From<&crate::rpc::Interface> for SpecificationVersions {
-    fn from(interface: &crate::rpc::Interface) -> Self {
+impl From<&crate::api::rpc::Interface> for SpecificationVersions {
+    fn from(interface: &crate::api::rpc::Interface) -> Self {
         match interface {
-            crate::rpc::Interface::LegacyNft => Self::V0,
+            crate::api::rpc::Interface::LegacyNft => Self::V0,
             _ => Self::V1,
         }
     }
 }
 
-impl From<crate::rpc::RoyaltyModel> for RoyaltyTargetType {
-    fn from(royalty_model: crate::rpc::RoyaltyModel) -> Self {
+impl From<crate::api::rpc::RoyaltyModel> for RoyaltyTargetType {
+    fn from(royalty_model: crate::api::rpc::RoyaltyModel) -> Self {
         match royalty_model {
-            crate::rpc::RoyaltyModel::Creators => Self::Creators,
-            crate::rpc::RoyaltyModel::Fanout => Self::Fanout,
-            crate::rpc::RoyaltyModel::Single => Self::Single,
+            crate::api::rpc::RoyaltyModel::Creators => Self::Creators,
+            crate::api::rpc::RoyaltyModel::Fanout => Self::Fanout,
+            crate::api::rpc::RoyaltyModel::Single => Self::Single,
         }
     }
 }

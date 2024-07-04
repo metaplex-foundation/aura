@@ -1,4 +1,3 @@
-#[cfg(feature = "sql_types")]
 use std::collections::BTreeMap;
 
 use schemars::JsonSchema;
@@ -9,7 +8,7 @@ use {
     std::collections::HashMap,
 };
 
-use crate::dao::scopes::{
+use crate::api::dao::scopes::{
     model,
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
 };
@@ -274,7 +273,6 @@ impl From<String> for RoyaltyModel {
     }
 }
 
-#[cfg(feature = "sql_types")]
 impl From<RoyaltyTargetType> for RoyaltyModel {
     fn from(s: RoyaltyTargetType) -> Self {
         match s {
@@ -334,7 +332,6 @@ impl From<String> for OwnershipModel {
     }
 }
 
-#[cfg(feature = "sql_types")]
 impl From<OwnerType> for OwnershipModel {
     fn from(s: OwnerType) -> Self {
         match s {

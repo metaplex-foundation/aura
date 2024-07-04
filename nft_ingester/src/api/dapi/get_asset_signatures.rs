@@ -1,6 +1,6 @@
-use crate::dao::scopes;
-use crate::dapi::common::build_transaction_signatures_response;
-use crate::rpc::response::TransactionSignatureList;
+use crate::api::dao::scopes;
+use crate::api::dapi::common::build_transaction_signatures_response;
+use crate::api::rpc::response::TransactionSignatureList;
 use entities::api_req_params::AssetSortDirection;
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
