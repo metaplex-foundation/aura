@@ -2,8 +2,6 @@ use std::collections::BTreeMap;
 
 use schemars::JsonSchema;
 use serde_json::Value;
-use solana_program::pubkey::Pubkey;
-
 use {
     serde::{Deserialize, Serialize},
     std::collections::HashMap,
@@ -249,8 +247,8 @@ pub struct FullAsset {
     pub asset_dynamic: AssetDynamicDetails,
     pub asset_leaf: AssetLeaf,
     pub offchain_data: OffChainData,
-    pub asset_collections: HashMap<Pubkey, AssetCollection>,
-    pub assets_authority: HashMap<Pubkey, AssetAuthority>,
+    pub asset_collections: Option<AssetCollection>,
+    pub assets_authority: AssetAuthority,
     pub edition_data: Option<EditionData>,
 }
 

@@ -10,7 +10,6 @@ use log::warn;
 use mime_guess::Mime;
 use rocks_db::errors::StorageError;
 use serde_json::Value;
-use solana_program::pubkey::Pubkey;
 use url::Url;
 
 use super::response::{AssetError, TokenAccountsList, TransactionSignatureList};
@@ -202,17 +201,12 @@ pub fn get_content(
 }
 
 pub fn to_authority(
-    asset_pubkey: &Pubkey,
-    assets_authority: &HashMap<Pubkey, AssetAuthority>,
-    asset_collections: &HashMap<Pubkey, AssetCollection>,
+    authority: &AssetAuthority,
+    asset_collection: &Option<AssetCollection>,
 ) -> Vec<Authority> {
-    let update_authority = asset_collections
-        .get(asset_pubkey)
+    let update_authority = asset_collection
+        .clone()
         .and_then(|update_authority| update_authority.authority.value);
-    let authority = assets_authority
-        .get(asset_pubkey)
-        .cloned()
-        .unwrap_or(AssetAuthority::default());
 
     vec![Authority {
         address: update_authority
@@ -235,19 +229,14 @@ pub fn to_creators(asset_dynamic: &AssetDynamicDetails) -> Vec<Creator> {
         .collect()
 }
 
-pub fn to_grouping(
-    asset_collections: &HashMap<Pubkey, AssetCollection>,
-    asset_pubkey: &Pubkey,
-) -> Vec<Group> {
-    asset_collections
-        .get(asset_pubkey)
-        .map_or(vec![], |collection| {
-            vec![Group {
-                group_key: COLLECTION_GROUP_KEY.to_string(),
-                group_value: Some(collection.collection.value.to_string()),
-                verified: Some(collection.is_collection_verified.value),
-            }]
-        })
+pub fn to_grouping(asset_collection: &Option<AssetCollection>) -> Vec<Group> {
+    asset_collection.clone().map_or(vec![], |collection| {
+        vec![Group {
+            group_key: COLLECTION_GROUP_KEY.to_string(),
+            group_value: Some(collection.collection.value.to_string()),
+            verified: Some(collection.is_collection_verified.value),
+        }]
+    })
 }
 
 pub fn get_interface(asset_static: &AssetStaticDetails) -> Result<Interface, StorageError> {
@@ -258,16 +247,9 @@ pub fn get_interface(asset_static: &AssetStaticDetails) -> Result<Interface, Sto
 }
 
 pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageError> {
-    let rpc_authorities = to_authority(
-        &full_asset.asset_static.pubkey,
-        &full_asset.assets_authority,
-        &full_asset.asset_collections,
-    );
+    let rpc_authorities = to_authority(&full_asset.assets_authority, &full_asset.asset_collections);
     let rpc_creators = to_creators(&full_asset.asset_dynamic);
-    let rpc_groups = to_grouping(
-        &full_asset.asset_collections,
-        &full_asset.asset_static.pubkey,
-    );
+    let rpc_groups = to_grouping(&full_asset.asset_collections);
     let interface = get_interface(&full_asset.asset_static)?;
 
     let owner = full_asset

@@ -14,7 +14,7 @@ use crate::api::dapi::rpc_asset_models::FullAsset;
 use futures::{stream, StreamExt};
 use interface::processing_possibility::ProcessingPossibilityChecker;
 use rocks_db::asset::{AssetLeaf, AssetSelectedMaps};
-use rocks_db::Storage;
+use rocks_db::{AssetAuthority, Storage};
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
@@ -58,8 +58,15 @@ fn convert_rocks_asset_model(
         asset_dynamic: dynamic_data.clone(),
         asset_leaf: leaf,
         offchain_data,
-        asset_collections: asset_selected_maps.assets_collection.clone(),
-        assets_authority: asset_selected_maps.assets_authority.clone(),
+        asset_collections: asset_selected_maps
+            .assets_collection
+            .get(asset_pubkey)
+            .cloned(),
+        assets_authority: asset_selected_maps
+            .assets_authority
+            .get(asset_pubkey)
+            .cloned()
+            .unwrap_or(AssetAuthority::default()),
         edition_data: asset_selected_maps
             .assets_static
             .get(asset_pubkey)
