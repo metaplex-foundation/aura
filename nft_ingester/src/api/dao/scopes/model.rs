@@ -18,6 +18,16 @@ pub enum ChainMutability {
     Unknown,
 }
 
+impl From<ChainMutability> for bool {
+    fn from(s: ChainMutability) -> Self {
+        match s {
+            ChainMutability::Mutable => true,
+            ChainMutability::Immutable => false,
+            _ => true,
+        }
+    }
+}
+
 impl From<entities::enums::ChainMutability> for ChainMutability {
     fn from(value: entities::enums::ChainMutability) -> Self {
         match value {

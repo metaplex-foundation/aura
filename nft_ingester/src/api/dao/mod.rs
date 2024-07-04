@@ -85,9 +85,7 @@ impl TryFrom<SearchAssets> for SearchAssetsQuery {
             supply_mint: validate_opt_pubkey_vec(&search_assets.supply_mint)?,
             compressed: search_assets.compressed,
             compressible: search_assets.compressible,
-            royalty_target_type: search_assets
-                .royalty_target_type
-                .map(|s| s.into()),
+            royalty_target_type: search_assets.royalty_target_type.map(|s| s.into()),
             royalty_target: validate_opt_pubkey_vec(&search_assets.royalty_target)?,
             royalty_amount: search_assets.royalty_amount,
             burnt: search_assets.burnt,

@@ -14,12 +14,12 @@ use solana_program::pubkey::Pubkey;
 use url::Url;
 
 use crate::api::dao::scopes::asset::COLLECTION_GROUP_KEY;
-use crate::api::dao::scopes::model::{ChainMutability};
+use crate::api::dao::scopes::model::ChainMutability;
 use crate::api::dao::FullAsset;
 use crate::api::rpc::response::{AssetError, TokenAccountsList, TransactionSignatureList};
 use crate::api::rpc::{
-    Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group,
-    MetadataMap, MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
+    Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, MetadataMap,
+    MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
 };
 use entities::api_req_params::Pagination;
 use entities::enums::{Interface, SpecificationVersions};
@@ -84,7 +84,7 @@ pub fn get_content(
     let json_uri = asset_dynamic.url.value.clone();
     let metadata: Value = serde_json::from_str(&offchain_data.metadata).unwrap_or(Value::Null);
     let chain_data: Value = serde_json::from_str(
-        &asset_dynamic
+        asset_dynamic
             .onchain_data
             .as_ref()
             .map_or("{}", |data| &data.value),
@@ -253,7 +253,7 @@ pub fn to_grouping(
 pub fn get_interface(asset_static: &AssetStaticDetails) -> Result<Interface, StorageError> {
     Ok(Interface::from((
         &SpecificationVersions::V1,
-        &asset_static.specification_asset_class.into(),
+        &asset_static.specification_asset_class,
     )))
 }
 
@@ -301,6 +301,15 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
                 .asset_dynamic
                 .plugins_json_version
                 .map(|u| u.value),
+        }),
+        _ => None,
+    };
+    let supply = match interface {
+        Interface::V1NFT => full_asset.edition_data.map(|e| Supply {
+            edition_nonce,
+            print_current_supply: e.supply,
+            print_max_supply: e.max_supply,
+            edition_number: e.edition_number,
         }),
         _ => None,
     };
@@ -356,29 +365,17 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
             ownership_model: full_asset.asset_owner.owner_type.value.into(),
             owner,
         },
-        supply: match interface {
-            Interface::V1NFT => full_asset.edition_data.map(|e| Supply {
-                edition_nonce,
-                print_current_supply: e.supply,
-                print_max_supply: e.max_supply,
-                edition_number: e.edition_number,
-            }),
-            _ => None,
-        },
-        uses: full_asset
-            .asset_dynamic
-            .onchain_data
-            .get("uses")
-            .map(|u| Uses {
-                use_method: u
-                    .get("use_method")
-                    .and_then(|s| s.as_str())
-                    .unwrap_or("Single")
-                    .to_string()
-                    .into(),
-                total: u.get("total").and_then(|t| t.as_u64()).unwrap_or(0),
-                remaining: u.get("remaining").and_then(|t| t.as_u64()).unwrap_or(0),
-            }),
+        supply,
+        uses: ch_data.get("uses").map(|u| Uses {
+            use_method: u
+                .get("use_method")
+                .and_then(|s| s.as_str())
+                .unwrap_or("Single")
+                .to_string()
+                .into(),
+            total: u.get("total").and_then(|t| t.as_u64()).unwrap_or(0),
+            remaining: u.get("remaining").and_then(|t| t.as_u64()).unwrap_or(0),
+        }),
         burnt: full_asset.asset_dynamic.is_burnt.value,
         lamports: full_asset.asset_dynamic.lamports.map(|u| u.value),
         executable: full_asset.asset_dynamic.executable.map(|u| u.value),
