@@ -36,11 +36,3 @@ impl From<entities::enums::ChainMutability> for ChainMutability {
         }
     }
 }
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum SpecificationVersions {
-    Unknown,
-    V0,
-    V1,
-    V2,
-}

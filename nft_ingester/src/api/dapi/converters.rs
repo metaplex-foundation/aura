@@ -59,7 +59,7 @@ impl TryFrom<SearchAssets> for SearchAssetsQuery {
         let grouping = search_assets
             .grouping
             .map(|(key, val)| {
-                if key != "collection" {
+                if key != COLLECTION_GROUP_KEY {
                     return Err(UsecaseError::InvalidGroupingKey(key));
                 }
                 validate_pubkey(val).map(|pubkey| (key, pubkey.to_bytes().to_vec()))
@@ -172,7 +172,7 @@ impl TryFrom<SearchAssetsQuery> for postgre_client::model::SearchAssetsFilter {
         let collection = query
             .grouping
             .map(|(key, val)| {
-                if key != "collection" {
+                if key != COLLECTION_GROUP_KEY {
                     return Err(ConversionError::IncompatibleGroupingKey(key));
                 }
                 Ok(val)
