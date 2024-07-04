@@ -1,10 +1,7 @@
 use entities::api_req_params::SearchConditionType;
 use thiserror::Error;
 
-use super::{
-    scopes::model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
-    AssetSupply, ConditionType, SearchAssetsQuery,
-};
+use super::{scopes::model::SpecificationVersions, AssetSupply, ConditionType, SearchAssetsQuery};
 
 #[derive(Error, Debug)]
 pub enum ConversionError {
@@ -69,99 +66,11 @@ impl From<SpecificationVersions> for postgre_client::model::SpecificationVersion
     }
 }
 
-impl From<SpecificationAssetClass> for postgre_client::model::SpecificationAssetClass {
-    fn from(specification_asset_class: SpecificationAssetClass) -> Self {
-        match specification_asset_class {
-            SpecificationAssetClass::Unknown => Self::Unknown,
-            SpecificationAssetClass::FungibleAsset => Self::FungibleAsset,
-            SpecificationAssetClass::FungibleToken => Self::FungibleToken,
-            SpecificationAssetClass::IdentityNft => Self::IdentityNft,
-            SpecificationAssetClass::Nft => Self::Nft,
-            SpecificationAssetClass::NonTransferableNft => Self::NonTransferableNft,
-            SpecificationAssetClass::Print => Self::Print,
-            SpecificationAssetClass::PrintableNft => Self::PrintableNft,
-            SpecificationAssetClass::ProgrammableNft => Self::ProgrammableNft,
-            SpecificationAssetClass::TransferRestrictedNft => Self::TransferRestrictedNft,
-            SpecificationAssetClass::MplCoreAsset => Self::MplCoreAsset,
-            SpecificationAssetClass::MplCoreCollection => Self::MplCoreCollection,
-        }
-    }
-}
-
-impl From<OwnerType> for postgre_client::model::OwnerType {
-    fn from(owner_type: OwnerType) -> Self {
-        match owner_type {
-            OwnerType::Unknown => Self::Unknown,
-            OwnerType::Token => Self::Token,
-            OwnerType::Single => Self::Single,
-        }
-    }
-}
-
-impl From<RoyaltyTargetType> for postgre_client::model::RoyaltyTargetType {
-    fn from(royalty_target_type: RoyaltyTargetType) -> Self {
-        match royalty_target_type {
-            RoyaltyTargetType::Unknown => Self::Unknown,
-            RoyaltyTargetType::Creators => Self::Creators,
-            RoyaltyTargetType::Fanout => Self::Fanout,
-            RoyaltyTargetType::Single => Self::Single,
-        }
-    }
-}
-
 impl From<SearchConditionType> for ConditionType {
     fn from(search_condition_type: SearchConditionType) -> Self {
         match search_condition_type {
             SearchConditionType::All => Self::All,
             SearchConditionType::Any => Self::Any,
-        }
-    }
-}
-
-impl From<crate::api::rpc::OwnershipModel> for OwnerType {
-    fn from(ownership_model: crate::api::rpc::OwnershipModel) -> Self {
-        match ownership_model {
-            crate::api::rpc::OwnershipModel::Single => Self::Single,
-            crate::api::rpc::OwnershipModel::Token => Self::Token,
-        }
-    }
-}
-
-impl From<&crate::api::rpc::Interface> for SpecificationAssetClass {
-    fn from(interface: &crate::api::rpc::Interface) -> Self {
-        match interface {
-            crate::api::rpc::Interface::FungibleAsset => Self::FungibleAsset,
-            crate::api::rpc::Interface::FungibleToken => Self::FungibleToken,
-            crate::api::rpc::Interface::Identity => Self::IdentityNft,
-            crate::api::rpc::Interface::Nft
-            | crate::api::rpc::Interface::V1NFT
-            | crate::api::rpc::Interface::LegacyNft => Self::Nft,
-            crate::api::rpc::Interface::V1PRINT => Self::Print,
-            crate::api::rpc::Interface::ProgrammableNFT => Self::ProgrammableNft,
-            crate::api::rpc::Interface::Custom | crate::api::rpc::Interface::Executable => {
-                Self::Unknown
-            }
-            crate::api::rpc::Interface::MplCoreAsset => Self::MplCoreAsset,
-            crate::api::rpc::Interface::MplCoreCollection => Self::MplCoreCollection,
-        }
-    }
-}
-
-impl From<&crate::api::rpc::Interface> for SpecificationVersions {
-    fn from(interface: &crate::api::rpc::Interface) -> Self {
-        match interface {
-            crate::api::rpc::Interface::LegacyNft => Self::V0,
-            _ => Self::V1,
-        }
-    }
-}
-
-impl From<crate::api::rpc::RoyaltyModel> for RoyaltyTargetType {
-    fn from(royalty_model: crate::api::rpc::RoyaltyModel) -> Self {
-        match royalty_model {
-            crate::api::rpc::RoyaltyModel::Creators => Self::Creators,
-            crate::api::rpc::RoyaltyModel::Fanout => Self::Fanout,
-            crate::api::rpc::RoyaltyModel::Single => Self::Single,
         }
     }
 }

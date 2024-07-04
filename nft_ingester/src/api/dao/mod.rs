@@ -1,9 +1,6 @@
 pub use full_asset::*;
 
-use self::{
-    scopes::asset::COLLECTION_GROUP_KEY,
-    scopes::model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
-};
+use self::scopes::asset::COLLECTION_GROUP_KEY;
 
 mod converters;
 mod full_asset;
@@ -11,6 +8,9 @@ pub mod scopes;
 pub use converters::*;
 use entities::api_req_params::{
     GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, SearchAssets,
+};
+use entities::enums::{
+    OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
 };
 use interface::error::UsecaseError;
 use usecase::validation::{validate_opt_pubkey_vec, validate_pubkey};
@@ -74,9 +74,7 @@ impl TryFrom<SearchAssets> for SearchAssetsQuery {
             negate: search_assets.negate,
             condition_type: search_assets.condition_type.map(|s| s.into()),
             owner_address: validate_opt_pubkey_vec(&search_assets.owner_address)?,
-            owner_type: search_assets
-                .owner_type
-                .map(|s| crate::api::rpc::OwnershipModel::from(s).into()),
+            owner_type: search_assets.owner_type.map(|s| s.into()),
             creator_address: validate_opt_pubkey_vec(&search_assets.creator_address)?,
             creator_verified: search_assets.creator_verified,
             authority_address: validate_opt_pubkey_vec(&search_assets.authority_address)?,
@@ -89,18 +87,15 @@ impl TryFrom<SearchAssets> for SearchAssetsQuery {
             compressible: search_assets.compressible,
             royalty_target_type: search_assets
                 .royalty_target_type
-                .map(|s| crate::api::rpc::RoyaltyModel::from(s).into()),
+                .map(|s| s.into()),
             royalty_target: validate_opt_pubkey_vec(&search_assets.royalty_target)?,
             royalty_amount: search_assets.royalty_amount,
             burnt: search_assets.burnt,
             json_uri: search_assets.json_uri,
-            specification_version: search_assets
-                .interface
-                .clone()
-                .map(|s| (&crate::api::rpc::Interface::from(s)).into()),
+            specification_version: search_assets.interface.clone().map(|s| s.into()),
             specification_asset_class: search_assets
                 .interface
-                .map(|s| (&crate::api::rpc::Interface::from(s)).into())
+                .map(|s| s.into())
                 .filter(|v| v != &SpecificationAssetClass::Unknown),
         })
     }

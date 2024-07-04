@@ -72,65 +72,6 @@ fn convert_rocks_asset_model(
     })
 }
 
-// todo: remove this and following functions as part of dropping the old db and sea orm, use the entities directly in the business logic and the specific implementations from the pg_client or rocks_client for the db interactions
-// impl From<entities::enums::SpecificationAssetClass> for SpecificationAssetClass {
-//     fn from(value: entities::enums::SpecificationAssetClass) -> Self {
-//         match value {
-//             entities::enums::SpecificationAssetClass::FungibleAsset => {
-//                 SpecificationAssetClass::FungibleAsset
-//             }
-//             entities::enums::SpecificationAssetClass::FungibleToken => {
-//                 SpecificationAssetClass::FungibleToken
-//             }
-//             entities::enums::SpecificationAssetClass::IdentityNft => {
-//                 SpecificationAssetClass::IdentityNft
-//             }
-//             entities::enums::SpecificationAssetClass::Nft => SpecificationAssetClass::Nft,
-//             entities::enums::SpecificationAssetClass::NonTransferableNft => {
-//                 SpecificationAssetClass::NonTransferableNft
-//             }
-//             entities::enums::SpecificationAssetClass::Print => SpecificationAssetClass::Print,
-//             entities::enums::SpecificationAssetClass::PrintableNft => {
-//                 SpecificationAssetClass::PrintableNft
-//             }
-//             entities::enums::SpecificationAssetClass::ProgrammableNft => {
-//                 SpecificationAssetClass::ProgrammableNft
-//             }
-//             entities::enums::SpecificationAssetClass::TransferRestrictedNft => {
-//                 SpecificationAssetClass::TransferRestrictedNft
-//             }
-//             entities::enums::SpecificationAssetClass::Unknown => SpecificationAssetClass::Unknown,
-//             entities::enums::SpecificationAssetClass::MplCoreAsset => {
-//                 SpecificationAssetClass::MplCoreAsset
-//             }
-//             entities::enums::SpecificationAssetClass::MplCoreCollection => {
-//                 SpecificationAssetClass::MplCoreCollection
-//             }
-//         }
-//     }
-// }
-//
-// impl From<entities::enums::OwnerType> for OwnerType {
-//     fn from(value: entities::enums::OwnerType) -> Self {
-//         match value {
-//             entities::enums::OwnerType::Single => OwnerType::Single,
-//             entities::enums::OwnerType::Token => OwnerType::Token,
-//             entities::enums::OwnerType::Unknown => OwnerType::Unknown,
-//         }
-//     }
-// }
-//
-// impl From<entities::enums::RoyaltyTargetType> for RoyaltyTargetType {
-//     fn from(value: entities::enums::RoyaltyTargetType) -> Self {
-//         match value {
-//             entities::enums::RoyaltyTargetType::Creators => RoyaltyTargetType::Creators,
-//             entities::enums::RoyaltyTargetType::Fanout => RoyaltyTargetType::Fanout,
-//             entities::enums::RoyaltyTargetType::Single => RoyaltyTargetType::Single,
-//             entities::enums::RoyaltyTargetType::Unknown => RoyaltyTargetType::Unknown,
-//         }
-//     }
-// }
-
 // Use macros to reduce code duplications
 #[macro_export]
 macro_rules! fetch_asset_data {

@@ -14,14 +14,15 @@ use solana_program::pubkey::Pubkey;
 use url::Url;
 
 use crate::api::dao::scopes::asset::COLLECTION_GROUP_KEY;
-use crate::api::dao::scopes::model::{ChainMutability, SpecificationVersions};
+use crate::api::dao::scopes::model::{ChainMutability};
 use crate::api::dao::FullAsset;
 use crate::api::rpc::response::{AssetError, TokenAccountsList, TransactionSignatureList};
 use crate::api::rpc::{
-    Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
+    Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group,
     MetadataMap, MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
 };
 use entities::api_req_params::Pagination;
+use entities::enums::{Interface, SpecificationVersions};
 use rocks_db::asset::AssetCollection;
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetStaticDetails};
 

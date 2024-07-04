@@ -8,11 +8,7 @@ use {
     std::collections::HashMap,
 };
 
-use crate::api::dao::scopes::{
-    model,
-    model::{OwnerType, RoyaltyTargetType, SpecificationVersions},
-};
-use entities::enums::SpecificationAssetClass;
+use entities::enums::{Interface, OwnerType, RoyaltyTargetType};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AssetProof {
     pub root: String,
@@ -20,97 +16,6 @@ pub struct AssetProof {
     pub node_index: i64,
     pub leaf: String,
     pub tree_id: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
-pub enum Interface {
-    #[serde(rename = "V1_NFT")]
-    V1NFT,
-    #[serde(rename = "V1_PRINT")]
-    V1PRINT,
-    #[serde(rename = "LEGACY_NFT")]
-    LegacyNft,
-    #[serde(rename = "V2_NFT")]
-    Nft,
-    #[serde(rename = "FungibleAsset")]
-    FungibleAsset,
-    #[serde(rename = "FungibleToken")]
-    FungibleToken,
-    #[serde(rename = "Custom")]
-    Custom,
-    #[serde(rename = "Identity")]
-    Identity,
-    #[serde(rename = "Executable")]
-    Executable,
-    #[serde(rename = "ProgrammableNFT")]
-    ProgrammableNFT,
-    #[serde(rename = "MplCoreAsset")]
-    MplCoreAsset,
-    #[serde(rename = "MplCoreCollection")]
-    MplCoreCollection,
-}
-
-impl From<entities::enums::Interface> for Interface {
-    fn from(value: entities::enums::Interface) -> Self {
-        match value {
-            entities::enums::Interface::V1NFT => Interface::V1NFT,
-            entities::enums::Interface::V1PRINT => Interface::V1PRINT,
-            entities::enums::Interface::LegacyNft => Interface::LegacyNft,
-            entities::enums::Interface::Nft => Interface::Nft,
-            entities::enums::Interface::FungibleAsset => Interface::FungibleAsset,
-            entities::enums::Interface::Custom => Interface::Custom,
-            entities::enums::Interface::Identity => Interface::Identity,
-            entities::enums::Interface::Executable => Interface::Executable,
-            entities::enums::Interface::ProgrammableNFT => Interface::ProgrammableNFT,
-            entities::enums::Interface::MplCoreAsset => Interface::MplCoreAsset,
-            entities::enums::Interface::MplCoreCollection => Interface::MplCoreCollection,
-        }
-    }
-}
-
-impl From<(&SpecificationVersions, &SpecificationAssetClass)> for Interface {
-    fn from(i: (&SpecificationVersions, &SpecificationAssetClass)) -> Self {
-        match i {
-            (SpecificationVersions::V1, SpecificationAssetClass::Nft) => Interface::V1NFT,
-            (SpecificationVersions::V1, SpecificationAssetClass::PrintableNft) => Interface::V1NFT,
-            (SpecificationVersions::V0, SpecificationAssetClass::Nft) => Interface::LegacyNft,
-            (SpecificationVersions::V1, SpecificationAssetClass::ProgrammableNft) => {
-                Interface::ProgrammableNFT
-            }
-            (_, SpecificationAssetClass::FungibleAsset) => Interface::FungibleAsset,
-            (_, SpecificationAssetClass::FungibleToken) => Interface::FungibleToken,
-            (_, SpecificationAssetClass::MplCoreAsset) => Interface::MplCoreAsset,
-            (_, SpecificationAssetClass::MplCoreCollection) => Interface::MplCoreCollection,
-            _ => Interface::Custom,
-        }
-    }
-}
-
-impl From<Interface> for (SpecificationVersions, SpecificationAssetClass) {
-    fn from(val: Interface) -> Self {
-        match val {
-            Interface::V1NFT => (SpecificationVersions::V1, SpecificationAssetClass::Nft),
-            Interface::LegacyNft => (SpecificationVersions::V0, SpecificationAssetClass::Nft),
-            Interface::ProgrammableNFT => (
-                SpecificationVersions::V1,
-                SpecificationAssetClass::ProgrammableNft,
-            ),
-            Interface::V1PRINT => (SpecificationVersions::V1, SpecificationAssetClass::Print),
-            Interface::FungibleAsset => (
-                SpecificationVersions::V1,
-                SpecificationAssetClass::FungibleAsset,
-            ),
-            Interface::MplCoreAsset => (
-                SpecificationVersions::V1,
-                SpecificationAssetClass::MplCoreAsset,
-            ),
-            Interface::MplCoreCollection => (
-                SpecificationVersions::V1,
-                SpecificationAssetClass::MplCoreCollection,
-            ),
-            _ => (SpecificationVersions::V1, SpecificationAssetClass::Unknown),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -231,9 +136,6 @@ pub struct Compression {
     pub leaf_id: i64,
 }
 
-pub type GroupKey = String;
-pub type GroupValue = String;
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Group {
     pub group_key: String,
@@ -293,10 +195,6 @@ pub struct Royalty {
     pub primary_sale_happened: bool,
     pub locked: bool,
 }
-
-pub type Address = String;
-pub type Share = String;
-pub type Verified = bool;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Creator {
@@ -365,18 +263,6 @@ impl From<String> for UseMethod {
             "Single" => UseMethod::Single,
             "Multiple" => UseMethod::Multiple,
             _ => UseMethod::Single,
-        }
-    }
-}
-
-pub type Mutability = bool;
-
-impl From<model::ChainMutability> for Mutability {
-    fn from(s: model::ChainMutability) -> Self {
-        match s {
-            model::ChainMutability::Mutable => true,
-            model::ChainMutability::Immutable => false,
-            _ => true,
         }
     }
 }
