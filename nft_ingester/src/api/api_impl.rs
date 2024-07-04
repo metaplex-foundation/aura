@@ -1,18 +1,20 @@
-use dao::SearchAssetsQuery;
 use dapi::{get_asset, get_asset_batch, get_proof_for_assets, search_assets};
 use interface::error::UsecaseError;
 use interface::json::{JsonDownloader, JsonPersister};
 use interface::proofs::ProofChecker;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
-use rpc::response::AssetList;
 use std::{sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
 use self::util::ApiRequest;
+use crate::api::dapi::converters::SearchAssetsQuery;
+use crate::api::dapi::response::{
+    AssetList, GetGroupingResponse, TransactionSignatureListDeprecated,
+};
+use crate::api::dapi::rpc_asset_models::Asset;
 use crate::api::error::DasApiError;
-use crate::api::rpc::response::GetGroupingResponse;
 use crate::config::{ApiConfig, JsonMiddlewareConfig};
 use dapi::get_asset_signatures::get_asset_signatures;
 use dapi::get_token_accounts::get_token_accounts;
@@ -23,8 +25,6 @@ use entities::api_req_params::{
 };
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
-use rpc::response::TransactionSignatureListDeprecated;
-use rpc::Asset;
 use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
 use usecase::validation::{validate_opt_pubkey, validate_pubkey};

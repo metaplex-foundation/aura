@@ -2,13 +2,18 @@ use std::collections::BTreeMap;
 
 use schemars::JsonSchema;
 use serde_json::Value;
+use solana_program::pubkey::Pubkey;
 
 use {
     serde::{Deserialize, Serialize},
     std::collections::HashMap,
 };
 
-use entities::enums::{Interface, OwnerType, RoyaltyTargetType};
+use entities::enums::{Interface, OwnershipModel, RoyaltyModel, UseMethod};
+use entities::models::{EditionData, OffChainData};
+use rocks_db::asset::{AssetCollection, AssetLeaf};
+use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AssetProof {
     pub root: String,
@@ -144,48 +149,6 @@ pub struct Group {
     pub verified: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
-pub enum RoyaltyModel {
-    #[serde(rename = "creators")]
-    Creators,
-    #[serde(rename = "fanout")]
-    Fanout,
-    #[serde(rename = "single")]
-    Single,
-}
-
-impl From<entities::enums::RoyaltyModel> for RoyaltyModel {
-    fn from(value: entities::enums::RoyaltyModel) -> Self {
-        match value {
-            entities::enums::RoyaltyModel::Creators => RoyaltyModel::Creators,
-            entities::enums::RoyaltyModel::Fanout => RoyaltyModel::Fanout,
-            entities::enums::RoyaltyModel::Single => RoyaltyModel::Single,
-        }
-    }
-}
-
-impl From<String> for RoyaltyModel {
-    fn from(s: String) -> Self {
-        match &*s {
-            "creators" => RoyaltyModel::Creators,
-            "fanout" => RoyaltyModel::Fanout,
-            "single" => RoyaltyModel::Single,
-            _ => RoyaltyModel::Creators,
-        }
-    }
-}
-
-impl From<RoyaltyTargetType> for RoyaltyModel {
-    fn from(s: RoyaltyTargetType) -> Self {
-        match s {
-            RoyaltyTargetType::Creators => RoyaltyModel::Creators,
-            RoyaltyTargetType::Fanout => RoyaltyModel::Fanout,
-            RoyaltyTargetType::Single => RoyaltyModel::Single,
-            _ => RoyaltyModel::Creators,
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Royalty {
     pub royalty_model: RoyaltyModel,
@@ -203,43 +166,6 @@ pub struct Creator {
     pub verified: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
-pub enum OwnershipModel {
-    #[serde(rename = "single")]
-    Single,
-    #[serde(rename = "token")]
-    Token,
-}
-
-impl From<entities::enums::OwnershipModel> for OwnershipModel {
-    fn from(value: entities::enums::OwnershipModel) -> Self {
-        match value {
-            entities::enums::OwnershipModel::Single => OwnershipModel::Single,
-            entities::enums::OwnershipModel::Token => OwnershipModel::Token,
-        }
-    }
-}
-
-impl From<String> for OwnershipModel {
-    fn from(s: String) -> Self {
-        match &*s {
-            "single" => OwnershipModel::Single,
-            "token" => OwnershipModel::Token,
-            _ => OwnershipModel::Single,
-        }
-    }
-}
-
-impl From<OwnerType> for OwnershipModel {
-    fn from(s: OwnerType) -> Self {
-        match s {
-            OwnerType::Token => OwnershipModel::Token,
-            OwnerType::Single => OwnershipModel::Single,
-            _ => OwnershipModel::Single,
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Ownership {
     pub frozen: bool,
@@ -247,24 +173,6 @@ pub struct Ownership {
     pub delegate: Option<String>,
     pub ownership_model: OwnershipModel,
     pub owner: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub enum UseMethod {
-    Burn,
-    Multiple,
-    Single,
-}
-
-impl From<String> for UseMethod {
-    fn from(s: String) -> Self {
-        match &*s {
-            "Burn" => UseMethod::Burn,
-            "Single" => UseMethod::Single,
-            "Multiple" => UseMethod::Multiple,
-            _ => UseMethod::Single,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -332,4 +240,20 @@ pub struct Asset {
     pub external_plugins: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unknown_external_plugins: Option<Value>,
+}
+
+#[derive(Clone, Debug)]
+pub struct FullAsset {
+    pub asset_static: AssetStaticDetails,
+    pub asset_owner: AssetOwner,
+    pub asset_dynamic: AssetDynamicDetails,
+    pub asset_leaf: AssetLeaf,
+    pub offchain_data: OffChainData,
+    pub asset_collections: HashMap<Pubkey, AssetCollection>,
+    pub assets_authority: HashMap<Pubkey, AssetAuthority>,
+    pub edition_data: Option<EditionData>,
+}
+
+pub struct FullAssetList {
+    pub list: Vec<FullAsset>,
 }

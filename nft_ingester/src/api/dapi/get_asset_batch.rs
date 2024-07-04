@@ -8,9 +8,9 @@ use tokio::{
     task::{JoinError, JoinSet},
 };
 
-use crate::{api::dao::scopes, api::rpc::Asset};
-
-use super::common::asset_to_rpc;
+use crate::api::dapi::asset;
+use crate::api::dapi::rpc_asset_convertors::asset_to_rpc;
+use crate::api::dapi::rpc_asset_models::Asset;
 
 pub async fn get_asset_batch(
     rocks_db: Arc<Storage>,
@@ -21,7 +21,7 @@ pub async fn get_asset_batch(
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 ) -> Result<Vec<Option<Asset>>, StorageError> {
-    let assets = scopes::asset::get_by_ids(
+    let assets = asset::get_by_ids(
         rocks_db,
         ids,
         options,

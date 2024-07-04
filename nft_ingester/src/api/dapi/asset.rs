@@ -10,7 +10,7 @@ use log::error;
 use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::api::dao::FullAsset;
+use crate::api::dapi::rpc_asset_models::FullAsset;
 use futures::{stream, StreamExt};
 use interface::processing_possibility::ProcessingPossibilityChecker;
 use rocks_db::asset::{AssetLeaf, AssetSelectedMaps};
@@ -18,7 +18,6 @@ use rocks_db::Storage;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
-pub const PROCESSING_METADATA_STATE: &str = "processing";
 pub const COLLECTION_GROUP_KEY: &str = "collection";
 
 fn convert_rocks_asset_model(

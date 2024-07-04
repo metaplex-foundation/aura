@@ -78,11 +78,22 @@ impl From<blockbuster::token_metadata::types::TokenStandard> for TokenStandard {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
+#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive, PartialEq, JsonSchema)]
 pub enum UseMethod {
     Burn,
     Multiple,
     Single,
+}
+
+impl From<String> for UseMethod {
+    fn from(s: String) -> Self {
+        match &*s {
+            "Burn" => UseMethod::Burn,
+            "Single" => UseMethod::Single,
+            "Multiple" => UseMethod::Multiple,
+            _ => UseMethod::Single,
+        }
+    }
 }
 
 impl From<blockbuster::token_metadata::types::UseMethod> for UseMethod {
@@ -223,6 +234,16 @@ impl From<OwnershipModel> for OwnerType {
     }
 }
 
+impl From<OwnerType> for OwnershipModel {
+    fn from(s: OwnerType) -> Self {
+        match s {
+            OwnerType::Token => OwnershipModel::Token,
+            OwnerType::Single => OwnershipModel::Single,
+            _ => OwnershipModel::Single,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
 pub enum RoyaltyModel {
     #[serde(rename = "creators")]
@@ -231,6 +252,17 @@ pub enum RoyaltyModel {
     Fanout,
     #[serde(rename = "single")]
     Single,
+}
+
+impl From<RoyaltyTargetType> for RoyaltyModel {
+    fn from(s: RoyaltyTargetType) -> Self {
+        match s {
+            RoyaltyTargetType::Creators => RoyaltyModel::Creators,
+            RoyaltyTargetType::Fanout => RoyaltyModel::Fanout,
+            RoyaltyTargetType::Single => RoyaltyModel::Single,
+            _ => RoyaltyModel::Creators,
+        }
+    }
 }
 
 impl From<RoyaltyModel> for RoyaltyTargetType {

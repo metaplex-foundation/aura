@@ -1,5 +1,7 @@
-use crate::api::dao::{scopes, ConversionError, SearchAssetsQuery};
-use crate::api::rpc::response::AssetList;
+use crate::api::dapi::asset;
+use crate::api::dapi::converters::{ConversionError, SearchAssetsQuery};
+use crate::api::dapi::response::AssetList;
+use crate::api::dapi::rpc_asset_convertors::asset_list_to_rpc;
 use entities::api_req_params::{AssetSorting, Options};
 use interface::json::{JsonDownloader, JsonPersister};
 use rocks_db::errors::StorageError;
@@ -8,8 +10,6 @@ use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
-
-use super::common::asset_list_to_rpc;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn search_assets(
@@ -70,7 +70,7 @@ pub async fn search_assets(
         .filter_map(|k| Pubkey::try_from(k.pubkey.clone()).ok())
         .collect::<Vec<Pubkey>>();
     //todo: there is an additional round trip to the db here, this should be optimized
-    let assets = scopes::asset::get_by_ids(
+    let assets = asset::get_by_ids(
         rocks_db,
         asset_ids,
         options,

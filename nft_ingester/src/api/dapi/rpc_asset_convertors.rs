@@ -13,14 +13,14 @@ use serde_json::Value;
 use solana_program::pubkey::Pubkey;
 use url::Url;
 
-use crate::api::dao::scopes::asset::COLLECTION_GROUP_KEY;
-use crate::api::dao::scopes::model::ChainMutability;
-use crate::api::dao::FullAsset;
-use crate::api::rpc::response::{AssetError, TokenAccountsList, TransactionSignatureList};
-use crate::api::rpc::{
+use super::response::{AssetError, TokenAccountsList, TransactionSignatureList};
+use super::rpc_asset_models::FullAsset;
+use super::rpc_asset_models::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, MetadataMap,
     MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
 };
+use crate::api::dapi::asset::COLLECTION_GROUP_KEY;
+use crate::api::dapi::model::ChainMutability;
 use entities::api_req_params::Pagination;
 use entities::enums::{Interface, SpecificationVersions};
 use rocks_db::asset::AssetCollection;

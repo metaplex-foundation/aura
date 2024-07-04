@@ -1,9 +1,7 @@
+use crate::api::dapi::rpc_asset_models::Asset;
 use entities::models::{AssetSignature, TokenAccount};
 use schemars::JsonSchema;
-use {
-    crate::api::rpc::Asset,
-    serde::{Deserialize, Serialize},
-};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
 #[serde(default)]
