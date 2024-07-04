@@ -10,9 +10,9 @@ use {
 
 use crate::api::dao::scopes::{
     model,
-    model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
+    model::{OwnerType, RoyaltyTargetType, SpecificationVersions},
 };
-
+use entities::enums::SpecificationAssetClass;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AssetProof {
     pub root: String,

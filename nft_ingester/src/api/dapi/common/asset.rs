@@ -8,15 +8,14 @@ use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
 use mime_guess::Mime;
-use mockall::PredicateStrExt;
 use rocks_db::errors::StorageError;
 use serde_json::Value;
 use solana_program::pubkey::Pubkey;
 use url::Url;
 
 use crate::api::dao::scopes::asset::COLLECTION_GROUP_KEY;
-use crate::api::dao::scopes::model::SpecificationVersions;
-use crate::api::dao::{scopes::model, FullAsset};
+use crate::api::dao::scopes::model::{ChainMutability, SpecificationVersions};
+use crate::api::dao::FullAsset;
 use crate::api::rpc::response::{AssetError, TokenAccountsList, TransactionSignatureList};
 use crate::api::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
@@ -244,7 +243,7 @@ pub fn to_grouping(
         .map_or(vec![], |collection| {
             vec![Group {
                 group_key: COLLECTION_GROUP_KEY.to_string(),
-                group_value: collection.collection.as_ref().map(|c| c.to_string()),
+                group_value: Some(collection.collection.value.to_string()),
                 verified: Some(collection.is_collection_verified.value),
             }]
         })
@@ -277,8 +276,21 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
         .map(|o| bs58::encode(o).into_string())
         .unwrap_or_default();
     let content = get_content(&full_asset.asset_dynamic, &full_asset.offchain_data)?;
-    let basis_points = full_asset.asset_dynamic.primary_sale_happened;
-    let edition_nonce = full_asset.asset_dynamic.edition_nonce.map(|v| v as u64);
+    let ch_data = serde_json::from_str(
+        &full_asset
+            .asset_dynamic
+            .onchain_data
+            .map(|onchain_data| onchain_data.value)
+            .unwrap_or_default(),
+    )
+    .unwrap_or(serde_json::Value::Null);
+    let mut chain_data_selector_fn = jsonpath_lib::selector(&ch_data);
+    let chain_data_selector = &mut chain_data_selector_fn;
+    let basis_points = safe_select(chain_data_selector, "$.primary_sale_happened")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let edition_nonce =
+        safe_select(chain_data_selector, "$.edition_nonce").and_then(|v| v.as_u64());
 
     let mpl_core_info = match interface {
         Interface::MplCoreAsset | Interface::MplCoreCollection => Some(MplCoreInfo {
@@ -294,20 +306,22 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
 
     Ok(Some(RpcAsset {
         interface,
-        id: bs58::encode(&full_asset.asset_static.pubkey.to_bytes()).into_string(),
+        id: full_asset.asset_static.pubkey.to_string(),
         content: Some(content),
         authorities: Some(rpc_authorities),
-        mutable: full_asset.asset_dynamic.chain_data_mutability.into(),
+        mutable: full_asset
+            .asset_dynamic
+            .chain_mutability
+            .clone()
+            .map(|m| m.value.into())
+            .unwrap_or(ChainMutability::Unknown)
+            .into(),
         compression: Some(Compression {
             eligible: full_asset.asset_dynamic.is_compressible.value,
             compressed: full_asset.asset_dynamic.is_compressed.value,
             leaf_id: full_asset.asset_leaf.nonce.unwrap_or(0) as i64,
             seq: full_asset.asset_leaf.leaf_seq.unwrap_or(0) as i64,
-            tree: full_asset
-                .asset_leaf
-                .tree_id
-                .map(|s| bs58::encode(s).into_string())
-                .unwrap_or_default(),
+            tree: full_asset.asset_leaf.tree_id.to_string(),
             asset_hash: full_asset
                 .asset_leaf
                 .data_hash
@@ -316,36 +330,33 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
             data_hash: full_asset
                 .asset_leaf
                 .data_hash
-                .map(|e| e.trim().to_string())
+                .map(|e| e.to_string())
                 .unwrap_or_default(),
             creator_hash: full_asset
                 .asset_leaf
                 .creator_hash
-                .map(|e| e.trim().to_string())
+                .map(|e| e.to_string())
                 .unwrap_or_default(),
         }),
         grouping: Some(rpc_groups),
         royalty: Some(Royalty {
             royalty_model: full_asset.asset_static.royalty_target_type.into(),
-            target: full_asset
-                .asset_static
-                .royalty_target
-                .map(|s| bs58::encode(s).into_string()),
-            percent: (full_asset.asset_static.royalty_amount as f64) * 0.0001,
-            basis_points: full_asset.asset_static.royalty_amount as u32,
+            target: None,
+            percent: (full_asset.asset_dynamic.royalty_amount.value as f64) * 0.0001,
+            basis_points: full_asset.asset_dynamic.royalty_amount.value as u32,
             primary_sale_happened: basis_points,
             locked: false,
         }),
         creators: Some(rpc_creators),
         ownership: Ownership {
             frozen: full_asset.asset_dynamic.is_frozen.value,
-            delegated: full_asset.asset_owner.delegate.is_some(),
+            delegated: full_asset.asset_owner.delegate.value.is_some(),
             delegate: full_asset.asset_owner.delegate.value.map(|u| u.to_string()),
-            ownership_model: full_asset.asset_owner.owner_type.into(),
+            ownership_model: full_asset.asset_owner.owner_type.value.into(),
             owner,
         },
         supply: match interface {
-            Interface::V1NFT => full_asset.asset_static.edition_address.map(|e| Supply {
+            Interface::V1NFT => full_asset.edition_data.map(|e| Supply {
                 edition_nonce,
                 print_current_supply: e.supply,
                 print_max_supply: e.max_supply,

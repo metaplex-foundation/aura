@@ -5,7 +5,7 @@ use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetai
 use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct FullAsset {
     pub asset_static: AssetStaticDetails,
     pub asset_owner: AssetOwner,

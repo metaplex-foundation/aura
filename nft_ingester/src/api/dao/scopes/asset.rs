@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::string::ToString;
 use std::sync::Arc;
 
@@ -9,24 +8,15 @@ use interface::asset_sigratures::AssetSignaturesGetter;
 use interface::json::{JsonDownloader, JsonPersister};
 use log::error;
 use rocks_db::errors::StorageError;
-use serde_json::Value as Json;
 use solana_sdk::pubkey::Pubkey;
 
+use crate::api::dao::FullAsset;
 use futures::{stream, StreamExt};
 use interface::processing_possibility::ProcessingPossibilityChecker;
-use rocks_db::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetSelectedMaps,
-    AssetStaticDetails,
-};
+use rocks_db::asset::{AssetLeaf, AssetSelectedMaps};
 use rocks_db::Storage;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
-
-use crate::api::dao::scopes::model;
-use crate::api::dao::scopes::model::{
-    ChainMutability, Mutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
-};
-use crate::api::dao::{AssetDataModel, FullAsset};
 
 pub const PROCESSING_METADATA_STATE: &str = "processing";
 pub const COLLECTION_GROUP_KEY: &str = "collection";
