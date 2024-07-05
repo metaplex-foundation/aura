@@ -451,20 +451,14 @@ impl PgClient {
                 .push_bind(asset_index.owner.map(|owner| owner.to_bytes().to_vec()))
                 .push_bind(asset_index.delegate.map(|k| k.to_bytes().to_vec()))
                 .push_bind(if let Some(collection) = asset_index.collection {
-                    if asset_index.specification_asset_class
-                        == entities::enums::SpecificationAssetClass::MplCoreAsset
-                    {
+                    if asset_index.update_authority.is_some() {
                         Some(collection.to_bytes().to_vec())
                     } else if asset_index.authority.is_some() {
                         Some(asset_index.pubkey.to_bytes().to_vec())
                     } else {
                         None
                     }
-                } else if asset_index
-                    .authority
-                    .or(asset_index.update_authority)
-                    .is_some()
-                {
+                } else if asset_index.authority.is_some() {
                     Some(asset_index.pubkey.to_bytes().to_vec())
                 } else {
                     None

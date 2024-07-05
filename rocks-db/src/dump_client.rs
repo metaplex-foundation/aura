@@ -169,14 +169,14 @@ impl Storage {
                 ast_owner: index.owner.map(Self::encode),
                 ast_delegate: index.delegate.map(Self::encode),
                 ast_authority_fk: if let Some(collection) = index.collection {
-                    if index.specification_asset_class == SpecificationAssetClass::MplCoreAsset {
+                    if index.update_authority.is_some() {
                         Some(Self::encode(collection))
                     } else if index.authority.is_some() {
                         Some(Self::encode(index.pubkey))
                     } else {
                         None
                     }
-                } else if index.authority.or(index.update_authority).is_some() {
+                } else if index.authority.is_some() {
                     Some(Self::encode(index.pubkey))
                 } else {
                     None
