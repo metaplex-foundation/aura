@@ -421,6 +421,7 @@ pub struct FailedRollup {
     pub created_at_slot: u64,
     pub signature: Signature,
     pub download_attempts: u8,
+    pub staker: Pubkey,
 }
 
 impl Default for JsonDownloadTask {

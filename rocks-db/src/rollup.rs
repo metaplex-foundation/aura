@@ -11,6 +11,7 @@ use entities::rollup::Rollup;
 use log::error;
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FailedRollupKey {
@@ -119,7 +120,13 @@ pub fn merge_failed_rollup(
     Some(result)
 }
 
-impl TypedColumn for Rollup {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RollupWithStaker {
+    pub rollup: Rollup,
+    pub staker: Pubkey,
+}
+
+impl TypedColumn for RollupWithStaker {
     type KeyType = String;
     type ValueType = Self;
     const NAME: &'static str = "ROLLUPS"; // Name of the column family
@@ -148,7 +155,7 @@ impl Storage {
 
         if let Some(rollup) = &first_value {
             let rollup = self.rollups.get(rollup.file_hash.clone())?;
-            return Ok((first_value, rollup));
+            return Ok((first_value, rollup.map(|r| r.rollup)));
         }
         Ok((first_value, None))
     }
@@ -173,6 +180,7 @@ impl Storage {
             created_at_slot: rollup.created_at_slot,
             signature: rollup.signature,
             download_attempts: rollup.download_attempts + 1,
+            staker: rollup.staker,
         };
         self.failed_rollups.put_async(key, value).await
     }
