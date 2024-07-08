@@ -91,7 +91,7 @@ pub async fn main() -> Result<(), IngesterError> {
             red_metrics.clone(),
             MigrationState::CreateColumnFamilies,
         )
-            .unwrap();
+        .unwrap();
     }
     let migration_version_manager_dir = TempDir::new().unwrap();
     let migration_version_manager = Storage::open_secondary(
@@ -104,7 +104,7 @@ pub async fn main() -> Result<(), IngesterError> {
         red_metrics.clone(),
         MigrationState::Last,
     )
-        .unwrap();
+    .unwrap();
     Storage::apply_all_migrations(
         &config
             .rocks_db_path_container
@@ -113,8 +113,8 @@ pub async fn main() -> Result<(), IngesterError> {
         &config.migration_storage_path,
         Arc::new(migration_version_manager),
     )
-        .await
-        .unwrap();
+    .await
+    .unwrap();
     let storage = Storage::open(
         &primary_storage_path,
         mutexed_tasks.clone(),
