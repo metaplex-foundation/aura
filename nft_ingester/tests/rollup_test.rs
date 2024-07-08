@@ -11,7 +11,7 @@ use mpl_bubblegum::types::{LeafSchema, MetadataArgs};
 use digital_asset_types::rpc::AssetProof;
 use entities::api_req_params::GetAssetProof;
 use entities::enums::{FailedRollupState, PersistingRollupState, RollupState};
-use entities::models::{BufferedTransaction, FailedRollupKey};
+use entities::models::BufferedTransaction;
 use entities::models::{RollupToVerify, RollupWithState};
 use entities::rollup::{ChangeLogEventV1, PathNode, RolledMintInstruction, Rollup};
 use flatbuffers::FlatBufferBuilder;
@@ -31,6 +31,7 @@ use nft_ingester::rollup::rollup_processor::{MockPermanentStorageClient, RollupP
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
 use rand::{thread_rng, Rng};
+use rocks_db::rollup::FailedRollupKey;
 use serde_json::json;
 use solana_program::instruction::CompiledInstruction;
 use solana_program::message::Message;
@@ -433,6 +434,7 @@ async fn rollup_persister_test() {
         signature: Signature::new_unique(),
         download_attempts: 0,
         persisting_state: PersistingRollupState::ReceivedTransaction,
+        staker: Default::default(),
     };
 
     env.rocks_env
@@ -566,6 +568,7 @@ async fn rollup_persister_download_fail_test() {
         signature: Signature::new_unique(),
         download_attempts,
         persisting_state: PersistingRollupState::ReceivedTransaction,
+        staker: Default::default(),
     };
 
     env.rocks_env
@@ -631,6 +634,7 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
         signature: Signature::new_unique(),
         download_attempts,
         persisting_state: PersistingRollupState::ReceivedTransaction,
+        staker: Default::default(),
     };
 
     env.rocks_env

@@ -18,7 +18,6 @@ pub use asset::{
 pub use column::columns;
 use column::{Column, TypedColumn};
 use entities::models::{AssetSignature, FailedRollup, OffChainData, RawBlock, RollupToVerify};
-use entities::rollup::Rollup;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -29,6 +28,7 @@ use crate::migrations::collection_authority::{
 };
 use crate::migrations::external_plugins::{AssetDynamicDetailsV0, ExternalPluginsMigration};
 use crate::parameters::ParameterColumn;
+use crate::rollup::RollupWithStaker;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
 pub mod asset;
@@ -105,7 +105,7 @@ pub struct Storage {
     pub asset_signature: Column<AssetSignature>,
     pub rollup_to_verify: Column<RollupToVerify>,
     pub failed_rollups: Column<FailedRollup>,
-    pub rollups: Column<Rollup>,
+    pub rollups: Column<RollupWithStaker>,
     pub migration_version: Column<MigrationVersions>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
@@ -260,7 +260,7 @@ impl Storage {
             Self::new_cf_descriptor::<MigrationVersions>(migration_state),
             Self::new_cf_descriptor::<RollupToVerify>(migration_state),
             Self::new_cf_descriptor::<FailedRollup>(migration_state),
-            Self::new_cf_descriptor::<Rollup>(migration_state),
+            Self::new_cf_descriptor::<RollupWithStaker>(migration_state),
         ]
     }
 
@@ -541,7 +541,7 @@ impl Storage {
                     rollup::merge_failed_rollup,
                 );
             }
-            Rollup::NAME => {
+            RollupWithStaker::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_downloaded_rollup",
                     asset::AssetStaticDetails::merge_keep_existing,
