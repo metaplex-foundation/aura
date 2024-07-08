@@ -308,11 +308,11 @@ impl BubblegumTxProcessor {
                     .map(From::from)
                     .map(Ok)?
             }
-            // InstructionName::CreateTreeWithRoot => {
-            //     Self::get_create_tree_with_root_update(parsing_result, bundle)
-            //         .map(From::from)
-            //         .map(Ok)?
-            // }
+            InstructionName::CreateTreeWithRoot => {
+                Self::get_create_tree_with_root_update(parsing_result, bundle)
+                    .map(From::from)
+                    .map(Ok)?
+            }
             _ => {
                 debug!("Bubblegum: Not Implemented Instruction");
                 Ok(InstructionResult::default())
