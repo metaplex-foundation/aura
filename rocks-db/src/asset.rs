@@ -777,15 +777,41 @@ impl TypedColumn for AssetsUpdateIdx {
 pub struct SlotAssetIdx {}
 
 impl TypedColumn for SlotAssetIdx {
-    type KeyType = (u64, Pubkey);
+    type KeyType = SlotAssetIdxKey;
     type ValueType = Self;
     const NAME: &'static str = "SLOT_ASSET_IDX";
 
-    fn encode_key(key: (u64, Pubkey)) -> Vec<u8> {
-        encode_u64_pubkey(key.0, key.1)
+    fn encode_key(key: SlotAssetIdxKey) -> Vec<u8> {
+        key.encode_to_bytes()
     }
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        decode_u64_pubkey(bytes)
+        SlotAssetIdxKey::decode_from_bypes(bytes)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct SlotAssetIdxKey {
+    pub slot: u64,
+    pub pubkey: Pubkey,
+}
+
+impl SlotAssetIdxKey {
+    pub fn new(slot: u64, asset: Pubkey) -> SlotAssetIdxKey {
+        SlotAssetIdxKey {
+            slot,
+            pubkey: asset,
+        }
+    }
+
+    pub fn encode_to_bytes(&self) -> Vec<u8> {
+        encode_u64_pubkey(self.slot, self.pubkey)
+    }
+
+    pub fn decode_from_bypes(bytes: Vec<u8>) -> Result<SlotAssetIdxKey> {
+        decode_u64_pubkey(bytes).map(|(slot, asset)| SlotAssetIdxKey {
+            slot,
+            pubkey: asset,
+        })
     }
 }

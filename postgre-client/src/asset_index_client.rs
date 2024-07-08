@@ -114,6 +114,7 @@ impl PgClient {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct Authority {
     pub key: Pubkey,
     pub authority: Pubkey,
@@ -170,26 +171,33 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
         .iter()
         .map(|asset_index| asset_index.pubkey.to_bytes().to_vec())
         .collect::<Vec<Vec<u8>>>();
-    let authorities = asset_indexes
-        .iter()
-        .filter_map(|asset| {
-            asset.authority.map(|authority| Authority {
-                key: if let Some(collection) = asset.collection {
-                    if asset.specification_asset_class
-                        == entities::enums::SpecificationAssetClass::MplCoreAsset
-                    {
-                        collection
-                    } else {
-                        asset.pubkey
-                    }
-                } else {
-                    asset.pubkey
-                },
+    let mut authorities: HashMap<Pubkey, Authority> = HashMap::new();
+    for asset in asset_indexes.iter() {
+        let authority = asset.update_authority.or(asset.authority);
+        let authority_key = if asset.update_authority.is_some() {
+            asset.collection
+        } else {
+            Some(asset.pubkey)
+        };
+        if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
+            let new_entry = Authority {
+                key: authority_key,
                 authority,
                 slot_updated: asset.slot_updated,
-            })
-        })
-        .collect::<Vec<_>>();
+            };
+
+            authorities
+                .entry(authority_key)
+                .and_modify(|existing_entry| {
+                    if new_entry.slot_updated > existing_entry.slot_updated {
+                        *existing_entry = new_entry;
+                    }
+                })
+                .or_insert(new_entry);
+        }
+    }
+    let mut authorities = authorities.into_values().collect::<Vec<_>>();
+    authorities.sort_by(|a, b| a.key.cmp(&b.key));
     AssetComponenents {
         metadata_urls,
         asset_indexes,
@@ -443,15 +451,17 @@ impl PgClient {
                 .push_bind(asset_index.owner.map(|owner| owner.to_bytes().to_vec()))
                 .push_bind(asset_index.delegate.map(|k| k.to_bytes().to_vec()))
                 .push_bind(if let Some(collection) = asset_index.collection {
-                    if asset_index.specification_asset_class
-                        == entities::enums::SpecificationAssetClass::MplCoreAsset
-                    {
-                        collection.to_bytes().to_vec()
+                    if asset_index.update_authority.is_some() {
+                        Some(collection.to_bytes().to_vec())
+                    } else if asset_index.authority.is_some() {
+                        Some(asset_index.pubkey.to_bytes().to_vec())
                     } else {
-                        asset_index.pubkey.to_bytes().to_vec()
+                        None
                     }
+                } else if asset_index.authority.is_some() {
+                    Some(asset_index.pubkey.to_bytes().to_vec())
                 } else {
-                    asset_index.pubkey.to_bytes().to_vec()
+                    None
                 })
                 .push_bind(asset_index.collection.map(|k| k.to_bytes().to_vec()))
                 .push_bind(asset_index.is_collection_verified)

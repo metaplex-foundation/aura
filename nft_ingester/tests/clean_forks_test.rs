@@ -14,6 +14,8 @@ use tokio::sync::broadcast;
 #[tracing_test::traced_test]
 #[tokio::test]
 async fn test_clean_forks() {
+    use rocks_db::cl_items::ClItemKey;
+
     let storage = RocksTestEnvironment::new(&[]).storage;
     let first_tree_key =
         solana_program::pubkey::Pubkey::from_str("5zYdh7eB538fv5Xnjbqg2rZfapY993vwwNYUoP59uz61")
@@ -25,7 +27,7 @@ async fn test_clean_forks() {
     storage
         .cl_items
         .put_async(
-            (100, first_tree_key),
+            ClItemKey::new(100, first_tree_key),
             ClItem {
                 cli_node_idx: 100,
                 cli_tree_key: first_tree_key,
@@ -41,7 +43,7 @@ async fn test_clean_forks() {
     storage
         .cl_items
         .put_async(
-            (101, first_tree_key),
+            ClItemKey::new(101, first_tree_key),
             ClItem {
                 cli_node_idx: 101,
                 cli_tree_key: first_tree_key,
@@ -57,7 +59,7 @@ async fn test_clean_forks() {
     storage
         .cl_items
         .put_async(
-            (102, first_tree_key),
+            ClItemKey::new(102, first_tree_key),
             ClItem {
                 cli_node_idx: 102,
                 cli_tree_key: first_tree_key,
@@ -73,7 +75,7 @@ async fn test_clean_forks() {
     storage
         .cl_items
         .put_async(
-            (103, first_tree_key),
+            ClItemKey::new(103, first_tree_key),
             ClItem {
                 cli_node_idx: 103,
                 cli_tree_key: first_tree_key,
@@ -89,7 +91,7 @@ async fn test_clean_forks() {
     storage
         .cl_items
         .put_async(
-            (104, first_tree_key),
+            ClItemKey::new(104, first_tree_key),
             ClItem {
                 cli_node_idx: 104,
                 cli_tree_key: first_tree_key,
@@ -105,7 +107,7 @@ async fn test_clean_forks() {
     storage
         .cl_items
         .put_async(
-            (105, first_tree_key),
+            ClItemKey::new(105, first_tree_key),
             ClItem {
                 cli_node_idx: 105,
                 cli_tree_key: first_tree_key,
@@ -121,7 +123,7 @@ async fn test_clean_forks() {
     storage
         .cl_items
         .put_async(
-            (106, first_tree_key),
+            ClItemKey::new(106, first_tree_key),
             ClItem {
                 cli_node_idx: 106,
                 cli_tree_key: first_tree_key,
@@ -137,7 +139,7 @@ async fn test_clean_forks() {
     storage
         .cl_items
         .put_async(
-            (100, second_tree_key),
+            ClItemKey::new(100, second_tree_key),
             ClItem {
                 cli_node_idx: 100,
                 cli_tree_key: second_tree_key,
@@ -153,7 +155,7 @@ async fn test_clean_forks() {
     storage
         .cl_items
         .put_async(
-            (101, second_tree_key),
+            ClItemKey::new(101, second_tree_key),
             ClItem {
                 cli_node_idx: 101,
                 cli_tree_key: second_tree_key,
@@ -169,7 +171,7 @@ async fn test_clean_forks() {
     storage
         .cl_items
         .put_async(
-            (104, second_tree_key),
+            ClItemKey::new(104, second_tree_key),
             ClItem {
                 cli_node_idx: 104,
                 cli_tree_key: second_tree_key,
@@ -185,7 +187,7 @@ async fn test_clean_forks() {
     storage
         .cl_items
         .put_async(
-            (106, second_tree_key),
+            ClItemKey::new(106, second_tree_key),
             ClItem {
                 cli_node_idx: 106,
                 cli_tree_key: second_tree_key,
@@ -391,8 +393,14 @@ async fn test_clean_forks() {
     );
     fork_cleaner.clean_forks(rx.resubscribe()).await;
 
-    let forked_first_key_first_item = storage.cl_items.get((103, first_tree_key)).unwrap();
-    let forked_first_key_second_item = storage.cl_items.get((104, first_tree_key)).unwrap();
+    let forked_first_key_first_item = storage
+        .cl_items
+        .get(ClItemKey::new(103, first_tree_key))
+        .unwrap();
+    let forked_first_key_second_item = storage
+        .cl_items
+        .get(ClItemKey::new(104, first_tree_key))
+        .unwrap();
     let forked_first_key_first_seq = storage.tree_seq_idx.get((first_tree_key, 10003)).unwrap();
     let forked_first_key_second_seq = storage.tree_seq_idx.get((first_tree_key, 10004)).unwrap();
     assert_eq!(forked_first_key_first_item, None);
@@ -400,12 +408,18 @@ async fn test_clean_forks() {
     assert_eq!(forked_first_key_first_seq, None);
     assert_eq!(forked_first_key_second_seq, None);
 
-    let forked_second_key_first_item = storage.cl_items.get((104, second_tree_key)).unwrap();
+    let forked_second_key_first_item = storage
+        .cl_items
+        .get(ClItemKey::new(104, second_tree_key))
+        .unwrap();
     let forked_second_key_first_seq = storage.tree_seq_idx.get((second_tree_key, 10002)).unwrap();
     assert_eq!(forked_second_key_first_item, None);
     assert_eq!(forked_second_key_first_seq, None);
 
-    let non_forked_first_key_item = storage.cl_items.get((106, first_tree_key)).unwrap();
+    let non_forked_first_key_item = storage
+        .cl_items
+        .get(ClItemKey::new(106, first_tree_key))
+        .unwrap();
     let non_forked_first_key_seq = storage.tree_seq_idx.get((first_tree_key, 10006)).unwrap();
     assert_eq!(
         non_forked_first_key_item,
@@ -421,7 +435,10 @@ async fn test_clean_forks() {
     );
     assert_eq!(non_forked_first_key_seq, Some(TreeSeqIdx { slot: 10006 }));
 
-    let non_forked_second_key_item = storage.cl_items.get((106, second_tree_key)).unwrap();
+    let non_forked_second_key_item = storage
+        .cl_items
+        .get(ClItemKey::new(106, second_tree_key))
+        .unwrap();
     let non_forked_second_key_seq = storage.tree_seq_idx.get((second_tree_key, 10003)).unwrap();
     assert_eq!(
         non_forked_second_key_item,
