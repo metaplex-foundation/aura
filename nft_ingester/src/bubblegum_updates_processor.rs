@@ -159,7 +159,9 @@ impl BubblegumTxProcessor {
             InstructionName::SetAndVerifyCollection => "SetAndVerifyCollection",
             InstructionName::SetDecompressibleState => "SetDecompressibleState",
             InstructionName::UpdateMetadata => "UpdateMetadata",
-            InstructionName::CreateTreeWithRoot => "CreateTreeWithRoot",
+            InstructionName::PrepareTree => "PrepareTree",
+            InstructionName::AddCanopy => "AddCanopy",
+            InstructionName::FinalizeTreeWithRoot => "FinalizeTreeWithRoot",
         }
     }
 
@@ -306,7 +308,7 @@ impl BubblegumTxProcessor {
                     .map(From::from)
                     .map(Ok)?
             }
-            InstructionName::CreateTreeWithRoot => {
+            InstructionName::FinalizeTreeWithRoot => {
                 Self::get_create_tree_with_root_update(parsing_result, bundle)
                     .map(From::from)
                     .map(Ok)?
