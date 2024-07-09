@@ -1,4 +1,4 @@
 [submodule "blockbuster"]
 	path = blockbuster
 	url = git@github.com:adm-metaex/blockbuster.git
-	branch = feat/staker-role
+	branch = feat/finilize-root-and-collection

@@ -243,7 +243,8 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         rollup: &Rollup,
         rollup_to_process: &mut RollupWithState,
     ) -> Result<(), IngesterError> {
-        if let Err(e) = crate::rollup::rollup_verifier::validate_rollup(rollup).await {
+        // TODO: add possibility to set collection and send FinilizeTreeAndCollection tx
+        if let Err(e) = crate::rollup::rollup_verifier::validate_rollup(rollup, None).await {
             if let Err(err) = self
                 .pg_client
                 .mark_rollup_as_failed(

@@ -28,6 +28,10 @@ pub enum RollupValidationError {
     Anchor(#[from] anchor_lang::error::Error),
     #[error("FileChecksumMismatch: expected {0}, actual file hash {1}")]
     FileChecksumMismatch(String, String),
+    #[error("WrongCollectionVerified: {0}")]
+    WrongCollectionVerified(String),
+    #[error("VerifiedCollectionMismatch: expected :{0}, got :{1}")]
+    VerifiedCollectionMismatch(String, String),
 }
 
 impl From<std::io::Error> for RollupValidationError {
