@@ -13,6 +13,7 @@ use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::transaction_ingester;
 use prometheus_client::registry::Registry;
+use tempfile::TempDir;
 
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::setup_metrics;
@@ -73,6 +74,44 @@ pub async fn main() -> Result<(), IngesterError> {
         .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string());
 
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    {
+        // storage in secondary mod cannot create new column families, that
+        // could be required for migration_version_manager, so firstly open
+        // storage with MigrationState::CreateColumnFamilies in order to create
+        // all column families
+        Storage::open(
+            &config
+                .rocks_db_path_container
+                .clone()
+                .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+            mutexed_tasks.clone(),
+            red_metrics.clone(),
+            MigrationState::CreateColumnFamilies,
+        )
+        .unwrap();
+    }
+    let migration_version_manager_dir = TempDir::new().unwrap();
+    let migration_version_manager = Storage::open_secondary(
+        &config
+            .rocks_db_path_container
+            .clone()
+            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        migration_version_manager_dir.path().to_str().unwrap(),
+        mutexed_tasks.clone(),
+        red_metrics.clone(),
+        MigrationState::Last,
+    )
+    .unwrap();
+    Storage::apply_all_migrations(
+        &config
+            .rocks_db_path_container
+            .clone()
+            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        &config.migration_storage_path,
+        Arc::new(migration_version_manager),
+    )
+    .await
+    .unwrap();
     let storage = Storage::open(
         &primary_storage_path,
         mutexed_tasks.clone(),
