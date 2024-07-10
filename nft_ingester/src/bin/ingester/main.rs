@@ -423,8 +423,11 @@ pub async fn main() -> Result<(), IngesterError> {
     let first_processed_slot = Arc::new(AtomicU64::new(0));
     let first_processed_slot_clone = first_processed_slot.clone();
     let cloned_rocks_storage = rocks_storage.clone();
+
     let cloned_rx = shutdown_rx.resubscribe();
+
     let cloned_tx = shutdown_tx.clone();
+
     mutexed_tasks.lock().await.spawn(async move {
         while cloned_rx.is_empty() {
             let slot = cloned_rocks_storage.last_saved_slot();
