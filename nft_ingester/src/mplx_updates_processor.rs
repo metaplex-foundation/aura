@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -10,6 +9,7 @@ use log::error;
 use mpl_token_metadata::accounts::MasterEdition;
 use serde_json::json;
 use solana_program::pubkey::Pubkey;
+use tokio::sync::broadcast::Receiver;
 use tokio::time::Instant;
 
 use crate::buffer::Buffer;
@@ -76,14 +76,14 @@ pub struct MplxAccsProcessor {
 
 #[macro_export]
 macro_rules! process_accounts {
-    ($self:expr, $keep_running:expr, $buffer:expr, $batch_size:expr, $extract_value:expr, $last_received_at:expr, $transform_and_save:expr, $metric_name:expr) => {
+    ($self:expr, $rx:expr, $buffer:expr, $batch_size:expr, $extract_value:expr, $last_received_at:expr, $transform_and_save:expr, $metric_name:expr) => {
         // interval after which buffer is flushed
         const WORKER_IDLE_TIMEOUT_MS: u64 = 100;
         // worker idle timeout
         const FLUSH_INTERVAL_SEC: u64 = 5;
 
         #[allow(clippy::redundant_closure_call)]
-        while $keep_running.load(std::sync::atomic::Ordering::SeqCst) {
+        while $rx.is_empty() {
             let buffer_len = $buffer.lock().await.len();
             if buffer_len < $batch_size {
                 if buffer_len == 0
@@ -141,10 +141,10 @@ impl MplxAccsProcessor {
         }
     }
 
-    pub async fn process_edition_accs(&mut self, keep_running: Arc<AtomicBool>) {
+    pub async fn process_edition_accs(&mut self, rx: Receiver<()>) {
         process_accounts!(
             self,
-            keep_running,
+            rx,
             self.buffer.token_metadata_editions,
             self.batch_size,
             |s: TokenMetadata| s.edition,
@@ -154,10 +154,10 @@ impl MplxAccsProcessor {
         );
     }
 
-    pub async fn process_metadata_accs(&mut self, keep_running: Arc<AtomicBool>) {
+    pub async fn process_metadata_accs(&mut self, rx: Receiver<()>) {
         process_accounts!(
             self,
-            keep_running,
+            rx,
             self.buffer.mplx_metadata_info,
             self.batch_size,
             |s: MetadataInfo| s,
@@ -167,10 +167,10 @@ impl MplxAccsProcessor {
         );
     }
 
-    pub async fn process_burnt_accs(&mut self, keep_running: Arc<AtomicBool>) {
+    pub async fn process_burnt_accs(&mut self, rx: Receiver<()>) {
         process_accounts!(
             self,
-            keep_running,
+            rx,
             self.buffer.burnt_metadata_at_slot,
             self.batch_size,
             |s: BurntMetadataSlot| s,

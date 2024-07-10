@@ -1,5 +1,4 @@
 use std::cmp::min;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
@@ -80,8 +79,6 @@ pub async fn main() -> Result<(), IngesterError> {
     let tasks = JoinSet::new();
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
-    let keep_running = Arc::new(AtomicBool::new(true));
-
     let primary_storage_path = config
         .rocks_db_path_container
         .clone()
@@ -129,7 +126,7 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     };
 
-    let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
+    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     let cloned_tasks = mutexed_tasks.clone();
     let cloned_rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
@@ -177,12 +174,13 @@ pub async fn main() -> Result<(), IngesterError> {
         rocks_storage.clone(),
     );
     let addr = format!("0.0.0.0:{}", config.peer_grpc_port).parse()?;
+    let mut cloned_rx = shutdown_rx.resubscribe();
     // Spawn the gRPC server task and add to JoinSet
     mutexed_tasks.lock().await.spawn(async move {
         if let Err(e) = Server::builder()
             .add_service(GapFillerServiceServer::new(serv))
             .serve_with_shutdown(addr, async {
-                shutdown_rx.recv().await.unwrap();
+                cloned_rx.recv().await.unwrap();
             })
             .await
         {
@@ -192,11 +190,11 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     // try synchronizing secondary rocksdb instance every config.rocks_sync_interval_seconds
-    let cloned_keep_running = keep_running.clone();
+    let cloned_rx = shutdown_rx.resubscribe();
     let cloned_rocks_storage = rocks_storage.clone();
     let dur = tokio::time::Duration::from_secs(config.rocks_sync_interval_seconds);
     mutexed_tasks.lock().await.spawn(async move {
-        while cloned_keep_running.load(Ordering::SeqCst) {
+        while cloned_rx.is_empty() {
             if let Err(e) = cloned_rocks_storage.db.try_catch_up_with_primary() {
                 error!("Sync rocksdb error: {}", e);
             }
@@ -209,7 +207,6 @@ pub async fn main() -> Result<(), IngesterError> {
     // --stop
     graceful_stop(
         mutexed_tasks,
-        keep_running.clone(),
         shutdown_tx,
         guard,
         config.profiling_file_path_container,

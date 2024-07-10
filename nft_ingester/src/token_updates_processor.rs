@@ -15,9 +15,9 @@ use rocks_db::Storage;
 use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
+use tokio::sync::broadcast::Receiver;
 use tokio::time::Instant;
 use usecase::save_metrics::result_to_metrics;
 
@@ -55,10 +55,10 @@ impl TokenAccsProcessor {
         }
     }
 
-    pub async fn process_mint_accs(&mut self, keep_running: Arc<AtomicBool>) {
+    pub async fn process_mint_accs(&mut self, rx: Receiver<()>) {
         process_accounts!(
             self,
-            keep_running,
+            rx,
             self.buffer.mints,
             self.batch_size,
             |s: Mint| s,
@@ -68,10 +68,10 @@ impl TokenAccsProcessor {
         );
     }
 
-    pub async fn process_token_accs(&mut self, keep_running: Arc<AtomicBool>) {
+    pub async fn process_token_accs(&mut self, rx: Receiver<()>) {
         process_accounts!(
             self,
-            keep_running,
+            rx,
             self.buffer.token_accs,
             self.batch_size,
             |s: TokenAccount| s,
