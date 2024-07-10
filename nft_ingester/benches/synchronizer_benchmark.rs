@@ -33,10 +33,7 @@ async fn bench_synchronize(env: Arc<TestEnvironment<'_>>, batch_size: usize) {
     );
 
     let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-    syncronizer
-        .synchronize_asset_indexes(&rx, 0)
-        .await
-        .unwrap();
+    syncronizer.synchronize_asset_indexes(&rx, 0).await.unwrap();
 }
 
 fn sync_benchmark(c: &mut Criterion) {

@@ -68,7 +68,11 @@ impl BackupService {
         self.verify_backup_single(backup_id)
     }
 
-    pub fn perform_backup(&mut self, metrics: Arc<IngesterMetricsConfig>, rx: Receiver<()>) {
+    pub async fn perform_backup(
+        &mut self,
+        metrics: Arc<IngesterMetricsConfig>,
+        mut rx: Receiver<()>,
+    ) {
         let mut last_backup_id = 1;
         while rx.is_empty() {
             let start_time = chrono::Utc::now();
@@ -102,11 +106,13 @@ impl BackupService {
 
             info!("perform_backup {}", duration.num_seconds());
 
-            let mut seconds_sleep = 0;
-            while seconds_sleep < self.backup_config.rocks_interval_in_seconds && rx.is_empty() {
-                std::thread::sleep(Duration::from_secs(1));
-                seconds_sleep += 1;
-            }
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(self.backup_config.rocks_interval_in_seconds as u64)) => {},
+                _ = rx.recv() => {
+                    info!("Received stop signal, stopping performing backup");
+                    break;
+                }
+            };
         }
     }
 

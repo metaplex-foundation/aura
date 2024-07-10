@@ -342,7 +342,9 @@ pub async fn main() -> Result<(), IngesterError> {
     if config.store_db_backups() {
         let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            backup_service.perform_backup(cloned_metrics, cloned_rx);
+            backup_service
+                .perform_backup(cloned_metrics, cloned_rx)
+                .await;
             Ok(())
         });
     }
