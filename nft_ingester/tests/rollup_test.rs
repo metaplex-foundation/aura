@@ -434,6 +434,7 @@ async fn rollup_persister_test() {
         signature: Signature::new_unique(),
         download_attempts: 0,
         persisting_state: PersistingRollupState::ReceivedTransaction,
+        staker: Default::default(),
     };
 
     env.rocks_env
@@ -567,6 +568,7 @@ async fn rollup_persister_download_fail_test() {
         signature: Signature::new_unique(),
         download_attempts,
         persisting_state: PersistingRollupState::ReceivedTransaction,
+        staker: Default::default(),
     };
 
     env.rocks_env
@@ -632,6 +634,7 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
         signature: Signature::new_unique(),
         download_attempts,
         persisting_state: PersistingRollupState::ReceivedTransaction,
+        staker: Default::default(),
     };
 
     env.rocks_env

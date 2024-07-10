@@ -39,8 +39,8 @@ impl TempClient {
         for table in [
             "tasks",
             "asset_creators_v3",
-            "assets_v3",
             "assets_authorities",
+            "assets_v3",
             "last_synced_key",
         ] {
             self.pg_client
