@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use nft_ingester::rollup::rollup_persister::{self, RollupPersister};
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -279,17 +279,17 @@ pub async fn main() -> Result<(), IngesterError> {
     let geyser_addr = config
         .tcp_config
         .get_tcp_receiver_addr_ingester(config.consumer_number)?;
-    let keep_running = Arc::new(AtomicBool::new(true));
-    let cloned_keep_running = keep_running.clone();
+
+    let cloned_rx = shutdown_rx.resubscribe();
 
     mutexed_tasks.lock().await.spawn(async move {
         let geyser_tcp_receiver = Arc::new(geyser_tcp_receiver);
-        while cloned_keep_running.load(Ordering::SeqCst) {
+        while cloned_rx.is_empty() {
             let geyser_tcp_receiver_clone = geyser_tcp_receiver.clone();
-            let cloned_keep_running = cloned_keep_running.clone();
+            let cl_rx = cloned_rx.resubscribe();
             if let Err(e) = tokio::spawn(async move {
                 geyser_tcp_receiver_clone
-                    .connect(geyser_addr, cloned_keep_running)
+                    .connect(geyser_addr, cl_rx)
                     .await
                     .unwrap()
             })
@@ -300,15 +300,16 @@ pub async fn main() -> Result<(), IngesterError> {
         }
         Ok(())
     });
-    let cloned_keep_running = keep_running.clone();
+
+    let cloned_rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
         let snapshot_tcp_receiver = Arc::new(snapshot_tcp_receiver);
-        while cloned_keep_running.load(Ordering::SeqCst) {
+        while cloned_rx.is_empty() {
             let snapshot_tcp_receiver_clone = snapshot_tcp_receiver.clone();
-            let cloned_keep_running = cloned_keep_running.clone();
+            let cl_rx = cloned_rx.resubscribe();
             if let Err(e) = tokio::spawn(async move {
                 snapshot_tcp_receiver_clone
-                    .connect(snapshot_addr, cloned_keep_running)
+                    .connect(snapshot_addr, cl_rx)
                     .await
                     .unwrap()
             })
@@ -321,10 +322,10 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     let cloned_buffer = buffer.clone();
-    let cloned_keep_running = keep_running.clone();
+    let cloned_rx = shutdown_rx.resubscribe();
     let cloned_metrics = metrics_state.ingester_metrics.clone();
     mutexed_tasks.lock().await.spawn(async move {
-        while cloned_keep_running.load(Ordering::SeqCst) {
+        while cloned_rx.is_empty() {
             cloned_buffer.debug().await;
             cloned_buffer.capture_metrics(&cloned_metrics).await;
             tokio::time::sleep(Duration::from_secs(5)).await;
@@ -339,9 +340,11 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_metrics = metrics_state.ingester_metrics.clone();
 
     if config.store_db_backups() {
-        let keep_running = keep_running.clone();
+        let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            backup_service.perform_backup(cloned_metrics, keep_running);
+            backup_service
+                .perform_backup(cloned_metrics, cloned_rx)
+                .await;
             Ok(())
         });
     }
@@ -369,66 +372,52 @@ pub async fn main() -> Result<(), IngesterError> {
     for _ in 0..config.mplx_workers {
         let mut cloned_mplx_parser = mplx_accs_parser.clone();
 
-        let cloned_keep_running = keep_running.clone();
+        let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            cloned_mplx_parser
-                .process_metadata_accs(cloned_keep_running)
-                .await;
+            cloned_mplx_parser.process_metadata_accs(cloned_rx).await;
             Ok(())
         });
 
         let mut cloned_token_parser = token_accs_parser.clone();
 
-        let cloned_keep_running = keep_running.clone();
+        let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            cloned_token_parser
-                .process_token_accs(cloned_keep_running)
-                .await;
+            cloned_token_parser.process_token_accs(cloned_rx).await;
             Ok(())
         });
         let mut cloned_mplx_parser = mplx_accs_parser.clone();
-        let cloned_keep_running = keep_running.clone();
+        let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            cloned_mplx_parser
-                .process_burnt_accs(cloned_keep_running)
-                .await;
+            cloned_mplx_parser.process_burnt_accs(cloned_rx).await;
             Ok(())
         });
 
         let mut cloned_token_parser = token_accs_parser.clone();
 
-        let cloned_keep_running = keep_running.clone();
+        let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            cloned_token_parser
-                .process_mint_accs(cloned_keep_running)
-                .await;
+            cloned_token_parser.process_mint_accs(cloned_rx).await;
             Ok(())
         });
 
         let mut cloned_mplx_parser = mplx_accs_parser.clone();
-        let cloned_keep_running = keep_running.clone();
+        let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            cloned_mplx_parser
-                .process_edition_accs(cloned_keep_running)
-                .await;
+            cloned_mplx_parser.process_edition_accs(cloned_rx).await;
             Ok(())
         });
 
         let mut cloned_core_parser = mpl_core_parser.clone();
-        let cloned_keep_running = keep_running.clone();
+        let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            cloned_core_parser
-                .process_mpl_assets(cloned_keep_running)
-                .await;
+            cloned_core_parser.process_mpl_assets(cloned_rx).await;
             Ok(())
         });
 
         let mut cloned_core_parser = mpl_core_parser.clone();
-        let cloned_keep_running = keep_running.clone();
+        let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            cloned_core_parser
-                .process_mpl_asset_burn(cloned_keep_running)
-                .await;
+            cloned_core_parser.process_mpl_asset_burn(cloned_rx).await;
             Ok(())
         });
     }
@@ -436,9 +425,13 @@ pub async fn main() -> Result<(), IngesterError> {
     let first_processed_slot = Arc::new(AtomicU64::new(0));
     let first_processed_slot_clone = first_processed_slot.clone();
     let cloned_rocks_storage = rocks_storage.clone();
-    let cloned_keep_running = keep_running.clone();
+
+    let cloned_rx = shutdown_rx.resubscribe();
+
+    let cloned_tx = shutdown_tx.clone();
+
     mutexed_tasks.lock().await.spawn(async move {
-        while cloned_keep_running.load(Ordering::SeqCst) {
+        while cloned_rx.is_empty() {
             let slot = cloned_rocks_storage.last_saved_slot();
 
             match slot {
@@ -453,7 +446,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 Err(e) => {
                     // If error returned from DB - stop all services
                     error!("Error while getting last saved slot: {}", e);
-                    cloned_keep_running.store(false, Ordering::SeqCst);
+                    let _ = cloned_tx.send(());
                     break;
                 }
             }
@@ -574,10 +567,10 @@ pub async fn main() -> Result<(), IngesterError> {
         buffer.json_tasks.clone(),
     ));
 
-    let cloned_keep_running = keep_running.clone();
+    let cloned_rx = shutdown_rx.resubscribe();
     let buffer_clone = buffer.clone();
     mutexed_tasks.lock().await.spawn(async move {
-        while cloned_keep_running.load(Ordering::SeqCst) {
+        while cloned_rx.is_empty() {
             if let Some(tx) = buffer_clone.get_processing_transaction().await {
                 if let Err(e) = geyser_bubblegum_updates_processor
                     .process_transaction(tx)
@@ -593,10 +586,10 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    let cloned_keep_running = keep_running.clone();
+    let cloned_rx = shutdown_rx.resubscribe();
     let cloned_js = json_processor.clone();
     mutexed_tasks.lock().await.spawn(async move {
-        json_worker::run(cloned_js, cloned_keep_running).await;
+        json_worker::run(cloned_js, cloned_rx).await;
         Ok(())
     });
 
@@ -836,12 +829,13 @@ pub async fn main() -> Result<(), IngesterError> {
         tx_ingester.clone(),
         metrics_state.rpc_backfiller_metrics.clone(),
     );
-    let cloned_keep_running = keep_running.clone();
+
+    let cloned_rx = shutdown_rx.resubscribe();
 
     let metrics_clone = metrics_state.rpc_backfiller_metrics.clone();
     mutexed_tasks.lock().await.spawn(async move {
         let program_id = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
-        while cloned_keep_running.load(Ordering::SeqCst) {
+        while cloned_rx.is_empty() {
             let res = signature_fetcher
                 .fetch_signatures(program_id, config.rpc_retry_interval_millis)
                 .await;
@@ -1011,7 +1005,6 @@ pub async fn main() -> Result<(), IngesterError> {
     // --stop
     graceful_stop(
         mutexed_tasks,
-        keep_running.clone(),
         shutdown_tx,
         guard,
         config.profiling_file_path_container,

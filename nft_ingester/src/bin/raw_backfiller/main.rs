@@ -1,4 +1,3 @@
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use log::{error, info};
@@ -14,6 +13,7 @@ use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::transaction_ingester;
 use prometheus_client::registry::Registry;
+use tempfile::TempDir;
 
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::setup_metrics;
@@ -68,14 +68,50 @@ pub async fn main() -> Result<(), IngesterError> {
     let tasks = JoinSet::new();
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
-    let keep_running = Arc::new(AtomicBool::new(true));
-
     let primary_storage_path = config
         .rocks_db_path_container
         .clone()
         .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string());
 
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    {
+        // storage in secondary mod cannot create new column families, that
+        // could be required for migration_version_manager, so firstly open
+        // storage with MigrationState::CreateColumnFamilies in order to create
+        // all column families
+        Storage::open(
+            &config
+                .rocks_db_path_container
+                .clone()
+                .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+            mutexed_tasks.clone(),
+            red_metrics.clone(),
+            MigrationState::CreateColumnFamilies,
+        )
+        .unwrap();
+    }
+    let migration_version_manager_dir = TempDir::new().unwrap();
+    let migration_version_manager = Storage::open_secondary(
+        &config
+            .rocks_db_path_container
+            .clone()
+            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        migration_version_manager_dir.path().to_str().unwrap(),
+        mutexed_tasks.clone(),
+        red_metrics.clone(),
+        MigrationState::Last,
+    )
+    .unwrap();
+    Storage::apply_all_migrations(
+        &config
+            .rocks_db_path_container
+            .clone()
+            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
+        &config.migration_storage_path,
+        Arc::new(migration_version_manager),
+    )
+    .await
+    .unwrap();
     let storage = Storage::open(
         &primary_storage_path,
         mutexed_tasks.clone(),
@@ -121,11 +157,11 @@ pub async fn main() -> Result<(), IngesterError> {
         config::BackfillerMode::IngestPersisted => {
             let buffer = Arc::new(Buffer::new());
             // run dev->null buffer consumer
-            let cloned_keep_running = keep_running.clone();
+            let cloned_rx = shutdown_rx.resubscribe();
             let clonned_json_deque = buffer.json_tasks.clone();
             mutexed_tasks.lock().await.spawn(async move {
                 info!("Running empty buffer consumer...");
-                while cloned_keep_running.load(std::sync::atomic::Ordering::Relaxed) {
+                while cloned_rx.is_empty() {
                     clonned_json_deque.lock().await.clear();
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
@@ -183,7 +219,6 @@ pub async fn main() -> Result<(), IngesterError> {
     // --stop
     graceful_stop(
         mutexed_tasks,
-        keep_running.clone(),
         shutdown_tx,
         guard,
         config.profiling_file_path_container,

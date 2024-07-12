@@ -18,9 +18,9 @@ use serde_json::Map;
 use serde_json::{json, Value};
 use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
+use tokio::sync::broadcast::Receiver;
 use tracing::error;
 use usecase::save_metrics::result_to_metrics;
 
@@ -52,10 +52,10 @@ impl MplCoreProcessor {
         }
     }
 
-    pub async fn process_mpl_asset_burn(&mut self, keep_running: Arc<AtomicBool>) {
+    pub async fn process_mpl_asset_burn(&mut self, rx: Receiver<()>) {
         process_accounts!(
             self,
-            keep_running,
+            rx,
             self.buffer.burnt_mpl_core_at_slot,
             self.batch_size,
             |s: BurntMetadataSlot| s,
@@ -65,10 +65,10 @@ impl MplCoreProcessor {
         );
     }
 
-    pub async fn process_mpl_assets(&mut self, keep_running: Arc<AtomicBool>) {
+    pub async fn process_mpl_assets(&mut self, rx: Receiver<()>) {
         process_accounts!(
             self,
-            keep_running,
+            rx,
             self.buffer.mpl_core_indexable_assets,
             self.batch_size,
             |s: IndexableAssetWithAccountInfo| s,

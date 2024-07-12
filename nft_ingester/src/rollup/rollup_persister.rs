@@ -7,6 +7,7 @@ use entities::{enums::FailedRollupState, models::RollupToVerify, rollup::Rollup}
 use interface::{error::UsecaseError, rollup::RollupDownloader};
 use log::{error, info};
 use metrics_utils::{MetricStatus, RollupPersisterMetricsConfig};
+use rocks_db::rollup::RollupWithStaker;
 use tokio::{sync::broadcast::Receiver, task::JoinError, time::Instant};
 
 use crate::{bubblegum_updates_processor::BubblegumTxProcessor, error::IngesterError};
@@ -181,11 +182,13 @@ impl<D: RollupDownloader> RollupPersister<D> {
             Ok(r) => {
                 self.metrics
                     .inc_rollups_with_status("rollup_download", MetricStatus::SUCCESS);
-                if let Err(e) = self
-                    .rocks_client
-                    .rollups
-                    .put(rollup_to_verify.file_hash.clone(), r.deref().clone())
-                {
+                if let Err(e) = self.rocks_client.rollups.put(
+                    rollup_to_verify.file_hash.clone(),
+                    RollupWithStaker {
+                        rollup: r.deref().clone(),
+                        staker: rollup_to_verify.staker,
+                    },
+                ) {
                     self.metrics
                         .inc_rollups_with_status("persist_rollup", MetricStatus::FAILURE);
                     return Err(e.into());

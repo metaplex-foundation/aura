@@ -1,4 +1,3 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use entities::enums::TaskStatus;
@@ -8,6 +7,7 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait};
 use postgre_client::PgClient;
+use tokio::sync::broadcast::Receiver;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::{JoinError, JoinSet};
 
@@ -52,7 +52,6 @@ pub async fn main() -> Result<(), IngesterError> {
     start_metrics(metrics_state.registry, Some(config.metrics_port)).await;
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-    let keep_running = Arc::new(AtomicBool::new(true));
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
 
     let storage = Storage::open(
@@ -82,26 +81,17 @@ pub async fn main() -> Result<(), IngesterError> {
         config,
     );
 
-    let cloned_keep_running = keep_running.clone();
     let cloned_tasks = mutexed_tasks.clone();
 
+    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
+
+    let cloned_rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
-        json_migrator.run(cloned_keep_running, cloned_tasks).await;
+        json_migrator.run(cloned_rx, cloned_tasks).await;
         Ok(())
     });
 
-    // useless thing in this context
-    let (shutdown_tx, _shutdown_rx) = broadcast::channel::<()>(1);
-
-    graceful_stop(
-        mutexed_tasks,
-        keep_running.clone(),
-        shutdown_tx,
-        None,
-        None,
-        "",
-    )
-    .await;
+    graceful_stop(mutexed_tasks, shutdown_tx, None, None, "").await;
 
     Ok(())
 }
@@ -133,7 +123,7 @@ impl JsonMigrator {
 
     pub async fn run(
         &self,
-        keep_running: Arc<AtomicBool>,
+        rx: Receiver<()>,
         tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
     ) {
         match self.config.work_mode {
@@ -141,34 +131,34 @@ impl JsonMigrator {
                 info!("Launch JSON migrator in full mode");
 
                 info!("Start migrate JSONs...");
-                self.migrate_jsons(keep_running.clone()).await;
+                self.migrate_jsons(rx.resubscribe()).await;
 
                 info!("JSONs are migrated. Start setting tasks...");
-                self.set_tasks(keep_running, tasks).await;
+                self.set_tasks(rx.resubscribe(), tasks).await;
                 info!("Tasks are set!");
             }
             JsonMigratorMode::JsonsOnly => {
                 info!("Launch JSON migrator in jsons only mode");
 
                 info!("Start migrate JSONs...");
-                self.migrate_jsons(keep_running.clone()).await;
+                self.migrate_jsons(rx.resubscribe()).await;
                 info!("JSONs are migrated!");
             }
             JsonMigratorMode::TasksOnly => {
                 info!("Launch JSON migrator in tasks only mode");
 
                 info!("Start set tasks...");
-                self.set_tasks(keep_running, tasks).await;
+                self.set_tasks(rx.resubscribe(), tasks).await;
                 info!("Tasks are set!");
             }
         }
     }
 
-    pub async fn migrate_jsons(&self, keep_running: Arc<AtomicBool>) {
+    pub async fn migrate_jsons(&self, rx: Receiver<()>) {
         let all_available_jsons = self.source_rocks_db.asset_offchain_data.iter_end();
 
         for json in all_available_jsons {
-            if !keep_running.load(Ordering::SeqCst) {
+            if !rx.is_empty() {
                 info!("JSON migrator is stopped");
                 break;
             }
@@ -213,23 +203,24 @@ impl JsonMigrator {
 
     pub async fn set_tasks(
         &self,
-        keep_running: Arc<AtomicBool>,
+        rx: Receiver<()>,
         tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
     ) {
         let dynamic_asset_details = self.target_rocks_db.asset_dynamic_data.iter_end();
 
         let tasks_buffer = Arc::new(Mutex::new(Vec::new()));
 
-        let cloned_keep_running = keep_running.clone();
         let cloned_tasks_buffer = tasks_buffer.clone();
         let cloned_pg_client = self.database_pool.clone();
         let cloned_metrics = self.metrics.clone();
 
         let tasks_batch_to_insert = 1000;
 
+        let cloned_rx = rx.resubscribe();
+
         tasks.lock().await.spawn(async move {
             loop {
-                if !cloned_keep_running.load(Ordering::SeqCst) {
+                if !cloned_rx.is_empty() {
                     info!("Worker to clean tasks buffer is stopped");
                     break;
                 }
@@ -280,7 +271,7 @@ impl JsonMigrator {
         });
 
         for dynamic_details in dynamic_asset_details {
-            if !keep_running.load(Ordering::SeqCst) {
+            if !rx.is_empty() {
                 info!("Setting tasks for JSONs is stopped");
                 break;
             }

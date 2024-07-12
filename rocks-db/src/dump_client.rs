@@ -58,7 +58,7 @@ struct AssetRecord {
     ast_owner_type: Option<OwnerType>,
     ast_owner: Option<String>,
     ast_delegate: Option<String>,
-    ast_authority_fk: String,
+    ast_authority_fk: Option<String>,
     ast_collection: Option<String>,
     ast_is_collection_verified: Option<bool>,
     ast_is_burnt: bool,
@@ -169,15 +169,17 @@ impl Storage {
                 ast_owner: index.owner.map(Self::encode),
                 ast_delegate: index.delegate.map(Self::encode),
                 ast_authority_fk: if let Some(collection) = index.collection {
-                    if index.specification_asset_class
-                        == entities::enums::SpecificationAssetClass::MplCoreAsset
-                    {
-                        Self::encode(collection)
+                    if index.update_authority.is_some() {
+                        Some(Self::encode(collection))
+                    } else if index.authority.is_some() {
+                        Some(Self::encode(index.pubkey))
                     } else {
-                        Self::encode(index.pubkey)
+                        None
                     }
+                } else if index.authority.is_some() {
+                    Some(Self::encode(index.pubkey))
                 } else {
-                    Self::encode(index.pubkey)
+                    None
                 },
                 ast_collection: index.collection.map(Self::encode),
                 ast_is_collection_verified: index.is_collection_verified,
