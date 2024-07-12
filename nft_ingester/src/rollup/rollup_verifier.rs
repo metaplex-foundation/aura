@@ -1,9 +1,13 @@
+use std::collections::HashMap;
+
 use anchor_lang::AnchorSerialize;
 use entities::rollup::{RolledMintInstruction, Rollup};
 use mpl_bubblegum::utils::get_asset_id;
+use rollup_sdk::rollup_builder::{verify_signature, MetadataArgsHash};
 use solana_sdk::{
     keccak::{self, Hash},
     pubkey::Pubkey,
+    signature::Signature,
 };
 
 use usecase::error::RollupValidationError;
@@ -18,6 +22,12 @@ pub async fn validate_rollup(rollup: &Rollup) -> Result<(), RollupValidationErro
             }
         };
         leaf_hashes.push(leaf_hash);
+
+        verify_creators_signatures(
+            &rollup.tree_id,
+            asset,
+            asset.creator_signature.clone().unwrap_or_default(),
+        )?;
     }
 
     usecase::merkle_tree::validate_change_logs(
@@ -26,6 +36,33 @@ pub async fn validate_rollup(rollup: &Rollup) -> Result<(), RollupValidationErro
         &leaf_hashes,
         rollup,
     )
+}
+
+fn verify_creators_signatures(
+    tree_key: &Pubkey,
+    rolled_mint: &RolledMintInstruction,
+    creator_signatures: HashMap<Pubkey, Signature>,
+) -> Result<(), RollupValidationError> {
+    let metadata_hash =
+        MetadataArgsHash::new(&rolled_mint.leaf_update, tree_key, &rolled_mint.mint_args);
+
+    for creator in &rolled_mint.mint_args.creators {
+        if creator.verified {
+            if let Some(signature) = creator_signatures.get(&creator.address) {
+                if !verify_signature(&creator.address, &metadata_hash.get_message(), signature) {
+                    return Err(RollupValidationError::FailedCreatorVerification(
+                        creator.address.to_string(),
+                    ));
+                }
+            } else {
+                return Err(RollupValidationError::MissingCreatorSignature(
+                    creator.address.to_string(),
+                ));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn get_leaf_hash(
