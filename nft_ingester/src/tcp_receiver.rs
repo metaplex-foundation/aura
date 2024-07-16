@@ -3,11 +3,11 @@ use log::{debug, error, info};
 use std::convert::TryInto;
 use std::io;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
+use tokio::sync::broadcast::Receiver;
 use tokio::time::sleep;
 
 const HEADER_BYTE_SIZE: usize = 4;
@@ -25,40 +25,33 @@ impl TcpReceiver {
         }
     }
 
-    pub async fn connect(&self, addr: SocketAddr, keep_running: Arc<AtomicBool>) -> io::Result<()> {
-        loop {
-            if !keep_running.load(Ordering::SeqCst) {
-                return Ok(());
-            }
+    pub async fn connect(&self, addr: SocketAddr, rx: Receiver<()>) -> io::Result<()> {
+        while rx.is_empty() {
             info!("Receiver Connect {:?}", addr);
 
-            if let Err(e) = self.connect_and_read(addr, keep_running.clone()).await {
+            if let Err(e) = self.connect_and_read(addr, rx.resubscribe()).await {
                 error!("receiver: read error: {:?}", e);
             }
 
             sleep(self.reconnect_interval).await;
         }
+
+        Ok(())
     }
 
-    async fn connect_and_read(
-        &self,
-        addr: SocketAddr,
-        keep_running: Arc<AtomicBool>,
-    ) -> io::Result<()> {
+    async fn connect_and_read(&self, addr: SocketAddr, rx: Receiver<()>) -> io::Result<()> {
         let stream = TcpStream::connect(&addr).await?;
         let mut stream = tokio::io::BufReader::new(stream);
 
-        loop {
-            if !keep_running.load(Ordering::SeqCst) {
-                return Ok(());
-            }
-
+        while rx.is_empty() {
             let (bytes_read, duration, num_elements) = self.read_response(&mut stream).await?;
             debug!(
                 "TCP Socket: Received {} elements, {} in {:?}",
                 num_elements, bytes_read, duration
             );
         }
+
+        Ok(())
     }
 
     async fn read_response(

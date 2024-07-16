@@ -3,10 +3,12 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anchor_lang::prelude::*;
 use async_trait::async_trait;
-use mpl_bubblegum::types::{LeafSchema, MetadataArgs};
+use mockall::predicate;
+use mpl_bubblegum::types::{Creator, LeafSchema, MetadataArgs};
 
 use digital_asset_types::rpc::AssetProof;
 use entities::api_req_params::GetAssetProof;
@@ -22,6 +24,7 @@ use metrics_utils::ApiMetricsConfig;
 use metrics_utils::IngesterMetricsConfig;
 use metrics_utils::RollupPersisterMetricsConfig;
 use metrics_utils::RollupProcessorMetricsConfig;
+use nft_ingester::api::error::DasApiError;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::config::JsonMiddlewareConfig;
 use nft_ingester::error::IngesterError;
@@ -32,13 +35,17 @@ use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
 use rand::{thread_rng, Rng};
 use rocks_db::rollup::FailedRollupKey;
+use rollup_sdk::rollup_client::RollupClient;
 use serde_json::json;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::instruction::CompiledInstruction;
 use solana_program::message::Message;
 use solana_program::message::MessageHeader;
 use solana_sdk::keccak;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
+use solana_sdk::signature::Signer;
+use solana_sdk::signer::keypair::Keypair;
 use solana_sdk::transaction::SanitizedTransaction;
 use solana_sdk::transaction::Transaction;
 use solana_transaction_status::TransactionStatusMeta;
@@ -184,6 +191,7 @@ fn generate_rollup(size: usize) -> Rollup {
             },
             mint_args,
             authority,
+            creator_signature: None,
         };
         mints.push(rolled_mint);
     }
@@ -410,6 +418,290 @@ async fn save_rollup_to_queue_test() {
 
     assert_eq!(r.file_hash, metadata_hash);
     assert_eq!(r.url, metadata_url);
+}
+
+#[tokio::test]
+async fn rollup_with_verified_creators_test() {
+    // For this test it's necessary to use Solana mainnet RPC
+    let url = "https://api.mainnet-beta.solana.com".to_string();
+    let solana_client = Arc::new(RpcClient::new_with_timeout(url, Duration::from_secs(3)));
+    // Merkle tree created in mainnet for testing purposes
+    let tree_key = Pubkey::from_str("AGMiLKtXX7PiVneM8S1KkTmCnF7X5zh6bKq4t1Mhrwpb").unwrap();
+
+    // First we have to create offchain Merkle tree with SDK
+
+    let rollup_client = RollupClient::new(solana_client);
+    let mut rollup_builder = rollup_client
+        .create_rollup_builder(&tree_key)
+        .await
+        .unwrap();
+
+    let asset_creator = Keypair::new();
+    let owner = Keypair::new();
+    let delegate = Keypair::new();
+
+    let asset = MetadataArgs {
+        name: "Name".to_string(),
+        symbol: "Symbol".to_string(),
+        uri: "https://immutable-storage/asset/".to_string(),
+        seller_fee_basis_points: 0,
+        primary_sale_happened: false,
+        is_mutable: false,
+        edition_nonce: None,
+        token_standard: Some(mpl_bubblegum::types::TokenStandard::NonFungible),
+        collection: None,
+        uses: None,
+        token_program_version: mpl_bubblegum::types::TokenProgramVersion::Original,
+        creators: vec![Creator {
+            address: asset_creator.pubkey(),
+            verified: true,
+            share: 100,
+        }],
+    };
+
+    let metadata_hash_arg = rollup_builder
+        .add_asset(&owner.pubkey(), &delegate.pubkey(), &asset)
+        .unwrap();
+
+    let signature = asset_creator.sign_message(&metadata_hash_arg.get_message());
+
+    let mut creators_signatures = HashMap::new();
+    creators_signatures.insert(asset_creator.pubkey(), signature);
+
+    let mut message_and_signatures = HashMap::new();
+    message_and_signatures.insert(metadata_hash_arg.get_nonce(), creators_signatures);
+
+    rollup_builder
+        .add_signatures_for_verified_creators(message_and_signatures)
+        .unwrap();
+
+    let finalized_rollup = rollup_builder.build_rollup().unwrap();
+
+    // Offchain Merkle tree creation is finished
+    // Start to process it
+
+    let cnt = 0;
+    let cli = Cli::default();
+    let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+
+    let tmp_dir = tempfile::TempDir::new().unwrap();
+
+    // dump rollup into .json file not to cast one Rollup struct into another one
+    let tmp_file = File::create(tmp_dir.path().join("rollup-1.json")).unwrap();
+    serde_json::to_writer(tmp_file, &finalized_rollup).unwrap();
+
+    let metadata_url = "url".to_string();
+    let metadata_hash = "hash".to_string();
+    let rollup_to_verify = RollupToVerify {
+        file_hash: metadata_hash.clone(),
+        url: metadata_url.clone(),
+        created_at_slot: 10,
+        signature: Signature::new_unique(),
+        download_attempts: 0,
+        persisting_state: PersistingRollupState::ReceivedTransaction,
+    };
+
+    env.rocks_env
+        .storage
+        .rollup_to_verify
+        .put(metadata_hash.clone(), rollup_to_verify.clone())
+        .unwrap();
+
+    let mut mocked_downloader = MockRollupDownloader::new();
+    mocked_downloader
+        .expect_download_rollup_and_check_checksum()
+        .with(
+            predicate::eq("url".to_string()),
+            predicate::eq("hash".to_string()),
+        )
+        .returning(move |_, _| {
+            let json_file = std::fs::read_to_string(tmp_dir.path().join("rollup-1.json")).unwrap();
+            Ok(Box::new(serde_json::from_str(&json_file).unwrap()))
+        });
+
+    let rollup_persister = RollupPersister::new(
+        env.rocks_env.storage.clone(),
+        mocked_downloader,
+        Arc::new(RollupPersisterMetricsConfig::new()),
+    );
+
+    let (rollup_to_verify, _) = env
+        .rocks_env
+        .storage
+        .fetch_rollup_for_verifying()
+        .await
+        .unwrap();
+
+    let (_, rx) = broadcast::channel::<()>(1);
+    rollup_persister
+        .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
+        .await;
+
+    let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+        env.pg_env.client.clone(),
+        env.rocks_env.storage.clone(),
+        Arc::new(ApiMetricsConfig::new()),
+        None,
+        50,
+        None,
+        None,
+        JsonMiddlewareConfig::default(),
+    );
+
+    let payload = GetAssetProof {
+        id: metadata_hash_arg.get_asset_id().to_string(),
+    };
+    let proof_result = api.get_asset_proof(payload).await.unwrap();
+    let asset_proof: AssetProof = serde_json::from_value(proof_result).unwrap();
+
+    assert_eq!(asset_proof.proof.is_empty(), false);
+}
+
+#[tokio::test]
+async fn rollup_with_unverified_creators_test() {
+    // For this test it's necessary to use Solana mainnet RPC
+    let url = "https://api.mainnet-beta.solana.com".to_string();
+    let solana_client = Arc::new(RpcClient::new_with_timeout(url, Duration::from_secs(3)));
+    // Merkle tree created in mainnet for testing purposes
+    let tree_key = Pubkey::from_str("AGMiLKtXX7PiVneM8S1KkTmCnF7X5zh6bKq4t1Mhrwpb").unwrap();
+
+    // First we have to create offchain Merkle tree with SDK
+
+    let rollup_client = RollupClient::new(solana_client);
+    let mut rollup_builder = rollup_client
+        .create_rollup_builder(&tree_key)
+        .await
+        .unwrap();
+
+    let asset_creator = Keypair::new();
+    let owner = Keypair::new();
+    let delegate = Keypair::new();
+
+    let asset = MetadataArgs {
+        name: "Name".to_string(),
+        symbol: "Symbol".to_string(),
+        uri: "https://immutable-storage/asset/".to_string(),
+        seller_fee_basis_points: 0,
+        primary_sale_happened: false,
+        is_mutable: false,
+        edition_nonce: None,
+        token_standard: Some(mpl_bubblegum::types::TokenStandard::NonFungible),
+        collection: None,
+        uses: None,
+        token_program_version: mpl_bubblegum::types::TokenProgramVersion::Original,
+        creators: vec![Creator {
+            address: asset_creator.pubkey(),
+            verified: true,
+            share: 100,
+        }],
+    };
+
+    let metadata_hash_arg = rollup_builder
+        .add_asset(&owner.pubkey(), &delegate.pubkey(), &asset)
+        .unwrap();
+
+    let signature = asset_creator.sign_message(&metadata_hash_arg.get_message());
+
+    let mut creators_signatures = HashMap::new();
+    creators_signatures.insert(asset_creator.pubkey(), signature);
+
+    let mut message_and_signatures = HashMap::new();
+    message_and_signatures.insert(metadata_hash_arg.get_nonce(), creators_signatures);
+
+    rollup_builder
+        .add_signatures_for_verified_creators(message_and_signatures)
+        .unwrap();
+
+    let mut finalized_rollup = rollup_builder.build_rollup().unwrap();
+    // drop signature from the rollup to test if verification on indexer side will catch it
+    for mint in finalized_rollup.rolled_mints.iter_mut() {
+        mint.creator_signature = None;
+    }
+
+    // Offchain Merkle tree creation is finished
+    // Start to process it
+
+    let cnt = 0;
+    let cli = Cli::default();
+    let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+
+    let tmp_dir = tempfile::TempDir::new().unwrap();
+
+    // dump rollup into .json file not to cast one Rollup struct into another one
+    let tmp_file = File::create(tmp_dir.path().join("rollup-1.json")).unwrap();
+    serde_json::to_writer(tmp_file, &finalized_rollup).unwrap();
+
+    let metadata_url = "url".to_string();
+    let metadata_hash = "hash".to_string();
+    let rollup_to_verify = RollupToVerify {
+        file_hash: metadata_hash.clone(),
+        url: metadata_url.clone(),
+        created_at_slot: 10,
+        signature: Signature::new_unique(),
+        download_attempts: 0,
+        persisting_state: PersistingRollupState::ReceivedTransaction,
+    };
+
+    env.rocks_env
+        .storage
+        .rollup_to_verify
+        .put(metadata_hash.clone(), rollup_to_verify.clone())
+        .unwrap();
+
+    let mut mocked_downloader = MockRollupDownloader::new();
+    mocked_downloader
+        .expect_download_rollup_and_check_checksum()
+        .with(
+            predicate::eq("url".to_string()),
+            predicate::eq("hash".to_string()),
+        )
+        .returning(move |_, _| {
+            let json_file = std::fs::read_to_string(tmp_dir.path().join("rollup-1.json")).unwrap();
+            Ok(Box::new(serde_json::from_str(&json_file).unwrap()))
+        });
+
+    let rollup_persister = RollupPersister::new(
+        env.rocks_env.storage.clone(),
+        mocked_downloader,
+        Arc::new(RollupPersisterMetricsConfig::new()),
+    );
+
+    let (rollup_to_verify, _) = env
+        .rocks_env
+        .storage
+        .fetch_rollup_for_verifying()
+        .await
+        .unwrap();
+
+    let (_, rx) = broadcast::channel::<()>(1);
+    rollup_persister
+        .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
+        .await;
+
+    let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+        env.pg_env.client.clone(),
+        env.rocks_env.storage.clone(),
+        Arc::new(ApiMetricsConfig::new()),
+        None,
+        50,
+        None,
+        None,
+        JsonMiddlewareConfig::default(),
+    );
+
+    let payload = GetAssetProof {
+        id: metadata_hash_arg.get_asset_id().to_string(),
+    };
+
+    // rollup update should not be processed
+    // and as a result proof for asset cannot be extracted
+    match api.get_asset_proof(payload).await {
+        Ok(_) => panic!("Request should fail"),
+        Err(err) => match err {
+            DasApiError::ProofNotFound => {}
+            _ => panic!("API returned wrong error"),
+        },
+    }
 }
 
 #[tokio::test]

@@ -10,9 +10,9 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufReader, Write};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast::Receiver;
 
 const BACKUP_PREFIX: &str = "backup-rocksdb";
 const BACKUP_POSTFIX: &str = ".tar.lz4";
@@ -68,13 +68,13 @@ impl BackupService {
         self.verify_backup_single(backup_id)
     }
 
-    pub fn perform_backup(
+    pub async fn perform_backup(
         &mut self,
         metrics: Arc<IngesterMetricsConfig>,
-        keep_running: Arc<AtomicBool>,
+        mut rx: Receiver<()>,
     ) {
         let mut last_backup_id = 1;
-        while keep_running.load(Ordering::SeqCst) {
+        while rx.is_empty() {
             let start_time = chrono::Utc::now();
             last_backup_id = match self.backup_engine.get_backup_info().last() {
                 None => last_backup_id,
@@ -106,16 +106,13 @@ impl BackupService {
 
             info!("perform_backup {}", duration.num_seconds());
 
-            let mut seconds_sleep = 0;
-            while seconds_sleep < self.backup_config.rocks_interval_in_seconds
-                && keep_running.load(Ordering::SeqCst)
-            {
-                std::thread::sleep(Duration::from_secs(1));
-                seconds_sleep += 1;
-            }
-            if !keep_running.load(Ordering::SeqCst) {
-                return;
-            }
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(self.backup_config.rocks_interval_in_seconds as u64)) => {},
+                _ = rx.recv() => {
+                    info!("Received stop signal, stopping performing backup");
+                    break;
+                }
+            };
         }
     }
 
