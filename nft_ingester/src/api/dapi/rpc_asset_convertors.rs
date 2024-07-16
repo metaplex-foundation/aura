@@ -137,6 +137,7 @@ pub fn get_content(
     {
         for v in files.iter() {
             if v.is_object() {
+                // Some assets don't follow the standard and specifiy 'url' instead of 'uri'
                 let mut uri = v.get("uri");
                 if uri.is_none() {
                     uri = v.get("url");
@@ -180,6 +181,7 @@ pub fn get_content(
 
     let mut files: Vec<File> = actual_files.into_values().collect();
 
+    // List the defined image file before the other files (if one exists).
     files.sort_by(|a, _: &File| match (a.uri.as_ref(), links.get("image")) {
         (Some(x), Some(y)) => {
             if x == y {

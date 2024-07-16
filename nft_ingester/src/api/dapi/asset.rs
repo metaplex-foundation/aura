@@ -50,7 +50,7 @@ fn convert_rocks_asset_model(
         .assets_leaf
         .get(asset_pubkey)
         .cloned()
-        .unwrap_or(AssetLeaf::default()); // Asset can do not have leaf, but we still can make conversion
+        .unwrap_or(AssetLeaf::default()); // Asset may not have a leaf but we still can make the conversion
 
     Ok(FullAsset {
         asset_static: static_data.clone(),
