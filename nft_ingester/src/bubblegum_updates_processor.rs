@@ -162,9 +162,7 @@ impl BubblegumTxProcessor {
             InstructionName::PrepareTree => "PrepareTree",
             InstructionName::AddCanopy => "AddCanopy",
             InstructionName::FinalizeTreeWithRoot => "FinalizeTreeWithRoot",
-            InstructionName::FinalizeTreeWithRootAndCollection => {
-                "FinalizeTreeWithRootAndCollection"
-            }
+            InstructionName::FinalizeTreeWithRootAndCollection => "FinalizeTreeWithRootAndCollection",
         }
     }
 
