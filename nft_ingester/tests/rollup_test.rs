@@ -336,7 +336,7 @@ async fn save_rollup_to_queue_test() {
     // arbitrary data
     let rollup_instruction_data =
         mpl_bubblegum::instructions::FinalizeTreeWithRootInstructionArgs {
-            rightmost_root: [1; 32],
+            root: [1; 32],
             rightmost_leaf: [1; 32],
             rightmost_index: 99,
             metadata_url: metadata_url.clone(),

@@ -162,6 +162,7 @@ impl BubblegumTxProcessor {
             InstructionName::PrepareTree => "PrepareTree",
             InstructionName::AddCanopy => "AddCanopy",
             InstructionName::FinalizeTreeWithRoot => "FinalizeTreeWithRoot",
+            InstructionName::FinalizeTreeWithRootAndCollection => "FinalizeTreeWithRootAndCollection",
         }
     }
 
@@ -330,7 +331,7 @@ impl BubblegumTxProcessor {
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
     ) -> Result<AssetUpdateEvent, IngesterError> {
-        if let Some(Payload::CreateTreeWithRoot { args, .. }) = &parsing_result.payload {
+        if let Some(Payload::FinalizeTreeWithRoot { args, .. }) = &parsing_result.payload {
             let upd = AssetUpdateEvent {
                 rollup_creation_update: Some(RollupToVerify {
                     file_hash: args.metadata_hash.clone(),
