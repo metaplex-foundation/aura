@@ -91,6 +91,7 @@ pub struct RawBackfillConfig {
     pub profiling_file_path_container: Option<String>,
     #[serde(default = "default_heap_path")]
     pub heap_path: String,
+    pub migration_storage_path: String,
 }
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {

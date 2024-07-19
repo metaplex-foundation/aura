@@ -410,6 +410,8 @@ pub struct RollupToVerify {
     pub signature: Signature,
     pub download_attempts: u8,
     pub persisting_state: PersistingRollupState,
+    pub staker: Pubkey,
+    pub collection_mint: Option<Pubkey>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -420,6 +422,7 @@ pub struct FailedRollup {
     pub created_at_slot: u64,
     pub signature: Signature,
     pub download_attempts: u8,
+    pub staker: Pubkey,
 }
 
 impl Default for JsonDownloadTask {

@@ -11,8 +11,8 @@ use postgre_client::PgClient;
 use reqwest::{Client, ClientBuilder};
 use rocks_db::Storage;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use tokio::sync::broadcast::Receiver;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinSet;
@@ -68,14 +68,9 @@ impl TasksStreamer {
         }
     }
 
-    pub async fn run(
-        self,
-        keep_running: Arc<AtomicBool>,
-        num_of_tasks: i32,
-        tasks: &mut JoinSet<()>,
-    ) {
+    pub async fn run(self, rx: Receiver<()>, num_of_tasks: i32, tasks: &mut JoinSet<()>) {
         tasks.spawn(async move {
-            while keep_running.load(Ordering::SeqCst) {
+            while rx.is_empty() {
                 let locked_receiver = self.receiver.lock().await;
                 let is_empty = locked_receiver.is_empty();
                 drop(locked_receiver);
@@ -124,12 +119,12 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
         }
     }
 
-    pub async fn run(mut self, keep_running: Arc<AtomicBool>, tasks: &mut JoinSet<()>) {
+    pub async fn run(mut self, rx: Receiver<()>, tasks: &mut JoinSet<()>) {
         tasks.spawn(async move {
             let mut buffer = vec![];
             let mut clock = tokio::time::Instant::now();
 
-            while keep_running.load(Ordering::SeqCst) {
+            while rx.is_empty() {
                 if buffer.len() > JSON_BATCH
                     || tokio::time::Instant::now() - clock
                         > Duration::from_secs(WIPE_PERIOD_SEC)
@@ -182,7 +177,7 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
     }
 }
 
-pub async fn run(json_downloader: Arc<JsonWorker>, keep_running: Arc<AtomicBool>) {
+pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
     let mut workers_pool = JoinSet::new();
 
     let num_of_tasks = json_downloader.num_of_parallel_workers;
@@ -201,20 +196,20 @@ pub async fn run(json_downloader: Arc<JsonWorker>, keep_running: Arc<AtomicBool>
     let tasks_persister = TasksPersister::new(json_downloader.clone(), result_rx);
 
     tasks_streamer
-        .run(keep_running.clone(), num_of_tasks, &mut workers_pool)
+        .run(rx.resubscribe(), num_of_tasks, &mut workers_pool)
         .await;
     tasks_persister
-        .run(keep_running.clone(), &mut workers_pool)
+        .run(rx.resubscribe(), &mut workers_pool)
         .await;
 
     for _ in 0..json_downloader.num_of_parallel_workers {
-        let keep_running = keep_running.clone();
+        let cln_rx = rx.resubscribe();
         let json_downloader = json_downloader.clone();
         let tasks_rx = tasks_rx.clone();
         let result_tx = result_tx.clone();
 
         workers_pool.spawn(async move {
-            while keep_running.load(Ordering::SeqCst) {
+            while cln_rx.is_empty() {
                 let mut locked_rx = tasks_rx.lock().await;
                 match locked_rx.try_recv() {
                     Ok(task) => {

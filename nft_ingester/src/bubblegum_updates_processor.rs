@@ -159,7 +159,12 @@ impl BubblegumTxProcessor {
             InstructionName::SetAndVerifyCollection => "SetAndVerifyCollection",
             InstructionName::SetDecompressibleState => "SetDecompressibleState",
             InstructionName::UpdateMetadata => "UpdateMetadata",
-            InstructionName::CreateTreeWithRoot => "CreateTreeWithRoot",
+            InstructionName::PrepareTree => "PrepareTree",
+            InstructionName::AddCanopy => "AddCanopy",
+            InstructionName::FinalizeTreeWithRoot => "FinalizeTreeWithRoot",
+            InstructionName::FinalizeTreeWithRootAndCollection => {
+                "FinalizeTreeWithRootAndCollection"
+            }
         }
     }
 
@@ -306,7 +311,8 @@ impl BubblegumTxProcessor {
                     .map(From::from)
                     .map(Ok)?
             }
-            InstructionName::CreateTreeWithRoot => {
+            InstructionName::FinalizeTreeWithRoot
+            | InstructionName::FinalizeTreeWithRootAndCollection => {
                 Self::get_create_tree_with_root_update(parsing_result, bundle)
                     .map(From::from)
                     .map(Ok)?
@@ -328,7 +334,7 @@ impl BubblegumTxProcessor {
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
     ) -> Result<AssetUpdateEvent, IngesterError> {
-        if let Some(Payload::CreateTreeWithRoot { args, .. }) = &parsing_result.payload {
+        if let Some(Payload::FinalizeTreeWithRoot { args, .. }) = &parsing_result.payload {
             let upd = AssetUpdateEvent {
                 rollup_creation_update: Some(RollupToVerify {
                     file_hash: args.metadata_hash.clone(),
@@ -338,6 +344,8 @@ impl BubblegumTxProcessor {
                         .map_err(|e| IngesterError::ParseSignatureError(e.to_string()))?,
                     download_attempts: 0,
                     persisting_state: PersistingRollupState::ReceivedTransaction,
+                    staker: args.staker,
+                    collection_mint: args.collection_mint,
                 }),
                 ..Default::default()
             };

@@ -11,7 +11,9 @@ use metrics_utils::RollupProcessorMetricsConfig;
 use mockall::automock;
 use postgre_client::model::RollupState;
 use postgre_client::PgClient;
+use rocks_db::rollup::RollupWithStaker;
 use rocks_db::Storage;
+use solana_program::pubkey::Pubkey;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -241,7 +243,8 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         rollup: &Rollup,
         rollup_to_process: &mut RollupWithState,
     ) -> Result<(), IngesterError> {
-        if let Err(e) = crate::rollup::rollup_verifier::validate_rollup(rollup).await {
+        // TODO: add possibility to set collection and send FinilizeTreeAndCollection tx
+        if let Err(e) = crate::rollup::rollup_verifier::validate_rollup(rollup, None).await {
             if let Err(err) = self
                 .pg_client
                 .mark_rollup_as_failed(
@@ -349,7 +352,13 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         if let Err(err) = self
             .rocks
             .rollups
-            .put_async(file_checksum.to_string(), rollup.clone())
+            .put_async(
+                file_checksum.to_string(),
+                RollupWithStaker {
+                    rollup: rollup.clone(),
+                    staker: Pubkey::default(), // TODO: here we must set our own pubkey
+                },
+            )
             .await
         {
             error!(

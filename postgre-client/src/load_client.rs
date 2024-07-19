@@ -205,7 +205,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
         self.drop_indexes(transaction).await?;
-        for table in ["assets_v3", "asset_creators_v3"] {
+        for table in ["assets_v3", "asset_creators_v3", "assets_authorities"] {
             self.truncate_table(transaction, table).await?;
         }
 
@@ -228,14 +228,14 @@ impl PgClient {
                 "asc_pubkey, asc_creator, asc_verified, asc_slot_updated",
             ),
             (
-                "assets_v3",
-                assets_copy_path,
-                "ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_authority_fk, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated",
-            ),
-            (
                 "assets_authorities",
                 assets_authorities_copy_path,
                 "auth_pubkey, auth_authority, auth_slot_updated",
+            ),
+            (
+                "assets_v3",
+                assets_copy_path,
+                "ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_authority_fk, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated",
             ),
         ] {
             self.copy_table_from(transaction, path, table, columns).await?;
