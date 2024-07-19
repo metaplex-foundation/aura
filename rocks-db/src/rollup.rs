@@ -201,6 +201,7 @@ impl Storage {
                     download_attempts: rollup_to_verify.download_attempts + 1,
                     persisting_state: PersistingRollupState::FailedToPersist,
                     staker: rollup_to_verify.staker,
+                    collection_mint: rollup_to_verify.collection_mint,
                 },
             )
             .await

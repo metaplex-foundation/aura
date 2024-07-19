@@ -12,7 +12,10 @@ use solana_sdk::{
 
 use usecase::error::RollupValidationError;
 
-pub async fn validate_rollup(rollup: &Rollup) -> Result<(), RollupValidationError> {
+pub async fn validate_rollup(
+    rollup: &Rollup,
+    collection_mint: Option<Pubkey>,
+) -> Result<(), RollupValidationError> {
     let mut leaf_hashes = Vec::new();
     for asset in rollup.rolled_mints.iter() {
         let leaf_hash = match get_leaf_hash(asset, &rollup.tree_id) {
@@ -22,6 +25,25 @@ pub async fn validate_rollup(rollup: &Rollup) -> Result<(), RollupValidationErro
             }
         };
         leaf_hashes.push(leaf_hash);
+        if let Some(ref collection) = asset.mint_args.collection {
+            match collection_mint {
+                None => {
+                    if collection.verified {
+                        return Err(RollupValidationError::WrongCollectionVerified(
+                            collection.key.to_string(),
+                        ));
+                    }
+                }
+                Some(collection_mint) => {
+                    if collection.verified && collection_mint != collection.key {
+                        return Err(RollupValidationError::VerifiedCollectionMismatch(
+                            collection_mint.to_string(),
+                            collection.key.to_string(),
+                        ));
+                    }
+                }
+            }
+        }
 
         verify_creators_signatures(
             &rollup.tree_id,
