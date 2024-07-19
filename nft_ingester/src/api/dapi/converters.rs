@@ -222,7 +222,7 @@ impl From<SearchConditionType> for ConditionType {
 
 #[cfg(test)]
 mod tests {
-    use crate::dao::SearchAssetsQuery;
+    use crate::api::dapi::converters::SearchAssetsQuery;
 
     #[test]
     fn test_search_assets_filter_from_search_assets_query_conversion_error() {

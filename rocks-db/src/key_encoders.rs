@@ -300,6 +300,7 @@ mod tests {
         assert_eq!(decoded_key.hash, key2.hash);
     }
 
+    #[test]
     fn test_invalid_encode_decode_failed_rollup_key() {
         assert_eq!(
             matches!(
