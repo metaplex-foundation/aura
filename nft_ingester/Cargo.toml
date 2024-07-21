@@ -125,3 +125,6 @@ name = "synchronizer"
 
 [[bin]]
 name = "raw_backup"
+
+[[bin]]
+name = "core_indexing"

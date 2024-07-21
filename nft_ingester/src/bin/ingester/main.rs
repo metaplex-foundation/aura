@@ -43,7 +43,7 @@ use nft_ingester::config::{
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::json_worker::JsonWorker;
-use nft_ingester::message_handler::MessageHandler;
+use nft_ingester::message_handler::MessageHandlerIngester;
 use nft_ingester::mplx_updates_processor::MplxAccsProcessor;
 use nft_ingester::tcp_receiver::TcpReceiver;
 use nft_ingester::token_updates_processor::TokenAccsProcessor;
@@ -264,7 +264,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let buffer = Arc::new(Buffer::new());
 
     // setup receiver
-    let message_handler = Arc::new(MessageHandler::new(buffer.clone()));
+    let message_handler = Arc::new(MessageHandlerIngester::new(buffer.clone()));
 
     let geyser_tcp_receiver = TcpReceiver::new(
         message_handler.clone(),

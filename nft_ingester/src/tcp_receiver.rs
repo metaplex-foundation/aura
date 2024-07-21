@@ -1,4 +1,5 @@
-use crate::message_handler::MessageHandler;
+use crate::message_handler::MessageHandlerIngester;
+use interface::message_handler::MessageHandler;
 use log::{debug, error, info};
 use std::convert::TryInto;
 use std::io;
@@ -12,13 +13,13 @@ use tokio::time::sleep;
 
 const HEADER_BYTE_SIZE: usize = 4;
 
-pub struct TcpReceiver {
-    callback: Arc<MessageHandler>,
+pub struct TcpReceiver<M: MessageHandler> {
+    callback: Arc<M>,
     reconnect_interval: Duration,
 }
 
-impl TcpReceiver {
-    pub fn new(callback: Arc<MessageHandler>, reconnect_interval: Duration) -> Self {
+impl<M: MessageHandler> TcpReceiver<M> {
+    pub fn new(callback: Arc<M>, reconnect_interval: Duration) -> Self {
         TcpReceiver {
             callback,
             reconnect_interval,
