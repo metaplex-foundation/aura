@@ -11,7 +11,7 @@ export INGESTER_SLOT_START_FROM=276960411
 export INGESTER_MIGRATION_STORAGE_PATH="/migration_storage"
 export INGESTER_METRICS_PORT=9091
 
-# This group of parameter almost never changed.
+# This group of parameters almost never changes.
 # These are like constants for persisting raw Solana blocks.
 export INGESTER_BACKFILLER_MODE=Persist
 export INGESTER_LOG_LEVEL=warn
