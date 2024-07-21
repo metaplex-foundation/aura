@@ -81,6 +81,8 @@ triomphe = "=0.1.9"
 rollup-sdk = { path = "../rollup-sdk" }
 shank = "0.4.2"
 num-derive = "0.4.2"
+borsh = { version = "1.5.1", features = ["borsh-derive", "derive"] }
+strum = { version = "0.26.1", features = ["derive"] }
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

@@ -115,6 +115,12 @@ pub enum IngesterError {
     SendTransaction(String),
     #[error("ProcessRollup: {0}")]
     ProcessRollup(String),
+    #[error("NumericalOverflowError")]
+    NumericalOverflowError,
+    #[error("IncorrectAccount")]
+    IncorrectAccount,
+    #[error("SolanaSDK: {0}")]
+    SolanaSDK(#[from] solana_sdk::program_error::ProgramError),
 }
 
 impl From<reqwest::Error> for IngesterError {

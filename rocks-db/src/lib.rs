@@ -41,7 +41,6 @@ pub mod batch_savers;
 pub mod bubblegum_slots;
 pub mod cl_items;
 pub mod column;
-pub mod core_fees;
 pub mod dump_client;
 pub mod editions;
 pub mod errors;

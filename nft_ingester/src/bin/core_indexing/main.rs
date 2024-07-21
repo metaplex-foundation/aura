@@ -1,32 +1,30 @@
 use std::sync::Arc;
 
 use log::{error, info};
+use metrics_utils::{MetricState, MetricsTrait};
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{init_logger, setup_config, IngesterConfig, INGESTER_CONFIG_PREFIX};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
-
-use tempfile::TempDir;
-
-use metrics_utils::{MetricState, MetricsTrait};
 use nft_ingester::message_handler::MessageHandlerCoreIndexing;
 use nft_ingester::mpl_core_fee_indexing_processor::MplCoreFeeProcessor;
 use nft_ingester::tcp_receiver::TcpReceiver;
-use rocks_db::migrator::MigrationState;
-use rocks_db::Storage;
+use postgre_client::PgClient;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 
-pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
+pub const PG_MIGRATIONS_PATH: &str = "./migrations";
+pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
+pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
     info!("Starting raw backfill server...");
 
     let config: IngesterConfig = setup_config(INGESTER_CONFIG_PREFIX);
-    init_logger(&config.log_level);
+    init_logger(&config.get_log_level());
 
-    let guard = if config.run_profiling {
+    let guard = if config.run_profiling.unwrap_or_default() {
         Some(
             pprof::ProfilerGuardBuilder::default()
                 .frequency(100)
@@ -41,58 +39,21 @@ pub async fn main() -> Result<(), IngesterError> {
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
-
-    let primary_storage_path = config
-        .rocks_db_path_container
-        .clone()
-        .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string());
-
-    {
-        // storage in secondary mod cannot create new column families, that
-        // could be required for migration_version_manager, so firstly open
-        // storage with MigrationState::CreateColumnFamilies in order to create
-        // all column families
-        Storage::open(
-            &config
-                .rocks_db_path_container
-                .clone()
-                .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
-            mutexed_tasks.clone(),
+    let index_storage = Arc::new(
+        PgClient::new(
+            &config.database_config.get_database_url().unwrap(),
+            DEFAULT_MIN_POSTGRES_CONNECTIONS,
+            DEFAULT_MAX_POSTGRES_CONNECTIONS,
             metrics_state.red_metrics.clone(),
-            MigrationState::CreateColumnFamilies,
         )
-        .unwrap();
-    }
-    let migration_version_manager_dir = TempDir::new().unwrap();
-    let migration_version_manager = Storage::open_secondary(
-        &config
-            .rocks_db_path_container
-            .clone()
-            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
-        migration_version_manager_dir.path().to_str().unwrap(),
-        mutexed_tasks.clone(),
-        metrics_state.red_metrics.clone(),
-        MigrationState::Last,
-    )
-    .unwrap();
-    Storage::apply_all_migrations(
-        &config
-            .rocks_db_path_container
-            .clone()
-            .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
-        &config.migration_storage_path,
-        Arc::new(migration_version_manager),
-    )
-    .await
-    .unwrap();
-    let storage = Storage::open(
-        &primary_storage_path,
-        mutexed_tasks.clone(),
-        metrics_state.red_metrics.clone(),
-        MigrationState::Last,
-    )
-    .unwrap();
-    let rocks_storage = Arc::new(storage);
+        .await?,
+    );
+
+    index_storage
+        .run_migration(PG_MIGRATIONS_PATH)
+        .await
+        .map_err(IngesterError::SqlxError)?;
+
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     let buffer = Arc::new(Buffer::new());
 
@@ -152,7 +113,7 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     let mpl_core_fee_parser = MplCoreFeeProcessor::new(
-        rocks_storage.clone(),
+        index_storage.clone(),
         buffer.clone(),
         metrics_state.ingester_metrics.clone(),
         config.mpl_core_buffer_size,

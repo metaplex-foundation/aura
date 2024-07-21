@@ -1,4 +1,3 @@
-use crate::message_handler::MessageHandlerIngester;
 use interface::message_handler::MessageHandler;
 use log::{debug, error, info};
 use std::convert::TryInto;

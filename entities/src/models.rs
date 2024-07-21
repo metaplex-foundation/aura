@@ -436,6 +436,14 @@ impl Default for JsonDownloadTask {
     }
 }
 
+pub struct CoreFee {
+    pub pubkey: Pubkey,
+    pub is_paid: bool,
+    pub current_balance: u64,
+    pub minimum_rent: u64,
+    pub slot_updated: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

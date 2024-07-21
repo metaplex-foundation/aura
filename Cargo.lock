@@ -4480,6 +4480,7 @@ dependencies = [
  "backfill-rpc",
  "bincode",
  "blockbuster",
+ "borsh 1.5.1",
  "bs58 0.4.0",
  "chrono",
  "clap 4.5.4",
@@ -4537,6 +4538,7 @@ dependencies = [
  "spl-token 4.0.0",
  "sqlx",
  "stretto",
+ "strum 0.26.3",
  "tempfile",
  "testcontainers",
  "thiserror",
@@ -9121,6 +9123,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "strum"
+version = "0.26.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
+dependencies = [
+ "strum_macros 0.26.4",
+]
+
+[[package]]
 name = "strum_macros"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9143,6 +9154,19 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.26.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.66",
 ]
 
 [[package]]
