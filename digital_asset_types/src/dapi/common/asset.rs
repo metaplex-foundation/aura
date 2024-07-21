@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 
-use entities::models::AssetSignatureWithPagination;
+use entities::models::{AssetSignatureWithPagination, CoreFeesAccount};
 use entities::models::TokenAccResponse;
 use jsonpath_lib::JsonPathError;
 use log::error;
@@ -13,7 +13,9 @@ use serde_json::Value;
 use url::Url;
 
 use crate::dao::{scopes::model, FullAsset};
-use crate::rpc::response::{AssetError, TokenAccountsList, TransactionSignatureList};
+use crate::rpc::response::{
+    AssetError, CoreFeesAccountsList, TokenAccountsList, TransactionSignatureList,
+};
 use crate::rpc::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
     MetadataMap, MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
@@ -431,6 +433,21 @@ pub fn build_token_accounts_response(
         before: pagination.before,
         cursor: pagination.cursor,
         token_accounts: token_accounts.into_iter().map(|t| t.token_acc).collect(),
+    })
+}
+
+pub fn build_core_fees_response(
+    core_fees_account: Vec<CoreFeesAccount>,
+    limit: u64,
+    page: Option<u64>,
+) -> Result<CoreFeesAccountsList, String> {
+    // let pagination = get_pagination_values(&token_accounts, &page, cursor_enabled)?;
+
+    Ok(CoreFeesAccountsList {
+        total: core_fees_account.len() as u64,
+        limit,
+        page,
+        core_fees_account,
     })
 }
 

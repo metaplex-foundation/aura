@@ -444,6 +444,14 @@ pub struct CoreFee {
     pub slot_updated: u64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
+#[serde(default)]
+pub struct CoreFeesAccount {
+    pub address: String,
+    pub current_balance: i64,
+    pub minimum_rent: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

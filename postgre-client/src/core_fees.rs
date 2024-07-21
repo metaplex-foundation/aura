@@ -1,7 +1,8 @@
-use crate::{PgClient, INSERT_ACTION, SQL_COMPONENT};
+use crate::{PgClient, BATCH_SELECT_ACTION, INSERT_ACTION, SQL_COMPONENT};
 use chrono::Utc;
-use entities::models::CoreFee;
-use sqlx::QueryBuilder;
+use entities::models::{CoreFee, CoreFeesAccount};
+use solana_sdk::pubkey::Pubkey;
+use sqlx::{QueryBuilder, Row};
 
 impl PgClient {
     pub async fn save_core_fees(&self, fees: Vec<CoreFee>) -> Result<(), String> {
@@ -38,5 +39,41 @@ impl PgClient {
             .observe_request(SQL_COMPONENT, INSERT_ACTION, "core_fees", start_time);
 
         Ok(())
+    }
+
+    pub async fn get_core_fees(
+        &self,
+        page: u64,
+        limit: u64,
+    ) -> Result<Vec<CoreFeesAccount>, String> {
+        let mut query_builder = QueryBuilder::new(
+            "SELECT fee_pubkey, fee_current_balance, fee_minimum_rent FROM core_fees WHERE not fee_paid ",
+        );
+        query_builder.push(" LIMIT ");
+        query_builder.push_bind(limit as i64);
+        if page > 0 {
+            query_builder.push(" OFFSET ");
+            query_builder.push_bind(page as i64 - 1 * limit as i64);
+        }
+        query_builder.push(";");
+        let query = query_builder.build();
+        let start_time = chrono::Utc::now();
+        let result = query.fetch_all(&self.pool).await.map_err(|err| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, BATCH_SELECT_ACTION, "core_fees");
+            err.to_string()
+        })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, BATCH_SELECT_ACTION, "core_fees", start_time);
+        Ok(result
+            .iter()
+            .map(|row| CoreFeesAccount {
+                address: Pubkey::try_from(row.get::<Vec<u8>, _>("fee_pubkey"))
+                    .unwrap()
+                    .to_string(),
+                current_balance: row.get::<i64, _>("fee_current_balance"),
+                minimum_rent: row.get::<i64, _>("fee_minimum_rent"),
+            })
+            .collect::<Vec<_>>())
     }
 }

@@ -1,4 +1,4 @@
-use entities::models::{AssetSignature, TokenAccount};
+use entities::models::{AssetSignature, CoreFeesAccount, TokenAccount};
 use schemars::JsonSchema;
 use {
     crate::rpc::Asset,
@@ -111,4 +111,17 @@ pub struct TokenAccountsList {
     pub after: Option<String>,
     pub cursor: Option<String>,
     pub token_accounts: Vec<TokenAccount>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
+#[serde(default)]
+pub struct CoreFeesAccountsList {
+    pub total: u64,
+    pub limit: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<u64>,
+    // pub before: Option<String>,
+    // pub after: Option<String>,
+    // pub cursor: Option<String>,
+    pub core_fees_account: Vec<CoreFeesAccount>,
 }
