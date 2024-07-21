@@ -2,7 +2,7 @@
 
 cargo b --release --package nft_ingester --bin raw_backfiller
 
-# This group of parameters has to be changed depends on server where we are running it
+# This group of parameters has to be changed depending on the server where we are running it
 # or range of slots we are going to persist.
 export INGESTER_ROCKS_DB_PATH_CONTAINER="/rocksdb-data"
 export INGESTER_BIG_TABLE_CONFIG='{creds="/utility-chain/creds.json", timeout=1000}'
