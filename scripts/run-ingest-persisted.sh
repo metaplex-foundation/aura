@@ -9,7 +9,7 @@ export INGESTER_BIG_TABLE_CONFIG='{creds="/utility-chain/creds.json", timeout=10
 export INGESTER_MIGRATION_STORAGE_PATH="/migration_storage"
 export INGESTER_METRICS_PORT=9091
 
-# This group of parameter almost never changed.
+# This group of parameters almost never changes.
 # These are like constants for ingesting persisted raw Solana blocks.
 export INGESTER_BACKFILLER_MODE=IngestPersisted
 export INGESTER_SLOT_UNTIL=0
