@@ -79,6 +79,8 @@ arweave-rs = {version = "0.2.0", git = "https://github.com/RequescoS/arweave-rs.
 serde_cbor = "0.11.2"
 triomphe = "=0.1.9"
 rollup-sdk = { path = "../rollup-sdk" }
+shank = "0.4.2"
+num-derive = "0.4.2"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

@@ -11,10 +11,10 @@ use tonic::async_trait;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::columns::{Mint, TokenAccount};
 
-use crate::mplx_updates_processor::MetadataInfo;
 use crate::mplx_updates_processor::{
     BurntMetadataSlot, IndexableAssetWithAccountInfo, TokenMetadata,
 };
+use crate::mplx_updates_processor::{CoreAssetFee, MetadataInfo};
 
 #[derive(Default)]
 pub struct Buffer {
@@ -27,6 +27,7 @@ pub struct Buffer {
     pub burnt_metadata_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub burnt_mpl_core_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub mpl_core_indexable_assets: Mutex<HashMap<Pubkey, IndexableAssetWithAccountInfo>>,
+    pub mpl_core_fee_assets: Mutex<HashMap<Pubkey, CoreAssetFee>>,
 }
 
 impl Buffer {
@@ -41,6 +42,7 @@ impl Buffer {
             burnt_metadata_at_slot: Mutex::new(HashMap::new()),
             burnt_mpl_core_at_slot: Mutex::new(HashMap::new()),
             mpl_core_indexable_assets: Mutex::new(HashMap::new()),
+            mpl_core_fee_assets: Mutex::new(HashMap::new()),
         }
     }
 

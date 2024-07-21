@@ -29,7 +29,7 @@ use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
 use crate::mplx_updates_processor::{
-    BurntMetadataSlot, IndexableAssetWithAccountInfo, MetadataInfo, TokenMetadata,
+    BurntMetadataSlot, CoreAssetFee, IndexableAssetWithAccountInfo, MetadataInfo, TokenMetadata,
 };
 use crate::plerkle;
 use crate::plerkle::PlerkleAccountInfo;
@@ -525,16 +525,18 @@ impl MessageHandlerCoreIndexing {
     ) {
         let key = account_update.pubkey;
         match &parsing_result.data {
-            MplCoreAccountData::Asset(_) | MplCoreAccountData::Collection(_) => {
+            MplCoreAccountData::Asset(_)
+            | MplCoreAccountData::EmptyAccount
+            | MplCoreAccountData::HashedAsset => {
                 update_or_insert!(
-                    self.buffer.mpl_core_indexable_assets,
+                    self.buffer.mpl_core_fee_assets,
                     key,
-                    IndexableAssetWithAccountInfo {
+                    CoreAssetFee {
                         indexable_asset: parsing_result.data.clone(),
+                        data: account_update.data.clone(),
                         slot_updated: account_update.slot,
                         write_version: account_update.write_version,
                         lamports: account_update.lamports,
-                        executable: account_update.executable,
                         rent_epoch: account_update.rent_epoch,
                     },
                     account_update.write_version
