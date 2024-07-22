@@ -32,6 +32,10 @@ pub enum RollupValidationError {
     FailedCreatorVerification(String),
     #[error("Missing creator's signature in rollup: {0}")]
     MissingCreatorSignature(String),
+    #[error("WrongCollectionVerified: {0}")]
+    WrongCollectionVerified(String),
+    #[error("VerifiedCollectionMismatch: expected :{0}, got :{1}")]
+    VerifiedCollectionMismatch(String, String),
 }
 
 impl From<std::io::Error> for RollupValidationError {

@@ -254,7 +254,12 @@ impl<D: RollupDownloader> RollupPersister<D> {
     }
 
     async fn validate_rollup(&self, rollup_to_verify: &mut RollupToVerify, rollup: &Rollup) {
-        if let Err(e) = crate::rollup::rollup_verifier::validate_rollup(rollup).await {
+        if let Err(e) = crate::rollup::rollup_verifier::validate_rollup(
+            rollup,
+            rollup_to_verify.collection_mint,
+        )
+        .await
+        {
             self.metrics
                 .inc_rollups_with_status("rollup_validating", MetricStatus::FAILURE);
             error!("Error while validating rollup: {}", e.to_string());

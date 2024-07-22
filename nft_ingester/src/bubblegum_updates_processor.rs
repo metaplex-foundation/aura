@@ -162,7 +162,9 @@ impl BubblegumTxProcessor {
             InstructionName::PrepareTree => "PrepareTree",
             InstructionName::AddCanopy => "AddCanopy",
             InstructionName::FinalizeTreeWithRoot => "FinalizeTreeWithRoot",
-            InstructionName::FinalizeTreeWithRootAndCollection => "FinalizeTreeWithRootAndCollection",
+            InstructionName::FinalizeTreeWithRootAndCollection => {
+                "FinalizeTreeWithRootAndCollection"
+            }
         }
     }
 
@@ -309,7 +311,8 @@ impl BubblegumTxProcessor {
                     .map(From::from)
                     .map(Ok)?
             }
-            InstructionName::FinalizeTreeWithRoot => {
+            InstructionName::FinalizeTreeWithRoot
+            | InstructionName::FinalizeTreeWithRootAndCollection => {
                 Self::get_create_tree_with_root_update(parsing_result, bundle)
                     .map(From::from)
                     .map(Ok)?
@@ -342,6 +345,7 @@ impl BubblegumTxProcessor {
                     download_attempts: 0,
                     persisting_state: PersistingRollupState::ReceivedTransaction,
                     staker: args.staker,
+                    collection_mint: args.collection_mint,
                 }),
                 ..Default::default()
             };
