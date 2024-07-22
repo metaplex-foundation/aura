@@ -47,13 +47,13 @@ impl PgClient {
         limit: u64,
     ) -> Result<Vec<CoreFeesAccount>, String> {
         let mut query_builder = QueryBuilder::new(
-            "SELECT fee_pubkey, fee_current_balance, fee_minimum_rent FROM core_fees WHERE not fee_paid ",
+            "SELECT fee_pubkey, fee_current_balance, fee_minimum_rent FROM core_fees WHERE not fee_paid ORDER BY fee_slot_updated",
         );
         query_builder.push(" LIMIT ");
         query_builder.push_bind(limit as i64);
-        if page > 0 {
+        if page > 1 {
             query_builder.push(" OFFSET ");
-            query_builder.push_bind(page as i64 - 1 * limit as i64);
+            query_builder.push_bind((page as i64).saturating_sub(1) * limit as i64);
         }
         query_builder.push(";");
         let query = query_builder.build();
