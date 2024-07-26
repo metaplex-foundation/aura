@@ -49,6 +49,8 @@ jobs:
       run: |
         ls -l
         pwd
+        cd ./blockbuster
+        ls -l
 
     - name: Check formatting
       run: cargo fmt --all -- --check
