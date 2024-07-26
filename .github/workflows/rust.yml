@@ -45,6 +45,11 @@ jobs:
         echo "[profile.dev]" >> Cargo.toml
         echo "debug = 0" >> Cargo.toml
 
+    - name: Debug
+      run: |
+        ls -l
+        pwd
+
     - name: Check formatting
       run: cargo fmt --all -- --check
 
