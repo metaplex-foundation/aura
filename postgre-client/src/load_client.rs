@@ -49,6 +49,7 @@ impl PgClient {
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("TRUNCATE ");
         query_builder.push(table);
+        query_builder.push(" CASCADE");
         query_builder.push(";");
         self.execute_query_with_metrics(transaction, &mut query_builder, TRUNCATE_ACTION, table)
             .await

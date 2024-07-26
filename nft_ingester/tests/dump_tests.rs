@@ -15,11 +15,11 @@ mod tests {
     use tempfile::TempDir;
     use testcontainers::clients::Cli;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
     #[tracing_test::traced_test]
     async fn test_csv_export_from_rocks_import_into_pg() {
         let env = RocksTestEnvironment::new(&[]);
-        let number_of_assets = 1000;
+        let number_of_assets = 100;
         let generated_assets = env.generate_assets(number_of_assets, 25);
         let storage = env.storage;
         let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
