@@ -20,7 +20,7 @@ plerkle_messenger = { version = "1.5.2", features = ['redis'] }
 plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
 flatbuffers = "23.1.21"
 mpl-bubblegum = {path = "../blockbuster/mpl-bubblegum/clients/rust", features = ["serde"] }
-spl-account-compression = { path = "../blockbuster/mpl-bubblegum/solana-program-library/account-compression/programs/account-compression", features = ["no-entrypoint"] }
+spl-account-compression = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root", features = ["no-entrypoint"] }
 num-traits = "0.2.15"
 blockbuster = { path = "../blockbuster/blockbuster" }
 figment = { version = "0.10.6", features = ["env", "toml", "yaml"] }
