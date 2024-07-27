@@ -50,6 +50,7 @@ jobs:
 
     - name: Debug
       run: |
+        git rev-parse --abbrev-ref HEAD
         ls -l
         pwd
         cd ./blockbuster
