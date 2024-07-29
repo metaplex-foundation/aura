@@ -1,5 +1,5 @@
+use log::{error, info};
 use tokio::task::JoinSet;
-use log::{info, error};
 
 pub async fn wait_for_all_tasks_to_finish<T: 'static>(tasks: &mut JoinSet<T>, task_name: String) {
     while let Some(task) = tasks.join_next().await {

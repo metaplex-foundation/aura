@@ -1,5 +1,8 @@
 use crate::{
-    key_encoders::decode_pubkey, storage_traits::{AssetIndexReader, Dumper}, utils::wait_for_all_tasks_to_finish, Storage
+    key_encoders::decode_pubkey,
+    storage_traits::{AssetIndexReader, Dumper},
+    utils::wait_for_all_tasks_to_finish,
+    Storage,
 };
 use async_trait::async_trait;
 use csv::WriterBuilder;
@@ -104,7 +107,13 @@ impl Storage {
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
         writer_tasks.spawn(async move {
-            Self::write_to_file(metadata_file_and_path, rx_cloned, shutdown_cloned, rx_metadata).await;
+            Self::write_to_file(
+                metadata_file_and_path,
+                rx_cloned,
+                shutdown_cloned,
+                rx_metadata,
+            )
+            .await;
         });
 
         let (tx_assets, rx_assets) = mpsc::channel(MPSC_BUFFER_SIZE);
@@ -120,7 +129,13 @@ impl Storage {
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
         writer_tasks.spawn(async move {
-            Self::write_to_file(creators_file_and_path, rx_cloned, shutdown_cloned, rx_creators).await;
+            Self::write_to_file(
+                creators_file_and_path,
+                rx_cloned,
+                shutdown_cloned,
+                rx_creators,
+            )
+            .await;
         });
 
         let (tx_authority, rx_authority) = mpsc::channel(MPSC_BUFFER_SIZE);
@@ -128,7 +143,13 @@ impl Storage {
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
         writer_tasks.spawn(async move {
-            Self::write_to_file(authority_file_and_path, rx_cloned, shutdown_cloned, rx_authority).await;
+            Self::write_to_file(
+                authority_file_and_path,
+                rx_cloned,
+                shutdown_cloned,
+                rx_authority,
+            )
+            .await;
         });
 
         let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
@@ -323,7 +344,7 @@ impl Storage {
     }
 
     async fn write_to_file<T: Serialize>(
-        file_and_path: (File,String),
+        file_and_path: (File, String),
         application_shutdown: tokio::sync::broadcast::Receiver<()>,
         worker_shutdown: tokio::sync::broadcast::Receiver<()>,
         mut data_channel: tokio::sync::mpsc::Receiver<T>,
@@ -332,28 +353,34 @@ impl Storage {
         let mut writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
-    
+
         loop {
             if !application_shutdown.is_empty() {
                 break;
             }
-    
+
             if !worker_shutdown.is_empty() && data_channel.is_empty() {
                 break;
             }
-    
+
             if data_channel.is_empty() {
                 continue;
             } else {
                 if let Ok(k) = data_channel.try_recv() {
                     if let Err(e) = writer.serialize(k).map_err(|e| e.to_string()) {
-                        error!("Error while writing data into {:?}. Err: {:?}", file_and_path.1, e);
+                        error!(
+                            "Error while writing data into {:?}. Err: {:?}",
+                            file_and_path.1, e
+                        );
                     }
                 }
             }
         }
         if let Err(e) = writer.flush().map_err(|e| e.to_string()) {
-            error!("Error happened during flushing data to {:?}. Err: {:?}", file_and_path.1, e);
+            error!(
+                "Error happened during flushing data to {:?}. Err: {:?}",
+                file_and_path.1, e
+            );
         }
     }
 
