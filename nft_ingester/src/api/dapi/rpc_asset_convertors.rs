@@ -10,6 +10,7 @@ use log::warn;
 use mime_guess::Mime;
 use rocks_db::errors::StorageError;
 use serde_json::Value;
+use solana_program::pubkey::Pubkey;
 use url::Url;
 
 use super::response::{AssetError, TokenAccountsList, TransactionSignatureList};
@@ -254,12 +255,22 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
     let rpc_groups = to_grouping(&full_asset.asset_collections);
     let interface = get_interface(&full_asset.asset_static)?;
 
-    let owner = full_asset
+    let mut owner = full_asset
         .asset_owner
         .owner
         .value
         .map(|o| bs58::encode(o).into_string())
         .unwrap_or_default();
+    let mut grouping = Some(rpc_groups);
+    let mut frozen = full_asset.asset_dynamic.is_frozen.value;
+    match interface {
+        Interface::FungibleAsset | Interface::FungibleToken => {
+            owner = "".to_string();
+            grouping = Some(vec![]);
+            frozen = false;
+        }
+        _ => {}
+    }
     let content = get_content(&full_asset.asset_dynamic, &full_asset.offchain_data)?;
     let ch_data = serde_json::from_str(
         &full_asset
@@ -297,6 +308,11 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
         }),
         _ => None,
     };
+    let tree = if full_asset.asset_leaf.tree_id == Pubkey::default() {
+        None
+    } else {
+        Some(full_asset.asset_leaf.tree_id.to_bytes().to_vec())
+    };
 
     Ok(Some(RpcAsset {
         interface,
@@ -314,11 +330,21 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
             eligible: full_asset.asset_dynamic.is_compressible.value,
             compressed: full_asset.asset_dynamic.is_compressed.value,
             leaf_id: full_asset.asset_leaf.nonce.unwrap_or(0) as i64,
-            seq: full_asset.asset_leaf.leaf_seq.unwrap_or(0) as i64,
-            tree: full_asset.asset_leaf.tree_id.to_string(),
+            seq: std::cmp::max(
+                full_asset
+                    .asset_dynamic
+                    .seq
+                    .clone()
+                    .and_then(|u| u.value.try_into().ok())
+                    .unwrap_or(0) as i64,
+                full_asset.asset_leaf.leaf_seq.unwrap_or(0) as i64,
+            ),
+            tree: tree
+                .map(|s| bs58::encode(s).into_string())
+                .unwrap_or_default(),
             asset_hash: full_asset
                 .asset_leaf
-                .data_hash
+                .leaf
                 .map(|s| bs58::encode(s).into_string())
                 .unwrap_or_default(),
             data_hash: full_asset
@@ -332,7 +358,7 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
                 .map(|e| e.to_string())
                 .unwrap_or_default(),
         }),
-        grouping: Some(rpc_groups),
+        grouping,
         royalty: Some(Royalty {
             royalty_model: full_asset.asset_static.royalty_target_type.into(),
             target: None,
@@ -343,7 +369,7 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
         }),
         creators: Some(rpc_creators),
         ownership: Ownership {
-            frozen: full_asset.asset_dynamic.is_frozen.value,
+            frozen,
             delegated: full_asset.asset_owner.delegate.value.is_some(),
             delegate: full_asset.asset_owner.delegate.value.map(|u| u.to_string()),
             ownership_model: full_asset.asset_owner.owner_type.value.into(),

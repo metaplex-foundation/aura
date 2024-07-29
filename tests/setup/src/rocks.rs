@@ -200,6 +200,6 @@ fn generate_test_collection(pubkey: Pubkey) -> AssetCollection {
         pubkey,
         collection: generate_test_updated(Pubkey::new_unique()),
         is_collection_verified: generate_test_updated(false),
-        authority: generate_test_updated(Some(Pubkey::new_unique())),
+        authority: generate_test_updated(None),
     }
 }

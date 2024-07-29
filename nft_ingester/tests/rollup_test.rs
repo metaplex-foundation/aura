@@ -361,6 +361,7 @@ async fn save_rollup_to_queue_test() {
                 Pubkey::from_str("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY").unwrap(),
                 Pubkey::new_unique(),
                 Pubkey::new_unique(),
+                Pubkey::new_unique(),
             ],
             recent_blockhash: [1; 32].into(),
             instructions: vec![CompiledInstruction {
