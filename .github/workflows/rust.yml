@@ -48,14 +48,6 @@ jobs:
         echo "[profile.dev]" >> Cargo.toml
         echo "debug = 0" >> Cargo.toml
 
-    - name: Debug
-      run: |
-        git rev-parse --abbrev-ref HEAD
-        ls -l
-        pwd
-        cd ./blockbuster
-        ls -l
-
     - name: Check formatting
       run: cargo fmt -- --check
 
