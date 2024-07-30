@@ -132,6 +132,17 @@ impl AssetIndexReader for Storage {
         let asset_authority_details = asset_authority_details?;
         let asset_owner_details = asset_owner_details?;
         let asset_collection_details = asset_collection_details?;
+        let assets_collection_pks = asset_collection_details
+            .iter()
+            .flat_map(|c| c.as_ref().map(|c| c.collection.value))
+            .collect::<Vec<_>>();
+        let mpl_core_collections = self
+            .asset_collection_data
+            .batch_get(assets_collection_pks)
+            .await?
+            .into_iter()
+            .filter_map(|asset| asset.map(|a| (a.pubkey, a)))
+            .collect::<HashMap<_, _>>();
 
         for static_info in asset_static_details.iter().flatten() {
             let asset_index = AssetIndex {
@@ -220,7 +231,9 @@ impl AssetIndexReader for Storage {
             if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
                 existed_index.collection = Some(data.collection.value);
                 existed_index.is_collection_verified = Some(data.is_collection_verified.value);
-                existed_index.update_authority = data.authority.value;
+                existed_index.update_authority = mpl_core_collections
+                    .get(&data.collection.value)
+                    .and_then(|c| c.authority.value);
                 if data.get_slot_updated() as i64 > existed_index.slot_updated {
                     existed_index.slot_updated = data.get_slot_updated() as i64;
                 }
@@ -229,7 +242,9 @@ impl AssetIndexReader for Storage {
                     pubkey: data.pubkey,
                     collection: Some(data.collection.value),
                     is_collection_verified: Some(data.is_collection_verified.value),
-                    update_authority: data.authority.value,
+                    update_authority: mpl_core_collections
+                        .get(&data.collection.value)
+                        .and_then(|c| c.authority.value),
                     slot_updated: data.get_slot_updated() as i64,
                     ..Default::default()
                 };
