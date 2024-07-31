@@ -201,6 +201,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
             mutexed_tasks.clone(),
             metrics_state.red_metrics.clone(),
+            metrics_state.dump_metrics.clone(),
             MigrationState::CreateColumnFamilies,
         )
         .unwrap();
@@ -214,6 +215,7 @@ pub async fn main() -> Result<(), IngesterError> {
         migration_version_manager_dir.path().to_str().unwrap(),
         mutexed_tasks.clone(),
         metrics_state.red_metrics.clone(),
+        metrics_state.dump_metrics.clone(),
         MigrationState::Last,
     )
     .unwrap();
@@ -235,6 +237,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
         mutexed_tasks.clone(),
         metrics_state.red_metrics.clone(),
+        metrics_state.dump_metrics.clone(),
         MigrationState::Last,
     )
     .unwrap();

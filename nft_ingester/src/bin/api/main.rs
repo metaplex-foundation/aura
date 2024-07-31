@@ -11,7 +11,7 @@ use nft_ingester::json_worker::JsonWorker;
 use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
-use metrics_utils::{ApiMetricsConfig, JsonDownloaderMetricsConfig};
+use metrics_utils::{ApiMetricsConfig, DumpMetricsConfig, JsonDownloaderMetricsConfig};
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -92,6 +92,8 @@ pub async fn main() -> Result<(), IngesterError> {
         &secondary_storage_path,
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        // in this context we should not register dump metrics
+        Arc::new(DumpMetricsConfig::new()),
         MigrationState::Last,
     )
     .unwrap();

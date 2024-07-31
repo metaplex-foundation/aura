@@ -6,6 +6,7 @@ use crate::Storage;
 use bincode::deserialize;
 use interface::migration_version_manager::PrimaryStorageMigrationVersionManager;
 use metrics_utils::red::RequestErrorDurationMetrics;
+use metrics_utils::DumpMetricsConfig;
 use rocksdb::{IteratorMode, DB};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -158,6 +159,7 @@ impl<'a> MigrationApplier<'a> {
             db_path,
             Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
+            Arc::new(DumpMetricsConfig::new()),
             MigrationState::Version(version),
         )
     }

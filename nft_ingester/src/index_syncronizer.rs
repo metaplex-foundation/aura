@@ -7,7 +7,7 @@ use rocks_db::{
     storage_traits::{AssetIndexStorage as AssetIndexSourceStorage, AssetUpdatedKey},
 };
 use solana_sdk::pubkey::Pubkey;
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, sync::Arc, time::Instant};
 use tokio::task::JoinSet;
 
 use crate::error::IngesterError;
@@ -233,15 +233,23 @@ where
     ) -> Result<(), IngesterError> {
         let path = std::path::Path::new(self.dump_path.as_str());
         tracing::info!("Dumping the primary storage to {}", self.dump_path);
+        let start = Instant::now();
         self.primary_storage
             .dump_db(path, self.dump_synchronizer_batch_size, rx)
             .await?;
-        tracing::info!("Dump is complete. Loading the dump into the index storage");
+        tracing::info!(
+            "Dump is complete. It took {:?}. Loading the dump into the index storage",
+            start.elapsed()
+        );
 
+        let start = Instant::now();
         self.index_storage
             .load_from_dump(path, last_included_rocks_key)
             .await?;
-        tracing::info!("Dump is loaded into the index storage");
+        tracing::info!(
+            "Dump is loaded into the index storage. It took {:?}.",
+            start.elapsed()
+        );
         Ok(())
     }
 

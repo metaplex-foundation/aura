@@ -1,5 +1,6 @@
 use entities::models::AssetSignature;
 use metrics_utils::red::RequestErrorDurationMetrics;
+use metrics_utils::DumpMetricsConfig;
 use rocks_db::asset::MetadataMintMap;
 use rocks_db::column::TypedColumn;
 use rocks_db::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
@@ -84,12 +85,14 @@ fn copy_column_families(
 ) -> Result<(), String> {
     let start = Instant::now();
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    let dump_metrics = Arc::new(DumpMetricsConfig::new());
     // Open source and destination databases
     let source_db = Storage::open_secondary(
         source_path,
         secondary_source_path,
         Arc::new(Mutex::new(JoinSet::new())),
         red_metrics.clone(),
+        dump_metrics.clone(),
         MigrationState::Last,
     )
     .map_err(|e| e.to_string())?;
@@ -97,6 +100,7 @@ fn copy_column_families(
         destination_path,
         Arc::new(Mutex::new(JoinSet::new())),
         red_metrics.clone(),
+        dump_metrics.clone(),
         MigrationState::Last,
     )
     .map_err(|e| e.to_string())?;

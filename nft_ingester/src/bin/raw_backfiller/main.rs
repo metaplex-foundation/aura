@@ -17,7 +17,7 @@ use tempfile::TempDir;
 
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::setup_metrics;
-use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
+use metrics_utils::{BackfillerMetricsConfig, DumpMetricsConfig, IngesterMetricsConfig};
 use rocks_db::bubblegum_slots::BubblegumSlotGetter;
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
@@ -74,6 +74,7 @@ pub async fn main() -> Result<(), IngesterError> {
         .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string());
 
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    let dump_metrics = Arc::new(DumpMetricsConfig::new());
     {
         // storage in secondary mod cannot create new column families, that
         // could be required for migration_version_manager, so firstly open
@@ -86,6 +87,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),
             mutexed_tasks.clone(),
             red_metrics.clone(),
+            dump_metrics.clone(),
             MigrationState::CreateColumnFamilies,
         )
         .unwrap();
@@ -99,6 +101,7 @@ pub async fn main() -> Result<(), IngesterError> {
         migration_version_manager_dir.path().to_str().unwrap(),
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        dump_metrics.clone(),
         MigrationState::Last,
     )
     .unwrap();
@@ -116,6 +119,7 @@ pub async fn main() -> Result<(), IngesterError> {
         &primary_storage_path,
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        dump_metrics.clone(),
         MigrationState::Last,
     )
     .unwrap();

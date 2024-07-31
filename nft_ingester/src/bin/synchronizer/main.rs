@@ -52,6 +52,8 @@ pub async fn main() -> Result<(), IngesterError> {
     metrics.register(&mut registry);
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     red_metrics.register(&mut registry);
+    let dump_metrics = Arc::new(metrics_utils::DumpMetricsConfig::new());
+    dump_metrics.register(&mut registry);
     tokio::spawn(async move {
         match setup_metrics(registry, config.metrics_port).await {
             Ok(_) => {
@@ -89,6 +91,7 @@ pub async fn main() -> Result<(), IngesterError> {
         &secondary_storage_path,
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        dump_metrics.clone(),
         MigrationState::Last,
     )
     .unwrap();

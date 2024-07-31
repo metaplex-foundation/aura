@@ -4,6 +4,7 @@ use clap::{arg, Parser};
 use entities::models::OffChainData;
 use entities::models::RawBlock;
 use metrics_utils::red::RequestErrorDurationMetrics;
+use metrics_utils::DumpMetricsConfig;
 use nft_ingester::config::init_logger;
 use rocks_db::column::TypedColumn;
 use tempfile::TempDir;
@@ -34,12 +35,14 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    let dump_metrics = Arc::new(DumpMetricsConfig::new());
     let secondary_rocks_dir = TempDir::new().unwrap();
     let source_storage = Storage::open_secondary(
         &config.source_db,
         secondary_rocks_dir.path().to_str().unwrap(),
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        dump_metrics.clone(),
         MigrationState::Last,
     )
     .unwrap();
@@ -48,6 +51,7 @@ pub async fn main() -> Result<(), IngesterError> {
         &config.target_db,
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        dump_metrics.clone(),
         MigrationState::Last,
     )
     .unwrap();

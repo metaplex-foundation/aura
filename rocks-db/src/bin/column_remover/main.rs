@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use log::info;
+use metrics_utils::DumpMetricsConfig;
 use rocks_db::asset::{
     self, AssetAuthorityDeprecated, AssetDynamicDetailsDeprecated, AssetOwnerDeprecated,
     AssetStaticDetailsDeprecated, MetadataMintMap,
@@ -103,10 +104,12 @@ fn remove_column_families(db_path: String, columns_to_remove: &[&str]) {
     let cf_names = DB::list_cf(&options, &db_path).expect("Failed to list column families.");
 
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    let dump_metrics = Arc::new(DumpMetricsConfig::new());
     let db = rocks_db::Storage::open(
         &db_path,
         Arc::new(Mutex::new(JoinSet::new())),
         red_metrics.clone(),
+        dump_metrics.clone(),
         MigrationState::Last,
     )
     .expect("Failed to open DB.");

@@ -51,6 +51,7 @@ pub struct MetricState {
     pub fork_cleaner_metrics: Arc<ForkCleanerMetricsConfig>,
     pub rollup_processor_metrics: Arc<RollupProcessorMetricsConfig>,
     pub rollup_persisting_metrics: Arc<RollupPersisterMetricsConfig>,
+    pub dump_metrics: Arc<DumpMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -77,6 +78,7 @@ impl MetricState {
             rollup_processor_metrics: Arc::new(RollupProcessorMetricsConfig::new()),
             rollup_persisting_metrics: Arc::new(RollupPersisterMetricsConfig::new()),
             red_metrics: Arc::new(RequestErrorDurationMetrics::new()),
+            dump_metrics: Arc::new(DumpMetricsConfig::new()),
             registry: Registry::default(),
         }
     }
@@ -303,6 +305,53 @@ impl SynchronizerMetricsConfig {
 }
 
 #[derive(Debug, Clone)]
+pub struct DumpMetricsConfig {
+    assets: Family<MethodLabel, Counter>,
+    latency: Family<MethodLabel, Histogram>, // nanoseconds
+}
+
+impl DumpMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            assets: Family::<MethodLabel, Counter>::default(),
+            // nanoseconds
+            latency: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(10.0, 500.0, 10))
+            }),
+        }
+    }
+
+    pub fn inc_assets(&self, label: &str) -> u64 {
+        self.assets
+            .get_or_create(&MethodLabel {
+                method_name: label.to_owned(),
+            })
+            .inc()
+    }
+
+    pub fn set_latency(&self, label: &str, duration: f64) {
+        self.latency
+            .get_or_create(&MethodLabel {
+                method_name: label.to_owned(),
+            })
+            .observe(duration);
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "num_of_assets_to_dump",
+            "The number of assets synchronizer dumps",
+            self.assets.clone(),
+        );
+        registry.register(
+            "synchronizer_job_latency",
+            "A histogram of the different jobs duration",
+            self.latency.clone(),
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ApiMetricsConfig {
     requests: Family<MethodLabel, Counter>,
     search_asset_requests: Family<MethodLabel, Counter>,
@@ -428,6 +477,8 @@ impl MetricsTrait for MetricState {
         self.json_downloader_metrics.register(&mut self.registry);
 
         self.backfiller_metrics.register(&mut self.registry);
+
+        self.dump_metrics.register(&mut self.registry);
 
         self.registry.register(
             "rpc_backfiller_transactions_processed",

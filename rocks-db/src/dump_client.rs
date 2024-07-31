@@ -13,6 +13,7 @@ use entities::{
 use hex;
 use inflector::Inflector;
 use log::error;
+use metrics_utils::DumpMetricsConfig;
 use serde::{Serialize, Serializer};
 use solana_sdk::pubkey::Pubkey;
 use std::{
@@ -20,6 +21,7 @@ use std::{
     fs::File,
     io::BufWriter,
     sync::Arc,
+    time::Instant,
 };
 use tokio::sync::mpsc;
 use tokio::{
@@ -27,8 +29,8 @@ use tokio::{
     task::JoinSet,
 };
 
-const MPSC_BUFFER_SIZE: usize = 1_000_000;
-const ITERATION_WORKERS: usize = 3;
+const MPSC_BUFFER_SIZE: usize = 5_000_000;
+const ITERATION_WORKERS: usize = 5;
 
 const ONE_G: usize = 1024 * 1024 * 1024;
 fn serialize_as_snake_case<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
@@ -105,6 +107,7 @@ impl Storage {
         let (tx_metadata, rx_metadata) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
+        let dump_metrics_cloned = self.dump_metrics.clone();
 
         writer_tasks.spawn(async move {
             Self::write_to_file(
@@ -112,6 +115,7 @@ impl Storage {
                 rx_cloned,
                 shutdown_cloned,
                 rx_metadata,
+                dump_metrics_cloned,
             )
             .await;
         });
@@ -119,14 +123,23 @@ impl Storage {
         let (tx_assets, rx_assets) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
+        let dump_metrics_cloned = self.dump_metrics.clone();
 
         writer_tasks.spawn(async move {
-            Self::write_to_file(assets_file_and_path, rx_cloned, shutdown_cloned, rx_assets).await;
+            Self::write_to_file(
+                assets_file_and_path,
+                rx_cloned,
+                shutdown_cloned,
+                rx_assets,
+                dump_metrics_cloned,
+            )
+            .await;
         });
 
         let (tx_creators, rx_creators) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
+        let dump_metrics_cloned = self.dump_metrics.clone();
 
         writer_tasks.spawn(async move {
             Self::write_to_file(
@@ -134,6 +147,7 @@ impl Storage {
                 rx_cloned,
                 shutdown_cloned,
                 rx_creators,
+                dump_metrics_cloned,
             )
             .await;
         });
@@ -141,6 +155,7 @@ impl Storage {
         let (tx_authority, rx_authority) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
+        let dump_metrics_cloned = self.dump_metrics.clone();
 
         writer_tasks.spawn(async move {
             Self::write_to_file(
@@ -148,6 +163,7 @@ impl Storage {
                 rx_cloned,
                 shutdown_cloned,
                 rx_authority,
+                dump_metrics_cloned,
             )
             .await;
         });
@@ -168,6 +184,7 @@ impl Storage {
             let tx_authority_cloned = tx_authority.clone();
             let metadata_key_set_cloned = metadata_key_set.clone();
             let authorities_key_set_cloned = authorities_key_set.clone();
+            let dump_metrics_cloned = self.dump_metrics.clone();
             iterator_tasks.spawn(async move {
                 Self::iterate_over_indexes(
                     rx_cloned,
@@ -179,6 +196,7 @@ impl Storage {
                     tx_authority_cloned,
                     metadata_key_set_cloned,
                     authorities_key_set_cloned,
+                    dump_metrics_cloned,
                 )
                 .await;
             });
@@ -191,12 +209,17 @@ impl Storage {
             .filter_map(|k| k.ok())
             .filter_map(|(key, _)| decode_pubkey(key.to_vec()).ok())
         {
+            self.dump_metrics.inc_assets("new_asset_taken");
             batch.push(k);
             if batch.len() == batch_size {
+                let start = Instant::now();
                 let indexes = self
                     .get_asset_indexes(batch.as_ref())
                     .await
                     .map_err(|e| e.to_string())?;
+                self.dump_metrics
+                    .set_latency("rocks_batch_select", start.elapsed().as_nanos() as f64);
+
                 tx_indexes.send(indexes).await.unwrap();
 
                 batch.clear();
@@ -207,10 +230,14 @@ impl Storage {
         }
 
         if !batch.is_empty() {
+            let start = Instant::now();
             let indexes = self
                 .get_asset_indexes(batch.as_ref())
                 .await
                 .map_err(|e| e.to_string())?;
+            self.dump_metrics
+                .set_latency("rocks_batch_select", start.elapsed().as_nanos() as f64);
+
             tx_indexes.send(indexes).await.unwrap();
         }
 
@@ -218,11 +245,17 @@ impl Storage {
         // to iterators and wait until they finish it's job. Because that workers populate channel
         // for writers.
         iterator_shutdown_tx.send(()).unwrap();
+        let start = Instant::now();
         wait_for_all_tasks_to_finish(&mut iterator_tasks, "Iterator".to_string()).await;
+        self.dump_metrics
+            .set_latency("wait_iterator_tasks", start.elapsed().as_nanos() as f64);
 
         // Once iterators are stopped it's safe to shutdown writers.
         writer_shutdown_tx.send(()).unwrap();
+        let start = Instant::now();
         wait_for_all_tasks_to_finish(&mut writer_tasks, "Writer".to_string()).await;
+        self.dump_metrics
+            .set_latency("wait_writer_tasks", start.elapsed().as_nanos() as f64);
 
         Ok(())
     }
@@ -237,6 +270,7 @@ impl Storage {
         tx_authority_cloned: tokio::sync::mpsc::Sender<(String, String, i64)>,
         metadata_key_set: Arc<Mutex<HashSet<Vec<u8>>>>,
         authorities_key_set: Arc<Mutex<HashSet<Pubkey>>>,
+        dump_metrics: Arc<DumpMetricsConfig>,
     ) {
         loop {
             // whole application is stopped
@@ -249,9 +283,10 @@ impl Storage {
             }
 
             if rx_indexes_cloned.is_empty() {
-                continue;
+                std::hint::spin_loop();
             } else {
                 if let Ok(indexes) = rx_indexes_cloned.try_recv() {
+                    let start = Instant::now();
                     for (key, index) in indexes {
                         let metadata_url = index
                             .metadata_url
@@ -348,6 +383,8 @@ impl Storage {
                             }
                         }
                     }
+                    dump_metrics
+                        .set_latency("iterate_over_indexes", start.elapsed().as_nanos() as f64);
                 }
             }
         }
@@ -358,6 +395,7 @@ impl Storage {
         application_shutdown: tokio::sync::broadcast::Receiver<()>,
         worker_shutdown: tokio::sync::broadcast::Receiver<()>,
         mut data_channel: tokio::sync::mpsc::Receiver<T>,
+        dump_metrics: Arc<DumpMetricsConfig>,
     ) {
         let buf_writer = BufWriter::with_capacity(ONE_G, file_and_path.0);
         let mut writer = WriterBuilder::new()
@@ -374,24 +412,35 @@ impl Storage {
             }
 
             if data_channel.is_empty() {
-                continue;
+                std::hint::spin_loop();
             } else {
                 if let Ok(k) = data_channel.try_recv() {
+                    let start = Instant::now();
                     if let Err(e) = writer.serialize(k).map_err(|e| e.to_string()) {
                         error!(
                             "Error while writing data into {:?}. Err: {:?}",
                             file_and_path.1, e
                         );
                     }
+                    dump_metrics.set_latency(
+                        "serialize_data_into_file",
+                        start.elapsed().as_nanos() as f64,
+                    );
                 }
             }
         }
+
+        let start = Instant::now();
         if let Err(e) = writer.flush().map_err(|e| e.to_string()) {
             error!(
                 "Error happened during flushing data to {:?}. Err: {:?}",
                 file_and_path.1, e
             );
         }
+        dump_metrics.set_latency(
+            "serialize_data_into_file",
+            start.elapsed().as_nanos() as f64,
+        );
     }
 
     fn encode<T: AsRef<[u8]>>(v: T) -> String {

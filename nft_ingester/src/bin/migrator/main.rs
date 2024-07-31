@@ -5,7 +5,9 @@ use entities::models::{OffChainData, Task};
 use log::{error, info};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
-use metrics_utils::{JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait};
+use metrics_utils::{
+    DumpMetricsConfig, JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait,
+};
 use postgre_client::PgClient;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::{broadcast, Mutex};
@@ -53,11 +55,13 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    let dump_metrics = Arc::new(DumpMetricsConfig::new());
 
     let storage = Storage::open(
         &config.json_target_db.clone(),
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        dump_metrics.clone(),
         MigrationState::Last,
     )
     .unwrap();
@@ -68,6 +72,7 @@ pub async fn main() -> Result<(), IngesterError> {
         &config.json_source_db,
         mutexed_tasks.clone(),
         red_metrics.clone(),
+        dump_metrics.clone(),
         MigrationState::Last,
     )
     .unwrap();

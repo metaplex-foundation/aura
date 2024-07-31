@@ -1,4 +1,5 @@
 use inflector::Inflector;
+use metrics_utils::DumpMetricsConfig;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
@@ -111,6 +112,7 @@ pub struct Storage {
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
+    dump_metrics: Arc<DumpMetricsConfig>,
 }
 
 impl Storage {
@@ -118,6 +120,7 @@ impl Storage {
         db: Arc<DB>,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
+        dump_metrics: Arc<DumpMetricsConfig>,
     ) -> Self {
         let asset_static_data = Self::column(db.clone(), red_metrics.clone());
         let asset_dynamic_data = Self::column(db.clone(), red_metrics.clone());
@@ -191,6 +194,7 @@ impl Storage {
             failed_rollups,
             rollups,
             migration_version,
+            dump_metrics,
         }
     }
 
@@ -198,6 +202,7 @@ impl Storage {
         db_path: &str,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
+        dump_metrics: Arc<DumpMetricsConfig>,
         migration_state: MigrationState,
     ) -> Result<Self> {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
@@ -206,7 +211,7 @@ impl Storage {
             db_path,
             cf_descriptors,
         )?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, join_set, red_metrics, dump_metrics))
     }
 
     pub fn open_secondary(
@@ -214,6 +219,7 @@ impl Storage {
         secondary_path: &str,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
+        dump_metrics: Arc<DumpMetricsConfig>,
         migration_state: MigrationState,
     ) -> Result<Self> {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
@@ -223,7 +229,7 @@ impl Storage {
             secondary_path,
             cf_descriptors,
         )?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, join_set, red_metrics, dump_metrics))
     }
 
     fn create_cf_descriptors(migration_state: &MigrationState) -> Vec<ColumnFamilyDescriptor> {
