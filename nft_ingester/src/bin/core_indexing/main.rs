@@ -10,6 +10,7 @@ use nft_ingester::message_handler::MessageHandlerCoreIndexing;
 use nft_ingester::mpl_core_fee_indexing_processor::MplCoreFeeProcessor;
 use nft_ingester::tcp_receiver::TcpReceiver;
 use postgre_client::PgClient;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 
@@ -112,18 +113,21 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    let mpl_core_fee_parser = MplCoreFeeProcessor::new(
+    let mpl_core_fee_parser = MplCoreFeeProcessor::build(
         index_storage.clone(),
         buffer.clone(),
         metrics_state.ingester_metrics.clone(),
+        Arc::new(RpcClient::new(config.backfill_rpc_address)),
+        mutexed_tasks.clone(),
         config.mpl_core_buffer_size,
-    );
+    )
+    .await?;
 
     for _ in 0..config.mplx_workers {
         let mut cloned_core_parser = mpl_core_fee_parser.clone();
         let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            cloned_core_parser.process(cloned_rx).await;
+            cloned_core_parser.start_processing(cloned_rx).await;
             Ok(())
         });
     }
