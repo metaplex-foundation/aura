@@ -2370,32 +2370,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "digital_asset_types"
-version = "0.7.2"
-dependencies = [
- "blockbuster",
- "bs58 0.4.0",
- "entities",
- "futures",
- "interface",
- "jsonpath_lib",
- "log",
- "metrics-utils",
- "mime_guess",
- "postgre-client",
- "rocks-db",
- "schemars",
- "serde",
- "serde_json",
- "solana-sdk",
- "spl-concurrent-merkle-tree 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "thiserror",
- "tokio",
- "url",
- "usecase",
-]
-
-[[package]]
 name = "dir-diff"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4485,7 +4459,6 @@ dependencies = [
  "clap 4.5.4",
  "criterion",
  "csv",
- "digital_asset_types",
  "entities",
  "env_logger 0.10.2",
  "figment",
@@ -4497,12 +4470,14 @@ dependencies = [
  "interface",
  "itertools 0.12.1",
  "jemallocator",
+ "jsonpath_lib",
  "jsonrpc-core 19.0.0",
  "jsonrpc-http-server",
  "lazy_static",
  "libc",
  "log",
  "metrics-utils",
+ "mime_guess",
  "mockall 0.11.4",
  "mpl-bubblegum",
  "mpl-token-metadata 4.1.2",
@@ -4545,6 +4520,7 @@ dependencies = [
  "tracing-subscriber",
  "tracing-test",
  "triomphe",
+ "url",
  "usecase",
  "utils",
  "uuid 1.8.0",

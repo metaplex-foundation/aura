@@ -8,12 +8,12 @@ use rocks_db::cl_items::{ClItemKey, ClLeafKey};
 use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
+use crate::api::dapi::model;
+use crate::api::dapi::rpc_asset_models::AssetProof;
 use interface::processing_possibility::ProcessingPossibilityChecker;
 use rocks_db::asset_streaming_client::get_required_nodes_for_proof;
 use rocks_db::Storage;
-use {
-    crate::dao::scopes::model, crate::rpc::AssetProof, spl_concurrent_merkle_tree::node::empty_node,
-};
+use spl_concurrent_merkle_tree::node::empty_node;
 
 use crate::fetch_asset_data;
 

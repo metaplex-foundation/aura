@@ -8,7 +8,6 @@ WORKDIR /rust
 COPY Cargo.toml Cargo.toml
 COPY Cargo.lock Cargo.lock
 COPY backfill_rpc ./backfill_rpc
-COPY digital_asset_types ./digital_asset_types
 COPY entities ./entities
 COPY grpc ./grpc
 COPY interface ./interface
