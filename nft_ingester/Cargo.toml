@@ -83,6 +83,7 @@ shank = "0.4.2"
 num-derive = "0.4.2"
 borsh = { version = "1.5.1", features = ["borsh-derive", "derive"] }
 strum = { version = "0.26.1", features = ["derive"] }
+mpl-core-program = { git = "https://github.com/metaplex-foundation/mpl-core.git", branch = "feat/no-entypoint", features = ["no-entrypoint"] }
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

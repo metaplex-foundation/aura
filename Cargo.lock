@@ -4321,8 +4321,9 @@ dependencies = [
 
 [[package]]
 name = "mpl-core"
-version = "0.7.0"
-source = "git+https://github.com/RequescoS/mpl-core.git#00496a76af1745aa2349199367be245cba2fec59"
+version = "0.8.0-beta.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1178d8a405352e2a2478abf5b62e2a4d6a91ed6f0470307ab6732614662dbf85"
 dependencies = [
  "base64 0.22.1",
  "borsh 0.10.3",
@@ -4334,6 +4335,25 @@ dependencies = [
  "serde_json",
  "serde_with 3.8.1",
  "solana-program",
+ "thiserror",
+]
+
+[[package]]
+name = "mpl-core-program"
+version = "0.1.0"
+source = "git+https://github.com/metaplex-foundation/mpl-core.git?branch=feat/no-entypoint#4619c675e246d0d00c2df01df18d7afc26205b9e"
+dependencies = [
+ "borsh 0.10.3",
+ "bytemuck",
+ "modular-bitfield",
+ "mpl-utils",
+ "num-derive 0.3.3",
+ "num-traits",
+ "podded",
+ "shank 0.4.2",
+ "solana-program",
+ "spl-noop 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "strum 0.26.3",
  "thiserror",
 ]
 
@@ -4398,6 +4418,17 @@ checksum = "12989bc45715b0ee91944855130131479f9c772e198a910c3eb0ea327d5bffc3"
 dependencies = [
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "mpl-utils"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ee1b830bfd014504a11b2234e2e7d6af535adda601f224cd519b923f593c91b"
+dependencies = [
+ "arrayref",
+ "solana-program",
+ "spl-token-2022 0.6.1",
 ]
 
 [[package]]
@@ -4506,6 +4537,7 @@ dependencies = [
  "metrics-utils",
  "mockall 0.11.4",
  "mpl-bubblegum",
+ "mpl-core-program",
  "mpl-token-metadata 4.1.2",
  "multer",
  "num-derive 0.4.2",
@@ -5290,6 +5322,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81b30686a7d9c3e010b84284bdd26a29f2138574f52f5eb6f794fc0ad924e705"
 dependencies = [
  "plotters-backend",
+]
+
+[[package]]
+name = "podded"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5ef03855395ea7838e038410cf2be5dd419fa65560c3c82dfcf1ee5b32cfb4e"
+dependencies = [
+ "bytemuck",
 ]
 
 [[package]]
