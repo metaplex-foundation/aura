@@ -1,5 +1,5 @@
 # Initial stage: install cargo-chef
-FROM rust:1.75-bullseye AS chef
+FROM rust:1.76-bullseye AS chef
 RUN cargo install cargo-chef
 
 # Planning stage: determine dependencies
@@ -45,7 +45,7 @@ COPY . .
 RUN cargo build --release --features profiling --bin ingester --bin api --bin raw_backfiller --bin synchronizer
 
 # Final image
-FROM rust:1.75-slim-bullseye AS runtime
+FROM rust:1.76-slim-bullseye AS runtime
 ARG APP=/usr/src/app
 RUN apt update && apt install -y curl ca-certificates tzdata libjemalloc2 google-perftools graphviz libjemalloc-dev && rm -rf /var/lib/apt/lists/*
 COPY --from=cacher /usr/local/lib/libjemalloc.so.2 /usr/local/lib/libjemalloc.so.2
