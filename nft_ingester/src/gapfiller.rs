@@ -31,7 +31,7 @@ pub async fn process_raw_blocks_stream(
 
     while rx.is_empty() {
         match raw_blocks_streamer.next().await {
-            Ok(block) => {
+            Some(Ok(block)) => {
                 if let Some(e) = storage
                     .raw_blocks_cbor
                     .put_cbor_encoded(block.slot, block)
@@ -43,9 +43,10 @@ pub async fn process_raw_blocks_stream(
                     processed_slots += 1;
                 }
             }
-            Err(e) => {
+            Some(Err(e)) => {
                 error!("Error processing raw block stream item: {}", e);
             }
+            None => {}
         }
 
         tokio::select! {
@@ -84,16 +85,17 @@ pub async fn process_asset_details_stream(
 
     while rx.is_empty() {
         match asset_details_stream.next().await {
-            Ok(details) => {
+            Some(Ok(details)) => {
                 if let Some(e) = storage.insert_gaped_data(details).await.err() {
                     error!("Error processing gaped data: {}", e)
                 } else {
                     processed_assets += 1;
                 }
             }
-            Err(e) => {
+            Some(Err(e)) => {
                 error!("Error processing asset details stream item: {}", e);
             }
+            None => {}
         }
 
         tokio::select! {

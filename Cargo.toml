@@ -13,11 +13,6 @@ members = [
   "backfill_rpc",
   "integrity_verification"
 ]
-exclude = [
-  "blockbuster/blockbuster",
-  "blockbuster/mpl-bubblegum",
-  "rollup-sdk",
-]
 
 [workspace.dependencies]
 thiserror = { version = "1"}
