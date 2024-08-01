@@ -4,10 +4,6 @@ mod tests {
     use std::{collections::HashMap, sync::Arc};
 
     use blockbuster::token_metadata::accounts::Metadata;
-    use blockbuster::token_metadata::types::{Key, TokenStandard as BLKTokenStandard};
-    use digital_asset_types::rpc::response::{
-        AssetList, TokenAccountsList, TransactionSignatureList,
-    };
     use entities::api_req_params::{
         DisplayOptions, GetAssetProof, GetAssetSignatures, GetTokenAccounts, Options,
     };
@@ -27,6 +23,10 @@ mod tests {
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig};
     use mockall::predicate;
     use mpl_token_metadata::accounts::MasterEdition;
+    use mpl_token_metadata::types::Key;
+    use nft_ingester::api::dapi::response::{
+        AssetList, TokenAccountsList, TransactionSignatureList,
+    };
     use nft_ingester::api::error::DasApiError;
     use nft_ingester::{
         buffer::Buffer,
@@ -781,7 +781,7 @@ mod tests {
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: None,
-                token_standard: Some(BLKTokenStandard::Fungible),
+                token_standard: Some(mpl_token_metadata::types::TokenStandard::Fungible),
                 collection: None,
                 uses: None,
                 collection_details: None,
@@ -900,8 +900,8 @@ mod tests {
         let mut token_accs = Vec::new();
 
         let token_standards = vec![
-            BLKTokenStandard::ProgrammableNonFungible,
-            BLKTokenStandard::ProgrammableNonFungibleEdition,
+            mpl_token_metadata::types::TokenStandard::ProgrammableNonFungible,
+            mpl_token_metadata::types::TokenStandard::ProgrammableNonFungibleEdition,
         ];
 
         for standard in token_standards.iter() {
@@ -1099,7 +1099,7 @@ mod tests {
                 primary_sale_happened: false,
                 is_mutable: true,
                 edition_nonce: None,
-                token_standard: Some(BLKTokenStandard::Fungible),
+                token_standard: Some(mpl_token_metadata::types::TokenStandard::Fungible),
                 collection: None,
                 uses: None,
                 collection_details: None,

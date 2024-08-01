@@ -1,6 +1,4 @@
-use digital_asset_types::dao::SearchAssetsQuery;
-use digital_asset_types::dapi::{get_asset, get_asset_batch, get_proof_for_assets, search_assets};
-use digital_asset_types::rpc::response::AssetList;
+use dapi::{get_asset, get_asset_batch, get_proof_for_assets, search_assets};
 use interface::error::UsecaseError;
 use interface::json::{JsonDownloader, JsonPersister};
 use interface::proofs::ProofChecker;
@@ -11,13 +9,16 @@ use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
 use self::util::ApiRequest;
+use crate::api::dapi::converters::SearchAssetsQuery;
+use crate::api::dapi::response::{
+    AssetList, GetGroupingResponse, TransactionSignatureListDeprecated,
+};
+use crate::api::dapi::rpc_asset_models::Asset;
 use crate::api::error::DasApiError;
 use crate::config::{ApiConfig, JsonMiddlewareConfig};
-use digital_asset_types::dapi::get_asset_signatures::get_asset_signatures;
+use dapi::get_asset_signatures::get_asset_signatures;
+use dapi::get_token_accounts::get_token_accounts;
 use digital_asset_types::dapi::get_core_fees::get_core_fees;
-use digital_asset_types::dapi::get_token_accounts::get_token_accounts;
-use digital_asset_types::rpc::response::TransactionSignatureListDeprecated;
-use digital_asset_types::rpc::Asset;
 use entities::api_req_params::{
     GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
     GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetCoreFees,

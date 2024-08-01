@@ -3,24 +3,28 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use entities::models::TokenAccResponse;
-use entities::models::{AssetSignatureWithPagination, CoreFeesAccount};
+use entities::models::{AssetSignatureWithPagination, OffChainData, CoreFeesAccount};
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
 use mime_guess::Mime;
 use rocks_db::errors::StorageError;
 use serde_json::Value;
+use solana_program::pubkey::Pubkey;
 use url::Url;
 
-use crate::dao::{scopes::model, FullAsset};
-use crate::rpc::response::{
-    AssetError, CoreFeesAccountsList, TokenAccountsList, TransactionSignatureList,
+use super::response::{AssetError, CoreFeesAccountsList, TokenAccountsList, TransactionSignatureList};
+use super::rpc_asset_models::FullAsset;
+use super::rpc_asset_models::{
+    Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, MetadataMap,
+    MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
 };
-use crate::rpc::{
-    Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface,
-    MetadataMap, MplCoreInfo, Ownership, Royalty, Scope, Supply, Uses,
-};
+use crate::api::dapi::asset::COLLECTION_GROUP_KEY;
+use crate::api::dapi::model::ChainMutability;
 use entities::api_req_params::Pagination;
+use entities::enums::{Interface, SpecificationVersions};
+use rocks_db::asset::AssetCollection;
+use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetStaticDetails};
 
 pub fn to_uri(uri: String) -> Option<Url> {
     Url::parse(uri.as_str()).ok()
@@ -73,12 +77,22 @@ pub fn safe_select<'a>(
         .and_then(|v| v.pop())
 }
 
-pub fn v1_content_from_json(asset_data: &model::AssetDataModel) -> Result<Content, StorageError> {
-    // todo -> move this to the bg worker for pre processing
-    let json_uri = asset_data.metadata_url.clone();
-    let metadata = &asset_data.metadata;
-    let mut selector_fn = jsonpath_lib::selector(metadata);
-    let mut chain_data_selector_fn = jsonpath_lib::selector(&asset_data.chain_data);
+pub fn get_content(
+    asset_dynamic: &AssetDynamicDetails,
+    offchain_data: &OffChainData,
+) -> Result<Content, StorageError> {
+    let json_uri = asset_dynamic.url.value.clone();
+    let metadata: Value = serde_json::from_str(&offchain_data.metadata).unwrap_or(Value::Null);
+    let chain_data: Value = serde_json::from_str(
+        asset_dynamic
+            .onchain_data
+            .as_ref()
+            .map_or("{}", |data| &data.value),
+    )
+    .unwrap_or(Value::Null);
+
+    let mut selector_fn = jsonpath_lib::selector(&metadata);
+    let mut chain_data_selector_fn = jsonpath_lib::selector(&chain_data);
     let selector = &mut selector_fn;
     let chain_data_selector = &mut chain_data_selector_fn;
     let mut meta: MetadataMap = MetadataMap::new();
@@ -98,9 +112,9 @@ pub fn v1_content_from_json(asset_data: &model::AssetDataModel) -> Result<Conten
         meta.set_item("description", desc.clone());
     }
 
-    let symbol = safe_select(selector, "$.attributes");
-    if let Some(symbol) = symbol {
-        meta.set_item("attributes", symbol.clone());
+    let attributes = safe_select(selector, "$.attributes");
+    if let Some(attributes) = attributes {
+        meta.set_item("attributes", attributes.clone());
     }
 
     let token_standard = safe_select(chain_data_selector, "$.token_standard");
@@ -117,11 +131,10 @@ pub fn v1_content_from_json(asset_data: &model::AssetDataModel) -> Result<Conten
         }
     }
 
-    let _metadata = safe_select(selector, "description");
     let mut actual_files: HashMap<String, File> = HashMap::new();
     if let Some(files) = selector("$.properties.files[*]")
         .ok()
-        .filter(|d| !Vec::is_empty(d))
+        .filter(|d| !d.is_empty())
     {
         for v in files.iter() {
             if v.is_object() {
@@ -146,13 +159,13 @@ pub fn v1_content_from_json(asset_data: &model::AssetDataModel) -> Result<Conten
                                 warn!("Mime is not string: {:?}", m);
                                 file_from_str(str_uri.to_string())
                             };
-                            actual_files.insert(str_uri.to_string().clone(), file);
+                            actual_files.insert(str_uri.to_string(), file);
                         } else {
                             warn!("URI is not string: {:?}", u);
                         }
                     }
                     (Some(u), None) => {
-                        let str_uri = serde_json::to_string(u).unwrap_or_else(|_| String::new());
+                        let str_uri = serde_json::to_string(u).unwrap_or_default();
                         actual_files.insert(str_uri.clone(), file_from_str(str_uri));
                     }
                     _ => {}
@@ -190,92 +203,66 @@ pub fn v1_content_from_json(asset_data: &model::AssetDataModel) -> Result<Conten
     })
 }
 
-pub fn get_content(
-    asset: &model::AssetModel,
-    data: &model::AssetDataModel,
-) -> Result<Content, StorageError> {
-    match asset.specification_version {
-        Some(model::SpecificationVersions::V1) | Some(model::SpecificationVersions::V0) => {
-            v1_content_from_json(data)
-        }
-        Some(_) => Err(StorageError::Common("Version Not Implemented".to_string())),
-        None => Err(StorageError::Common(
-            "Specification version not found".to_string(),
-        )),
-    }
+pub fn to_authority(
+    authority: &AssetAuthority,
+    asset_collection: &Option<AssetCollection>,
+) -> Vec<Authority> {
+    let update_authority = asset_collection
+        .clone()
+        .and_then(|update_authority| update_authority.authority.value);
+
+    vec![Authority {
+        address: update_authority
+            .map(|update_authority| update_authority.to_string())
+            .unwrap_or(authority.authority.to_string()),
+        scopes: vec![Scope::Full],
+    }]
 }
 
-pub fn to_authority(authority: Vec<model::AssetAuthorityModel>) -> Vec<Authority> {
-    authority
+pub fn to_creators(asset_dynamic: &AssetDynamicDetails) -> Vec<Creator> {
+    asset_dynamic
+        .creators
+        .value
         .iter()
-        .map(|a| Authority {
-            address: bs58::encode(&a.authority).into_string(),
-            scopes: vec![Scope::Full],
+        .map(|creator| Creator {
+            address: bs58::encode(&creator.creator).into_string(),
+            share: creator.creator_share as i32,
+            verified: creator.creator_verified,
         })
         .collect()
 }
 
-pub fn to_creators(creators: Vec<model::AssetCreatorsModel>) -> Vec<Creator> {
-    creators
-        .iter()
-        .map(|a| Creator {
-            address: bs58::encode(&a.creator).into_string(),
-            share: a.share,
-            verified: a.verified,
-        })
-        .collect()
+pub fn to_grouping(asset_collection: &Option<AssetCollection>) -> Vec<Group> {
+    asset_collection.clone().map_or(vec![], |collection| {
+        vec![Group {
+            group_key: COLLECTION_GROUP_KEY.to_string(),
+            group_value: Some(collection.collection.value.to_string()),
+            verified: Some(collection.is_collection_verified.value),
+        }]
+    })
 }
 
-pub fn to_grouping(groups: Vec<model::AssetGroupingModel>) -> Result<Vec<Group>, StorageError> {
-    fn find_group(model: &model::AssetGroupingModel) -> Result<Group, StorageError> {
-        Ok(Group {
-            group_key: model.group_key.clone(),
-            group_value: model.group_value.clone(),
-            verified: model.verified,
-        })
-    }
-
-    groups.iter().map(find_group).collect()
-}
-
-pub fn get_interface(asset: &model::AssetModel) -> Result<Interface, StorageError> {
+pub fn get_interface(asset_static: &AssetStaticDetails) -> Result<Interface, StorageError> {
     Ok(Interface::from((
-        asset
-            .specification_version
-            .as_ref()
-            .ok_or(StorageError::Common(
-                "Specification version not found".to_string(),
-            ))?,
-        asset
-            .specification_asset_class
-            .as_ref()
-            .unwrap_or(&model::SpecificationAssetClass::Unknown),
+        &SpecificationVersions::V1,
+        &asset_static.specification_asset_class,
     )))
 }
 
-//TODO -> impl custom error type
-pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, StorageError> {
-    let FullAsset {
-        asset,
-        data,
-        authorities,
-        creators,
-        groups,
-        edition_data,
-    } = asset;
-    let rpc_authorities = to_authority(authorities);
-    let rpc_creators = to_creators(creators);
-    let rpc_groups = to_grouping(groups)?;
-    let interface = get_interface(&asset)?;
+pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageError> {
+    let rpc_authorities = to_authority(&full_asset.assets_authority, &full_asset.asset_collections);
+    let rpc_creators = to_creators(&full_asset.asset_dynamic);
+    let rpc_groups = to_grouping(&full_asset.asset_collections);
+    let interface = get_interface(&full_asset.asset_static)?;
 
-    let mut owner = asset
+    let mut owner = full_asset
+        .asset_owner
         .owner
-        .clone()
+        .value
         .map(|o| bs58::encode(o).into_string())
-        .unwrap_or("".to_string());
+        .unwrap_or_default();
     let mut grouping = Some(rpc_groups);
-    let mut frozen = asset.frozen;
-
+    let mut frozen = full_asset.asset_dynamic.is_frozen.value;
     match interface {
         Interface::FungibleAsset | Interface::FungibleToken => {
             owner = "".to_string();
@@ -284,79 +271,112 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, StorageError> 
         }
         _ => {}
     }
-
-    let content = get_content(&asset, &data.asset)?;
-    let mut chain_data_selector_fn = jsonpath_lib::selector(&data.asset.chain_data);
+    let content = get_content(&full_asset.asset_dynamic, &full_asset.offchain_data)?;
+    let ch_data = serde_json::from_str(
+        &full_asset
+            .asset_dynamic
+            .onchain_data
+            .map(|onchain_data| onchain_data.value)
+            .unwrap_or_default(),
+    )
+    .unwrap_or(serde_json::Value::Null);
+    let mut chain_data_selector_fn = jsonpath_lib::selector(&ch_data);
     let chain_data_selector = &mut chain_data_selector_fn;
     let basis_points = safe_select(chain_data_selector, "$.primary_sale_happened")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
     let edition_nonce =
         safe_select(chain_data_selector, "$.edition_nonce").and_then(|v| v.as_u64());
+
     let mpl_core_info = match interface {
         Interface::MplCoreAsset | Interface::MplCoreCollection => Some(MplCoreInfo {
-            num_minted: asset.num_minted,
-            current_size: asset.current_supply,
-            plugins_json_version: asset.plugins_json_version,
+            num_minted: full_asset.asset_dynamic.num_minted.map(|u| u.value),
+            current_size: full_asset.asset_dynamic.current_size.map(|u| u.value),
+            plugins_json_version: full_asset
+                .asset_dynamic
+                .plugins_json_version
+                .map(|u| u.value),
         }),
         _ => None,
     };
+    let supply = match interface {
+        Interface::V1NFT => full_asset.edition_data.map(|e| Supply {
+            edition_nonce,
+            print_current_supply: e.supply,
+            print_max_supply: e.max_supply,
+            edition_number: e.edition_number,
+        }),
+        _ => None,
+    };
+    let tree = if full_asset.asset_leaf.tree_id == Pubkey::default() {
+        None
+    } else {
+        Some(full_asset.asset_leaf.tree_id.to_bytes().to_vec())
+    };
 
     Ok(Some(RpcAsset {
-        interface: interface.clone(),
-        id: bs58::encode(asset.id).into_string(),
+        interface,
+        id: full_asset.asset_static.pubkey.to_string(),
         content: Some(content),
         authorities: Some(rpc_authorities),
-        mutable: data.asset.chain_data_mutability.into(),
+        mutable: full_asset
+            .asset_dynamic
+            .chain_mutability
+            .clone()
+            .map(|m| m.value.into())
+            .unwrap_or(ChainMutability::Unknown)
+            .into(),
         compression: Some(Compression {
-            eligible: asset.compressible,
-            compressed: asset.compressed,
-            leaf_id: asset.nonce.unwrap_or(0_i64),
-            seq: asset.seq.unwrap_or(0_i64),
-            tree: asset
-                .tree_id
+            eligible: full_asset.asset_dynamic.is_compressible.value,
+            compressed: full_asset.asset_dynamic.is_compressed.value,
+            leaf_id: full_asset.asset_leaf.nonce.unwrap_or(0) as i64,
+            seq: std::cmp::max(
+                full_asset
+                    .asset_dynamic
+                    .seq
+                    .clone()
+                    .and_then(|u| u.value.try_into().ok())
+                    .unwrap_or(0) as i64,
+                full_asset.asset_leaf.leaf_seq.unwrap_or(0) as i64,
+            ),
+            tree: tree
                 .map(|s| bs58::encode(s).into_string())
                 .unwrap_or_default(),
-            asset_hash: asset
+            asset_hash: full_asset
+                .asset_leaf
                 .leaf
                 .map(|s| bs58::encode(s).into_string())
                 .unwrap_or_default(),
-            data_hash: asset
+            data_hash: full_asset
+                .asset_leaf
                 .data_hash
-                .map(|e| e.trim().to_string())
+                .map(|e| e.to_string())
                 .unwrap_or_default(),
-            creator_hash: asset
+            creator_hash: full_asset
+                .asset_leaf
                 .creator_hash
-                .map(|e| e.trim().to_string())
+                .map(|e| e.to_string())
                 .unwrap_or_default(),
         }),
         grouping,
         royalty: Some(Royalty {
-            royalty_model: asset.royalty_target_type.into(),
-            target: asset.royalty_target.map(|s| bs58::encode(s).into_string()),
-            percent: (asset.royalty_amount as f64) * 0.0001,
-            basis_points: asset.royalty_amount as u32,
+            royalty_model: full_asset.asset_static.royalty_target_type.into(),
+            target: None,
+            percent: (full_asset.asset_dynamic.royalty_amount.value as f64) * 0.0001,
+            basis_points: full_asset.asset_dynamic.royalty_amount.value as u32,
             primary_sale_happened: basis_points,
             locked: false,
         }),
         creators: Some(rpc_creators),
         ownership: Ownership {
             frozen,
-            delegated: asset.delegate.is_some(),
-            delegate: asset.delegate.map(|s| bs58::encode(s).into_string()),
-            ownership_model: asset.owner_type.into(),
+            delegated: full_asset.asset_owner.delegate.value.is_some(),
+            delegate: full_asset.asset_owner.delegate.value.map(|u| u.to_string()),
+            ownership_model: full_asset.asset_owner.owner_type.value.into(),
             owner,
         },
-        supply: match interface {
-            Interface::V1NFT => edition_data.map(|e| Supply {
-                edition_nonce,
-                print_current_supply: e.supply,
-                print_max_supply: e.max_supply,
-                edition_number: e.edition_number,
-            }),
-            _ => None,
-        },
-        uses: data.asset.chain_data.get("uses").map(|u| Uses {
+        supply,
+        uses: ch_data.get("uses").map(|u| Uses {
             use_method: u
                 .get("use_method")
                 .and_then(|s| s.as_str())
@@ -366,16 +386,28 @@ pub fn asset_to_rpc(asset: FullAsset) -> Result<Option<RpcAsset>, StorageError> 
             total: u.get("total").and_then(|t| t.as_u64()).unwrap_or(0),
             remaining: u.get("remaining").and_then(|t| t.as_u64()).unwrap_or(0),
         }),
-        burnt: asset.burnt,
-        lamports: data.lamports,
-        executable: data.executable,
-        metadata_owner: data.metadata_owner,
-        rent_epoch: data.rent_epoch,
-        plugins: asset.plugins,
-        unknown_plugins: asset.unknown_plugins,
+        burnt: full_asset.asset_dynamic.is_burnt.value,
+        lamports: full_asset.asset_dynamic.lamports.map(|u| u.value),
+        executable: full_asset.asset_dynamic.executable.map(|u| u.value),
+        metadata_owner: full_asset.asset_dynamic.metadata_owner.map(|u| u.value),
+        rent_epoch: full_asset.asset_dynamic.rent_epoch.map(|u| u.value),
+        plugins: full_asset
+            .asset_dynamic
+            .mpl_core_plugins
+            .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
+        unknown_plugins: full_asset
+            .asset_dynamic
+            .mpl_core_unknown_plugins
+            .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
         mpl_core_info,
-        external_plugins: asset.external_plugins,
-        unknown_external_plugins: asset.unknown_external_plugins,
+        external_plugins: full_asset
+            .asset_dynamic
+            .mpl_core_external_plugins
+            .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
+        unknown_external_plugins: full_asset
+            .asset_dynamic
+            .mpl_core_unknown_external_plugins
+            .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
     }))
 }
 
@@ -408,7 +440,7 @@ pub fn asset_list_to_rpc(asset_list: Vec<FullAsset>) -> (Vec<RpcAsset>, Vec<Asse
                 Err(e) => {
                     error!(
                         "Could not cast asset to asset rpc type. Key: {:?}. Error: {:?}",
-                        bs58::encode(asset.asset.id).into_string(),
+                        asset.asset_static.pubkey,
                         e.to_string()
                     )
                 }

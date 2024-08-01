@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use mockall::predicate;
 use mpl_bubblegum::types::{Creator, LeafSchema, MetadataArgs};
 
-use digital_asset_types::rpc::AssetProof;
 use entities::api_req_params::GetAssetProof;
 use entities::enums::{FailedRollupState, PersistingRollupState, RollupState};
 use entities::models::BufferedTransaction;
@@ -24,6 +23,7 @@ use metrics_utils::ApiMetricsConfig;
 use metrics_utils::IngesterMetricsConfig;
 use metrics_utils::RollupPersisterMetricsConfig;
 use metrics_utils::RollupProcessorMetricsConfig;
+use nft_ingester::api::dapi::rpc_asset_models::AssetProof;
 use nft_ingester::api::error::DasApiError;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::config::JsonMiddlewareConfig;
@@ -336,7 +336,7 @@ async fn save_rollup_to_queue_test() {
     // arbitrary data
     let rollup_instruction_data =
         mpl_bubblegum::instructions::FinalizeTreeWithRootInstructionArgs {
-            rightmost_root: [1; 32],
+            root: [1; 32],
             rightmost_leaf: [1; 32],
             rightmost_index: 99,
             metadata_url: metadata_url.clone(),
@@ -359,6 +359,7 @@ async fn save_rollup_to_queue_test() {
             account_keys: vec![
                 Pubkey::new_unique(),
                 Pubkey::from_str("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY").unwrap(),
+                Pubkey::new_unique(),
                 Pubkey::new_unique(),
                 Pubkey::new_unique(),
             ],
@@ -499,6 +500,8 @@ async fn rollup_with_verified_creators_test() {
         signature: Signature::new_unique(),
         download_attempts: 0,
         persisting_state: PersistingRollupState::ReceivedTransaction,
+        staker: Default::default(),
+        collection_mint: None,
     };
 
     env.rocks_env
@@ -640,6 +643,8 @@ async fn rollup_with_unverified_creators_test() {
         signature: Signature::new_unique(),
         download_attempts: 0,
         persisting_state: PersistingRollupState::ReceivedTransaction,
+        staker: Default::default(),
+        collection_mint: None,
     };
 
     env.rocks_env
@@ -727,6 +732,7 @@ async fn rollup_persister_test() {
         download_attempts: 0,
         persisting_state: PersistingRollupState::ReceivedTransaction,
         staker: Default::default(),
+        collection_mint: None,
     };
 
     env.rocks_env
@@ -861,6 +867,7 @@ async fn rollup_persister_download_fail_test() {
         download_attempts,
         persisting_state: PersistingRollupState::ReceivedTransaction,
         staker: Default::default(),
+        collection_mint: None,
     };
 
     env.rocks_env
@@ -927,6 +934,7 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
         download_attempts,
         persisting_state: PersistingRollupState::ReceivedTransaction,
         staker: Default::default(),
+        collection_mint: None,
     };
 
     env.rocks_env

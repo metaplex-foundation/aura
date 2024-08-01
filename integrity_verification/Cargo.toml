@@ -12,7 +12,7 @@ postgre-client = { path = "../postgre-client" }
 entities = { path = "../entities" }
 interface = { path = "../interface" }
 tokio = { version = "1.26.0", features = ["full", "tracing"] }
-thiserror = "1.0.56"
+thiserror = "1.0.63"
 clap = { version = "4.4.14", features = ["derive"] }
 tracing = {version = "0.1.40", features = ["log"]}
 env_logger = "0.10.1"
