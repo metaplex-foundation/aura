@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use entities::models::TokenAccResponse;
-use entities::models::{AssetSignatureWithPagination, OffChainData, CoreFeesAccount};
+use entities::models::{AssetSignatureWithPagination, CoreFeesAccount, OffChainData};
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
@@ -13,7 +13,9 @@ use serde_json::Value;
 use solana_program::pubkey::Pubkey;
 use url::Url;
 
-use super::response::{AssetError, CoreFeesAccountsList, TokenAccountsList, TransactionSignatureList};
+use super::response::{
+    AssetError, CoreFeesAccountsList, TokenAccountsList, TransactionSignatureList,
+};
 use super::rpc_asset_models::FullAsset;
 use super::rpc_asset_models::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, MetadataMap,

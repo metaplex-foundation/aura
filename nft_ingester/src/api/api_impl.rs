@@ -17,8 +17,8 @@ use crate::api::dapi::rpc_asset_models::Asset;
 use crate::api::error::DasApiError;
 use crate::config::{ApiConfig, JsonMiddlewareConfig};
 use dapi::get_asset_signatures::get_asset_signatures;
+use dapi::get_core_fees::get_core_fees;
 use dapi::get_token_accounts::get_token_accounts;
-use digital_asset_types::dapi::get_core_fees::get_core_fees;
 use entities::api_req_params::{
     GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
     GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetCoreFees,

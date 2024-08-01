@@ -1,9 +1,9 @@
-use crate::dapi::common::build_core_fees_response;
+use crate::api::dapi::rpc_asset_convertors::build_core_fees_response;
 use postgre_client::PgClient;
 use rocks_db::errors::StorageError;
 use std::sync::Arc;
 
-use crate::rpc::response::CoreFeesAccountsList;
+use crate::api::dapi::response::CoreFeesAccountsList;
 
 pub async fn get_core_fees(
     pg_client: Arc<PgClient>,
