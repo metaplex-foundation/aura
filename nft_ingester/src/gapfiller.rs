@@ -1,9 +1,11 @@
+use crate::api::synchronization_state_consistency::CATCH_UP_SEQUENCES_TIMEOUT_SEC;
 use futures::StreamExt;
 use interface::asset_streaming_and_discovery::{AssetDetailsConsumer, RawBlocksConsumer};
-use log::error;
 use rocks_db::Storage;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
+use tracing::{error, info};
 
 /// Method returns the number of successfully processed assets
 pub async fn process_raw_blocks_stream(
@@ -24,12 +26,11 @@ pub async fn process_raw_blocks_stream(
         }
     };
 
+    let mut rx = rx;
     let mut processed_slots = 0;
-    while let Some(result) = raw_blocks_streamer.next().await {
-        if !rx.is_empty() {
-            break;
-        }
-        match result {
+
+    while rx.is_empty() {
+        match raw_blocks_streamer.next().await {
             Ok(block) => {
                 if let Some(e) = storage
                     .raw_blocks_cbor
@@ -44,6 +45,14 @@ pub async fn process_raw_blocks_stream(
             }
             Err(e) => {
                 error!("Error processing raw block stream item: {}", e);
+            }
+        }
+
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)) => {},
+            _ = rx.recv() => {
+                info!("Received stop signal, stopping Gapfiller processing raw blocks...");
+                return processed_slots;
             }
         }
     }
@@ -70,12 +79,11 @@ pub async fn process_asset_details_stream(
         }
     };
 
+    let mut rx = rx;
     let mut processed_assets = 0;
-    while let Some(result) = asset_details_stream.next().await {
-        if !rx.is_empty() {
-            break;
-        }
-        match result {
+
+    while rx.is_empty() {
+        match asset_details_stream.next().await {
             Ok(details) => {
                 if let Some(e) = storage.insert_gaped_data(details).await.err() {
                     error!("Error processing gaped data: {}", e)
@@ -85,6 +93,14 @@ pub async fn process_asset_details_stream(
             }
             Err(e) => {
                 error!("Error processing asset details stream item: {}", e);
+            }
+        }
+
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)) => {},
+            _ = rx.recv() => {
+                info!("Received stop signal, stopping Gapfiller processing assets...");
+                return processed_assets;
             }
         }
     }
