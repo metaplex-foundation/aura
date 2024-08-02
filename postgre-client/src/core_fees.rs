@@ -49,16 +49,9 @@ impl PgClient {
         after: Option<String>,
     ) -> Result<Vec<CoreFeesAccountWithSortingID>, String> {
         let mut query_builder = QueryBuilder::new(
-            "SELECT fee_pubkey, fee_current_balance, fee_minimum_rent FROM core_fees WHERE not fee_paid ORDER BY",
+            "SELECT fee_pubkey, fee_current_balance, fee_minimum_rent FROM core_fees WHERE not fee_paid  ",
         );
         let order_reversed = before.is_some() && after.is_none();
-        if order_reversed {
-            query_builder.push(" DESC ")
-        } else {
-            query_builder.push(" ASC ")
-        };
-        query_builder.push(" fee_slot_updated ");
-
         if let Some(before) = before {
             let comparison = if order_reversed { " < " } else { " > " };
             add_slot_and_key_comparison(before.as_ref(), comparison, &mut query_builder)?;
@@ -67,6 +60,12 @@ impl PgClient {
             let comparison = if order_reversed { " > " } else { " < " };
             add_slot_and_key_comparison(after.as_ref(), comparison, &mut query_builder)?;
         }
+        query_builder.push(" ORDER BY fee_slot_updated ");
+        if order_reversed {
+            query_builder.push(" DESC ")
+        } else {
+            query_builder.push(" ASC ")
+        };
 
         query_builder.push(" LIMIT ");
         query_builder.push_bind(limit as i64);

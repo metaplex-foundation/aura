@@ -2,18 +2,13 @@ use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::mplx_updates_processor::CoreAssetFee;
 use crate::process_accounts;
-use blockbuster::programs::mpl_core_program::MplCoreAccountData;
 use entities::models::CoreFee;
 use metrics_utils::IngesterMetricsConfig;
-use mpl_core_program::state::{AssetV1, DataBlob, HashedAssetV1};
-use mpl_core_program::utils::fetch_core_data;
 use postgre_client::PgClient;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::account_info::AccountInfo;
 use solana_program::pubkey::Pubkey;
 use solana_program::rent::Rent;
 use solana_program::sysvar::rent;
-use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
@@ -114,7 +109,7 @@ impl MplCoreFeeProcessor {
     pub async fn store_mpl_assets_fee(&self, metadata_info: &HashMap<Pubkey, CoreAssetFee>) {
         let mut fees = Vec::new();
         for (pk, asset) in metadata_info.iter() {
-            let rent = match self.calculate_rent_amount(*pk, asset).await {
+            let rent = match self.calculate_rent_amount(asset).await {
                 Ok(rent) => rent,
                 Err(err) => {
                     error!("calculate_rent_amount: {:?}", err);
@@ -143,47 +138,12 @@ impl MplCoreFeeProcessor {
 
     async fn calculate_rent_amount(
         &self,
-        key: Pubkey,
         account_info: &CoreAssetFee,
     ) -> Result<u64, IngesterError> {
-        let rent_amount = match &account_info.indexable_asset {
-            MplCoreAccountData::EmptyAccount => self.rent.read().await.minimum_balance(1),
-            MplCoreAccountData::Asset(_) => {
-                let (asset, header, registry) = fetch_core_data::<AssetV1>(&AccountInfo::new(
-                    &key,
-                    false,
-                    false,
-                    &mut account_info.lamports.clone(),
-                    account_info.data.clone().borrow_mut(),
-                    &mpl_core_program::id(),
-                    false,
-                    account_info.rent_epoch,
-                ))?;
-                let header_size = match header {
-                    Some(header) => header.get_size(),
-                    None => 0,
-                };
-                let registry_size = match registry {
-                    Some(registry) => registry.get_size(),
-                    None => 0,
-                };
-                self.rent.read().await.minimum_balance(
-                    asset
-                        .get_size()
-                        .checked_add(header_size)
-                        .ok_or(IngesterError::NumericalOverflowError)?
-                        .checked_add(registry_size)
-                        .ok_or(IngesterError::NumericalOverflowError)?,
-                )
-            }
-            MplCoreAccountData::HashedAsset => self
-                .rent
-                .read()
-                .await
-                .minimum_balance(HashedAssetV1::LENGTH),
-            _ => return Err(IngesterError::IncorrectAccount),
-        };
-
-        Ok(rent_amount)
+        Ok(self
+            .rent
+            .read()
+            .await
+            .minimum_balance(account_info.data.len()))
     }
 }

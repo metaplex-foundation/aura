@@ -78,7 +78,6 @@ arweave-rs = {version = "0.2.0", git = "https://github.com/RequescoS/arweave-rs.
 serde_cbor = "0.11.2"
 triomphe = "=0.1.9"
 rollup-sdk = { path = "../rollup-sdk" }
-mpl-core-program = { git = "https://github.com/metaplex-foundation/mpl-core.git", branch = "feat/no-entypoint", features = ["no-entrypoint"] }
 jsonpath_lib = "0.3.0"
 mime_guess = "2.0.4"
 url = "2.3.1"
