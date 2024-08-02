@@ -96,7 +96,6 @@ pub struct RawBackfillConfig {
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {
     pub database_config: DatabaseConfig,
-    pub old_database_config: Option<DatabaseConfig>,
     pub tcp_config: TcpConfig,
     pub tx_background_savers: u32,
     pub backfill_background_savers: u32,
@@ -109,10 +108,7 @@ pub struct IngesterConfig {
     pub metrics_port_first_consumer: Option<u16>,
     pub metrics_port_second_consumer: Option<u16>,
     pub backfill_consumer_metrics_port: Option<u16>,
-    pub is_snapshot: Option<bool>,
     pub consumer_number: Option<usize>,
-    pub migration_batch_size: Option<u32>,
-    pub migrator_workers: Option<u32>,
     pub rocks_db_path_container: Option<String>,
     pub rocks_backup_url: String,
     pub rocks_backup_archives_dir: String,
@@ -337,10 +333,6 @@ impl IngesterConfig {
                 ),
             }),
         }
-    }
-
-    pub fn get_is_snapshot(&self) -> bool {
-        self.is_snapshot.unwrap_or_default()
     }
 
     pub fn get_log_level(&self) -> String {

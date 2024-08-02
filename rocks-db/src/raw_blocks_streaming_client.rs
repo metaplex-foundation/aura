@@ -72,8 +72,9 @@ impl RawBlockGetter for Storage {
             )
             .map_err(|e| Box::new(e) as AsyncError)
             .and_then(|res| {
+                let err_msg = format!("Cannot get raw block with slot: '{slot}'!");
                 res.and_then(|r| serde_cbor::from_slice::<RawBlock>(r.as_slice()).ok())
-                    .ok_or(Box::new(StorageError::NotFound) as AsyncError)
+                    .ok_or(Box::new(StorageError::NotFound(err_msg)) as AsyncError)
             })
     }
 }

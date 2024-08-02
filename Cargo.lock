@@ -2370,32 +2370,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "digital_asset_types"
-version = "0.7.2"
-dependencies = [
- "blockbuster",
- "bs58 0.4.0",
- "entities",
- "futures",
- "interface",
- "jsonpath_lib",
- "log",
- "metrics-utils",
- "mime_guess",
- "postgre-client",
- "rocks-db",
- "schemars",
- "serde",
- "serde_json",
- "solana-sdk",
- "spl-concurrent-merkle-tree 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "thiserror",
- "tokio",
- "url",
- "usecase",
-]
-
-[[package]]
 name = "dir-diff"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4321,8 +4295,9 @@ dependencies = [
 
 [[package]]
 name = "mpl-core"
-version = "0.7.0"
-source = "git+https://github.com/RequescoS/mpl-core.git#00496a76af1745aa2349199367be245cba2fec59"
+version = "0.8.0-beta.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1178d8a405352e2a2478abf5b62e2a4d6a91ed6f0470307ab6732614662dbf85"
 dependencies = [
  "base64 0.22.1",
  "borsh 0.10.3",
@@ -4485,7 +4460,6 @@ dependencies = [
  "clap 4.5.4",
  "criterion",
  "csv",
- "digital_asset_types",
  "entities",
  "env_logger 0.10.2",
  "figment",
@@ -4497,12 +4471,14 @@ dependencies = [
  "interface",
  "itertools 0.12.1",
  "jemallocator",
+ "jsonpath_lib",
  "jsonrpc-core 19.0.0",
  "jsonrpc-http-server",
  "lazy_static",
  "libc",
  "log",
  "metrics-utils",
+ "mime_guess",
  "mockall 0.11.4",
  "mpl-bubblegum",
  "mpl-token-metadata 4.1.2",
@@ -4545,6 +4521,7 @@ dependencies = [
  "tracing-subscriber",
  "tracing-test",
  "triomphe",
+ "url",
  "usecase",
  "utils",
  "uuid 1.8.0",

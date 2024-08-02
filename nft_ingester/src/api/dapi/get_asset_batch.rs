@@ -1,30 +1,29 @@
-use std::sync::Arc;
-
 use entities::api_req_params::Options;
 use interface::json::{JsonDownloader, JsonPersister};
 use rocks_db::{errors::StorageError, Storage};
 use solana_sdk::pubkey::Pubkey;
+use std::sync::Arc;
 use tokio::{
     sync::Mutex,
     task::{JoinError, JoinSet},
 };
 
-use crate::{dao::scopes, rpc::Asset};
+use crate::api::dapi::asset;
+use crate::api::dapi::rpc_asset_convertors::asset_to_rpc;
+use crate::api::dapi::rpc_asset_models::Asset;
 
-use super::common::asset_to_rpc;
-
-pub async fn get_asset(
+pub async fn get_asset_batch(
     rocks_db: Arc<Storage>,
-    id: Pubkey,
+    ids: Vec<Pubkey>,
     options: Options,
     json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-) -> Result<Option<Asset>, StorageError> {
-    let assets = scopes::asset::get_by_ids(
+) -> Result<Vec<Option<Asset>>, StorageError> {
+    let assets = asset::get_by_ids(
         rocks_db,
-        vec![id],
+        ids,
         options,
         json_downloader,
         json_persister,
@@ -33,8 +32,11 @@ pub async fn get_asset(
     )
     .await?;
 
-    match &assets[0] {
-        Some(asset) => asset_to_rpc(asset.clone()),
-        None => Ok(None),
-    }
+    assets
+        .into_iter()
+        .map(|asset| match asset {
+            Some(asset) => Ok(Some(asset_to_rpc(asset)?.unwrap())),
+            None => Ok(None),
+        })
+        .collect()
 }
