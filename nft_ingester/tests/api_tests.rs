@@ -2312,7 +2312,39 @@ mod tests {
         };
         let res = api.get_core_fees(payload).await.unwrap();
         let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
-
         assert_eq!(res.core_fees_account.len(), 50);
+
+        let payload = GetCoreFees {
+            limit: Some(975),
+            page: None,
+            before: None,
+            after: None,
+            cursor: None,
+        };
+        let res = api.get_core_fees(payload).await.unwrap();
+        let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
+        assert_eq!(res.core_fees_account.len(), 975);
+
+        let payload = GetCoreFees {
+            limit: None,
+            page: None,
+            before: None,
+            after: None,
+            cursor: res.cursor,
+        };
+        let res = api.get_core_fees(payload).await.unwrap();
+        let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
+        assert_eq!(res.core_fees_account.len(), 25);
+
+        let payload = GetCoreFees {
+            limit: None,
+            page: None,
+            before: None,
+            after: None,
+            cursor: res.cursor,
+        };
+        let res = api.get_core_fees(payload).await.unwrap();
+        let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
+        assert_eq!(res.core_fees_account.len(), 0);
     }
 }

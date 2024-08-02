@@ -49,15 +49,15 @@ impl PgClient {
         after: Option<String>,
     ) -> Result<Vec<CoreFeesAccountWithSortingID>, String> {
         let mut query_builder = QueryBuilder::new(
-            "SELECT fee_pubkey, fee_current_balance, fee_minimum_rent FROM core_fees WHERE not fee_paid  ",
+            "SELECT fee_pubkey, fee_current_balance, fee_minimum_rent, fee_slot_updated FROM core_fees WHERE not fee_paid  ",
         );
         let order_reversed = before.is_some() && after.is_none();
         if let Some(before) = before {
-            let comparison = if order_reversed { " < " } else { " > " };
+            let comparison = if order_reversed { " > " } else { " < " };
             add_slot_and_key_comparison(before.as_ref(), comparison, &mut query_builder)?;
         }
         if let Some(after) = after {
-            let comparison = if order_reversed { " > " } else { " < " };
+            let comparison = if order_reversed { " < " } else { " > " };
             add_slot_and_key_comparison(after.as_ref(), comparison, &mut query_builder)?;
         }
         query_builder.push(" ORDER BY fee_slot_updated ");
