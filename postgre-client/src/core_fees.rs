@@ -1,8 +1,8 @@
 use crate::{PgClient, BATCH_SELECT_ACTION, INSERT_ACTION, SQL_COMPONENT};
 use chrono::Utc;
-use entities::models::{CoreFee, CoreFeesAccount};
+use entities::models::{CoreFee, CoreFeesAccount, CoreFeesAccountWithSortingID};
 use solana_sdk::pubkey::Pubkey;
-use sqlx::{QueryBuilder, Row};
+use sqlx::{Postgres, QueryBuilder, Row};
 
 impl PgClient {
     pub async fn save_core_fees(&self, fees: Vec<CoreFee>) -> Result<(), String> {
@@ -43,17 +43,39 @@ impl PgClient {
 
     pub async fn get_core_fees(
         &self,
-        page: u64,
         limit: u64,
-    ) -> Result<Vec<CoreFeesAccount>, String> {
+        page: Option<u64>,
+        before: Option<String>,
+        after: Option<String>,
+    ) -> Result<Vec<CoreFeesAccountWithSortingID>, String> {
         let mut query_builder = QueryBuilder::new(
-            "SELECT fee_pubkey, fee_current_balance, fee_minimum_rent FROM core_fees WHERE not fee_paid ORDER BY fee_slot_updated",
+            "SELECT fee_pubkey, fee_current_balance, fee_minimum_rent FROM core_fees WHERE not fee_paid ORDER BY",
         );
+        let order_reversed = before.is_some() && after.is_none();
+        if order_reversed {
+            query_builder.push(" DESC ")
+        } else {
+            query_builder.push(" ASC ")
+        };
+        query_builder.push(" fee_slot_updated ");
+
+        if let Some(before) = before {
+            let comparison = if order_reversed { " < " } else { " > " };
+            add_slot_and_key_comparison(before.as_ref(), comparison, &mut query_builder)?;
+        }
+        if let Some(after) = after {
+            let comparison = if order_reversed { " > " } else { " < " };
+            add_slot_and_key_comparison(after.as_ref(), comparison, &mut query_builder)?;
+        }
+
         query_builder.push(" LIMIT ");
         query_builder.push_bind(limit as i64);
-        if page > 1 {
-            query_builder.push(" OFFSET ");
-            query_builder.push_bind((page as i64).saturating_sub(1) * limit as i64);
+        if let Some(page_num) = page {
+            if page_num > 0 {
+                let offset = (page_num.saturating_sub(1)) * limit; // Prevent underflow
+                query_builder.push(" OFFSET ");
+                query_builder.push_bind(offset as i64);
+            }
         }
         query_builder.push(";");
         let query = query_builder.build();
@@ -67,13 +89,39 @@ impl PgClient {
             .observe_request(SQL_COMPONENT, BATCH_SELECT_ACTION, "core_fees", start_time);
         Ok(result
             .iter()
-            .map(|row| CoreFeesAccount {
-                address: Pubkey::try_from(row.get::<Vec<u8>, _>("fee_pubkey"))
-                    .unwrap()
-                    .to_string(),
-                current_balance: row.get::<i64, _>("fee_current_balance"),
-                minimum_rent: row.get::<i64, _>("fee_minimum_rent"),
+            .map(|row| {
+                let slot = row.get::<i64, _>("fee_slot_updated");
+                let pubkey = Pubkey::try_from(row.get::<Vec<u8>, _>("fee_pubkey")).unwrap();
+                CoreFeesAccountWithSortingID::from((
+                    pubkey.to_bytes().to_vec().as_slice(),
+                    slot,
+                    CoreFeesAccount {
+                        address: pubkey.to_string(),
+                        current_balance: row.get::<i64, _>("fee_current_balance"),
+                        minimum_rent: row.get::<i64, _>("fee_minimum_rent"),
+                    },
+                ))
             })
             .collect::<Vec<_>>())
     }
+}
+
+fn add_slot_and_key_comparison(
+    key: &str,
+    comparison: &str,
+    query_builder: &mut QueryBuilder<'_, Postgres>,
+) -> Result<(), String> {
+    let res = crate::asset_filter_client::decode_sorting_key(key);
+
+    if let Ok((slot, pubkey)) = res {
+        query_builder.push(format!(" AND (fee_slot_updated {}", comparison));
+        query_builder.push_bind(slot);
+        query_builder.push(" OR (fee_slot_updated = ");
+        query_builder.push_bind(slot);
+        query_builder.push(format!(" AND fee_pubkey {}", comparison));
+        query_builder.push_bind(pubkey);
+        query_builder.push("))");
+    }
+
+    Ok(())
 }

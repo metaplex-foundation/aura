@@ -3,6 +3,8 @@ use crate::enums::{
     RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TaskStatus, TokenStandard,
     UseMethod,
 };
+use base64::engine::general_purpose;
+use base64::Engine;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -450,6 +452,25 @@ pub struct CoreFeesAccount {
     pub address: String,
     pub current_balance: i64,
     pub minimum_rent: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct CoreFeesAccountWithSortingID {
+    pub sorting_id: String,
+    pub fees_account: CoreFeesAccount,
+}
+
+impl From<(&[u8], i64, CoreFeesAccount)> for CoreFeesAccountWithSortingID {
+    fn from((pubkey, slot, value): (&[u8], i64, CoreFeesAccount)) -> Self {
+        let mut key = slot.to_be_bytes().to_vec();
+        key.extend_from_slice(pubkey);
+        let sorting_id = general_purpose::STANDARD_NO_PAD.encode(key);
+
+        Self {
+            sorting_id,
+            fees_account: value,
+        }
+    }
 }
 
 #[cfg(test)]

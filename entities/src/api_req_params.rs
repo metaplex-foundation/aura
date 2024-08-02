@@ -235,9 +235,9 @@ pub struct SearchAssets {
 pub struct GetCoreFees {
     pub limit: Option<u32>,
     pub page: Option<u32>,
-    // pub before: Option<String>,
-    // pub after: Option<String>,
-    // pub cursor: Option<String>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub cursor: Option<String>,
 }
 
 impl SearchAssets {

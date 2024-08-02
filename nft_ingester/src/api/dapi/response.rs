@@ -118,8 +118,8 @@ pub struct CoreFeesAccountsList {
     pub limit: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u64>,
-    // pub before: Option<String>,
-    // pub after: Option<String>,
-    // pub cursor: Option<String>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub cursor: Option<String>,
     pub core_fees_account: Vec<CoreFeesAccount>,
 }

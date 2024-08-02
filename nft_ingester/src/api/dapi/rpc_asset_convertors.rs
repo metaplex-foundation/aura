@@ -2,8 +2,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 
-use entities::models::TokenAccResponse;
-use entities::models::{AssetSignatureWithPagination, CoreFeesAccount, OffChainData};
+use entities::models::{AssetSignatureWithPagination, OffChainData};
+use entities::models::{CoreFeesAccountWithSortingID, TokenAccResponse};
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
@@ -471,17 +471,24 @@ pub fn build_token_accounts_response(
 }
 
 pub fn build_core_fees_response(
-    core_fees_account: Vec<CoreFeesAccount>,
+    core_fees_account: Vec<CoreFeesAccountWithSortingID>,
     limit: u64,
     page: Option<u64>,
+    before: Option<String>,
+    after: Option<String>,
+    cursor: Option<String>,
 ) -> Result<CoreFeesAccountsList, String> {
-    // let pagination = get_pagination_values(&token_accounts, &page, cursor_enabled)?;
-
     Ok(CoreFeesAccountsList {
         total: core_fees_account.len() as u64,
         limit,
         page,
-        core_fees_account,
+        core_fees_account: core_fees_account
+            .into_iter()
+            .map(|c| c.fees_account)
+            .collect::<Vec<_>>(),
+        after,
+        before,
+        cursor,
     })
 }
 

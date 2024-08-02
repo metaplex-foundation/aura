@@ -91,12 +91,11 @@ impl MplCoreFeeProcessor {
                 tokio::select! {
                     _ = rx.recv() => {
                         info!("Received stop signal, stopping update_rent...");
-                        return ();
+                        return;
                     }
                     _ = tokio::time::sleep(FETCH_RENT_INTERVAL) => {},
                 }
             }
-            ()
         }));
     }
 

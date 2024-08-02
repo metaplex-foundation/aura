@@ -464,26 +464,27 @@ where
         let GetCoreFees {
             limit,
             page,
-            // before,
-            // after,
-            // cursor,
+            before,
+            after,
+            cursor,
         } = payload;
 
-        // let pagination = Pagination {
-        //     limit,
-        //     page,
-        //     before,
-        //     after,
-        //     cursor,
-        // };
-        //
-        // // todo: a hack to return more pages where the before/after pagination is not implemented
-        // Self::validate_basic_pagination(&pagination, self.max_page_limit * 10)?;
+        let pagination = Pagination {
+            limit,
+            page,
+            before,
+            after,
+            cursor,
+        };
 
+        Self::validate_basic_pagination(&pagination, self.max_page_limit)?;
         let res = get_core_fees(
             self.pg_client.clone(),
             limit.unwrap_or(DEFAULT_LIMIT as u32).into(),
             page.map(|page| page as u64),
+            pagination.before,
+            pagination.after,
+            pagination.cursor,
         )
         .await?;
 
