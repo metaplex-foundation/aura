@@ -1,4 +1,5 @@
 pub mod account_balance;
+pub mod assert_urls;
 pub mod asset_sigratures;
 pub mod asset_streaming_and_discovery;
 pub mod batch_mint;
@@ -11,11 +12,10 @@ pub mod migration_version_manager;
 pub mod price_fetcher;
 pub mod processing_possibility;
 pub mod proofs;
+pub mod schedules;
 pub mod sequence_consistent;
 pub mod signature_persistence;
 pub mod slot_getter;
 pub mod slots_dumper;
 pub mod solana_rpc;
 pub mod token_accounts;
-pub mod assert_urls;
-pub mod schedules;

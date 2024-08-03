@@ -38,6 +38,7 @@ use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
 pub mod asset;
 mod asset_client;
+pub mod asset_previews;
 pub mod asset_signatures;
 pub mod asset_streaming_client;
 pub mod backup_service;
@@ -59,6 +60,7 @@ pub mod parameters;
 pub mod processing_possibility;
 pub mod raw_block;
 pub mod raw_blocks_streaming_client;
+pub mod schedule;
 pub mod sequence_consistent;
 pub mod signature_client;
 pub mod slots_dumper;
@@ -68,8 +70,6 @@ pub mod token_prices;
 pub mod transaction;
 pub mod transaction_client;
 pub mod tree_seq;
-pub mod asset_previews;
-pub mod schedule;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 

@@ -2,23 +2,23 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use digital_asset_types::dapi::common::parse_files;
 use entities::models::OffChainData;
 use log::error;
 use rocks_db::asset_previews::UrlToDownload;
 
 use rocks_db::Storage;
 
-use interface::schedules::SchedulesStore;
-use entities::schedule::Schedule;
 use entities::schedule::JobRunState;
+use entities::schedule::Schedule;
+use interface::schedules::SchedulesStore;
 use tonic::async_trait;
 
+use crate::api::dapi::rpc_asset_convertors::parse_files;
 
 /// Represents a functionality for running background jobs according
 /// to a confgurations stored in DB.
 /// Jobs can be one-time jobs, or periodically running jobs.
-/// 
+///
 /// The main feature of this scheduler is that if a jobs is a long
 /// running task, it should do the work in iterative way.
 /// And after each iteration, the intermediate state is persisted
@@ -33,20 +33,14 @@ pub struct Scheduler {
 
 impl Scheduler {
     pub fn new(storage: Arc<Storage>) -> Scheduler {
-
         // Here we defined all "scheduled" jobs
-        let jobs: Vec<Box<dyn Job + Send>> = vec![
-            Box::new(InitUrlsToDownloadJob{
-                storage: storage.clone(),
-                batch_size: 1000,
-                last_key: None,
-            }),
-        ];
+        let jobs: Vec<Box<dyn Job + Send>> = vec![Box::new(InitUrlsToDownloadJob {
+            storage: storage.clone(),
+            batch_size: 1000,
+            last_key: None,
+        })];
 
-        Scheduler {
-            storage,
-            jobs,
-        }
+        Scheduler { storage, jobs }
     }
 
     pub async fn run_in_background(mut scheduler: Scheduler) {
@@ -68,7 +62,7 @@ impl Scheduler {
                         let initial_config = job.initial_config();
                         self.storage.put_schedule(&initial_config);
                         initial_config
-                    },
+                    }
                 };
                 if sched.wont_run_again() {
                     to_remove.push(job.id());
@@ -78,21 +72,24 @@ impl Scheduler {
                         match job.run().await {
                             JobRunResult::Finished(state) => {
                                 self.storage.mark_finished(&mut sched, state);
-                                if  sched.wont_run_again() {
+                                if sched.wont_run_again() {
                                     to_remove.push(job.id());
                                 } else if let Some(run_interval_sec) = sched.run_interval_sec {
-                                    sleep_to_next_run = std::cmp::min(sleep_to_next_run, sched.last_run_epoch_time + run_interval_sec);
+                                    sleep_to_next_run = std::cmp::min(
+                                        sleep_to_next_run,
+                                        sched.last_run_epoch_time + run_interval_sec,
+                                    );
                                 }
                                 break;
-                            },
+                            }
                             JobRunResult::NotFinished(state) => {
                                 self.storage.update_state(&mut sched, state);
-                            },
+                            }
                             JobRunResult::Error(state_op) => {
                                 self.storage.mark_failed(&mut sched, state_op);
                                 to_remove.push(job.id());
                                 break;
-                            },
+                            }
                         };
                     }
                 }
@@ -102,8 +99,7 @@ impl Scheduler {
                 break;
             }
             tokio::time::sleep(Duration::from_secs(sleep_to_next_run)).await;
-        };
-
+        }
     }
 }
 
@@ -135,7 +131,7 @@ trait SchedulesStoreEx: SchedulesStore {
     }
 }
 
-impl <T> SchedulesStoreEx for T where T : SchedulesStore { }
+impl<T> SchedulesStoreEx for T where T: SchedulesStore {}
 
 /// Result of a job interation. Each iteration returns an updates state for the job.
 pub enum JobRunResult {
@@ -163,15 +159,17 @@ pub trait Job {
 
 /// One-shot job that is responsible for collecting all the NFT asset URLs from
 /// the offchain data column family and pushing these URLs in
-/// the URLs to download table.
-/// In the normal from a URL is pushed to "URLs to download" immediately
+/// the URLs to download column family.
+/// In the normal flow, a URL is pushed to "URLs to download" immediately
 /// when the new NFT is ingested by the nft_injecter. But since
 /// "URLs to download" column family has been created after the offchain data,
 /// there is a need to backfill already existing records.
 /// And this job does this backfilling.
 pub struct InitUrlsToDownloadJob {
     storage: Arc<Storage>,
+    /// how much offchain data records we process into URLs to donwload in a single run
     batch_size: usize,
+    /// a key of the last offchain data record processed in the previous run
     last_key: Option<String>,
 }
 
@@ -184,7 +182,7 @@ impl Job for InitUrlsToDownloadJob {
     fn initial_config(&self) -> Schedule {
         Schedule {
             job_id: self.id(),
-            run_interval_sec: None,
+            run_interval_sec: None, // one-time job
             last_run_epoch_time: 0,
             last_run_status: JobRunState::NotRun,
             state: None,
@@ -197,20 +195,35 @@ impl Job for InitUrlsToDownloadJob {
 
     async fn run(&mut self) -> JobRunResult {
         let data = match &self.last_key {
-            Some(v) => self.storage.asset_offchain_data.get_after(v.clone(), self.batch_size),
-            None => self.storage.asset_offchain_data.get_from_start(self.batch_size),
+            Some(v) => self
+                .storage
+                .asset_offchain_data
+                .get_after(v.clone(), self.batch_size),
+            None => self
+                .storage
+                .asset_offchain_data
+                .get_from_start(self.batch_size),
         };
 
         if data.is_empty() {
             return JobRunResult::Finished(None);
         }
 
-        self.last_key = Some(data.last().unwrap().0.clone()); // won't ever fail
+        self.last_key = Some(data.last().unwrap().0.clone()); // .unwrap() won't ever fail
 
-        let urls: HashMap<String, UrlToDownload> = data.into_iter()
+        let urls: HashMap<String, UrlToDownload> = data
+            .into_iter()
             .filter_map(|(_, OffChainData { url, metadata })| parse_files(&metadata))
-            .flat_map(|files| files.into_iter().filter_map(|f|f.uri))
-            .map(|uri| (uri, UrlToDownload { timestamp: 0, download_attempts: 0 }))
+            .flat_map(|files| files.into_iter().filter_map(|f| f.uri))
+            .map(|uri| {
+                (
+                    uri,
+                    UrlToDownload {
+                        timestamp: 0,
+                        download_attempts: 0,
+                    },
+                )
+            })
             .collect();
 
         if let Err(e) = self.storage.urls_to_download.put_batch(urls).await {
@@ -218,10 +231,11 @@ impl Job for InitUrlsToDownloadJob {
             return JobRunResult::Error(None);
         };
 
-        // If somehow the rocks key cannot be serialized, then it's probably better to crush?
-        JobRunResult::NotFinished(self.last_key.clone().map(|s|bincode::serialize(&s).unwrap()))
+        // If somehow the rocks key cannot be serialized, then it's probably better to crash?
+        JobRunResult::NotFinished(
+            self.last_key
+                .clone()
+                .map(|s| bincode::serialize(&s).unwrap()),
+        )
     }
-    
-
 }
-

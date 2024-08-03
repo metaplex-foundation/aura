@@ -179,16 +179,16 @@ pub async fn main() -> Result<(), IngesterError> {
     let index_storage = Arc::new(
         PgClient::new(
             &config.database_config.get_database_url().unwrap(),
-            1,
-            2,
+            DEFAULT_MIN_POSTGRES_CONNECTIONS,
+            max_postgre_connections,
             metrics_state.red_metrics.clone(),
         )
         .await?,
     );
-    // index_storage
-    //     .run_migration(PG_MIGRATIONS_PATH)
-    //     .await
-    //     .map_err(IngesterError::SqlxError)?;
+    index_storage
+        .run_migration(PG_MIGRATIONS_PATH)
+        .await
+        .map_err(IngesterError::SqlxError)?;
     let tasks = JoinSet::new();
 
     let mutexed_tasks = Arc::new(Mutex::new(tasks));

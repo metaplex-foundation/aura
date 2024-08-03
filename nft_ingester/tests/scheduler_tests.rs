@@ -1,9 +1,9 @@
 use assertables::assert_contains;
 use assertables::assert_contains_as_result;
+use entities::models::OffChainData;
 use nft_ingester::scheduler::Scheduler;
 use rocks_db::asset_previews::UrlToDownload;
 use setup::rocks::RocksTestEnvironment;
-use entities::models::OffChainData;
 
 const NFT_1: (&str, &str) = (
     "https://yra5lrhegorsgx7upcyi5trrfiktyczlq5g3jst3yvgaefab36vq.arweave.net/xEHVxOQzoyNf9Hiwjs4xKhU8CyuHTbTKe8VMAhQB36s",
@@ -47,7 +47,7 @@ const NFT_2: (&str, &str) = (
             ]
         }
         }
-    "#
+    "#,
 );
 
 #[tokio::test]
@@ -60,9 +60,16 @@ async fn test_collect_urls_to_download() {
 
     let nfts = [NFT_1, NFT_2];
     nfts.iter()
-        .map(|(url, metadata)| OffChainData { url: url.to_string(), metadata: metadata.to_string() })
+        .map(|(url, metadata)| OffChainData {
+            url: url.to_string(),
+            metadata: metadata.to_string(),
+        })
         .for_each(|entity| {
-            rocks_env.storage.asset_offchain_data.put(entity.url.clone(), entity).unwrap()
+            rocks_env
+                .storage
+                .asset_offchain_data
+                .put(entity.url.clone(), entity)
+                .unwrap()
         });
 
     let sut = Scheduler::new(rocks_env.storage.clone());
@@ -76,17 +83,23 @@ async fn test_collect_urls_to_download() {
 
     let expected_urls = [
         "https://arweave.net/doAKIwo6dzUqzPQd6F9ROqWv5Gc61AGWhGPvTpY_Uy0".to_string(),
-        "https://888jup.com/img/888jup.png".to_string()
+        "https://888jup.com/img/888jup.png".to_string(),
     ];
     let res = rocks_env.storage.urls_to_download.get_from_start(10);
-    res.iter()
-        .for_each(|(url, UrlToDownload { timestamp, download_attempts } )| {
+    res.iter().for_each(
+        |(
+            url,
+            UrlToDownload {
+                timestamp,
+                download_attempts,
+            },
+        )| {
             assert_contains!(expected_urls, url);
             println!("URL: {}", url);
             assert_eq!(*timestamp, 0);
             assert_eq!(*download_attempts, 0);
-        });
-
+        },
+    );
 }
 
 /// Makes given number of attempts to get the given predicate true.
@@ -96,19 +109,17 @@ async fn test_collect_urls_to_download() {
 /// `duration` - an invterway to wait between condition checks
 #[macro_export]
 macro_rules! await_async_for {
-    ($condition: expr, $attempts: literal, $duration: expr) => {
-        {
-            let mut attempts_ = $attempts;
-            loop {
-                if $condition {
-                    break;
-                };
-                if attempts_ == 0 {
-                    panic!("No attempts left, but the condition is not satisfied");
-                };
-                attempts_ -= 1;
-                tokio::time::sleep($duration).await;
-            } 
+    ($condition: expr, $attempts: literal, $duration: expr) => {{
+        let mut attempts_ = $attempts;
+        loop {
+            if $condition {
+                break;
+            };
+            if attempts_ == 0 {
+                panic!("No attempts left, but the condition is not satisfied");
+            };
+            attempts_ -= 1;
+            tokio::time::sleep($duration).await;
         }
-    };
+    }};
 }

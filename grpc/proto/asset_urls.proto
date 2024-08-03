@@ -4,15 +4,22 @@ import "google/protobuf/wrappers.proto";
 import "google/protobuf/empty.proto";
 package asseturls;
 
-
+// Collections of asset URLs to download
 message AssetsToDownload {
     repeated string urls = 1;
 }
 
 message GetAssetUrlsRequest {
+    // Number of URLs requested for downloading
     uint32 count = 1;
 }
 
+// Collection of download results
+message DownloadResultsRequest {
+    repeated UrlDownloadDetails results = 1;
+}
+
+// Result of downloading
 message UrlDownloadDetails {
     string url = 1;
     oneof dl_result {
@@ -34,10 +41,6 @@ enum DownloadError {
     TOO_LARGE = 3;
     TOO_MANY_REQUESTS = 4;
     CORRUPTED_ASSET = 5;
-}
-
-message DownloadResultsRequest {
-    repeated UrlDownloadDetails results = 1;
 }
 
 service AssetUrlService {

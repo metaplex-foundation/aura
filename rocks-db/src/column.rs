@@ -6,7 +6,6 @@ use entities::models::{TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
 use serde::{de::DeserializeOwned, Serialize};
-use serde_json::map::Iter;
 use solana_sdk::pubkey::Pubkey;
 use tracing::error;
 
@@ -368,10 +367,9 @@ where
     fn to_pairs_generic(
         &self,
         it: &mut dyn Iterator<Item = std::result::Result<(Box<[u8]>, Box<[u8]>), rocksdb::Error>>,
-        num: usize
+        num: usize,
     ) -> Vec<(C::KeyType, C::ValueType)> {
-        it
-            .filter_map(|r|r.ok())
+        it.filter_map(|r| r.ok())
             .filter_map(|(key_bytes, val_bytes)| {
                 let k_op = C::decode_key(key_bytes.to_vec()).ok();
                 let v_op = deserialize::<C::ValueType>(&val_bytes).ok();
@@ -381,30 +379,19 @@ where
             .collect::<Vec<_>>()
     }
 
-    pub fn get_from_start(&self, num: usize) -> Vec<(C::KeyType, C::ValueType)>  {
-        // self.iter_start()
-        //     .filter_map(|r|r.ok())
-        //     .filter_map(|(key_bytes, val_bytes)| {
-        //         let k_op = C::decode_key(key_bytes.to_vec()).ok();
-        //         let v_op = deserialize::<C::ValueType>(&val_bytes).ok();
-        //         k_op.zip(v_op)
-        //     })
-        //     .take(num)
-        //     .collect::<Vec<_>>();
+    /// Fetches maximum given amount of records from the beginning of the column family.
+    /// ## Args:
+    /// * `num` - desired amount of records to fetch
+    pub fn get_from_start(&self, num: usize) -> Vec<(C::KeyType, C::ValueType)> {
         self.to_pairs_generic(&mut self.iter_start(), num)
     }
 
-    pub fn get_after(&self, key: C::KeyType, num: usize) -> Vec<(C::KeyType, C::ValueType)>  {
-        // self.iter(key)
-        //     .skip(1)
-        //     .filter_map(|r|r.ok())
-        //     .filter_map(|(key_bytes, val_bytes)| {
-        //         let k_op = C::decode_key(key_bytes.to_vec()).ok();
-        //         let v_op = deserialize::<C::ValueType>(&val_bytes).ok();
-        //         k_op.zip(v_op)
-        //     })
-        //     .take(num)
-        //     .collect::<Vec<_>>()
+    /// Fetches maximum given amount of records from the position that is right
+    /// after the given key.
+    /// ## Args:
+    /// * `key` - the key, records should be fetched after
+    /// * `num` - desired amount of records to fetch
+    pub fn get_after(&self, key: C::KeyType, num: usize) -> Vec<(C::KeyType, C::ValueType)> {
         self.to_pairs_generic(&mut self.iter(key).skip(1), num)
     }
 

@@ -36,13 +36,15 @@ impl Schedule {
             return true;
         };
 
-        self.run_interval_sec.map(|sec_interval| {
-            let since_the_epoch = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
-            since_the_epoch > self.last_run_epoch_time + sec_interval
-        }).unwrap_or(false)
+        self.run_interval_sec
+            .map(|sec_interval| {
+                let since_the_epoch = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                since_the_epoch > self.last_run_epoch_time + sec_interval
+            })
+            .unwrap_or(false)
     }
 
     /// Check if the given schedule belongs to a one-time job, that has been finished already.
