@@ -27,6 +27,8 @@ skaffold-state.json
 test-programs
 .DS_Store
 .env
+*.log
+*m_s_p
 
 **/creds.json
 my_rocksdb/

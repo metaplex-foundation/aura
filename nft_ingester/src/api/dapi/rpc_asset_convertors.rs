@@ -124,6 +124,94 @@ pub fn get_content(
         meta.set_item("token_standard", standard.clone());
     }
 
+    // TODO: remove
+    // let mut links = HashMap::new();
+    // let link_fields = vec!["image", "animation_url", "external_url"];
+    // for f in link_fields {
+    //     let l = safe_select(selector, format!("$.{}", f).as_str());
+    //     if let Some(l) = l {
+    //         links.insert(f.to_string(), l.to_owned());
+    //     }
+    // }
+
+    // let _metadata = safe_select(selector, "description");
+    // let mut actual_files: HashMap<String, File> = HashMap::new();
+    // if let Some(files) = selector("$.properties.files[*]")
+    //     .ok()
+    //     .filter(|d| !Vec::is_empty(d))
+    // {
+    //     for v in files.iter() {
+    //         if v.is_object() {
+    //             // Some assets don't follow the standard and specifiy 'url' instead of 'uri'
+    //             let mut uri = v.get("uri");
+    //             if uri.is_none() {
+    //                 uri = v.get("url");
+    //             }
+    //             let mime_type = v.get("type");
+
+    //             match (uri, mime_type) {
+    //                 (Some(u), Some(m)) => {
+    //                     if let Some(str_uri) = u.as_str() {
+    //                         let file = if let Some(str_mime) = m.as_str() {
+    //                             File {
+    //                                 uri: Some(str_uri.to_string()),
+    //                                 mime: Some(str_mime.to_string()),
+    //                                 quality: None,
+    //                                 contexts: None,
+    //                             }
+    //                         } else {
+    //                             warn!("Mime is not string: {:?}", m);
+    //                             file_from_str(str_uri.to_string())
+    //                         };
+    //                         actual_files.insert(str_uri.to_string().clone(), file);
+    //                     } else {
+    //                         warn!("URI is not string: {:?}", u);
+    //                     }
+    //                 }
+    //                 (Some(u), None) => {
+    //                     let str_uri = serde_json::to_string(u).unwrap_or_else(|_| String::new());
+    //                     actual_files.insert(str_uri.clone(), file_from_str(str_uri));
+    //                 }
+    //                 _ => {}
+    //             }
+    //         } else if v.is_string() {
+    //             let str_uri = v.as_str().unwrap().to_string();
+    //             actual_files.insert(str_uri.clone(), file_from_str(str_uri));
+    //         }
+    //     }
+    // }
+
+    // track_top_level_file(&mut actual_files, links.get("image"));
+    // track_top_level_file(&mut actual_files, links.get("animation_url"));
+
+    // let mut files: Vec<File> = actual_files.into_values().collect();
+
+    let (links, mut files) = parse_files_from_selector(selector);
+
+    // List the defined image file before the other files (if one exists).
+    files.sort_by(|a, _: &File| match (a.uri.as_ref(), links.get("image")) {
+        (Some(x), Some(y)) => {
+            if x == y {
+                Ordering::Less
+            } else {
+                Ordering::Equal
+            }
+        }
+        _ => Ordering::Equal,
+    });
+
+    Ok(Content {
+        schema: "https://schema.metaplex.com/nft1.0.json".to_string(),
+        json_uri,
+        files: Some(files),
+        metadata: meta,
+        links: Some(links),
+    })
+}
+
+pub fn parse_files_from_selector<'a>(
+    selector: &mut impl FnMut(&str) -> Result<Vec<&'a Value>, JsonPathError>
+) -> (HashMap<String,Value>, Vec<File>) {
     let mut links = HashMap::new();
     let link_fields = vec!["image", "animation_url", "external_url"];
     for f in link_fields {
@@ -183,26 +271,16 @@ pub fn get_content(
     track_top_level_file(&mut actual_files, links.get("animation_url"));
 
     let mut files: Vec<File> = actual_files.into_values().collect();
+    (links, files)
+}
 
-    // List the defined image file before the other files (if one exists).
-    files.sort_by(|a, _: &File| match (a.uri.as_ref(), links.get("image")) {
-        (Some(x), Some(y)) => {
-            if x == y {
-                Ordering::Less
-            } else {
-                Ordering::Equal
-            }
-        }
-        _ => Ordering::Equal,
-    });
-
-    Ok(Content {
-        schema: "https://schema.metaplex.com/nft1.0.json".to_string(),
-        json_uri,
-        files: Some(files),
-        metadata: meta,
-        links: Some(links),
-    })
+pub fn parse_files(metadata: &str) -> Option<Vec<File>> {
+    serde_json::from_str(metadata)
+        .map(|metadata_json| {
+            let mut selector_fn = jsonpath_lib::selector(&metadata_json);
+            let (_, files) = parse_files_from_selector(&mut selector_fn);
+            files
+        }).ok()
 }
 
 pub fn to_authority(

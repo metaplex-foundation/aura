@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+package asseturls;
+
+
+message AssetsToDownload {
+    repeated string urls = 1;
+}
+
+message GetAssetUrlsRequest {
+    uint32 count = 1;
+}
+
+message UrlDownloadDetails {
+    string url = 1;
+    oneof dl_result {
+        DownloadSuccess success = 2;
+        DownloadError fail = 3;
+    }
+}
+
+message DownloadSuccess {
+    string mime = 1;
+    // Size of the resived version of the image we have saved on the media service
+    uint32 size = 2;
+}
+
+enum DownloadError {
+    NOT_FOUND = 0;
+    SERVER_ERROR = 1;
+    NOT_SUPPORTED_FORMAT = 2;
+    TOO_LARGE = 3;
+    TOO_MANY_REQUESTS = 4;
+    CORRUPTED_ASSET = 5;
+}
+
+message DownloadResultsRequest {
+    repeated UrlDownloadDetails results = 1;
+}
+
+service AssetUrlService {
+    // Used to request next portion of asset URLs, that are to be downloaded
+    rpc GetAssetUrlsToDownload(GetAssetUrlsRequest) returns (AssetsToDownload);
+    // Used to notify about asset download results
+    rpc SubmitDownloadResult(DownloadResultsRequest) returns (google.protobuf.Empty);
+}

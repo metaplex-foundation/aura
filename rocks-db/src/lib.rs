@@ -1,3 +1,5 @@
+use asset_previews::{AssetPreviews, UrlToDownload};
+use entities::schedule::Schedule;
 use inflector::Inflector;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
@@ -66,6 +68,8 @@ pub mod token_prices;
 pub mod transaction;
 pub mod transaction_client;
 pub mod tree_seq;
+pub mod asset_previews;
+pub mod schedule;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
@@ -112,6 +116,9 @@ pub struct Storage {
     pub batch_mints: Column<BatchMintWithStaker>,
     pub migration_version: Column<MigrationVersions>,
     pub token_prices: Column<TokenPrice>,
+    pub asset_previews: Column<AssetPreviews>,
+    pub urls_to_download: Column<UrlToDownload>,
+    pub schedules: Column<Schedule>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -158,6 +165,9 @@ impl Storage {
         let batch_mints = Self::column(db.clone(), red_metrics.clone());
         let migration_version = Self::column(db.clone(), red_metrics.clone());
         let token_prices = Self::column(db.clone(), red_metrics.clone());
+        let asset_previews = Self::column(db.clone(), red_metrics.clone());
+        let urls_to_download = Self::column(db.clone(), red_metrics.clone());
+        let schedules = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -197,6 +207,9 @@ impl Storage {
             batch_mints,
             migration_version,
             token_prices,
+            asset_previews,
+            urls_to_download,
+            schedules,
         }
     }
 
@@ -269,6 +282,9 @@ impl Storage {
             Self::new_cf_descriptor::<FailedBatchMint>(migration_state),
             Self::new_cf_descriptor::<BatchMintWithStaker>(migration_state),
             Self::new_cf_descriptor::<TokenPrice>(migration_state),
+            Self::new_cf_descriptor::<AssetPreviews>(migration_state),
+            Self::new_cf_descriptor::<UrlToDownload>(migration_state),
+            Self::new_cf_descriptor::<Schedule>(migration_state),
         ]
     }
 
