@@ -45,7 +45,7 @@ pub async fn main() -> Result<(), IngesterError> {
         None
     };
 
-    let mut registry = Registry::default();
+    let mut registry: Registry = Registry::default();
     let metrics = Arc::new(ApiMetricsConfig::new());
     metrics.register(&mut registry);
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());

@@ -1,3 +1,5 @@
+use asset_previews::{AssetPreviews, UrlToDownload};
+use entities::schedule::Schedule;
 use inflector::Inflector;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
@@ -62,6 +64,8 @@ pub mod token_accounts;
 pub mod transaction;
 pub mod transaction_client;
 pub mod tree_seq;
+pub mod asset_previews;
+pub mod schedule;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
@@ -107,6 +111,9 @@ pub struct Storage {
     pub failed_rollups: Column<FailedRollup>,
     pub rollups: Column<RollupWithStaker>,
     pub migration_version: Column<MigrationVersions>,
+    pub asset_previews: Column<AssetPreviews>,
+    pub urls_to_download: Column<UrlToDownload>,
+    pub schedules: Column<Schedule>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -152,6 +159,9 @@ impl Storage {
         let failed_rollups = Self::column(db.clone(), red_metrics.clone());
         let rollups = Self::column(db.clone(), red_metrics.clone());
         let migration_version = Self::column(db.clone(), red_metrics.clone());
+        let asset_previews = Self::column(db.clone(), red_metrics.clone());
+        let urls_to_download = Self::column(db.clone(), red_metrics.clone());
+        let schedules = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -190,6 +200,9 @@ impl Storage {
             failed_rollups,
             rollups,
             migration_version,
+            asset_previews,
+            urls_to_download,
+            schedules,
         }
     }
 
@@ -261,6 +274,9 @@ impl Storage {
             Self::new_cf_descriptor::<RollupToVerify>(migration_state),
             Self::new_cf_descriptor::<FailedRollup>(migration_state),
             Self::new_cf_descriptor::<RollupWithStaker>(migration_state),
+            Self::new_cf_descriptor::<AssetPreviews>(migration_state),
+            Self::new_cf_descriptor::<UrlToDownload>(migration_state),
+            Self::new_cf_descriptor::<Schedule>(migration_state),
         ]
     }
 
