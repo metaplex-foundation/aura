@@ -118,6 +118,9 @@ impl BlockProducer for Client {
             tracing::info!("Got block from backup provider for slot: {}", slot);
             return Ok(block);
         }
-        Err(StorageError::NotFound)
+
+        Err(StorageError::NotFound(format!(
+            "Cannot get block with slot: '{slot}'!"
+        )))
     }
 }

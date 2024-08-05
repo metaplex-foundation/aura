@@ -124,6 +124,22 @@ impl PgClient {
         Ok(())
     }
 
+    pub async fn drop_constraints(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), IndexDbError> {
+        for (table, constraint) in [("assets_v3", "assets_v3_authority_fk_constraint")] {
+            let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("ALTER TABLE ");
+            query_builder.push(table);
+            query_builder.push(" DROP CONSTRAINT ");
+            query_builder.push(constraint);
+            query_builder.push(";");
+            self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, table)
+                .await?;
+        }
+        Ok(())
+    }
+
     async fn create_index(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
@@ -173,6 +189,15 @@ impl PgClient {
         Ok(())
     }
 
+    pub async fn recreate_constraints(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("ALTER TABLE assets_v3 ADD CONSTRAINT assets_v3_authority_fk_constraint FOREIGN KEY (ast_authority_fk) REFERENCES assets_authorities(auth_pubkey) ON DELETE SET NULL ON UPDATE CASCADE;");
+        self.execute_query_with_metrics(transaction, &mut query_builder, DROP_ACTION, "assets_v3")
+            .await
+    }
+
     pub async fn create_temp_tables(
         &self,
         main_table: &str,
@@ -206,6 +231,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
         self.drop_indexes(transaction).await?;
+        self.drop_constraints(transaction).await?;
         for table in ["assets_v3", "asset_creators_v3", "assets_authorities"] {
             self.truncate_table(transaction, table).await?;
         }
@@ -242,6 +268,7 @@ impl PgClient {
             self.copy_table_from(transaction, path, table, columns).await?;
         }
         self.recreate_indexes(transaction).await?;
+        self.recreate_constraints(transaction).await?;
         Ok(())
     }
 }

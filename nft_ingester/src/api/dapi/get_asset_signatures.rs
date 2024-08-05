@@ -1,6 +1,6 @@
-use crate::dao::scopes;
-use crate::dapi::common::build_transaction_signatures_response;
-use crate::rpc::response::TransactionSignatureList;
+use crate::api::dapi::asset;
+use crate::api::dapi::response::TransactionSignatureList;
+use crate::api::dapi::rpc_asset_convertors::build_transaction_signatures_response;
 use entities::api_req_params::AssetSortDirection;
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
@@ -19,7 +19,7 @@ pub async fn get_asset_signatures(
     before: Option<String>,
     after: Option<String>,
 ) -> Result<TransactionSignatureList, StorageError> {
-    let signatures = scopes::asset::get_asset_signatures(
+    let signatures = asset::get_asset_signatures(
         rocks_db, id, tree, leaf_idx, page, &before, &after, limit, sort_by,
     )
     .await?;

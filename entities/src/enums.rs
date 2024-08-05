@@ -78,11 +78,22 @@ impl From<blockbuster::token_metadata::types::TokenStandard> for TokenStandard {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
+#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive, PartialEq, JsonSchema)]
 pub enum UseMethod {
     Burn,
     Multiple,
     Single,
+}
+
+impl From<String> for UseMethod {
+    fn from(s: String) -> Self {
+        match &*s {
+            "Burn" => UseMethod::Burn,
+            "Single" => UseMethod::Single,
+            "Multiple" => UseMethod::Multiple,
+            _ => UseMethod::Single,
+        }
+    }
 }
 
 impl From<blockbuster::token_metadata::types::UseMethod> for UseMethod {
@@ -120,6 +131,8 @@ pub enum Interface {
     Nft,
     #[serde(rename = "FungibleAsset")]
     FungibleAsset,
+    #[serde(rename = "FungibleToken")]
+    FungibleToken,
     #[serde(rename = "Custom")]
     Custom,
     #[serde(rename = "Identity")]
@@ -134,12 +147,101 @@ pub enum Interface {
     MplCoreCollection,
 }
 
+impl From<Interface> for SpecificationAssetClass {
+    fn from(interface: Interface) -> Self {
+        match interface {
+            Interface::FungibleAsset => Self::FungibleAsset,
+            Interface::FungibleToken => Self::FungibleToken,
+            Interface::Identity => Self::IdentityNft,
+            Interface::Nft | Interface::V1NFT | Interface::LegacyNft => Self::Nft,
+            Interface::V1PRINT => Self::Print,
+            Interface::ProgrammableNFT => Self::ProgrammableNft,
+            Interface::Custom | Interface::Executable => Self::Unknown,
+            Interface::MplCoreAsset => Self::MplCoreAsset,
+            Interface::MplCoreCollection => Self::MplCoreCollection,
+        }
+    }
+}
+
+impl From<(&SpecificationVersions, &SpecificationAssetClass)> for Interface {
+    fn from(i: (&SpecificationVersions, &SpecificationAssetClass)) -> Self {
+        match i {
+            (SpecificationVersions::V1, SpecificationAssetClass::Nft) => Interface::V1NFT,
+            (SpecificationVersions::V1, SpecificationAssetClass::PrintableNft) => Interface::V1NFT,
+            (SpecificationVersions::V0, SpecificationAssetClass::Nft) => Interface::LegacyNft,
+            (SpecificationVersions::V1, SpecificationAssetClass::ProgrammableNft) => {
+                Interface::ProgrammableNFT
+            }
+            (_, SpecificationAssetClass::FungibleAsset) => Interface::FungibleAsset,
+            (_, SpecificationAssetClass::FungibleToken) => Interface::FungibleToken,
+            (_, SpecificationAssetClass::MplCoreAsset) => Interface::MplCoreAsset,
+            (_, SpecificationAssetClass::MplCoreCollection) => Interface::MplCoreCollection,
+            _ => Interface::Custom,
+        }
+    }
+}
+
+impl From<Interface> for (SpecificationVersions, SpecificationAssetClass) {
+    fn from(val: Interface) -> Self {
+        match val {
+            Interface::V1NFT => (SpecificationVersions::V1, SpecificationAssetClass::Nft),
+            Interface::LegacyNft => (SpecificationVersions::V0, SpecificationAssetClass::Nft),
+            Interface::ProgrammableNFT => (
+                SpecificationVersions::V1,
+                SpecificationAssetClass::ProgrammableNft,
+            ),
+            Interface::V1PRINT => (SpecificationVersions::V1, SpecificationAssetClass::Print),
+            Interface::FungibleAsset => (
+                SpecificationVersions::V1,
+                SpecificationAssetClass::FungibleAsset,
+            ),
+            Interface::MplCoreAsset => (
+                SpecificationVersions::V1,
+                SpecificationAssetClass::MplCoreAsset,
+            ),
+            Interface::MplCoreCollection => (
+                SpecificationVersions::V1,
+                SpecificationAssetClass::MplCoreCollection,
+            ),
+            _ => (SpecificationVersions::V1, SpecificationAssetClass::Unknown),
+        }
+    }
+}
+
+impl From<Interface> for SpecificationVersions {
+    fn from(interface: Interface) -> Self {
+        match interface {
+            Interface::LegacyNft => Self::V0,
+            _ => Self::V1,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
 pub enum OwnershipModel {
     #[serde(rename = "single")]
     Single,
     #[serde(rename = "token")]
     Token,
+}
+
+impl From<OwnershipModel> for OwnerType {
+    fn from(ownership_model: OwnershipModel) -> Self {
+        match ownership_model {
+            OwnershipModel::Single => Self::Single,
+            OwnershipModel::Token => Self::Token,
+        }
+    }
+}
+
+impl From<OwnerType> for OwnershipModel {
+    fn from(s: OwnerType) -> Self {
+        match s {
+            OwnerType::Token => OwnershipModel::Token,
+            OwnerType::Single => OwnershipModel::Single,
+            _ => OwnershipModel::Single,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
@@ -150,6 +252,27 @@ pub enum RoyaltyModel {
     Fanout,
     #[serde(rename = "single")]
     Single,
+}
+
+impl From<RoyaltyTargetType> for RoyaltyModel {
+    fn from(s: RoyaltyTargetType) -> Self {
+        match s {
+            RoyaltyTargetType::Creators => RoyaltyModel::Creators,
+            RoyaltyTargetType::Fanout => RoyaltyModel::Fanout,
+            RoyaltyTargetType::Single => RoyaltyModel::Single,
+            _ => RoyaltyModel::Creators,
+        }
+    }
+}
+
+impl From<RoyaltyModel> for RoyaltyTargetType {
+    fn from(royalty_model: RoyaltyModel) -> Self {
+        match royalty_model {
+            RoyaltyModel::Creators => Self::Creators,
+            RoyaltyModel::Fanout => Self::Fanout,
+            RoyaltyModel::Single => Self::Single,
+        }
+    }
 }
 
 #[derive(

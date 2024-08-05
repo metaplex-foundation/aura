@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-  "digital_asset_types",
   "nft_ingester",
   "metrics_utils",
   "rocks-db",
