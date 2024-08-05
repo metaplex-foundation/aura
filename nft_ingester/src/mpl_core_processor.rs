@@ -257,6 +257,15 @@ impl MplCoreProcessor {
                 .unwrap_or(false);
 
             if let UpdateAuthority::Collection(address) = asset.update_authority {
+                // setup update_authority only on collection updates
+                let authority = if matches!(
+                    account_data.indexable_asset,
+                    MplCoreAccountData::Collection(_)
+                ) {
+                    Some(update_authority)
+                } else {
+                    None
+                };
                 models.asset_collection.push(AssetCollection {
                     pubkey: *asset_key,
                     collection: Updated::new(
@@ -272,7 +281,7 @@ impl MplCoreProcessor {
                     authority: Updated::new(
                         account_data.slot_updated,
                         Some(UpdateVersion::WriteVersion(account_data.write_version)),
-                        Some(update_authority),
+                        authority,
                     ),
                 });
             }
