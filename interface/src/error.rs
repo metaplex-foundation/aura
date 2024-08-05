@@ -60,12 +60,20 @@ impl From<serde_json::Error> for UsecaseError {
 //       e.g. by making fully compliant with rocks_db::error::StorageError
 #[derive(Error, Debug, PartialEq)]
 pub enum StorageError {
-    #[error("common error: {0}")]
+    #[error("Common error: {0}")]
     Common(String),
-    #[error("not found")]
-    NotFound,
+    #[error("Serialize error: {0}")]
+    Serialize(String),
+    #[error("Deserialize error: {0}")]
+    Deserialize(String),
+    #[error("Database specific error: {0}")]
+    DatabaseSpecificErr(String),
+    #[error("Not found: {0}")]
+    NotFound(String),
     #[error("CannotServiceRequest")]
     CannotServiceRequest,
+    #[error("Unknown error: {0}")]
+    Unknown(String),
 }
 
 impl From<Error> for UsecaseError {

@@ -1,9 +1,9 @@
 use futures::StreamExt;
 use interface::asset_streaming_and_discovery::{AssetDetailsConsumer, RawBlocksConsumer};
-use log::error;
 use rocks_db::Storage;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
+use tracing::error;
 
 /// Method returns the number of successfully processed assets
 pub async fn process_raw_blocks_stream(
@@ -19,32 +19,31 @@ pub async fn process_raw_blocks_stream(
     {
         Ok(stream) => stream,
         Err(e) => {
-            error!("Error consume raw blocks stream in range: {}", e);
+            error!("Error consume raw blocks stream in range: {e}");
             return 0;
         }
     };
 
     let mut processed_slots = 0;
-    while let Some(result) = raw_blocks_streamer.next().await {
-        if !rx.is_empty() {
-            break;
-        }
-        match result {
-            Ok(block) => {
+
+    while rx.is_empty() {
+        match raw_blocks_streamer.next().await {
+            Some(Ok(block)) => {
                 if let Some(e) = storage
                     .raw_blocks_cbor
                     .put_cbor_encoded(block.slot, block)
                     .await
                     .err()
                 {
-                    error!("Error processing raw block: {}", e)
+                    error!("Error processing raw block: {e}")
                 } else {
                     processed_slots += 1;
                 }
             }
-            Err(e) => {
-                error!("Error processing raw block stream item: {}", e);
+            Some(Err(e)) => {
+                error!("Error processing raw block stream item: {e}");
             }
+            None => {}
         }
     }
 
@@ -65,27 +64,26 @@ pub async fn process_asset_details_stream(
     {
         Ok(stream) => stream,
         Err(e) => {
-            error!("Error consume asset details stream in range: {}", e);
+            error!("Error consume asset details stream in range: {e}");
             return 0;
         }
     };
 
     let mut processed_assets = 0;
-    while let Some(result) = asset_details_stream.next().await {
-        if !rx.is_empty() {
-            break;
-        }
-        match result {
-            Ok(details) => {
+
+    while rx.is_empty() {
+        match asset_details_stream.next().await {
+            Some(Ok(details)) => {
                 if let Some(e) = storage.insert_gaped_data(details).await.err() {
-                    error!("Error processing gaped data: {}", e)
+                    error!("Error processing gaped data: {e}")
                 } else {
                     processed_assets += 1;
                 }
             }
-            Err(e) => {
-                error!("Error processing asset details stream item: {}", e);
+            Some(Err(e)) => {
+                error!("Error processing asset details stream item: {e}");
             }
+            None => {}
         }
     }
 

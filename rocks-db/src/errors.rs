@@ -49,7 +49,7 @@ pub enum StorageError {
     TryFromSliceError(#[from] TryFromSliceError),
     NoAssetOwner(String),
     InvalidKeyLength,
-    NotFound,
+    NotFound(String),
     CannotServiceRequest,
     InvalidMigrationVersion(u64),
 }
@@ -63,20 +63,21 @@ impl std::fmt::Display for StorageError {
 impl From<StorageError> for interface::error::StorageError {
     fn from(val: StorageError) -> Self {
         use interface::error::StorageError as InterfaceStorageError;
+
         match val {
             StorageError::Common(s) => InterfaceStorageError::Common(s),
-            StorageError::RocksDb(e) => InterfaceStorageError::Common(e.to_string()),
-            StorageError::Serialize(e) => InterfaceStorageError::Common(e.to_string()),
+            StorageError::RocksDb(e) => InterfaceStorageError::DatabaseSpecificErr(e.to_string()),
+            StorageError::Serialize(e) => InterfaceStorageError::Serialize(e.to_string()),
             StorageError::TryFromSliceError(e) => InterfaceStorageError::Common(e.to_string()),
             StorageError::NoAssetOwner(s) => InterfaceStorageError::Common(s),
             StorageError::InvalidKeyLength => {
-                InterfaceStorageError::Common(String::from("InvalidKeyLength"))
+                InterfaceStorageError::Common(ToOwned::to_owned("InvalidKeyLength"))
             }
             StorageError::CannotServiceRequest => InterfaceStorageError::CannotServiceRequest,
             StorageError::InvalidMigrationVersion(v) => {
-                InterfaceStorageError::Common(format!("InvalidMigrationVersion: {}", v))
+                InterfaceStorageError::Common(format!("InvalidMigrationVersion: {v}"))
             }
-            StorageError::NotFound => InterfaceStorageError::Common(String::from("NotFound")),
+            StorageError::NotFound(s) => InterfaceStorageError::NotFound(s),
         }
     }
 }
