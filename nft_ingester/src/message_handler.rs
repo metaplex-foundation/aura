@@ -25,7 +25,7 @@ use utils::flatbuffer::account_data_generated::account_data::root_as_account_dat
 use rocks_db::columns::{Mint, TokenAccount};
 use rocks_db::editions::TokenMetadataEdition;
 
-use crate::buffer::Buffer;
+use crate::buffer::{Buffer, FeesBuffer};
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
 use crate::mplx_updates_processor::{
@@ -449,7 +449,7 @@ fn account_parsing_error(err: BlockbusterError, account_info: &plerkle::AccountI
 }
 
 pub struct MessageHandlerCoreIndexing {
-    buffer: Arc<Buffer>,
+    buffer: Arc<FeesBuffer>,
     mpl_core_parser: Arc<MplCoreParser>,
 }
 
@@ -471,7 +471,7 @@ impl MessageHandler for MessageHandlerCoreIndexing {
 }
 
 impl MessageHandlerCoreIndexing {
-    pub fn new(buffer: Arc<Buffer>) -> Self {
+    pub fn new(buffer: Arc<FeesBuffer>) -> Self {
         Self {
             buffer,
             mpl_core_parser: Arc::new(MplCoreParser {}),

@@ -5,4 +5,4 @@ CREATE TABLE core_fees (
    fee_minimum_rent bigint NOT NULL DEFAULT 0,
    fee_slot_updated bigint NOT NULL DEFAULT 0
 );
-CREATE INDEX fee_paid_slot_index ON core_fees(fee_pubkey, fee_slot_updated) where not fee_paid;
+CREATE INDEX fee_paid_slot_index ON core_fees(fee_slot_updated, fee_pubkey) where not fee_paid;

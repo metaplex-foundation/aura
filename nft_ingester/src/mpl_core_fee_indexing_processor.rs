@@ -1,4 +1,4 @@
-use crate::buffer::Buffer;
+use crate::buffer::FeesBuffer;
 use crate::error::IngesterError;
 use crate::mplx_updates_processor::CoreAssetFee;
 use crate::process_accounts;
@@ -24,7 +24,7 @@ const FETCH_RENT_INTERVAL: Duration = Duration::from_secs(60 * 60 * 24);
 pub struct MplCoreFeeProcessor {
     pub storage: Arc<PgClient>,
     pub batch_size: usize,
-    pub buffer: Arc<Buffer>,
+    pub buffer: Arc<FeesBuffer>,
     pub metrics: Arc<IngesterMetricsConfig>,
     rpc_client: Arc<RpcClient>,
     rent: Arc<RwLock<Rent>>,
@@ -36,7 +36,7 @@ pub struct MplCoreFeeProcessor {
 impl MplCoreFeeProcessor {
     pub async fn build(
         storage: Arc<PgClient>,
-        buffer: Arc<Buffer>,
+        buffer: Arc<FeesBuffer>,
         metrics: Arc<IngesterMetricsConfig>,
         rpc_client: Arc<RpcClient>,
         join_set: Arc<Mutex<JoinSet<Result<(), tokio::task::JoinError>>>>,
@@ -119,7 +119,7 @@ impl MplCoreFeeProcessor {
 
             fees.push(CoreFee {
                 pubkey: *pk,
-                is_paid: asset.lamports < rent,
+                is_paid: asset.lamports <= rent,
                 current_balance: asset.lamports,
                 minimum_rent: rent,
                 slot_updated: asset.slot_updated,

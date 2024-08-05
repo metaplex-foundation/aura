@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use log::{error, info};
 use metrics_utils::{MetricState, MetricsTrait};
-use nft_ingester::buffer::Buffer;
+use nft_ingester::buffer::FeesBuffer;
 use nft_ingester::config::{init_logger, setup_config, IngesterConfig, INGESTER_CONFIG_PREFIX};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
@@ -56,7 +56,7 @@ pub async fn main() -> Result<(), IngesterError> {
         .map_err(IngesterError::SqlxError)?;
 
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-    let buffer = Arc::new(Buffer::new());
+    let buffer = Arc::new(FeesBuffer::new());
 
     let message_handler = Arc::new(MessageHandlerCoreIndexing::new(buffer.clone()));
 

@@ -27,7 +27,6 @@ pub struct Buffer {
     pub burnt_metadata_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub burnt_mpl_core_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub mpl_core_indexable_assets: Mutex<HashMap<Pubkey, IndexableAssetWithAccountInfo>>,
-    pub mpl_core_fee_assets: Mutex<HashMap<Pubkey, CoreAssetFee>>,
 }
 
 impl Buffer {
@@ -42,7 +41,6 @@ impl Buffer {
             burnt_metadata_at_slot: Mutex::new(HashMap::new()),
             burnt_mpl_core_at_slot: Mutex::new(HashMap::new()),
             mpl_core_indexable_assets: Mutex::new(HashMap::new()),
-            mpl_core_fee_assets: Mutex::new(HashMap::new()),
         }
     }
 
@@ -90,5 +88,17 @@ impl ProcessingDataGetter for Buffer {
     async fn get_processing_transaction(&self) -> Option<BufferedTransaction> {
         let mut buffer = self.transactions.lock().await;
         buffer.pop_front()
+    }
+}
+
+#[derive(Default)]
+pub struct FeesBuffer {
+    pub mpl_core_fee_assets: Mutex<HashMap<Pubkey, CoreAssetFee>>,
+}
+impl FeesBuffer {
+    pub fn new() -> Self {
+        Self {
+            mpl_core_fee_assets: Mutex::new(HashMap::new()),
+        }
     }
 }
