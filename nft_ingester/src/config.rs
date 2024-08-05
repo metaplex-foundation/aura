@@ -12,7 +12,6 @@ use tracing_subscriber::fmt;
 
 use crate::error::IngesterError;
 
-const INGESTER_CONSUMERS_COUNT: usize = 2;
 pub const INGESTER_BACKUP_NAME: &str = "snapshot.tar.lz4";
 
 pub const INGESTER_CONFIG_PREFIX: &str = "INGESTER_";
@@ -97,24 +96,17 @@ pub struct RawBackfillConfig {
 pub struct IngesterConfig {
     pub database_config: DatabaseConfig,
     pub tcp_config: TcpConfig,
-    pub tx_background_savers: u32,
-    pub backfill_background_savers: u32,
     pub mplx_buffer_size: usize,
     pub mplx_workers: u32,
     pub spl_buffer_size: usize,
-    pub spl_workers: u32,
     #[serde(default = "default_mpl_core_buffer_size")]
     pub mpl_core_buffer_size: usize,
-    pub metrics_port_first_consumer: Option<u16>,
-    pub metrics_port_second_consumer: Option<u16>,
-    pub backfill_consumer_metrics_port: Option<u16>,
-    pub consumer_number: Option<usize>,
+    pub metrics_port: Option<u16>,
     pub rocks_db_path_container: Option<String>,
     pub rocks_backup_url: String,
     pub rocks_backup_archives_dir: String,
     pub rocks_backup_dir: String,
     pub run_bubblegum_backfiller: bool,
-    pub synchronizer_batch_size: usize,
     #[serde(default = "default_dump_synchronizer_batch_size")]
     pub dump_synchronizer_batch_size: usize,
     #[serde(default = "default_dump_path")]
@@ -139,8 +131,6 @@ pub struct IngesterConfig {
     pub run_sequence_consistent_checker: bool,
     #[serde(default = "default_sequence_consistent_checker_wait_period_sec")]
     pub sequence_consistent_checker_wait_period_sec: u64,
-    #[serde(default = "default_sequence_consister_skip_check_slots_offset")]
-    pub sequence_consister_skip_check_slots_offset: u64, // TODO: remove in future if there no need in that env
     pub rpc_host: Option<String>,
     #[serde(default = "default_check_proofs_probability")]
     pub check_proofs_probability: f64,
@@ -181,10 +171,6 @@ const fn default_dump_synchronizer_batch_size() -> usize {
 
 const fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
     60
-}
-
-const fn default_sequence_consister_skip_check_slots_offset() -> u64 {
-    20
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
@@ -310,31 +296,6 @@ impl ApiConfig {
 }
 
 impl IngesterConfig {
-    pub fn get_metrics_port(
-        &self,
-        consumer_number: Option<usize>,
-    ) -> Result<Option<u16>, IngesterError> {
-        let consumer_number = match consumer_number {
-            Some(consumer_number) => consumer_number,
-            None => {
-                return Err(IngesterError::ConfigurationError {
-                    msg: "missing consumer number".to_string(),
-                });
-            }
-        };
-
-        match consumer_number {
-            0 => Ok(self.metrics_port_first_consumer),
-            1 => Ok(self.metrics_port_second_consumer),
-            _ => Err(IngesterError::ConfigurationError {
-                msg: format!(
-                    "invalid consumer number: {}, expected to be lower than: {}",
-                    consumer_number, INGESTER_CONSUMERS_COUNT
-                ),
-            }),
-        }
-    }
-
     pub fn get_log_level(&self) -> String {
         self.rust_log.clone().unwrap_or("warn".to_string())
     }
@@ -455,38 +416,8 @@ impl TcpConfig {
         self.get_addr(TCP_RECEIVER_BACKFILLER_ADDR)
     }
 
-    pub fn get_tcp_receiver_addr_ingester(
-        &self,
-        consumer_number: Option<usize>,
-    ) -> Result<SocketAddr, IngesterError> {
-        let tcp_senders = self.get_addrs(TCP_RECEIVER_ADDR)?;
-        if tcp_senders.len() != INGESTER_CONSUMERS_COUNT {
-            return Err(IngesterError::ConfigurationError {
-                msg: format!(
-                    "invalid len of tcp_senders: {}, expected: {}",
-                    tcp_senders.len(),
-                    INGESTER_CONSUMERS_COUNT
-                ),
-            });
-        };
-        let consumer_number = match consumer_number {
-            Some(consumer_number) => consumer_number,
-            None => {
-                return Err(IngesterError::ConfigurationError {
-                    msg: "missing consumer number".to_string(),
-                });
-            }
-        };
-        if consumer_number >= INGESTER_CONSUMERS_COUNT {
-            return Err(IngesterError::ConfigurationError {
-                msg: format!(
-                    "invalid consumer number: {}, expected to be lower than: {}",
-                    consumer_number, INGESTER_CONSUMERS_COUNT
-                ),
-            });
-        };
-
-        Ok(tcp_senders[consumer_number])
+    pub fn get_tcp_receiver_addr_ingester(&self) -> Result<SocketAddr, IngesterError> {
+        self.get_addr(TCP_RECEIVER_ADDR)
     }
 
     pub fn get_snapshot_addr_ingester(&self) -> Result<SocketAddr, IngesterError> {
@@ -516,28 +447,6 @@ impl TcpConfig {
             .ok_or(IngesterError::ConfigurationError {
                 msg: "SocketAddr".to_string(),
             })
-    }
-
-    fn get_addrs(&self, key: &str) -> Result<Vec<SocketAddr>, IngesterError> {
-        self.0
-            .get(key)
-            .and_then(|a| a.as_array())
-            .ok_or(IngesterError::ConfigurationError {
-                msg: format!("TCP receiver address missing: {}", key),
-            })?
-            .iter()
-            .map(|a| {
-                a.as_str()
-                    .ok_or(IngesterError::ConfigurationError {
-                        msg: format!("TCP receiver address missing: {}", key),
-                    })?
-                    .to_socket_addrs()?
-                    .next()
-                    .ok_or(IngesterError::ConfigurationError {
-                        msg: "SocketAddr".to_string(),
-                    })
-            })
-            .collect()
     }
 
     pub fn get_tcp_sender_backfiller_port(&self) -> Result<u16, IngesterError> {

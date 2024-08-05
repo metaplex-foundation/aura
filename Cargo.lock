@@ -1205,21 +1205,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bit-set"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0700ddab506f33b20a03b13996eccd309a48e5ff77d0d95926aa0210fb4e95f1"
-dependencies = [
- "bit-vec",
-]
-
-[[package]]
-name = "bit-vec"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1306,8 +1291,8 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status",
  "solana-zk-token-sdk",
- "spl-account-compression 0.3.0",
- "spl-concurrent-merkle-tree 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
+ "spl-concurrent-merkle-tree 0.2.0",
  "spl-noop 0.2.0",
  "spl-pod",
  "spl-token 4.0.0",
@@ -1496,7 +1481,7 @@ dependencies = [
 
 [[package]]
 name = "bubblegum"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "anchor-lang 0.29.0",
  "anchor-spl 0.29.0",
@@ -1504,16 +1489,16 @@ dependencies = [
  "bytemuck",
  "mpl-token-auth-rules",
  "mpl-token-metadata 3.2.3",
- "mplx-staking-states",
+ "mplx-staking-states 0.0.1 (git+https://github.com/adm-metaex/mplx-staking.git)",
  "num-traits",
  "solana-program",
  "solana-program-test",
  "solana-sdk",
- "spl-account-compression 0.3.0",
+ "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
  "spl-associated-token-account 2.3.0",
- "spl-concurrent-merkle-tree 0.2.0",
- "spl-merkle-tree-reference 0.1.0",
- "spl-noop 0.2.0",
+ "spl-concurrent-merkle-tree 0.3.0",
+ "spl-merkle-tree-reference 0.1.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
+ "spl-noop 0.2.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
  "spl-token 4.0.0",
 ]
 
@@ -2563,7 +2548,7 @@ dependencies = [
  "solana-program",
  "solana-sdk",
  "solana-transaction-status",
- "spl-account-compression 0.3.0",
+ "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
  "sqlx",
 ]
 
@@ -3626,7 +3611,7 @@ dependencies = [
  "solana-program",
  "solana-sdk",
  "spl-account-compression 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "spl-concurrent-merkle-tree 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spl-concurrent-merkle-tree 0.2.0",
  "thiserror",
  "tokio",
  "tokio-util 0.7.11",
@@ -4284,11 +4269,11 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
- "spl-account-compression 0.3.0",
+ "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
  "spl-associated-token-account 2.3.0",
- "spl-concurrent-merkle-tree 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spl-concurrent-merkle-tree 0.2.0",
  "spl-merkle-tree-reference 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "spl-noop 0.2.0",
+ "spl-noop 0.2.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
  "spl-token 4.0.0",
  "thiserror",
 ]
@@ -4314,9 +4299,9 @@ dependencies = [
 
 [[package]]
 name = "mpl-token-auth-rules"
-version = "1.5.0"
+version = "1.5.1"
+source = "git+https://github.com/metaplex-foundation/mpl-token-auth-rules.git?branch=main#5b8b8973543a1e1e139912d0c210d902af77a6b5"
 dependencies = [
- "assert_matches",
  "borsh 0.10.3",
  "bytemuck",
  "mpl-token-metadata-context-derive",
@@ -4324,16 +4309,9 @@ dependencies = [
  "num-traits",
  "rmp-serde",
  "serde",
- "serde_json",
- "serde_with 1.14.0",
  "shank",
- "solana-logger",
  "solana-program",
- "solana-program-test",
- "solana-sdk",
  "solana-zk-token-sdk",
- "spl-associated-token-account 1.1.3",
- "spl-token 3.5.0",
  "thiserror",
 ]
 
@@ -4385,6 +4363,16 @@ dependencies = [
  "bytemuck",
  "static_assertions",
  "thiserror",
+]
+
+[[package]]
+name = "mplx-staking-states"
+version = "0.0.1"
+source = "git+https://github.com/adm-metaex/mplx-staking.git#209a320d1bd287ffc3f0d164d0de0d625bae2cd8"
+dependencies = [
+ "anchor-lang 0.26.0",
+ "anchor-spl 0.26.0",
+ "static_assertions",
 ]
 
 [[package]]
@@ -4506,8 +4494,8 @@ dependencies = [
  "solana-sdk",
  "solana-storage-bigtable",
  "solana-transaction-status",
- "spl-account-compression 0.3.0",
- "spl-concurrent-merkle-tree 0.2.0",
+ "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
+ "spl-concurrent-merkle-tree 0.3.0",
  "spl-token 4.0.0",
  "sqlx",
  "stretto",
@@ -5579,26 +5567,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proptest"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31b476131c3c86cb68032fdc5cb6d5a1045e3e42d96b69fa599fd77701e1f5bf"
-dependencies = [
- "bit-set",
- "bit-vec",
- "bitflags 2.5.0",
- "lazy_static",
- "num-traits",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "rand_xorshift",
- "regex-syntax 0.8.3",
- "rusty-fork",
- "tempfile",
- "unarray",
-]
-
-[[package]]
 name = "prost"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5815,12 +5783,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "quick-error"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
-
-[[package]]
 name = "quinn"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5950,31 +5912,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "rand_distr"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32cb0b9bc82b0a0876c2dd994a7e7a2683d3e7390ca40e6886785ef0c7e3ee31"
-dependencies = [
- "num-traits",
- "rand 0.8.5",
-]
-
-[[package]]
 name = "rand_hc"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
 dependencies = [
  "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_xorshift"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
-dependencies = [
- "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -6261,7 +6204,7 @@ dependencies = [
  "setup",
  "solana-sdk",
  "solana-transaction-status",
- "spl-account-compression 0.3.0",
+ "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
  "tar",
  "tempfile",
  "thiserror",
@@ -6294,7 +6237,7 @@ dependencies = [
  "bytemuck",
  "chrono",
  "mpl-bubblegum",
- "mplx-staking-states",
+ "mplx-staking-states 0.0.1",
  "paste",
  "serde",
  "serde_derive",
@@ -6306,11 +6249,10 @@ dependencies = [
  "solana-program",
  "solana-rpc-client-api",
  "solana-sdk",
- "spl-account-compression 0.3.0",
- "spl-concurrent-merkle-tree 0.2.0",
- "spl-merkle-tree-reference 0.1.0",
+ "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
+ "spl-concurrent-merkle-tree 0.3.0",
+ "spl-merkle-tree-reference 0.1.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
  "spl-noop 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "spl-token 4.0.1",
  "thiserror",
  "tokio",
  "uuid 1.8.0",
@@ -6469,18 +6411,6 @@ name = "rustversion"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "955d28af4278de8121b7ebeb796b6a45735dc01436d898801014aced2773a3d6"
-
-[[package]]
-name = "rusty-fork"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb3dcc6e454c328bb824492db107ab7c0ae8fcffe4ad210136ef014458c1bc4f"
-dependencies = [
- "fnv",
- "quick-error",
- "tempfile",
- "wait-timeout",
-]
 
 [[package]]
 name = "rustyline"
@@ -8390,24 +8320,25 @@ dependencies = [
 [[package]]
 name = "spl-account-compression"
 version = "0.3.0"
-dependencies = [
- "anchor-lang 0.29.0",
- "bytemuck",
- "solana-program",
- "spl-concurrent-merkle-tree 0.2.0",
- "spl-noop 0.2.0",
-]
-
-[[package]]
-name = "spl-account-compression"
-version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85c43bd4455d9fb29b9e4f83c087ccffa2f6f41fecfc0549932ae391d00f3378"
 dependencies = [
  "anchor-lang 0.29.0",
  "bytemuck",
- "spl-concurrent-merkle-tree 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spl-concurrent-merkle-tree 0.2.0",
  "spl-noop 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "spl-account-compression"
+version = "0.3.0"
+source = "git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root#623df9148b0c2ac36c3c685d8d28308f3a82efff"
+dependencies = [
+ "anchor-lang 0.29.0",
+ "bytemuck",
+ "solana-program",
+ "spl-concurrent-merkle-tree 0.3.0",
+ "spl-noop 0.2.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
 ]
 
 [[package]]
@@ -8445,21 +8376,18 @@ dependencies = [
 [[package]]
 name = "spl-concurrent-merkle-tree"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "141eaea58588beae81b71d101373a53f096737739873de42d6b1368bc2b8fc30"
 dependencies = [
  "bytemuck",
- "rand 0.8.5",
- "rand_distr",
  "solana-program",
- "spl-merkle-tree-reference 0.1.0",
  "thiserror",
- "tokio",
 ]
 
 [[package]]
 name = "spl-concurrent-merkle-tree"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "141eaea58588beae81b71d101373a53f096737739873de42d6b1368bc2b8fc30"
+version = "0.3.0"
+source = "git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root#623df9148b0c2ac36c3c685d8d28308f3a82efff"
 dependencies = [
  "bytemuck",
  "solana-program",
@@ -8522,6 +8450,8 @@ dependencies = [
 [[package]]
 name = "spl-merkle-tree-reference"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28437c617c7f0db6b7229a489239f3ea6160499542d9367fbca2fc5ec7744abb"
 dependencies = [
  "solana-program",
  "thiserror",
@@ -8530,8 +8460,7 @@ dependencies = [
 [[package]]
 name = "spl-merkle-tree-reference"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28437c617c7f0db6b7229a489239f3ea6160499542d9367fbca2fc5ec7744abb"
+source = "git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root#623df9148b0c2ac36c3c685d8d28308f3a82efff"
 dependencies = [
  "solana-program",
  "thiserror",
@@ -8549,6 +8478,14 @@ name = "spl-noop"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dd67ea3d0070a12ff141f5da46f9695f49384a03bce1203a5608f5739437950"
+dependencies = [
+ "solana-program",
+]
+
+[[package]]
+name = "spl-noop"
+version = "0.2.0"
+source = "git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root#623df9148b0c2ac36c3c685d8d28308f3a82efff"
 dependencies = [
  "solana-program",
 ]
@@ -8648,24 +8585,6 @@ dependencies = [
  "num-traits",
  "num_enum 0.6.1",
  "solana-program",
- "thiserror",
-]
-
-[[package]]
-name = "spl-token"
-version = "4.0.1"
-dependencies = [
- "arrayref",
- "bytemuck",
- "lazy_static",
- "num-derive 0.4.2",
- "num-traits",
- "num_enum 0.7.2",
- "proptest",
- "serial_test",
- "solana-program",
- "solana-program-test",
- "solana-sdk",
  "thiserror",
 ]
 
@@ -9331,18 +9250,18 @@ checksum = "23d434d3f8967a09480fb04132ebe0a3e088c173e6d0ee7897abbdf4eab0f8b9"
 
 [[package]]
 name = "thiserror"
-version = "1.0.61"
+version = "1.0.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c546c80d6be4bc6a00c0f01730c08df82eaa7a7a61f11d656526506112cc1709"
+checksum = "c0342370b38b6a11b6cc11d6a805569958d54cfa061a29969c3b5ce2ea405724"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.61"
+version = "1.0.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46c3384250002a6d5af4d114f2845d37b57521033f30d5c3f46c4d70e1197533"
+checksum = "a4558b58466b9ad7ca0f102865eccc95938dca1a74a856f2b57b6629050da261"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10039,12 +9958,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 
 [[package]]
-name = "unarray"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
-
-[[package]]
 name = "uncased"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10195,8 +10108,8 @@ dependencies = [
  "solana-sdk",
  "solana-storage-bigtable",
  "solana-transaction-status",
- "spl-account-compression 0.3.0",
- "spl-concurrent-merkle-tree 0.2.0",
+ "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
+ "spl-concurrent-merkle-tree 0.3.0",
  "thiserror",
  "tokio",
  "tracing",
@@ -10281,15 +10194,6 @@ name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
-
-[[package]]
-name = "wait-timeout"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f200f5b12eb75f8c1ed65abd4b2db8a6e1b138a20de009dacee265a2498f3f6"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "walkdir"

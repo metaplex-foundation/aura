@@ -276,9 +276,7 @@ pub async fn main() -> Result<(), IngesterError> {
     );
 
     let snapshot_addr = config.tcp_config.get_snapshot_addr_ingester()?;
-    let geyser_addr = config
-        .tcp_config
-        .get_tcp_receiver_addr_ingester(config.consumer_number)?;
+    let geyser_addr = config.tcp_config.get_tcp_receiver_addr_ingester()?;
 
     let cloned_rx = shutdown_rx.resubscribe();
 
@@ -996,11 +994,7 @@ pub async fn main() -> Result<(), IngesterError> {
         rollup_persister.persist_rollups(rx).await
     });
 
-    start_metrics(
-        metrics_state.registry,
-        config.get_metrics_port(config.consumer_number)?,
-    )
-    .await;
+    start_metrics(metrics_state.registry, config.metrics_port).await;
 
     // --stop
     graceful_stop(

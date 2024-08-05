@@ -1,13 +1,12 @@
 version: "3.9"
 services:
-  ingester-first-consumer:
-    container_name: ingester-first-consumer
+  ingester:
+    container_name: ingester
     restart: always
     entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then exec ./ingester; else exec ./profiling_ingester; fi"
     env_file:
       - .env
     environment:
-      INGESTER_CONSUMER_NUMBER: 0
       RUST_MIN_STACK: 83886080
     network_mode: host
     volumes:
