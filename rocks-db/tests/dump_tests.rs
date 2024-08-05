@@ -4,7 +4,7 @@ use csv::WriterBuilder;
 use setup::rocks::*;
 use tempfile::TempDir;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 #[tracing_test::traced_test]
 async fn test_scv_export_from_rocks() {
     let env = RocksTestEnvironment::new(&[]);
