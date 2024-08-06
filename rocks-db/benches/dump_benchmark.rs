@@ -17,8 +17,11 @@ async fn bench_dump(storage: Arc<Storage>, batch_size: usize) {
 
 fn dump_benchmark(c: &mut Criterion) {
     let env = setup::rocks::RocksTestEnvironment::new(&[]);
-    let cnt = 1_000_000;
-    _ = env.generate_assets(cnt, 25);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(|| async {
+        let cnt = 1_000_000;
+        _ = env.generate_assets(cnt, 25).await
+    });
     let rt = tokio::runtime::Runtime::new().unwrap();
     let mut group = c.benchmark_group("Dumping Group");
     group.sample_size(10);

@@ -20,7 +20,7 @@ mod tests {
     async fn test_csv_export_from_rocks_import_into_pg() {
         let env = RocksTestEnvironment::new(&[]);
         let number_of_assets = 1000;
-        let generated_assets = env.generate_assets(number_of_assets, 25);
+        let generated_assets = env.generate_assets(number_of_assets, 25).await;
         let storage = env.storage;
         let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
@@ -84,5 +84,210 @@ mod tests {
         });
         pg_env.teardown().await;
         temp_dir.close().unwrap();
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "integration_tests")]
+mod mtg_441_tests {
+    use entities::api_req_params::{GetAsset, Options};
+    use metrics_utils::ApiMetricsConfig;
+    use nft_ingester::api::dapi::rpc_asset_models::Asset;
+    use nft_ingester::api::DasApi;
+    use nft_ingester::config::JsonMiddlewareConfig;
+    use nft_ingester::json_worker::JsonWorker;
+    use serde_json::Value;
+    use setup::rocks::RocksTestEnvironmentSetup;
+    use setup::TestEnvironment;
+    use std::sync::Arc;
+    use testcontainers::clients::Cli;
+    use tokio::sync::Mutex;
+    use tokio::task::JoinSet;
+    use usecase::proofs::MaybeProofChecker;
+
+    const SLOT_UPDATED: u64 = 100;
+
+    fn get_das_api(env: &TestEnvironment) -> DasApi<MaybeProofChecker, JsonWorker, JsonWorker> {
+        DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+        )
+    }
+
+    fn parse_asset(json: Value) -> Asset {
+        serde_json::from_value::<Asset>(json).expect("Cannot parse 'Asset'.")
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn authority_none_collection_authority_some() {
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create_and_setup_from_closures(
+            &cli,
+            20,
+            SLOT_UPDATED,
+            RocksTestEnvironmentSetup::static_data_for_mpl,
+            RocksTestEnvironmentSetup::without_authority,
+            RocksTestEnvironmentSetup::test_owner,
+            RocksTestEnvironmentSetup::dynamic_data,
+            RocksTestEnvironmentSetup::collection_with_authority,
+        )
+        .await;
+
+        let first_pubkey = generated_assets
+            .static_details
+            .first()
+            .expect("Cannot get first pubkey.")
+            .pubkey;
+
+        let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+        let api_res = get_das_api(&env)
+            .get_asset(
+                GetAsset {
+                    id: first_pubkey.to_string(),
+                    options: Some(Options {
+                        show_unverified_collections: true,
+                    }),
+                },
+                mutexed_tasks,
+            )
+            .await;
+
+        dbg!(&api_res);
+
+        assert!(api_res.is_ok());
+        let api_res = api_res.expect("Cannot run api call.");
+        let res = parse_asset(api_res);
+        assert!(res.id.eq(&first_pubkey.to_string()));
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn authority_some_collection_authority_none() {
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create_and_setup_from_closures(
+            &cli,
+            20,
+            SLOT_UPDATED,
+            RocksTestEnvironmentSetup::static_data_for_mpl,
+            RocksTestEnvironmentSetup::with_authority,
+            RocksTestEnvironmentSetup::test_owner,
+            RocksTestEnvironmentSetup::dynamic_data,
+            RocksTestEnvironmentSetup::collection_without_authority,
+        )
+        .await;
+
+        let first_pubkey = generated_assets
+            .static_details
+            .first()
+            .expect("Cannot get first pubkey.")
+            .pubkey;
+
+        let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+        let api_res = get_das_api(&env)
+            .get_asset(
+                GetAsset {
+                    id: first_pubkey.to_string(),
+                    options: Some(Options {
+                        show_unverified_collections: true,
+                    }),
+                },
+                mutexed_tasks,
+            )
+            .await;
+        assert!(api_res.is_ok());
+        let api_res = api_res.expect("Cannot run api call.");
+        let res = parse_asset(api_res);
+        assert!(res.id.eq(&first_pubkey.to_string()));
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn authority_some_collection_authority_some() {
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create_and_setup_from_closures(
+            &cli,
+            20,
+            SLOT_UPDATED,
+            RocksTestEnvironmentSetup::static_data_for_mpl,
+            RocksTestEnvironmentSetup::with_authority,
+            RocksTestEnvironmentSetup::test_owner,
+            RocksTestEnvironmentSetup::dynamic_data,
+            RocksTestEnvironmentSetup::collection_with_authority,
+        )
+        .await;
+
+        let first_pubkey = generated_assets
+            .static_details
+            .first()
+            .expect("Cannot get first pubkey.")
+            .pubkey;
+
+        let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+        let api_res = get_das_api(&env)
+            .get_asset(
+                GetAsset {
+                    id: first_pubkey.to_string(),
+                    options: Some(Options {
+                        show_unverified_collections: true,
+                    }),
+                },
+                mutexed_tasks,
+            )
+            .await;
+        assert!(api_res.is_ok());
+        let api_res = api_res.expect("Cannot run api call.");
+        let res = parse_asset(api_res);
+        assert!(res.id.eq(&first_pubkey.to_string()));
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn authority_none_collection_authority_none() {
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create_and_setup_from_closures(
+            &cli,
+            20,
+            SLOT_UPDATED,
+            RocksTestEnvironmentSetup::static_data_for_mpl,
+            RocksTestEnvironmentSetup::without_authority,
+            RocksTestEnvironmentSetup::test_owner,
+            RocksTestEnvironmentSetup::dynamic_data,
+            RocksTestEnvironmentSetup::collection_without_authority,
+        )
+        .await;
+
+        let first_pubkey = generated_assets
+            .static_details
+            .first()
+            .expect("Cannot get first pubkey.")
+            .pubkey;
+
+        let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+        // let a = env.rocks_env.storage.asset_static_data.get(first_pubkey).unwrap();
+        // assert!(a.is_some());
+
+        let api_res = get_das_api(&env)
+            .get_asset(
+                GetAsset {
+                    id: first_pubkey.to_string(),
+                    options: Some(Options {
+                        show_unverified_collections: true,
+                    }),
+                },
+                mutexed_tasks,
+            )
+            .await;
+        assert!(api_res.is_ok());
+        let api_res = api_res.expect("Cannot run api call.");
+        let res = parse_asset(api_res);
+        assert!(res.id.eq(&first_pubkey.to_string()));
     }
 }

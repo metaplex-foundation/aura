@@ -11,7 +11,7 @@ async fn setup_environment<'a>(
 ) -> (TestEnvironment<'a>, setup::rocks::GeneratedAssets) {
     let (env, _) = setup::TestEnvironment::create(cli, 0, 100).await;
     let cnt = 1_000_000; // Number of records for the setup
-    let assets = env.rocks_env.generate_assets(cnt, 100);
+    let assets = env.rocks_env.generate_assets(cnt, 100).await;
     (env, assets)
 }
 
