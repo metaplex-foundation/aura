@@ -10,8 +10,8 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::errors::StorageError;
 use rocks_db::migrator::MigrationState;
 use rocks_db::{
-    asset::AssetCollection, AssetAuthority, AssetDynamicDetails, AssetOwner,
-    AssetStaticDetails, Storage,
+    asset::AssetCollection, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+    Storage,
 };
 use tokio::{sync::Mutex, task::JoinSet};
 
@@ -140,47 +140,41 @@ impl RocksTestEnvironment {
             },
         )?;
 
-        let static_data_batch = self.storage
-            .asset_static_data
-            .put_batch(
-                generated_assets
-                    .static_details
-                    .iter()
-                    .map(|value| (value.pubkey, value.clone()))
-                    .collect());
-        let authority_batch = self.storage
-            .asset_authority_data
-            .put_batch(
-                generated_assets
-                    .authorities
-                    .iter()
-                    .map(|value| (value.pubkey, value.clone()))
-                    .collect());
-        let owners_batch = self.storage
-            .asset_owner_data
-            .put_batch(
-                generated_assets
-                    .owners
-                    .iter()
-                    .map(|value| (value.pubkey, value.clone()))
-                    .collect());
-        let dynamic_details_batch = self.storage
-            .asset_dynamic_data
-            .put_batch(
-                generated_assets
-                    .dynamic_details
-                    .iter()
-                    .map(|value| (value.pubkey, value.clone()))
-                    .collect(),
-            );
-        let collections_batch = self.storage
-            .asset_collection_data
-            .put_batch(
-                generated_assets
-                    .collections
-                    .iter()
-                    .map(|value| (value.pubkey, value.clone()))
-                    .collect());
+        let static_data_batch = self.storage.asset_static_data.put_batch(
+            generated_assets
+                .static_details
+                .iter()
+                .map(|value| (value.pubkey, value.clone()))
+                .collect(),
+        );
+        let authority_batch = self.storage.asset_authority_data.put_batch(
+            generated_assets
+                .authorities
+                .iter()
+                .map(|value| (value.pubkey, value.clone()))
+                .collect(),
+        );
+        let owners_batch = self.storage.asset_owner_data.put_batch(
+            generated_assets
+                .owners
+                .iter()
+                .map(|value| (value.pubkey, value.clone()))
+                .collect(),
+        );
+        let dynamic_details_batch = self.storage.asset_dynamic_data.put_batch(
+            generated_assets
+                .dynamic_details
+                .iter()
+                .map(|value| (value.pubkey, value.clone()))
+                .collect(),
+        );
+        let collections_batch = self.storage.asset_collection_data.put_batch(
+            generated_assets
+                .collections
+                .iter()
+                .map(|value| (value.pubkey, value.clone()))
+                .collect(),
+        );
 
         tokio::try_join!(
             static_data_batch,
