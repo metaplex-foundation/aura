@@ -11,10 +11,10 @@ use tonic::async_trait;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::columns::{Mint, TokenAccount};
 
-use crate::mplx_updates_processor::MetadataInfo;
 use crate::mplx_updates_processor::{
     BurntMetadataSlot, IndexableAssetWithAccountInfo, TokenMetadata,
 };
+use crate::mplx_updates_processor::{CoreAssetFee, MetadataInfo};
 
 #[derive(Default)]
 pub struct Buffer {
@@ -88,5 +88,17 @@ impl ProcessingDataGetter for Buffer {
     async fn get_processing_transaction(&self) -> Option<BufferedTransaction> {
         let mut buffer = self.transactions.lock().await;
         buffer.pop_front()
+    }
+}
+
+#[derive(Default)]
+pub struct FeesBuffer {
+    pub mpl_core_fee_assets: Mutex<HashMap<Pubkey, CoreAssetFee>>,
+}
+impl FeesBuffer {
+    pub fn new() -> Self {
+        Self {
+            mpl_core_fee_assets: Mutex::new(HashMap::new()),
+        }
     }
 }

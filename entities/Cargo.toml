@@ -21,6 +21,7 @@ mpl-bubblegum = {path = "../blockbuster/mpl-bubblegum/clients/rust", features = 
 serde_json = "1.0.81"
 spl-account-compression = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root", features = ["no-entrypoint"] }
 solana-transaction-status = "~1.18.11"
+base64 = "0.21.5"
 
 [dev-dependencies]
 hex = "0.4.3"

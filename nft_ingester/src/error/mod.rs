@@ -115,6 +115,14 @@ pub enum IngesterError {
     SendTransaction(String),
     #[error("ProcessRollup: {0}")]
     ProcessRollup(String),
+    #[error("NumericalOverflowError")]
+    NumericalOverflowError,
+    #[error("IncorrectAccount")]
+    IncorrectAccount,
+    #[error("SolanaSDK: {0}")]
+    SolanaSDK(#[from] solana_sdk::program_error::ProgramError),
+    #[error("SolanaClient: {0}")]
+    SolanaClient(String),
 }
 
 impl From<reqwest::Error> for IngesterError {
@@ -272,5 +280,11 @@ impl From<arweave_rs::error::Error> for IngesterError {
 impl From<std::convert::Infallible> for IngesterError {
     fn from(err: std::convert::Infallible) -> Self {
         IngesterError::Infallible(err.to_string())
+    }
+}
+
+impl From<solana_client::client_error::ClientError> for IngesterError {
+    fn from(err: solana_client::client_error::ClientError) -> Self {
+        IngesterError::SolanaClient(err.to_string())
     }
 }

@@ -4,6 +4,7 @@ pub mod converters;
 mod get_asset;
 mod get_asset_batch;
 pub mod get_asset_signatures;
+pub mod get_core_fees;
 pub mod get_token_accounts;
 mod model;
 pub mod response;

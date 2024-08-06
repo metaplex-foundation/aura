@@ -5,7 +5,7 @@ mod tests {
 
     use blockbuster::token_metadata::accounts::Metadata;
     use entities::api_req_params::{
-        DisplayOptions, GetAssetProof, GetAssetSignatures, GetTokenAccounts, Options,
+        DisplayOptions, GetAssetProof, GetAssetSignatures, GetCoreFees, GetTokenAccounts, Options,
     };
     use entities::models::{AssetSignature, AssetSignatureKey, OffChainData};
     use entities::{
@@ -25,7 +25,7 @@ mod tests {
     use mpl_token_metadata::accounts::MasterEdition;
     use mpl_token_metadata::types::Key;
     use nft_ingester::api::dapi::response::{
-        AssetList, TokenAccountsList, TransactionSignatureList,
+        AssetList, CoreFeesAccountsList, TokenAccountsList, TransactionSignatureList,
     };
     use nft_ingester::api::error::DasApiError;
     use nft_ingester::{
@@ -44,6 +44,7 @@ mod tests {
     use serde_json::{json, Value};
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
+    use sqlx::{Executor, QueryBuilder};
     use testcontainers::clients::Cli;
     use tokio::{sync::Mutex, task::JoinSet};
     use usecase::proofs::MaybeProofChecker;
@@ -2265,5 +2266,85 @@ mod tests {
         };
         let res = api.get_asset_proof(payload).await.err().unwrap();
         assert!(matches!(res, DasApiError::CannotServiceRequest));
+    }
+
+    #[tokio::test]
+    async fn test_core_account_fees() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let asset_fees_count = 1000;
+        let mut asset_ids = Vec::with_capacity(asset_fees_count);
+        for _ in 0..asset_fees_count {
+            asset_ids.push(Pubkey::new_unique())
+        }
+        let mut query_builder = QueryBuilder::new(
+            "INSERT INTO core_fees (
+              fee_pubkey
+            ) ",
+        );
+        query_builder.push_values(asset_ids, |mut builder, id| {
+            builder.push_bind(id.to_bytes().to_vec());
+        });
+        query_builder
+            .build()
+            .execute(&env.pg_env.pool)
+            .await
+            .unwrap();
+
+        let payload = GetCoreFees {
+            limit: Some(50),
+            page: Some(1),
+            before: None,
+            after: None,
+            cursor: None,
+        };
+        let res = api.get_core_fees(payload).await.unwrap();
+        let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
+        assert_eq!(res.core_fees_account.len(), 50);
+
+        let payload = GetCoreFees {
+            limit: Some(975),
+            page: None,
+            before: None,
+            after: None,
+            cursor: None,
+        };
+        let res = api.get_core_fees(payload).await.unwrap();
+        let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
+        assert_eq!(res.core_fees_account.len(), 975);
+
+        let payload = GetCoreFees {
+            limit: None,
+            page: None,
+            before: None,
+            after: None,
+            cursor: res.cursor,
+        };
+        let res = api.get_core_fees(payload).await.unwrap();
+        let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
+        assert_eq!(res.core_fees_account.len(), 25);
+
+        let payload = GetCoreFees {
+            limit: None,
+            page: None,
+            before: None,
+            after: None,
+            cursor: res.cursor,
+        };
+        let res = api.get_core_fees(payload).await.unwrap();
+        let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
+        assert_eq!(res.core_fees_account.len(), 0);
     }
 }
