@@ -10,7 +10,7 @@ async fn bench_dump(storage: Arc<Storage>, batch_size: usize) {
     let temp_dir_path = temp_dir.path();
 
     storage
-        .dump_db(temp_dir_path, batch_size, rx)
+        .dump_db(temp_dir_path, batch_size, &rx)
         .await
         .unwrap();
 }
@@ -18,7 +18,7 @@ async fn bench_dump(storage: Arc<Storage>, batch_size: usize) {
 fn dump_benchmark(c: &mut Criterion) {
     let env = setup::rocks::RocksTestEnvironment::new(&[]);
     let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(|| async {
+    rt.block_on(async {
         let cnt = 1_000_000;
         _ = env.generate_assets(cnt, 25).await
     });
