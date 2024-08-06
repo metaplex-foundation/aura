@@ -9,21 +9,35 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::{column::TypedColumn, key_encoders::decode_string, Storage};
 
 const DL_RETRY_INTERVAL_SEC: u64 = 300; // 5 minutes
-const DL_MAX_ATTEMPTS: u64 = 5;
+pub const DL_MAX_ATTEMPTS: u64 = 5;
 
 /// Represents information about asset preview stored on Storage service.
 ///
 /// Also serves a value type for Rocks columns famility that contains pairs:
 /// Hash of asset URL -> AssetPreviews
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct AssetPreviews {
     /// The size of asset preview stored in Storage service
     pub size: u32,
+    pub failed: Option<DownloadFailInfo>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct DownloadFailInfo {
+    timestamp_epoch_sec: u64,
 }
 
 impl AssetPreviews {
     pub fn new(size: u32) -> Self {
-        AssetPreviews { size }
+        AssetPreviews { size, failed: None }
+    }
+    pub fn new_failed(timestamp: u64) -> Self {
+        AssetPreviews {
+            size: 0,
+            failed: Some(DownloadFailInfo {
+                timestamp_epoch_sec: timestamp,
+            }),
+        }
     }
 }
 
@@ -57,10 +71,19 @@ impl TypedColumn for AssetPreviews {
 }
 
 /// Entity for column family that contains "URL to download" for storage service.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct UrlToDownload {
     pub timestamp: u64, // unix time in seconds
     pub download_attempts: u64,
+}
+
+impl Default for UrlToDownload {
+    fn default() -> Self {
+        Self {
+            timestamp: 0,
+            download_attempts: 0,
+        }
+    }
 }
 
 impl From<u64> for UrlToDownload {
@@ -96,10 +119,7 @@ impl UrlsToDownloadStore for Storage {
     /// While fetching, in RocksDB these URLs are marked with the timestamp
     /// that indicates moment when they has been retrieved.
     fn get_urls_to_download(&self, number_of_urls: u32) -> Result<Vec<String>, AsyncError> {
-        let now: u64 = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now: u64 = current_epoch_time();
 
         let mut urls = self
             .urls_to_download
@@ -134,6 +154,7 @@ impl UrlsToDownloadStore for Storage {
         &self,
         results: Vec<UrlDownloadNotification>,
     ) -> Result<(), AsyncError> {
+        let now = current_epoch_time();
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for UrlDownloadNotification { url, outcome } in results {
             use interface::assert_urls::DownloadOutcome as E;
@@ -148,17 +169,29 @@ impl UrlsToDownloadStore for Storage {
                         .put_with_batch(&mut batch, url_hash.to_bytes(), &prev)?;
                 }
                 E::NotFound => {
-                    // TODO-XXX: any additional actions?
-                    self.urls_to_download.delete_with_batch(&mut batch, url)
+                    let url_hash = keccak::hash(url.as_bytes());
+                    self.urls_to_download.delete_with_batch(&mut batch, url);
+                    self.asset_previews.put_with_batch(
+                        &mut batch,
+                        url_hash.to_bytes(),
+                        &AssetPreviews::new_failed(now),
+                    )?;
                 }
                 E::ServerError | E::TooManyRequests => {
                     if let Ok(Some(prev)) = self.urls_to_download.get(url.clone()) {
                         if prev.download_attempts > DL_MAX_ATTEMPTS {
-                            self.urls_to_download.delete_with_batch(&mut batch, url)
+                            let url_hash = keccak::hash(url.as_bytes());
+                            self.urls_to_download.delete_with_batch(&mut batch, url);
+                            self.asset_previews.put_with_batch(
+                                &mut batch,
+                                url_hash.to_bytes(),
+                                &AssetPreviews::new_failed(now),
+                            )?;
                         }
                     };
                 }
                 E::NotSupportedFormat | E::TooLarge | E::CorruptedAsset | E::Nothing => {
+                    // Means in get-asset request, we'll be providing original asset URL
                     self.urls_to_download.delete_with_batch(&mut batch, url)
                 }
             };
@@ -166,4 +199,11 @@ impl UrlsToDownloadStore for Storage {
         self.db.write(batch)?;
         Ok(())
     }
+}
+
+fn current_epoch_time() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }

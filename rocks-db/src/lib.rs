@@ -1,5 +1,5 @@
 use asset_previews::{AssetPreviews, UrlToDownload};
-use entities::schedule::Schedule;
+use entities::schedule::ScheduledJob;
 use inflector::Inflector;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
@@ -118,7 +118,7 @@ pub struct Storage {
     pub token_prices: Column<TokenPrice>,
     pub asset_previews: Column<AssetPreviews>,
     pub urls_to_download: Column<UrlToDownload>,
-    pub schedules: Column<Schedule>,
+    pub schedules: Column<ScheduledJob>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -284,7 +284,7 @@ impl Storage {
             Self::new_cf_descriptor::<TokenPrice>(migration_state),
             Self::new_cf_descriptor::<AssetPreviews>(migration_state),
             Self::new_cf_descriptor::<UrlToDownload>(migration_state),
-            Self::new_cf_descriptor::<Schedule>(migration_state),
+            Self::new_cf_descriptor::<ScheduledJob>(migration_state),
         ]
     }
 

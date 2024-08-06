@@ -22,7 +22,6 @@ impl AssetUrlServiceImpl {
 impl AssetUrlService for AssetUrlServiceImpl {
     #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-
     async fn get_asset_urls_to_download(
         &self,
         request: tonic::Request<GetAssetUrlsRequest>,

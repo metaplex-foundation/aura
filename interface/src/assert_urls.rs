@@ -3,11 +3,13 @@ use mockall::automock;
 
 use crate::asset_streaming_and_discovery::AsyncError;
 
+#[derive(Debug, Clone)]
 pub struct UrlDownloadNotification {
     pub url: String,
     pub outcome: DownloadOutcome,
 }
 
+#[derive(Debug, Clone)]
 pub enum DownloadOutcome {
     Success { mime: String, size: u32 },
     NotFound,
@@ -25,9 +27,9 @@ pub enum DownloadOutcome {
 #[automock]
 #[async_trait]
 pub trait UrlsToDownloadStore: Send + Sync {
-    /// Fetch potions of URLs for downloading
+    /// Fetch a batch of URLs for downloading
     /// ## Args:
-    /// * `number_of_urls` - maximum amount of URLs to be retrieved
+    /// * `number_of_urls` - maximum number of URLs to be retrieved
     fn get_urls_to_download(&self, number_of_urls: u32) -> Result<Vec<String>, AsyncError>;
 
     /// Process URLs downloading results, which in case of successfull download assumes

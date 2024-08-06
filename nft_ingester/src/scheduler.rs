@@ -9,7 +9,7 @@ use rocks_db::asset_previews::UrlToDownload;
 use rocks_db::Storage;
 
 use entities::schedule::JobRunState;
-use entities::schedule::Schedule;
+use entities::schedule::ScheduledJob;
 use interface::schedules::SchedulesStore;
 use tonic::async_trait;
 
@@ -105,18 +105,18 @@ impl Scheduler {
 
 /// Helper functions for transitioning job from one state to another.
 trait SchedulesStoreEx: SchedulesStore {
-    fn mark_started(&self, sched: &mut Schedule) {
+    fn mark_started(&self, sched: &mut ScheduledJob) {
         sched.last_run_status = JobRunState::Started;
         sched.update_with_current_time();
         self.put_schedule(&sched);
     }
-    fn mark_finished(&self, sched: &mut Schedule, new_state: Option<Vec<u8>>) {
+    fn mark_finished(&self, sched: &mut ScheduledJob, new_state: Option<Vec<u8>>) {
         sched.state = new_state;
         sched.update_with_current_time();
         sched.last_run_status = JobRunState::Finished;
         self.put_schedule(&sched);
     }
-    fn mark_failed(&self, sched: &mut Schedule, new_state: Option<Option<Vec<u8>>>) {
+    fn mark_failed(&self, sched: &mut ScheduledJob, new_state: Option<Option<Vec<u8>>>) {
         if let Some(state) = new_state {
             sched.state = state;
         }
@@ -124,7 +124,7 @@ trait SchedulesStoreEx: SchedulesStore {
         sched.last_run_status = JobRunState::Failed;
         self.put_schedule(&sched);
     }
-    fn update_state(&self, sched: &mut Schedule, new_state: Option<Vec<u8>>) {
+    fn update_state(&self, sched: &mut ScheduledJob, new_state: Option<Vec<u8>>) {
         sched.state = new_state;
         sched.update_with_current_time();
         self.put_schedule(&sched);
@@ -148,7 +148,7 @@ pub trait Job {
 
     /// If the job is newly added, i.e. doesn't have a state in DB yet,
     /// this method used to create an inital stated for the job.
-    fn initial_config(&self) -> Schedule;
+    fn initial_config(&self) -> ScheduledJob;
 
     /// Used to init job state before running, with a state fetched from the DB.
     fn init_with_state(&mut self, prev_state: Option<Vec<u8>>);
@@ -179,8 +179,8 @@ impl Job for InitUrlsToDownloadJob {
         "init_urls_to_download".to_string()
     }
 
-    fn initial_config(&self) -> Schedule {
-        Schedule {
+    fn initial_config(&self) -> ScheduledJob {
+        ScheduledJob {
             job_id: self.id(),
             run_interval_sec: None, // one-time job
             last_run_epoch_time: 0,

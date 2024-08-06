@@ -1,3 +1,4 @@
+pub mod awaitility;
 pub mod pg;
 pub mod rocks;
 
