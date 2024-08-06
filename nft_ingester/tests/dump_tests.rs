@@ -159,8 +159,6 @@ mod mtg_441_tests {
             )
             .await;
 
-        dbg!(&api_res);
-
         assert!(api_res.is_ok());
         let api_res = api_res.expect("Cannot run api call.");
         let res = parse_asset(api_res);
@@ -270,10 +268,6 @@ mod mtg_441_tests {
             .pubkey;
 
         let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
-        // let a = env.rocks_env.storage.asset_static_data.get(first_pubkey).unwrap();
-        // assert!(a.is_some());
-
         let api_res = get_das_api(&env)
             .get_asset(
                 GetAsset {
