@@ -230,6 +230,16 @@ pub struct SearchAssets {
     pub options: Option<Options>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetCoreFees {
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub cursor: Option<String>,
+}
+
 impl SearchAssets {
     pub fn extract_some_fields(&self) -> String {
         let mut result = String::new();

@@ -17,11 +17,12 @@ use crate::api::dapi::rpc_asset_models::Asset;
 use crate::api::error::DasApiError;
 use crate::config::{ApiConfig, JsonMiddlewareConfig};
 use dapi::get_asset_signatures::get_asset_signatures;
+use dapi::get_core_fees::get_core_fees;
 use dapi::get_token_accounts::get_token_accounts;
 use entities::api_req_params::{
     GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
-    GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetGrouping,
-    GetTokenAccounts, Pagination, SearchAssets,
+    GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetCoreFees,
+    GetGrouping, GetTokenAccounts, Pagination, SearchAssets,
 };
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
@@ -446,6 +447,44 @@ where
             pagination.after,
             pagination.cursor,
             options.map(|op| op.show_zero_balance).unwrap_or_default(),
+        )
+        .await?;
+
+        self.metrics
+            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+
+        Ok(json!(res))
+    }
+
+    pub async fn get_core_fees(&self, payload: GetCoreFees) -> Result<Value, DasApiError> {
+        let label = "get_core_fees";
+        self.metrics.inc_requests(label);
+        let latency_timer = Instant::now();
+
+        let GetCoreFees {
+            limit,
+            page,
+            before,
+            after,
+            cursor,
+        } = payload;
+
+        let pagination = Pagination {
+            limit,
+            page,
+            before,
+            after,
+            cursor,
+        };
+
+        Self::validate_basic_pagination(&pagination, self.max_page_limit)?;
+        let res = get_core_fees(
+            self.pg_client.clone(),
+            limit.unwrap_or(DEFAULT_LIMIT as u32).into(),
+            page.map(|page| page as u64),
+            pagination.before,
+            pagination.after,
+            pagination.cursor,
         )
         .await?;
 

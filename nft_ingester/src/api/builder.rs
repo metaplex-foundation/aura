@@ -224,8 +224,9 @@ impl RpcApiBuilder {
         });
         module.add_alias("getSignaturesForAssetV2", "get_signatures_for_asset_v2");
 
+        let cloned_api = api.clone();
         module.add_method("get_token_accounts", move |rpc_params: Params| {
-            let api = api.clone();
+            let api = cloned_api.clone();
             async move {
                 api.get_token_accounts(rpc_params.parse()?)
                     .await
@@ -233,6 +234,16 @@ impl RpcApiBuilder {
             }
         });
         module.add_alias("getTokenAccounts", "get_token_accounts");
+
+        module.add_method("get_core_fees", move |rpc_params: Params| {
+            let api = api.clone();
+            async move {
+                api.get_core_fees(rpc_params.parse()?)
+                    .await
+                    .map_err(Into::into)
+            }
+        });
+        module.add_alias("getCoreFees", "get_core_fees");
 
         Ok(module)
     }
