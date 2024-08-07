@@ -3,10 +3,10 @@
 SHELL := /bin/bash
 
 build:
-	@docker compose -f docker-compose.yaml build ingester-first-consumer raw-backfiller das-api synchronizer
+	@docker compose -f docker-compose.yaml build ingester raw-backfiller das-api synchronizer
 
 start:
-	@docker compose -f docker-compose.yaml up -d ingester-first-consumer
+	@docker compose -f docker-compose.yaml up -d ingester
 
 start-synchronizer:
 	@docker compose -f docker-compose.yaml up -d synchronizer
@@ -30,7 +30,7 @@ dev:
 	@docker compose -f docker-compose.yaml up -d db
 
 stop:
-	@docker stop --time 1000 ingester-first-consumer
+	@docker stop --time 1000 ingester
 
 clippy:
 	@cargo clean -p postgre-client -p rocks-db -p interface

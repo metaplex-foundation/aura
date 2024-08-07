@@ -56,6 +56,22 @@ const fn default_mpl_core_buffer_size() -> usize {
     10
 }
 
+fn default_rocks_backup_url() -> String {
+    return String::from("127.0.0.1:3051/snapshot");
+}
+
+fn default_rocks_backup_archives_dir() -> String {
+    return String::from("/rocksdb/_rocks_backup_archives");
+}
+
+fn default_rocks_backup_dir() -> String {
+    return String::from("/rocksdb/_rocksdb_backup");
+}
+
+fn default_gapfiller_peer_addr() -> String {
+    return String::from("0.0.0.0");
+}
+
 impl BackfillerConfig {
     pub fn get_slot_until(&self) -> u64 {
         self.slot_until.unwrap_or_default()
@@ -97,14 +113,17 @@ pub struct IngesterConfig {
     pub database_config: DatabaseConfig,
     pub tcp_config: TcpConfig,
     pub mplx_buffer_size: usize,
-    pub mplx_workers: u32,
+    pub parsing_workers: u32,
     pub spl_buffer_size: usize,
     #[serde(default = "default_mpl_core_buffer_size")]
     pub mpl_core_buffer_size: usize,
     pub metrics_port: Option<u16>,
     pub rocks_db_path_container: Option<String>,
+    #[serde(default = "default_rocks_backup_url")]
     pub rocks_backup_url: String,
+    #[serde(default = "default_rocks_backup_archives_dir")]
     pub rocks_backup_archives_dir: String,
+    #[serde(default = "default_rocks_backup_dir")]
     pub rocks_backup_dir: String,
     pub run_bubblegum_backfiller: bool,
     #[serde(default = "default_dump_synchronizer_batch_size")]
@@ -117,10 +136,11 @@ pub struct IngesterConfig {
     pub run_dump_synchronize_on_start: bool,
     #[serde(default)]
     pub disable_synchronizer: bool,
+    #[serde(default = "default_gapfiller_peer_addr")]
     pub gapfiller_peer_addr: String,
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
-    pub rust_log: Option<String>,
+    pub log_level: Option<String>,
     pub backfill_rpc_address: String,
     pub run_profiling: Option<bool>,
     pub profiling_file_path_container: Option<String>,
@@ -297,7 +317,7 @@ impl ApiConfig {
 
 impl IngesterConfig {
     pub fn get_log_level(&self) -> String {
-        self.rust_log.clone().unwrap_or("warn".to_string())
+        self.log_level.clone().unwrap_or("warn".to_string())
     }
 
     pub fn get_is_run_profiling(&self) -> bool {
@@ -362,58 +382,15 @@ impl BigTableConfig {
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct MetricsConfig(figment::value::Dict);
-
-pub const METRICS_HOST_KEY: &str = "metrics_host";
-pub const METRICS_PORT_KEY: &str = "metrics_port";
-
-impl MetricsConfig {
-    pub fn get_metrics_port(&self) -> Result<u16, IngesterError> {
-        self.0
-            .get(METRICS_PORT_KEY)
-            .and_then(|a| a.to_u128().map(|res| res as u16))
-            .ok_or(IngesterError::ConfigurationError {
-                msg: format!("get_metrics_port missing: {}", METRICS_PORT_KEY),
-            })
-    }
-
-    pub fn get_metrics_host(&self) -> Result<String, IngesterError> {
-        self.0
-            .get(METRICS_HOST_KEY)
-            .and_then(|a| a.clone().into_string())
-            .ok_or(IngesterError::ConfigurationError {
-                msg: format!("get_metrics_host missing: {}", METRICS_HOST_KEY),
-            })
-    }
-}
-
-pub const CODE_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-#[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct TcpConfig(figment::value::Dict);
 
 pub const TCP_RECEIVER_ADDR: &str = "receiver_addr";
 pub const TCP_RECEIVER_RECONNECT_INTERVAL: &str = "receiver_reconnect_interval";
-
-pub const TCP_RECEIVER_BACKFILLER_ADDR: &str = "backfiller_receiver_addr";
-pub const BACKFILLER_RECONNECT_INTERVAL: &str = "backfiller_receiver_reconnect_interval";
-pub const TCP_SENDER_BACKFILLER_PORT: &str = "backfiller_sender_port";
-pub const TCP_SENDER_BACKFILLER_BATCH_MAX_BYTES: &str = "backfiller_sender_batch_max_bytes";
-pub const TCP_SENDER_BACKFILLER_BUFFER_SIZE: &str = "backfiller_sender_buffer_size";
-
 pub const TCP_SNAPSHOT_RECEIVER_ADDR: &str = "snapshot_receiver_addr";
 
 impl TcpConfig {
     pub fn get_tcp_receiver_reconnect_interval(&self) -> Result<time::Duration, IngesterError> {
         self.get_duration(TCP_RECEIVER_RECONNECT_INTERVAL)
-    }
-
-    pub fn get_backfiller_reconnect_interval(&self) -> Result<time::Duration, IngesterError> {
-        self.get_duration(BACKFILLER_RECONNECT_INTERVAL)
-    }
-
-    pub fn get_tcp_receiver_addr_backfiller(&self) -> Result<SocketAddr, IngesterError> {
-        self.get_addr(TCP_RECEIVER_BACKFILLER_ADDR)
     }
 
     pub fn get_tcp_receiver_addr_ingester(&self) -> Result<SocketAddr, IngesterError> {
@@ -447,45 +424,6 @@ impl TcpConfig {
             .ok_or(IngesterError::ConfigurationError {
                 msg: "SocketAddr".to_string(),
             })
-    }
-
-    pub fn get_tcp_sender_backfiller_port(&self) -> Result<u16, IngesterError> {
-        Ok(self
-            .0
-            .get(TCP_SENDER_BACKFILLER_PORT)
-            .and_then(|a| a.to_u128())
-            .ok_or(IngesterError::ConfigurationError {
-                msg: format!(
-                    "TCP sender port for backfiller missing: {}",
-                    TCP_SENDER_BACKFILLER_PORT
-                ),
-            })? as u16)
-    }
-
-    pub fn get_tcp_sender_backfiller_buffer_size(&self) -> Result<usize, IngesterError> {
-        Ok(self
-            .0
-            .get(TCP_SENDER_BACKFILLER_BUFFER_SIZE)
-            .and_then(|a| a.to_u128())
-            .ok_or(IngesterError::ConfigurationError {
-                msg: format!(
-                    "TCP sender buffer size for backfiller missing: {}",
-                    TCP_SENDER_BACKFILLER_BUFFER_SIZE
-                ),
-            })? as usize)
-    }
-
-    pub fn get_tcp_sender_backfiller_batch_max_bytes(&self) -> Result<usize, IngesterError> {
-        Ok(self
-            .0
-            .get(TCP_SENDER_BACKFILLER_BATCH_MAX_BYTES)
-            .and_then(|a| a.to_u128())
-            .ok_or(IngesterError::ConfigurationError {
-                msg: format!(
-                    "TCP sender batch max bytes for backfiller missing: {}",
-                    TCP_SENDER_BACKFILLER_BATCH_MAX_BYTES
-                ),
-            })? as usize)
     }
 }
 

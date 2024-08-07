@@ -367,7 +367,7 @@ pub async fn main() -> Result<(), IngesterError> {
         config.mpl_core_buffer_size,
     );
 
-    for _ in 0..config.mplx_workers {
+    for _ in 0..config.parsing_workers {
         let mut cloned_mplx_parser = mplx_accs_parser.clone();
 
         let cloned_rx = shutdown_rx.resubscribe();
