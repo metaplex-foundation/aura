@@ -1,7 +1,7 @@
 use crate::model::RollupState;
 use crate::{PgClient, INSERT_ACTION, SELECT_ACTION, SQL_COMPONENT, UPDATE_ACTION};
 use chrono::Utc;
-use entities::models::RollupWithState;
+use entities::models::BatchMintWithState;
 use sqlx::database::HasArguments;
 use sqlx::query::Query;
 use sqlx::{Postgres, QueryBuilder, Row};
@@ -34,7 +34,7 @@ impl PgClient {
         Ok(())
     }
 
-    pub async fn fetch_rollup_for_processing(&self) -> Result<Option<RollupWithState>, String> {
+    pub async fn fetch_rollup_for_processing(&self) -> Result<Option<BatchMintWithState>, String> {
         let mut query_builder = QueryBuilder::new(
             "SELECT rlp_file_name, rlp_state, rlp_error, rlp_url, EXTRACT(EPOCH FROM rlp_created_at) as created_at FROM rollups
             WHERE rlp_state in ('uploaded', 'validation_complete', 'fail_upload_to_arweave', 'uploaded_to_arweave', 'fail_sending_transaction') ORDER BY rlp_created_at ASC"
@@ -42,7 +42,7 @@ impl PgClient {
         self.fetch_rollup(query_builder.build()).await
     }
 
-    pub async fn get_rollup_by_url(&self, url: &str) -> Result<Option<RollupWithState>, String> {
+    pub async fn get_rollup_by_url(&self, url: &str) -> Result<Option<BatchMintWithState>, String> {
         let mut query_builder = QueryBuilder::new(
             "SELECT rlp_file_name, rlp_state, rlp_error, rlp_url, EXTRACT(EPOCH FROM rlp_created_at) as created_at FROM rollups
             WHERE rlp_url = $1"
@@ -103,13 +103,13 @@ impl PgClient {
     async fn fetch_rollup(
         &self,
         query: Query<'_, Postgres, <Postgres as HasArguments<'_>>::Arguments>,
-    ) -> Result<Option<RollupWithState>, String> {
+    ) -> Result<Option<BatchMintWithState>, String> {
         let start_time = chrono::Utc::now();
         let result = query
             .fetch_optional(&self.pool)
             .await
             .map(|row| {
-                row.map(|row| RollupWithState {
+                row.map(|row| BatchMintWithState {
                     file_name: row.try_get("rlp_file_name").unwrap_or_default(),
                     state: row
                         .try_get::<RollupState, _>("rlp_state")

@@ -19,10 +19,10 @@ reqwest = "0.11.11"
 plerkle_messenger = { version = "1.5.2", features = ['redis'] }
 plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
 flatbuffers = "23.1.21"
-mpl-bubblegum = {path = "../blockbuster/mpl-bubblegum/clients/rust", features = ["serde"] }
+mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum.git", branch = "feature/cleanup", features = ["serde"] }
 spl-account-compression = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root", features = ["no-entrypoint"] }
 num-traits = "0.2.15"
-blockbuster = { path = "../blockbuster/blockbuster" }
+blockbuster = { git = "https://github.com/adm-metaex/blockbuster", branch = "remove-bubblegum-submodule" }
 figment = { version = "0.10.6", features = ["env", "toml", "yaml"] }
 solana-sdk = { workspace = true }
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
@@ -77,7 +77,7 @@ jemallocator = { version = "*", features = ["profiling", "debug"] }
 arweave-rs = {version = "0.2.0", git = "https://github.com/RequescoS/arweave-rs.git", rev = "d8f5ef76f06c96afdf013fe5b62301790631b33f"}
 serde_cbor = "0.11.2"
 triomphe = "=0.1.9"
-rollup-sdk = { path = "../rollup-sdk" }
+bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "ed7ebcf" }
 jsonpath_lib = "0.3.0"
 mime_guess = "2.0.4"
 url = "2.3.1"

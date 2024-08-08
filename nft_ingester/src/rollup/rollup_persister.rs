@@ -2,12 +2,13 @@ use std::ops::Deref;
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use entities::enums::PersistingRollupState;
-use entities::{enums::FailedRollupState, models::RollupToVerify, rollup::Rollup};
-use interface::{error::UsecaseError, rollup::RollupDownloader};
+use bubblegum_batch_sdk::model::BatchMint;
+use entities::enums::PersistingBatchMintState;
+use entities::{enums::FailedBatchMintState, models::BatchMintToVerify};
+use interface::{batch_mint::BatchMintDownloader, error::UsecaseError};
 use log::{error, info};
 use metrics_utils::{MetricStatus, RollupPersisterMetricsConfig};
-use rocks_db::rollup::RollupWithStaker;
+use rocks_db::batch_mint::BatchMintWithStaker;
 use tokio::{sync::broadcast::Receiver, task::JoinError, time::Instant};
 
 use crate::{bubblegum_updates_processor::BubblegumTxProcessor, error::IngesterError};
@@ -15,7 +16,7 @@ use usecase::error::RollupValidationError;
 
 pub const MAX_ROLLUP_DOWNLOAD_ATTEMPTS: u8 = 5;
 
-pub struct RollupPersister<D: RollupDownloader> {
+pub struct RollupPersister<D: BatchMintDownloader> {
     rocks_client: Arc<rocks_db::Storage>,
     downloader: D,
     metrics: Arc<RollupPersisterMetricsConfig>,
@@ -24,17 +25,17 @@ pub struct RollupPersister<D: RollupDownloader> {
 pub struct RollupDownloaderForPersister {}
 
 #[async_trait]
-impl RollupDownloader for RollupDownloaderForPersister {
-    async fn download_rollup(&self, url: &str) -> Result<Box<Rollup>, UsecaseError> {
+impl BatchMintDownloader for RollupDownloaderForPersister {
+    async fn download_batch_mint(&self, url: &str) -> Result<Box<BatchMint>, UsecaseError> {
         let response = reqwest::get(url).await?.bytes().await?;
         Ok(Box::new(serde_json::from_slice(&response)?))
     }
 
-    async fn download_rollup_and_check_checksum(
+    async fn download_batch_mint_and_check_checksum(
         &self,
         url: &str,
         checksum: &str,
-    ) -> Result<Box<Rollup>, UsecaseError> {
+    ) -> Result<Box<BatchMint>, UsecaseError> {
         let response = reqwest::get(url).await?.bytes().await?;
         let file_hash = xxhash_rust::xxh3::xxh3_128(&response);
         let hash_hex = hex::encode(file_hash.to_be_bytes());
@@ -45,7 +46,7 @@ impl RollupDownloader for RollupDownloaderForPersister {
     }
 }
 
-impl<D: RollupDownloader> RollupPersister<D> {
+impl<D: BatchMintDownloader> RollupPersister<D> {
     pub fn new(
         rocks_client: Arc<rocks_db::Storage>,
         downloader: D,
@@ -85,14 +86,14 @@ impl<D: RollupDownloader> RollupPersister<D> {
     pub async fn persist_rollup(
         &self,
         rx: &Receiver<()>,
-        mut rollup_to_verify: RollupToVerify,
-        mut rollup: Option<Box<Rollup>>,
+        mut rollup_to_verify: BatchMintToVerify,
+        mut rollup: Option<Box<BatchMint>>,
     ) {
         let start_time = Instant::now();
         info!("Persisting {} rollup", &rollup_to_verify.url);
         while rx.is_empty() {
             match &rollup_to_verify.persisting_state {
-                &PersistingRollupState::ReceivedTransaction => {
+                &PersistingBatchMintState::ReceivedTransaction => {
                     if let Err(err) = self
                         .download_rollup(&mut rollup_to_verify, &mut rollup)
                         .await
@@ -100,7 +101,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
                         error!("Error during rollup downloading: {}", err)
                     };
                 }
-                &PersistingRollupState::SuccessfullyDownload => {
+                &PersistingBatchMintState::SuccessfullyDownload => {
                     if let Some(r) = &rollup {
                         self.validate_rollup(&mut rollup_to_verify, r).await;
                     } else {
@@ -110,7 +111,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
                         )
                     }
                 }
-                &PersistingRollupState::SuccessfullyValidate => {
+                &PersistingBatchMintState::SuccessfullyValidate => {
                     if let Some(r) = &rollup {
                         self.store_rollup_update(&mut rollup_to_verify, r).await;
                     } else {
@@ -120,7 +121,8 @@ impl<D: RollupDownloader> RollupPersister<D> {
                         )
                     }
                 }
-                &PersistingRollupState::FailedToPersist | &PersistingRollupState::StoredUpdate => {
+                &PersistingBatchMintState::FailedToPersist
+                | &PersistingBatchMintState::StoredUpdate => {
                     self.drop_rollup_from_queue(rollup_to_verify.file_hash.clone())
                         .await;
                     info!(
@@ -147,7 +149,7 @@ impl<D: RollupDownloader> RollupPersister<D> {
 
     async fn get_rollup_to_verify(
         &self,
-    ) -> Result<(Option<RollupToVerify>, Option<Box<Rollup>>), IngesterError> {
+    ) -> Result<(Option<BatchMintToVerify>, Option<Box<BatchMint>>), IngesterError> {
         match self.rocks_client.fetch_rollup_for_verifying().await {
             Ok((Some(rollup_to_verify), rollup_data)) => {
                 Ok((Some(rollup_to_verify), rollup_data.map(Box::new)))
@@ -164,16 +166,16 @@ impl<D: RollupDownloader> RollupPersister<D> {
 
     async fn download_rollup(
         &self,
-        rollup_to_verify: &mut RollupToVerify,
-        rollup: &mut Option<Box<Rollup>>,
+        rollup_to_verify: &mut BatchMintToVerify,
+        rollup: &mut Option<Box<BatchMint>>,
     ) -> Result<(), IngesterError> {
         if rollup.is_some() {
-            rollup_to_verify.persisting_state = PersistingRollupState::SuccessfullyDownload;
+            rollup_to_verify.persisting_state = PersistingBatchMintState::SuccessfullyDownload;
             return Ok(());
         }
         match self
             .downloader
-            .download_rollup_and_check_checksum(
+            .download_batch_mint_and_check_checksum(
                 rollup_to_verify.url.as_ref(),
                 &rollup_to_verify.file_hash,
             )
@@ -184,8 +186,8 @@ impl<D: RollupDownloader> RollupPersister<D> {
                     .inc_rollups_with_status("rollup_download", MetricStatus::SUCCESS);
                 if let Err(e) = self.rocks_client.rollups.put(
                     rollup_to_verify.file_hash.clone(),
-                    RollupWithStaker {
-                        rollup: r.deref().clone(),
+                    BatchMintWithStaker {
+                        batch_mint: r.deref().clone(),
                         staker: rollup_to_verify.staker,
                     },
                 ) {
@@ -194,15 +196,15 @@ impl<D: RollupDownloader> RollupPersister<D> {
                     return Err(e.into());
                 }
                 *rollup = Some(r);
-                rollup_to_verify.persisting_state = PersistingRollupState::SuccessfullyDownload;
+                rollup_to_verify.persisting_state = PersistingBatchMintState::SuccessfullyDownload;
             }
             Err(e) => {
                 if let UsecaseError::HashMismatch(expected, actual) = e {
-                    rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
+                    rollup_to_verify.persisting_state = PersistingBatchMintState::FailedToPersist;
                     self.metrics
                         .inc_rollups_with_status("rollup_checksum_verify", MetricStatus::FAILURE);
                     self.save_rollup_as_failed(
-                        FailedRollupState::ChecksumVerifyFailed,
+                        FailedBatchMintState::ChecksumVerifyFailed,
                         rollup_to_verify,
                     )
                     .await?;
@@ -212,13 +214,13 @@ impl<D: RollupDownloader> RollupPersister<D> {
                     ));
                 }
                 if let UsecaseError::Serialization(e) = e {
-                    rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
+                    rollup_to_verify.persisting_state = PersistingBatchMintState::FailedToPersist;
                     self.metrics.inc_rollups_with_status(
                         "rollup_file_deserialization",
                         MetricStatus::FAILURE,
                     );
                     self.save_rollup_as_failed(
-                        FailedRollupState::FileSerialization,
+                        FailedBatchMintState::FileSerialization,
                         rollup_to_verify,
                     )
                     .await?;
@@ -229,9 +231,12 @@ impl<D: RollupDownloader> RollupPersister<D> {
                 self.metrics
                     .inc_rollups_with_status("rollup_download", MetricStatus::FAILURE);
                 if rollup_to_verify.download_attempts + 1 > MAX_ROLLUP_DOWNLOAD_ATTEMPTS {
-                    rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
-                    self.save_rollup_as_failed(FailedRollupState::DownloadFailed, rollup_to_verify)
-                        .await?;
+                    rollup_to_verify.persisting_state = PersistingBatchMintState::FailedToPersist;
+                    self.save_rollup_as_failed(
+                        FailedBatchMintState::DownloadFailed,
+                        rollup_to_verify,
+                    )
+                    .await?;
                 } else {
                     if let Err(e) = self
                         .rocks_client
@@ -253,8 +258,8 @@ impl<D: RollupDownloader> RollupPersister<D> {
         Ok(())
     }
 
-    async fn validate_rollup(&self, rollup_to_verify: &mut RollupToVerify, rollup: &Rollup) {
-        if let Err(e) = crate::rollup::rollup_verifier::validate_rollup(
+    async fn validate_rollup(&self, rollup_to_verify: &mut BatchMintToVerify, rollup: &BatchMint) {
+        if let Err(e) = bubblegum_batch_sdk::batch_mint_validations::validate_batch_mint(
             rollup,
             rollup_to_verify.collection_mint,
         )
@@ -264,9 +269,9 @@ impl<D: RollupDownloader> RollupPersister<D> {
                 .inc_rollups_with_status("rollup_validating", MetricStatus::FAILURE);
             error!("Error while validating rollup: {}", e.to_string());
 
-            rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
+            rollup_to_verify.persisting_state = PersistingBatchMintState::FailedToPersist;
             if let Err(err) = self
-                .save_rollup_as_failed(FailedRollupState::RollupVerifyFailed, rollup_to_verify)
+                .save_rollup_as_failed(FailedBatchMintState::RollupVerifyFailed, rollup_to_verify)
                 .await
             {
                 error!("Save rollup as failed: {}", err);
@@ -275,10 +280,14 @@ impl<D: RollupDownloader> RollupPersister<D> {
         }
         self.metrics
             .inc_rollups_with_status("rollup_validating", MetricStatus::SUCCESS);
-        rollup_to_verify.persisting_state = PersistingRollupState::SuccessfullyValidate;
+        rollup_to_verify.persisting_state = PersistingBatchMintState::SuccessfullyValidate;
     }
 
-    async fn store_rollup_update(&self, rollup_to_verify: &mut RollupToVerify, rollup: &Rollup) {
+    async fn store_rollup_update(
+        &self,
+        rollup_to_verify: &mut BatchMintToVerify,
+        rollup: &BatchMint,
+    ) {
         if BubblegumTxProcessor::store_rollup_update(
             rollup_to_verify.created_at_slot,
             rollup,
@@ -290,18 +299,18 @@ impl<D: RollupDownloader> RollupPersister<D> {
         {
             self.metrics
                 .inc_rollups_with_status("rollup_persist", MetricStatus::FAILURE);
-            rollup_to_verify.persisting_state = PersistingRollupState::FailedToPersist;
+            rollup_to_verify.persisting_state = PersistingBatchMintState::FailedToPersist;
             return;
         }
         self.metrics
             .inc_rollups_with_status("rollup_persist", MetricStatus::SUCCESS);
-        rollup_to_verify.persisting_state = PersistingRollupState::StoredUpdate;
+        rollup_to_verify.persisting_state = PersistingBatchMintState::StoredUpdate;
     }
 
     async fn save_rollup_as_failed(
         &self,
-        status: FailedRollupState,
-        rollup: &RollupToVerify,
+        status: FailedBatchMintState,
+        rollup: &BatchMintToVerify,
     ) -> Result<(), IngesterError> {
         if let Err(e) = self
             .rocks_client

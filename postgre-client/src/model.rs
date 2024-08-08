@@ -154,18 +154,20 @@ impl From<entities::api_req_params::AssetSortDirection> for AssetSortDirection {
     }
 }
 
-impl From<RollupState> for entities::enums::RollupState {
+impl From<RollupState> for entities::enums::BatchMintState {
     fn from(value: RollupState) -> Self {
         match value {
-            RollupState::Uploaded => entities::enums::RollupState::Uploaded,
-            RollupState::ValidationFail => entities::enums::RollupState::ValidationFail,
-            RollupState::ValidationComplete => entities::enums::RollupState::ValidationComplete,
-            RollupState::UploadedToArweave => entities::enums::RollupState::UploadedToArweave,
-            RollupState::FailUploadToArweave => entities::enums::RollupState::FailUploadToArweave,
-            RollupState::FailSendingTransaction => {
-                entities::enums::RollupState::FailSendingTransaction
+            RollupState::Uploaded => entities::enums::BatchMintState::Uploaded,
+            RollupState::ValidationFail => entities::enums::BatchMintState::ValidationFail,
+            RollupState::ValidationComplete => entities::enums::BatchMintState::ValidationComplete,
+            RollupState::UploadedToArweave => entities::enums::BatchMintState::UploadedToArweave,
+            RollupState::FailUploadToArweave => {
+                entities::enums::BatchMintState::FailUploadToArweave
             }
-            RollupState::Complete => entities::enums::RollupState::Complete,
+            RollupState::FailSendingTransaction => {
+                entities::enums::BatchMintState::FailSendingTransaction
+            }
+            RollupState::Complete => entities::enums::BatchMintState::Complete,
         }
     }
 }

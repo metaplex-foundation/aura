@@ -16,7 +16,7 @@ tokio = { version = "1.26.0", features = ["full", "tracing"] }
 solana-storage-bigtable = "~1.18.11"
 solana-bigtable-connection = "1.10.31"
 solana-transaction-status = "~1.18.11"
-mpl-bubblegum = {path = "../blockbuster/mpl-bubblegum/clients/rust", features = ["serde"] }
+mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum.git", branch = "feature/cleanup", features = ["serde"] }
 mockall = "0.12.0"
 spl-account-compression = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root", features = ["no-entrypoint"] }
 solana-client = "~1.18.11"
@@ -30,6 +30,7 @@ anchor-lang = "0.29.0"
 plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
 async-recursion = "1.1.1"
 thiserror = "1.0.31"
+bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "ed7ebcf" }
 
 [dev-dependencies]
 futures = "0.3.30"

@@ -297,7 +297,7 @@ pub enum TaskStatus {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
-pub enum RollupState {
+pub enum BatchMintState {
     Uploaded,
     ValidationFail,
     ValidationComplete,
@@ -308,7 +308,7 @@ pub enum RollupState {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
-pub enum PersistingRollupState {
+pub enum PersistingBatchMintState {
     ReceivedTransaction,
     FailedToPersist,
     SuccessfullyDownload,
@@ -317,33 +317,33 @@ pub enum PersistingRollupState {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive, PartialEq)]
-pub enum FailedRollupState {
+pub enum FailedBatchMintState {
     DownloadFailed,
     ChecksumVerifyFailed,
     RollupVerifyFailed,
     FileSerialization,
 }
 
-impl From<FailedRollupState> for u8 {
-    fn from(value: FailedRollupState) -> Self {
+impl From<FailedBatchMintState> for u8 {
+    fn from(value: FailedBatchMintState) -> Self {
         match value {
-            FailedRollupState::DownloadFailed => 0,
-            FailedRollupState::ChecksumVerifyFailed => 1,
-            FailedRollupState::RollupVerifyFailed => 2,
-            FailedRollupState::FileSerialization => 3,
+            FailedBatchMintState::DownloadFailed => 0,
+            FailedBatchMintState::ChecksumVerifyFailed => 1,
+            FailedBatchMintState::RollupVerifyFailed => 2,
+            FailedBatchMintState::FileSerialization => 3,
         }
     }
 }
 
-impl TryFrom<u8> for FailedRollupState {
+impl TryFrom<u8> for FailedBatchMintState {
     type Error = String;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(FailedRollupState::DownloadFailed),
-            1 => Ok(FailedRollupState::ChecksumVerifyFailed),
-            2 => Ok(FailedRollupState::RollupVerifyFailed),
-            3 => Ok(FailedRollupState::FileSerialization),
+            0 => Ok(FailedBatchMintState::DownloadFailed),
+            1 => Ok(FailedBatchMintState::ChecksumVerifyFailed),
+            2 => Ok(FailedBatchMintState::RollupVerifyFailed),
+            3 => Ok(FailedBatchMintState::FileSerialization),
             _ => Err("Wrong enum value".to_string()),
         }
     }

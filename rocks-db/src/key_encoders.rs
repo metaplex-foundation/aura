@@ -1,7 +1,7 @@
-use entities::{enums::FailedRollupState, models::AssetSignatureKey};
+use entities::{enums::FailedBatchMintState, models::AssetSignatureKey};
 use solana_sdk::pubkey::Pubkey;
 
-use crate::rollup::FailedRollupKey;
+use crate::batch_mint::FailedRollupKey;
 use crate::{storage_traits::AssetUpdatedKey, Result};
 
 pub fn encode_u64x2_pubkey(seq: u64, slot: u64, pubkey: Pubkey) -> Vec<u8> {
@@ -167,7 +167,7 @@ pub fn encode_failed_rollup_key(key: FailedRollupKey) -> Vec<u8> {
 
 pub fn decode_failed_rollup_key(key: Vec<u8>) -> Result<FailedRollupKey> {
     Ok(FailedRollupKey {
-        status: FailedRollupState::try_from(
+        status: FailedBatchMintState::try_from(
             *key.first().ok_or(crate::StorageError::InvalidKeyLength)?,
         )
         .map_err(crate::StorageError::Common)?,
@@ -278,7 +278,7 @@ mod tests {
     #[test]
     fn test_encode_decode_failed_rollup_key() {
         let key = FailedRollupKey {
-            status: FailedRollupState::DownloadFailed,
+            status: FailedBatchMintState::DownloadFailed,
             hash: "".to_string(),
         };
 
@@ -289,7 +289,7 @@ mod tests {
         assert_eq!(decoded_key.hash, key.hash);
 
         let key2 = FailedRollupKey {
-            status: FailedRollupState::RollupVerifyFailed,
+            status: FailedBatchMintState::RollupVerifyFailed,
             hash: "asdfasdf".to_string(),
         };
 

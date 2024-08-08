@@ -10,15 +10,16 @@ use async_trait::async_trait;
 use mockall::predicate;
 use mpl_bubblegum::types::{Creator, LeafSchema, MetadataArgs};
 
+use bubblegum_batch_sdk::rollup_client::RollupClient;
 use entities::api_req_params::GetAssetProof;
-use entities::enums::{FailedRollupState, PersistingRollupState, RollupState};
+use entities::enums::{BatchMintState, FailedBatchMintState, PersistingBatchMintState};
 use entities::models::BufferedTransaction;
-use entities::models::{RollupToVerify, RollupWithState};
+use entities::models::{BatchMintToVerify, BatchMintWithState};
 use entities::rollup::{ChangeLogEventV1, PathNode, RolledMintInstruction, Rollup};
 use flatbuffers::FlatBufferBuilder;
+use interface::batch_mint::BatchMintDownloader;
+use interface::batch_mint::MockRollupDownloader;
 use interface::error::UsecaseError;
-use interface::rollup::MockRollupDownloader;
-use interface::rollup::RollupDownloader;
 use metrics_utils::ApiMetricsConfig;
 use metrics_utils::IngesterMetricsConfig;
 use metrics_utils::RollupPersisterMetricsConfig;
@@ -34,8 +35,7 @@ use nft_ingester::rollup::rollup_processor::{MockPermanentStorageClient, RollupP
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
 use rand::{thread_rng, Rng};
-use rocks_db::rollup::FailedRollupKey;
-use rollup_sdk::rollup_client::RollupClient;
+use rocks_db::batch_mint::FailedRollupKey;
 use serde_json::json;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::instruction::CompiledInstruction;
@@ -258,15 +258,18 @@ fn test_generate_10_000_000_rollup() {
 const ROLLUP_ASSETS_TO_SAVE: usize = 1_000;
 struct TestRollupCreator;
 #[async_trait]
-impl RollupDownloader for TestRollupCreator {
-    async fn download_rollup(&self, _url: &str) -> std::result::Result<Box<Rollup>, UsecaseError> {
+impl BatchMintDownloader for TestRollupCreator {
+    async fn download_batch_mint(
+        &self,
+        _url: &str,
+    ) -> std::result::Result<Box<Rollup>, UsecaseError> {
         // let json_file = std::fs::read_to_string("../rollup-1000.json").unwrap();
         // let rollup: Rollup = serde_json::from_str(&json_file).unwrap();
 
         Ok(Box::new(generate_rollup(ROLLUP_ASSETS_TO_SAVE)))
     }
 
-    async fn download_rollup_and_check_checksum(
+    async fn download_batch_mint_and_check_checksum(
         &self,
         _url: &str,
         _checksum: &str,
@@ -493,13 +496,13 @@ async fn rollup_with_verified_creators_test() {
 
     let metadata_url = "url".to_string();
     let metadata_hash = "hash".to_string();
-    let rollup_to_verify = RollupToVerify {
+    let rollup_to_verify = BatchMintToVerify {
         file_hash: metadata_hash.clone(),
         url: metadata_url.clone(),
         created_at_slot: 10,
         signature: Signature::new_unique(),
         download_attempts: 0,
-        persisting_state: PersistingRollupState::ReceivedTransaction,
+        persisting_state: PersistingBatchMintState::ReceivedTransaction,
         staker: Default::default(),
         collection_mint: None,
     };
@@ -636,13 +639,13 @@ async fn rollup_with_unverified_creators_test() {
 
     let metadata_url = "url".to_string();
     let metadata_hash = "hash".to_string();
-    let rollup_to_verify = RollupToVerify {
+    let rollup_to_verify = BatchMintToVerify {
         file_hash: metadata_hash.clone(),
         url: metadata_url.clone(),
         created_at_slot: 10,
         signature: Signature::new_unique(),
         download_attempts: 0,
-        persisting_state: PersistingRollupState::ReceivedTransaction,
+        persisting_state: PersistingBatchMintState::ReceivedTransaction,
         staker: Default::default(),
         collection_mint: None,
     };
@@ -724,13 +727,13 @@ async fn rollup_persister_test() {
 
     let metadata_url = "url".to_string();
     let metadata_hash = "hash".to_string();
-    let rollup_to_verify = RollupToVerify {
+    let rollup_to_verify = BatchMintToVerify {
         file_hash: metadata_hash.clone(),
         url: metadata_url.clone(),
         created_at_slot: 10,
         signature: Signature::new_unique(),
         download_attempts: 0,
-        persisting_state: PersistingRollupState::ReceivedTransaction,
+        persisting_state: PersistingBatchMintState::ReceivedTransaction,
         staker: Default::default(),
         collection_mint: None,
     };
@@ -859,13 +862,13 @@ async fn rollup_persister_download_fail_test() {
 
     let metadata_url = "url".to_string();
     let metadata_hash = "hash".to_string();
-    let rollup_to_verify = RollupToVerify {
+    let rollup_to_verify = BatchMintToVerify {
         file_hash: metadata_hash.clone(),
         url: metadata_url.clone(),
         created_at_slot: 10,
         signature: Signature::new_unique(),
         download_attempts,
-        persisting_state: PersistingRollupState::ReceivedTransaction,
+        persisting_state: PersistingBatchMintState::ReceivedTransaction,
         staker: Default::default(),
         collection_mint: None,
     };
@@ -926,13 +929,13 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
 
     let metadata_url = "url".to_string();
     let metadata_hash = "hash".to_string();
-    let rollup_to_verify = RollupToVerify {
+    let rollup_to_verify = BatchMintToVerify {
         file_hash: metadata_hash.clone(),
         url: metadata_url.clone(),
         created_at_slot: 10,
         signature: Signature::new_unique(),
         download_attempts,
-        persisting_state: PersistingRollupState::ReceivedTransaction,
+        persisting_state: PersistingBatchMintState::ReceivedTransaction,
         staker: Default::default(),
         collection_mint: None,
     };
@@ -976,7 +979,7 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
     assert_eq!(r.is_none(), true);
 
     let key = FailedRollupKey {
-        status: FailedRollupState::DownloadFailed,
+        status: FailedBatchMintState::DownloadFailed,
         hash: metadata_hash.clone(),
     };
     let failed_rollup = env
@@ -1041,9 +1044,9 @@ async fn rollup_processing_validation_test() {
     let processing_result = rollup_processor
         .process_rollup(
             shutdown_rx.resubscribe(),
-            RollupWithState {
+            BatchMintWithState {
                 file_name,
-                state: RollupState::Uploaded,
+                state: BatchMintState::Uploaded,
                 error: None,
                 url: None,
                 created_at: 0,
@@ -1060,9 +1063,9 @@ async fn rollup_processing_validation_test() {
     let processing_result = rollup_processor
         .process_rollup(
             shutdown_rx.resubscribe(),
-            RollupWithState {
+            BatchMintWithState {
                 file_name,
-                state: RollupState::Uploaded,
+                state: BatchMintState::Uploaded,
                 error: None,
                 url: None,
                 created_at: 0,
@@ -1096,9 +1099,9 @@ async fn rollup_processing_validation_test() {
     let processing_result = rollup_processor
         .process_rollup(
             shutdown_rx.resubscribe(),
-            RollupWithState {
+            BatchMintWithState {
                 file_name,
-                state: RollupState::Uploaded,
+                state: BatchMintState::Uploaded,
                 error: None,
                 url: None,
                 created_at: 0,
@@ -1131,9 +1134,9 @@ async fn rollup_processing_validation_test() {
     let processing_result = rollup_processor
         .process_rollup(
             shutdown_rx.resubscribe(),
-            RollupWithState {
+            BatchMintWithState {
                 file_name,
-                state: RollupState::Uploaded,
+                state: BatchMintState::Uploaded,
                 error: None,
                 url: None,
                 created_at: 0,
@@ -1163,9 +1166,9 @@ async fn rollup_processing_validation_test() {
     let processing_result = rollup_processor
         .process_rollup(
             shutdown_rx.resubscribe(),
-            RollupWithState {
+            BatchMintWithState {
                 file_name,
-                state: RollupState::Uploaded,
+                state: BatchMintState::Uploaded,
                 error: None,
                 url: None,
                 created_at: 0,
@@ -1203,9 +1206,9 @@ async fn rollup_processing_validation_test() {
     let processing_result = rollup_processor
         .process_rollup(
             shutdown_rx.resubscribe(),
-            RollupWithState {
+            BatchMintWithState {
                 file_name,
-                state: RollupState::Uploaded,
+                state: BatchMintState::Uploaded,
                 error: None,
                 url: None,
                 created_at: 0,
@@ -1230,9 +1233,9 @@ async fn rollup_processing_validation_test() {
     let processing_result = rollup_processor
         .process_rollup(
             shutdown_rx.resubscribe(),
-            RollupWithState {
+            BatchMintWithState {
                 file_name,
-                state: RollupState::Uploaded,
+                state: BatchMintState::Uploaded,
                 error: None,
                 url: None,
                 created_at: 0,
@@ -1259,9 +1262,9 @@ async fn rollup_processing_validation_test() {
     let processing_result = rollup_processor
         .process_rollup(
             shutdown_rx.resubscribe(),
-            RollupWithState {
+            BatchMintWithState {
                 file_name,
-                state: RollupState::Uploaded,
+                state: BatchMintState::Uploaded,
                 error: None,
                 url: None,
                 created_at: 0,
@@ -1315,9 +1318,9 @@ async fn rollup_upload_test() {
     let processing_result = rollup_processor
         .process_rollup(
             shutdown_rx.resubscribe(),
-            RollupWithState {
+            BatchMintWithState {
                 file_name,
-                state: RollupState::Uploaded,
+                state: BatchMintState::Uploaded,
                 error: None,
                 url: None,
                 created_at: 0,
@@ -1349,9 +1352,9 @@ async fn rollup_upload_test() {
     let processing_result = rollup_processor
         .process_rollup(
             shutdown_rx.resubscribe(),
-            RollupWithState {
+            BatchMintWithState {
                 file_name,
-                state: RollupState::Uploaded,
+                state: BatchMintState::Uploaded,
                 error: None,
                 url: None,
                 created_at: 0,

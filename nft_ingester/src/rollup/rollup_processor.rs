@@ -3,15 +3,14 @@ use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::crypto::base64::Base64;
 use arweave_rs::Arweave;
 use async_trait::async_trait;
-use entities::models::RollupWithState;
-use entities::rollup::{BatchMintInstruction, Rollup};
+use bubblegum_batch_sdk::model::{BatchMint, BatchMintInstruction};
+use entities::models::BatchMintWithState;
+use interface::batch_mint::{BatchMintDownloader, BatchMintTxSender};
 use interface::error::UsecaseError;
-use interface::rollup::{RollupDownloader, RollupTxSender};
 use metrics_utils::RollupProcessorMetricsConfig;
-use mockall::automock;
 use postgre_client::model::RollupState;
 use postgre_client::PgClient;
-use rocks_db::rollup::RollupWithStaker;
+use rocks_db::batch_mint::BatchMintWithStaker;
 use rocks_db::Storage;
 use solana_program::pubkey::Pubkey;
 use std::path::PathBuf;
@@ -44,8 +43,8 @@ impl RollupDownloaderImpl {
     }
 }
 #[async_trait]
-impl RollupDownloader for RollupDownloaderImpl {
-    async fn download_rollup(&self, url: &str) -> Result<Box<Rollup>, UsecaseError> {
+impl BatchMintDownloader for RollupDownloaderImpl {
+    async fn download_batch_mint(&self, url: &str) -> Result<Box<BatchMint>, UsecaseError> {
         // TODO: normalize url
         let rollup_to_process = self.pg_client.get_rollup_by_url(url).await.ok().flatten();
         if let Some(rollup_to_process) = rollup_to_process {
@@ -54,7 +53,7 @@ impl RollupDownloader for RollupDownloaderImpl {
                 self.file_storage_path, &rollup_to_process.file_name
             ))
             .await
-            .map(|json_file| serde_json::from_str::<Rollup>(&json_file))
+            .map(|json_file| serde_json::from_str::<BatchMint>(&json_file))
             {
                 return Ok(Box::new(rollup));
             };
@@ -63,11 +62,11 @@ impl RollupDownloader for RollupDownloaderImpl {
         Ok(Box::new(serde_json::from_slice(&response)?))
     }
 
-    async fn download_rollup_and_check_checksum(
+    async fn download_batch_mint_and_check_checksum(
         &self,
         url: &str,
         checksum: &str,
-    ) -> Result<Box<Rollup>, UsecaseError> {
+    ) -> Result<Box<BatchMint>, UsecaseError> {
         let rollup_to_process = self.pg_client.get_rollup_by_url(url).await.ok().flatten();
         if let Some(rollup_to_process) = rollup_to_process {
             if let Ok(Ok(rollup)) = tokio::fs::read(format!(
@@ -83,7 +82,7 @@ impl RollupDownloader for RollupDownloaderImpl {
                         "File checksum mismatch".to_string(),
                     ));
                 }
-                serde_json::from_slice::<Rollup>(&json_file)
+                serde_json::from_slice::<BatchMint>(&json_file)
                     .map_err(|e| UsecaseError::Storage(e.to_string()))
             }) {
                 return Ok(Box::new(rollup));
@@ -102,7 +101,7 @@ impl RollupDownloader for RollupDownloaderImpl {
 }
 
 #[async_trait]
-#[automock]
+#[mockall::automock]
 pub trait PermanentStorageClient {
     async fn upload_file(
         &self,
@@ -132,22 +131,25 @@ impl PermanentStorageClient for Arweave {
 
 pub struct NoopRollupTxSender;
 #[async_trait]
-impl RollupTxSender for NoopRollupTxSender {
-    async fn send_rollup_tx(&self, _instruction: BatchMintInstruction) -> Result<(), UsecaseError> {
+impl BatchMintTxSender for NoopRollupTxSender {
+    async fn send_batch_mint_tx(
+        &self,
+        _instruction: BatchMintInstruction,
+    ) -> Result<(), UsecaseError> {
         Ok(())
     }
 }
 
-pub struct RollupProcessor<R: RollupTxSender, P: PermanentStorageClient> {
+pub struct RollupProcessor<R: BatchMintTxSender, P: PermanentStorageClient> {
     pg_client: Arc<PgClient>,
     rocks: Arc<Storage>,
     permanent_storage_client: Arc<P>,
-    rollup_tx_sender: Arc<R>,
+    _rollup_tx_sender: Arc<R>,
     file_storage_path: String,
     metrics: Arc<RollupProcessorMetricsConfig>,
 }
 
-impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
+impl<R: BatchMintTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
     pub fn new(
         pg_client: Arc<PgClient>,
         rocks: Arc<Storage>,
@@ -160,7 +162,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
             pg_client,
             rocks,
             permanent_storage_client,
-            rollup_tx_sender,
+            _rollup_tx_sender: rollup_tx_sender,
             file_storage_path,
             metrics,
         }
@@ -193,7 +195,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
     pub async fn process_rollup(
         &self,
         rx: Receiver<()>,
-        mut rollup_to_process: RollupWithState,
+        mut rollup_to_process: BatchMintWithState,
     ) -> Result<(), IngesterError> {
         info!("Processing {} rollup file", &rollup_to_process.file_name);
         let start_time = Instant::now();
@@ -201,18 +203,18 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         let mut metadata_url = String::new();
         while rx.is_empty() {
             match &rollup_to_process.state {
-                entities::enums::RollupState::Uploaded => {
+                entities::enums::BatchMintState::Uploaded => {
                     self.process_rollup_validation(&rollup, &mut rollup_to_process)
                         .await?;
                 }
-                entities::enums::RollupState::ValidationComplete
-                | entities::enums::RollupState::FailUploadToArweave => {
+                entities::enums::BatchMintState::ValidationComplete
+                | entities::enums::BatchMintState::FailUploadToArweave => {
                     metadata_url = self
                         .process_rollup_upload_to_arweave(&mut rollup_to_process, file_size)
                         .await?;
                 }
-                entities::enums::RollupState::UploadedToArweave
-                | entities::enums::RollupState::FailSendingTransaction => {
+                entities::enums::BatchMintState::UploadedToArweave
+                | entities::enums::BatchMintState::FailSendingTransaction => {
                     self.process_rollup_send_solana_tx(
                         &mut rollup_to_process,
                         &metadata_url,
@@ -240,15 +242,17 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
 
     async fn process_rollup_validation(
         &self,
-        rollup: &Rollup,
-        rollup_to_process: &mut RollupWithState,
+        batch_mint: &BatchMint,
+        batch_mint_to_process: &mut BatchMintWithState,
     ) -> Result<(), IngesterError> {
         // TODO: add possibility to set collection and send FinilizeTreeAndCollection tx
-        if let Err(e) = crate::rollup::rollup_verifier::validate_rollup(rollup, None).await {
+        if let Err(e) =
+            bubblegum_batch_sdk::batch_mint_validations::validate_batch_mint(batch_mint, None).await
+        {
             if let Err(err) = self
                 .pg_client
                 .mark_rollup_as_failed(
-                    &rollup_to_process.file_name,
+                    &batch_mint_to_process.file_name,
                     &e.to_string(),
                     RollupState::ValidationFail,
                 )
@@ -256,7 +260,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
             {
                 error!(
                     "Failed to mark rollup as verification failed: file_path: {}, error: {}",
-                    &rollup_to_process.file_name, err
+                    &batch_mint_to_process.file_name, err
                 );
             }
             self.metrics
@@ -266,23 +270,23 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
         if let Err(err) = self
             .pg_client
             .update_rollup_state(
-                &rollup_to_process.file_name,
+                &batch_mint_to_process.file_name,
                 RollupState::ValidationComplete,
             )
             .await
         {
             error!(
                 "Failed to mark rollup as verification complete: file_path: {}, error: {}",
-                &rollup_to_process.file_name, err
+                &batch_mint_to_process.file_name, err
             );
         };
-        rollup_to_process.state = entities::enums::RollupState::ValidationComplete;
+        batch_mint_to_process.state = entities::enums::BatchMintState::ValidationComplete;
         Ok(())
     }
 
     async fn process_rollup_upload_to_arweave(
         &self,
-        rollup_to_process: &mut RollupWithState,
+        rollup_to_process: &mut BatchMintWithState,
         file_size: usize,
     ) -> Result<String, IngesterError> {
         let (tx_id, reward) = match self
@@ -311,15 +315,15 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                 &rollup_to_process.file_name, e
             );
         }
-        rollup_to_process.state = entities::enums::RollupState::UploadedToArweave;
+        rollup_to_process.state = entities::enums::BatchMintState::UploadedToArweave;
         Ok(metadata_url)
     }
 
     async fn process_rollup_send_solana_tx(
         &self,
-        rollup_to_process: &mut RollupWithState,
+        rollup_to_process: &mut BatchMintWithState,
         metadata_url: &str,
-        rollup: &Rollup,
+        rollup: &BatchMint,
         file_checksum: &str,
     ) -> Result<(), IngesterError> {
         if let Err(e) = self
@@ -354,8 +358,8 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
             .rollups
             .put_async(
                 file_checksum.to_string(),
-                RollupWithStaker {
-                    rollup: rollup.clone(),
+                BatchMintWithStaker {
+                    batch_mint: rollup.clone(),
                     staker: Pubkey::default(), // TODO: here we must set our own pubkey
                 },
             )
@@ -366,14 +370,14 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                 file_checksum, &rollup_to_process.file_name, err
             );
         }
-        rollup_to_process.state = entities::enums::RollupState::Complete;
+        rollup_to_process.state = entities::enums::BatchMintState::Complete;
         Ok(())
     }
 
     async fn read_rollup_file(
         &self,
-        rollup_to_process: &RollupWithState,
-    ) -> Result<(Rollup, usize, String), IngesterError> {
+        rollup_to_process: &BatchMintWithState,
+    ) -> Result<(BatchMint, usize, String), IngesterError> {
         let json_file = match tokio::fs::read(format!(
             "{}/{}",
             self.file_storage_path, &rollup_to_process.file_name
@@ -390,7 +394,7 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
                 return Err(e.into());
             }
         };
-        let rollup = match serde_json::from_slice::<Rollup>(&json_file) {
+        let rollup = match serde_json::from_slice::<BatchMint>(&json_file) {
             Ok(rollup) => rollup,
             Err(e) => {
                 if let Err(e) = self
@@ -462,55 +466,46 @@ impl<R: RollupTxSender, P: PermanentStorageClient> RollupProcessor<R, P> {
 
     async fn send_rollup_tx_with_retry(
         &self,
-        file_name: &str,
-        rollup: &Rollup,
-        metadata_url: &str,
-        file_checksum: &str,
+        _file_name: &str,
+        _rollup: &BatchMint,
+        _metadata_url: &str,
+        _file_checksum: &str,
     ) -> Result<(), IngesterError> {
-        let mut last_error = UsecaseError::Storage("".to_string());
-        let instruction = BatchMintInstruction {
-            max_depth: rollup.max_depth,
-            max_buffer_size: rollup.max_buffer_size,
-            num_minted: rollup.rolled_mints.len() as u64,
-            root: rollup.merkle_root,
-            leaf: rollup.last_leaf_hash,
-            index: rollup.rolled_mints.len().saturating_sub(1) as u32, // TODO
-            metadata_url: metadata_url.to_string(),
-            file_checksum: file_checksum.to_string(),
-        };
+        // let mut last_error = UsecaseError::Storage("".to_string());
 
-        for _ in 0..MAX_ROLLUP_RETRIES {
-            match self
-                .rollup_tx_sender
-                .send_rollup_tx(instruction.clone())
-                .await
-            {
-                Ok(_) => return Ok(()),
-                Err(e) => {
-                    tokio::time::sleep(Duration::from_millis(500)).await;
-                    last_error = e;
-                }
-            }
-        }
-        if let Err(err) = self
-            .pg_client
-            .mark_rollup_as_failed(
-                file_name,
-                &format!("send rollup tx: {}", last_error),
-                RollupState::FailSendingTransaction,
-            )
-            .await
-        {
-            error!(
-                "Failed to mark rollup as failed: file_path: {}, error: {}",
-                &file_name, err
-            );
-        }
-        error!(
-            "Failed to send rollup transaction: file_path: {}, error: {}",
-            &file_name, last_error
-        );
-
-        Err(IngesterError::SendTransaction(last_error.to_string()))
+        // for _ in 0..MAX_ROLLUP_RETRIES {
+        // match self
+        //     .rollup_tx_sender
+        //     .send_batch_mint_tx(instruction.clone())
+        //     .await
+        // {
+        //     Ok(_) => return Ok(()),
+        //     Err(e) => {
+        //         tokio::time::sleep(Duration::from_millis(500)).await;
+        //         last_error = e;
+        //     }
+        // }
+        // }
+        // if let Err(err) = self
+        //     .pg_client
+        //     .mark_rollup_as_failed(
+        //         file_name,
+        //         &format!("send rollup tx: {}", last_error),
+        //         RollupState::FailSendingTransaction,
+        //     )
+        //     .await
+        // {
+        //     error!(
+        //         "Failed to mark rollup as failed: file_path: {}, error: {}",
+        //         &file_name, err
+        //     );
+        // }
+        // error!(
+        //     "Failed to send rollup transaction: file_path: {}, error: {}",
+        //     &file_name, last_error
+        // );
+        //
+        // Err(IngesterError::SendTransaction(last_error.to_string()))
+        Ok(())
     }
 }

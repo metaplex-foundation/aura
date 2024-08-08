@@ -5,9 +5,9 @@ use crate::key_encoders::{
 };
 use crate::{Result, Storage};
 use bincode::deserialize;
-use entities::enums::{FailedRollupState, PersistingRollupState};
-use entities::models::{FailedRollup, RollupToVerify};
-use entities::rollup::Rollup;
+use bubblegum_batch_sdk::model::BatchMint;
+use entities::enums::{FailedBatchMintState, PersistingBatchMintState};
+use entities::models::{BatchMintToVerify, FailedRollup};
 use log::error;
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
@@ -15,12 +15,12 @@ use solana_sdk::pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FailedRollupKey {
-    pub status: FailedRollupState,
+    pub status: FailedBatchMintState,
     pub hash: String,
 }
 
 // queue
-impl TypedColumn for RollupToVerify {
+impl TypedColumn for BatchMintToVerify {
     type KeyType = String;
     type ValueType = Self;
     const NAME: &'static str = "ROLLUP_TO_VERIFY"; // Name of the column family
@@ -42,7 +42,7 @@ pub fn merge_rollup_to_verify(
     let mut result = vec![];
     let mut slot = 0;
     if let Some(existing_val) = existing_val {
-        match deserialize::<RollupToVerify>(existing_val) {
+        match deserialize::<BatchMintToVerify>(existing_val) {
             Ok(value) => {
                 slot = value.created_at_slot;
                 result = existing_val.to_vec();
@@ -54,7 +54,7 @@ pub fn merge_rollup_to_verify(
     }
 
     for op in operands {
-        match deserialize::<RollupToVerify>(op) {
+        match deserialize::<BatchMintToVerify>(op) {
             Ok(new_val) => {
                 if new_val.created_at_slot > slot {
                     slot = new_val.created_at_slot;
@@ -121,12 +121,12 @@ pub fn merge_failed_rollup(
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct RollupWithStaker {
-    pub rollup: Rollup,
+pub struct BatchMintWithStaker {
+    pub batch_mint: BatchMint,
     pub staker: Pubkey,
 }
 
-impl TypedColumn for RollupWithStaker {
+impl TypedColumn for BatchMintWithStaker {
     type KeyType = String;
     type ValueType = Self;
     const NAME: &'static str = "ROLLUPS"; // Name of the column family
@@ -143,19 +143,19 @@ impl TypedColumn for RollupWithStaker {
 impl Storage {
     pub async fn fetch_rollup_for_verifying(
         &self,
-    ) -> Result<(Option<RollupToVerify>, Option<Rollup>)> {
+    ) -> Result<(Option<BatchMintToVerify>, Option<BatchMint>)> {
         let first_value = self
             .rollup_to_verify
             .iter_start()
             .next()
             .transpose()
             .map_err(StorageError::RocksDb)?
-            .map(|(_, value)| bincode::deserialize::<RollupToVerify>(value.as_ref()))
+            .map(|(_, value)| bincode::deserialize::<BatchMintToVerify>(value.as_ref()))
             .transpose()?;
 
         if let Some(rollup) = &first_value {
             let rollup = self.rollups.get(rollup.file_hash.clone())?;
-            return Ok((first_value, rollup.map(|r| r.rollup)));
+            return Ok((first_value, rollup.map(|r| r.batch_mint)));
         }
         Ok((first_value, None))
     }
@@ -166,42 +166,42 @@ impl Storage {
 
     pub async fn save_rollup_as_failed(
         &self,
-        status: FailedRollupState,
-        rollup: &RollupToVerify,
+        status: FailedBatchMintState,
+        batch_mint: &BatchMintToVerify,
     ) -> Result<()> {
         let key = FailedRollupKey {
             status: status.clone(),
-            hash: rollup.file_hash.clone(),
+            hash: batch_mint.file_hash.clone(),
         };
         let value = FailedRollup {
             status,
-            file_hash: rollup.file_hash.clone(),
-            url: rollup.url.clone(),
-            created_at_slot: rollup.created_at_slot,
-            signature: rollup.signature,
-            download_attempts: rollup.download_attempts + 1,
-            staker: rollup.staker,
+            file_hash: batch_mint.file_hash.clone(),
+            url: batch_mint.url.clone(),
+            created_at_slot: batch_mint.created_at_slot,
+            signature: batch_mint.signature,
+            download_attempts: batch_mint.download_attempts + 1,
+            staker: batch_mint.staker,
         };
         self.failed_rollups.put_async(key, value).await
     }
 
     pub async fn inc_rollup_to_verify_download_attempts(
         &self,
-        rollup_to_verify: &mut RollupToVerify,
+        batch_mint_to_verify: &mut BatchMintToVerify,
     ) -> Result<()> {
-        rollup_to_verify.download_attempts += 1;
+        batch_mint_to_verify.download_attempts += 1;
         self.rollup_to_verify
             .put_async(
-                rollup_to_verify.file_hash.clone(),
-                RollupToVerify {
-                    file_hash: rollup_to_verify.file_hash.clone(),
-                    url: rollup_to_verify.url.clone(),
-                    created_at_slot: rollup_to_verify.created_at_slot,
-                    signature: rollup_to_verify.signature,
-                    download_attempts: rollup_to_verify.download_attempts + 1,
-                    persisting_state: PersistingRollupState::FailedToPersist,
-                    staker: rollup_to_verify.staker,
-                    collection_mint: rollup_to_verify.collection_mint,
+                batch_mint_to_verify.file_hash.clone(),
+                BatchMintToVerify {
+                    file_hash: batch_mint_to_verify.file_hash.clone(),
+                    url: batch_mint_to_verify.url.clone(),
+                    created_at_slot: batch_mint_to_verify.created_at_slot,
+                    signature: batch_mint_to_verify.signature,
+                    download_attempts: batch_mint_to_verify.download_attempts + 1,
+                    persisting_state: PersistingBatchMintState::FailedToPersist,
+                    staker: batch_mint_to_verify.staker,
+                    collection_mint: batch_mint_to_verify.collection_mint,
                 },
             )
             .await
