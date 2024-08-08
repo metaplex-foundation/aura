@@ -1,8 +1,5 @@
 use core::time;
-use std::{
-    env,
-    net::{SocketAddr, ToSocketAddrs},
-};
+use std::net::{SocketAddr, ToSocketAddrs};
 
 use figment::{providers::Env, Figment};
 use interface::asset_streaming_and_discovery::PeerDiscovery;
@@ -195,7 +192,7 @@ const fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct JsonMigratorConfig {
-    pub rust_log: Option<String>,
+    pub log_level: Option<String>,
     pub json_source_db: String,
     pub json_target_db: String,
     pub database_config: DatabaseConfig,
@@ -213,7 +210,7 @@ pub enum JsonMigratorMode {
 
 impl JsonMigratorConfig {
     pub fn get_log_level(&self) -> String {
-        self.rust_log.clone().unwrap_or("warn".to_string())
+        self.log_level.clone().unwrap_or("warn".to_string())
     }
 }
 
@@ -258,7 +255,7 @@ pub struct ApiConfig {
     pub server_port: u16,
     pub batch_mint_service_port: Option<u16>,
     pub file_storage_path_container: String,
-    pub rust_log: Option<String>,
+    pub log_level: Option<String>,
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
     #[serde(default)]
@@ -311,7 +308,7 @@ pub const fn default_max_page_limit() -> usize {
 
 impl ApiConfig {
     pub fn get_log_level(&self) -> String {
-        self.rust_log.clone().unwrap_or("warn".to_string())
+        self.log_level.clone().unwrap_or("warn".to_string())
     }
 }
 
