@@ -1,4 +1,0 @@
-[submodule "rollup-sdk"]
-	path = rollup-sdk
-	url = git@github.com:metaplex-foundation/rollup-sdk.git
-	branch = fix/import-path

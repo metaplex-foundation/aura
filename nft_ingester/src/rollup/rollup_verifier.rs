@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anchor_lang::AnchorSerialize;
 use entities::rollup::{RolledMintInstruction, Rollup};
 use mpl_bubblegum::utils::get_asset_id;
-use rollup_sdk::rollup_builder::{verify_signature, MetadataArgsHash};
+use bubblegum_batch_sdk::batch_mint_builder::{verify_signature, MetadataArgsHash};
 use solana_sdk::{
     keccak::{self, Hash},
     pubkey::Pubkey,
