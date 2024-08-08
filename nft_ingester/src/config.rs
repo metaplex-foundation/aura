@@ -1,8 +1,5 @@
 use core::time;
-use std::{
-    env,
-    net::{SocketAddr, ToSocketAddrs},
-};
+use std::net::{SocketAddr, ToSocketAddrs};
 
 use figment::{providers::Env, Figment};
 use interface::asset_streaming_and_discovery::PeerDiscovery;
@@ -12,7 +9,6 @@ use tracing_subscriber::fmt;
 
 use crate::error::IngesterError;
 
-const INGESTER_CONSUMERS_COUNT: usize = 2;
 pub const INGESTER_BACKUP_NAME: &str = "snapshot.tar.lz4";
 
 pub const INGESTER_CONFIG_PREFIX: &str = "INGESTER_";
@@ -57,6 +53,22 @@ const fn default_mpl_core_buffer_size() -> usize {
     10
 }
 
+fn default_rocks_backup_url() -> String {
+    return String::from("127.0.0.1:3051/snapshot");
+}
+
+fn default_rocks_backup_archives_dir() -> String {
+    return String::from("/rocksdb/_rocks_backup_archives");
+}
+
+fn default_rocks_backup_dir() -> String {
+    return String::from("/rocksdb/_rocksdb_backup");
+}
+
+fn default_gapfiller_peer_addr() -> String {
+    return String::from("0.0.0.0");
+}
+
 impl BackfillerConfig {
     pub fn get_slot_until(&self) -> u64 {
         self.slot_until.unwrap_or_default()
@@ -97,24 +109,20 @@ pub struct RawBackfillConfig {
 pub struct IngesterConfig {
     pub database_config: DatabaseConfig,
     pub tcp_config: TcpConfig,
-    pub tx_background_savers: u32,
-    pub backfill_background_savers: u32,
     pub mplx_buffer_size: usize,
-    pub mplx_workers: u32,
+    pub parsing_workers: u32,
     pub spl_buffer_size: usize,
-    pub spl_workers: u32,
     #[serde(default = "default_mpl_core_buffer_size")]
     pub mpl_core_buffer_size: usize,
-    pub metrics_port_first_consumer: Option<u16>,
-    pub metrics_port_second_consumer: Option<u16>,
-    pub backfill_consumer_metrics_port: Option<u16>,
-    pub consumer_number: Option<usize>,
+    pub metrics_port: Option<u16>,
     pub rocks_db_path_container: Option<String>,
+    #[serde(default = "default_rocks_backup_url")]
     pub rocks_backup_url: String,
+    #[serde(default = "default_rocks_backup_archives_dir")]
     pub rocks_backup_archives_dir: String,
+    #[serde(default = "default_rocks_backup_dir")]
     pub rocks_backup_dir: String,
     pub run_bubblegum_backfiller: bool,
-    pub synchronizer_batch_size: usize,
     #[serde(default = "default_dump_synchronizer_batch_size")]
     pub dump_synchronizer_batch_size: usize,
     #[serde(default = "default_dump_path")]
@@ -125,10 +133,11 @@ pub struct IngesterConfig {
     pub run_dump_synchronize_on_start: bool,
     #[serde(default)]
     pub disable_synchronizer: bool,
+    #[serde(default = "default_gapfiller_peer_addr")]
     pub gapfiller_peer_addr: String,
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
-    pub rust_log: Option<String>,
+    pub log_level: Option<String>,
     pub backfill_rpc_address: String,
     pub run_profiling: Option<bool>,
     pub profiling_file_path_container: Option<String>,
@@ -139,8 +148,6 @@ pub struct IngesterConfig {
     pub run_sequence_consistent_checker: bool,
     #[serde(default = "default_sequence_consistent_checker_wait_period_sec")]
     pub sequence_consistent_checker_wait_period_sec: u64,
-    #[serde(default = "default_sequence_consister_skip_check_slots_offset")]
-    pub sequence_consister_skip_check_slots_offset: u64, // TODO: remove in future if there no need in that env
     pub rpc_host: Option<String>,
     #[serde(default = "default_check_proofs_probability")]
     pub check_proofs_probability: f64,
@@ -183,13 +190,9 @@ const fn default_sequence_consistent_checker_wait_period_sec() -> u64 {
     60
 }
 
-const fn default_sequence_consister_skip_check_slots_offset() -> u64 {
-    20
-}
-
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct JsonMigratorConfig {
-    pub rust_log: Option<String>,
+    pub log_level: Option<String>,
     pub json_source_db: String,
     pub json_target_db: String,
     pub database_config: DatabaseConfig,
@@ -207,7 +210,7 @@ pub enum JsonMigratorMode {
 
 impl JsonMigratorConfig {
     pub fn get_log_level(&self) -> String {
-        self.rust_log.clone().unwrap_or("warn".to_string())
+        self.log_level.clone().unwrap_or("warn".to_string())
     }
 }
 
@@ -252,7 +255,7 @@ pub struct ApiConfig {
     pub server_port: u16,
     pub batch_mint_service_port: Option<u16>,
     pub file_storage_path_container: String,
-    pub rust_log: Option<String>,
+    pub log_level: Option<String>,
     pub peer_grpc_port: u16,
     pub peer_grpc_max_gap_slots: u64,
     #[serde(default)]
@@ -305,38 +308,13 @@ pub const fn default_max_page_limit() -> usize {
 
 impl ApiConfig {
     pub fn get_log_level(&self) -> String {
-        self.rust_log.clone().unwrap_or("warn".to_string())
+        self.log_level.clone().unwrap_or("warn".to_string())
     }
 }
 
 impl IngesterConfig {
-    pub fn get_metrics_port(
-        &self,
-        consumer_number: Option<usize>,
-    ) -> Result<Option<u16>, IngesterError> {
-        let consumer_number = match consumer_number {
-            Some(consumer_number) => consumer_number,
-            None => {
-                return Err(IngesterError::ConfigurationError {
-                    msg: "missing consumer number".to_string(),
-                });
-            }
-        };
-
-        match consumer_number {
-            0 => Ok(self.metrics_port_first_consumer),
-            1 => Ok(self.metrics_port_second_consumer),
-            _ => Err(IngesterError::ConfigurationError {
-                msg: format!(
-                    "invalid consumer number: {}, expected to be lower than: {}",
-                    consumer_number, INGESTER_CONSUMERS_COUNT
-                ),
-            }),
-        }
-    }
-
     pub fn get_log_level(&self) -> String {
-        self.rust_log.clone().unwrap_or("warn".to_string())
+        self.log_level.clone().unwrap_or("warn".to_string())
     }
 
     pub fn get_is_run_profiling(&self) -> bool {
@@ -401,45 +379,10 @@ impl BigTableConfig {
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct MetricsConfig(figment::value::Dict);
-
-pub const METRICS_HOST_KEY: &str = "metrics_host";
-pub const METRICS_PORT_KEY: &str = "metrics_port";
-
-impl MetricsConfig {
-    pub fn get_metrics_port(&self) -> Result<u16, IngesterError> {
-        self.0
-            .get(METRICS_PORT_KEY)
-            .and_then(|a| a.to_u128().map(|res| res as u16))
-            .ok_or(IngesterError::ConfigurationError {
-                msg: format!("get_metrics_port missing: {}", METRICS_PORT_KEY),
-            })
-    }
-
-    pub fn get_metrics_host(&self) -> Result<String, IngesterError> {
-        self.0
-            .get(METRICS_HOST_KEY)
-            .and_then(|a| a.clone().into_string())
-            .ok_or(IngesterError::ConfigurationError {
-                msg: format!("get_metrics_host missing: {}", METRICS_HOST_KEY),
-            })
-    }
-}
-
-pub const CODE_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-#[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct TcpConfig(figment::value::Dict);
 
 pub const TCP_RECEIVER_ADDR: &str = "receiver_addr";
 pub const TCP_RECEIVER_RECONNECT_INTERVAL: &str = "receiver_reconnect_interval";
-
-pub const TCP_RECEIVER_BACKFILLER_ADDR: &str = "backfiller_receiver_addr";
-pub const BACKFILLER_RECONNECT_INTERVAL: &str = "backfiller_receiver_reconnect_interval";
-pub const TCP_SENDER_BACKFILLER_PORT: &str = "backfiller_sender_port";
-pub const TCP_SENDER_BACKFILLER_BATCH_MAX_BYTES: &str = "backfiller_sender_batch_max_bytes";
-pub const TCP_SENDER_BACKFILLER_BUFFER_SIZE: &str = "backfiller_sender_buffer_size";
-
 pub const TCP_SNAPSHOT_RECEIVER_ADDR: &str = "snapshot_receiver_addr";
 
 impl TcpConfig {
@@ -447,46 +390,8 @@ impl TcpConfig {
         self.get_duration(TCP_RECEIVER_RECONNECT_INTERVAL)
     }
 
-    pub fn get_backfiller_reconnect_interval(&self) -> Result<time::Duration, IngesterError> {
-        self.get_duration(BACKFILLER_RECONNECT_INTERVAL)
-    }
-
-    pub fn get_tcp_receiver_addr_backfiller(&self) -> Result<SocketAddr, IngesterError> {
-        self.get_addr(TCP_RECEIVER_BACKFILLER_ADDR)
-    }
-
-    pub fn get_tcp_receiver_addr_ingester(
-        &self,
-        consumer_number: Option<usize>,
-    ) -> Result<SocketAddr, IngesterError> {
-        let tcp_senders = self.get_addrs(TCP_RECEIVER_ADDR)?;
-        if tcp_senders.len() != INGESTER_CONSUMERS_COUNT {
-            return Err(IngesterError::ConfigurationError {
-                msg: format!(
-                    "invalid len of tcp_senders: {}, expected: {}",
-                    tcp_senders.len(),
-                    INGESTER_CONSUMERS_COUNT
-                ),
-            });
-        };
-        let consumer_number = match consumer_number {
-            Some(consumer_number) => consumer_number,
-            None => {
-                return Err(IngesterError::ConfigurationError {
-                    msg: "missing consumer number".to_string(),
-                });
-            }
-        };
-        if consumer_number >= INGESTER_CONSUMERS_COUNT {
-            return Err(IngesterError::ConfigurationError {
-                msg: format!(
-                    "invalid consumer number: {}, expected to be lower than: {}",
-                    consumer_number, INGESTER_CONSUMERS_COUNT
-                ),
-            });
-        };
-
-        Ok(tcp_senders[consumer_number])
+    pub fn get_tcp_receiver_addr_ingester(&self) -> Result<SocketAddr, IngesterError> {
+        self.get_addr(TCP_RECEIVER_ADDR)
     }
 
     pub fn get_snapshot_addr_ingester(&self) -> Result<SocketAddr, IngesterError> {
@@ -516,67 +421,6 @@ impl TcpConfig {
             .ok_or(IngesterError::ConfigurationError {
                 msg: "SocketAddr".to_string(),
             })
-    }
-
-    fn get_addrs(&self, key: &str) -> Result<Vec<SocketAddr>, IngesterError> {
-        self.0
-            .get(key)
-            .and_then(|a| a.as_array())
-            .ok_or(IngesterError::ConfigurationError {
-                msg: format!("TCP receiver address missing: {}", key),
-            })?
-            .iter()
-            .map(|a| {
-                a.as_str()
-                    .ok_or(IngesterError::ConfigurationError {
-                        msg: format!("TCP receiver address missing: {}", key),
-                    })?
-                    .to_socket_addrs()?
-                    .next()
-                    .ok_or(IngesterError::ConfigurationError {
-                        msg: "SocketAddr".to_string(),
-                    })
-            })
-            .collect()
-    }
-
-    pub fn get_tcp_sender_backfiller_port(&self) -> Result<u16, IngesterError> {
-        Ok(self
-            .0
-            .get(TCP_SENDER_BACKFILLER_PORT)
-            .and_then(|a| a.to_u128())
-            .ok_or(IngesterError::ConfigurationError {
-                msg: format!(
-                    "TCP sender port for backfiller missing: {}",
-                    TCP_SENDER_BACKFILLER_PORT
-                ),
-            })? as u16)
-    }
-
-    pub fn get_tcp_sender_backfiller_buffer_size(&self) -> Result<usize, IngesterError> {
-        Ok(self
-            .0
-            .get(TCP_SENDER_BACKFILLER_BUFFER_SIZE)
-            .and_then(|a| a.to_u128())
-            .ok_or(IngesterError::ConfigurationError {
-                msg: format!(
-                    "TCP sender buffer size for backfiller missing: {}",
-                    TCP_SENDER_BACKFILLER_BUFFER_SIZE
-                ),
-            })? as usize)
-    }
-
-    pub fn get_tcp_sender_backfiller_batch_max_bytes(&self) -> Result<usize, IngesterError> {
-        Ok(self
-            .0
-            .get(TCP_SENDER_BACKFILLER_BATCH_MAX_BYTES)
-            .and_then(|a| a.to_u128())
-            .ok_or(IngesterError::ConfigurationError {
-                msg: format!(
-                    "TCP sender batch max bytes for backfiller missing: {}",
-                    TCP_SENDER_BACKFILLER_BATCH_MAX_BYTES
-                ),
-            })? as usize)
     }
 }
 
