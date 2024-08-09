@@ -22,7 +22,7 @@ flatbuffers = "23.1.21"
 mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum", branch = "feature/cleanup", features = ["serde"] }
 spl-account-compression = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root", features = ["no-entrypoint"] }
 num-traits = "0.2.15"
-blockbuster = { git = "https://github.com/adm-metaex/blockbuster", branch = "remove-bubblegum-submodule" }
+blockbuster = { git = "https://github.com/adm-metaex/blockbuster", branch = "feat/create-tree-with-root" }
 figment = { version = "0.10.6", features = ["env", "toml", "yaml"] }
 solana-sdk = { workspace = true }
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
