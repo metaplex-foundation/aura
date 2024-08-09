@@ -1249,8 +1249,8 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "blockbuster"
-version = "2.3.0"
-source = "git+https://github.com/adm-metaex/blockbuster?branch=remove-bubblegum-submodule#1dedaa8dc539eeafa5e430da1c5cbb4d657967dc"
+version = "2.4.0"
+source = "git+https://github.com/adm-metaex/blockbuster?branch=feat/create-tree-with-root#7a1f193f2275cbe46d60ba0587d7d7db9c802ff2"
 dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
@@ -1473,7 +1473,7 @@ dependencies = [
 [[package]]
 name = "bubblegum-batch-sdk"
 version = "0.1.0"
-source = "git+https://github.com/metaplex-foundation/bubblegum-batch-sdk.git?rev=d276bc4#d276bc4915a98eb837e1e4f012ca2a94e3af8ab5"
+source = "git+https://github.com/metaplex-foundation/bubblegum-batch-sdk.git?rev=b809b81#b809b81ceda2e9545e833313edb8fc858980c4be"
 dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
@@ -4178,9 +4178,9 @@ dependencies = [
 
 [[package]]
 name = "mpl-core"
-version = "0.7.2"
+version = "0.8.0-beta.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1d4f516cd9daae872182a50850ab6d5588667e71152d49b0729a32830036b83"
+checksum = "1178d8a405352e2a2478abf5b62e2a4d6a91ed6f0470307ab6732614662dbf85"
 dependencies = [
  "base64 0.22.1",
  "borsh 0.10.3",
