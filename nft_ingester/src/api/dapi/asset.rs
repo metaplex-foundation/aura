@@ -75,6 +75,15 @@ fn convert_rocks_asset_model(
                     .edition_address
                     .and_then(|e| asset_selected_maps.editions.get(&e).cloned())
             }),
+        mpl_core_collections: asset_selected_maps
+            .assets_collection
+            .get(asset_pubkey)
+            .and_then(|collection| {
+                asset_selected_maps
+                    .mpl_core_collections
+                    .get(&collection.collection.value)
+            })
+            .cloned(),
     })
 }
 

@@ -205,9 +205,9 @@ pub fn get_content(
 
 pub fn to_authority(
     authority: &AssetAuthority,
-    asset_collection: &Option<AssetCollection>,
+    mpl_core_collection: &Option<AssetCollection>,
 ) -> Vec<Authority> {
-    let update_authority = asset_collection
+    let update_authority = mpl_core_collection
         .clone()
         .and_then(|update_authority| update_authority.authority.value);
 
@@ -250,7 +250,10 @@ pub fn get_interface(asset_static: &AssetStaticDetails) -> Result<Interface, Sto
 }
 
 pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageError> {
-    let rpc_authorities = to_authority(&full_asset.assets_authority, &full_asset.asset_collections);
+    let rpc_authorities = to_authority(
+        &full_asset.assets_authority,
+        &full_asset.mpl_core_collections,
+    );
     let rpc_creators = to_creators(&full_asset.asset_dynamic);
     let rpc_groups = to_grouping(&full_asset.asset_collections);
     let interface = get_interface(&full_asset.asset_static)?;

@@ -153,6 +153,7 @@ impl Storage {
         });
 
         let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
+        let authorities_key_set = Arc::new(Mutex::new(HashSet::new()));
 
         // Launch N workers which iterates over index data - asset's data selected from RocksDB.
         // During that iteration it splits asset's data and push it to appropriate
@@ -166,6 +167,7 @@ impl Storage {
             let tx_assets_cloned = tx_assets.clone();
             let tx_authority_cloned = tx_authority.clone();
             let metadata_key_set_cloned = metadata_key_set.clone();
+            let authorities_key_set_cloned = authorities_key_set.clone();
             iterator_tasks.spawn(async move {
                 Self::iterate_over_indexes(
                     rx_cloned,
@@ -176,6 +178,7 @@ impl Storage {
                     tx_assets_cloned,
                     tx_authority_cloned,
                     metadata_key_set_cloned,
+                    authorities_key_set_cloned,
                 )
                 .await;
             });
@@ -233,6 +236,7 @@ impl Storage {
         tx_assets_cloned: tokio::sync::mpsc::Sender<AssetRecord>,
         tx_authority_cloned: tokio::sync::mpsc::Sender<(String, String, i64)>,
         metadata_key_set: Arc<Mutex<HashSet<Vec<u8>>>>,
+        authorities_key_set: Arc<Mutex<HashSet<Pubkey>>>,
     ) {
         loop {
             // whole application is stopped
@@ -326,15 +330,21 @@ impl Storage {
                             Some(key)
                         };
                         if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
-                            if let Err(e) = tx_authority_cloned
-                                .send((
-                                    Self::encode(authority_key.to_bytes()),
-                                    Self::encode(authority.to_bytes()),
-                                    index.slot_updated,
-                                ))
-                                .await
                             {
-                                error!("Error sending message: {:?}", e);
+                                let mut authorities_keys = authorities_key_set.lock().await;
+                                if !authorities_keys.contains(&authority_key) {
+                                    authorities_keys.insert(authority_key);
+                                    if let Err(e) = tx_authority_cloned
+                                        .send((
+                                            Self::encode(authority_key.to_bytes()),
+                                            Self::encode(authority.to_bytes()),
+                                            index.slot_updated,
+                                        ))
+                                        .await
+                                    {
+                                        error!("Error sending message: {:?}", e);
+                                    }
+                                }
                             }
                         }
                     }

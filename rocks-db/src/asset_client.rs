@@ -124,6 +124,16 @@ impl Storage {
             .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
             .collect::<HashMap<_, _>>();
         let assets_static = to_map!(assets_static);
+        let assets_collection_pks = assets_collection
+            .as_ref()
+            .map_err(|e| StorageError::Common(e.to_string()))?
+            .iter()
+            .flat_map(|c| c.as_ref().map(|c| c.collection.value))
+            .collect::<Vec<_>>();
+        let mpl_core_collections = self
+            .asset_collection_data
+            .batch_get(assets_collection_pks)
+            .await;
         Ok(AssetSelectedMaps {
             editions: self
                 .get_editions(
@@ -141,6 +151,7 @@ impl Storage {
             assets_leaf: to_map!(assets_leaf),
             offchain_data,
             urls,
+            mpl_core_collections: to_map!(mpl_core_collections),
         })
     }
 
