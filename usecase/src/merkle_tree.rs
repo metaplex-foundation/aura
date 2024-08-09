@@ -1,4 +1,3 @@
-use crate::error::RollupValidationError;
 use spl_account_compression::state::ConcurrentMerkleTreeHeader;
 use spl_account_compression::zero_copy::ZeroCopy;
 macro_rules! check_proof {
@@ -55,7 +54,7 @@ macro_rules! process_merkle_tree {
             (30, 512) => $macro_name!(30, 512, $($arg)*),
             (30, 1024) => $macro_name!(30, 1024, $($arg)*),
             (30, 2048) => $macro_name!(30, 2048, $($arg)*),
-            _ => Err(RollupValidationError::CannotCreateMerkleTree($max_depth, $max_buffer_size)),
+            _ => Err(bubblegum_batch_sdk::batch_mint_validations::BatchMintValidationError::UnexpectedTreeSize($max_depth, $max_buffer_size)),
         }
     };
 }
@@ -66,7 +65,7 @@ pub fn check_proof(
     initial_proofs: Vec<[u8; 32]>,
     leaf: [u8; 32],
     leaf_index: u32,
-) -> Result<bool, RollupValidationError> {
+) -> Result<bool, bubblegum_batch_sdk::batch_mint_validations::BatchMintValidationError> {
     let max_depth = header.get_max_depth();
     let max_buffer_size = header.get_max_buffer_size();
     process_merkle_tree!(

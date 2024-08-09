@@ -103,9 +103,9 @@ pub struct Storage {
     pub token_account_owner_idx: Column<TokenAccountOwnerIdx>,
     pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
     pub asset_signature: Column<AssetSignature>,
-    pub rollup_to_verify: Column<BatchMintToVerify>,
-    pub failed_rollups: Column<FailedRollup>,
-    pub rollups: Column<BatchMintWithStaker>,
+    pub batch_mint_to_verify: Column<BatchMintToVerify>,
+    pub failed_batch_mints: Column<FailedRollup>,
+    pub batch_mints: Column<BatchMintWithStaker>,
     pub migration_version: Column<MigrationVersions>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
@@ -186,9 +186,9 @@ impl Storage {
             red_metrics,
             asset_signature,
             token_account_mint_owner_idx,
-            rollup_to_verify,
-            failed_rollups,
-            rollups,
+            batch_mint_to_verify: rollup_to_verify,
+            failed_batch_mints: failed_rollups,
+            batch_mints: rollups,
             migration_version,
         }
     }
@@ -532,13 +532,13 @@ impl Storage {
             BatchMintToVerify::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_rollup_to_verify",
-                    batch_mint::merge_rollup_to_verify,
+                    batch_mint::merge_batch_mint_to_verify,
                 );
             }
             FailedRollup::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_failed_rollup",
-                    batch_mint::merge_failed_rollup,
+                    batch_mint::merge_failed_batch_mint,
                 );
             }
             BatchMintWithStaker::NAME => {

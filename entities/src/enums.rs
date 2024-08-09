@@ -320,7 +320,7 @@ pub enum PersistingBatchMintState {
 pub enum FailedBatchMintState {
     DownloadFailed,
     ChecksumVerifyFailed,
-    RollupVerifyFailed,
+    BatchMintVerifyFailed,
     FileSerialization,
 }
 
@@ -329,7 +329,7 @@ impl From<FailedBatchMintState> for u8 {
         match value {
             FailedBatchMintState::DownloadFailed => 0,
             FailedBatchMintState::ChecksumVerifyFailed => 1,
-            FailedBatchMintState::RollupVerifyFailed => 2,
+            FailedBatchMintState::BatchMintVerifyFailed => 2,
             FailedBatchMintState::FileSerialization => 3,
         }
     }
@@ -342,7 +342,7 @@ impl TryFrom<u8> for FailedBatchMintState {
         match value {
             0 => Ok(FailedBatchMintState::DownloadFailed),
             1 => Ok(FailedBatchMintState::ChecksumVerifyFailed),
-            2 => Ok(FailedBatchMintState::RollupVerifyFailed),
+            2 => Ok(FailedBatchMintState::BatchMintVerifyFailed),
             3 => Ok(FailedBatchMintState::FileSerialization),
             _ => Err("Wrong enum value".to_string()),
         }

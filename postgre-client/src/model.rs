@@ -47,7 +47,7 @@ pub enum OwnerType {
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, sqlx::Type)]
 #[sqlx(type_name = "rollup_state", rename_all = "snake_case")]
-pub enum RollupState {
+pub enum BatchMintState {
     Uploaded,
     ValidationFail,
     ValidationComplete,
@@ -154,20 +154,22 @@ impl From<entities::api_req_params::AssetSortDirection> for AssetSortDirection {
     }
 }
 
-impl From<RollupState> for entities::enums::BatchMintState {
-    fn from(value: RollupState) -> Self {
+impl From<BatchMintState> for entities::enums::BatchMintState {
+    fn from(value: BatchMintState) -> Self {
         match value {
-            RollupState::Uploaded => entities::enums::BatchMintState::Uploaded,
-            RollupState::ValidationFail => entities::enums::BatchMintState::ValidationFail,
-            RollupState::ValidationComplete => entities::enums::BatchMintState::ValidationComplete,
-            RollupState::UploadedToArweave => entities::enums::BatchMintState::UploadedToArweave,
-            RollupState::FailUploadToArweave => {
+            BatchMintState::Uploaded => entities::enums::BatchMintState::Uploaded,
+            BatchMintState::ValidationFail => entities::enums::BatchMintState::ValidationFail,
+            BatchMintState::ValidationComplete => {
+                entities::enums::BatchMintState::ValidationComplete
+            }
+            BatchMintState::UploadedToArweave => entities::enums::BatchMintState::UploadedToArweave,
+            BatchMintState::FailUploadToArweave => {
                 entities::enums::BatchMintState::FailUploadToArweave
             }
-            RollupState::FailSendingTransaction => {
+            BatchMintState::FailSendingTransaction => {
                 entities::enums::BatchMintState::FailSendingTransaction
             }
-            RollupState::Complete => entities::enums::BatchMintState::Complete,
+            BatchMintState::Complete => entities::enums::BatchMintState::Complete,
         }
     }
 }

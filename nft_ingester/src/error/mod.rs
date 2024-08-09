@@ -14,7 +14,6 @@ use thiserror::Error;
 
 use crate::plerkle::PlerkleDeserializerError;
 use rocks_db::errors::{BackupServiceError, StorageError};
-use usecase::error::RollupValidationError;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum IngesterError {
@@ -110,8 +109,6 @@ pub enum IngesterError {
     Arweave(String),
     #[error("Infallible: {0}")]
     Infallible(String),
-    #[error("RollupValidation: {0}")]
-    RollupValidation(#[from] RollupValidationError),
     #[error("SendTransaction: {0}")]
     SendTransaction(String),
     #[error("ProcessRollup: {0}")]

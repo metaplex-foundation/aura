@@ -21,21 +21,25 @@ use interface::batch_mint::BatchMintDownloader;
 use interface::batch_mint::MockRollupDownloader;
 use interface::error::UsecaseError;
 use metrics_utils::ApiMetricsConfig;
+use metrics_utils::BatchMintPersisterMetricsConfig;
+use metrics_utils::BatchMintProcessorMetricsConfig;
 use metrics_utils::IngesterMetricsConfig;
-use metrics_utils::RollupPersisterMetricsConfig;
-use metrics_utils::RollupProcessorMetricsConfig;
 use nft_ingester::api::dapi::rpc_asset_models::AssetProof;
 use nft_ingester::api::error::DasApiError;
+use nft_ingester::batch_mint::batch_mint_persister::{
+    RollupPersister, MAX_ROLLUP_DOWNLOAD_ATTEMPTS,
+};
+use nft_ingester::batch_mint::batch_mint_processor::{
+    BatchMintProcessor, MockPermanentStorageClient,
+};
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::config::JsonMiddlewareConfig;
 use nft_ingester::error::IngesterError;
 use nft_ingester::json_worker::JsonWorker;
-use nft_ingester::rollup::rollup_persister::{RollupPersister, MAX_ROLLUP_DOWNLOAD_ATTEMPTS};
-use nft_ingester::rollup::rollup_processor::{MockPermanentStorageClient, RollupProcessor};
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
 use rand::{thread_rng, Rng};
-use rocks_db::batch_mint::FailedRollupKey;
+use rocks_db::batch_mint::FailedBatchMintKey;
 use serde_json::json;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::instruction::CompiledInstruction;
@@ -415,7 +419,7 @@ async fn save_rollup_to_queue_test() {
     let r = env
         .rocks_env
         .storage
-        .rollup_to_verify
+        .batch_mint_to_verify
         .get(metadata_hash.clone())
         .unwrap()
         .unwrap();
@@ -509,7 +513,7 @@ async fn rollup_with_verified_creators_test() {
 
     env.rocks_env
         .storage
-        .rollup_to_verify
+        .batch_mint_to_verify
         .put(metadata_hash.clone(), rollup_to_verify.clone())
         .unwrap();
 
@@ -528,13 +532,13 @@ async fn rollup_with_verified_creators_test() {
     let rollup_persister = RollupPersister::new(
         env.rocks_env.storage.clone(),
         mocked_downloader,
-        Arc::new(RollupPersisterMetricsConfig::new()),
+        Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
     let (rollup_to_verify, _) = env
         .rocks_env
         .storage
-        .fetch_rollup_for_verifying()
+        .fetch_batch_mint_for_verifying()
         .await
         .unwrap();
 
@@ -652,7 +656,7 @@ async fn rollup_with_unverified_creators_test() {
 
     env.rocks_env
         .storage
-        .rollup_to_verify
+        .batch_mint_to_verify
         .put(metadata_hash.clone(), rollup_to_verify.clone())
         .unwrap();
 
@@ -671,13 +675,13 @@ async fn rollup_with_unverified_creators_test() {
     let rollup_persister = RollupPersister::new(
         env.rocks_env.storage.clone(),
         mocked_downloader,
-        Arc::new(RollupPersisterMetricsConfig::new()),
+        Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
     let (rollup_to_verify, _) = env
         .rocks_env
         .storage
-        .fetch_rollup_for_verifying()
+        .fetch_batch_mint_for_verifying()
         .await
         .unwrap();
 
@@ -740,7 +744,7 @@ async fn rollup_persister_test() {
 
     env.rocks_env
         .storage
-        .rollup_to_verify
+        .batch_mint_to_verify
         .put(metadata_hash.clone(), rollup_to_verify.clone())
         .unwrap();
 
@@ -755,13 +759,13 @@ async fn rollup_persister_test() {
     let rollup_persister = RollupPersister::new(
         env.rocks_env.storage.clone(),
         mocked_downloader,
-        Arc::new(RollupPersisterMetricsConfig::new()),
+        Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
     let (rollup_to_verify, _) = env
         .rocks_env
         .storage
-        .fetch_rollup_for_verifying()
+        .fetch_batch_mint_for_verifying()
         .await
         .unwrap();
 
@@ -827,7 +831,7 @@ async fn rollup_persister_test() {
     assert_eq!(
         env.rocks_env
             .storage
-            .rollup_to_verify
+            .batch_mint_to_verify
             .get(metadata_hash.clone())
             .unwrap()
             .is_none(),
@@ -837,7 +841,7 @@ async fn rollup_persister_test() {
     assert_eq!(
         env.rocks_env
             .storage
-            .rollups
+            .batch_mints
             .get(metadata_hash.clone())
             .unwrap()
             .is_some(),
@@ -875,7 +879,7 @@ async fn rollup_persister_download_fail_test() {
 
     env.rocks_env
         .storage
-        .rollup_to_verify
+        .batch_mint_to_verify
         .put(metadata_hash.clone(), rollup_to_verify.clone())
         .unwrap();
 
@@ -887,13 +891,13 @@ async fn rollup_persister_download_fail_test() {
     let rollup_persister = RollupPersister::new(
         env.rocks_env.storage.clone(),
         mocked_downloader,
-        Arc::new(RollupPersisterMetricsConfig::new()),
+        Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
     let (rollup_to_verify, _) = env
         .rocks_env
         .storage
-        .fetch_rollup_for_verifying()
+        .fetch_batch_mint_for_verifying()
         .await
         .unwrap();
 
@@ -905,7 +909,7 @@ async fn rollup_persister_download_fail_test() {
     let r = env
         .rocks_env
         .storage
-        .rollup_to_verify
+        .batch_mint_to_verify
         .get(metadata_hash.clone())
         .unwrap();
 
@@ -942,7 +946,7 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
 
     env.rocks_env
         .storage
-        .rollup_to_verify
+        .batch_mint_to_verify
         .put(metadata_hash.clone(), rollup_to_verify.clone())
         .unwrap();
 
@@ -954,13 +958,13 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
     let rollup_persister = RollupPersister::new(
         env.rocks_env.storage.clone(),
         mocked_downloader,
-        Arc::new(RollupPersisterMetricsConfig::new()),
+        Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
     let (rollup_to_verify, _) = env
         .rocks_env
         .storage
-        .fetch_rollup_for_verifying()
+        .fetch_batch_mint_for_verifying()
         .await
         .unwrap();
 
@@ -972,20 +976,20 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
     let r = env
         .rocks_env
         .storage
-        .rollup_to_verify
+        .batch_mint_to_verify
         .get(metadata_hash.clone())
         .unwrap();
 
     assert_eq!(r.is_none(), true);
 
-    let key = FailedRollupKey {
+    let key = FailedBatchMintKey {
         status: FailedBatchMintState::DownloadFailed,
         hash: metadata_hash.clone(),
     };
     let failed_rollup = env
         .rocks_env
         .storage
-        .failed_rollups
+        .failed_batch_mints
         .get(key)
         .unwrap()
         .unwrap();
@@ -1032,13 +1036,13 @@ async fn rollup_processing_validation_test() {
     let dir = TempDir::new().unwrap();
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
 
-    let rollup_processor = RollupProcessor::new(
+    let rollup_processor = BatchMintProcessor::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
-        Arc::new(nft_ingester::rollup::rollup_processor::NoopRollupTxSender {}),
+        Arc::new(nft_ingester::batch_mint::batch_mint_processor::NoopBatchMintTxSender {}),
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
-        Arc::new(RollupProcessorMetricsConfig::new()),
+        Arc::new(BatchMintProcessorMetricsConfig::new()),
     );
     let (_, shutdown_rx) = broadcast::channel::<()>(1);
     let processing_result = rollup_processor
@@ -1292,7 +1296,7 @@ async fn rollup_upload_test() {
     let mut permanent_storage_client = MockPermanentStorageClient::new();
     permanent_storage_client
         .expect_upload_file()
-        .times(nft_ingester::rollup::rollup_processor::MAX_ROLLUP_RETRIES - 1)
+        .times(nft_ingester::batch_mint::batch_mint_processor::MAX_BATCH_MINT_RETRIES - 1)
         .returning(|_, _| {
             Box::pin(async { Err(IngesterError::Arweave("test error".to_string())) })
         });
@@ -1305,13 +1309,13 @@ async fn rollup_upload_test() {
         .returning(|_| "".to_string());
     let dir = TempDir::new().unwrap();
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
-    let rollup_processor = RollupProcessor::new(
+    let rollup_processor = BatchMintProcessor::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
-        Arc::new(nft_ingester::rollup::rollup_processor::NoopRollupTxSender {}),
+        Arc::new(nft_ingester::batch_mint::batch_mint_processor::NoopBatchMintTxSender {}),
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
-        Arc::new(RollupProcessorMetricsConfig::new()),
+        Arc::new(BatchMintProcessorMetricsConfig::new()),
     );
 
     let (_, shutdown_rx) = broadcast::channel::<()>(1);
@@ -1332,20 +1336,20 @@ async fn rollup_upload_test() {
     let mut permanent_storage_client = MockPermanentStorageClient::new();
     permanent_storage_client
         .expect_upload_file()
-        .times(nft_ingester::rollup::rollup_processor::MAX_ROLLUP_RETRIES)
+        .times(nft_ingester::batch_mint::batch_mint_processor::MAX_BATCH_MINT_RETRIES)
         .returning(|_, _| {
             Box::pin(async { Err(IngesterError::Arweave("test error".to_string())) })
         });
     permanent_storage_client
         .expect_get_metadata_url()
         .returning(|_| "".to_string());
-    let rollup_processor = RollupProcessor::new(
+    let rollup_processor = BatchMintProcessor::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
-        Arc::new(nft_ingester::rollup::rollup_processor::NoopRollupTxSender {}),
+        Arc::new(nft_ingester::batch_mint::batch_mint_processor::NoopBatchMintTxSender {}),
         Arc::new(permanent_storage_client),
         dir.path().to_str().unwrap().to_string(),
-        Arc::new(RollupProcessorMetricsConfig::new()),
+        Arc::new(BatchMintProcessorMetricsConfig::new()),
     );
 
     let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;

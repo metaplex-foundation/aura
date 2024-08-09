@@ -1,7 +1,7 @@
 use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
 use async_trait::async_trait;
-use nft_ingester::rollup::rollup_persister::{self, RollupPersister};
+use nft_ingester::batch_mint::batch_mint_persister::{self, BatchMintPersister};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -59,10 +59,10 @@ use nft_ingester::backfiller::{
     connect_new_bigtable_from_config, DirectBlockParser, ForceReingestableSlotGetter,
     TransactionsParser,
 };
+use nft_ingester::batch_mint::batch_mint_processor::{BatchMintProcessor, NoopBatchMintTxSender};
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
-use nft_ingester::rollup::rollup_processor::{NoopRollupTxSender, RollupProcessor};
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use rocks_db::migrator::MigrationState;
 use usecase::bigtable::BigTableClient;
@@ -964,34 +964,34 @@ pub async fn main() -> Result<(), IngesterError> {
         ARWEAVE_BASE_URL.parse().unwrap(),
     ) {
         let arweave = Arc::new(arweave);
-        let rollup_processor = Arc::new(RollupProcessor::new(
+        let batch_mint_processor = Arc::new(BatchMintProcessor::new(
             index_storage.clone(),
             rocks_storage.clone(),
-            Arc::new(NoopRollupTxSender {}),
+            Arc::new(NoopBatchMintTxSender {}),
             arweave,
             file_storage_path,
-            metrics_state.rollup_processor_metrics.clone(),
+            metrics_state.batch_mint_processor_metrics.clone(),
         ));
         let rx = shutdown_rx.resubscribe();
-        let processor_clone = rollup_processor.clone();
+        let processor_clone = batch_mint_processor.clone();
         mutexed_tasks.lock().await.spawn(async move {
-            info!("Start processing rollups...");
-            processor_clone.process_rollups(rx).await;
-            info!("Finish processing rollups...");
+            info!("Start processing batch_mints...");
+            processor_clone.process_batch_mints(rx).await;
+            info!("Finish processing batch_mints...");
 
             Ok(())
         });
     }
 
-    let rollup_persister = RollupPersister::new(
+    let batch_mint_persister = BatchMintPersister::new(
         rocks_storage.clone(),
-        rollup_persister::RollupDownloaderForPersister {},
-        metrics_state.rollup_persisting_metrics.clone(),
+        batch_mint_persister::BatchMintDownloaderForPersister {},
+        metrics_state.batch_mint_persisting_metrics.clone(),
     );
     let rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
-        info!("Start rollup persister...");
-        rollup_persister.persist_rollups(rx).await
+        info!("Start batch_mint persister...");
+        batch_mint_persister.persist_batch_mints(rx).await
     });
 
     start_metrics(metrics_state.registry, config.metrics_port).await;

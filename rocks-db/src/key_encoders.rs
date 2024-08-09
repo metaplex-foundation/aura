@@ -1,7 +1,7 @@
 use entities::{enums::FailedBatchMintState, models::AssetSignatureKey};
 use solana_sdk::pubkey::Pubkey;
 
-use crate::batch_mint::FailedRollupKey;
+use crate::batch_mint::FailedBatchMintKey;
 use crate::{storage_traits::AssetUpdatedKey, Result};
 
 pub fn encode_u64x2_pubkey(seq: u64, slot: u64, pubkey: Pubkey) -> Vec<u8> {
@@ -159,14 +159,14 @@ pub fn encode_pubkeyx3(ask: (Pubkey, Pubkey, Pubkey)) -> Vec<u8> {
     key
 }
 
-pub fn encode_failed_rollup_key(key: FailedRollupKey) -> Vec<u8> {
+pub fn encode_failed_batch_mint_key(key: FailedBatchMintKey) -> Vec<u8> {
     let state = key.status as u8;
     let hash = key.hash.into_bytes();
     [vec![state], hash].concat()
 }
 
-pub fn decode_failed_rollup_key(key: Vec<u8>) -> Result<FailedRollupKey> {
-    Ok(FailedRollupKey {
+pub fn decode_failed_batch_mint_key(key: Vec<u8>) -> Result<FailedBatchMintKey> {
+    Ok(FailedBatchMintKey {
         status: FailedBatchMintState::try_from(
             *key.first().ok_or(crate::StorageError::InvalidKeyLength)?,
         )
@@ -277,24 +277,24 @@ mod tests {
 
     #[test]
     fn test_encode_decode_failed_rollup_key() {
-        let key = FailedRollupKey {
+        let key = FailedBatchMintKey {
             status: FailedBatchMintState::DownloadFailed,
             hash: "".to_string(),
         };
 
-        let encoded_key = encode_failed_rollup_key(key.clone());
-        let decoded_key = decode_failed_rollup_key(encoded_key).unwrap();
+        let encoded_key = encode_failed_batch_mint_key(key.clone());
+        let decoded_key = decode_failed_batch_mint_key(encoded_key).unwrap();
 
         assert_eq!(decoded_key.status, key.status);
         assert_eq!(decoded_key.hash, key.hash);
 
-        let key2 = FailedRollupKey {
-            status: FailedBatchMintState::RollupVerifyFailed,
+        let key2 = FailedBatchMintKey {
+            status: FailedBatchMintState::BatchMintVerifyFailed,
             hash: "asdfasdf".to_string(),
         };
 
-        let encoded_key = encode_failed_rollup_key(key2.clone());
-        let decoded_key = decode_failed_rollup_key(encoded_key).unwrap();
+        let encoded_key = encode_failed_batch_mint_key(key2.clone());
+        let decoded_key = decode_failed_batch_mint_key(encoded_key).unwrap();
 
         assert_eq!(decoded_key.status, key2.status);
         assert_eq!(decoded_key.hash, key2.hash);
@@ -304,7 +304,7 @@ mod tests {
     fn test_invalid_encode_decode_failed_rollup_key() {
         assert_eq!(
             matches!(
-                decode_failed_rollup_key(vec![]),
+                decode_failed_batch_mint_key(vec![]),
                 Err(StorageError::InvalidKeyLength)
             ),
             true

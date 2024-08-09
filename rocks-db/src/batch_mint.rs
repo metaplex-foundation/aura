@@ -1,7 +1,7 @@
 use crate::column::TypedColumn;
 use crate::errors::StorageError;
 use crate::key_encoders::{
-    decode_failed_rollup_key, decode_string, encode_failed_rollup_key, encode_string,
+    decode_failed_batch_mint_key, decode_string, encode_failed_batch_mint_key, encode_string,
 };
 use crate::{Result, Storage};
 use bincode::deserialize;
@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct FailedRollupKey {
+pub struct FailedBatchMintKey {
     pub status: FailedBatchMintState,
     pub hash: String,
 }
@@ -34,7 +34,7 @@ impl TypedColumn for BatchMintToVerify {
     }
 }
 
-pub fn merge_rollup_to_verify(
+pub fn merge_batch_mint_to_verify(
     _new_key: &[u8],
     existing_val: Option<&[u8]>,
     operands: &MergeOperands,
@@ -71,20 +71,20 @@ pub fn merge_rollup_to_verify(
 }
 
 impl TypedColumn for FailedRollup {
-    type KeyType = FailedRollupKey;
+    type KeyType = FailedBatchMintKey;
     type ValueType = Self;
     const NAME: &'static str = "FAILED_ROLLUP"; // Name of the column family
 
-    fn encode_key(key: FailedRollupKey) -> Vec<u8> {
-        encode_failed_rollup_key(key)
+    fn encode_key(key: FailedBatchMintKey) -> Vec<u8> {
+        encode_failed_batch_mint_key(key)
     }
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        decode_failed_rollup_key(bytes)
+        decode_failed_batch_mint_key(bytes)
     }
 }
 
-pub fn merge_failed_rollup(
+pub fn merge_failed_batch_mint(
     _new_key: &[u8],
     existing_val: Option<&[u8]>,
     operands: &MergeOperands,
@@ -141,11 +141,11 @@ impl TypedColumn for BatchMintWithStaker {
 }
 
 impl Storage {
-    pub async fn fetch_rollup_for_verifying(
+    pub async fn fetch_batch_mint_for_verifying(
         &self,
     ) -> Result<(Option<BatchMintToVerify>, Option<BatchMint>)> {
         let first_value = self
-            .rollup_to_verify
+            .batch_mint_to_verify
             .iter_start()
             .next()
             .transpose()
@@ -154,22 +154,22 @@ impl Storage {
             .transpose()?;
 
         if let Some(rollup) = &first_value {
-            let rollup = self.rollups.get(rollup.file_hash.clone())?;
+            let rollup = self.batch_mints.get(rollup.file_hash.clone())?;
             return Ok((first_value, rollup.map(|r| r.batch_mint)));
         }
         Ok((first_value, None))
     }
 
-    pub async fn drop_rollup_from_queue(&self, file_hash: String) -> Result<()> {
-        self.rollup_to_verify.delete(file_hash)
+    pub async fn drop_batch_mint_from_queue(&self, file_hash: String) -> Result<()> {
+        self.batch_mint_to_verify.delete(file_hash)
     }
 
-    pub async fn save_rollup_as_failed(
+    pub async fn save_batch_mint_as_failed(
         &self,
         status: FailedBatchMintState,
         batch_mint: &BatchMintToVerify,
     ) -> Result<()> {
-        let key = FailedRollupKey {
+        let key = FailedBatchMintKey {
             status: status.clone(),
             hash: batch_mint.file_hash.clone(),
         };
@@ -182,15 +182,15 @@ impl Storage {
             download_attempts: batch_mint.download_attempts + 1,
             staker: batch_mint.staker,
         };
-        self.failed_rollups.put_async(key, value).await
+        self.failed_batch_mints.put_async(key, value).await
     }
 
-    pub async fn inc_rollup_to_verify_download_attempts(
+    pub async fn inc_batch_mint_to_verify_download_attempts(
         &self,
         batch_mint_to_verify: &mut BatchMintToVerify,
     ) -> Result<()> {
         batch_mint_to_verify.download_attempts += 1;
-        self.rollup_to_verify
+        self.batch_mint_to_verify
             .put_async(
                 batch_mint_to_verify.file_hash.clone(),
                 BatchMintToVerify {
