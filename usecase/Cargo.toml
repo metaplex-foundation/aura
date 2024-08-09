@@ -30,7 +30,7 @@ anchor-lang = "0.29.0"
 plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
 async-recursion = "1.1.1"
 thiserror = "1.0.31"
-bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "ed7ebcf" }
+bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "d276bc4" }
 
 [dev-dependencies]
 futures = "0.3.30"

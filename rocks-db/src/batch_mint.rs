@@ -7,7 +7,7 @@ use crate::{Result, Storage};
 use bincode::deserialize;
 use bubblegum_batch_sdk::model::BatchMint;
 use entities::enums::{FailedBatchMintState, PersistingBatchMintState};
-use entities::models::{BatchMintToVerify, FailedRollup};
+use entities::models::{BatchMintToVerify, FailedBatchMint};
 use log::error;
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ pub struct FailedBatchMintKey {
 impl TypedColumn for BatchMintToVerify {
     type KeyType = String;
     type ValueType = Self;
-    const NAME: &'static str = "ROLLUP_TO_VERIFY"; // Name of the column family
+    const NAME: &'static str = "BATCH_MINT_TO_VERIFY"; // Name of the column family
 
     fn encode_key(key: String) -> Vec<u8> {
         encode_string(key)
@@ -48,7 +48,7 @@ pub fn merge_batch_mint_to_verify(
                 result = existing_val.to_vec();
             }
             Err(e) => {
-                error!("RocksDB: RollupToVerify deserialize existing_val: {}", e)
+                error!("RocksDB: BatchMintToVerify deserialize existing_val: {}", e)
             }
         }
     }
@@ -62,7 +62,7 @@ pub fn merge_batch_mint_to_verify(
                 }
             }
             Err(e) => {
-                error!("RocksDB: RollupToVerify deserialize new_val: {}", e)
+                error!("RocksDB: BatchMintToVerify deserialize new_val: {}", e)
             }
         }
     }
@@ -70,10 +70,10 @@ pub fn merge_batch_mint_to_verify(
     Some(result)
 }
 
-impl TypedColumn for FailedRollup {
+impl TypedColumn for FailedBatchMint {
     type KeyType = FailedBatchMintKey;
     type ValueType = Self;
-    const NAME: &'static str = "FAILED_ROLLUP"; // Name of the column family
+    const NAME: &'static str = "FAILED_BATCH_MINT"; // Name of the column family
 
     fn encode_key(key: FailedBatchMintKey) -> Vec<u8> {
         encode_failed_batch_mint_key(key)
@@ -92,19 +92,19 @@ pub fn merge_failed_batch_mint(
     let mut result = vec![];
     let mut slot = 0;
     if let Some(existing_val) = existing_val {
-        match deserialize::<FailedRollup>(existing_val) {
+        match deserialize::<FailedBatchMint>(existing_val) {
             Ok(value) => {
                 slot = value.created_at_slot;
                 result = existing_val.to_vec();
             }
             Err(e) => {
-                error!("RocksDB: FailedRollup deserialize existing_val: {}", e)
+                error!("RocksDB: FailedBatchMint deserialize existing_val: {}", e)
             }
         }
     }
 
     for op in operands {
-        match deserialize::<FailedRollup>(op) {
+        match deserialize::<FailedBatchMint>(op) {
             Ok(new_val) => {
                 if new_val.created_at_slot > slot {
                     slot = new_val.created_at_slot;
@@ -112,7 +112,7 @@ pub fn merge_failed_batch_mint(
                 }
             }
             Err(e) => {
-                error!("RocksDB: FailedRollup deserialize new_val: {}", e)
+                error!("RocksDB: FailedBatchMint deserialize new_val: {}", e)
             }
         }
     }
@@ -129,7 +129,7 @@ pub struct BatchMintWithStaker {
 impl TypedColumn for BatchMintWithStaker {
     type KeyType = String;
     type ValueType = Self;
-    const NAME: &'static str = "ROLLUPS"; // Name of the column family
+    const NAME: &'static str = "BATCH_MINTS"; // Name of the column family
 
     fn encode_key(key: String) -> Vec<u8> {
         encode_string(key)
@@ -153,9 +153,9 @@ impl Storage {
             .map(|(_, value)| bincode::deserialize::<BatchMintToVerify>(value.as_ref()))
             .transpose()?;
 
-        if let Some(rollup) = &first_value {
-            let rollup = self.batch_mints.get(rollup.file_hash.clone())?;
-            return Ok((first_value, rollup.map(|r| r.batch_mint)));
+        if let Some(batch_mint) = &first_value {
+            let batch_mint = self.batch_mints.get(batch_mint.file_hash.clone())?;
+            return Ok((first_value, batch_mint.map(|r| r.batch_mint)));
         }
         Ok((first_value, None))
     }
@@ -173,7 +173,7 @@ impl Storage {
             status: status.clone(),
             hash: batch_mint.file_hash.clone(),
         };
-        let value = FailedRollup {
+        let value = FailedBatchMint {
             status,
             file_hash: batch_mint.file_hash.clone(),
             url: batch_mint.url.clone(),

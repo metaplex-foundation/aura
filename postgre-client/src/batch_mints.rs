@@ -11,9 +11,9 @@ impl PgClient {
         let start_time = Utc::now();
         let mut query_builder = QueryBuilder::new(
             "INSERT INTO batch_mints (
-                rlp_file_name,
-                rlp_state
-            ) VALUES ($1, $2) ON CONFLICT (rlp_file_name) DO NOTHING;",
+                btm_file_name,
+                btm_state
+            ) VALUES ($1, $2) ON CONFLICT (btm_file_name) DO NOTHING;",
         );
 
         let query = query_builder.build();
@@ -38,8 +38,8 @@ impl PgClient {
         &self,
     ) -> Result<Option<BatchMintWithState>, String> {
         let mut query_builder = QueryBuilder::new(
-            "SELECT rlp_file_name, rlp_state, rlp_error, rlp_url, EXTRACT(EPOCH FROM rlp_created_at) as created_at FROM batch_mints
-            WHERE rlp_state in ('uploaded', 'validation_complete', 'fail_upload_to_arweave', 'uploaded_to_arweave', 'fail_sending_transaction') ORDER BY rlp_created_at ASC"
+            "SELECT btm_file_name, btm_state, btm_error, btm_url, EXTRACT(EPOCH FROM btm_created_at) as created_at FROM batch_mints
+            WHERE btm_state in ('uploaded', 'validation_complete', 'fail_upload_to_arweave', 'uploaded_to_arweave', 'fail_sending_transaction') ORDER BY btm_created_at ASC"
         );
         self.fetch_batch_mint(query_builder.build()).await
     }
@@ -49,8 +49,8 @@ impl PgClient {
         url: &str,
     ) -> Result<Option<BatchMintWithState>, String> {
         let mut query_builder = QueryBuilder::new(
-            "SELECT rlp_file_name, rlp_state, rlp_error, rlp_url, EXTRACT(EPOCH FROM rlp_created_at) as created_at FROM batch_mints
-            WHERE rlp_url = $1"
+            "SELECT btm_file_name, btm_state, btm_error, btm_url, EXTRACT(EPOCH FROM btm_created_at) as created_at FROM batch_mints
+            WHERE btm_url = $1"
         );
         self.fetch_batch_mint(query_builder.build().bind(url)).await
     }
@@ -62,7 +62,7 @@ impl PgClient {
         state: BatchMintState,
     ) -> Result<(), String> {
         let mut query_builder = QueryBuilder::new(
-            "UPDATE batch_mints SET rlp_state = $1, rlp_error = $2 WHERE rlp_file_name = $3",
+            "UPDATE batch_mints SET btm_state = $1, btm_error = $2 WHERE btm_file_name = $3",
         );
         self.update_batch_mint(
             query_builder
@@ -81,7 +81,7 @@ impl PgClient {
         reward: i64,
     ) -> Result<(), String> {
         let mut query_builder = QueryBuilder::new(
-            "UPDATE batch_mints SET rlp_url = $1, rlp_tx_reward = $2, rlp_state = $3 WHERE rlp_file_name = $4",
+            "UPDATE batch_mints SET btm_url = $1, btm_tx_reward = $2, btm_state = $3 WHERE btm_file_name = $4",
         );
         self.update_batch_mint(
             query_builder
@@ -100,7 +100,7 @@ impl PgClient {
         state: BatchMintState,
     ) -> Result<(), String> {
         let mut query_builder =
-            QueryBuilder::new("UPDATE batch_mints SET rlp_state = $1 WHERE rlp_file_name = $2");
+            QueryBuilder::new("UPDATE batch_mints SET btm_state = $1 WHERE btm_file_name = $2");
         self.update_batch_mint(query_builder.build().bind(state).bind(file_path))
             .await
     }
@@ -115,13 +115,13 @@ impl PgClient {
             .await
             .map(|row| {
                 row.map(|row| BatchMintWithState {
-                    file_name: row.try_get("rlp_file_name").unwrap_or_default(),
+                    file_name: row.try_get("btm_file_name").unwrap_or_default(),
                     state: row
-                        .try_get::<BatchMintState, _>("rlp_state")
+                        .try_get::<BatchMintState, _>("btm_state")
                         .unwrap_or(BatchMintState::Uploaded)
                         .into(),
-                    error: row.try_get("rlp_error").ok(),
-                    url: row.try_get("rlp_url").ok(),
+                    error: row.try_get("btm_error").ok(),
+                    url: row.try_get("btm_url").ok(),
                     created_at: row
                         .try_get::<f64, _>("created_at")
                         .map(|sec| sec as u64)

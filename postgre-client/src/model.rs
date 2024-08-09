@@ -46,7 +46,7 @@ pub enum OwnerType {
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, sqlx::Type)]
-#[sqlx(type_name = "rollup_state", rename_all = "snake_case")]
+#[sqlx(type_name = "batch_mint_state", rename_all = "snake_case")]
 pub enum BatchMintState {
     Uploaded,
     ValidationFail,

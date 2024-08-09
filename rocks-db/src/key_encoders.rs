@@ -276,7 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_decode_failed_rollup_key() {
+    fn test_encode_decode_failed_batch_mint_key() {
         let key = FailedBatchMintKey {
             status: FailedBatchMintState::DownloadFailed,
             hash: "".to_string(),
@@ -301,7 +301,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_encode_decode_failed_rollup_key() {
+    fn test_invalid_encode_decode_failed_batch_mint_key() {
         assert_eq!(
             matches!(
                 decode_failed_batch_mint_key(vec![]),

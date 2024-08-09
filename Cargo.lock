@@ -1473,7 +1473,7 @@ dependencies = [
 [[package]]
 name = "bubblegum-batch-sdk"
 version = "0.1.0"
-source = "git+https://github.com/metaplex-foundation/bubblegum-batch-sdk.git?rev=ed7ebcf#ed7ebcf5183d704c6358db246378af704fad29ec"
+source = "git+https://github.com/metaplex-foundation/bubblegum-batch-sdk.git?rev=d276bc4#d276bc4915a98eb837e1e4f012ca2a94e3af8ab5"
 dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
@@ -1485,6 +1485,7 @@ dependencies = [
  "mpl-bubblegum",
  "mplx-staking-states",
  "paste",
+ "rand 0.8.5",
  "serde",
  "serde_derive",
  "serde_json",

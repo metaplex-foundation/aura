@@ -17,7 +17,9 @@ pub use asset::{
 };
 pub use column::columns;
 use column::{Column, TypedColumn};
-use entities::models::{AssetSignature, BatchMintToVerify, FailedRollup, OffChainData, RawBlock};
+use entities::models::{
+    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock,
+};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -104,7 +106,7 @@ pub struct Storage {
     pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
     pub asset_signature: Column<AssetSignature>,
     pub batch_mint_to_verify: Column<BatchMintToVerify>,
-    pub failed_batch_mints: Column<FailedRollup>,
+    pub failed_batch_mints: Column<FailedBatchMint>,
     pub batch_mints: Column<BatchMintWithStaker>,
     pub migration_version: Column<MigrationVersions>,
     assets_update_last_seq: AtomicU64,
@@ -148,9 +150,9 @@ impl Storage {
         let token_accounts = Self::column(db.clone(), red_metrics.clone());
         let token_account_owner_idx = Self::column(db.clone(), red_metrics.clone());
         let token_account_mint_owner_idx = Self::column(db.clone(), red_metrics.clone());
-        let rollup_to_verify = Self::column(db.clone(), red_metrics.clone());
-        let failed_rollups = Self::column(db.clone(), red_metrics.clone());
-        let rollups = Self::column(db.clone(), red_metrics.clone());
+        let batch_mint_to_verify = Self::column(db.clone(), red_metrics.clone());
+        let failed_batch_mints = Self::column(db.clone(), red_metrics.clone());
+        let batch_mints = Self::column(db.clone(), red_metrics.clone());
         let migration_version = Self::column(db.clone(), red_metrics.clone());
 
         Self {
@@ -186,9 +188,9 @@ impl Storage {
             red_metrics,
             asset_signature,
             token_account_mint_owner_idx,
-            batch_mint_to_verify: rollup_to_verify,
-            failed_batch_mints: failed_rollups,
-            batch_mints: rollups,
+            batch_mint_to_verify,
+            failed_batch_mints,
+            batch_mints,
             migration_version,
         }
     }
@@ -259,7 +261,7 @@ impl Storage {
             Self::new_cf_descriptor::<TokenAccountMintOwnerIdx>(migration_state),
             Self::new_cf_descriptor::<MigrationVersions>(migration_state),
             Self::new_cf_descriptor::<BatchMintToVerify>(migration_state),
-            Self::new_cf_descriptor::<FailedRollup>(migration_state),
+            Self::new_cf_descriptor::<FailedBatchMint>(migration_state),
             Self::new_cf_descriptor::<BatchMintWithStaker>(migration_state),
         ]
     }
@@ -531,19 +533,19 @@ impl Storage {
             }
             BatchMintToVerify::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_rollup_to_verify",
+                    "merge_fn_batch_mint_to_verify",
                     batch_mint::merge_batch_mint_to_verify,
                 );
             }
-            FailedRollup::NAME => {
+            FailedBatchMint::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_failed_rollup",
+                    "merge_fn_failed_batch_mint",
                     batch_mint::merge_failed_batch_mint,
                 );
             }
             BatchMintWithStaker::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_downloaded_rollup",
+                    "merge_fn_downloaded_batch_mint",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }

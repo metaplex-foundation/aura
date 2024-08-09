@@ -261,7 +261,7 @@ impl BatchMintService {
                             }
                         }
                         if let Err(e) = self.pg_client.insert_new_batch_mint(&file_name).await {
-                            error!("Failed to save rollup state: {}", e);
+                            error!("Failed to save batch mint state: {}", e);
                             return Ok(Response::builder()
                                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                                 .body(Body::from("Failed to save file"))

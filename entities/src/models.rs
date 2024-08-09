@@ -417,7 +417,7 @@ pub struct BatchMintToVerify {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct FailedRollup {
+pub struct FailedBatchMint {
     pub status: FailedBatchMintState,
     pub file_hash: String,
     pub url: String,

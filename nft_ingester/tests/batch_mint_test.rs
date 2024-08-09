@@ -10,15 +10,15 @@ use async_trait::async_trait;
 use mockall::predicate;
 use mpl_bubblegum::types::{Creator, LeafSchema, MetadataArgs};
 
-use bubblegum_batch_sdk::rollup_client::RollupClient;
+use bubblegum_batch_sdk::batch_mint_client::BatchMintClient;
+use bubblegum_batch_sdk::batch_mint_validations::generate_batch_mint;
+use bubblegum_batch_sdk::model::BatchMint;
 use entities::api_req_params::GetAssetProof;
 use entities::enums::{BatchMintState, FailedBatchMintState, PersistingBatchMintState};
 use entities::models::BufferedTransaction;
 use entities::models::{BatchMintToVerify, BatchMintWithState};
-use entities::rollup::{ChangeLogEventV1, PathNode, RolledMintInstruction, Rollup};
 use flatbuffers::FlatBufferBuilder;
-use interface::batch_mint::BatchMintDownloader;
-use interface::batch_mint::MockRollupDownloader;
+use interface::batch_mint::{BatchMintDownloader, MockBatchMintDownloader};
 use interface::error::UsecaseError;
 use metrics_utils::ApiMetricsConfig;
 use metrics_utils::BatchMintPersisterMetricsConfig;
@@ -27,7 +27,7 @@ use metrics_utils::IngesterMetricsConfig;
 use nft_ingester::api::dapi::rpc_asset_models::AssetProof;
 use nft_ingester::api::error::DasApiError;
 use nft_ingester::batch_mint::batch_mint_persister::{
-    RollupPersister, MAX_ROLLUP_DOWNLOAD_ATTEMPTS,
+    BatchMintPersister, MAX_BATCH_MINT_DOWNLOAD_ATTEMPTS,
 };
 use nft_ingester::batch_mint::batch_mint_processor::{
     BatchMintProcessor, MockPermanentStorageClient,
@@ -38,7 +38,6 @@ use nft_ingester::error::IngesterError;
 use nft_ingester::json_worker::JsonWorker;
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
-use rand::{thread_rng, Rng};
 use rocks_db::batch_mint::FailedBatchMintKey;
 use serde_json::json;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -61,232 +60,90 @@ use testcontainers::clients::Cli;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::broadcast;
 use tokio::sync::Mutex;
-use usecase::error::RollupValidationError;
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 
-fn generate_rollup(size: usize) -> Rollup {
-    let authority = Pubkey::from_str("3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM").unwrap();
-    let tree = Pubkey::from_str("HxhCw9g3kZvrdg9zZvctmh6qpSDg1FfsBXfFvRkbCHB7").unwrap();
-    let mut mints = Vec::new();
-    let mut merkle = ConcurrentMerkleTree::<10, 32>::new();
-    merkle.initialize().unwrap();
-
-    let mut last_leaf_hash = [0u8; 32];
-    for i in 0..size {
-        let mint_args = MetadataArgs {
-            name: thread_rng()
-                .sample_iter(rand::distributions::Alphanumeric)
-                .take(15)
-                .map(char::from)
-                .collect(),
-            symbol: thread_rng()
-                .sample_iter(rand::distributions::Alphanumeric)
-                .take(5)
-                .map(char::from)
-                .collect(),
-            uri: format!(
-                "https://arweave.net/{}",
-                thread_rng()
-                    .sample_iter(rand::distributions::Alphanumeric)
-                    .take(43)
-                    .map(char::from)
-                    .collect::<String>()
-            ),
-            seller_fee_basis_points: thread_rng()
-                .sample(rand::distributions::Uniform::new(0, 10000)),
-            primary_sale_happened: thread_rng().gen_bool(0.5),
-            is_mutable: thread_rng().gen_bool(0.5),
-            edition_nonce: if thread_rng().gen_bool(0.5) {
-                None
-            } else {
-                Some(thread_rng().sample(rand::distributions::Uniform::new(0, 255)))
-            },
-            token_standard: if thread_rng().gen_bool(0.5) {
-                None
-            } else {
-                Some(mpl_bubblegum::types::TokenStandard::NonFungible)
-            },
-            collection: if thread_rng().gen_bool(0.5) {
-                None
-            } else {
-                Some(mpl_bubblegum::types::Collection {
-                    verified: false,
-                    key: Pubkey::new_unique(),
-                })
-            },
-            uses: None, // todo
-            token_program_version: mpl_bubblegum::types::TokenProgramVersion::Original,
-            creators: (0..thread_rng().sample(rand::distributions::Uniform::new(1, 5)))
-                .map(|_| mpl_bubblegum::types::Creator {
-                    address: Pubkey::new_unique(),
-                    verified: false,
-                    share: thread_rng().sample(rand::distributions::Uniform::new(0, 100)),
-                })
-                .collect(),
-        };
-        let nonce = i as u64;
-        let id = mpl_bubblegum::utils::get_asset_id(&tree, nonce);
-        let owner = authority.clone();
-        let delegate = authority.clone();
-
-        let metadata_args_hash = keccak::hashv(&[mint_args.try_to_vec().unwrap().as_slice()]);
-        let data_hash = keccak::hashv(&[
-            &metadata_args_hash.to_bytes(),
-            &mint_args.seller_fee_basis_points.to_le_bytes(),
-        ]);
-        let creator_data = mint_args
-            .creators
-            .iter()
-            .map(|c| [c.address.as_ref(), &[c.verified as u8], &[c.share]].concat())
-            .collect::<Vec<_>>();
-        let creator_hash = keccak::hashv(
-            creator_data
-                .iter()
-                .map(|c| c.as_slice())
-                .collect::<Vec<&[u8]>>()
-                .as_ref(),
-        );
-
-        let hashed_leaf = keccak::hashv(&[
-            &[1], //self.version().to_bytes()
-            id.as_ref(),
-            owner.as_ref(),
-            delegate.as_ref(),
-            nonce.to_le_bytes().as_ref(),
-            data_hash.as_ref(),
-            creator_hash.as_ref(),
-        ])
-        .to_bytes();
-        merkle.append(hashed_leaf).unwrap();
-        last_leaf_hash = hashed_leaf;
-        let changelog = merkle.change_logs[merkle.active_index as usize];
-        let path_len = changelog.path.len() as u32;
-        let mut path: Vec<spl_account_compression::state::PathNode> = changelog
-            .path
-            .iter()
-            .enumerate()
-            .map(|(lvl, n)| {
-                spl_account_compression::state::PathNode::new(
-                    *n,
-                    (1 << (path_len - lvl as u32)) + (changelog.index >> lvl),
-                )
-            })
-            .collect();
-        path.push(spl_account_compression::state::PathNode::new(
-            changelog.root,
-            1,
-        ));
-
-        let rolled_mint = RolledMintInstruction {
-            tree_update: ChangeLogEventV1 {
-                id: tree,
-                path: path.into_iter().map(Into::into).collect::<Vec<_>>(),
-                seq: merkle.sequence_number,
-                index: changelog.index,
-            },
-            leaf_update: LeafSchema::V1 {
-                id,
-                owner,
-                delegate,
-                nonce,
-                data_hash: data_hash.to_bytes(),
-                creator_hash: creator_hash.to_bytes(),
-            },
-            mint_args,
-            authority,
-            creator_signature: None,
-        };
-        mints.push(rolled_mint);
-    }
-    let rollup = Rollup {
-        tree_id: tree,
-        raw_metadata_map: HashMap::new(),
-        max_depth: 10,
-        rolled_mints: mints,
-        merkle_root: merkle.get_root(),
-        last_leaf_hash,
-        max_buffer_size: 32,
-    };
-
-    rollup
+#[test]
+#[cfg(feature = "batch_mint_tests")]
+fn test_generate_1_000_batch_mint() {
+    let batch_mint = generate_batch_mint(1000);
+    assert_eq!(batch_mint.batch_mints.len(), 1000);
+    let file = File::create("batch_mint-1000.json").unwrap();
+    serde_json::to_writer(file, &batch_mint).unwrap()
 }
 
 #[test]
-#[cfg(feature = "rollup_tests")]
-fn test_generate_1_000_rollup() {
-    let rollup = generate_rollup(1000);
-    assert_eq!(rollup.rolled_mints.len(), 1000);
-    let file = File::create("rollup-1000.json").unwrap();
-    serde_json::to_writer(file, &rollup).unwrap()
+#[cfg(feature = "batch_mint_tests")]
+fn test_generate_10_000_batch_mint() {
+    let batch_mint = generate_batch_mint(10_000);
+    assert_eq!(batch_mint.batch_mints.len(), 10_000);
+    println!(
+        "batch_mint of {:?} assets created",
+        batch_mint.batch_mints.len()
+    );
+    let file = File::create("batch_mint-10_000.json").unwrap();
+    serde_json::to_writer(file, &batch_mint).unwrap()
 }
 
 #[test]
-#[cfg(feature = "rollup_tests")]
-fn test_generate_10_000_rollup() {
-    let rollup = generate_rollup(10_000);
-    assert_eq!(rollup.rolled_mints.len(), 10_000);
-    println!("rollup of {:?} assets created", rollup.rolled_mints.len());
-    let file = File::create("rollup-10_000.json").unwrap();
-    serde_json::to_writer(file, &rollup).unwrap()
+#[cfg(feature = "batch_mint_tests")]
+fn test_generate_100_000_batch_mint() {
+    let batch_mint = generate_batch_mint(100_000);
+    assert_eq!(batch_mint.batch_mints.len(), 100_000);
+    println!(
+        "batch_mint of {:?} assets created",
+        batch_mint.batch_mints.len()
+    );
+    let file = File::create("batch_mint-100_000.json").unwrap();
+    serde_json::to_writer(file, &batch_mint).unwrap()
 }
 
 #[test]
-#[cfg(feature = "rollup_tests")]
-fn test_generate_100_000_rollup() {
-    let rollup = generate_rollup(100_000);
-    assert_eq!(rollup.rolled_mints.len(), 100_000);
-    println!("rollup of {:?} assets created", rollup.rolled_mints.len());
-    let file = File::create("rollup-100_000.json").unwrap();
-    serde_json::to_writer(file, &rollup).unwrap()
+#[cfg(feature = "batch_mint_tests")]
+fn test_generate_1_000_000_batch_mint() {
+    let batch_mint = generate_batch_mint(1_000_000);
+    assert_eq!(batch_mint.batch_mints.len(), 1_000_000);
+    let file = File::create("batch_mint-1_000_000.json").unwrap();
+    serde_json::to_writer(file, &batch_mint).unwrap()
 }
 
 #[test]
-#[cfg(feature = "rollup_tests")]
-fn test_generate_1_000_000_rollup() {
-    let rollup = generate_rollup(1_000_000);
-    assert_eq!(rollup.rolled_mints.len(), 1_000_000);
-    let file = File::create("rollup-1_000_000.json").unwrap();
-    serde_json::to_writer(file, &rollup).unwrap()
+#[cfg(feature = "batch_mint_tests")]
+fn test_generate_10_000_000_batch_mint() {
+    let batch_mint = generate_batch_mint(10_000_000);
+    assert_eq!(batch_mint.batch_mints.len(), 10_000_000);
+    let file = File::create("batch_mint-10_000_000.json").unwrap();
+    serde_json::to_writer(file, &batch_mint).unwrap()
 }
 
-#[test]
-#[cfg(feature = "rollup_tests")]
-fn test_generate_10_000_000_rollup() {
-    let rollup = generate_rollup(10_000_000);
-    assert_eq!(rollup.rolled_mints.len(), 10_000_000);
-    let file = File::create("rollup-10_000_000.json").unwrap();
-    serde_json::to_writer(file, &rollup).unwrap()
-}
-
-const ROLLUP_ASSETS_TO_SAVE: usize = 1_000;
-struct TestRollupCreator;
+const BATCH_MINT_ASSETS_TO_SAVE: usize = 1_000;
+struct TestBatchMintCreator;
 #[async_trait]
-impl BatchMintDownloader for TestRollupCreator {
+impl BatchMintDownloader for TestBatchMintCreator {
     async fn download_batch_mint(
         &self,
         _url: &str,
-    ) -> std::result::Result<Box<Rollup>, UsecaseError> {
-        // let json_file = std::fs::read_to_string("../rollup-1000.json").unwrap();
-        // let rollup: Rollup = serde_json::from_str(&json_file).unwrap();
+    ) -> std::result::Result<Box<BatchMint>, UsecaseError> {
+        // let json_file = std::fs::read_to_string("../batch_mint-1000.json").unwrap();
+        // let batch_mint: BatchMint = serde_json::from_str(&json_file).unwrap();
 
-        Ok(Box::new(generate_rollup(ROLLUP_ASSETS_TO_SAVE)))
+        Ok(Box::new(generate_batch_mint(BATCH_MINT_ASSETS_TO_SAVE)))
     }
 
     async fn download_batch_mint_and_check_checksum(
         &self,
         _url: &str,
         _checksum: &str,
-    ) -> std::result::Result<Box<Rollup>, UsecaseError> {
-        Ok(Box::new(generate_rollup(ROLLUP_ASSETS_TO_SAVE)))
+    ) -> std::result::Result<Box<BatchMint>, UsecaseError> {
+        Ok(Box::new(generate_batch_mint(BATCH_MINT_ASSETS_TO_SAVE)))
     }
 }
 
-fn generate_merkle_tree_from_rollup(rollup: &Rollup) -> ConcurrentMerkleTree<10, 32> {
+fn generate_merkle_tree_from_batch_mint(batch_mint: &BatchMint) -> ConcurrentMerkleTree<10, 32> {
     let mut merkle_tree = ConcurrentMerkleTree::<10, 32>::new();
     merkle_tree.initialize().unwrap();
 
-    for (nonce, asset) in rollup.rolled_mints.iter().enumerate() {
+    for (nonce, asset) in batch_mint.batch_mints.iter().enumerate() {
         let metadata_args_hash = keccak::hashv(&[asset.mint_args.try_to_vec().unwrap().as_slice()]);
         let data_hash = keccak::hashv(&[
             &metadata_args_hash.to_bytes(),
@@ -308,7 +165,7 @@ fn generate_merkle_tree_from_rollup(rollup: &Rollup) -> ConcurrentMerkleTree<10,
                 .as_ref(),
         );
 
-        let id = mpl_bubblegum::utils::get_asset_id(&rollup.tree_id, nonce as u64);
+        let id = mpl_bubblegum::utils::get_asset_id(&batch_mint.tree_id, nonce as u64);
 
         let leaf = LeafSchema::V1 {
             id,
@@ -324,7 +181,7 @@ fn generate_merkle_tree_from_rollup(rollup: &Rollup) -> ConcurrentMerkleTree<10,
 }
 
 #[tokio::test]
-async fn save_rollup_to_queue_test() {
+async fn save_batch_mint_to_queue_test() {
     let cnt = 0;
     let cli = Cli::default();
     let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
@@ -341,7 +198,7 @@ async fn save_rollup_to_queue_test() {
     let metadata_hash = "hash".to_string();
 
     // arbitrary data
-    let rollup_instruction_data =
+    let batch_mint_instruction_data =
         mpl_bubblegum::instructions::FinalizeTreeWithRootInstructionArgs {
             root: [1; 32],
             rightmost_leaf: [1; 32],
@@ -353,7 +210,7 @@ async fn save_rollup_to_queue_test() {
     // took it from Bubblegum client
     // this value is generated by Anchor library, it's instruction identifier
     let mut instruction_data = vec![77, 73, 220, 153, 126, 225, 64, 204];
-    instruction_data.extend(rollup_instruction_data.try_to_vec().unwrap().iter());
+    instruction_data.extend(batch_mint_instruction_data.try_to_vec().unwrap().iter());
 
     let transaction = SanitizedTransaction::from_transaction_for_tests(Transaction {
         signatures: vec![Signature::new_unique()],
@@ -369,11 +226,14 @@ async fn save_rollup_to_queue_test() {
                 Pubkey::new_unique(),
                 Pubkey::new_unique(),
                 Pubkey::new_unique(),
+                Pubkey::new_unique(),
+                Pubkey::new_unique(),
+                Pubkey::new_unique(),
             ],
             recent_blockhash: [1; 32].into(),
             instructions: vec![CompiledInstruction {
                 program_id_index: 1,
-                accounts: vec![2, 3],
+                accounts: vec![2, 3, 4, 5, 6],
                 data: instruction_data,
             }],
         },
@@ -429,7 +289,7 @@ async fn save_rollup_to_queue_test() {
 }
 
 #[tokio::test]
-async fn rollup_with_verified_creators_test() {
+async fn batch_mint_with_verified_creators_test() {
     // For this test it's necessary to use Solana mainnet RPC
     let url = "https://api.mainnet-beta.solana.com".to_string();
     let solana_client = Arc::new(RpcClient::new_with_timeout(url, Duration::from_secs(3)));
@@ -438,9 +298,9 @@ async fn rollup_with_verified_creators_test() {
 
     // First we have to create offchain Merkle tree with SDK
 
-    let rollup_client = RollupClient::new(solana_client);
-    let mut rollup_builder = rollup_client
-        .create_rollup_builder(&tree_key)
+    let batch_mint_client = BatchMintClient::new(solana_client);
+    let mut batch_mint_builder = batch_mint_client
+        .create_batch_mint_builder(&tree_key)
         .await
         .unwrap();
 
@@ -467,7 +327,7 @@ async fn rollup_with_verified_creators_test() {
         }],
     };
 
-    let metadata_hash_arg = rollup_builder
+    let metadata_hash_arg = batch_mint_builder
         .add_asset(&owner.pubkey(), &delegate.pubkey(), &asset)
         .unwrap();
 
@@ -479,11 +339,11 @@ async fn rollup_with_verified_creators_test() {
     let mut message_and_signatures = HashMap::new();
     message_and_signatures.insert(metadata_hash_arg.get_nonce(), creators_signatures);
 
-    rollup_builder
+    batch_mint_builder
         .add_signatures_for_verified_creators(message_and_signatures)
         .unwrap();
 
-    let finalized_rollup = rollup_builder.build_rollup().unwrap();
+    let finalized_batch_mint = batch_mint_builder.build_batch_mint().unwrap();
 
     // Offchain Merkle tree creation is finished
     // Start to process it
@@ -494,13 +354,13 @@ async fn rollup_with_verified_creators_test() {
 
     let tmp_dir = tempfile::TempDir::new().unwrap();
 
-    // dump rollup into .json file not to cast one Rollup struct into another one
-    let tmp_file = File::create(tmp_dir.path().join("rollup-1.json")).unwrap();
-    serde_json::to_writer(tmp_file, &finalized_rollup).unwrap();
+    // dump batch_mint into .json file not to cast one BatchMint struct into another one
+    let tmp_file = File::create(tmp_dir.path().join("batch_mint-1.json")).unwrap();
+    serde_json::to_writer(tmp_file, &finalized_batch_mint).unwrap();
 
     let metadata_url = "url".to_string();
     let metadata_hash = "hash".to_string();
-    let rollup_to_verify = BatchMintToVerify {
+    let batch_mint_to_verify = BatchMintToVerify {
         file_hash: metadata_hash.clone(),
         url: metadata_url.clone(),
         created_at_slot: 10,
@@ -514,28 +374,29 @@ async fn rollup_with_verified_creators_test() {
     env.rocks_env
         .storage
         .batch_mint_to_verify
-        .put(metadata_hash.clone(), rollup_to_verify.clone())
+        .put(metadata_hash.clone(), batch_mint_to_verify.clone())
         .unwrap();
 
-    let mut mocked_downloader = MockRollupDownloader::new();
+    let mut mocked_downloader = MockBatchMintDownloader::new();
     mocked_downloader
-        .expect_download_rollup_and_check_checksum()
+        .expect_download_batch_mint_and_check_checksum()
         .with(
             predicate::eq("url".to_string()),
             predicate::eq("hash".to_string()),
         )
         .returning(move |_, _| {
-            let json_file = std::fs::read_to_string(tmp_dir.path().join("rollup-1.json")).unwrap();
+            let json_file =
+                std::fs::read_to_string(tmp_dir.path().join("batch_mint-1.json")).unwrap();
             Ok(Box::new(serde_json::from_str(&json_file).unwrap()))
         });
 
-    let rollup_persister = RollupPersister::new(
+    let batch_mint_persister = BatchMintPersister::new(
         env.rocks_env.storage.clone(),
         mocked_downloader,
         Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
-    let (rollup_to_verify, _) = env
+    let (batch_mint_to_verify, _) = env
         .rocks_env
         .storage
         .fetch_batch_mint_for_verifying()
@@ -543,8 +404,8 @@ async fn rollup_with_verified_creators_test() {
         .unwrap();
 
     let (_, rx) = broadcast::channel::<()>(1);
-    rollup_persister
-        .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
+    batch_mint_persister
+        .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
         .await;
 
     let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
@@ -568,7 +429,7 @@ async fn rollup_with_verified_creators_test() {
 }
 
 #[tokio::test]
-async fn rollup_with_unverified_creators_test() {
+async fn batch_mint_with_unverified_creators_test() {
     // For this test it's necessary to use Solana mainnet RPC
     let url = "https://api.mainnet-beta.solana.com".to_string();
     let solana_client = Arc::new(RpcClient::new_with_timeout(url, Duration::from_secs(3)));
@@ -577,9 +438,9 @@ async fn rollup_with_unverified_creators_test() {
 
     // First we have to create offchain Merkle tree with SDK
 
-    let rollup_client = RollupClient::new(solana_client);
-    let mut rollup_builder = rollup_client
-        .create_rollup_builder(&tree_key)
+    let batch_mint_client = BatchMintClient::new(solana_client);
+    let mut batch_mint_builder = batch_mint_client
+        .create_batch_mint_builder(&tree_key)
         .await
         .unwrap();
 
@@ -606,7 +467,7 @@ async fn rollup_with_unverified_creators_test() {
         }],
     };
 
-    let metadata_hash_arg = rollup_builder
+    let metadata_hash_arg = batch_mint_builder
         .add_asset(&owner.pubkey(), &delegate.pubkey(), &asset)
         .unwrap();
 
@@ -618,13 +479,13 @@ async fn rollup_with_unverified_creators_test() {
     let mut message_and_signatures = HashMap::new();
     message_and_signatures.insert(metadata_hash_arg.get_nonce(), creators_signatures);
 
-    rollup_builder
+    batch_mint_builder
         .add_signatures_for_verified_creators(message_and_signatures)
         .unwrap();
 
-    let mut finalized_rollup = rollup_builder.build_rollup().unwrap();
-    // drop signature from the rollup to test if verification on indexer side will catch it
-    for mint in finalized_rollup.rolled_mints.iter_mut() {
+    let mut finalized_batch_mint = batch_mint_builder.build_batch_mint().unwrap();
+    // drop signature from the batch_mint to test if verification on indexer side will catch it
+    for mint in finalized_batch_mint.batch_mints.iter_mut() {
         mint.creator_signature = None;
     }
 
@@ -637,13 +498,13 @@ async fn rollup_with_unverified_creators_test() {
 
     let tmp_dir = tempfile::TempDir::new().unwrap();
 
-    // dump rollup into .json file not to cast one Rollup struct into another one
-    let tmp_file = File::create(tmp_dir.path().join("rollup-1.json")).unwrap();
-    serde_json::to_writer(tmp_file, &finalized_rollup).unwrap();
+    // dump batch_mint into .json file not to cast one BatchMint struct into another one
+    let tmp_file = File::create(tmp_dir.path().join("batch_mint-1.json")).unwrap();
+    serde_json::to_writer(tmp_file, &finalized_batch_mint).unwrap();
 
     let metadata_url = "url".to_string();
     let metadata_hash = "hash".to_string();
-    let rollup_to_verify = BatchMintToVerify {
+    let batch_mint_to_verify = BatchMintToVerify {
         file_hash: metadata_hash.clone(),
         url: metadata_url.clone(),
         created_at_slot: 10,
@@ -657,28 +518,29 @@ async fn rollup_with_unverified_creators_test() {
     env.rocks_env
         .storage
         .batch_mint_to_verify
-        .put(metadata_hash.clone(), rollup_to_verify.clone())
+        .put(metadata_hash.clone(), batch_mint_to_verify.clone())
         .unwrap();
 
-    let mut mocked_downloader = MockRollupDownloader::new();
+    let mut mocked_downloader = MockBatchMintDownloader::new();
     mocked_downloader
-        .expect_download_rollup_and_check_checksum()
+        .expect_download_batch_mint_and_check_checksum()
         .with(
             predicate::eq("url".to_string()),
             predicate::eq("hash".to_string()),
         )
         .returning(move |_, _| {
-            let json_file = std::fs::read_to_string(tmp_dir.path().join("rollup-1.json")).unwrap();
+            let json_file =
+                std::fs::read_to_string(tmp_dir.path().join("batch_mint-1.json")).unwrap();
             Ok(Box::new(serde_json::from_str(&json_file).unwrap()))
         });
 
-    let rollup_persister = RollupPersister::new(
+    let batch_mint_persister = BatchMintPersister::new(
         env.rocks_env.storage.clone(),
         mocked_downloader,
         Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
-    let (rollup_to_verify, _) = env
+    let (batch_mint_to_verify, _) = env
         .rocks_env
         .storage
         .fetch_batch_mint_for_verifying()
@@ -686,8 +548,8 @@ async fn rollup_with_unverified_creators_test() {
         .unwrap();
 
     let (_, rx) = broadcast::channel::<()>(1);
-    rollup_persister
-        .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
+    batch_mint_persister
+        .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
         .await;
 
     let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
@@ -705,7 +567,7 @@ async fn rollup_with_unverified_creators_test() {
         id: metadata_hash_arg.get_asset_id().to_string(),
     };
 
-    // rollup update should not be processed
+    // batch_mint update should not be processed
     // and as a result proof for asset cannot be extracted
     match api.get_asset_proof(payload).await {
         Ok(_) => panic!("Request should fail"),
@@ -717,21 +579,21 @@ async fn rollup_with_unverified_creators_test() {
 }
 
 #[tokio::test]
-async fn rollup_persister_test() {
+async fn batch_mint_persister_test() {
     let cnt = 0;
     let cli = Cli::default();
     let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
 
-    let test_rollup = generate_rollup(10);
+    let test_batch_mint = generate_batch_mint(10);
 
     let tmp_dir = tempfile::TempDir::new().unwrap();
 
-    let tmp_file = File::create(tmp_dir.path().join("rollup-10.json")).unwrap();
-    serde_json::to_writer(tmp_file, &test_rollup).unwrap();
+    let tmp_file = File::create(tmp_dir.path().join("batch_mint-10.json")).unwrap();
+    serde_json::to_writer(tmp_file, &test_batch_mint).unwrap();
 
     let metadata_url = "url".to_string();
     let metadata_hash = "hash".to_string();
-    let rollup_to_verify = BatchMintToVerify {
+    let batch_mint_to_verify = BatchMintToVerify {
         file_hash: metadata_hash.clone(),
         url: metadata_url.clone(),
         created_at_slot: 10,
@@ -745,24 +607,25 @@ async fn rollup_persister_test() {
     env.rocks_env
         .storage
         .batch_mint_to_verify
-        .put(metadata_hash.clone(), rollup_to_verify.clone())
+        .put(metadata_hash.clone(), batch_mint_to_verify.clone())
         .unwrap();
 
-    let mut mocked_downloader = MockRollupDownloader::new();
+    let mut mocked_downloader = MockBatchMintDownloader::new();
     mocked_downloader
-        .expect_download_rollup_and_check_checksum()
+        .expect_download_batch_mint_and_check_checksum()
         .returning(move |_, _| {
-            let json_file = std::fs::read_to_string(tmp_dir.path().join("rollup-10.json")).unwrap();
+            let json_file =
+                std::fs::read_to_string(tmp_dir.path().join("batch_mint-10.json")).unwrap();
             Ok(Box::new(serde_json::from_str(&json_file).unwrap()))
         });
 
-    let rollup_persister = RollupPersister::new(
+    let batch_mint_persister = BatchMintPersister::new(
         env.rocks_env.storage.clone(),
         mocked_downloader,
         Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
-    let (rollup_to_verify, _) = env
+    let (batch_mint_to_verify, _) = env
         .rocks_env
         .storage
         .fetch_batch_mint_for_verifying()
@@ -770,11 +633,11 @@ async fn rollup_persister_test() {
         .unwrap();
 
     let (_, rx) = broadcast::channel::<()>(1);
-    rollup_persister
-        .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
+    batch_mint_persister
+        .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
         .await;
 
-    let merkle_tree = generate_merkle_tree_from_rollup(&test_rollup);
+    let merkle_tree = generate_merkle_tree_from_batch_mint(&test_batch_mint);
 
     let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
         env.pg_env.client.clone(),
@@ -790,8 +653,8 @@ async fn rollup_persister_test() {
     let leaf_index = 4u32;
 
     let payload = GetAssetProof {
-        id: test_rollup
-            .rolled_mints
+        id: test_batch_mint
+            .batch_mints
             .get(leaf_index as usize)
             .unwrap()
             .leaf_update
@@ -850,23 +713,23 @@ async fn rollup_persister_test() {
 }
 
 #[tokio::test]
-async fn rollup_persister_download_fail_test() {
+async fn batch_mint_persister_download_fail_test() {
     let cnt = 0;
     let cli = Cli::default();
     let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
 
-    let test_rollup = generate_rollup(10);
+    let test_batch_mint = generate_batch_mint(10);
 
     let tmp_dir = tempfile::TempDir::new().unwrap();
 
-    let tmp_file = File::create(tmp_dir.path().join("rollup-10.json")).unwrap();
-    serde_json::to_writer(tmp_file, &test_rollup).unwrap();
+    let tmp_file = File::create(tmp_dir.path().join("batch_mint-10.json")).unwrap();
+    serde_json::to_writer(tmp_file, &test_batch_mint).unwrap();
 
     let download_attempts = 0;
 
     let metadata_url = "url".to_string();
     let metadata_hash = "hash".to_string();
-    let rollup_to_verify = BatchMintToVerify {
+    let batch_mint_to_verify = BatchMintToVerify {
         file_hash: metadata_hash.clone(),
         url: metadata_url.clone(),
         created_at_slot: 10,
@@ -880,21 +743,21 @@ async fn rollup_persister_download_fail_test() {
     env.rocks_env
         .storage
         .batch_mint_to_verify
-        .put(metadata_hash.clone(), rollup_to_verify.clone())
+        .put(metadata_hash.clone(), batch_mint_to_verify.clone())
         .unwrap();
 
-    let mut mocked_downloader = MockRollupDownloader::new();
+    let mut mocked_downloader = MockBatchMintDownloader::new();
     mocked_downloader
-        .expect_download_rollup_and_check_checksum()
+        .expect_download_batch_mint_and_check_checksum()
         .returning(move |_, _| Err(UsecaseError::Reqwest("Could not download file".to_string())));
 
-    let rollup_persister = RollupPersister::new(
+    let batch_mint_persister = BatchMintPersister::new(
         env.rocks_env.storage.clone(),
         mocked_downloader,
         Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
-    let (rollup_to_verify, _) = env
+    let (batch_mint_to_verify, _) = env
         .rocks_env
         .storage
         .fetch_batch_mint_for_verifying()
@@ -902,8 +765,8 @@ async fn rollup_persister_download_fail_test() {
         .unwrap();
 
     let (_, rx) = broadcast::channel::<()>(1);
-    rollup_persister
-        .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
+    batch_mint_persister
+        .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
         .await;
 
     let r = env
@@ -917,23 +780,23 @@ async fn rollup_persister_download_fail_test() {
 }
 
 #[tokio::test]
-async fn rollup_persister_drop_from_queue_after_download_fail_test() {
+async fn batch_mint_persister_drop_from_queue_after_download_fail_test() {
     let cnt = 0;
     let cli = Cli::default();
     let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
 
-    let test_rollup = generate_rollup(10);
+    let test_batch_mint = generate_batch_mint(10);
 
     let tmp_dir = tempfile::TempDir::new().unwrap();
 
-    let tmp_file = File::create(tmp_dir.path().join("rollup-10.json")).unwrap();
-    serde_json::to_writer(tmp_file, &test_rollup).unwrap();
+    let tmp_file = File::create(tmp_dir.path().join("batch_mint-10.json")).unwrap();
+    serde_json::to_writer(tmp_file, &test_batch_mint).unwrap();
 
-    let download_attempts = MAX_ROLLUP_DOWNLOAD_ATTEMPTS;
+    let download_attempts = MAX_BATCH_MINT_DOWNLOAD_ATTEMPTS;
 
     let metadata_url = "url".to_string();
     let metadata_hash = "hash".to_string();
-    let rollup_to_verify = BatchMintToVerify {
+    let batch_mint_to_verify = BatchMintToVerify {
         file_hash: metadata_hash.clone(),
         url: metadata_url.clone(),
         created_at_slot: 10,
@@ -947,21 +810,21 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
     env.rocks_env
         .storage
         .batch_mint_to_verify
-        .put(metadata_hash.clone(), rollup_to_verify.clone())
+        .put(metadata_hash.clone(), batch_mint_to_verify.clone())
         .unwrap();
 
-    let mut mocked_downloader = MockRollupDownloader::new();
+    let mut mocked_downloader = MockBatchMintDownloader::new();
     mocked_downloader
-        .expect_download_rollup_and_check_checksum()
+        .expect_download_batch_mint_and_check_checksum()
         .returning(move |_, _| Err(UsecaseError::Reqwest("Could not download file".to_string())));
 
-    let rollup_persister = RollupPersister::new(
+    let batch_mint_persister = BatchMintPersister::new(
         env.rocks_env.storage.clone(),
         mocked_downloader,
         Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
-    let (rollup_to_verify, _) = env
+    let (batch_mint_to_verify, _) = env
         .rocks_env
         .storage
         .fetch_batch_mint_for_verifying()
@@ -969,8 +832,8 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
         .unwrap();
 
     let (_, rx) = broadcast::channel::<()>(1);
-    rollup_persister
-        .persist_rollup(&rx, rollup_to_verify.unwrap(), None)
+    batch_mint_persister
+        .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
         .await;
 
     let r = env
@@ -986,7 +849,7 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
         status: FailedBatchMintState::DownloadFailed,
         hash: metadata_hash.clone(),
     };
-    let failed_rollup = env
+    let failed_batch_mint = env
         .rocks_env
         .storage
         .failed_batch_mints
@@ -994,8 +857,8 @@ async fn rollup_persister_drop_from_queue_after_download_fail_test() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(failed_rollup.file_hash, metadata_hash.clone());
-    assert_eq!(failed_rollup.download_attempts, download_attempts + 1);
+    assert_eq!(failed_batch_mint.file_hash, metadata_hash.clone());
+    assert_eq!(failed_batch_mint.download_attempts, download_attempts + 1);
 }
 
 #[tokio::test]
@@ -1009,290 +872,27 @@ async fn xxhash_test() {
     assert_eq!(&hash_hex, "4f299160368d57dccbb6deec075d5083");
 }
 
-async fn save_temp_rollup(dir: &TempDir, client: Arc<PgClient>, rollup: &Rollup) -> String {
+async fn save_temp_batch_mint(
+    dir: &TempDir,
+    client: Arc<PgClient>,
+    batch_mint: &BatchMint,
+) -> String {
     let file_name = format!("{}.json", Uuid::new_v4());
     let full_file_path = format!("{}/{}", dir.path().to_str().unwrap(), &file_name);
     let mut file = tokio::fs::File::create(full_file_path).await.unwrap();
-    file.write_all(json!(rollup).to_string().as_bytes())
+    file.write_all(json!(batch_mint).to_string().as_bytes())
         .await
         .unwrap();
-    client.insert_new_rollup(&file_name).await.unwrap();
+    client.insert_new_batch_mint(&file_name).await.unwrap();
     file_name
 }
 
 #[tokio::test]
-async fn rollup_processing_validation_test() {
+async fn batch_mint_upload_test() {
     let cnt = 0;
     let cli = Cli::default();
     let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-    let mut rollup = generate_rollup(1000);
-    let mut permanent_storage_client = MockPermanentStorageClient::new();
-    permanent_storage_client
-        .expect_upload_file()
-        .returning(|_, _| Box::pin(async { Ok(("tx_id".to_string(), 100u64)) }));
-    permanent_storage_client
-        .expect_get_metadata_url()
-        .returning(|_| "".to_string());
-    let dir = TempDir::new().unwrap();
-    let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
-
-    let rollup_processor = BatchMintProcessor::new(
-        env.pg_env.client.clone(),
-        env.rocks_env.storage.clone(),
-        Arc::new(nft_ingester::batch_mint::batch_mint_processor::NoopBatchMintTxSender {}),
-        Arc::new(permanent_storage_client),
-        dir.path().to_str().unwrap().to_string(),
-        Arc::new(BatchMintProcessorMetricsConfig::new()),
-    );
-    let (_, shutdown_rx) = broadcast::channel::<()>(1);
-    let processing_result = rollup_processor
-        .process_rollup(
-            shutdown_rx.resubscribe(),
-            BatchMintWithState {
-                file_name,
-                state: BatchMintState::Uploaded,
-                error: None,
-                url: None,
-                created_at: 0,
-            },
-        )
-        .await;
-    assert_eq!(processing_result, Ok(()));
-
-    let old_root = rollup.merkle_root;
-    let new_root = Pubkey::new_unique();
-    rollup.merkle_root = new_root.to_bytes();
-    let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
-
-    let processing_result = rollup_processor
-        .process_rollup(
-            shutdown_rx.resubscribe(),
-            BatchMintWithState {
-                file_name,
-                state: BatchMintState::Uploaded,
-                error: None,
-                url: None,
-                created_at: 0,
-            },
-        )
-        .await;
-    assert_eq!(
-        processing_result,
-        Err(IngesterError::RollupValidation(
-            RollupValidationError::InvalidRoot(
-                Pubkey::from(old_root).to_string(),
-                new_root.to_string()
-            )
-        ))
-    );
-
-    rollup.merkle_root = old_root;
-    let leaf_idx = 111;
-    let old_leaf_data_hash = rollup.rolled_mints[leaf_idx].leaf_update.data_hash();
-    let new_leaf_data_hash = Pubkey::new_unique();
-    rollup.rolled_mints[leaf_idx].leaf_update = LeafSchema::V1 {
-        id: rollup.rolled_mints[leaf_idx].leaf_update.id(),
-        owner: rollup.rolled_mints[leaf_idx].leaf_update.owner(),
-        delegate: rollup.rolled_mints[leaf_idx].leaf_update.delegate(),
-        nonce: rollup.rolled_mints[leaf_idx].leaf_update.nonce(),
-        data_hash: new_leaf_data_hash.to_bytes(),
-        creator_hash: rollup.rolled_mints[leaf_idx].leaf_update.creator_hash(),
-    };
-    let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
-
-    let processing_result = rollup_processor
-        .process_rollup(
-            shutdown_rx.resubscribe(),
-            BatchMintWithState {
-                file_name,
-                state: BatchMintState::Uploaded,
-                error: None,
-                url: None,
-                created_at: 0,
-            },
-        )
-        .await;
-    assert_eq!(
-        processing_result,
-        Err(IngesterError::RollupValidation(
-            RollupValidationError::InvalidDataHash(
-                Pubkey::from(old_leaf_data_hash).to_string(),
-                new_leaf_data_hash.to_string()
-            )
-        ))
-    );
-
-    rollup.rolled_mints[leaf_idx].leaf_update = LeafSchema::V1 {
-        id: rollup.rolled_mints[leaf_idx].leaf_update.id(),
-        owner: rollup.rolled_mints[leaf_idx].leaf_update.owner(),
-        delegate: rollup.rolled_mints[leaf_idx].leaf_update.delegate(),
-        nonce: rollup.rolled_mints[leaf_idx].leaf_update.nonce(),
-        data_hash: old_leaf_data_hash,
-        creator_hash: rollup.rolled_mints[leaf_idx].leaf_update.creator_hash(),
-    };
-    let old_tree_depth = rollup.max_depth;
-    let new_tree_depth = 100;
-    rollup.max_depth = new_tree_depth;
-    let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
-
-    let processing_result = rollup_processor
-        .process_rollup(
-            shutdown_rx.resubscribe(),
-            BatchMintWithState {
-                file_name,
-                state: BatchMintState::Uploaded,
-                error: None,
-                url: None,
-                created_at: 0,
-            },
-        )
-        .await;
-    assert_eq!(
-        processing_result,
-        Err(IngesterError::RollupValidation(
-            RollupValidationError::CannotCreateMerkleTree(new_tree_depth, rollup.max_buffer_size)
-        ))
-    );
-
-    rollup.max_depth = old_tree_depth;
-    let new_asset_id = Pubkey::new_unique();
-    let old_asset_id = rollup.rolled_mints[leaf_idx].leaf_update.id();
-    rollup.rolled_mints[leaf_idx].leaf_update = LeafSchema::V1 {
-        id: new_asset_id,
-        owner: rollup.rolled_mints[leaf_idx].leaf_update.owner(),
-        delegate: rollup.rolled_mints[leaf_idx].leaf_update.delegate(),
-        nonce: rollup.rolled_mints[leaf_idx].leaf_update.nonce(),
-        data_hash: rollup.rolled_mints[leaf_idx].leaf_update.data_hash(),
-        creator_hash: rollup.rolled_mints[leaf_idx].leaf_update.creator_hash(),
-    };
-    let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
-
-    let processing_result = rollup_processor
-        .process_rollup(
-            shutdown_rx.resubscribe(),
-            BatchMintWithState {
-                file_name,
-                state: BatchMintState::Uploaded,
-                error: None,
-                url: None,
-                created_at: 0,
-            },
-        )
-        .await;
-    assert_eq!(
-        processing_result,
-        Err(IngesterError::RollupValidation(
-            RollupValidationError::PDACheckFail(old_asset_id.to_string(), new_asset_id.to_string())
-        ))
-    );
-
-    rollup.rolled_mints[leaf_idx].leaf_update = LeafSchema::V1 {
-        id: old_asset_id,
-        owner: rollup.rolled_mints[leaf_idx].leaf_update.owner(),
-        delegate: rollup.rolled_mints[leaf_idx].leaf_update.delegate(),
-        nonce: rollup.rolled_mints[leaf_idx].leaf_update.nonce(),
-        data_hash: rollup.rolled_mints[leaf_idx].leaf_update.data_hash(),
-        creator_hash: rollup.rolled_mints[leaf_idx].leaf_update.creator_hash(),
-    };
-    let old_path = rollup.rolled_mints[leaf_idx]
-        .tree_update
-        .path
-        .iter()
-        .map(|path| PathNode {
-            node: path.node,
-            index: path.index,
-        })
-        .collect::<Vec<_>>();
-    let new_path = Vec::new();
-    rollup.rolled_mints[leaf_idx].tree_update.path = new_path;
-    let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
-
-    let processing_result = rollup_processor
-        .process_rollup(
-            shutdown_rx.resubscribe(),
-            BatchMintWithState {
-                file_name,
-                state: BatchMintState::Uploaded,
-                error: None,
-                url: None,
-                created_at: 0,
-            },
-        )
-        .await;
-    assert_eq!(
-        processing_result,
-        Err(IngesterError::RollupValidation(
-            RollupValidationError::WrongAssetPath(
-                rollup.rolled_mints[leaf_idx].leaf_update.id().to_string()
-            )
-        ))
-    );
-
-    rollup.rolled_mints[leaf_idx].tree_update.path = old_path;
-    let old_tree_id = rollup.rolled_mints[leaf_idx].tree_update.id;
-    let new_tree_id = Pubkey::new_unique();
-    rollup.rolled_mints[leaf_idx].tree_update.id = new_tree_id;
-    let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
-
-    let processing_result = rollup_processor
-        .process_rollup(
-            shutdown_rx.resubscribe(),
-            BatchMintWithState {
-                file_name,
-                state: BatchMintState::Uploaded,
-                error: None,
-                url: None,
-                created_at: 0,
-            },
-        )
-        .await;
-    assert_eq!(
-        processing_result,
-        Err(IngesterError::RollupValidation(
-            RollupValidationError::WrongTreeIdForChangeLog(
-                rollup.rolled_mints[leaf_idx].leaf_update.id().to_string(),
-                old_tree_id.to_string(),
-                new_tree_id.to_string()
-            )
-        ))
-    );
-
-    rollup.rolled_mints[leaf_idx].tree_update.id = old_tree_id;
-    let old_index = rollup.rolled_mints[leaf_idx].tree_update.index;
-    let new_index = 1;
-    rollup.rolled_mints[leaf_idx].tree_update.index = new_index;
-    let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
-
-    let processing_result = rollup_processor
-        .process_rollup(
-            shutdown_rx.resubscribe(),
-            BatchMintWithState {
-                file_name,
-                state: BatchMintState::Uploaded,
-                error: None,
-                url: None,
-                created_at: 0,
-            },
-        )
-        .await;
-    assert_eq!(
-        processing_result,
-        Err(IngesterError::RollupValidation(
-            RollupValidationError::WrongChangeLogIndex(
-                rollup.rolled_mints[leaf_idx].leaf_update.id().to_string(),
-                old_index,
-                new_index
-            )
-        ))
-    );
-}
-
-#[tokio::test]
-async fn rollup_upload_test() {
-    let cnt = 0;
-    let cli = Cli::default();
-    let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-    let rollup = generate_rollup(1000);
+    let batch_mint = generate_batch_mint(1000);
     let mut permanent_storage_client = MockPermanentStorageClient::new();
     permanent_storage_client
         .expect_upload_file()
@@ -1308,8 +908,8 @@ async fn rollup_upload_test() {
         .expect_get_metadata_url()
         .returning(|_| "".to_string());
     let dir = TempDir::new().unwrap();
-    let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
-    let rollup_processor = BatchMintProcessor::new(
+    let file_name = save_temp_batch_mint(&dir, env.pg_env.client.clone(), &batch_mint).await;
+    let batch_mint_processor = BatchMintProcessor::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
         Arc::new(nft_ingester::batch_mint::batch_mint_processor::NoopBatchMintTxSender {}),
@@ -1319,8 +919,8 @@ async fn rollup_upload_test() {
     );
 
     let (_, shutdown_rx) = broadcast::channel::<()>(1);
-    let processing_result = rollup_processor
-        .process_rollup(
+    let processing_result = batch_mint_processor
+        .process_batch_mint(
             shutdown_rx.resubscribe(),
             BatchMintWithState {
                 file_name,
@@ -1343,7 +943,7 @@ async fn rollup_upload_test() {
     permanent_storage_client
         .expect_get_metadata_url()
         .returning(|_| "".to_string());
-    let rollup_processor = BatchMintProcessor::new(
+    let batch_mint_processor = BatchMintProcessor::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
         Arc::new(nft_ingester::batch_mint::batch_mint_processor::NoopBatchMintTxSender {}),
@@ -1352,9 +952,9 @@ async fn rollup_upload_test() {
         Arc::new(BatchMintProcessorMetricsConfig::new()),
     );
 
-    let file_name = save_temp_rollup(&dir, env.pg_env.client.clone(), &rollup).await;
-    let processing_result = rollup_processor
-        .process_rollup(
+    let file_name = save_temp_batch_mint(&dir, env.pg_env.client.clone(), &batch_mint).await;
+    let processing_result = batch_mint_processor
+        .process_batch_mint(
             shutdown_rx.resubscribe(),
             BatchMintWithState {
                 file_name,
