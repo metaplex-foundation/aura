@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use entities::api_req_params::Options;
 use solana_sdk::{bs58, pubkey::Pubkey};
-use sqlx::{Postgres, QueryBuilder};
+use sqlx::{Postgres, QueryBuilder, Row};
 
 use crate::{
     error::IndexDbError,
@@ -13,7 +13,7 @@ use crate::{
         SearchAssetsFilter,
     },
     storage_traits::AssetPubkeyFilteredFetcher,
-    PgClient, SELECT_ACTION, SQL_COMPONENT,
+    PgClient, COUNT_ACTION, SELECT_ACTION, SQL_COMPONENT,
 };
 
 #[derive(sqlx::FromRow, Debug)]
@@ -33,139 +33,12 @@ impl PgClient {
         after: Option<String>,
         options: &'a Options,
     ) -> Result<(QueryBuilder<'a, Postgres>, bool), IndexDbError> {
-        // todo: remove the inner join with tasks and only perform it if the metadata_url_id is present in the filter
         let mut query_builder = QueryBuilder::new(
             "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 ",
         );
-        let mut group_clause_required = false;
-
-        if filter.creator_address.is_some()
-            || filter.creator_verified.is_some()
-            || filter.royalty_target.is_some()
-        {
-            query_builder.push(" INNER JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey ");
-            group_clause_required = true;
-        }
-        if filter.json_uri.is_some() {
-            query_builder.push(" INNER JOIN tasks ON ast_metadata_url_id = tsk_id ");
-            group_clause_required = true;
-        }
-        if filter.authority_address.is_some() {
-            query_builder.push(" INNER JOIN assets_authorities ON assets_v3.ast_authority_fk = assets_authorities.auth_pubkey ");
-            group_clause_required = true;
-        }
-
-        // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
-        query_builder.push(" WHERE TRUE ");
-        if let Some(spec_version) = &filter.specification_version {
-            query_builder.push(" AND assets_v3.ast_specification_version = ");
-            query_builder.push_bind(spec_version);
-        }
-
-        if let Some(asset_class) = &filter.specification_asset_class {
-            query_builder.push(" AND assets_v3.ast_specification_asset_class = ");
-            query_builder.push_bind(asset_class);
-        }
-
-        if let Some(owner_address) = &filter.owner_address {
-            query_builder.push(" AND assets_v3.ast_owner = ");
-            query_builder.push_bind(owner_address);
-        }
-
-        if let Some(owner_type) = &filter.owner_type {
-            query_builder.push(" AND assets_v3.ast_owner_type = ");
-            query_builder.push_bind(owner_type);
-        }
-
-        if let Some(creator_address) = &filter.creator_address {
-            query_builder.push(" AND asset_creators_v3.asc_creator = ");
-            query_builder.push_bind(creator_address);
-        }
-
-        if let Some(creator_verified) = filter.creator_verified {
-            query_builder.push(" AND asset_creators_v3.asc_verified = ");
-            query_builder.push_bind(creator_verified);
-        }
-
-        if let Some(authority) = &filter.authority_address {
-            query_builder.push(" AND assets_authorities.auth_authority = ");
-            query_builder.push_bind(authority);
-        }
-        if let Some(collection) = &filter.collection {
-            query_builder.push(" AND assets_v3.ast_collection = ");
-            query_builder.push_bind(collection);
-        }
-
-        if !options.show_unverified_collections {
-            query_builder.push(" AND assets_v3.ast_is_collection_verified = true");
-        }
-
-        if let Some(delegate) = &filter.delegate {
-            query_builder.push(" AND assets_v3.ast_delegate = ");
-            query_builder.push_bind(delegate);
-        }
-
-        if let Some(frozen) = filter.frozen {
-            query_builder.push(" AND assets_v3.ast_is_frozen = ");
-            query_builder.push_bind(frozen);
-        }
-
-        if let Some(supply) = &filter.supply {
-            match supply {
-                AssetSupply::Equal(s) => {
-                    query_builder.push(" AND assets_v3.ast_supply = ");
-                    query_builder.push_bind(*s as i64);
-                }
-                AssetSupply::Greater(s) => {
-                    query_builder.push(" AND assets_v3.ast_supply > ");
-                    query_builder.push_bind(*s as i64);
-                }
-            }
-        }
-
-        // supply_mint is identical to pubkey
-        if let Some(supply_mint) = &filter.supply_mint {
-            query_builder.push(" AND assets_v3.ast_pubkey = ");
-            query_builder.push_bind(supply_mint);
-        }
-
-        if let Some(compressed) = filter.compressed {
-            query_builder.push(" AND assets_v3.ast_is_compressed = ");
-            query_builder.push_bind(compressed);
-        }
-
-        if let Some(compressible) = filter.compressible {
-            query_builder.push(" AND assets_v3.ast_is_compressible = ");
-            query_builder.push_bind(compressible);
-        }
-
-        if let Some(royalty_target_type) = &filter.royalty_target_type {
-            query_builder.push(" AND assets_v3.ast_royalty_target_type = ");
-            query_builder.push_bind(royalty_target_type);
-        }
-
-        if let Some(royalty_target) = &filter.royalty_target {
-            query_builder.push(" AND asset_creators_v3.asc_creator = ");
-            query_builder.push_bind(royalty_target);
-        }
-
-        if let Some(royalty_amount) = filter.royalty_amount {
-            query_builder.push(" AND assets_v3.ast_royalty_amount = ");
-            query_builder.push_bind(royalty_amount as i64);
-        }
-
-        if let Some(burnt) = filter.burnt {
-            query_builder.push(" AND assets_v3.ast_is_burnt = ");
-            query_builder.push_bind(burnt);
-        }
-
-        if let Some(json_uri) = &filter.json_uri {
-            query_builder.push(" AND tsk_metadata_url = ");
-            query_builder.push_bind(json_uri);
-        }
+        let group_clause_required = add_filter_clause(&mut query_builder, filter, options);
 
         let order_reversed = before.is_some() && after.is_none();
-
         match &order.sort_by {
             AssetSortBy::SlotCreated | AssetSortBy::SlotUpdated => {
                 if let Some(before) = before {
@@ -226,12 +99,10 @@ impl PgClient {
                 }
             }
         }
-
         // Add GROUP BY clause if necessary
         if group_clause_required {
             query_builder.push(" GROUP BY assets_v3.ast_pubkey, assets_v3.ast_slot_created, assets_v3.ast_slot_updated ");
         }
-
         // Add ORDER BY clause
         let direction = match (&order.sort_direction, order_reversed) {
             (AssetSortDirection::Asc, true) | (AssetSortDirection::Desc, false) => " DESC ",
@@ -257,6 +128,156 @@ impl PgClient {
         }
         Ok((query_builder, order_reversed))
     }
+
+    pub fn build_grand_total_query<'a>(
+        filter: &'a SearchAssetsFilter,
+        options: &'a Options,
+    ) -> Result<QueryBuilder<'a, Postgres>, IndexDbError> {
+        let mut query_builder = QueryBuilder::new("SELECT count(*) FROM assets_v3 ");
+        let group_clause_required = add_filter_clause(&mut query_builder, filter, options);
+        // Add GROUP BY clause if necessary
+        if group_clause_required {
+            query_builder.push(" GROUP BY assets_v3.ast_pubkey, assets_v3.ast_slot_created, assets_v3.ast_slot_updated ");
+        }
+        query_builder.push(";");
+
+        Ok(query_builder)
+    }
+}
+
+fn add_filter_clause<'a, 'b>(
+    query_builder: &'b mut QueryBuilder<'a, Postgres>,
+    filter: &'a SearchAssetsFilter,
+    options: &'a Options,
+) -> bool {
+    // todo: remove the inner join with tasks and only perform it if the metadata_url_id is present in the filter
+    let mut group_clause_required = false;
+
+    if filter.creator_address.is_some()
+        || filter.creator_verified.is_some()
+        || filter.royalty_target.is_some()
+    {
+        query_builder.push(" INNER JOIN asset_creators_v3 ON ast_pubkey = asc_pubkey ");
+        group_clause_required = true;
+    }
+    if filter.json_uri.is_some() {
+        query_builder.push(" INNER JOIN tasks ON ast_metadata_url_id = tsk_id ");
+        group_clause_required = true;
+    }
+    if filter.authority_address.is_some() {
+        query_builder.push(" INNER JOIN assets_authorities ON assets_v3.ast_authority_fk = assets_authorities.auth_pubkey ");
+        group_clause_required = true;
+    }
+
+    // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
+    query_builder.push(" WHERE TRUE ");
+    if let Some(spec_version) = &filter.specification_version {
+        query_builder.push(" AND assets_v3.ast_specification_version = ");
+        query_builder.push_bind(spec_version);
+    }
+
+    if let Some(asset_class) = &filter.specification_asset_class {
+        query_builder.push(" AND assets_v3.ast_specification_asset_class = ");
+        query_builder.push_bind(asset_class);
+    }
+
+    if let Some(owner_address) = &filter.owner_address {
+        query_builder.push(" AND assets_v3.ast_owner = ");
+        query_builder.push_bind(owner_address);
+    }
+
+    if let Some(owner_type) = &filter.owner_type {
+        query_builder.push(" AND assets_v3.ast_owner_type = ");
+        query_builder.push_bind(owner_type);
+    }
+
+    if let Some(creator_address) = &filter.creator_address {
+        query_builder.push(" AND asset_creators_v3.asc_creator = ");
+        query_builder.push_bind(creator_address);
+    }
+
+    if let Some(creator_verified) = filter.creator_verified {
+        query_builder.push(" AND asset_creators_v3.asc_verified = ");
+        query_builder.push_bind(creator_verified);
+    }
+
+    if let Some(authority) = &filter.authority_address {
+        query_builder.push(" AND assets_authorities.auth_authority = ");
+        query_builder.push_bind(authority);
+    }
+    if let Some(collection) = &filter.collection {
+        query_builder.push(" AND assets_v3.ast_collection = ");
+        query_builder.push_bind(collection);
+    }
+
+    if !options.show_unverified_collections {
+        query_builder.push(" AND assets_v3.ast_is_collection_verified = true");
+    }
+
+    if let Some(delegate) = &filter.delegate {
+        query_builder.push(" AND assets_v3.ast_delegate = ");
+        query_builder.push_bind(delegate);
+    }
+
+    if let Some(frozen) = filter.frozen {
+        query_builder.push(" AND assets_v3.ast_is_frozen = ");
+        query_builder.push_bind(frozen);
+    }
+
+    if let Some(supply) = &filter.supply {
+        match supply {
+            AssetSupply::Equal(s) => {
+                query_builder.push(" AND assets_v3.ast_supply = ");
+                query_builder.push_bind(*s as i64);
+            }
+            AssetSupply::Greater(s) => {
+                query_builder.push(" AND assets_v3.ast_supply > ");
+                query_builder.push_bind(*s as i64);
+            }
+        }
+    }
+
+    // supply_mint is identical to pubkey
+    if let Some(supply_mint) = &filter.supply_mint {
+        query_builder.push(" AND assets_v3.ast_pubkey = ");
+        query_builder.push_bind(supply_mint);
+    }
+
+    if let Some(compressed) = filter.compressed {
+        query_builder.push(" AND assets_v3.ast_is_compressed = ");
+        query_builder.push_bind(compressed);
+    }
+
+    if let Some(compressible) = filter.compressible {
+        query_builder.push(" AND assets_v3.ast_is_compressible = ");
+        query_builder.push_bind(compressible);
+    }
+
+    if let Some(royalty_target_type) = &filter.royalty_target_type {
+        query_builder.push(" AND assets_v3.ast_royalty_target_type = ");
+        query_builder.push_bind(royalty_target_type);
+    }
+
+    if let Some(royalty_target) = &filter.royalty_target {
+        query_builder.push(" AND asset_creators_v3.asc_creator = ");
+        query_builder.push_bind(royalty_target);
+    }
+
+    if let Some(royalty_amount) = filter.royalty_amount {
+        query_builder.push(" AND assets_v3.ast_royalty_amount = ");
+        query_builder.push_bind(royalty_amount as i64);
+    }
+
+    if let Some(burnt) = filter.burnt {
+        query_builder.push(" AND assets_v3.ast_is_burnt = ");
+        query_builder.push_bind(burnt);
+    }
+
+    if let Some(json_uri) = &filter.json_uri {
+        query_builder.push(" AND tsk_metadata_url = ");
+        query_builder.push_bind(json_uri);
+    }
+    group_clause_required
 }
 
 fn add_slot_and_key_comparison(
@@ -333,6 +354,29 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         } else {
             Ok(r.collect())
         }
+    }
+
+    async fn get_grand_total(
+        &self,
+        filter: &SearchAssetsFilter,
+        options: &Options,
+    ) -> Result<u32, IndexDbError> {
+        let mut query_builder = Self::build_grand_total_query(filter, options)?;
+        let query = query_builder.build();
+        let start_time = chrono::Utc::now();
+        let result = query
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e: sqlx::Error| {
+                self.metrics
+                    .observe_error(SQL_COMPONENT, COUNT_ACTION, "assets_v3");
+                e
+            })?;
+        self.metrics
+            .observe_request(SQL_COMPONENT, COUNT_ACTION, "assets_v3", start_time);
+        let count: i64 = result.get(0);
+
+        Ok(count as u32)
     }
 }
 

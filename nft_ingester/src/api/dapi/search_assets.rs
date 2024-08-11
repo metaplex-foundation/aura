@@ -2,7 +2,7 @@ use crate::api::dapi::asset;
 use crate::api::dapi::converters::{ConversionError, SearchAssetsQuery};
 use crate::api::dapi::response::AssetList;
 use crate::api::dapi::rpc_asset_convertors::asset_list_to_rpc;
-use entities::api_req_params::{AssetSorting, Options};
+use entities::api_req_params::{AssetSorting, SearchAssetsOptions};
 use interface::json::{JsonDownloader, JsonPersister};
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
@@ -22,7 +22,7 @@ pub async fn search_assets(
     before: Option<String>,
     after: Option<String>,
     cursor: Option<String>,
-    options: Options,
+    options: SearchAssetsOptions,
     json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
@@ -61,7 +61,7 @@ pub async fn search_assets(
             page,
             before,
             after,
-            &options,
+            &(&options).into(),
         )
         .await
         .map_err(|e| StorageError::Common(e.to_string()))?;
@@ -73,7 +73,7 @@ pub async fn search_assets(
     let assets = asset::get_by_ids(
         rocks_db,
         asset_ids,
-        options,
+        (&options).into(),
         json_downloader,
         json_persister,
         max_json_to_download,
@@ -96,9 +96,19 @@ pub async fn search_assets(
             None,
         )
     };
+    let mut grand_total = None;
+    if options.show_grand_total {
+        grand_total = Some(
+            index_client
+                .get_grand_total(filter, &(&options).into())
+                .await
+                .map_err(|e| StorageError::Common(e.to_string()))?,
+        )
+    }
 
     let resp = AssetList {
         total,
+        grand_total,
         limit: limit as u32,
         page: page_res,
         before,

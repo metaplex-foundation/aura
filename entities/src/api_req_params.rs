@@ -57,6 +57,23 @@ pub struct Options {
     pub show_unverified_collections: bool,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct SearchAssetsOptions {
+    #[serde(default)]
+    pub show_unverified_collections: bool,
+    #[serde(default)]
+    pub show_grand_total: bool,
+}
+
+impl From<&SearchAssetsOptions> for Options {
+    fn from(value: &SearchAssetsOptions) -> Self {
+        Self {
+            show_unverified_collections: value.show_unverified_collections,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
 pub enum SearchConditionType {
     #[serde(rename = "all")]
@@ -76,7 +93,7 @@ pub struct GetAssetsByGroup {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub options: Option<Options>,
+    pub options: Option<SearchAssetsOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -89,7 +106,7 @@ pub struct GetAssetsByOwner {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub options: Option<Options>,
+    pub options: Option<SearchAssetsOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -129,7 +146,7 @@ pub struct GetAssetsByCreator {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub options: Option<Options>,
+    pub options: Option<SearchAssetsOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -142,7 +159,7 @@ pub struct GetAssetsByAuthority {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub options: Option<Options>,
+    pub options: Option<SearchAssetsOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -227,7 +244,7 @@ pub struct SearchAssets {
     pub cursor: Option<String>,
     #[serde(default)]
     pub name: Option<String>,
-    pub options: Option<Options>,
+    pub options: Option<SearchAssetsOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
@@ -350,8 +367,9 @@ impl From<SearchAssetsV0> for SearchAssets {
             json_uri: value.json_uri,
             cursor: None,
             name: None,
-            options: Some(Options {
+            options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
+                show_grand_total: false,
             }),
         }
     }
@@ -412,8 +430,9 @@ impl From<GetAssetsByAuthorityV0> for GetAssetsByAuthority {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: Some(Options {
+            options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
+                show_grand_total: false,
             }),
         }
     }
@@ -442,8 +461,9 @@ impl From<GetAssetsByCreatorV0> for GetAssetsByCreator {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: Some(Options {
+            options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
+                show_grand_total: false,
             }),
         }
     }
@@ -470,8 +490,9 @@ impl From<GetAssetsByOwnerV0> for GetAssetsByOwner {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: Some(Options {
+            options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
+                show_grand_total: false,
             }),
         }
     }

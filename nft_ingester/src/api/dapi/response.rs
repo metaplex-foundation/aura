@@ -22,6 +22,8 @@ pub struct GetGroupingResponse {
 #[serde(default)]
 pub struct AssetList {
     pub total: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grand_total: Option<u32>,
     pub limit: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,

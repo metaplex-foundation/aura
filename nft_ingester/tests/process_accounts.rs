@@ -2,8 +2,9 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use blockbuster::mpl_core::types::{
-        DataStore, ExternalPluginAdapter, ExternalPluginAdapterSchema, ExternalPluginAdapterType,
-        FreezeDelegate, Plugin, PluginAuthority, PluginType, TransferDelegate, UpdateAuthority,
+        DataSection, ExternalPluginAdapter, ExternalPluginAdapterSchema, ExternalPluginAdapterType,
+        FreezeDelegate, LinkedDataKey, Plugin, PluginAuthority, PluginType, TransferDelegate,
+        UpdateAuthority,
     };
     use blockbuster::mpl_core::{
         IndexableAsset, IndexableCheckResult, IndexableExternalPluginSchemaV1,
@@ -353,8 +354,8 @@ mod tests {
                     }),
                     unknown_lifecycle_checks: None,
                     r#type: ExternalPluginAdapterType::LifecycleHook,
-                    adapter_config: ExternalPluginAdapter::DataStore(DataStore {
-                        data_authority: PluginAuthority::Owner,
+                    adapter_config: ExternalPluginAdapter::DataSection(DataSection {
+                        parent_key: LinkedDataKey::LinkedAppData(PluginAuthority::Owner),
                         schema: ExternalPluginAdapterSchema::Binary,
                     }),
                     data_offset: Some(254),
@@ -467,7 +468,7 @@ mod tests {
                 .mpl_core_external_plugins
                 .unwrap()
                 .value,
-            "[{\"data_len\":500,\"index\":0,\"offset\":0,\"authority\":{\"type\":\"UpdateAuthority\",\"address\":null},\"lifecycle_checks\":{\"transfer\":[\"CanReject\"],\"create\":[\"CanApprove\"],\"update\":[\"CanListen\"],\"burn\":[\"CanReject\",\"CanApprove\"]},\"type\":\"LifecycleHook\",\"adapter_config\":{\"data_authority\":{\"type\":\"Owner\",\"address\":null},\"schema\":\"Binary\"},\"data_offset\":254,\"data\":\"asdfasdf\"}]".to_string()
+            "[{\"data_len\":500,\"index\":0,\"offset\":0,\"authority\":{\"type\":\"UpdateAuthority\",\"address\":null},\"lifecycle_checks\":{\"transfer\":[\"CanReject\"],\"create\":[\"CanApprove\"],\"update\":[\"CanListen\"],\"burn\":[\"CanReject\",\"CanApprove\"]},\"type\":\"LifecycleHook\",\"adapter_config\":{\"parent_key\":{\"linked_app_data\":{\"type\":\"Owner\",\"address\":null}},\"schema\":\"Binary\"},\"data_offset\":254,\"data\":\"asdfasdf\"}]".to_string()
         );
     }
 }

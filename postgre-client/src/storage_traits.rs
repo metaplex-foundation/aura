@@ -57,6 +57,11 @@ pub trait AssetPubkeyFilteredFetcher {
         after: Option<String>,
         options: &Options,
     ) -> Result<Vec<AssetSortedIndex>, IndexDbError>;
+    async fn get_grand_total(
+        &self,
+        filter: &SearchAssetsFilter,
+        options: &Options,
+    ) -> Result<u32, IndexDbError>;
 }
 
 #[automock]
