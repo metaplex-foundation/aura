@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::{str::FromStr, sync::Arc};
 
 use blockbuster::error::BlockbusterError;
@@ -24,15 +25,16 @@ use utils::flatbuffer::account_data_generated::account_data::root_as_account_dat
 use rocks_db::columns::{Mint, TokenAccount};
 use rocks_db::editions::TokenMetadataEdition;
 
-use crate::buffer::Buffer;
+use crate::buffer::{Buffer, FeesBuffer};
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
 use crate::mplx_updates_processor::{
-    BurntMetadataSlot, IndexableAssetWithAccountInfo, MetadataInfo, TokenMetadata,
+    BurntMetadataSlot, CoreAssetFee, IndexableAssetWithAccountInfo, MetadataInfo, TokenMetadata,
 };
 use crate::plerkle;
 use crate::plerkle::PlerkleAccountInfo;
 use entities::models::{EditionV1, MasterEdition};
+use interface::message_handler::MessageHandler;
 
 const BYTE_PREFIX_TX_SIMPLE_FINALIZED: u8 = 22;
 const BYTE_PREFIX_TX_FINALIZED: u8 = 12;
@@ -40,7 +42,7 @@ const BYTE_PREFIX_TX_PROCESSED: u8 = 2;
 const BYTE_PREFIX_ACCOUNT_FINALIZED: u8 = 10;
 const BYTE_PREFIX_ACCOUNT_PROCESSED: u8 = 0;
 
-pub struct MessageHandler {
+pub struct MessageHandlerIngester {
     buffer: Arc<Buffer>,
     token_acc_parser: Arc<TokenAccountParser>,
     mplx_acc_parser: Arc<TokenMetadataParser>,
@@ -64,21 +66,9 @@ macro_rules! update_or_insert {
     }};
 }
 
-impl MessageHandler {
-    pub fn new(buffer: Arc<Buffer>) -> Self {
-        let token_acc_parser = Arc::new(TokenAccountParser {});
-        let mplx_acc_parser = Arc::new(TokenMetadataParser {});
-        let mpl_core_parser = Arc::new(MplCoreParser {});
-
-        Self {
-            buffer,
-            token_acc_parser,
-            mplx_acc_parser,
-            mpl_core_parser,
-        }
-    }
-
-    pub async fn call(&self, msg: Vec<u8>) {
+#[async_trait]
+impl MessageHandler for MessageHandlerIngester {
+    async fn call(&self, msg: Vec<u8>) {
         let prefix = msg[0];
         let data = msg[1..].to_vec();
 
@@ -105,6 +95,21 @@ impl MessageHandler {
                 });
             }
             _ => {}
+        }
+    }
+}
+
+impl MessageHandlerIngester {
+    pub fn new(buffer: Arc<Buffer>) -> Self {
+        let token_acc_parser = Arc::new(TokenAccountParser {});
+        let mplx_acc_parser = Arc::new(TokenMetadataParser {});
+        let mpl_core_parser = Arc::new(MplCoreParser {});
+
+        Self {
+            buffer,
+            token_acc_parser,
+            mplx_acc_parser,
+            mpl_core_parser,
         }
     }
 
@@ -441,6 +446,105 @@ fn account_parsing_error(err: BlockbusterError, account_info: &plerkle::AccountI
         "Error while parsing account: {:?} {}",
         err, account_info.pubkey
     );
+}
+
+pub struct MessageHandlerCoreIndexing {
+    buffer: Arc<FeesBuffer>,
+    mpl_core_parser: Arc<MplCoreParser>,
+}
+
+#[async_trait]
+impl MessageHandler for MessageHandlerCoreIndexing {
+    async fn call(&self, msg: Vec<u8>) {
+        let prefix = msg[0];
+        let data = msg[1..].to_vec();
+
+        match prefix {
+            BYTE_PREFIX_ACCOUNT_FINALIZED | BYTE_PREFIX_ACCOUNT_PROCESSED => {
+                if let Err(err) = self.handle_account(data).await {
+                    error!("handle_account: {:?}", err)
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+impl MessageHandlerCoreIndexing {
+    pub fn new(buffer: Arc<FeesBuffer>) -> Self {
+        Self {
+            buffer,
+            mpl_core_parser: Arc::new(MplCoreParser {}),
+        }
+    }
+
+    async fn handle_account(&self, data: Vec<u8>) -> Result<(), IngesterError> {
+        let account_update =
+            utils::flatbuffer::account_info_generated::account_info::root_as_account_info(&data)?;
+
+        let account_info_bytes = map_account_info_fb_bytes(account_update)?;
+
+        let account_info = plerkle_serialization::root_as_account_info(account_info_bytes.as_ref())
+            .map_err(|e| IngesterError::AccountParsingError(e.to_string()))
+            .unwrap();
+
+        let account_info: plerkle::AccountInfo = PlerkleAccountInfo(account_info).try_into()?;
+        let account_owner = account_info.owner;
+        if account_owner == self.mpl_core_parser.key() {
+            self.handle_mpl_core_account(&account_info).await;
+        }
+
+        Ok(())
+    }
+
+    async fn handle_mpl_core_account<'a>(&self, account_info: &plerkle::AccountInfo) {
+        let acc_parse_result = self
+            .mpl_core_parser
+            .handle_account(account_info.data.as_slice());
+        match acc_parse_result {
+            Ok(acc_parsed) => {
+                let concrete = acc_parsed.result_type();
+                match concrete {
+                    ProgramParseResult::MplCore(parsing_result) => {
+                        self.write_mpl_core_accounts_to_buffer(account_info, parsing_result)
+                            .await
+                    }
+                    _ => debug!("\nUnexpected message\n"),
+                };
+            }
+            Err(e) => {
+                account_parsing_error(e, account_info);
+            }
+        }
+    }
+
+    async fn write_mpl_core_accounts_to_buffer(
+        &self,
+        account_update: &plerkle::AccountInfo,
+        parsing_result: &MplCoreAccountState,
+    ) {
+        let key = account_update.pubkey;
+        match &parsing_result.data {
+            MplCoreAccountData::Asset(_)
+            | MplCoreAccountData::EmptyAccount
+            | MplCoreAccountData::HashedAsset => {
+                update_or_insert!(
+                    self.buffer.mpl_core_fee_assets,
+                    key,
+                    CoreAssetFee {
+                        indexable_asset: parsing_result.data.clone(),
+                        data: account_update.data.clone(),
+                        slot_updated: account_update.slot,
+                        write_version: account_update.write_version,
+                        lamports: account_update.lamports,
+                        rent_epoch: account_update.rent_epoch,
+                    },
+                    account_update.write_version
+                );
+            }
+            _ => debug!("Not implemented"),
+        };
+    }
 }
 
 #[test]

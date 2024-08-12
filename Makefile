@@ -1,12 +1,12 @@
-.PHONY: build start build-integrity-verification start-integrity-verification start-raw-backfiller dev stop clippy test
+.PHONY: build start build-integrity-verification start-integrity-verification start-raw-backfiller start-core-indexing dev stop clippy test
 
 SHELL := /bin/bash
 
 build:
-	@docker compose -f docker-compose.yaml build ingester-first-consumer raw-backfiller das-api synchronizer
+	@docker compose -f docker-compose.yaml build ingester raw-backfiller das-api synchronizer core-indexing
 
 start:
-	@docker compose -f docker-compose.yaml up -d ingester-first-consumer
+	@docker compose -f docker-compose.yaml up -d ingester
 
 start-synchronizer:
 	@docker compose -f docker-compose.yaml up -d synchronizer
@@ -26,11 +26,14 @@ start-integrity-verification:
 start-raw-backfiller:
 	@docker compose -f docker-compose.yaml up -d raw-backfiller
 
+start-core-indexing:
+	@docker compose -f docker-compose.yaml up -d core-indexing
+
 dev:
 	@docker compose -f docker-compose.yaml up -d db
 
 stop:
-	@docker stop --time 1000 ingester-first-consumer
+	@docker stop --time 1000 ingester
 
 clippy:
 	@cargo clean -p postgre-client -p rocks-db -p interface

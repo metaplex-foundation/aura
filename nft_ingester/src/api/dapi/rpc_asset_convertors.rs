@@ -2,8 +2,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 
-use entities::models::TokenAccResponse;
 use entities::models::{AssetSignatureWithPagination, OffChainData};
+use entities::models::{CoreFeesAccountWithSortingID, TokenAccResponse};
 use jsonpath_lib::JsonPathError;
 use log::error;
 use log::warn;
@@ -13,7 +13,9 @@ use serde_json::Value;
 use solana_program::pubkey::Pubkey;
 use url::Url;
 
-use super::response::{AssetError, TokenAccountsList, TransactionSignatureList};
+use super::response::{
+    AssetError, CoreFeesAccountsList, TokenAccountsList, TransactionSignatureList,
+};
 use super::rpc_asset_models::FullAsset;
 use super::rpc_asset_models::{
     Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, MetadataMap,
@@ -468,6 +470,28 @@ pub fn build_token_accounts_response(
         before: pagination.before,
         cursor: pagination.cursor,
         token_accounts: token_accounts.into_iter().map(|t| t.token_acc).collect(),
+    })
+}
+
+pub fn build_core_fees_response(
+    core_fees_account: Vec<CoreFeesAccountWithSortingID>,
+    limit: u64,
+    page: Option<u64>,
+    before: Option<String>,
+    after: Option<String>,
+    cursor: Option<String>,
+) -> Result<CoreFeesAccountsList, String> {
+    Ok(CoreFeesAccountsList {
+        total: core_fees_account.len() as u64,
+        limit,
+        page,
+        core_fees_account: core_fees_account
+            .into_iter()
+            .map(|c| c.fees_account)
+            .collect::<Vec<_>>(),
+        after,
+        before,
+        cursor,
     })
 }
 

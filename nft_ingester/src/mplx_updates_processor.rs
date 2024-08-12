@@ -64,6 +64,16 @@ pub struct IndexableAssetWithAccountInfo {
 }
 
 #[derive(Clone)]
+pub struct CoreAssetFee {
+    pub indexable_asset: MplCoreAccountData,
+    pub data: Vec<u8>,
+    pub lamports: u64,
+    pub rent_epoch: u64,
+    pub slot_updated: u64,
+    pub write_version: u64,
+}
+
+#[derive(Clone)]
 pub struct MplxAccsProcessor {
     pub batch_size: usize,
     pub rocks_db: Arc<Storage>,

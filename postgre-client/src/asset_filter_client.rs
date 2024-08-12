@@ -265,7 +265,7 @@ fn add_slot_and_key_comparison(
     order_field: &AssetSortBy,
     query_builder: &mut QueryBuilder<'_, Postgres>,
 ) -> Result<(), IndexDbError> {
-    let res = AssetRawResponse::decode_sorting_key(key);
+    let res = decode_sorting_key(key);
     // TODO-XXX: is that OK that we just ignore the error from the call above?
 
     if let Ok((slot, pubkey)) = res {
@@ -352,21 +352,6 @@ impl AssetRawResponse {
             AssetSortBy::Key => bs58::encode(&self.pubkey).into_string(),
         }
     }
-
-    pub fn decode_sorting_key(encoded_key: &str) -> Result<(i64, Vec<u8>), IndexDbError> {
-        let key = match general_purpose::STANDARD_NO_PAD.decode(encoded_key) {
-            Ok(k) => k,
-            Err(_) => return Err(IndexDbError::Base64DecodingErr),
-        };
-
-        if key.len() < 8 {
-            return Err(IndexDbError::InvalidSortingKeyErr);
-        }
-
-        let slot = i64::from_be_bytes(key[0..8].try_into().unwrap());
-        let pubkey = key[8..].to_vec();
-        Ok((slot, pubkey))
-    }
 }
 
 impl From<(&AssetRawResponse, &AssetSortBy)> for AssetSortedIndex {
@@ -377,4 +362,19 @@ impl From<(&AssetRawResponse, &AssetSortBy)> for AssetSortedIndex {
             sorting_id: asset.encode_sorting_key(sort_by),
         }
     }
+}
+
+pub fn decode_sorting_key(encoded_key: &str) -> Result<(i64, Vec<u8>), IndexDbError> {
+    let key = match general_purpose::STANDARD_NO_PAD.decode(encoded_key) {
+        Ok(k) => k,
+        Err(_) => return Err(IndexDbError::Base64DecodingErr),
+    };
+
+    if key.len() < 8 {
+        return Err(IndexDbError::InvalidSortingKeyErr);
+    }
+
+    let slot = i64::from_be_bytes(key[0..8].try_into().unwrap());
+    let pubkey = key[8..].to_vec();
+    Ok((slot, pubkey))
 }

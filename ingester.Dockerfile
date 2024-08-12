@@ -56,10 +56,12 @@ COPY --from=builder /rust/target/release/ingester ${APP}/ingester
 COPY --from=builder /rust/target/release/raw_backfiller ${APP}/raw_backfiller
 COPY --from=builder /rust/target/release/api ${APP}/api
 COPY --from=builder /rust/target/release/synchronizer ${APP}/synchronizer
+COPY --from=builder /rust/target/release/core_indexing ${APP}/core_indexing
 COPY --from=builder-with-profiling /rust/target/release/ingester ${APP}/profiling_ingester
 COPY --from=builder-with-profiling /rust/target/release/raw_backfiller ${APP}/profiling_raw_backfiller
 COPY --from=builder-with-profiling /rust/target/release/api ${APP}/profiling_api
 COPY --from=builder-with-profiling /rust/target/release/synchronizer ${APP}/profiling_synchronizer
+COPY --from=builder-with-profiling /rust/target/release/core_indexing ${APP}/profiling_core_indexing
 
 WORKDIR ${APP}
 STOPSIGNAL SIGINT

@@ -43,7 +43,7 @@ use nft_ingester::config::{
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::json_worker::JsonWorker;
-use nft_ingester::message_handler::MessageHandler;
+use nft_ingester::message_handler::MessageHandlerIngester;
 use nft_ingester::mplx_updates_processor::MplxAccsProcessor;
 use nft_ingester::tcp_receiver::TcpReceiver;
 use nft_ingester::token_updates_processor::TokenAccsProcessor;
@@ -264,7 +264,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let buffer = Arc::new(Buffer::new());
 
     // setup receiver
-    let message_handler = Arc::new(MessageHandler::new(buffer.clone()));
+    let message_handler = Arc::new(MessageHandlerIngester::new(buffer.clone()));
 
     let geyser_tcp_receiver = TcpReceiver::new(
         message_handler.clone(),
@@ -276,9 +276,7 @@ pub async fn main() -> Result<(), IngesterError> {
     );
 
     let snapshot_addr = config.tcp_config.get_snapshot_addr_ingester()?;
-    let geyser_addr = config
-        .tcp_config
-        .get_tcp_receiver_addr_ingester(config.consumer_number)?;
+    let geyser_addr = config.tcp_config.get_tcp_receiver_addr_ingester()?;
 
     let cloned_rx = shutdown_rx.resubscribe();
 
@@ -369,7 +367,7 @@ pub async fn main() -> Result<(), IngesterError> {
         config.mpl_core_buffer_size,
     );
 
-    for _ in 0..config.mplx_workers {
+    for _ in 0..config.parsing_workers {
         let mut cloned_mplx_parser = mplx_accs_parser.clone();
 
         let cloned_rx = shutdown_rx.resubscribe();
@@ -996,11 +994,7 @@ pub async fn main() -> Result<(), IngesterError> {
         rollup_persister.persist_rollups(rx).await
     });
 
-    start_metrics(
-        metrics_state.registry,
-        config.get_metrics_port(config.consumer_number)?,
-    )
-    .await;
+    start_metrics(metrics_state.registry, config.metrics_port).await;
 
     // --stop
     graceful_stop(
