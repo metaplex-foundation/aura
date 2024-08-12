@@ -197,7 +197,9 @@ impl Storage {
                     .get_asset_indexes(batch.as_ref())
                     .await
                     .map_err(|e| e.to_string())?;
-                tx_indexes.send(indexes).await.unwrap();
+                tx_indexes.send(indexes).await.map_err(|e| {
+                    format!("Error sending asset indexes to channel: {}", e.to_string())
+                })?;
 
                 batch.clear();
             }
@@ -211,17 +213,29 @@ impl Storage {
                 .get_asset_indexes(batch.as_ref())
                 .await
                 .map_err(|e| e.to_string())?;
-            tx_indexes.send(indexes).await.unwrap();
+            tx_indexes.send(indexes).await.map_err(|e| {
+                format!("Error sending asset indexes to channel: {}", e.to_string())
+            })?;
         }
 
         // Once we iterate through all the assets in RocksDB we have to send stop signal
         // to iterators and wait until they finish it's job. Because that workers populate channel
         // for writers.
-        iterator_shutdown_tx.send(()).unwrap();
+        iterator_shutdown_tx.send(()).map_err(|e| {
+            format!(
+                "Error sending stop signal for indexes iterator: {}",
+                e.to_string()
+            )
+        })?;
         wait_for_all_tasks_to_finish(&mut iterator_tasks, "Iterator".to_string()).await;
 
         // Once iterators are stopped it's safe to shutdown writers.
-        writer_shutdown_tx.send(()).unwrap();
+        writer_shutdown_tx.send(()).map_err(|e| {
+            format!(
+                "Error sending stop signal for file writers: {}",
+                e.to_string()
+            )
+        })?;
         wait_for_all_tasks_to_finish(&mut writer_tasks, "Writer".to_string()).await;
 
         Ok(())
@@ -434,10 +448,18 @@ impl Dumper for Storage {
             authorities_path
         );
 
-        let metadata_file = File::create(metadata_path.clone().unwrap()).unwrap();
-        let assets_file = File::create(assets_path.clone().unwrap()).unwrap();
-        let creators_file = File::create(creators_path.clone().unwrap()).unwrap();
-        let authority_file = File::create(authorities_path.clone().unwrap()).unwrap();
+        let metadata_file = File::create(metadata_path.clone().unwrap())
+            .map_err(|e| format!("Could not create file for metadata dump: {}", e.to_string()))?;
+        let assets_file = File::create(assets_path.clone().unwrap())
+            .map_err(|e| format!("Could not create file for assets dump: {}", e.to_string()))?;
+        let creators_file = File::create(creators_path.clone().unwrap())
+            .map_err(|e| format!("Could not create file for creators dump: {}", e.to_string()))?;
+        let authority_file = File::create(authorities_path.clone().unwrap()).map_err(|e| {
+            format!(
+                "Could not create file for authority dump: {}",
+                e.to_string()
+            )
+        })?;
 
         self.dump_csv(
             (metadata_file, metadata_path.unwrap()),
