@@ -44,6 +44,8 @@ pub enum UsecaseError {
     BatchMintValidation(
         #[from] bubblegum_batch_sdk::batch_mint_validations::BatchMintValidationError,
     ),
+    #[error("EmptyPriceFetcherResponse {0}")]
+    EmptyPriceFetcherResponse(String),
 }
 
 impl From<ClientError> for UsecaseError {

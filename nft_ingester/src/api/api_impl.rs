@@ -22,7 +22,7 @@ use dapi::get_token_accounts::get_token_accounts;
 use entities::api_req_params::{
     GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
     GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetCoreFees,
-    GetGrouping, GetTokenAccounts, Pagination, SearchAssets,
+    GetGrouping, GetTokenAccounts, Pagination, SearchAssets, SearchAssetsOptions,
 };
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
@@ -136,6 +136,17 @@ where
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!("ok"))
+    }
+
+    fn validate_options(
+        options: &SearchAssetsOptions,
+        query: &SearchAssetsQuery,
+    ) -> Result<(), DasApiError> {
+        if options.show_native_balance && query.owner_address.is_none() {
+            return Err(DasApiError::MissingOwnerAddress);
+        }
+
+        Ok(())
     }
 
     pub fn validate_basic_pagination(
@@ -633,6 +644,7 @@ where
             .map_err(|e| DasApiError::from(e.into()))?;
 
         Self::validate_basic_pagination(&pagination, self.max_page_limit)?;
+        Self::validate_options(&options, &query)?;
 
         let res = search_assets(
             pg_client,

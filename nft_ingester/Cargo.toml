@@ -81,6 +81,7 @@ bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-
 jsonpath_lib = "0.3.0"
 mime_guess = "2.0.4"
 url = "2.3.1"
+coingecko = "1.0.0"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

@@ -145,8 +145,8 @@ impl PgClient {
     }
 }
 
-fn add_filter_clause<'a, 'b>(
-    query_builder: &'b mut QueryBuilder<'a, Postgres>,
+fn add_filter_clause<'a>(
+    query_builder: &mut QueryBuilder<'a, Postgres>,
     filter: &'a SearchAssetsFilter,
     options: &'a Options,
 ) -> bool {

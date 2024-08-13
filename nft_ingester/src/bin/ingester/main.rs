@@ -63,6 +63,7 @@ use nft_ingester::batch_mint::batch_mint_processor::{BatchMintProcessor, NoopBat
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
+use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater};
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use rocks_db::migrator::MigrationState;
 use usecase::bigtable::BigTableClient;
@@ -992,6 +993,16 @@ pub async fn main() -> Result<(), IngesterError> {
     mutexed_tasks.lock().await.spawn(async move {
         info!("Start batch_mint persister...");
         batch_mint_persister.persist_batch_mints(rx).await
+    });
+
+    let solana_price_updater =
+        SolanaPriceUpdater::new(rocks_storage.clone(), CoinGeckoPriceFetcher::new());
+    let rx = shutdown_rx.resubscribe();
+    mutexed_tasks.lock().await.spawn(async move {
+        info!("Start monitoring solana price...");
+        solana_price_updater.start_price_monitoring(rx).await;
+        info!("Stop monitoring solana price...");
+        Ok(())
     });
 
     start_metrics(metrics_state.registry, config.metrics_port).await;

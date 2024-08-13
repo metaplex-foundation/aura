@@ -64,6 +64,8 @@ pub struct SearchAssetsOptions {
     pub show_unverified_collections: bool,
     #[serde(default)]
     pub show_grand_total: bool,
+    #[serde(default)]
+    pub show_native_balance: bool,
 }
 
 impl From<&SearchAssetsOptions> for Options {
@@ -369,7 +371,7 @@ impl From<SearchAssetsV0> for SearchAssets {
             name: None,
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
-                show_grand_total: false,
+                ..Default::default()
             }),
         }
     }
@@ -432,7 +434,7 @@ impl From<GetAssetsByAuthorityV0> for GetAssetsByAuthority {
             cursor: None,
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
-                show_grand_total: false,
+                ..Default::default()
             }),
         }
     }
@@ -463,7 +465,7 @@ impl From<GetAssetsByCreatorV0> for GetAssetsByCreator {
             cursor: None,
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
-                show_grand_total: false,
+                ..Default::default()
             }),
         }
     }
@@ -492,7 +494,7 @@ impl From<GetAssetsByOwnerV0> for GetAssetsByOwner {
             cursor: None,
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
-                show_grand_total: false,
+                ..Default::default()
             }),
         }
     }

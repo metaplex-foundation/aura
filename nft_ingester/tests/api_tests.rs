@@ -79,7 +79,7 @@ mod tests {
                 limit: Some(limit),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -120,7 +120,7 @@ mod tests {
                 page: Some(1),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -144,7 +144,7 @@ mod tests {
                 page: Some(2),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -168,7 +168,7 @@ mod tests {
                 page: Some(3),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -186,7 +186,7 @@ mod tests {
                 after: after,
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -210,7 +210,7 @@ mod tests {
                 before: before,
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -241,7 +241,7 @@ mod tests {
                 }),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -266,7 +266,7 @@ mod tests {
                 owner_address: ref_value.owner.value.map(|owner| owner.to_string()),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -291,7 +291,7 @@ mod tests {
                 creator_address: Some(ref_value.creators.value[0].creator.to_string()),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -316,7 +316,7 @@ mod tests {
                 creator_verified: Some(true),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -342,7 +342,7 @@ mod tests {
                 authority_address: Some(ref_value.authority.to_string()),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -370,7 +370,7 @@ mod tests {
                 )),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -395,7 +395,7 @@ mod tests {
                 delegate: Some(ref_value.delegate.value.unwrap().to_string()),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -420,7 +420,7 @@ mod tests {
                 supply_mint: Some(ref_value.pubkey.to_string()),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -447,7 +447,7 @@ mod tests {
                 royalty_amount: Some(ref_value.royalty_amount.value as u32),
                 options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
-                    show_grand_total: false,
+                    ..Default::default()
                 }),
                 ..Default::default()
             };
@@ -1874,7 +1874,7 @@ mod tests {
             cursor: None,
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
-                show_grand_total: false,
+                ..Default::default()
             }),
         };
         let res = api
@@ -1924,7 +1924,7 @@ mod tests {
             cursor: None,
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
-                show_grand_total: false,
+                ..Default::default()
             }),
         };
         let res = api
@@ -1974,7 +1974,7 @@ mod tests {
             cursor: None,
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
-                show_grand_total: false,
+                ..Default::default()
             }),
         };
         let res = api
@@ -2023,7 +2023,7 @@ mod tests {
             cursor: None,
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
-                show_grand_total: false,
+                ..Default::default()
             }),
         };
         let res = api
@@ -2391,7 +2391,7 @@ mod tests {
             page: Some(1),
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
-                show_grand_total: true,
+                ..Default::default()
             }),
             ..Default::default()
         };
@@ -2407,7 +2407,7 @@ mod tests {
             page: Some(1),
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: false,
-                show_grand_total: true,
+                ..Default::default()
             }),
             ..Default::default()
         };
@@ -2423,7 +2423,7 @@ mod tests {
             page: Some(1),
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
-                show_grand_total: false,
+                ..Default::default()
             }),
             ..Default::default()
         };

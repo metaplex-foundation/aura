@@ -31,6 +31,7 @@ use crate::migrations::collection_authority::{
 };
 use crate::migrations::external_plugins::{AssetDynamicDetailsV0, ExternalPluginsMigration};
 use crate::parameters::ParameterColumn;
+use crate::token_prices::TokenPrice;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
 pub mod asset;
@@ -61,6 +62,7 @@ pub mod signature_client;
 pub mod slots_dumper;
 pub mod storage_traits;
 pub mod token_accounts;
+pub mod token_prices;
 pub mod transaction;
 pub mod transaction_client;
 pub mod tree_seq;
@@ -109,6 +111,7 @@ pub struct Storage {
     pub failed_batch_mints: Column<FailedBatchMint>,
     pub batch_mints: Column<BatchMintWithStaker>,
     pub migration_version: Column<MigrationVersions>,
+    pub token_prices: Column<TokenPrice>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -154,6 +157,7 @@ impl Storage {
         let failed_batch_mints = Self::column(db.clone(), red_metrics.clone());
         let batch_mints = Self::column(db.clone(), red_metrics.clone());
         let migration_version = Self::column(db.clone(), red_metrics.clone());
+        let token_prices = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -192,6 +196,7 @@ impl Storage {
             failed_batch_mints,
             batch_mints,
             migration_version,
+            token_prices,
         }
     }
 
@@ -263,6 +268,7 @@ impl Storage {
             Self::new_cf_descriptor::<BatchMintToVerify>(migration_state),
             Self::new_cf_descriptor::<FailedBatchMint>(migration_state),
             Self::new_cf_descriptor::<BatchMintWithStaker>(migration_state),
+            Self::new_cf_descriptor::<TokenPrice>(migration_state),
         ]
     }
 
@@ -552,6 +558,12 @@ impl Storage {
             MigrationVersions::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_migration_versions",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            TokenPrice::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_token_prices",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }

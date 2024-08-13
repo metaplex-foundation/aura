@@ -42,6 +42,8 @@ pub enum DasApiError {
     InternalDdError,
     #[error("CannotServiceRequest")]
     CannotServiceRequest,
+    #[error("MissingOwnerAddress")]
+    MissingOwnerAddress,
 }
 
 impl From<DasApiError> for jsonrpc_core::Error {
@@ -86,6 +88,12 @@ impl From<DasApiError> for jsonrpc_core::Error {
             DasApiError::Validation(msg) => jsonrpc_core::Error {
                 code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
                 message: format!("Validation Error: {msg}"),
+                data: None,
+            },
+            DasApiError::MissingOwnerAddress => jsonrpc_core::Error {
+                code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
+                message: "Need to specify \"ownerAddress\" when using \"showNativeBalance\""
+                    .to_string(),
                 data: None,
             },
             DasApiError::CannotServiceRequest => cannot_service_request_error(),

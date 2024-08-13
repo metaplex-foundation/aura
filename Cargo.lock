@@ -1826,6 +1826,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "coingecko"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b24c2d346c689c0b8a27d4c921a35d8cac68cc266130bc82ba879155ca828da0"
+dependencies = [
+ "chrono",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4335,6 +4348,7 @@ dependencies = [
  "bubblegum-batch-sdk",
  "chrono",
  "clap 4.5.15",
+ "coingecko",
  "criterion",
  "csv",
  "entities",
