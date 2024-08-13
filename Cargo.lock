@@ -1249,8 +1249,8 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "blockbuster"
-version = "2.3.0"
-source = "git+https://github.com/adm-metaex/blockbuster?branch=remove-bubblegum-submodule#1dedaa8dc539eeafa5e430da1c5cbb4d657967dc"
+version = "2.4.0"
+source = "git+https://github.com/adm-metaex/blockbuster?branch=feat/create-tree-with-root#7a1f193f2275cbe46d60ba0587d7d7db9c802ff2"
 dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
@@ -1456,7 +1456,7 @@ dependencies = [
 [[package]]
 name = "bubblegum"
 version = "0.13.0"
-source = "git+https://github.com/adm-metaex/mpl-bubblegum?branch=feature/cleanup#82029450d87f528c4338b791e893ea1d45dd75be"
+source = "git+https://github.com/adm-metaex/mpl-bubblegum.git?branch=feature/cleanup#82029450d87f528c4338b791e893ea1d45dd75be"
 dependencies = [
  "anchor-lang 0.29.0",
  "anchor-spl 0.29.0",
@@ -1473,17 +1473,19 @@ dependencies = [
 [[package]]
 name = "bubblegum-batch-sdk"
 version = "0.1.0"
-source = "git+https://github.com/metaplex-foundation/bubblegum-batch-sdk#c99c29437b07bd0942e3efde06170b77932f40f4"
+source = "git+https://github.com/metaplex-foundation/bubblegum-batch-sdk.git?rev=0d529f5#0d529f5115e256df8aa9cf9f5c2ab7779512cd0a"
 dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
- "borsh 0.10.3",
+ "blockbuster",
+ "borsh 0.9.3",
  "bubblegum",
  "bytemuck",
  "chrono",
  "mpl-bubblegum",
  "mplx-staking-states",
  "paste",
+ "rand 0.8.5",
  "serde",
  "serde_derive",
  "serde_json",
@@ -3537,6 +3539,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
+ "bubblegum-batch-sdk",
  "entities",
  "futures",
  "jsonrpc-core 19.0.0",
@@ -4161,7 +4164,7 @@ dependencies = [
 [[package]]
 name = "mpl-bubblegum"
 version = "1.4.0"
-source = "git+https://github.com/adm-metaex/mpl-bubblegum?branch=feature/cleanup#82029450d87f528c4338b791e893ea1d45dd75be"
+source = "git+https://github.com/adm-metaex/mpl-bubblegum.git?branch=feature/cleanup#82029450d87f528c4338b791e893ea1d45dd75be"
 dependencies = [
  "borsh 0.10.3",
  "kaigan",
@@ -4175,9 +4178,9 @@ dependencies = [
 
 [[package]]
 name = "mpl-core"
-version = "0.7.2"
+version = "0.8.0-beta.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1d4f516cd9daae872182a50850ab6d5588667e71152d49b0729a32830036b83"
+checksum = "1178d8a405352e2a2478abf5b62e2a4d6a91ed6f0470307ab6732614662dbf85"
 dependencies = [
  "base64 0.22.1",
  "borsh 0.10.3",
@@ -5026,8 +5029,8 @@ dependencies = [
 
 [[package]]
 name = "plerkle_serialization"
-version = "1.9.0"
-source = "git+https://github.com/n00m4d/digital-asset-validator-plugin.git#696f6ff95dad4989ff36adbef565643b669ce09d"
+version = "1.8.0"
+source = "git+https://github.com/n00m4d/digital-asset-validator-plugin.git#529a9a8865715641626cbbaad376e906973101a9"
 dependencies = [
  "bs58 0.4.0",
  "chrono",
@@ -5995,6 +5998,7 @@ dependencies = [
  "async-trait",
  "base64 0.21.7",
  "bincode",
+ "bubblegum-batch-sdk",
  "chrono",
  "criterion",
  "csv",
@@ -9216,6 +9220,7 @@ dependencies = [
  "anchor-lang 0.29.0",
  "async-recursion 1.1.1",
  "async-trait",
+ "bubblegum-batch-sdk",
  "entities",
  "futures",
  "interface",

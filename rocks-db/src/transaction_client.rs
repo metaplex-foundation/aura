@@ -139,13 +139,13 @@ impl Storage {
                     tracing::error!("Failed to merge offchain data: {}", e);
                 }
             }
-            if let Some(ref rollup_update) = update.rollup_creation_update {
-                if let Err(e) = self.rollup_to_verify.merge_with_batch(
+            if let Some(ref batch_mint_update) = update.batch_mint_creation_update {
+                if let Err(e) = self.batch_mint_to_verify.merge_with_batch(
                     batch,
-                    rollup_update.file_hash.clone(),
-                    rollup_update,
+                    batch_mint_update.file_hash.clone(),
+                    batch_mint_update,
                 ) {
-                    tracing::error!("Failed to merge rollup update data: {}", e);
+                    tracing::error!("Failed to merge batch mint update data: {}", e);
                 }
             }
         }

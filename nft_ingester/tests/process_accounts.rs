@@ -467,7 +467,7 @@ mod tests {
                 .mpl_core_external_plugins
                 .unwrap()
                 .value,
-            "[{\"data_len\":500,\"index\":0,\"offset\":0,\"authority\":{\"type\":\"UpdateAuthority\",\"address\":null},\"lifecycle_checks\":{\"transfer\":[\"CanReject\"],\"create\":[\"CanApprove\"],\"update\":[\"CanListen\"],\"burn\":[\"CanReject\",\"CanApprove\"]},\"type\":\"LifecycleHook\",\"adapter_config\":{\"data_authority\":\"Owner\",\"schema\":\"Binary\"},\"data_offset\":254,\"data\":\"asdfasdf\"}]".to_string()
+            "[{\"data_len\":500,\"index\":0,\"offset\":0,\"authority\":{\"type\":\"UpdateAuthority\",\"address\":null},\"lifecycle_checks\":{\"transfer\":[\"CanReject\"],\"create\":[\"CanApprove\"],\"update\":[\"CanListen\"],\"burn\":[\"CanReject\",\"CanApprove\"]},\"type\":\"LifecycleHook\",\"adapter_config\":{\"data_authority\":{\"type\":\"Owner\",\"address\":null},\"schema\":\"Binary\"},\"data_offset\":254,\"data\":\"asdfasdf\"}]".to_string()
         );
     }
 }

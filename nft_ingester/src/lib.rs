@@ -1,5 +1,6 @@
 pub mod api;
 pub mod backfiller;
+pub mod batch_mint;
 pub mod bubblegum_updates_processor;
 pub mod buffer;
 pub mod config;
@@ -15,7 +16,6 @@ pub mod mpl_core_fee_indexing_processor;
 pub mod mpl_core_processor;
 pub mod mplx_updates_processor;
 pub mod plerkle;
-pub mod rollup;
 pub mod sequence_consistent;
 pub mod tcp_receiver;
 pub mod token_updates_processor;

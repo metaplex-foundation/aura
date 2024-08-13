@@ -17,7 +17,7 @@ sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postg
 solana-program = { workspace = true }
 blockbuster = { git = "https://github.com/adm-metaex/blockbuster", branch = "feat/create-tree-with-root" }
 sha2 = "0.10.0"
-mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum", branch = "feature/cleanup", features = ["serde"] }
+mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum.git", branch = "feature/cleanup", features = ["serde"] }
 serde_json = "1.0.81"
 spl-account-compression = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root", features = ["no-entrypoint"] }
 solana-transaction-status = "~1.18.11"
