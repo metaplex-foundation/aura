@@ -1473,7 +1473,7 @@ dependencies = [
 [[package]]
 name = "bubblegum-batch-sdk"
 version = "0.1.0"
-source = "git+https://github.com/metaplex-foundation/bubblegum-batch-sdk.git?rev=b809b81#b809b81ceda2e9545e833313edb8fc858980c4be"
+source = "git+https://github.com/metaplex-foundation/bubblegum-batch-sdk.git?rev=0d529f5#0d529f5115e256df8aa9cf9f5c2ab7779512cd0a"
 dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
