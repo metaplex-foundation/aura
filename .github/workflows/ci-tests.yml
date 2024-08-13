@@ -9,7 +9,7 @@ env:
   RUSTFLAGS: "-D warnings -W rust-2021-compatibility"
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
