@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use entities::models::{BufferedTransaction, RollupToVerify, SignatureWithSlot};
+use entities::models::{BatchMintToVerify, BufferedTransaction, SignatureWithSlot};
 use entities::models::{OffChainData, Task};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
@@ -31,7 +31,7 @@ pub struct AssetUpdateEvent {
     pub authority_update: Option<AssetUpdate<AssetAuthority>>,
     pub collection_update: Option<AssetUpdate<AssetCollection>>,
     pub offchain_data_update: Option<OffChainData>,
-    pub rollup_creation_update: Option<RollupToVerify>,
+    pub batch_mint_creation_update: Option<BatchMintToVerify>,
 }
 
 #[derive(Clone, Default)]

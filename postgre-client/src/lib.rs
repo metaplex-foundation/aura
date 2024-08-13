@@ -13,13 +13,13 @@ use tracing::log::LevelFilter;
 
 pub mod asset_filter_client;
 pub mod asset_index_client;
+pub mod batch_mints;
 pub mod converters;
 pub mod core_fees;
 pub mod error;
 pub mod integrity_verification_client;
 pub mod load_client;
 pub mod model;
-pub mod rollups;
 pub mod storage_traits;
 pub mod tasks;
 pub mod temp_index_client;

@@ -49,8 +49,8 @@ pub struct MetricState {
     pub sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
     pub red_metrics: Arc<RequestErrorDurationMetrics>,
     pub fork_cleaner_metrics: Arc<ForkCleanerMetricsConfig>,
-    pub rollup_processor_metrics: Arc<RollupProcessorMetricsConfig>,
-    pub rollup_persisting_metrics: Arc<RollupPersisterMetricsConfig>,
+    pub batch_mint_processor_metrics: Arc<BatchMintProcessorMetricsConfig>,
+    pub batch_mint_persisting_metrics: Arc<BatchMintPersisterMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -74,8 +74,8 @@ impl MetricState {
                 SequenceConsistentGapfillMetricsConfig::new(),
             ),
             fork_cleaner_metrics: Arc::new(ForkCleanerMetricsConfig::new()),
-            rollup_processor_metrics: Arc::new(RollupProcessorMetricsConfig::new()),
-            rollup_persisting_metrics: Arc::new(RollupPersisterMetricsConfig::new()),
+            batch_mint_processor_metrics: Arc::new(BatchMintProcessorMetricsConfig::new()),
+            batch_mint_persisting_metrics: Arc::new(BatchMintPersisterMetricsConfig::new()),
             red_metrics: Arc::new(RequestErrorDurationMetrics::new()),
             registry: Registry::default(),
         }
@@ -420,7 +420,7 @@ impl MetricsTrait for MetricState {
         self.json_downloader_metrics.start_time();
         self.sequence_consistent_gapfill_metrics.start_time();
         self.fork_cleaner_metrics.start_time();
-        self.rollup_processor_metrics.start_time();
+        self.batch_mint_processor_metrics.start_time();
 
         self.api_metrics.register(&mut self.registry);
         self.ingester_metrics.register(&mut self.registry);
@@ -459,7 +459,8 @@ impl MetricsTrait for MetricState {
             .register(&mut self.registry);
         self.red_metrics.register(&mut self.registry);
         self.fork_cleaner_metrics.register(&mut self.registry);
-        self.rollup_processor_metrics.register(&mut self.registry);
+        self.batch_mint_processor_metrics
+            .register(&mut self.registry);
     }
 }
 
@@ -1131,23 +1132,23 @@ impl ForkCleanerMetricsConfig {
 }
 
 #[derive(Debug, Clone)]
-pub struct RollupProcessorMetricsConfig {
+pub struct BatchMintProcessorMetricsConfig {
     start_time: Gauge,
-    total_rollups: Family<MetricLabel, Counter>,
+    total_batch_mints: Family<MetricLabel, Counter>,
     processing_latency: Family<MetricLabel, Histogram>,
 }
 
-impl Default for RollupProcessorMetricsConfig {
+impl Default for BatchMintProcessorMetricsConfig {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RollupProcessorMetricsConfig {
+impl BatchMintProcessorMetricsConfig {
     pub fn new() -> Self {
         Self {
             start_time: Default::default(),
-            total_rollups: Default::default(),
+            total_batch_mints: Default::default(),
             processing_latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(1.0, 2.0, 12))
             }),
@@ -1156,8 +1157,8 @@ impl RollupProcessorMetricsConfig {
     pub fn start_time(&self) -> i64 {
         self.start_time.set(Utc::now().timestamp())
     }
-    pub fn inc_total_rollups(&self, label: &str) -> u64 {
-        self.total_rollups
+    pub fn inc_total_batch_mints(&self, label: &str) -> u64 {
+        self.total_batch_mints
             .get_or_create(&MetricLabel {
                 name: label.to_owned(),
             })
@@ -1172,45 +1173,45 @@ impl RollupProcessorMetricsConfig {
     }
     pub fn register(&self, registry: &mut Registry) {
         registry.register(
-            "rollup_processor_start_time",
-            "Rollup processor start time",
+            "batch_mint_processor_start_time",
+            "Batch mint processor start time",
             self.start_time.clone(),
         );
 
         registry.register(
-            "total_rollups",
-            "Total rollups processed",
-            self.total_rollups.clone(),
+            "total_batch_mints",
+            "Total batch mints processed",
+            self.total_batch_mints.clone(),
         );
 
         registry.register(
-            "rollups_processing_latency",
-            "A histogram of fork rollups processing latency",
+            "batch_mints_processing_latency",
+            "A histogram of fork batch mints processing latency",
             self.processing_latency.clone(),
         );
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct RollupPersisterMetricsConfig {
+pub struct BatchMintPersisterMetricsConfig {
     start_time: Gauge,
-    rollups_with_status: Family<MetricLabelWithStatus, Counter>,
-    rollups: Family<MetricLabel, Counter>,
+    batch_mints_with_status: Family<MetricLabelWithStatus, Counter>,
+    batch_mints: Family<MetricLabel, Counter>,
     persisting_latency: Family<MetricLabel, Histogram>,
 }
 
-impl Default for RollupPersisterMetricsConfig {
+impl Default for BatchMintPersisterMetricsConfig {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RollupPersisterMetricsConfig {
+impl BatchMintPersisterMetricsConfig {
     pub fn new() -> Self {
         Self {
             start_time: Default::default(),
-            rollups_with_status: Default::default(),
-            rollups: Default::default(),
+            batch_mints_with_status: Default::default(),
+            batch_mints: Default::default(),
             persisting_latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(1.0, 2.0, 12))
             }),
@@ -1219,16 +1220,16 @@ impl RollupPersisterMetricsConfig {
     pub fn start_time(&self) -> i64 {
         self.start_time.set(Utc::now().timestamp())
     }
-    pub fn inc_rollups_with_status(&self, label: &str, status: MetricStatus) -> u64 {
-        self.rollups_with_status
+    pub fn inc_batch_mints_with_status(&self, label: &str, status: MetricStatus) -> u64 {
+        self.batch_mints_with_status
             .get_or_create(&MetricLabelWithStatus {
                 name: label.to_owned(),
                 status,
             })
             .inc()
     }
-    pub fn inc_rollups(&self, label: &str) -> u64 {
-        self.rollups
+    pub fn inc_batch_mints(&self, label: &str) -> u64 {
+        self.batch_mints
             .get_or_create(&MetricLabel {
                 name: label.to_owned(),
             })
@@ -1243,26 +1244,26 @@ impl RollupPersisterMetricsConfig {
     }
     pub fn register(&self, registry: &mut Registry) {
         registry.register(
-            "rollup_processor_start_time",
-            "Rollup processor start time",
+            "batch_mint_processor_start_time",
+            "Batch mints processor start time",
             self.start_time.clone(),
         );
 
         registry.register(
-            "rollups_with_status",
-            "Rollups counter with status",
-            self.rollups_with_status.clone(),
+            "batch_mints_with_status",
+            "Batch mints counter with status",
+            self.batch_mints_with_status.clone(),
         );
 
         registry.register(
-            "rollups",
-            "Rollups counter without status",
-            self.rollups_with_status.clone(),
+            "batch_mints",
+            "Batch mints counter without status",
+            self.batch_mints_with_status.clone(),
         );
 
         registry.register(
-            "rollups_processing_latency",
-            "A histogram of rollups persisting latency",
+            "batch_mints_processing_latency",
+            "A histogram of batch mints persisting latency",
             self.persisting_latency.clone(),
         );
     }

@@ -38,6 +38,12 @@ pub enum UsecaseError {
     HashMismatch(String, String),
     #[error("Serialization: {0}")]
     Serialization(String),
+    #[error("Anchor {0}")]
+    Anchor(#[from] anchor_lang::error::Error),
+    #[error("BatchMintValidation {0}")]
+    BatchMintValidation(
+        #[from] bubblegum_batch_sdk::batch_mint_validations::BatchMintValidationError,
+    ),
 }
 
 impl From<ClientError> for UsecaseError {

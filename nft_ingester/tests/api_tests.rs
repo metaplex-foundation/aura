@@ -44,7 +44,7 @@ mod tests {
     use serde_json::{json, Value};
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
-    use sqlx::{Executor, QueryBuilder};
+    use sqlx::QueryBuilder;
     use testcontainers::clients::Cli;
     use tokio::{sync::Mutex, task::JoinSet};
     use usecase::proofs::MaybeProofChecker;
