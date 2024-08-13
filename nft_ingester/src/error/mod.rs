@@ -123,6 +123,8 @@ pub enum IngesterError {
     SolanaClient(String),
     #[error("BatchMintValidationError: {0}")]
     BatchMintValidation(String),
+    #[error("FileChecksumMismatch: expected {0}, actual file hash {1}")]
+    FileChecksumMismatch(String, String),
 }
 
 impl From<reqwest::Error> for IngesterError {

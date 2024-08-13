@@ -217,9 +217,7 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
                     )
                     .await?;
 
-                    return Err(IngesterError::BatchMintValidation(
-                        bubblegum_batch_sdk::batch_mint_validations::BatchMintValidationError::FileChecksumMismatch(expected, actual).to_string(),
-                    ));
+                    return Err(IngesterError::FileChecksumMismatch(expected, actual));
                 }
                 if let UsecaseError::Serialization(e) = e {
                     batch_mint_to_verify.persisting_state =
