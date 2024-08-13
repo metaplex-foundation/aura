@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use entities::schedule::ScheduledJob;
 use interface::schedules::SchedulesStore;
 use tracing::warn;
@@ -31,7 +30,7 @@ impl SchedulesStore for Storage {
             .schedules
             .iter_start()
             .filter_map(|a| a.ok())
-            .filter_map(|(key_bytes, value_bytes)| {
+            .filter_map(|(_key_bytes, value_bytes)| {
                 bincode::deserialize::<entities::schedule::ScheduledJob>(value_bytes.as_ref()).ok()
             })
             .collect::<Vec<_>>();

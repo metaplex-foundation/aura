@@ -208,7 +208,7 @@ pub fn parse_files_from_selector<'a>(
     track_top_level_file(&mut actual_files, links.get("image"));
     track_top_level_file(&mut actual_files, links.get("animation_url"));
 
-    let mut files: Vec<File> = actual_files.into_values().collect();
+    let files: Vec<File> = actual_files.into_values().collect();
     (links, files)
 }
 

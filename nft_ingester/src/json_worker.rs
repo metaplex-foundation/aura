@@ -1,3 +1,4 @@
+use crate::api::dapi::rpc_asset_convertors::parse_files;
 use crate::config::{setup_config, IngesterConfig, INGESTER_CONFIG_PREFIX};
 use async_trait::async_trait;
 use entities::enums::TaskStatus;
@@ -394,9 +395,12 @@ impl JsonPersister for JsonWorker {
 
         if !rocks_updates.is_empty() {
             let urls_to_download = rocks_updates
-                .keys()
-                .filter(|url| !url.is_empty())
-                .map(|url| (url.clone(), UrlToDownload::default()))
+                .values()
+                .filter(|data| !data.metadata.is_empty())
+                .filter_map(|data| parse_files(&data.metadata))
+                .flat_map(|files| files.into_iter())
+                .filter_map(|file| file.uri)
+                .map(|uri| (uri, UrlToDownload::default()))
                 .collect::<HashMap<_, _>>();
 
             self.rocks_db

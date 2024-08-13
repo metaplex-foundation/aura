@@ -3,7 +3,6 @@ use arweave_rs::Arweave;
 use async_trait::async_trait;
 use nft_ingester::batch_mint::batch_mint_persister::{self, BatchMintPersister};
 use nft_ingester::scheduler::Scheduler;
-use rocks_db::key_encoders::decode_string;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};

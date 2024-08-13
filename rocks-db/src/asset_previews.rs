@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::keccak;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{column::TypedColumn, key_encoders::decode_string, Storage};
+use crate::{column::TypedColumn, errors::StorageError, key_encoders::decode_string, Storage};
 
 const DL_RETRY_INTERVAL_SEC: u64 = 300; // 5 minutes
 pub const DL_MAX_ATTEMPTS: u64 = 5;
@@ -65,8 +65,12 @@ impl TypedColumn for AssetPreviews {
 
     fn decode_key(bytes: Vec<u8>) -> crate::Result<Self::KeyType> {
         let mut arr = [0u8; 32];
-        arr.copy_from_slice(&bytes);
-        Ok(arr)
+        if bytes.len() != arr.len() {
+            Err(StorageError::InvalidKeyLength)
+        } else {
+            arr.copy_from_slice(&bytes);
+            Ok(arr)
+        }
     }
 }
 
@@ -159,7 +163,7 @@ impl UrlsToDownloadStore for Storage {
         for UrlDownloadNotification { url, outcome } in results {
             use interface::assert_urls::DownloadOutcome as E;
             match outcome {
-                E::Success { mime, size } => {
+                E::Success { mime: _, size } => {
                     // This is the main successful scenario: the asset is downloaded, and we can remove its
                     // URL from the UrlToDownload collection and add to downloaded assets.
                     let url_hash = keccak::hash(url.as_bytes());

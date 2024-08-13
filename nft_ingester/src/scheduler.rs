@@ -8,10 +8,10 @@ use rocks_db::asset_previews::UrlToDownload;
 
 use rocks_db::Storage;
 
+use async_trait::async_trait;
 use entities::schedule::JobRunState;
 use entities::schedule::ScheduledJob;
 use interface::schedules::SchedulesStore;
-use tonic::async_trait;
 
 use crate::api::dapi::rpc_asset_convertors::parse_files;
 
@@ -213,7 +213,7 @@ impl Job for InitUrlsToDownloadJob {
 
         let urls: HashMap<String, UrlToDownload> = data
             .into_iter()
-            .filter_map(|(_, OffChainData { url, metadata })| parse_files(&metadata))
+            .filter_map(|(_, OffChainData { url: _, metadata })| parse_files(&metadata))
             .flat_map(|files| files.into_iter().filter_map(|f| f.uri))
             .map(|uri| {
                 (
