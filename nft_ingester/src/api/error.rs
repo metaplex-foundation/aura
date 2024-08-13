@@ -1,6 +1,6 @@
 use jsonrpc_core::ErrorCode;
-use tracing::error;
 use thiserror::Error;
+use tracing::error;
 
 use interface::error::UsecaseError;
 use rocks_db::errors::StorageError;

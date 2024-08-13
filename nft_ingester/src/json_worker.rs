@@ -4,7 +4,6 @@ use entities::enums::TaskStatus;
 use entities::models::{JsonDownloadTask, OffChainData};
 use interface::error::JsonDownloaderError;
 use interface::json::{JsonDownloader, JsonPersister};
-use tracing::{debug, error};
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::tasks::UpdatedTask;
 use postgre_client::PgClient;
@@ -17,6 +16,7 @@ use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::{self, Duration, Instant};
+use tracing::{debug, error};
 
 pub const JSON_CONTENT_TYPE: &str = "application/json";
 pub const JSON_BATCH: usize = 300;

@@ -1,6 +1,5 @@
 use crate::errors::BackupServiceError;
 use futures_util::StreamExt;
-use tracing::{error, info};
 use metrics_utils::IngesterMetricsConfig;
 use rocksdb::backup::{BackupEngine, BackupEngineOptions, RestoreOptions};
 use rocksdb::{Env, DB};
@@ -12,6 +11,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
+use tracing::{error, info};
 
 const BACKUP_PREFIX: &str = "backup-rocksdb";
 const BACKUP_POSTFIX: &str = ".tar.lz4";

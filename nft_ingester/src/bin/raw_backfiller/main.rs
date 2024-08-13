@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use tracing::{error, info};
 use nft_ingester::backfiller::{
     connect_new_bigtable_from_config, Backfiller, DirectBlockParser, TransactionsParser,
 };
@@ -14,6 +13,7 @@ use nft_ingester::init::graceful_stop;
 use nft_ingester::transaction_ingester;
 use prometheus_client::registry::Registry;
 use tempfile::TempDir;
+use tracing::{error, info};
 
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::setup_metrics;

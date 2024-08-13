@@ -1,7 +1,6 @@
 use hyper::{header::CONTENT_TYPE, Body, Method, Request, Response, Server, StatusCode};
 use jsonrpc_http_server::hyper;
 use jsonrpc_http_server::hyper::service::{make_service_fn, service_fn};
-use tracing::info;
 use multer::Multipart;
 use postgre_client::PgClient;
 use std::sync::Arc;
@@ -11,6 +10,7 @@ use tokio::sync::broadcast::Receiver;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tracing::error;
+use tracing::info;
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 

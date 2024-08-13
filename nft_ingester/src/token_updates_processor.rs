@@ -5,7 +5,6 @@ use entities::models::{
     PubkeyWithSlot, TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey, UpdateVersion, Updated,
 };
 use futures::future;
-use tracing::error;
 use metrics_utils::IngesterMetricsConfig;
 use num_traits::Zero;
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
@@ -19,6 +18,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::broadcast::Receiver;
 use tokio::time::Instant;
+use tracing::error;
 use usecase::save_metrics::result_to_metrics;
 
 #[derive(Clone)]
