@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::{collections::HashMap, str::FromStr};
 
 use interface::proofs::ProofChecker;
-use log::{debug, warn};
+use tracing::{debug, warn};
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::cl_items::{ClItemKey, ClLeafKey};
 use rocks_db::errors::StorageError;

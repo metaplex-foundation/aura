@@ -20,7 +20,7 @@ use entities::models::{
 };
 use entities::models::{ChainDataV1, Creator, Uses};
 use lazy_static::lazy_static;
-use log::{debug, error};
+use tracing::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;

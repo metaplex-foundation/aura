@@ -6,7 +6,7 @@ use bubblegum_batch_sdk::model::BatchMint;
 use entities::enums::PersistingBatchMintState;
 use entities::{enums::FailedBatchMintState, models::BatchMintToVerify};
 use interface::{batch_mint::BatchMintDownloader, error::UsecaseError};
-use log::{error, info};
+use tracing::{error, info};
 use metrics_utils::{BatchMintPersisterMetricsConfig, MetricStatus};
 use rocks_db::batch_mint::BatchMintWithStaker;
 use tokio::{sync::broadcast::Receiver, task::JoinError, time::Instant};

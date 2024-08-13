@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use log::{error, info};
+use tracing::{error, info};
 use nft_ingester::backfiller::{
     connect_new_bigtable_from_config, Backfiller, DirectBlockParser, TransactionsParser,
 };

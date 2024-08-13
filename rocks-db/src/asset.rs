@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use bincode::{deserialize, serialize};
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::{EditionData, OffChainData, UpdateVersion, Updated};
-use log::{error, warn};
+use tracing::{error, warn};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};

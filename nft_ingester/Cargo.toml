@@ -5,28 +5,27 @@ edition = "2021"
 publish = false
 
 [dependencies]
-serde_derive = "1.0.190"
+serde_derive = { workspace = true }
 env_logger = "0.10.0"
-log = "0.4.17"
-thiserror = "1.0.31"
-serde_json = "1.0.81"
-tokio = { version = "1.37.0", features = ["full", "tracing", "sync"] }
-sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json"] }
-chrono = "0.4.19"
-serde = "1.0.136"
+thiserror = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
 bs58 = "0.4.0"
-reqwest = "0.11.11"
+reqwest = { workspace = true }
 plerkle_messenger = { version = "1.5.2", features = ['redis'] }
 plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
-flatbuffers = "23.1.21"
-mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum", branch = "feature/cleanup", features = ["serde"] }
-spl-account-compression = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root", features = ["no-entrypoint"] }
+flatbuffers = { workspace = true }
+mpl-bubblegum = { workspace = true }
+spl-account-compression = { workspace = true }
 num-traits = "0.2.15"
 blockbuster = { git = "https://github.com/adm-metaex/blockbuster", branch = "feat/create-tree-with-root" }
-figment = { version = "0.10.6", features = ["env", "toml", "yaml"] }
+figment = { workspace = true }
 solana-sdk = { workspace = true }
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
-solana-transaction-status = "~1.18.11"
+solana-transaction-status = { workspace = true }
 solana-storage-bigtable = "~1.18.11"
 solana-bigtable-connection = "1.10.31"
 stretto = { version = "0.8.4", features = ["async"] }
@@ -38,7 +37,7 @@ tracing-subscriber = { version = "0.3.16", features = [
     "env-filter",
     "ansi",
 ] }
-clap = { version = "4.2.2", features = ["derive", "cargo"] }
+clap = { workspace = true }
 bincode = "1.3.3"
 metrics-utils = { path = "../metrics_utils" }
 rocks-db = { path = "../rocks-db" }
@@ -48,36 +47,36 @@ schemars = "0.8.6"
 jsonrpc-core = {version = "19.0.0", git = "https://github.com/RequescoS/jsonrpc-response-middleware.git"}
 jsonrpc-http-server = {version = "19.0.0", git = "https://github.com/RequescoS/jsonrpc-response-middleware.git"}
 libc = "0.2.144"
-mockall = "0.11.4"
+mockall = { workspace = true }
 entities = { path = "../entities" }
 usecase = { path = "../usecase" }
 grpc = { path = "../grpc" }
 mpl-token-metadata = { version = "4.1.1"}
-async-trait = "0.1.74"
-futures = "0.3.29"
+async-trait = { workspace = true }
+futures = { workspace = true }
 interface = { path = "../interface" }
 tonic = "0.10.2"
-tracing = "0.1.40"
+tracing = { workspace = true }
 backfill-rpc = { path = "../backfill_rpc" }
 prometheus-client = "0.21.2"
 pprof = { version = "0.13.0", features = ["_protobuf", "protobuf-codec"] }
 solana-program = { workspace = true }
 itertools = "0.12.1"
-solana-client = "~1.18.11"
+solana-client = { workspace = true }
 heck = "0.5.0"
 "lazy_static" = "1.4.0"
 tempfile = "3.8.1"
-anchor-lang = "0.29.0"
-spl-concurrent-merkle-tree = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root" }
+anchor-lang = { workspace = true }
+spl-concurrent-merkle-tree = { workspace = true }
 uuid = { version = "1.6.1" }
 multer = "3.0.0"
 xxhash-rust = { version = "0.8.10", features = ["xxh3"] }
 hex = "0.4.3"
 jemallocator = { version = "*", features = ["profiling", "debug"] }
 arweave-rs = {version = "0.2.0", git = "https://github.com/RequescoS/arweave-rs.git", rev = "d8f5ef76f06c96afdf013fe5b62301790631b33f"}
-serde_cbor = "0.11.2"
+serde_cbor = { workspace = true }
 triomphe = "=0.1.9"
-bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "0d529f5" }
+bubblegum-batch-sdk = { workspace = true }
 jsonpath_lib = "0.3.0"
 mime_guess = "2.0.4"
 url = "2.3.1"
@@ -89,7 +88,7 @@ tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 criterion = "0.5.1"
 zip-extract = "0.1.2"
 csv = "1.3.0"
-rand = "0.8.5"
+rand = { workspace = true }
 
 [[bench]]
 name = "integrated_benchmark"

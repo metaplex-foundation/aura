@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::sync::Arc;
 
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
-use log::{error, info};
+use tracing::{error, info};
 use nft_ingester::api::service::start_api;
 use nft_ingester::config::{init_logger, setup_config, ApiConfig};
 use nft_ingester::error::IngesterError;

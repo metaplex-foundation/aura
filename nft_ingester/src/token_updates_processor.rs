@@ -5,7 +5,7 @@ use entities::models::{
     PubkeyWithSlot, TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey, UpdateVersion, Updated,
 };
 use futures::future;
-use log::error;
+use tracing::error;
 use metrics_utils::IngesterMetricsConfig;
 use num_traits::Zero;
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};

@@ -4,7 +4,7 @@ use entities::enums::TaskStatus;
 use entities::models::{JsonDownloadTask, OffChainData};
 use interface::error::JsonDownloaderError;
 use interface::json::{JsonDownloader, JsonPersister};
-use log::{debug, error};
+use tracing::{debug, error};
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::tasks::UpdatedTask;
 use postgre_client::PgClient;

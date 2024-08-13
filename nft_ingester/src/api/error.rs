@@ -1,5 +1,5 @@
 use jsonrpc_core::ErrorCode;
-use log::error;
+use tracing::error;
 use thiserror::Error;
 
 use interface::error::UsecaseError;

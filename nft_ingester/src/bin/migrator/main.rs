@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use entities::enums::TaskStatus;
 use entities::models::{OffChainData, Task};
-use log::{error, info};
+use tracing::{error, info};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait};

@@ -3,7 +3,7 @@ use std::{collections::HashMap, marker::PhantomData, sync::Arc, vec};
 
 use bincode::{deserialize, serialize};
 use entities::models::{TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey};
-use log::error;
+use tracing::error;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
 use serde::{de::DeserializeOwned, Serialize};

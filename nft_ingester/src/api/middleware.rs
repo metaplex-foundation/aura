@@ -9,7 +9,7 @@ use jsonrpc_http_server::hyper::StatusCode;
 use jsonrpc_http_server::jsonrpc_core::futures::TryStreamExt;
 use jsonrpc_http_server::response_middleware::ResponseMiddleware;
 use jsonrpc_http_server::{hyper, RequestMiddleware, RequestMiddlewareAction};
-use log::info;
+use tracing::info;
 use serde_json::json;
 use tokio_util::codec::{BytesCodec, FramedRead};
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use log::{error, info};
+use tracing::{error, info};
 use metrics_utils::{MetricState, MetricsTrait};
 use nft_ingester::buffer::FeesBuffer;
 use nft_ingester::config::{init_logger, setup_config, IngesterConfig, INGESTER_CONFIG_PREFIX};

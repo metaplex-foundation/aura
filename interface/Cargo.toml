@@ -7,20 +7,20 @@ edition = "2021"
 
 [dependencies]
 async-trait="0.1.74"
-futures="0.3.29"
-mockall = "0.12.0"
-thiserror = "1.0.51"
+futures = { workspace = true }
+mockall = { workspace = true }
+thiserror = { workspace = true }
 entities = { path = "../entities" }
 solana-sdk = { workspace = true }
-solana-client = "~1.18.11"
+solana-client = { workspace = true }
 plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
-solana-transaction-status = "~1.18.11"
+solana-transaction-status = { workspace = true }
 solana-storage-bigtable = "~1.18.11"
 solana-program = { workspace = true }
-reqwest = { version = "0.11.23", features = ["json"] }
-anchor-lang = "0.29.0"
-serde_json = "1.0"
-serde_derive = "1.0.190"
-tokio = { version = "1.26.0", features = ["full", "tracing"] }
+reqwest = { workspace = true }
+anchor-lang = { workspace = true }
+serde_json = { workspace = true }
+serde_derive = { workspace = true }
+tokio = { workspace = true }
 jsonrpc-core = {version = "19.0.0", git = "https://github.com/RequescoS/jsonrpc-response-middleware.git"}
-bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "0d529f5" }
+bubblegum-batch-sdk = { workspace = true }

@@ -8,7 +8,7 @@ use interface::error::BlockConsumeError;
 use interface::signature_persistence::{BlockConsumer, BlockProducer};
 use interface::slot_getter::FinalizedSlotGetter;
 use interface::slots_dumper::{SlotGetter, SlotsDumper};
-use log::{error, info, warn};
+use tracing::{error, info, warn};
 use metrics_utils::BackfillerMetricsConfig;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, ForceReingestableSlots};

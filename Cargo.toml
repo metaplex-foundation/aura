@@ -15,9 +15,38 @@ members = [
 ]
 
 [workspace.dependencies]
+tokio = { version = "1.37.0", features = ["full", "sync", "tracing"] }
+
+serde = "1.0.193"
+serde_derive = "1.0.190"
+serde_json = "1.0.81"
+serde_cbor = "0.11.2"
+flatbuffers = "23.1.21"
+
+sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json", "chrono"] }
+
+tracing = "0.1.40"
+
 thiserror = { version = "1"}
+async-trait = "0.1.81"
+reqwest = { version = "0.11.23", features = ["json", "stream"] }
+mockall = "0.13.0"
+chrono = "0.4.31"
+rand = "0.8.5"
+base64 = "0.21.5"
+figment = { version = "0.10.6", features = ["env", "toml", "yaml"] }
+clap = { version = "4.2.2", features = ["derive", "cargo"] }
+futures = "0.3.30"
+
 solana-sdk = { version = "~1.18.11" }
 solana-program = { version = "~1.18.11" }
+solana-client = "~1.18.11"
+solana-transaction-status = "~1.18.11"
+spl-concurrent-merkle-tree = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root" }
+spl-account-compression = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root", features = ["no-entrypoint"] }
+anchor-lang = "0.29.0"
+mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum", branch = "feature/cleanup", features = ["serde"] }
+bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "0d529f5" }
 
 [profile.release]
 lto = true

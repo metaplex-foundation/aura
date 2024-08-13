@@ -1,5 +1,5 @@
 use entities::models::AssetIndex;
-use log::warn;
+use tracing::warn;
 use metrics_utils::SynchronizerMetricsConfig;
 use postgre_client::storage_traits::{AssetIndexStorage, TempClientProvider};
 use rocks_db::{

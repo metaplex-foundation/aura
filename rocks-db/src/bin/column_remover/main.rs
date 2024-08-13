@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use log::info;
+use tracing::info;
 use rocks_db::asset::{
     self, AssetAuthorityDeprecated, AssetDynamicDetailsDeprecated, AssetOwnerDeprecated,
     AssetStaticDetailsDeprecated, MetadataMintMap,

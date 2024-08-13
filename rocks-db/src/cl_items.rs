@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bincode::deserialize;
 use entities::models::{AssetSignature, AssetSignatureKey};
-use log::{debug, error};
+use tracing::{debug, error};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;

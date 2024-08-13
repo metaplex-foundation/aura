@@ -8,7 +8,7 @@ use interface::{
     error::BlockConsumeError,
     signature_persistence::{BlockConsumer, BlockProducer},
 };
-use log::error;
+use tracing::error;
 
 impl TypedColumn for RawBlock {
     type KeyType = u64;

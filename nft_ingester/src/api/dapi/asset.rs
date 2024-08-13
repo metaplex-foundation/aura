@@ -6,7 +6,7 @@ use entities::api_req_params::{AssetSortDirection, Options};
 use entities::models::{AssetSignatureWithPagination, OffChainData};
 use interface::asset_sigratures::AssetSignaturesGetter;
 use interface::json::{JsonDownloader, JsonPersister};
-use log::error;
+use tracing::error;
 use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 

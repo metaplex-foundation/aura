@@ -6,21 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tokio = { workspace = true }
 tonic = "0.10.2"
 prost = "0.12.3"
-futures = "0.3.29"
+futures = { workspace = true }
 solana-sdk = { workspace = true }
 interface = { path = "../interface" }
 entities = { path = "../entities" }
-tokio = { version = "1.35.1", features = ["full"] }
-async-trait = "0.1.74"
-thiserror = "1.0.31"
-solana-transaction-status = "~1.18.11"
-serde_cbor = "0.11.2"
-tracing = "0.1.40"
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+solana-transaction-status = { workspace = true }
+serde_cbor = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
-mockall = "0.12.0"
+mockall = { workspace = true }
 
 [build-dependencies]
 tonic-build = "0.10.2"  # Corresponding build tool for tonic

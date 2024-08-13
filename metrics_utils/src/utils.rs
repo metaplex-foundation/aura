@@ -5,7 +5,7 @@ use hyper::{
 
 use std::{future::Future, io, net::SocketAddr, pin::Pin, sync::Arc};
 
-use log::{error, info, warn};
+use tracing::{error, info, warn};
 
 use crate::errors::MetricsError;
 use prometheus_client::encoding::text::encode;

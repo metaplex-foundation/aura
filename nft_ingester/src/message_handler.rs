@@ -17,7 +17,7 @@ use blockbuster::{
 use chrono::Utc;
 use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
-use log::{debug, error, warn};
+use tracing::{debug, error, warn};
 use solana_program::program_pack::Pack;
 use solana_sdk::pubkey::Pubkey;
 use utils::flatbuffer::account_data_generated::account_data::root_as_account_data;

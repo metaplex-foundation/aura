@@ -1,7 +1,6 @@
 use crate::errors::BackupServiceError;
 use futures_util::StreamExt;
-use log;
-use log::{error, info};
+use tracing::{error, info};
 use metrics_utils::IngesterMetricsConfig;
 use rocksdb::backup::{BackupEngine, BackupEngineOptions, RestoreOptions};
 use rocksdb::{Env, DB};

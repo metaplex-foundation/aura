@@ -11,7 +11,7 @@ use std::time::Duration;
 use clap::Parser;
 use futures::FutureExt;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
-use log::{error, info, warn};
+use tracing::{error, info, warn};
 use nft_ingester::{backfiller, config, json_worker, transaction_ingester};
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use solana_client::nonblocking::rpc_client::RpcClient;

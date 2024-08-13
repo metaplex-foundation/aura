@@ -1,7 +1,7 @@
 use hyper::{header::CONTENT_TYPE, Body, Method, Request, Response, Server, StatusCode};
 use jsonrpc_http_server::hyper;
 use jsonrpc_http_server::hyper::service::{make_service_fn, service_fn};
-use log::info;
+use tracing::info;
 use multer::Multipart;
 use postgre_client::PgClient;
 use std::sync::Arc;
