@@ -1,7 +1,6 @@
 use crate::{
     key_encoders::decode_pubkey,
     storage_traits::{AssetIndexReader, Dumper},
-    utils::wait_for_all_tasks_to_finish,
     Storage,
 };
 use async_trait::async_trait;
@@ -12,7 +11,7 @@ use entities::{
 };
 use hex;
 use inflector::Inflector;
-use log::error;
+use log::{error, info};
 use serde::{Serialize, Serializer};
 use solana_sdk::pubkey::Pubkey;
 use std::{
@@ -21,11 +20,12 @@ use std::{
     io::BufWriter,
     sync::Arc,
 };
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::JoinError};
 use tokio::{
     sync::{broadcast, Mutex},
     task::JoinSet,
 };
+use usecase::graceful_stop::graceful_stop;
 
 const MPSC_BUFFER_SIZE: usize = 1_000_000;
 const ITERATION_WORKERS: usize = 3;
@@ -113,7 +113,7 @@ impl Storage {
                 shutdown_cloned,
                 rx_metadata,
             )
-            .await;
+            .await
         });
 
         let (tx_assets, rx_assets) = mpsc::channel(MPSC_BUFFER_SIZE);
@@ -121,7 +121,7 @@ impl Storage {
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
         writer_tasks.spawn(async move {
-            Self::write_to_file(assets_file_and_path, rx_cloned, shutdown_cloned, rx_assets).await;
+            Self::write_to_file(assets_file_and_path, rx_cloned, shutdown_cloned, rx_assets).await
         });
 
         let (tx_creators, rx_creators) = mpsc::channel(MPSC_BUFFER_SIZE);
@@ -135,7 +135,7 @@ impl Storage {
                 shutdown_cloned,
                 rx_creators,
             )
-            .await;
+            .await
         });
 
         let (tx_authority, rx_authority) = mpsc::channel(MPSC_BUFFER_SIZE);
@@ -149,7 +149,7 @@ impl Storage {
                 shutdown_cloned,
                 rx_authority,
             )
-            .await;
+            .await
         });
 
         let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
@@ -180,7 +180,7 @@ impl Storage {
                     metadata_key_set_cloned,
                     authorities_key_set_cloned,
                 )
-                .await;
+                .await
             });
         }
 
@@ -227,7 +227,9 @@ impl Storage {
                 e.to_string()
             )
         })?;
-        wait_for_all_tasks_to_finish(&mut iterator_tasks, "Iterator".to_string()).await;
+        info!("Stopping iterators...");
+        graceful_stop(&mut iterator_tasks).await;
+        info!("All iterators are stopped.");
 
         // Once iterators are stopped it's safe to shutdown writers.
         writer_shutdown_tx.send(()).map_err(|e| {
@@ -236,7 +238,9 @@ impl Storage {
                 e.to_string()
             )
         })?;
-        wait_for_all_tasks_to_finish(&mut writer_tasks, "Writer".to_string()).await;
+        info!("Stopping writers...");
+        graceful_stop(&mut writer_tasks).await;
+        info!("All writers are stopped.");
 
         Ok(())
     }
@@ -251,7 +255,7 @@ impl Storage {
         tx_authority_cloned: tokio::sync::mpsc::Sender<(String, String, i64)>,
         metadata_key_set: Arc<Mutex<HashSet<Vec<u8>>>>,
         authorities_key_set: Arc<Mutex<HashSet<Pubkey>>>,
-    ) {
+    ) -> Result<(), JoinError> {
         loop {
             // whole application is stopped
             if !rx_cloned.is_empty() {
@@ -365,6 +369,8 @@ impl Storage {
                 }
             }
         }
+
+        Ok(())
     }
 
     async fn write_to_file<T: Serialize>(
@@ -372,7 +378,7 @@ impl Storage {
         application_shutdown: tokio::sync::broadcast::Receiver<()>,
         worker_shutdown: tokio::sync::broadcast::Receiver<()>,
         mut data_channel: tokio::sync::mpsc::Receiver<T>,
-    ) {
+    ) -> Result<(), JoinError> {
         let buf_writer = BufWriter::with_capacity(ONE_G, file_and_path.0);
         let mut writer = WriterBuilder::new()
             .has_headers(false)
@@ -406,6 +412,8 @@ impl Storage {
                 file_and_path.1, e
             );
         }
+
+        Ok(())
     }
 
     fn encode<T: AsRef<[u8]>>(v: T) -> String {

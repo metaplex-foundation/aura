@@ -62,7 +62,6 @@ pub mod token_accounts;
 pub mod transaction;
 pub mod transaction_client;
 pub mod tree_seq;
-pub mod utils;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
