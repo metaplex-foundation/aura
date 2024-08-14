@@ -3,12 +3,12 @@ use async_trait::async_trait;
 use coingecko::CoinGeckoClient;
 use interface::error::UsecaseError;
 use interface::price_fetcher::PriceFetcher;
-use log::error;
 use rocks_db::token_prices::TokenPrice;
 use rocks_db::Storage;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
+use tracing::log::error;
 
 pub const SOLANA_CURRENCY: &str = "solana";
 const USD_CURRENCY: &str = "usd";

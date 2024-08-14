@@ -65,6 +65,7 @@ tonic-build = "0.10.2"
 prost = "0.12.3"
 jsonrpc-core = { version = "19.0.0", git = "https://github.com/RequescoS/jsonrpc-response-middleware.git" }
 open-rpc-schema = { version = "0.0.4" }
+coingecko = "1.0.0"
 
 
 # Traits
