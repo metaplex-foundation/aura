@@ -4,10 +4,10 @@ use crate::api::dapi::response::{AssetList, NativeBalance};
 use crate::api::dapi::rpc_asset_convertors::asset_list_to_rpc;
 use crate::price_fetcher::SOLANA_CURRENCY;
 use entities::api_req_params::{AssetSorting, SearchAssetsOptions};
+use interface::account_balance::AccountBalanceGetter;
 use interface::json::{JsonDownloader, JsonPersister};
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -32,8 +32,9 @@ pub async fn search_assets(
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-    rpc_client: Arc<RpcClient>,
+    account_balance_getter: Arc<impl AccountBalanceGetter>,
 ) -> Result<AssetList, StorageError> {
+    let show_native_balance = options.show_native_balance;
     let (asset_list, native_balance) = tokio::join!(
         fetch_assets(
             index_client,
@@ -51,7 +52,12 @@ pub async fn search_assets(
             max_json_to_download,
             tasks,
         ),
-        fetch_native_balance(filter.owner_address, rpc_client, rocks_db,)
+        fetch_native_balance(
+            show_native_balance,
+            filter.owner_address,
+            account_balance_getter,
+            rocks_db,
+        )
     );
     let native_balance = match native_balance {
         Ok(native_balance) => native_balance,
@@ -177,29 +183,32 @@ async fn fetch_assets(
 }
 
 async fn fetch_native_balance(
+    show_native_balance: bool,
     owner_address: Option<Vec<u8>>,
-    rpc_client: Arc<RpcClient>,
+    account_balance_getter: Arc<impl AccountBalanceGetter>,
     rocks_db: Arc<Storage>,
 ) -> Result<Option<NativeBalance>, StorageError> {
+    if !show_native_balance {
+        return Ok(None);
+    }
     let Some(owner_address) = owner_address else {
         return Ok(None);
     };
-    let account_info =
-        rpc_client
-            .get_account(&Pubkey::try_from(owner_address).map_err(|pk| {
+    let lamports =
+        account_balance_getter
+            .get_account_balance_lamports(&Pubkey::try_from(owner_address).map_err(|pk| {
                 StorageError::Common(format!("Cannot convert public key: {:?}", pk))
             })?)
             .await
-            .map_err(|e| StorageError::Common(format!("Solana client: {}", e)))?;
+            .map_err(|e| StorageError::Common(format!("Account balance getter: {}", e)))?;
     let token_price = rocks_db
         .token_prices
         .get(SOLANA_CURRENCY.to_string())?
         .ok_or(StorageError::Common("Not token price".to_string()))?;
 
     Ok(Some(NativeBalance {
-        lamports: account_info.lamports,
+        lamports,
         price_per_sol: token_price.price,
-        total_price: token_price.price * (account_info.lamports as f64)
-            / 10_f64.powi(SOLANA_DECIMALS),
+        total_price: token_price.price * (lamports as f64) / 10_f64.powi(SOLANA_DECIMALS),
     }))
 }

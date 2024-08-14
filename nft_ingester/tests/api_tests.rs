@@ -20,6 +20,7 @@ mod tests {
         },
         models::{ChainDataV1, UpdateVersion, Updated},
     };
+    use interface::account_balance::MockAccountBalanceGetter;
     use interface::json::{MockJsonDownloader, MockJsonPersister};
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig};
     use mockall::predicate;
@@ -29,6 +30,7 @@ mod tests {
         AssetList, CoreFeesAccountsList, TokenAccountsList, TransactionSignatureList,
     };
     use nft_ingester::api::error::DasApiError;
+    use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater};
     use nft_ingester::{
         buffer::Buffer,
         config::JsonMiddlewareConfig,
@@ -43,7 +45,6 @@ mod tests {
         AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
     };
     use serde_json::{json, Value};
-    use solana_client::nonblocking::rpc_client::RpcClient;
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
     use sqlx::QueryBuilder;
@@ -58,18 +59,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let limit = 10;
@@ -476,18 +481,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -615,18 +624,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -732,18 +745,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -888,18 +905,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -1052,18 +1073,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -1196,18 +1221,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
 
         let first_tree = Pubkey::new_unique();
         let second_tree = Pubkey::new_unique();
@@ -1407,18 +1436,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
 
         let buffer = Arc::new(Buffer::new());
         let token_updates_processor = TokenAccsProcessor::new(
@@ -1613,18 +1646,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
 
         let buffer = Arc::new(Buffer::new());
         let token_updates_processor = TokenAccsProcessor::new(
@@ -1700,7 +1737,12 @@ mod tests {
     }
 
     async fn check_pagination(
-        api: &nft_ingester::api::api_impl::DasApi<MaybeProofChecker, JsonWorker, JsonWorker>,
+        api: &nft_ingester::api::api_impl::DasApi<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >,
         owner: Option<String>,
         mint: Option<String>,
     ) {
@@ -1855,18 +1897,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -1909,18 +1955,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -1960,18 +2010,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -2011,18 +2065,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -2111,6 +2169,7 @@ mod tests {
             MaybeProofChecker,
             MockJsonDownloader,
             MockJsonPersister,
+            MockAccountBalanceGetter,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2123,7 +2182,7 @@ mod tests {
                 is_enabled: true,
                 max_urls_to_parse: 10,
             },
-            Arc::new(RpcClient::new("".to_string())),
+            Arc::new(MockAccountBalanceGetter::new()),
         );
 
         let pb = Pubkey::new_unique();
@@ -2259,18 +2318,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let asset_id = Pubkey::new_unique();
         let tree_id = Pubkey::new_unique();
         env.rocks_env
@@ -2309,18 +2372,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let asset_fees_count = 1000;
         let mut asset_ids = Vec::with_capacity(asset_fees_count);
         for _ in 0..asset_fees_count {
@@ -2390,18 +2457,22 @@ mod tests {
         let total_assets = 2000;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, total_assets, SLOT_UPDATED).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-                Arc::new(RpcClient::new("".to_string())),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = SearchAssets {
@@ -2453,5 +2524,54 @@ mod tests {
             .unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
         assert_eq!(res.grand_total, None);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_native_balance() {
+        let cnt = 0;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let solana_price_updater =
+            SolanaPriceUpdater::new(env.rocks_env.storage.clone(), CoinGeckoPriceFetcher::new());
+        solana_price_updater.update_price().await.unwrap();
+        let mut mock_account_balance_getter = MockAccountBalanceGetter::new();
+        mock_account_balance_getter
+            .expect_get_account_balance_lamports()
+            .returning(move |_| Ok(10_u64.pow(9)));
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(mock_account_balance_getter),
+        );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(Pubkey::new_unique().to_string()),
+            options: Some(SearchAssetsOptions {
+                show_unverified_collections: true,
+                show_native_balance: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let res = api
+            .search_assets(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+        assert!(res.native_balance.unwrap().total_price > 0.0);
     }
 }

@@ -12,6 +12,7 @@ use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{ApiMetricsConfig, JsonDownloaderMetricsConfig};
+use nft_ingester::api::account_balance::AccountBalanceGetterImpl;
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -99,6 +100,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let rocks_storage = Arc::new(storage);
 
     let rpc_client = Arc::new(RpcClient::new(config.rpc_host));
+    let account_balance_getter = Arc::new(AccountBalanceGetterImpl::new(rpc_client.clone()));
     let cloned_rocks_storage = rocks_storage.clone();
     let proof_checker = config
         .check_proofs
@@ -148,7 +150,7 @@ pub async fn main() -> Result<(), IngesterError> {
             config.consistence_backfilling_slots_threshold,
             config.batch_mint_service_port,
             config.file_storage_path_container.as_str(),
-            rpc_client,
+            account_balance_getter,
         )
         .await
         {

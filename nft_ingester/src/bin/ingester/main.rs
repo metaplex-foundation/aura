@@ -33,6 +33,7 @@ use metrics_utils::{
     BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait,
     SequenceConsistentGapfillMetricsConfig,
 };
+use nft_ingester::api::account_balance::AccountBalanceGetterImpl;
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
@@ -512,6 +513,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_api_metrics = metrics_state.api_metrics.clone();
     let rpc_client = Arc::new(RpcClient::new(config.rpc_host.clone()));
+    let account_balance_getter = Arc::new(AccountBalanceGetterImpl::new(rpc_client.clone()));
     let proof_checker = config
         .check_proofs
         .then_some(Arc::new(MaybeProofChecker::new(
@@ -550,7 +552,7 @@ pub async fn main() -> Result<(), IngesterError> {
             api_config.consistence_backfilling_slots_threshold,
             api_config.batch_mint_service_port,
             api_config.file_storage_path_container.as_str(),
-            rpc_client,
+            account_balance_getter,
         )
         .await
         {

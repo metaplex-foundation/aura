@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use usecase::proofs::MaybeProofChecker;
 
+use crate::api::account_balance::AccountBalanceGetterImpl;
 use crate::api::meta_middleware::RpcMetaMiddleware;
 use crate::api::*;
 use crate::json_worker::JsonWorker;
@@ -20,7 +21,7 @@ pub struct RpcApiBuilder;
 
 impl RpcApiBuilder {
     pub(crate) fn build(
-        api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker>,
+        api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker, AccountBalanceGetterImpl>,
         consistency_checkers: Vec<Arc<dyn ConsistencyChecker>>,
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     ) -> Result<MetaIoHandler<RpcMetaMiddleware, RpcMetaMiddleware>, DasApiError> {

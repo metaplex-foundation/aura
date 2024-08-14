@@ -4,7 +4,6 @@ use jsonrpc_http_server::hyper::service::{make_service_fn, service_fn};
 use log::info;
 use multer::Multipart;
 use postgre_client::PgClient;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -20,6 +19,7 @@ use interface::consistency_check::ConsistencyChecker;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 
+use crate::api::account_balance::AccountBalanceGetterImpl;
 use crate::api::error::DasApiError;
 use {crate::api::DasApi, std::net::SocketAddr};
 use {
@@ -64,7 +64,7 @@ pub async fn start_api(
     consistence_backfilling_slots_threshold: u64,
     batch_mint_service_port: Option<u16>,
     file_storage_path: &str,
-    rpc_client: Arc<RpcClient>,
+    account_balance_getter: Arc<AccountBalanceGetterImpl>,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -100,7 +100,7 @@ pub async fn start_api(
         json_downloader,
         json_persister,
         json_middleware_config.unwrap_or_default(),
-        rpc_client,
+        account_balance_getter,
     );
 
     run_api(
@@ -125,7 +125,7 @@ pub async fn start_api(
 
 #[allow(clippy::too_many_arguments)]
 async fn run_api(
-    api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker>,
+    api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker, AccountBalanceGetterImpl>,
     middlewares_data: Option<MiddlewaresData>,
     addr: SocketAddr,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,

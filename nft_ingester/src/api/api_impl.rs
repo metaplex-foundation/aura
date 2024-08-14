@@ -24,21 +24,22 @@ use entities::api_req_params::{
     GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetCoreFees,
     GetGrouping, GetTokenAccounts, Pagination, SearchAssets, SearchAssetsOptions,
 };
+use interface::account_balance::AccountBalanceGetter;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
-use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use usecase::validation::{validate_opt_pubkey, validate_pubkey};
 
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
 
-pub struct DasApi<PC, JD, JP>
+pub struct DasApi<PC, JD, JP, ABG>
 where
     PC: ProofChecker + Sync + Send + 'static,
     JD: JsonDownloader + Sync + Send + 'static,
     JP: JsonPersister + Sync + Send + 'static,
+    ABG: AccountBalanceGetter + Sync + Send + 'static,
 {
     pub(crate) pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
@@ -48,14 +49,15 @@ where
     json_downloader: Option<Arc<JD>>,
     json_persister: Option<Arc<JP>>,
     json_middleware_config: JsonMiddlewareConfig,
-    client: Arc<RpcClient>,
+    account_balance_getter: Arc<ABG>,
 }
 
-impl<PC, JD, JP> DasApi<PC, JD, JP>
+impl<PC, JD, JP, ABG> DasApi<PC, JD, JP, ABG>
 where
     PC: ProofChecker + Sync + Send + 'static,
     JD: JsonDownloader + Sync + Send + 'static,
     JP: JsonPersister + Sync + Send + 'static,
+    ABG: AccountBalanceGetter + Sync + Send + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -67,7 +69,7 @@ where
         json_downloader: Option<Arc<JD>>,
         json_persister: Option<Arc<JP>>,
         json_middleware_config: JsonMiddlewareConfig,
-        client: Arc<RpcClient>,
+        client: Arc<ABG>,
     ) -> Self {
         DasApi {
             pg_client,
@@ -78,7 +80,7 @@ where
             json_downloader,
             json_persister,
             json_middleware_config,
-            client,
+            account_balance_getter: client,
         }
     }
 }
@@ -87,11 +89,12 @@ pub fn not_found() -> DasApiError {
     DasApiError::NoDataFoundError
 }
 
-impl<PC, JD, JP> DasApi<PC, JD, JP>
+impl<PC, JD, JP, ABG> DasApi<PC, JD, JP, ABG>
 where
     PC: ProofChecker + Sync + Send + 'static,
     JD: JsonDownloader + Sync + Send + 'static,
     JP: JsonPersister + Sync + Send + 'static,
+    ABG: AccountBalanceGetter + Sync + Send + 'static,
 {
     pub async fn check_health(&self) -> Result<Value, DasApiError> {
         let label = "check_health";
@@ -632,7 +635,7 @@ where
             self.json_persister.clone(),
             self.json_middleware_config.max_urls_to_parse,
             tasks,
-            self.client.clone(),
+            self.account_balance_getter.clone(),
         )
         .await?;
 

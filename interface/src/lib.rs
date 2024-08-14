@@ -1,3 +1,4 @@
+pub mod account_balance;
 pub mod asset_sigratures;
 pub mod asset_streaming_and_discovery;
 pub mod batch_mint;
