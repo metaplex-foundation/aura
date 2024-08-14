@@ -5,12 +5,12 @@ use std::time::SystemTime;
 use blockbuster::programs::mpl_core_program::MplCoreAccountData;
 use blockbuster::token_metadata::accounts::Metadata;
 use blockbuster::token_metadata::types::TokenStandard;
-use log::error;
 use mpl_token_metadata::accounts::MasterEdition;
 use serde_json::json;
 use solana_program::pubkey::Pubkey;
 use tokio::sync::broadcast::Receiver;
 use tokio::time::Instant;
+use tracing::error;
 
 use crate::buffer::Buffer;
 use entities::enums::{ChainMutability, RoyaltyTargetType, SpecificationAssetClass};

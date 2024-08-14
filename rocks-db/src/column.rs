@@ -3,11 +3,11 @@ use std::{collections::HashMap, marker::PhantomData, sync::Arc, vec};
 
 use bincode::{deserialize, serialize};
 use entities::models::{TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey};
-use log::error;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
 use serde::{de::DeserializeOwned, Serialize};
 use solana_sdk::pubkey::Pubkey;
+use tracing::error;
 
 use crate::key_encoders::{decode_pubkeyx2, decode_pubkeyx3, encode_pubkeyx2, encode_pubkeyx3};
 use crate::{Result, StorageError, BATCH_GET_ACTION, ROCKS_COMPONENT};

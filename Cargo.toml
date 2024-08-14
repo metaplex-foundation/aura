@@ -15,9 +15,146 @@ members = [
 ]
 
 [workspace.dependencies]
+# Tokio ecosystem
+tokio = { version = "1.37.0", features = ["full", "sync", "tracing"] }
+tokio-stream = "0.1.11"
+tokio-util = { version = "0.7.10", features = ["codec", "compat"] }
+
+
+# Serde ecosystem and seryalization tools
+serde = "1.0.193"
+serde_derive = "1.0.190"
+serde_json = "1.0.81"
+serde_cbor = "0.11.2"
+serde_with = "3.7.0"
+flatbuffers = "23.1.21"
+plerkle_serialization = "1.9.0"
+plerkle_messenger = { version = "1.9.0", features = ['redis'] }
+
+
+# Database infrastructure
+rocksdb = { version = "0.21.0", features = ["multi-threaded-cf"] }
+redis = { version = "0.22.3", features = ["aio", "tokio-comp", "streams", "tokio-native-tls-comp"] }
+sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json", "chrono"] }
+uuid = { version = "1.6.1", features = ["v4"] }
+
+
+# Logging
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.16", features = ["json", "env-filter", "ansi"] }
+env_logger = "0.10.1"
+
+
+# Testing and benchmarking
+mockall = "0.13.0"
+assert-json-diff = "2.0.2"
+testcontainers = "0.15.0"
+testcontainers-modules = { version = "0.3.2", features = ["postgres"] }
+tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
+criterion = "0.5.1"
+prometheus-client = "0.21.2"
+pprof = { version = "0.13.0", features = ["_protobuf", "protobuf-codec"] }
+
+
+# HTTP, RPC and Schemas
+hyper = { version = "0.14.23", features = ["server"] }
+jsonrpc-http-server = { version = "19.0.0", git = "https://github.com/RequescoS/jsonrpc-response-middleware.git" }
+schemars = "0.8.6"
+tonic = "0.10.2"
+tonic-build = "0.10.2"
+prost = "0.12.3"
+jsonrpc-core = { version = "19.0.0", git = "https://github.com/RequescoS/jsonrpc-response-middleware.git" }
+open-rpc-schema = { version = "0.0.4" }
+
+
+# Traits
+async-trait = "0.1.81"
+num-derive = "0.4.1"
+num-traits = "0.2.17"
+
+
+# Configuration, env-vars and cli parsing
+figment = { version = "0.10.6", features = ["env", "toml", "yaml"] }
+clap = { version = "4.2.2", features = ["derive", "cargo"] }
+dotenvy = "0.15.7"
+
+
+# Errors, futures, helpers, tools, time, etc...
+# Errors
 thiserror = { version = "1"}
-solana-sdk = { version = "~1.18.11" }
-solana-program = { version = "~1.18.11" }
+# Clients
+arweave-rs = { version = "0.2.0", git = "https://github.com/RequescoS/arweave-rs.git", rev = "d8f5ef76f06c96afdf013fe5b62301790631b33f" }
+reqwest = { version = "0.11.23", features = ["json", "stream"] }
+# Time
+chrono = "0.4.31"
+# Async and Sync
+futures = "0.3.30"
+futures-util = "0.3.29"
+async-recursion = "1.1.1"
+async-channel = "2.3.1"
+stretto = { version = "0.8.4", features = ["async"] }
+triomphe = "=0.1.9"
+# Lazy
+once_cell = "1.19.0"
+lazy_static = "1.4.0"
+# Strings
+Inflector = "0.11.4"
+heck = "0.5.0"
+regex = "1.10.2"
+# Web
+url = "2.3.1"
+mime_guess = "2.0.4"
+# Other
+num_cpus = "1.16.0"
+itertools = "0.12.1"
+jsonpath_lib = "0.3.0"
+
+
+# Low level tools: FFI, hashing, encoding, random, etc...
+libc = "0.2.144"
+base64 = "0.21.5"
+rand = "0.8.5"
+bincode = "1.3.3"
+hex = "0.4.3"
+bs58 = "0.4.0"
+sha2 = "0.10.0"
+xxhash-rust = { version = "0.8.10", features = ["xxh3"] }
+jemallocator = { version = "*", features = ["profiling", "debug"] }
+
+
+# Compression, zipping and files
+lz4 = "1.24.0"
+tar = "0.4.40"
+csv = "1.3.0"
+rustyline = "13.0.0"
+tempfile = "3.8.1"
+multer = "3.0.0"
+zip-extract = "0.1.2"
+
+
+# Solana ecosystem
+solana-sdk = "~1.18.11"
+solana-program = "~1.18.11"
+solana-client = "~1.18.11"
+solana-transaction-status = "~1.18.11"
+spl-concurrent-merkle-tree = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root" }
+spl-account-compression = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root", features = ["no-entrypoint"] }
+solana-storage-bigtable = "~1.18.11"
+solana-bigtable-connection = "1.10.31"
+spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
+
+
+# Anchor ecosystem
+anchor-lang = "0.29.0"
+
+
+# Metaplex ecosystem
+blockbuster = { git = "https://github.com/adm-metaex/blockbuster", branch = "feat/create-tree-with-root" }
+mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum", branch = "feature/cleanup", features = ["serde"] }
+bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "0d529f5" }
+mpl-token-metadata = "4.1.1"
+
+
 
 [profile.release]
 lto = true

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use log::{error, info};
 use metrics_utils::{MetricState, MetricsTrait};
 use nft_ingester::buffer::FeesBuffer;
 use nft_ingester::config::{init_logger, setup_config, IngesterConfig, INGESTER_CONFIG_PREFIX};
@@ -13,6 +12,7 @@ use postgre_client::PgClient;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
+use tracing::{error, info};
 
 pub const PG_MIGRATIONS_PATH: &str = "./migrations";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;

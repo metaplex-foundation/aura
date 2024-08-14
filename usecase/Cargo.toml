@@ -6,31 +6,31 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-trait = "0.1.75"
+async-trait = { workspace = true }
 entities = { path = "../entities" }
 interface = { path = "../interface" }
-tracing = "0.1.40"
+tracing = { workspace = true }
 solana-sdk = { workspace = true }
 metrics-utils = { path = "../metrics_utils" }
-tokio = { version = "1.26.0", features = ["full", "tracing"] }
-solana-storage-bigtable = "~1.18.11"
-solana-bigtable-connection = "1.10.31"
-solana-transaction-status = "~1.18.11"
-mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum.git", branch = "feature/cleanup", features = ["serde"] }
-mockall = "0.12.0"
-spl-account-compression = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root", features = ["no-entrypoint"] }
-solana-client = "~1.18.11"
+tokio = { workspace = true }
+solana-storage-bigtable = { workspace = true }
+solana-bigtable-connection = { workspace = true }
+solana-transaction-status = { workspace = true }
+mpl-bubblegum = { workspace = true }
+mockall = { workspace = true }
+spl-account-compression = { workspace = true }
+solana-client = { workspace = true }
 solana-program = { workspace = true }
-spl-concurrent-merkle-tree = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root" }
-rand = "0.8.5"
-serde_json = "1.0"
-serde_derive = "1.0.190"
-serde = "1.0.136"
-anchor-lang = "0.29.0"
-plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
-async-recursion = "1.1.1"
-thiserror = "1.0.31"
-bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "0d529f5" }
+spl-concurrent-merkle-tree = { workspace = true }
+rand = { workspace = true }
+serde_json = { workspace = true }
+serde_derive = { workspace = true }
+serde = { workspace = true }
+anchor-lang = { workspace = true }
+plerkle_serialization = { workspace = true }
+async-recursion = { workspace = true }
+thiserror = { workspace = true }
+bubblegum-batch-sdk = { workspace = true }
 
 [dev-dependencies]
-futures = "0.3.30"
+futures = { workspace = true }

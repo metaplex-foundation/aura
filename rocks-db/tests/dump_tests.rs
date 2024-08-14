@@ -9,7 +9,7 @@ use tempfile::TempDir;
 async fn test_scv_export_from_rocks() {
     let env = RocksTestEnvironment::new(&[]);
     let number_of_assets = 1000;
-    let _generated_assets = env.generate_assets(number_of_assets, 25);
+    let _generated_assets = env.generate_assets(number_of_assets, 25).await;
     let storage = env.storage;
     let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
     let temp_dir = TempDir::new().expect("Failed to create a temporary directory");

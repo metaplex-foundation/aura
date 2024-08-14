@@ -20,7 +20,6 @@ use entities::models::{
 };
 use entities::models::{ChainDataV1, Creator, Uses};
 use lazy_static::lazy_static;
-use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
@@ -42,6 +41,7 @@ use std::collections::{HashSet, VecDeque};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing::{debug, error};
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
 const BATCH_MINT_BATCH_FLUSH_SIZE: usize = 10_000;

@@ -8,10 +8,10 @@ use bincode::deserialize;
 use bubblegum_batch_sdk::model::BatchMint;
 use entities::enums::{FailedBatchMintState, PersistingBatchMintState};
 use entities::models::{BatchMintToVerify, FailedBatchMint};
-use log::error;
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
+use tracing::error;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FailedBatchMintKey {
