@@ -511,13 +511,14 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_api_metrics = metrics_state.api_metrics.clone();
-    let proof_checker = config.rpc_host.clone().map(|host| {
-        Arc::new(MaybeProofChecker::new(
-            Arc::new(RpcClient::new(host)),
+    let rpc_client = Arc::new(RpcClient::new(config.rpc_host.clone()));
+    let proof_checker = config
+        .check_proofs
+        .then_some(Arc::new(MaybeProofChecker::new(
+            rpc_client.clone(),
             config.check_proofs_probability,
             config.check_proofs_commitment,
-        ))
-    });
+        )));
     let tasks_clone = mutexed_tasks.clone();
     let cloned_rx = shutdown_rx.resubscribe();
 
@@ -549,6 +550,7 @@ pub async fn main() -> Result<(), IngesterError> {
             api_config.consistence_backfilling_slots_threshold,
             api_config.batch_mint_service_port,
             api_config.file_storage_path_container.as_str(),
+            rpc_client,
         )
         .await
         {

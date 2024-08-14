@@ -23,6 +23,7 @@ mod tests {
         columns::{Mint, TokenAccount},
         Storage,
     };
+    use solana_client::nonblocking::rpc_client::RpcClient;
     use solana_sdk::pubkey::Pubkey;
     use std::fs::File;
     use std::str::FromStr;
@@ -247,6 +248,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
 
         let buffer = Arc::new(Buffer::new());
@@ -326,6 +328,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
 
         let buffer = Arc::new(Buffer::new());
@@ -405,6 +408,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
 
         let buffer = Arc::new(Buffer::new());
@@ -484,6 +488,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
 
         let buffer = Arc::new(Buffer::new());

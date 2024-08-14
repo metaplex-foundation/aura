@@ -148,7 +148,9 @@ pub struct IngesterConfig {
     pub run_sequence_consistent_checker: bool,
     #[serde(default = "default_sequence_consistent_checker_wait_period_sec")]
     pub sequence_consistent_checker_wait_period_sec: u64,
-    pub rpc_host: Option<String>,
+    pub rpc_host: String,
+    #[serde(default)]
+    pub check_proofs: bool,
     #[serde(default = "default_check_proofs_probability")]
     pub check_proofs_probability: f64,
     #[serde(default = "default_check_proofs_commitment")]
@@ -261,7 +263,9 @@ pub struct ApiConfig {
     #[serde(default)]
     pub run_profiling: bool,
     pub profiling_file_path_container: Option<String>,
-    pub rpc_host: Option<String>,
+    pub rpc_host: String,
+    #[serde(default)]
+    pub check_proofs: bool,
     #[serde(default = "default_check_proofs_probability")]
     pub check_proofs_probability: f64,
     #[serde(default = "default_check_proofs_commitment")]

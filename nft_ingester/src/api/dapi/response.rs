@@ -20,6 +20,14 @@ pub struct GetGroupingResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
 #[serde(default)]
+pub struct NativeBalance {
+    pub lamports: u64,
+    pub price_per_sol: f64,
+    pub total_price: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
+#[serde(default)]
 pub struct AssetList {
     pub total: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -36,6 +44,9 @@ pub struct AssetList {
     pub errors: Vec<AssetError>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "nativeBalance")]
+    pub native_balance: Option<NativeBalance>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]

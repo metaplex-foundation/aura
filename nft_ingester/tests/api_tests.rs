@@ -43,6 +43,7 @@ mod tests {
         AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
     };
     use serde_json::{json, Value};
+    use solana_client::nonblocking::rpc_client::RpcClient;
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
     use sqlx::QueryBuilder;
@@ -67,6 +68,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -484,6 +486,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -622,6 +625,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -738,6 +742,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -893,6 +898,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1056,6 +1062,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1199,6 +1206,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
 
         let first_tree = Pubkey::new_unique();
@@ -1409,6 +1417,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
 
         let buffer = Arc::new(Buffer::new());
@@ -1614,6 +1623,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
 
         let buffer = Arc::new(Buffer::new());
@@ -1855,6 +1865,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1908,6 +1919,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1958,6 +1970,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2008,6 +2021,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2109,6 +2123,7 @@ mod tests {
                 is_enabled: true,
                 max_urls_to_parse: 10,
             },
+            Arc::new(RpcClient::new("".to_string())),
         );
 
         let pb = Pubkey::new_unique();
@@ -2254,6 +2269,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let asset_id = Pubkey::new_unique();
         let tree_id = Pubkey::new_unique();
@@ -2303,6 +2319,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let asset_fees_count = 1000;
         let mut asset_ids = Vec::with_capacity(asset_fees_count);
@@ -2383,6 +2400,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2391,6 +2409,7 @@ mod tests {
             page: Some(1),
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
+                show_grand_total: true,
                 ..Default::default()
             }),
             ..Default::default()
@@ -2407,6 +2426,7 @@ mod tests {
             page: Some(1),
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: false,
+                show_grand_total: true,
                 ..Default::default()
             }),
             ..Default::default()

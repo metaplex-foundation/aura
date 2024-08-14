@@ -98,14 +98,15 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rocks_storage = Arc::new(storage);
 
+    let rpc_client = Arc::new(RpcClient::new(config.rpc_host));
     let cloned_rocks_storage = rocks_storage.clone();
-    let proof_checker = config.rpc_host.map(|host| {
-        Arc::new(MaybeProofChecker::new(
-            Arc::new(RpcClient::new(host)),
+    let proof_checker = config
+        .check_proofs
+        .then_some(Arc::new(MaybeProofChecker::new(
+            rpc_client.clone(),
             config.check_proofs_probability,
             config.check_proofs_commitment,
-        ))
-    });
+        )));
 
     let json_worker = {
         if let Some(middleware_config) = &config.json_middleware_config {
@@ -147,6 +148,7 @@ pub async fn main() -> Result<(), IngesterError> {
             config.consistence_backfilling_slots_threshold,
             config.batch_mint_service_port,
             config.file_storage_path_container.as_str(),
+            rpc_client,
         )
         .await
         {

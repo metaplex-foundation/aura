@@ -15,6 +15,7 @@ mod tests {
     };
     use rocks_db::migrator::MigrationState;
     use rocks_db::{bubblegum_slots::BubblegumSlotGetter, Storage};
+    use solana_client::nonblocking::rpc_client::RpcClient;
     use std::fs::File;
     use std::io::{self, Read};
     use std::sync::Arc;
@@ -71,6 +72,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
 
         let buffer = Arc::new(Buffer::new());
@@ -189,6 +191,7 @@ mod tests {
                 None,
                 None,
                 JsonMiddlewareConfig::default(),
+                Arc::new(RpcClient::new("".to_string())),
             );
 
         let buffer = Arc::new(Buffer::new());

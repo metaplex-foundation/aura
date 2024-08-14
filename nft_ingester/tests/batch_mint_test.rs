@@ -417,6 +417,7 @@ async fn batch_mint_with_verified_creators_test() {
         None,
         None,
         JsonMiddlewareConfig::default(),
+        Arc::new(RpcClient::new("".to_string())),
     );
 
     let payload = GetAssetProof {
@@ -561,6 +562,7 @@ async fn batch_mint_with_unverified_creators_test() {
         None,
         None,
         JsonMiddlewareConfig::default(),
+        Arc::new(RpcClient::new("".to_string())),
     );
 
     let payload = GetAssetProof {
@@ -648,6 +650,7 @@ async fn batch_mint_persister_test() {
         None,
         None,
         JsonMiddlewareConfig::default(),
+        Arc::new(RpcClient::new("".to_string())),
     );
 
     let leaf_index = 4u32;

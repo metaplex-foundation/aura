@@ -2,7 +2,6 @@ use dapi::{get_asset, get_asset_batch, get_proof_for_assets, search_assets};
 use interface::error::UsecaseError;
 use interface::json::{JsonDownloader, JsonPersister};
 use interface::proofs::ProofChecker;
-use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
 use tokio::sync::Mutex;
@@ -15,7 +14,8 @@ use crate::api::dapi::response::{
 };
 use crate::api::dapi::rpc_asset_models::Asset;
 use crate::api::error::DasApiError;
-use crate::config::{ApiConfig, JsonMiddlewareConfig};
+use crate::api::*;
+use crate::config::JsonMiddlewareConfig;
 use dapi::get_asset_signatures::get_asset_signatures;
 use dapi::get_core_fees::get_core_fees;
 use dapi::get_token_accounts::get_token_accounts;
@@ -27,9 +27,9 @@ use entities::api_req_params::{
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use usecase::validation::{validate_opt_pubkey, validate_pubkey};
-use {crate::api::*, sqlx::postgres::PgPoolOptions};
 
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
@@ -48,6 +48,7 @@ where
     json_downloader: Option<Arc<JD>>,
     json_persister: Option<Arc<JP>>,
     json_middleware_config: JsonMiddlewareConfig,
+    client: Arc<RpcClient>,
 }
 
 impl<PC, JD, JP> DasApi<PC, JD, JP>
@@ -66,6 +67,7 @@ where
         json_downloader: Option<Arc<JD>>,
         json_persister: Option<Arc<JP>>,
         json_middleware_config: JsonMiddlewareConfig,
+        client: Arc<RpcClient>,
     ) -> Self {
         DasApi {
             pg_client,
@@ -76,39 +78,8 @@ where
             json_downloader,
             json_persister,
             json_middleware_config,
+            client,
         }
-    }
-
-    pub async fn from_config(
-        config: ApiConfig,
-        metrics: Arc<ApiMetricsConfig>,
-        red_metrics: Arc<RequestErrorDurationMetrics>,
-        rocks_db: Arc<Storage>,
-        proof_checker: Option<Arc<PC>>,
-        json_downloader: Option<Arc<JD>>,
-        json_persister: Option<Arc<JP>>,
-    ) -> Result<Self, DasApiError> {
-        let pool = PgPoolOptions::new()
-            .max_connections(250)
-            .connect(
-                &config
-                    .database_config
-                    .get_database_url()
-                    .map_err(|err| DasApiError::ConfigurationError(err.to_string()))?,
-            )
-            .await?;
-
-        let pg_client = PgClient::new_with_pool(pool, red_metrics);
-        Ok(DasApi {
-            pg_client: Arc::new(pg_client),
-            rocks_db,
-            metrics,
-            proof_checker,
-            max_page_limit: config.max_page_limit as u32,
-            json_downloader,
-            json_persister,
-            json_middleware_config: config.json_middleware_config.unwrap_or_default(),
-        })
     }
 }
 
@@ -661,6 +632,7 @@ where
             self.json_persister.clone(),
             self.json_middleware_config.max_urls_to_parse,
             tasks,
+            self.client.clone(),
         )
         .await?;
 

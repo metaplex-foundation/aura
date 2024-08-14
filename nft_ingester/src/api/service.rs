@@ -4,6 +4,7 @@ use jsonrpc_http_server::hyper::service::{make_service_fn, service_fn};
 use log::info;
 use multer::Multipart;
 use postgre_client::PgClient;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -63,6 +64,7 @@ pub async fn start_api(
     consistence_backfilling_slots_threshold: u64,
     batch_mint_service_port: Option<u16>,
     file_storage_path: &str,
+    rpc_client: Arc<RpcClient>,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -98,6 +100,7 @@ pub async fn start_api(
         json_downloader,
         json_persister,
         json_middleware_config.unwrap_or_default(),
+        rpc_client,
     );
 
     run_api(
