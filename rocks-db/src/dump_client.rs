@@ -197,9 +197,10 @@ impl Storage {
                     .get_asset_indexes(batch.as_ref())
                     .await
                     .map_err(|e| e.to_string())?;
-                tx_indexes.send(indexes).await.map_err(|e| {
-                    format!("Error sending asset indexes to channel: {}", e.to_string())
-                })?;
+                tx_indexes
+                    .send(indexes)
+                    .await
+                    .map_err(|e| format!("Error sending asset indexes to channel: {}", e))?;
 
                 batch.clear();
             }
@@ -213,31 +214,26 @@ impl Storage {
                 .get_asset_indexes(batch.as_ref())
                 .await
                 .map_err(|e| e.to_string())?;
-            tx_indexes.send(indexes).await.map_err(|e| {
-                format!("Error sending asset indexes to channel: {}", e.to_string())
-            })?;
+            tx_indexes
+                .send(indexes)
+                .await
+                .map_err(|e| format!("Error sending asset indexes to channel: {}", e))?;
         }
 
         // Once we iterate through all the assets in RocksDB we have to send stop signal
         // to iterators and wait until they finish it's job. Because that workers populate channel
         // for writers.
-        iterator_shutdown_tx.send(()).map_err(|e| {
-            format!(
-                "Error sending stop signal for indexes iterator: {}",
-                e.to_string()
-            )
-        })?;
+        iterator_shutdown_tx
+            .send(())
+            .map_err(|e| format!("Error sending stop signal for indexes iterator: {}", e))?;
         info!("Stopping iterators...");
         graceful_stop(&mut iterator_tasks).await;
         info!("All iterators are stopped.");
 
         // Once iterators are stopped it's safe to shutdown writers.
-        writer_shutdown_tx.send(()).map_err(|e| {
-            format!(
-                "Error sending stop signal for file writers: {}",
-                e.to_string()
-            )
-        })?;
+        writer_shutdown_tx
+            .send(())
+            .map_err(|e| format!("Error sending stop signal for file writers: {}", e))?;
         info!("Stopping writers...");
         graceful_stop(&mut writer_tasks).await;
         info!("All writers are stopped.");
@@ -245,6 +241,7 @@ impl Storage {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn iterate_over_indexes(
         rx_cloned: tokio::sync::broadcast::Receiver<()>,
         shutdown_cloned: tokio::sync::broadcast::Receiver<()>,
@@ -268,100 +265,98 @@ impl Storage {
 
             if rx_indexes_cloned.is_empty() {
                 continue;
-            } else {
-                if let Ok(indexes) = rx_indexes_cloned.try_recv() {
-                    for (key, index) in indexes {
-                        let metadata_url = index
-                            .metadata_url
-                            .map(|url| (url.get_metadata_id(), url.metadata_url.trim().to_owned()));
-                        if let Some((ref metadata_key, ref url)) = metadata_url {
-                            {
-                                let mut metadata_keys = metadata_key_set.lock().await;
-                                if !metadata_keys.contains(metadata_key) {
-                                    metadata_keys.insert(metadata_key.clone());
-                                    if let Err(e) = tx_metadata_cloned
-                                        .send((
-                                            Self::encode(metadata_key),
-                                            url.to_string(),
-                                            "pending".to_string(),
-                                        ))
-                                        .await
-                                    {
-                                        error!("Error sending message: {:?}", e);
-                                    }
+            } else if let Ok(indexes) = rx_indexes_cloned.try_recv() {
+                for (key, index) in indexes {
+                    let metadata_url = index
+                        .metadata_url
+                        .map(|url| (url.get_metadata_id(), url.metadata_url.trim().to_owned()));
+                    if let Some((ref metadata_key, ref url)) = metadata_url {
+                        {
+                            let mut metadata_keys = metadata_key_set.lock().await;
+                            if !metadata_keys.contains(metadata_key) {
+                                metadata_keys.insert(metadata_key.clone());
+                                if let Err(e) = tx_metadata_cloned
+                                    .send((
+                                        Self::encode(metadata_key),
+                                        url.to_string(),
+                                        "pending".to_string(),
+                                    ))
+                                    .await
+                                {
+                                    error!("Error sending message: {:?}", e);
                                 }
                             }
                         }
-                        for creator in index.creators {
-                            if let Err(e) = tx_creators_cloned
-                                .send((
-                                    Self::encode(key.to_bytes()),
-                                    Self::encode(creator.creator),
-                                    creator.creator_verified,
-                                    index.slot_updated,
-                                ))
-                                .await
-                            {
-                                error!("Error sending message: {:?}", e);
-                            }
+                    }
+                    for creator in index.creators {
+                        if let Err(e) = tx_creators_cloned
+                            .send((
+                                Self::encode(key.to_bytes()),
+                                Self::encode(creator.creator),
+                                creator.creator_verified,
+                                index.slot_updated,
+                            ))
+                            .await
+                        {
+                            error!("Error sending message: {:?}", e);
                         }
-                        let record = AssetRecord {
-                            ast_pubkey: Self::encode(key.to_bytes()),
-                            ast_specification_version: index.specification_version,
-                            ast_specification_asset_class: index.specification_asset_class,
-                            ast_royalty_target_type: index.royalty_target_type,
-                            ast_royalty_amount: index.royalty_amount,
-                            ast_slot_created: index.slot_created,
-                            ast_owner_type: index.owner_type,
-                            ast_owner: index.owner.map(Self::encode),
-                            ast_delegate: index.delegate.map(Self::encode),
-                            ast_authority_fk: if let Some(collection) = index.collection {
-                                if index.update_authority.is_some() {
-                                    Some(Self::encode(collection))
-                                } else if index.authority.is_some() {
-                                    Some(Self::encode(index.pubkey))
-                                } else {
-                                    None
-                                }
+                    }
+                    let record = AssetRecord {
+                        ast_pubkey: Self::encode(key.to_bytes()),
+                        ast_specification_version: index.specification_version,
+                        ast_specification_asset_class: index.specification_asset_class,
+                        ast_royalty_target_type: index.royalty_target_type,
+                        ast_royalty_amount: index.royalty_amount,
+                        ast_slot_created: index.slot_created,
+                        ast_owner_type: index.owner_type,
+                        ast_owner: index.owner.map(Self::encode),
+                        ast_delegate: index.delegate.map(Self::encode),
+                        ast_authority_fk: if let Some(collection) = index.collection {
+                            if index.update_authority.is_some() {
+                                Some(Self::encode(collection))
                             } else if index.authority.is_some() {
                                 Some(Self::encode(index.pubkey))
                             } else {
                                 None
-                            },
-                            ast_collection: index.collection.map(Self::encode),
-                            ast_is_collection_verified: index.is_collection_verified,
-                            ast_is_burnt: index.is_burnt,
-                            ast_is_compressible: index.is_compressible,
-                            ast_is_compressed: index.is_compressed,
-                            ast_is_frozen: index.is_frozen,
-                            ast_supply: index.supply,
-                            ast_metadata_url_id: metadata_url.map(|(k, _)| k).map(Self::encode),
-                            ast_slot_updated: index.slot_updated,
-                        };
-                        if let Err(e) = tx_assets_cloned.send(record).await {
-                            error!("Error sending message: {:?}", e);
-                        }
-                        let authority = index.update_authority.or(index.authority);
-                        let authority_key = if index.update_authority.is_some() {
-                            index.collection
+                            }
+                        } else if index.authority.is_some() {
+                            Some(Self::encode(index.pubkey))
                         } else {
-                            Some(key)
-                        };
-                        if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
-                            {
-                                let mut authorities_keys = authorities_key_set.lock().await;
-                                if !authorities_keys.contains(&authority_key) {
-                                    authorities_keys.insert(authority_key);
-                                    if let Err(e) = tx_authority_cloned
-                                        .send((
-                                            Self::encode(authority_key.to_bytes()),
-                                            Self::encode(authority.to_bytes()),
-                                            index.slot_updated,
-                                        ))
-                                        .await
-                                    {
-                                        error!("Error sending message: {:?}", e);
-                                    }
+                            None
+                        },
+                        ast_collection: index.collection.map(Self::encode),
+                        ast_is_collection_verified: index.is_collection_verified,
+                        ast_is_burnt: index.is_burnt,
+                        ast_is_compressible: index.is_compressible,
+                        ast_is_compressed: index.is_compressed,
+                        ast_is_frozen: index.is_frozen,
+                        ast_supply: index.supply,
+                        ast_metadata_url_id: metadata_url.map(|(k, _)| k).map(Self::encode),
+                        ast_slot_updated: index.slot_updated,
+                    };
+                    if let Err(e) = tx_assets_cloned.send(record).await {
+                        error!("Error sending message: {:?}", e);
+                    }
+                    let authority = index.update_authority.or(index.authority);
+                    let authority_key = if index.update_authority.is_some() {
+                        index.collection
+                    } else {
+                        Some(key)
+                    };
+                    if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
+                        {
+                            let mut authorities_keys = authorities_key_set.lock().await;
+                            if !authorities_keys.contains(&authority_key) {
+                                authorities_keys.insert(authority_key);
+                                if let Err(e) = tx_authority_cloned
+                                    .send((
+                                        Self::encode(authority_key.to_bytes()),
+                                        Self::encode(authority.to_bytes()),
+                                        index.slot_updated,
+                                    ))
+                                    .await
+                                {
+                                    error!("Error sending message: {:?}", e);
                                 }
                             }
                         }
@@ -395,14 +390,12 @@ impl Storage {
 
             if data_channel.is_empty() {
                 continue;
-            } else {
-                if let Ok(k) = data_channel.try_recv() {
-                    if let Err(e) = writer.serialize(k).map_err(|e| e.to_string()) {
-                        error!(
-                            "Error while writing data into {:?}. Err: {:?}",
-                            file_and_path.1, e
-                        );
-                    }
+            } else if let Ok(k) = data_channel.try_recv() {
+                if let Err(e) = writer.serialize(k).map_err(|e| e.to_string()) {
+                    error!(
+                        "Error while writing data into {:?}. Err: {:?}",
+                        file_and_path.1, e
+                    );
                 }
             }
         }
@@ -457,17 +450,13 @@ impl Dumper for Storage {
         );
 
         let metadata_file = File::create(metadata_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for metadata dump: {}", e.to_string()))?;
+            .map_err(|e| format!("Could not create file for metadata dump: {}", e))?;
         let assets_file = File::create(assets_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for assets dump: {}", e.to_string()))?;
+            .map_err(|e| format!("Could not create file for assets dump: {}", e))?;
         let creators_file = File::create(creators_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for creators dump: {}", e.to_string()))?;
-        let authority_file = File::create(authorities_path.clone().unwrap()).map_err(|e| {
-            format!(
-                "Could not create file for authority dump: {}",
-                e.to_string()
-            )
-        })?;
+            .map_err(|e| format!("Could not create file for creators dump: {}", e))?;
+        let authority_file = File::create(authorities_path.clone().unwrap())
+            .map_err(|e| format!("Could not create file for authority dump: {}", e))?;
 
         self.dump_csv(
             (metadata_file, metadata_path.unwrap()),
