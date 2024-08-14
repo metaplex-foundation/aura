@@ -129,6 +129,7 @@ impl PgClient {
         Ok((query_builder, order_reversed))
     }
 
+    // Querying total count of records for such request
     pub fn build_grand_total_query<'a>(
         filter: &'a SearchAssetsFilter,
         options: &'a Options,
@@ -145,8 +146,8 @@ impl PgClient {
     }
 }
 
-fn add_filter_clause<'a, 'b>(
-    query_builder: &'b mut QueryBuilder<'a, Postgres>,
+fn add_filter_clause<'a>(
+    query_builder: &mut QueryBuilder<'a, Postgres>,
     filter: &'a SearchAssetsFilter,
     options: &'a Options,
 ) -> bool {

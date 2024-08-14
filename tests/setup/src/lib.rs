@@ -32,6 +32,7 @@ impl<'a> TestEnvironment<'a> {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_and_setup_from_closures(
         cli: &'a Cli,
         cnt: usize,

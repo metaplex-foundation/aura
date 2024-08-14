@@ -96,15 +96,12 @@ pub async fn search_assets(
             None,
         )
     };
-    let mut grand_total = None;
-    if options.show_grand_total {
-        grand_total = Some(
-            index_client
-                .get_grand_total(filter, &(&options).into())
-                .await
-                .map_err(|e| StorageError::Common(e.to_string()))?,
-        )
-    }
+    let grand_total = options.show_grand_total.then_some(
+        index_client
+            .get_grand_total(filter, &(&options).into())
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?,
+    );
 
     let resp = AssetList {
         total,
