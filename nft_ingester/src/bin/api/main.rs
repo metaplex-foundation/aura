@@ -2,13 +2,13 @@ use std::cmp::min;
 use std::sync::Arc;
 
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
-use log::{error, info};
 use nft_ingester::api::service::start_api;
 use nft_ingester::config::{init_logger, setup_config, ApiConfig};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::json_worker::JsonWorker;
 use prometheus_client::registry::Registry;
+use tracing::{error, info};
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::{ApiMetricsConfig, JsonDownloaderMetricsConfig};
