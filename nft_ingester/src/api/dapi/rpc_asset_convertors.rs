@@ -5,12 +5,12 @@ use std::path::Path;
 use entities::models::{AssetSignatureWithPagination, OffChainData};
 use entities::models::{CoreFeesAccountWithSortingID, TokenAccResponse};
 use jsonpath_lib::JsonPathError;
-use log::error;
-use log::warn;
 use mime_guess::Mime;
 use rocks_db::errors::StorageError;
 use serde_json::Value;
 use solana_program::pubkey::Pubkey;
+use tracing::error;
+use tracing::warn;
 use url::Url;
 
 use super::response::{

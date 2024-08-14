@@ -6,22 +6,22 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = "1.0.193"
+serde = { workspace = true }
 solana-sdk = { workspace = true }
-num-derive = "0.4.1"
-num-traits = "0.2.17"
-schemars = "0.8.6"
-serde_derive = "1.0.195"
-serde_with = "3.7.0"
-sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json", "chrono"] }
+num-derive = { workspace = true }
+num-traits = { workspace = true }
+schemars = { workspace = true }
+serde_derive = { workspace = true }
+serde_with = { workspace = true }
+sqlx = { workspace = true }
 solana-program = { workspace = true }
-blockbuster = { git = "https://github.com/adm-metaex/blockbuster", branch = "feat/create-tree-with-root" }
-sha2 = "0.10.0"
-mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum.git", branch = "feature/cleanup", features = ["serde"] }
-serde_json = "1.0.81"
-spl-account-compression = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root", features = ["no-entrypoint"] }
-solana-transaction-status = "~1.18.11"
-base64 = "0.21.5"
+blockbuster = { workspace = true }
+sha2 = { workspace = true }
+mpl-bubblegum = { workspace = true }
+serde_json = { workspace = true }
+spl-account-compression = { workspace = true }
+solana-transaction-status = { workspace = true }
+base64 = { workspace = true }
 
 [dev-dependencies]
-hex = "0.4.3"
+hex = { workspace = true }

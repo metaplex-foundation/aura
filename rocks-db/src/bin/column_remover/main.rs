@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use log::info;
 use rocks_db::asset::{
     self, AssetAuthorityDeprecated, AssetDynamicDetailsDeprecated, AssetOwnerDeprecated,
     AssetStaticDetailsDeprecated, MetadataMintMap,
@@ -12,6 +11,7 @@ use rocks_db::{
 };
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
+use tracing::info;
 
 use rocksdb::{Options, DB};
 use rustyline::error::ReadlineError;

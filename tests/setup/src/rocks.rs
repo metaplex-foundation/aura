@@ -5,7 +5,9 @@ use rand::{random, Rng};
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 
+use entities::enums::SpecificationAssetClass;
 use metrics_utils::red::RequestErrorDurationMetrics;
+use rocks_db::errors::StorageError;
 use rocks_db::migrator::MigrationState;
 use rocks_db::{
     asset::AssetCollection, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
@@ -13,10 +15,14 @@ use rocks_db::{
 };
 use tokio::{sync::Mutex, task::JoinSet};
 
+const DEFAULT_TEST_URL: &str = "http://example.com";
+
 pub struct RocksTestEnvironment {
     pub storage: Arc<Storage>,
     _temp_dir: TempDir,
 }
+
+pub struct RocksTestEnvironmentSetup;
 
 #[derive(Debug, Clone)]
 pub struct GeneratedAssets {
@@ -27,6 +33,7 @@ pub struct GeneratedAssets {
     pub dynamic_details: Vec<AssetDynamicDetails>,
     pub collections: Vec<AssetCollection>,
 }
+
 impl RocksTestEnvironment {
     pub fn new(keys: &[(u64, Pubkey)]) -> Self {
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
@@ -39,8 +46,11 @@ impl RocksTestEnvironment {
             MigrationState::Last,
         )
         .expect("Failed to create a database");
+
         for &(slot, ref pubkey) in keys {
-            storage.asset_updated(slot, *pubkey).unwrap();
+            storage
+                .asset_updated(slot, *pubkey)
+                .expect("Cannot update assets.");
         }
 
         RocksTestEnvironment {
@@ -49,83 +59,217 @@ impl RocksTestEnvironment {
         }
     }
 
-    pub fn generate_assets(&self, cnt: usize, slot: u64) -> GeneratedAssets {
-        let pubkeys = (0..cnt).map(|_| Pubkey::new_unique()).collect::<Vec<_>>();
-        for pk in pubkeys.iter() {
-            self.storage.asset_updated(slot, *pk).unwrap();
-        }
-        let url = "http://example.com";
-        // generate 1000 units of data using generate_test_static_data,generate_test_authority,generate_test_owner and create_test_dynamic_data for a 1000 unique pubkeys
-        let static_details = pubkeys
-            .iter()
-            .map(|pk| generate_test_static_data(*pk, slot))
+    pub async fn generate_from_closure(
+        &self,
+        cnt: usize,
+        slot: u64,
+        static_details: fn(&[Pubkey], u64) -> Vec<AssetStaticDetails>,
+        authorities: fn(&[Pubkey]) -> Vec<AssetAuthority>,
+        owners: fn(&[Pubkey]) -> Vec<AssetOwner>,
+        dynamic_details: fn(&[Pubkey], u64) -> Vec<AssetDynamicDetails>,
+        collections: fn(&[Pubkey]) -> Vec<AssetCollection>,
+    ) -> GeneratedAssets {
+        let pubkeys = (0..cnt)
+            .map(|_| self.generate_and_store_pubkey(slot))
             .collect::<Vec<_>>();
-        let authorities = pubkeys
-            .iter()
-            .map(|pk| generate_test_authority(*pk))
-            .collect::<Vec<_>>();
-        let owners = pubkeys
-            .iter()
-            .map(|pk| generate_test_owner(*pk))
-            .collect::<Vec<_>>();
-        let dynamic_details = pubkeys
-            .iter()
-            .map(|pk| create_test_dynamic_data(*pk, slot, url.to_string()))
-            .collect::<Vec<_>>();
-        let collections = pubkeys
-            .iter()
-            .map(|pk| generate_test_collection(*pk))
-            .collect::<Vec<_>>();
-        // put everything in the database
+        let static_details = static_details(&pubkeys, slot);
+        let authorities = authorities(&pubkeys);
+        let owners = owners(&pubkeys);
+        let dynamic_details = dynamic_details(&pubkeys, slot);
+        let collections = collections(&pubkeys);
 
-        self.storage
-            .asset_offchain_data
-            .put(
-                url.to_string(),
-                OffChainData {
-                    url: url.to_string(),
-                    metadata: "{}".to_string(),
-                },
-            )
-            .unwrap();
-        for (((((pk, static_data), authority_data), owner_data), dynamic_data), collection_data) in
-            pubkeys
-                .iter()
-                .zip(static_details.iter())
-                .zip(authorities.iter())
-                .zip(owners.iter())
-                .zip(dynamic_details.iter())
-                .zip(collections.iter())
-        {
-            self.storage
-                .asset_authority_data
-                .put(*pk, authority_data.clone())
-                .unwrap();
-            self.storage
-                .asset_static_data
-                .put(*pk, static_data.clone())
-                .unwrap();
-            self.storage
-                .asset_owner_data
-                .put(*pk, owner_data.clone())
-                .unwrap();
-            self.storage
-                .asset_dynamic_data
-                .put(*pk, dynamic_data.clone())
-                .unwrap();
-            self.storage
-                .asset_collection_data
-                .put(*pk, collection_data.clone())
-                .unwrap();
-        }
-        GeneratedAssets {
+        let assets = GeneratedAssets {
             pubkeys,
             static_details,
             authorities,
             owners,
             dynamic_details,
             collections,
-        }
+        };
+
+        self.put_everything_in_the_database(&assets)
+            .await
+            .expect("Cannot store 'GeneratedAssets' into storage.");
+
+        assets
+    }
+
+    pub async fn generate_assets(&self, cnt: usize, slot: u64) -> GeneratedAssets {
+        let pubkeys = (0..cnt)
+            .map(|_| self.generate_and_store_pubkey(slot))
+            .collect::<Vec<_>>();
+        let static_details = RocksTestEnvironmentSetup::static_data_for_nft(&pubkeys, slot);
+        let authorities = RocksTestEnvironmentSetup::with_authority(&pubkeys);
+        let owners = RocksTestEnvironmentSetup::test_owner(&pubkeys);
+        let dynamic_details = RocksTestEnvironmentSetup::dynamic_data(&pubkeys, slot);
+        let collections = RocksTestEnvironmentSetup::collection_without_authority(&pubkeys);
+
+        let assets = GeneratedAssets {
+            pubkeys,
+            static_details,
+            authorities,
+            owners,
+            dynamic_details,
+            collections,
+        };
+
+        self.put_everything_in_the_database(&assets)
+            .await
+            .expect("Cannot store 'GeneratedAssets' into storage.");
+
+        assets
+    }
+
+    fn generate_and_store_pubkey(&self, slot: u64) -> Pubkey {
+        let pubkey = Pubkey::new_unique();
+        self.storage
+            .asset_updated(slot, pubkey.clone())
+            .expect("Cannot update assets.");
+        pubkey
+    }
+
+    async fn put_everything_in_the_database(
+        &self,
+        generated_assets: &GeneratedAssets,
+    ) -> Result<(), StorageError> {
+        self.storage.asset_offchain_data.put(
+            ToOwned::to_owned(DEFAULT_TEST_URL),
+            OffChainData {
+                url: ToOwned::to_owned(DEFAULT_TEST_URL),
+                metadata: ToOwned::to_owned("{}"),
+            },
+        )?;
+
+        let static_data_batch = self.storage.asset_static_data.put_batch(
+            generated_assets
+                .static_details
+                .iter()
+                .map(|value| (value.pubkey, value.clone()))
+                .collect(),
+        );
+        let authority_batch = self.storage.asset_authority_data.put_batch(
+            generated_assets
+                .authorities
+                .iter()
+                .map(|value| (value.pubkey, value.clone()))
+                .collect(),
+        );
+        let owners_batch = self.storage.asset_owner_data.put_batch(
+            generated_assets
+                .owners
+                .iter()
+                .map(|value| (value.pubkey, value.clone()))
+                .collect(),
+        );
+        let dynamic_details_batch = self.storage.asset_dynamic_data.put_batch(
+            generated_assets
+                .dynamic_details
+                .iter()
+                .map(|value| (value.pubkey, value.clone()))
+                .collect(),
+        );
+        let collections_batch = self.storage.asset_collection_data.put_batch(
+            generated_assets
+                .collections
+                .iter()
+                .map(|value| (value.pubkey, value.clone()))
+                .collect(),
+        );
+
+        tokio::try_join!(
+            static_data_batch,
+            authority_batch,
+            owners_batch,
+            dynamic_details_batch,
+            collections_batch
+        )?;
+
+        Ok(())
+    }
+}
+
+impl RocksTestEnvironmentSetup {
+    pub fn static_data_for_mpl(pubkeys: &[Pubkey], slot: u64) -> Vec<AssetStaticDetails> {
+        Self::generate_static_data(pubkeys, slot, SpecificationAssetClass::MplCoreAsset)
+    }
+
+    pub fn static_data_for_nft(pubkeys: &[Pubkey], slot: u64) -> Vec<AssetStaticDetails> {
+        Self::generate_static_data(pubkeys, slot, SpecificationAssetClass::Nft)
+    }
+
+    fn generate_static_data(
+        pubkeys: &[Pubkey],
+        slot: u64,
+        specification_asset_class: SpecificationAssetClass,
+    ) -> Vec<AssetStaticDetails> {
+        pubkeys
+            .iter()
+            .map(|pubkey| AssetStaticDetails {
+                pubkey: *pubkey,
+                created_at: slot as i64,
+                specification_asset_class,
+                royalty_target_type: entities::enums::RoyaltyTargetType::Creators,
+                edition_address: Default::default(),
+            })
+            .collect()
+    }
+
+    pub fn without_authority(_: &[Pubkey]) -> Vec<AssetAuthority> {
+        Vec::new()
+    }
+
+    pub fn with_authority(pubkeys: &[Pubkey]) -> Vec<AssetAuthority> {
+        pubkeys
+            .iter()
+            .map(|pubkey| AssetAuthority {
+                pubkey: *pubkey,
+                authority: Pubkey::new_unique(),
+                slot_updated: rand::thread_rng().gen_range(0..100),
+                write_version: None,
+            })
+            .collect()
+    }
+
+    pub fn test_owner(pubkeys: &[Pubkey]) -> Vec<AssetOwner> {
+        pubkeys
+            .iter()
+            .map(|pubkey| AssetOwner {
+                pubkey: *pubkey,
+                owner: generate_test_updated(Some(Pubkey::new_unique())),
+                owner_type: generate_test_updated(entities::enums::OwnerType::Single),
+                owner_delegate_seq: generate_test_updated(Some(
+                    rand::thread_rng().gen_range(0..100),
+                )),
+                delegate: generate_test_updated(Some(Pubkey::new_unique())),
+            })
+            .collect()
+    }
+
+    pub fn dynamic_data(pubkeys: &[Pubkey], slot: u64) -> Vec<AssetDynamicDetails> {
+        pubkeys
+            .iter()
+            .map(|pubkey| create_test_dynamic_data(*pubkey, slot, DEFAULT_TEST_URL.to_owned()))
+            .collect()
+    }
+
+    pub fn collection_with_authority(pubkeys: &[Pubkey]) -> Vec<AssetCollection> {
+        Self::generate_collection(pubkeys, Some(Pubkey::new_unique()))
+    }
+
+    pub fn collection_without_authority(pubkeys: &[Pubkey]) -> Vec<AssetCollection> {
+        Self::generate_collection(pubkeys, None)
+    }
+
+    fn generate_collection(pubkeys: &[Pubkey], authority: Option<Pubkey>) -> Vec<AssetCollection> {
+        pubkeys
+            .iter()
+            .map(|pubkey| AssetCollection {
+                pubkey: *pubkey,
+                collection: generate_test_updated(Pubkey::new_unique()),
+                is_collection_verified: generate_test_updated(false),
+                authority: generate_test_updated(authority),
+            })
+            .collect()
     }
 }
 
@@ -154,7 +298,7 @@ pub fn create_test_dynamic_data(pubkey: Pubkey, slot: u64, url: String) -> Asset
     }
 }
 
-pub fn generate_test_creator() -> entities::models::Creator {
+fn generate_test_creator() -> entities::models::Creator {
     entities::models::Creator {
         creator: Pubkey::new_unique(),
         creator_verified: random(),
@@ -162,44 +306,6 @@ pub fn generate_test_creator() -> entities::models::Creator {
     }
 }
 
-pub fn generate_test_static_data(pubkey: Pubkey, slot: u64) -> AssetStaticDetails {
-    AssetStaticDetails {
-        pubkey,
-        created_at: slot as i64,
-        specification_asset_class: entities::enums::SpecificationAssetClass::Nft,
-        royalty_target_type: entities::enums::RoyaltyTargetType::Creators,
-        edition_address: Default::default(),
-    }
-}
-
-pub fn generate_test_authority(pubkey: Pubkey) -> AssetAuthority {
-    AssetAuthority {
-        pubkey,
-        authority: Pubkey::new_unique(),
-        slot_updated: rand::thread_rng().gen_range(0..100),
-        write_version: None,
-    }
-}
-
-pub fn generate_test_owner(pubkey: Pubkey) -> AssetOwner {
-    AssetOwner {
-        pubkey,
-        owner: generate_test_updated(Some(Pubkey::new_unique())),
-        owner_type: generate_test_updated(entities::enums::OwnerType::Single),
-        owner_delegate_seq: generate_test_updated(Some(rand::thread_rng().gen_range(0..100))),
-        delegate: generate_test_updated(Some(Pubkey::new_unique())),
-    }
-}
-
 fn generate_test_updated<T>(v: T) -> Updated<T> {
     Updated::new(rand::thread_rng().gen_range(0..100), None, v)
-}
-
-fn generate_test_collection(pubkey: Pubkey) -> AssetCollection {
-    AssetCollection {
-        pubkey,
-        collection: generate_test_updated(Pubkey::new_unique()),
-        is_collection_verified: generate_test_updated(false),
-        authority: generate_test_updated(None),
-    }
 }

@@ -2320,12 +2320,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "difflib"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
-
-[[package]]
 name = "digest"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2729,15 +2723,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "float-cmp"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3012,7 +2997,7 @@ dependencies = [
  "entities",
  "futures",
  "interface",
- "mockall 0.12.1",
+ "mockall",
  "prost 0.12.6",
  "serde_cbor",
  "solana-sdk",
@@ -3544,7 +3529,7 @@ dependencies = [
  "entities",
  "futures",
  "jsonrpc-core 19.0.0",
- "mockall 0.12.1",
+ "mockall",
  "plerkle_serialization",
  "reqwest",
  "serde_derive",
@@ -4051,10 +4036,10 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "hyper",
- "log",
  "prometheus-client",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4102,51 +4087,23 @@ dependencies = [
 
 [[package]]
 name = "mockall"
-version = "0.11.4"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c84490118f2ee2d74570d114f3d0493cbf02790df303d2707606c3e14e07c96"
+checksum = "d4c28b3fb6d753d28c20e826cd46ee611fda1cf3cde03a443a974043247c065a"
 dependencies = [
  "cfg-if 1.0.0",
  "downcast",
  "fragile",
- "lazy_static",
- "mockall_derive 0.11.4",
- "predicates 2.1.5",
- "predicates-tree",
-]
-
-[[package]]
-name = "mockall"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43766c2b5203b10de348ffe19f7e54564b64f3d6018ff7648d1e2d6d3a0f0a48"
-dependencies = [
- "cfg-if 1.0.0",
- "downcast",
- "fragile",
- "lazy_static",
- "mockall_derive 0.12.1",
- "predicates 3.1.2",
+ "mockall_derive",
+ "predicates",
  "predicates-tree",
 ]
 
 [[package]]
 name = "mockall_derive"
-version = "0.11.4"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22ce75669015c4f47b289fd4d4f56e894e4c96003ffdf3ac51313126f94c6cbb"
-dependencies = [
- "cfg-if 1.0.0",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "mockall_derive"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af7cbce79ec385a1d4f54baa90a76401eb15d9cab93685f62e7e9f942aa00ae2"
+checksum = "341014e7f530314e9a1fdbc7400b244efea7122662c96bfa248c31da5bfb2020"
 dependencies = [
  "cfg-if 1.0.0",
  "proc-macro2",
@@ -4353,10 +4310,9 @@ dependencies = [
  "jsonrpc-http-server",
  "lazy_static",
  "libc",
- "log",
  "metrics-utils",
  "mime_guess",
- "mockall 0.11.4",
+ "mockall",
  "mpl-bubblegum",
  "mpl-token-metadata 4.1.2",
  "multer",
@@ -4447,12 +4403,6 @@ dependencies = [
  "memchr",
  "minimal-lexical",
 ]
-
-[[package]]
-name = "normalize-line-endings"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
 
 [[package]]
 name = "nu-ansi-term"
@@ -5060,7 +5010,8 @@ dependencies = [
 [[package]]
 name = "plerkle_serialization"
 version = "1.9.0"
-source = "git+https://github.com/n00m4d/digital-asset-validator-plugin.git#975a5974bb8c3fe02afd05c5ee127b2dce6544dd"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69341a546676367be06201860e72bc7ebb8f228e7dcd1999aae715207ca0a816"
 dependencies = [
  "bs58 0.4.0",
  "chrono",
@@ -5151,9 +5102,8 @@ dependencies = [
  "entities",
  "interface",
  "lazy_static",
- "log",
  "metrics-utils",
- "mockall 0.11.4",
+ "mockall",
  "once_cell",
  "rand 0.8.5",
  "serde",
@@ -5204,20 +5154,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77957b295656769bb8ad2b6a6b09d897d94f05c41b069aede1fcdaa675eaea04"
 dependencies = [
  "zerocopy 0.7.35",
-]
-
-[[package]]
-name = "predicates"
-version = "2.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
-dependencies = [
- "difflib",
- "float-cmp",
- "itertools 0.10.5",
- "normalize-line-endings",
- "predicates-core",
- "regex",
 ]
 
 [[package]]
@@ -6038,11 +5974,10 @@ dependencies = [
  "futures-util",
  "hex",
  "interface",
- "log",
  "lz4",
  "metrics-utils",
- "mockall 0.12.1",
- "mpl-token-metadata 3.2.3",
+ "mockall",
+ "mpl-token-metadata 4.1.2",
  "num_cpus",
  "rand 0.8.5",
  "reqwest",
@@ -8999,9 +8934,9 @@ checksum = "c20c8dbed6283a09604c3e69b4b7eeb54e298b8a600d4d5ecb5ad39de609f1d0"
 
 [[package]]
 name = "tower-service"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6bc1c9ce2b5135ac7f93c72918fc37feb872bdc6a5533a8b85eb4b86bfdae52"
+checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
 name = "tracing"
@@ -9302,7 +9237,7 @@ dependencies = [
  "futures",
  "interface",
  "metrics-utils",
- "mockall 0.12.1",
+ "mockall",
  "mpl-bubblegum",
  "plerkle_serialization",
  "rand 0.8.5",

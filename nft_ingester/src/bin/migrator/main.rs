@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use entities::enums::TaskStatus;
 use entities::models::{OffChainData, Task};
-use log::{error, info};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait};
@@ -10,6 +9,7 @@ use postgre_client::PgClient;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::{JoinError, JoinSet};
+use tracing::{error, info};
 
 use nft_ingester::config::{
     init_logger, setup_config, JsonMigratorConfig, JsonMigratorMode, JSON_MIGRATOR_CONFIG_PREFIX,
