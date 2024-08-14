@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 tokio = { workspace = true }
-tonic = "0.10.2"
-prost = "0.12.3"
+tonic = { workspace = true }
+prost = { workspace = true }
 futures = { workspace = true }
 solana-sdk = { workspace = true }
 interface = { path = "../interface" }
@@ -23,4 +23,4 @@ tracing = { workspace = true }
 mockall = { workspace = true }
 
 [build-dependencies]
-tonic-build = "0.10.2"  # Corresponding build tool for tonic
+tonic-build = { workspace = true }  # Corresponding build tool for tonic

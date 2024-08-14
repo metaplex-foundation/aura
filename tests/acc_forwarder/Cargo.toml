@@ -4,21 +4,21 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-redis = { version = "0.22.3", features = ["aio", "tokio-comp", "streams", "tokio-native-tls-comp"] }
+redis = { workspace = true }
 futures = { workspace = true }
-futures-util = "0.3.0"
+futures-util = { workspace = true }
 base64 = { workspace = true }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
-plerkle_messenger = { version = "1.5.2", features = ['redis'] }
-plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
+plerkle_messenger = { workspace = true }
+plerkle_serialization = { workspace = true }
 flatbuffers = { workspace = true }
 clap = { workspace = true }
 solana-client = { workspace = true }
 solana-sdk = { workspace = true }
 solana-transaction-status = { workspace = true }
 figment = { workspace = true }
-bs58 = "0.4.0"
-tokio-stream = "0.1.11"
-mpl-token-metadata = { version = "3.2.3" }
+bs58 = { workspace = true }
+tokio-stream = { workspace = true }
+mpl-token-metadata = { workspace = true }
 reqwest = { workspace = true }

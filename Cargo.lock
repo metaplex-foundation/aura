@@ -5010,7 +5010,8 @@ dependencies = [
 [[package]]
 name = "plerkle_serialization"
 version = "1.9.0"
-source = "git+https://github.com/n00m4d/digital-asset-validator-plugin.git#975a5974bb8c3fe02afd05c5ee127b2dce6544dd"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69341a546676367be06201860e72bc7ebb8f228e7dcd1999aae715207ca0a816"
 dependencies = [
  "bs58 0.4.0",
  "chrono",
@@ -5975,7 +5976,7 @@ dependencies = [
  "lz4",
  "metrics-utils",
  "mockall",
- "mpl-token-metadata 3.2.3",
+ "mpl-token-metadata 4.1.2",
  "num_cpus",
  "rand 0.8.5",
  "reqwest",

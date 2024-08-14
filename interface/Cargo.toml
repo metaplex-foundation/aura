@@ -6,21 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-trait="0.1.74"
+async-trait = { workspace = true }
 futures = { workspace = true }
 mockall = { workspace = true }
 thiserror = { workspace = true }
 entities = { path = "../entities" }
 solana-sdk = { workspace = true }
 solana-client = { workspace = true }
-plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
+plerkle_serialization = { workspace = true }
 solana-transaction-status = { workspace = true }
-solana-storage-bigtable = "~1.18.11"
+solana-storage-bigtable = { workspace = true }
 solana-program = { workspace = true }
 reqwest = { workspace = true }
 anchor-lang = { workspace = true }
 serde_json = { workspace = true }
 serde_derive = { workspace = true }
 tokio = { workspace = true }
-jsonrpc-core = {version = "19.0.0", git = "https://github.com/RequescoS/jsonrpc-response-middleware.git"}
+jsonrpc-core = { workspace = true }
 bubblegum-batch-sdk = { workspace = true }

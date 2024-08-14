@@ -15,7 +15,7 @@ solana-program = { workspace = true }
 solana-transaction-status = { workspace = true }
 interface = { path = "../interface" }
 tokio = { workspace = true }
-plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
+plerkle_serialization = { workspace = true }
 flatbuffers = { workspace = true }
 tracing = { workspace = true }
 usecase = { path = "../usecase" }

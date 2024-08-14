@@ -12,11 +12,11 @@ postgre-client = { path = "../../postgre-client" }
 nft_ingester = { path = "../../nft_ingester" }
 metrics-utils = { path = "../../metrics_utils" }
 solana-sdk = { workspace = true }
-tempfile = "3.8.1"
+tempfile = { workspace = true }
 rand = { workspace = true }
 tokio = { workspace = true }
 sqlx = { workspace = true }
-testcontainers = "0.15.0"
-testcontainers-modules = { version = "0.3.2", features = ["postgres"] }
-uuid = { version = "1.6.1", features = ["v4"] }
-tracing  ="0.1.40"
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }

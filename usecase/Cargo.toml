@@ -13,8 +13,8 @@ tracing = { workspace = true }
 solana-sdk = { workspace = true }
 metrics-utils = { path = "../metrics_utils" }
 tokio = { workspace = true }
-solana-storage-bigtable = "~1.18.11"
-solana-bigtable-connection = "1.10.31"
+solana-storage-bigtable = { workspace = true }
+solana-bigtable-connection = { workspace = true }
 solana-transaction-status = { workspace = true }
 mpl-bubblegum = { workspace = true }
 mockall = { workspace = true }
@@ -27,8 +27,8 @@ serde_json = { workspace = true }
 serde_derive = { workspace = true }
 serde = { workspace = true }
 anchor-lang = { workspace = true }
-plerkle_serialization = { git = "https://github.com/n00m4d/digital-asset-validator-plugin.git" }
-async-recursion = "1.1.1"
+plerkle_serialization = { workspace = true }
+async-recursion = { workspace = true }
 thiserror = { workspace = true }
 bubblegum-batch-sdk = { workspace = true }
 

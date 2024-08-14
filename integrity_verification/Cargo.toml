@@ -15,17 +15,17 @@ tokio = { workspace = true }
 thiserror = { workspace = true }
 clap = { workspace = true }
 tracing = { workspace = true }
-env_logger = "0.10.1"
+env_logger = { workspace = true }
 reqwest = { workspace = true }
 figment = { workspace = true }
 serde_json = { workspace = true }
 serde_derive = { workspace = true }
 serde = { workspace = true }
-dotenvy = "0.15.7"
+dotenvy = { workspace = true }
 rand = { workspace = true }
-tokio-util = "0.7.10"
-assert-json-diff = "2.0.2"
-regex = "1.10.2"
+tokio-util = { workspace = true }
+assert-json-diff = { workspace = true }
+regex = { workspace = true }
 async-trait = { workspace = true }
 spl-account-compression = "0.3.0"
 solana-client = { workspace = true }
