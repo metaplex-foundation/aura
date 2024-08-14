@@ -1,7 +1,11 @@
 pub mod pg;
 pub mod rocks;
 
+use crate::rocks::RocksTestEnvironmentSetup;
 use metrics_utils::MetricsTrait;
+use rocks_db::asset::AssetCollection;
+use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
+use solana_sdk::pubkey::Pubkey;
 use testcontainers::clients::Cli;
 
 pub struct TestEnvironment<'a> {
@@ -15,9 +19,44 @@ impl<'a> TestEnvironment<'a> {
         cnt: usize,
         slot: u64,
     ) -> (TestEnvironment<'a>, rocks::GeneratedAssets) {
+        Self::create_and_setup_from_closures(
+            cli,
+            cnt,
+            slot,
+            RocksTestEnvironmentSetup::static_data_for_nft,
+            RocksTestEnvironmentSetup::with_authority,
+            RocksTestEnvironmentSetup::test_owner,
+            RocksTestEnvironmentSetup::dynamic_data,
+            RocksTestEnvironmentSetup::collection_without_authority,
+        )
+        .await
+    }
+
+    pub async fn create_and_setup_from_closures(
+        cli: &'a Cli,
+        cnt: usize,
+        slot: u64,
+        static_details: fn(&[Pubkey], u64) -> Vec<AssetStaticDetails>,
+        authorities: fn(&[Pubkey]) -> Vec<AssetAuthority>,
+        owners: fn(&[Pubkey]) -> Vec<AssetOwner>,
+        dynamic_details: fn(&[Pubkey], u64) -> Vec<AssetDynamicDetails>,
+        collections: fn(&[Pubkey]) -> Vec<AssetCollection>,
+    ) -> (TestEnvironment<'a>, rocks::GeneratedAssets) {
         let rocks_env = rocks::RocksTestEnvironment::new(&[]);
         let pg_env = pg::TestEnvironment::new(cli).await;
-        let generated_data = rocks_env.generate_assets(cnt, slot);
+
+        let generated_data = rocks_env
+            .generate_from_closure(
+                cnt,
+                slot,
+                static_details,
+                authorities,
+                owners,
+                dynamic_details,
+                collections,
+            )
+            .await;
+
         let env = Self { rocks_env, pg_env };
 
         let mut metrics_state = metrics_utils::MetricState::new();

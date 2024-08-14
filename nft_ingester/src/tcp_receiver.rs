@@ -1,5 +1,4 @@
 use interface::message_handler::MessageHandler;
-use log::{debug, error, info};
 use std::convert::TryInto;
 use std::io;
 use std::net::SocketAddr;
@@ -9,6 +8,7 @@ use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::sync::broadcast::Receiver;
 use tokio::time::sleep;
+use tracing::{debug, error, info};
 
 const HEADER_BYTE_SIZE: usize = 4;
 
