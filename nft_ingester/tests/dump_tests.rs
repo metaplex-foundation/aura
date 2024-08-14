@@ -15,7 +15,7 @@ mod tests {
     use tempfile::TempDir;
     use testcontainers::clients::Cli;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
     #[tracing_test::traced_test]
     async fn test_csv_export_from_rocks_import_into_pg() {
         let env = RocksTestEnvironment::new(&[]);

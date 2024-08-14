@@ -1,10 +1,9 @@
 use std::fs::File;
 
-use csv::WriterBuilder;
 use setup::rocks::*;
 use tempfile::TempDir;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 #[tracing_test::traced_test]
 async fn test_scv_export_from_rocks() {
     let env = RocksTestEnvironment::new(&[]);
@@ -21,25 +20,13 @@ async fn test_scv_export_from_rocks() {
     let assets_file: File = File::create(assets_path.to_string()).unwrap();
     let creators_file = File::create(creators_path.to_string()).unwrap();
     let authority_file = File::create(authority_path.to_string()).unwrap();
-    let mut tasks_writer = WriterBuilder::new()
-        .has_headers(false)
-        .from_writer(tasks_file);
-    let mut assets_writer = WriterBuilder::new()
-        .has_headers(false)
-        .from_writer(assets_file);
-    let mut creators_writer = WriterBuilder::new()
-        .has_headers(false)
-        .from_writer(creators_file);
-    let mut authority_writer = WriterBuilder::new()
-        .has_headers(false)
-        .from_writer(authority_file);
 
     storage
         .dump_csv(
-            &mut tasks_writer,
-            &mut creators_writer,
-            &mut assets_writer,
-            &mut authority_writer,
+            (tasks_file, tasks_path.clone()),
+            (assets_file, assets_path.clone()),
+            (creators_file, creators_path.clone()),
+            (authority_file, authority_path.clone()),
             155,
             &rx,
         )

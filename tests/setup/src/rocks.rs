@@ -59,6 +59,7 @@ impl RocksTestEnvironment {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn generate_from_closure(
         &self,
         cnt: usize,
@@ -123,7 +124,7 @@ impl RocksTestEnvironment {
     fn generate_and_store_pubkey(&self, slot: u64) -> Pubkey {
         let pubkey = Pubkey::new_unique();
         self.storage
-            .asset_updated(slot, pubkey.clone())
+            .asset_updated(slot, pubkey)
             .expect("Cannot update assets.");
         pubkey
     }

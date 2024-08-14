@@ -25,6 +25,7 @@ serde_json = { workspace = true }
 mockall = { workspace = true }
 async-trait = { workspace = true }
 tokio-stream = { workspace = true }
+async-channel = { workspace = true }
 entities = { path = "../entities" }
 interface = { path = "../interface" }
 solana-transaction-status = { workspace = true }
