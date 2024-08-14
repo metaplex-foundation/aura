@@ -1,6 +1,5 @@
 use std::fs::File;
 
-use csv::WriterBuilder;
 use setup::rocks::*;
 use tempfile::TempDir;
 
