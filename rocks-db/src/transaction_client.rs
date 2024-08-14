@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use entities::models::{OffChainData, SignatureWithSlot};
+use entities::models::SignatureWithSlot;
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 

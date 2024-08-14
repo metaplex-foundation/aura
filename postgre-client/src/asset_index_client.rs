@@ -143,7 +143,7 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
         .iter()
         .map(|url| UrlWithStatus::new(url.metadata_url.as_str(), url.is_downloaded))
         .collect();
-    metadata_urls.sort_by(|a, b| a.get_metadata_id().cmp(&b.get_metadata_id()));
+    metadata_urls.sort_by_key(|a| a.get_metadata_id());
 
     let mut asset_indexes = asset_indexes.to_vec();
     asset_indexes.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));

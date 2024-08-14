@@ -1,6 +1,6 @@
 use async_trait::async_trait;
+use entities::models::OffChainData;
 use entities::models::{BatchMintToVerify, BufferedTransaction, SignatureWithSlot};
-use entities::models::{OffChainData, Task};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;

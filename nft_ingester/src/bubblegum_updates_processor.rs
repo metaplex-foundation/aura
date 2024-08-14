@@ -12,11 +12,11 @@ use bubblegum_batch_sdk::model::BatchMint;
 use chrono::Utc;
 use entities::enums::{
     ChainMutability, OwnerType, PersistingBatchMintState, RoyaltyTargetType,
-    SpecificationAssetClass, TaskStatus, TokenStandard, UseMethod,
+    SpecificationAssetClass, TokenStandard, UseMethod,
 };
 use entities::models::{
     BatchMintToVerify, BufferedTransaction, OffChainData, SignatureWithSlot, Task, UpdateVersion,
-    Updated, UrlWithStatus,
+    Updated,
 };
 use entities::models::{ChainDataV1, Creator, Uses};
 use lazy_static::lazy_static;
