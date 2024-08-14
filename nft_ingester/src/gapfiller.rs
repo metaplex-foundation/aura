@@ -43,7 +43,7 @@ pub async fn process_raw_blocks_stream(
             Some(Err(e)) => {
                 error!("Error processing raw block stream item: {e}");
             }
-            None => {}
+            None => return processed_slots,
         }
     }
 
@@ -83,7 +83,7 @@ pub async fn process_asset_details_stream(
             Some(Err(e)) => {
                 error!("Error processing asset details stream item: {e}");
             }
-            None => {}
+            None => return processed_assets,
         }
     }
 

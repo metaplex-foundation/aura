@@ -8,17 +8,17 @@ use blockbuster::{
     program_handler::ProgramParser,
     programs::{bubblegum::BubblegumParser, ProgramParseResult},
 };
+use bubblegum_batch_sdk::model::BatchMint;
 use chrono::Utc;
 use entities::enums::{
-    ChainMutability, OwnerType, PersistingRollupState, RoyaltyTargetType, SpecificationAssetClass,
-    TaskStatus, TokenStandard, UseMethod,
+    ChainMutability, OwnerType, PersistingBatchMintState, RoyaltyTargetType,
+    SpecificationAssetClass, TaskStatus, TokenStandard, UseMethod,
 };
 use entities::models::{
-    BufferedTransaction, OffChainData, RollupToVerify, SignatureWithSlot, Task, UpdateVersion,
+    BatchMintToVerify, BufferedTransaction, OffChainData, SignatureWithSlot, Task, UpdateVersion,
     Updated, UrlWithStatus,
 };
 use entities::models::{ChainDataV1, Creator, Uses};
-use entities::rollup::Rollup;
 use lazy_static::lazy_static;
 use log::{debug, error};
 use metrics_utils::IngesterMetricsConfig;
@@ -44,7 +44,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
-const ROLLUP_BATCH_FLUSH_SIZE: usize = 10_000;
+const BATCH_MINT_BATCH_FLUSH_SIZE: usize = 10_000;
 lazy_static! {
     static ref KEY_SET: HashSet<Pubkey> = {
         let mut m = HashSet::new();
@@ -336,14 +336,14 @@ impl BubblegumTxProcessor {
     ) -> Result<AssetUpdateEvent, IngesterError> {
         if let Some(Payload::FinalizeTreeWithRoot { args, .. }) = &parsing_result.payload {
             let upd = AssetUpdateEvent {
-                rollup_creation_update: Some(RollupToVerify {
+                batch_mint_creation_update: Some(BatchMintToVerify {
                     file_hash: args.metadata_hash.clone(),
                     url: args.metadata_url.clone(),
                     created_at_slot: bundle.slot,
                     signature: Signature::from_str(bundle.txn_id)
                         .map_err(|e| IngesterError::ParseSignatureError(e.to_string()))?,
                     download_attempts: 0,
-                    persisting_state: PersistingRollupState::ReceivedTransaction,
+                    persisting_state: PersistingBatchMintState::ReceivedTransaction,
                     staker: args.staker,
                     collection_mint: args.collection_mint,
                 }),
@@ -1125,9 +1125,9 @@ impl BubblegumTxProcessor {
         ))
     }
 
-    pub async fn store_rollup_update(
+    pub async fn store_batch_mint_update(
         slot: u64,
-        rollup: &Rollup,
+        batch_mint: &BatchMint,
         rocks_db: Arc<Storage>,
         signature: Signature,
     ) -> Result<(), IngesterError> {
@@ -1138,16 +1138,16 @@ impl BubblegumTxProcessor {
                 SignatureWithSlot { signature, slot },
             )),
         };
-        for rolled_mint in rollup.rolled_mints.iter() {
-            let seq = rolled_mint.tree_update.seq;
+        for batched_mint in batch_mint.batch_mints.iter() {
+            let seq = batched_mint.tree_update.seq;
             let event = (&blockbuster::programs::bubblegum::ChangeLogEventV1::from(
-                &rolled_mint.tree_update,
+                &batched_mint.tree_update,
             ))
                 .into();
             let (mut update, mut task_option) =
-                Self::get_mint_v1_update(&rolled_mint.into(), slot)?;
+                Self::get_mint_v1_update(&batched_mint.into(), slot)?;
             if let Some(ref mut task) = task_option {
-                if let Some(metadata) = rollup.raw_metadata_map.get(&task.ofd_metadata_url) {
+                if let Some(metadata) = batch_mint.raw_metadata_map.get(&task.ofd_metadata_url) {
                     task.ofd_status = TaskStatus::Success;
                     update.offchain_data_update = Some(OffChainData {
                         url: task.ofd_metadata_url.clone(),
@@ -1158,7 +1158,7 @@ impl BubblegumTxProcessor {
 
             let mut ix: InstructionResult = (update, task_option).into();
             ix.tree_update = Some(TreeUpdate {
-                tree: rollup.tree_id,
+                tree: batched_mint.tree_update.id,
                 seq,
                 slot,
                 event,
@@ -1167,7 +1167,7 @@ impl BubblegumTxProcessor {
             });
 
             transaction_result.instruction_results.push(ix);
-            if transaction_result.instruction_results.len() >= ROLLUP_BATCH_FLUSH_SIZE {
+            if transaction_result.instruction_results.len() >= BATCH_MINT_BATCH_FLUSH_SIZE {
                 // TODO: add retry
                 rocks_db
                     .store_transaction_result(&transaction_result, false)

@@ -54,19 +54,19 @@ const fn default_mpl_core_buffer_size() -> usize {
 }
 
 fn default_rocks_backup_url() -> String {
-    return String::from("127.0.0.1:3051/snapshot");
+    String::from("127.0.0.1:3051/snapshot")
 }
 
 fn default_rocks_backup_archives_dir() -> String {
-    return String::from("/rocksdb/_rocks_backup_archives");
+    String::from("/rocksdb/_rocks_backup_archives")
 }
 
 fn default_rocks_backup_dir() -> String {
-    return String::from("/rocksdb/_rocksdb_backup");
+    String::from("/rocksdb/_rocksdb_backup")
 }
 
 fn default_gapfiller_peer_addr() -> String {
-    return String::from("0.0.0.0");
+    String::from("0.0.0.0")
 }
 
 impl BackfillerConfig {

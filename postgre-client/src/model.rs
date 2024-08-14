@@ -46,8 +46,8 @@ pub enum OwnerType {
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, sqlx::Type)]
-#[sqlx(type_name = "rollup_state", rename_all = "snake_case")]
-pub enum RollupState {
+#[sqlx(type_name = "batch_mint_state", rename_all = "snake_case")]
+pub enum BatchMintState {
     Uploaded,
     ValidationFail,
     ValidationComplete,
@@ -154,18 +154,22 @@ impl From<entities::api_req_params::AssetSortDirection> for AssetSortDirection {
     }
 }
 
-impl From<RollupState> for entities::enums::RollupState {
-    fn from(value: RollupState) -> Self {
+impl From<BatchMintState> for entities::enums::BatchMintState {
+    fn from(value: BatchMintState) -> Self {
         match value {
-            RollupState::Uploaded => entities::enums::RollupState::Uploaded,
-            RollupState::ValidationFail => entities::enums::RollupState::ValidationFail,
-            RollupState::ValidationComplete => entities::enums::RollupState::ValidationComplete,
-            RollupState::UploadedToArweave => entities::enums::RollupState::UploadedToArweave,
-            RollupState::FailUploadToArweave => entities::enums::RollupState::FailUploadToArweave,
-            RollupState::FailSendingTransaction => {
-                entities::enums::RollupState::FailSendingTransaction
+            BatchMintState::Uploaded => entities::enums::BatchMintState::Uploaded,
+            BatchMintState::ValidationFail => entities::enums::BatchMintState::ValidationFail,
+            BatchMintState::ValidationComplete => {
+                entities::enums::BatchMintState::ValidationComplete
             }
-            RollupState::Complete => entities::enums::RollupState::Complete,
+            BatchMintState::UploadedToArweave => entities::enums::BatchMintState::UploadedToArweave,
+            BatchMintState::FailUploadToArweave => {
+                entities::enums::BatchMintState::FailUploadToArweave
+            }
+            BatchMintState::FailSendingTransaction => {
+                entities::enums::BatchMintState::FailSendingTransaction
+            }
+            BatchMintState::Complete => entities::enums::BatchMintState::Complete,
         }
     }
 }

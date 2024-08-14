@@ -2,7 +2,7 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use blockbuster::mpl_core::types::{
-        DataStore, ExternalPluginAdapter, ExternalPluginAdapterSchema, ExternalPluginAdapterType,
+        AppData, ExternalPluginAdapter, ExternalPluginAdapterSchema, ExternalPluginAdapterType,
         FreezeDelegate, Plugin, PluginAuthority, PluginType, TransferDelegate, UpdateAuthority,
     };
     use blockbuster::mpl_core::{
@@ -353,7 +353,7 @@ mod tests {
                     }),
                     unknown_lifecycle_checks: None,
                     r#type: ExternalPluginAdapterType::LifecycleHook,
-                    adapter_config: ExternalPluginAdapter::DataStore(DataStore {
+                    adapter_config: ExternalPluginAdapter::AppData(AppData {
                         data_authority: PluginAuthority::Owner,
                         schema: ExternalPluginAdapterSchema::Binary,
                     }),
