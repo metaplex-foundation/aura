@@ -11,7 +11,6 @@ use entities::{
 };
 use hex;
 use inflector::Inflector;
-use log::{error, info};
 use serde::{Serialize, Serializer};
 use solana_sdk::pubkey::Pubkey;
 use std::{
@@ -25,6 +24,7 @@ use tokio::{
     sync::{broadcast, Mutex},
     task::JoinSet,
 };
+use tracing::{error, info};
 use usecase::graceful_stop::graceful_stop;
 
 const MPSC_BUFFER_SIZE: usize = 1_000_000;
