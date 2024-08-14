@@ -479,7 +479,7 @@ impl BubblegumTxProcessor {
     pub fn get_mint_v1_update(
         parsing_result: &BubblegumInstruction,
         slot: u64,
-    ) -> Result<(AssetUpdateEvent, Option<Task>), IngesterError> {
+    ) -> Result<AssetUpdateEvent, IngesterError> {
         if let (
             Some(le),
             Some(cl),
@@ -674,20 +674,7 @@ impl BubblegumTxProcessor {
                 }
             }
 
-            let task = if !args.uri.is_empty() {
-                let url_with_status = UrlWithStatus::new(&args.uri, false);
-                Some(Task {
-                    ofd_metadata_url: url_with_status.metadata_url,
-                    ofd_locked_until: Some(chrono::Utc::now()),
-                    ofd_attempts: 0,
-                    ofd_max_attempts: 10,
-                    ofd_error: None,
-                    ..Default::default()
-                })
-            } else {
-                None
-            };
-            return Ok((asset_update, task));
+            return Ok(asset_update);
         }
         Err(IngesterError::ParsingError(
             "Ix not parsed correctly".to_string(),
@@ -951,7 +938,7 @@ impl BubblegumTxProcessor {
     pub fn get_update_metadata_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
-    ) -> Result<(AssetUpdateEvent, Option<Task>), IngesterError> {
+    ) -> Result<AssetUpdateEvent, IngesterError> {
         if let (
             Some(le),
             Some(cl),
@@ -1103,20 +1090,8 @@ impl BubblegumTxProcessor {
                             ..Default::default()
                         }),
                     });
-                    let task = if !uri.is_empty() {
-                        Some(Task {
-                            ofd_metadata_url: uri.clone(),
-                            ofd_locked_until: Some(chrono::Utc::now()),
-                            ofd_attempts: 0,
-                            ofd_max_attempts: 10,
-                            ofd_error: None,
-                            ..Default::default()
-                        })
-                    } else {
-                        None
-                    };
 
-                    Ok((asset_update, task))
+                    Ok(asset_update)
                 }
             };
         }
@@ -1144,19 +1119,21 @@ impl BubblegumTxProcessor {
                 &batched_mint.tree_update,
             ))
                 .into();
-            let (mut update, mut task_option) =
-                Self::get_mint_v1_update(&batched_mint.into(), slot)?;
-            if let Some(ref mut task) = task_option {
-                if let Some(metadata) = batch_mint.raw_metadata_map.get(&task.ofd_metadata_url) {
-                    task.ofd_status = TaskStatus::Success;
-                    update.offchain_data_update = Some(OffChainData {
-                        url: task.ofd_metadata_url.clone(),
-                        metadata: metadata.to_string(),
-                    });
+            let mut update = Self::get_mint_v1_update(&batched_mint.into(), slot)?;
+
+            if let Some(dynamic_info) = &update.update {
+                if let Some(data) = &dynamic_info.dynamic_data {
+                    let url = data.url.value.clone();
+                    if let Some(metadata) = batch_mint.raw_metadata_map.get(&url) {
+                        update.offchain_data_update = Some(OffChainData {
+                            url,
+                            metadata: metadata.to_string(),
+                        });
+                    }
                 }
             }
 
-            let mut ix: InstructionResult = (update, task_option).into();
+            let mut ix: InstructionResult = update.into();
             ix.tree_update = Some(TreeUpdate {
                 tree: batched_mint.tree_update.id,
                 seq,
