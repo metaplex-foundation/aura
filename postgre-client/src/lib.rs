@@ -28,6 +28,7 @@ pub const SQL_COMPONENT: &str = "sql";
 pub const SELECT_ACTION: &str = "select";
 pub const INSERT_ACTION: &str = "insert";
 pub const UPDATE_ACTION: &str = "update";
+pub const COUNT_ACTION: &str = "count";
 pub const BATCH_SELECT_ACTION: &str = "batch_select";
 pub const BATCH_UPSERT_ACTION: &str = "batch_upsert";
 pub const BATCH_DELETE_ACTION: &str = "batch_delete";

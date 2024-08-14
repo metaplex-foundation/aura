@@ -6,6 +6,7 @@ mod tests {
     use blockbuster::token_metadata::accounts::Metadata;
     use entities::api_req_params::{
         DisplayOptions, GetAssetProof, GetAssetSignatures, GetCoreFees, GetTokenAccounts, Options,
+        SearchAssetsOptions,
     };
     use entities::models::{AssetSignature, AssetSignatureKey, OffChainData};
     use entities::{
@@ -76,8 +77,9 @@ mod tests {
         {
             let payload = SearchAssets {
                 limit: Some(limit),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -116,8 +118,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 page: Some(1),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -139,8 +142,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 page: Some(2),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -162,8 +166,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 page: Some(3),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -179,8 +184,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 after: after,
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -202,8 +208,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 before: before,
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -232,8 +239,9 @@ mod tests {
                     sort_by: AssetSortBy::Created,
                     sort_direction: Some(AssetSortDirection::Desc),
                 }),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -256,8 +264,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 owner_address: ref_value.owner.value.map(|owner| owner.to_string()),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -280,8 +289,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 creator_address: Some(ref_value.creators.value[0].creator.to_string()),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -304,8 +314,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 creator_verified: Some(true),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -329,8 +340,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 authority_address: Some(ref_value.authority.to_string()),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -356,8 +368,9 @@ mod tests {
                     "collection".to_string(),
                     ref_value.collection.value.to_string(),
                 )),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -380,8 +393,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 delegate: Some(ref_value.delegate.value.unwrap().to_string()),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -404,8 +418,9 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 supply_mint: Some(ref_value.pubkey.to_string()),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -430,8 +445,9 @@ mod tests {
                 royalty_target: Some(ref_value.creators.value[0].creator.to_string()),
                 royalty_target_type: Some(RoyaltyModel::Creators),
                 royalty_amount: Some(ref_value.royalty_amount.value as u32),
-                options: Some(Options {
+                options: Some(SearchAssetsOptions {
                     show_unverified_collections: true,
+                    show_grand_total: false,
                 }),
                 ..Default::default()
             };
@@ -1856,8 +1872,9 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
-            options: Some(Options {
+            options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
+                show_grand_total: false,
             }),
         };
         let res = api
@@ -1905,8 +1922,9 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
-            options: Some(Options {
+            options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
+                show_grand_total: false,
             }),
         };
         let res = api
@@ -1954,8 +1972,9 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
-            options: Some(Options {
+            options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
+                show_grand_total: false,
             }),
         };
         let res = api
@@ -2002,8 +2021,9 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
-            options: Some(Options {
+            options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
+                show_grand_total: false,
             }),
         };
         let res = api
@@ -2346,5 +2366,72 @@ mod tests {
         let res = api.get_core_fees(payload).await.unwrap();
         let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
         assert_eq!(res.core_fees_account.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_search_assets_grand_total() {
+        let total_assets = 2000;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, total_assets, SLOT_UPDATED).await;
+        let api =
+            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                Arc::new(ApiMetricsConfig::new()),
+                None,
+                50,
+                None,
+                None,
+                JsonMiddlewareConfig::default(),
+            );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            options: Some(SearchAssetsOptions {
+                show_unverified_collections: true,
+                show_grand_total: true,
+            }),
+            ..Default::default()
+        };
+        let res = api
+            .search_assets(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+        assert_eq!(res.grand_total, Some(total_assets as u32));
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            options: Some(SearchAssetsOptions {
+                show_unverified_collections: false,
+                show_grand_total: true,
+            }),
+            ..Default::default()
+        };
+        let res = api
+            .search_assets(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+        assert_eq!(res.grand_total, Some(0));
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            options: Some(SearchAssetsOptions {
+                show_unverified_collections: true,
+                show_grand_total: false,
+            }),
+            ..Default::default()
+        };
+        let res = api
+            .search_assets(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+        assert_eq!(res.grand_total, None);
     }
 }

@@ -1,12 +1,12 @@
 use entities::api_req_params::{
     AssetSorting, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner,
-    Options, Pagination, SearchAssets,
+    Pagination, SearchAssets, SearchAssetsOptions,
 };
 
 pub trait ApiRequest {
     fn get_all_pagination_parameters(&self) -> Pagination;
     fn get_sort_parameter(&self) -> Option<AssetSorting>;
-    fn get_options(&self) -> Option<Options>;
+    fn get_options(&self) -> Option<SearchAssetsOptions>;
 }
 
 macro_rules! impl_request_with_pagination {
@@ -26,7 +26,7 @@ macro_rules! impl_request_with_pagination {
                 self.sort_by.clone()
             }
 
-            fn get_options(&self) -> Option<Options> {
+            fn get_options(&self) -> Option<SearchAssetsOptions> {
                 self.options.clone()
             }
         }
