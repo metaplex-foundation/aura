@@ -29,6 +29,7 @@ mod tests {
     use nft_ingester::api::dapi::response::{
         AssetList, CoreFeesAccountsList, TokenAccountsList, TransactionSignatureList,
     };
+    use nft_ingester::api::dapi::rpc_asset_models::Asset;
     use nft_ingester::api::error::DasApiError;
     use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater};
     use nft_ingester::{
@@ -605,6 +606,7 @@ mod tests {
             id: pb.to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
+                ..Default::default()
             }),
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -724,6 +726,7 @@ mod tests {
             id: pb.to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
+                ..Default::default()
             }),
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -862,6 +865,7 @@ mod tests {
             id: mint_key.to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
+                ..Default::default()
             }),
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -888,6 +892,7 @@ mod tests {
             id: mint_key.to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
+                ..Default::default()
             }),
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -1046,6 +1051,7 @@ mod tests {
             id: mint_accs[0].pubkey.to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
+                ..Default::default()
             }),
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -1057,6 +1063,7 @@ mod tests {
             id: mint_accs[1].pubkey.to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
+                ..Default::default()
             }),
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -1204,6 +1211,7 @@ mod tests {
             id: mint_key.to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
+                ..Default::default()
             }),
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -2266,6 +2274,7 @@ mod tests {
             id: pb.to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
+                ..Default::default()
             }),
         };
 
@@ -2576,5 +2585,213 @@ mod tests {
             .unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
         assert!(res.native_balance.unwrap().total_price > 0.0);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_collection_metadata() {
+        let cnt = 100;
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let mut collection_dynamic_details = HashMap::new();
+        generated_assets.collections.iter().for_each(|collection| {
+            collection_dynamic_details.insert(
+                collection.collection.value,
+                AssetDynamicDetails {
+                    pubkey: collection.collection.value,
+                    url: Updated::new(
+                        100,
+                        Some(UpdateVersion::Sequence(100)),
+                        "http://example.com".to_string(),
+                    ),
+                    onchain_data: Some(Updated::new(
+                        100,
+                        Some(UpdateVersion::Sequence(100)),
+                        "{
+                            \"name\": \"WIF Drop\",
+                            \"symbol\": \"6WIF\"\
+                         }"
+                        .to_string(),
+                    )),
+                    ..Default::default()
+                },
+            );
+        });
+        let (d, o) = tokio::join!(
+            env.rocks_env
+                .storage
+                .asset_dynamic_data
+                .put_batch(collection_dynamic_details),
+            env.rocks_env.storage.asset_offchain_data.put_async(
+                "http://example.com".to_string(),
+                OffChainData {
+                    url: "http://example.com".to_string(),
+                    metadata: "{
+                      \"name\": \"WIF Drop\",
+                      \"symbol\": \"6WIF\",
+                      \"description\": \"Random Drop event! https://3000wif.com\",
+                      \"seller_fee_basis_points\": 0,
+                      \"image\": \"https://img.hi-hi.vip/json/img/3000wif.png\",
+                      \"attributes\": [
+                        {
+                          \"trait_type\": \"Website\",
+                          \"value\": \"https://3000wif.com\"
+                        },
+                        {
+                          \"trait_type\": \"Verified\",
+                          \"value\": \"True\"
+                        },
+                        {
+                          \"trait_type\": \"Amount\",
+                          \"value\": \"3,000+ WIF\"
+                        },
+                        {
+                          \"trait_type\": \"Time Left\",
+                          \"value\": \"25 minutes!\"
+                        }
+                      ],
+                        \"external_url\": \"https://3000wif.com\",
+                      \"properties\": {
+                        \"creators\": [
+                          {
+                            \"address\": \"Gx31E1GUzEeqjCHPtyLkNQHCqwi6REpyp66Hi262vCtG\",
+                            \"share\": 100
+                          }
+                        ]
+                      }
+                    }"
+                    .to_string(),
+                }
+            )
+        );
+        d.unwrap();
+        o.unwrap();
+
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+        let payload = GetAsset {
+            id: generated_assets
+                .collections
+                .first()
+                .unwrap()
+                .pubkey
+                .to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+                show_collection_metadata: true,
+            }),
+        };
+        let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: Asset = serde_json::from_value(res).unwrap();
+
+        assert_eq!(
+            res.grouping
+                .clone()
+                .unwrap()
+                .first()
+                .unwrap()
+                .collection_metadata
+                .clone()
+                .unwrap()
+                .get_item("description")
+                .unwrap()
+                .to_string(),
+            "\"Random Drop event! https://3000wif.com\"".to_string()
+        );
+        assert_eq!(
+            res.grouping
+                .clone()
+                .unwrap()
+                .first()
+                .unwrap()
+                .collection_metadata
+                .clone()
+                .unwrap()
+                .get_item("external_url")
+                .unwrap()
+                .to_string(),
+            "\"https://3000wif.com\"".to_string()
+        );
+        assert_eq!(
+            res.grouping
+                .clone()
+                .unwrap()
+                .first()
+                .unwrap()
+                .collection_metadata
+                .clone()
+                .unwrap()
+                .get_item("image")
+                .unwrap()
+                .to_string(),
+            "\"https://img.hi-hi.vip/json/img/3000wif.png\"".to_string()
+        );
+        assert_eq!(
+            res.grouping
+                .clone()
+                .unwrap()
+                .first()
+                .unwrap()
+                .collection_metadata
+                .clone()
+                .unwrap()
+                .get_item("name")
+                .unwrap()
+                .to_string(),
+            "\"WIF Drop\"".to_string()
+        );
+        assert_eq!(
+            res.grouping
+                .clone()
+                .unwrap()
+                .first()
+                .unwrap()
+                .collection_metadata
+                .clone()
+                .unwrap()
+                .get_item("symbol")
+                .unwrap()
+                .to_string(),
+            "\"6WIF\"".to_string()
+        );
+
+        let payload = GetAsset {
+            id: generated_assets
+                .collections
+                .first()
+                .unwrap()
+                .pubkey
+                .to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+                show_collection_metadata: false,
+            }),
+        };
+        let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: Asset = serde_json::from_value(res).unwrap();
+
+        assert!(res
+            .grouping
+            .clone()
+            .unwrap()
+            .first()
+            .unwrap()
+            .collection_metadata
+            .is_none());
     }
 }

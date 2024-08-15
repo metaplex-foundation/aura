@@ -52,6 +52,16 @@ fn convert_rocks_asset_model(
         .cloned()
         .unwrap_or(AssetLeaf::default()); // Asset may not have a leaf but we still can make the conversion
 
+    let collection_dynamic_data = asset_selected_maps
+        .assets_collection
+        .get(asset_pubkey)
+        .and_then(|collection| {
+            asset_selected_maps
+                .collection_dynamic_data
+                .get(&collection.collection.value)
+        })
+        .cloned();
+
     Ok(FullAsset {
         asset_static: static_data.clone(),
         asset_owner: owner.clone(),
@@ -84,6 +94,15 @@ fn convert_rocks_asset_model(
                     .get(&collection.collection.value)
             })
             .cloned(),
+        collection_offchain_data: collection_dynamic_data
+            .as_ref()
+            .and_then(|dynamic_data| {
+                asset_selected_maps
+                    .collection_offchain_data
+                    .get(&dynamic_data.url.value)
+            })
+            .cloned(),
+        collection_dynamic_data,
     })
 }
 
@@ -152,7 +171,7 @@ pub async fn get_by_ids(
 
     let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
     let mut asset_selected_maps = rocks_db
-        .get_asset_selected_maps_async(unique_asset_ids.clone())
+        .get_asset_selected_maps_async(unique_asset_ids.clone(), options.show_collection_metadata)
         .await?;
 
     if let Some(json_downloader) = json_downloader {

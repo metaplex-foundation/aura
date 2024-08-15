@@ -55,6 +55,8 @@ pub enum AssetSortDirection {
 pub struct Options {
     #[serde(default)]
     pub show_unverified_collections: bool,
+    #[serde(default)]
+    pub show_collection_metadata: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
@@ -66,12 +68,15 @@ pub struct SearchAssetsOptions {
     pub show_grand_total: bool,
     #[serde(default)]
     pub show_native_balance: bool,
+    #[serde(default)]
+    pub show_collection_metadata: bool,
 }
 
 impl From<&SearchAssetsOptions> for Options {
     fn from(value: &SearchAssetsOptions) -> Self {
         Self {
             show_unverified_collections: value.show_unverified_collections,
+            show_collection_metadata: value.show_collection_metadata,
         }
     }
 }
@@ -389,6 +394,7 @@ impl From<GetAssetV0> for GetAsset {
             id: value.id,
             options: Some(Options {
                 show_unverified_collections: true,
+                show_collection_metadata: false,
             }),
         }
     }
@@ -406,6 +412,7 @@ impl From<GetAssetBatchV0> for GetAssetBatch {
             ids: value.ids,
             options: Some(Options {
                 show_unverified_collections: true,
+                show_collection_metadata: false,
             }),
         }
     }

@@ -145,6 +145,8 @@ pub struct Group {
     pub group_value: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verified: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collection_metadata: Option<MetadataMap>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -251,6 +253,8 @@ pub struct FullAsset {
     pub assets_authority: AssetAuthority,
     pub edition_data: Option<EditionData>,
     pub mpl_core_collections: Option<AssetCollection>,
+    pub collection_dynamic_data: Option<AssetDynamicDetails>,
+    pub collection_offchain_data: Option<OffChainData>,
 }
 
 pub struct FullAssetList {
