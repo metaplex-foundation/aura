@@ -129,6 +129,7 @@ impl PgClient {
         Ok((query_builder, order_reversed))
     }
 
+    // Querying total count of records for such request
     pub fn build_grand_total_query<'a>(
         filter: &'a SearchAssetsFilter,
         options: &'a Options,

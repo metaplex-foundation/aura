@@ -59,7 +59,11 @@ impl Storage {
         migration_applier
             .apply_migration(crate::migrations::external_plugins::ExternalPluginsMigration)
             .await?;
-
+        migration_applier
+            .apply_migration(
+                crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration,
+            )
+            .await?;
         Ok(())
     }
 }

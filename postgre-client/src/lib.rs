@@ -57,7 +57,7 @@ impl PgClient {
     ) -> Result<Self, Error> {
         let mut options: PgConnectOptions = url.parse().unwrap();
         options.log_statements(LevelFilter::Off);
-        options.log_slow_statements(LevelFilter::Info, Duration::from_secs(2));
+        options.log_slow_statements(LevelFilter::Off, Duration::from_secs(100));
 
         let pool = PgPoolOptions::new()
             .min_connections(min_connections)

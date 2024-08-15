@@ -574,7 +574,9 @@ async fn test_edition_pda() {
     use blockbuster::programs::token_metadata::{TokenMetadataAccountData, TokenMetadataParser};
     use blockbuster::programs::ProgramParseResult;
     use mpl_token_metadata::accounts::MasterEdition;
+    use plerkle_serialization::deserializer::PlerkleOptionalU8Vector;
     use plerkle_serialization::solana_geyser_plugin_interface_shims::ReplicaAccountInfoV2;
+    use solana_client::nonblocking::rpc_client::RpcClient;
 
     let master_edition_pubkey =
         Pubkey::from_str("9Rfs2otkZpsLPomKUGku7DaFv9YvtkV9a87nqTUgMBhC").unwrap();
@@ -601,7 +603,7 @@ async fn test_edition_pda() {
     let parser = TokenMetadataParser {};
     let binding = ser_edition_account.finished_data().to_owned();
     let binding = plerkle_serialization::root_as_account_info(binding.as_ref()).unwrap();
-    let account_data: Vec<u8> = PlerkleOptionalU8Vector(binding.data()).try_into()?;
+    let account_data: Vec<u8> = PlerkleOptionalU8Vector(binding.data()).try_into().unwrap();
     let binding = parser.handle_account(account_data.as_slice()).unwrap();
     let binding = binding.result_type();
     let binding = match binding {
@@ -635,7 +637,7 @@ async fn test_edition_pda() {
     );
     let binding = ser_master_edition_account.finished_data().to_owned();
     let binding = plerkle_serialization::root_as_account_info(binding.as_ref()).unwrap();
-    let account_data: Vec<u8> = PlerkleOptionalU8Vector(binding.data()).try_into()?;
+    let account_data: Vec<u8> = PlerkleOptionalU8Vector(binding.data()).try_into().unwrap();
     let binding = parser.handle_account(account_data.as_slice()).unwrap();
     let binding = binding.result_type();
     let binding = match binding {
@@ -645,12 +647,12 @@ async fn test_edition_pda() {
         }
     };
 
-    let master_edition = if let TokenMetadataAccountData::MasterEditionV1(account) = &binding.data {
+    let master_edition = if let TokenMetadataAccountData::MasterEditionV2(account) = &binding.data {
         Some(account)
     } else {
         None
     };
-    // check that account is really MasterEditionV1
+    // check that account is really MasterEditionV2
     assert_ne!(None, master_edition);
     assert_eq!(
         edition_pubkey,

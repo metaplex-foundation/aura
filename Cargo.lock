@@ -5975,6 +5975,7 @@ name = "rocks-db"
 version = "0.1.0"
 dependencies = [
  "Inflector",
+ "async-channel 2.3.1",
  "async-trait",
  "base64 0.21.7",
  "bincode",

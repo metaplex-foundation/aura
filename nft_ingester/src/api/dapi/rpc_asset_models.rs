@@ -250,6 +250,7 @@ pub struct FullAsset {
     pub asset_collections: Option<AssetCollection>,
     pub assets_authority: AssetAuthority,
     pub edition_data: Option<EditionData>,
+    pub mpl_core_collections: Option<AssetCollection>,
 }
 
 pub struct FullAssetList {
