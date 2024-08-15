@@ -18,6 +18,7 @@ use entities::enums::{BatchMintState, FailedBatchMintState, PersistingBatchMintS
 use entities::models::BufferedTransaction;
 use entities::models::{BatchMintToVerify, BatchMintWithState};
 use flatbuffers::FlatBufferBuilder;
+use interface::account_balance::MockAccountBalanceGetter;
 use interface::batch_mint::{BatchMintDownloader, MockBatchMintDownloader};
 use interface::error::UsecaseError;
 use metrics_utils::ApiMetricsConfig;
@@ -408,7 +409,12 @@ async fn batch_mint_with_verified_creators_test() {
         .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
         .await;
 
-    let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+    let api = nft_ingester::api::api_impl::DasApi::<
+        MaybeProofChecker,
+        JsonWorker,
+        JsonWorker,
+        MockAccountBalanceGetter,
+    >::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
         Arc::new(ApiMetricsConfig::new()),
@@ -417,6 +423,7 @@ async fn batch_mint_with_verified_creators_test() {
         None,
         None,
         JsonMiddlewareConfig::default(),
+        Arc::new(MockAccountBalanceGetter::new()),
     );
 
     let payload = GetAssetProof {
@@ -552,7 +559,12 @@ async fn batch_mint_with_unverified_creators_test() {
         .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
         .await;
 
-    let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+    let api = nft_ingester::api::api_impl::DasApi::<
+        MaybeProofChecker,
+        JsonWorker,
+        JsonWorker,
+        MockAccountBalanceGetter,
+    >::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
         Arc::new(ApiMetricsConfig::new()),
@@ -561,6 +573,7 @@ async fn batch_mint_with_unverified_creators_test() {
         None,
         None,
         JsonMiddlewareConfig::default(),
+        Arc::new(MockAccountBalanceGetter::new()),
     );
 
     let payload = GetAssetProof {
@@ -639,7 +652,12 @@ async fn batch_mint_persister_test() {
 
     let merkle_tree = generate_merkle_tree_from_batch_mint(&test_batch_mint);
 
-    let api = nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+    let api = nft_ingester::api::api_impl::DasApi::<
+        MaybeProofChecker,
+        JsonWorker,
+        JsonWorker,
+        MockAccountBalanceGetter,
+    >::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
         Arc::new(ApiMetricsConfig::new()),
@@ -648,6 +666,7 @@ async fn batch_mint_persister_test() {
         None,
         None,
         JsonMiddlewareConfig::default(),
+        Arc::new(MockAccountBalanceGetter::new()),
     );
 
     let leaf_index = 4u32;

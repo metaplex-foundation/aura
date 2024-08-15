@@ -33,6 +33,7 @@ use metrics_utils::{
     BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait,
     SequenceConsistentGapfillMetricsConfig,
 };
+use nft_ingester::api::account_balance::AccountBalanceGetterImpl;
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
@@ -63,6 +64,7 @@ use nft_ingester::batch_mint::batch_mint_processor::{BatchMintProcessor, NoopBat
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
+use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater};
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use rocks_db::migrator::MigrationState;
 use usecase::bigtable::BigTableClient;
@@ -510,13 +512,15 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_api_metrics = metrics_state.api_metrics.clone();
-    let proof_checker = config.rpc_host.clone().map(|host| {
-        Arc::new(MaybeProofChecker::new(
-            Arc::new(RpcClient::new(host)),
+    let rpc_client = Arc::new(RpcClient::new(config.rpc_host.clone()));
+    let account_balance_getter = Arc::new(AccountBalanceGetterImpl::new(rpc_client.clone()));
+    let proof_checker = config
+        .check_proofs
+        .then_some(Arc::new(MaybeProofChecker::new(
+            rpc_client.clone(),
             config.check_proofs_probability,
             config.check_proofs_commitment,
-        ))
-    });
+        )));
     let tasks_clone = mutexed_tasks.clone();
     let cloned_rx = shutdown_rx.resubscribe();
 
@@ -548,6 +552,7 @@ pub async fn main() -> Result<(), IngesterError> {
             api_config.consistence_backfilling_slots_threshold,
             api_config.batch_mint_service_port,
             api_config.file_storage_path_container.as_str(),
+            account_balance_getter,
         )
         .await
         {
@@ -992,6 +997,19 @@ pub async fn main() -> Result<(), IngesterError> {
     mutexed_tasks.lock().await.spawn(async move {
         info!("Start batch_mint persister...");
         batch_mint_persister.persist_batch_mints(rx).await
+    });
+
+    let solana_price_updater = SolanaPriceUpdater::new(
+        rocks_storage.clone(),
+        CoinGeckoPriceFetcher::new(),
+        config.price_monitoring_interval_sec,
+    );
+    let rx = shutdown_rx.resubscribe();
+    mutexed_tasks.lock().await.spawn(async move {
+        info!("Start monitoring solana price...");
+        solana_price_updater.start_price_monitoring(rx).await;
+        info!("Stop monitoring solana price...");
+        Ok(())
     });
 
     start_metrics(metrics_state.registry, config.metrics_port).await;

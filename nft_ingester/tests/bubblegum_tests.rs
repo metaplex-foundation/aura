@@ -3,6 +3,7 @@
 mod tests {
     use entities::api_req_params::{GetAsset, GetAssetProof, Options};
     use entities::models::OffChainData;
+    use interface::account_balance::MockAccountBalanceGetter;
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::config::JsonMiddlewareConfig;
@@ -61,17 +62,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
 
         let buffer = Arc::new(Buffer::new());
 
@@ -179,17 +185,22 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let api =
-            nft_ingester::api::api_impl::DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
-                env.pg_env.client.clone(),
-                env.rocks_env.storage.clone(),
-                Arc::new(ApiMetricsConfig::new()),
-                None,
-                50,
-                None,
-                None,
-                JsonMiddlewareConfig::default(),
-            );
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+        );
 
         let buffer = Arc::new(Buffer::new());
 

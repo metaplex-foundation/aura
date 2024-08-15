@@ -1,3 +1,4 @@
+pub mod account_balance;
 pub mod asset_sigratures;
 pub mod asset_streaming_and_discovery;
 pub mod batch_mint;
@@ -7,6 +8,7 @@ pub mod fork_cleaner;
 pub mod json;
 pub mod message_handler;
 pub mod migration_version_manager;
+pub mod price_fetcher;
 pub mod processing_possibility;
 pub mod proofs;
 pub mod sequence_consistent;

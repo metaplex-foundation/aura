@@ -76,6 +76,7 @@ bubblegum-batch-sdk = { workspace = true }
 jsonpath_lib = { workspace = true }
 mime_guess = { workspace = true }
 url = { workspace = true }
+coingecko =  { workspace = true }
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

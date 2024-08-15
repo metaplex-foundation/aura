@@ -1,5 +1,6 @@
 pub use api_impl::*;
 
+pub mod account_balance;
 pub mod api_impl;
 pub mod backfilling_state_consistency;
 pub mod builder;

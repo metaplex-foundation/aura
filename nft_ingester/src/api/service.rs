@@ -19,6 +19,7 @@ use interface::consistency_check::ConsistencyChecker;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 
+use crate::api::account_balance::AccountBalanceGetterImpl;
 use crate::api::error::DasApiError;
 use {crate::api::DasApi, std::net::SocketAddr};
 use {
@@ -63,6 +64,7 @@ pub async fn start_api(
     consistence_backfilling_slots_threshold: u64,
     batch_mint_service_port: Option<u16>,
     file_storage_path: &str,
+    account_balance_getter: Arc<AccountBalanceGetterImpl>,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -98,6 +100,7 @@ pub async fn start_api(
         json_downloader,
         json_persister,
         json_middleware_config.unwrap_or_default(),
+        account_balance_getter,
     );
 
     run_api(
@@ -122,7 +125,7 @@ pub async fn start_api(
 
 #[allow(clippy::too_many_arguments)]
 async fn run_api(
-    api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker>,
+    api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker, AccountBalanceGetterImpl>,
     middlewares_data: Option<MiddlewaresData>,
     addr: SocketAddr,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
