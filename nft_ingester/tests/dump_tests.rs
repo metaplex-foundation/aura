@@ -91,6 +91,7 @@ mod tests {
 #[cfg(feature = "integration_tests")]
 mod mtg_441_tests {
     use entities::api_req_params::{GetAsset, Options};
+    use interface::account_balance::MockAccountBalanceGetter;
     use metrics_utils::ApiMetricsConfig;
     use nft_ingester::api::dapi::rpc_asset_models::Asset;
     use nft_ingester::api::DasApi;
@@ -103,12 +104,13 @@ mod mtg_441_tests {
     use testcontainers::clients::Cli;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
-    use interface::account_balance::MockAccountBalanceGetter;
     use usecase::proofs::MaybeProofChecker;
 
     const SLOT_UPDATED: u64 = 100;
 
-    fn get_das_api(env: &TestEnvironment) -> DasApi<MaybeProofChecker, JsonWorker, JsonWorker, MockAccountBalanceGetter> {
+    fn get_das_api(
+        env: &TestEnvironment,
+    ) -> DasApi<MaybeProofChecker, JsonWorker, JsonWorker, MockAccountBalanceGetter> {
         DasApi::<MaybeProofChecker, JsonWorker, JsonWorker, MockAccountBalanceGetter>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
