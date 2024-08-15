@@ -14,8 +14,6 @@ use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tracing::error;
 
-const SOLANA_DECIMALS: i32 = 9;
-
 #[allow(clippy::too_many_arguments)]
 pub async fn search_assets(
     index_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
@@ -59,13 +57,10 @@ pub async fn search_assets(
             rocks_db,
         )
     );
-    let native_balance = match native_balance {
-        Ok(native_balance) => native_balance,
-        Err(e) => {
-            error!("fetch_native_balance: {e}");
-            None
-        }
-    };
+    let native_balance = native_balance.unwrap_or_else(|e| {
+        error!("fetch_native_balance: {e}");
+        None
+    });
     let mut asset_list = asset_list?;
     asset_list.native_balance = native_balance;
 
@@ -206,6 +201,10 @@ async fn fetch_native_balance(
     Ok(Some(NativeBalance {
         lamports,
         price_per_sol: token_price.price,
-        total_price: token_price.price * (lamports as f64) / 10_f64.powi(SOLANA_DECIMALS),
+        total_price: calculate_total_price_usd_by_lamports(lamports, token_price.price),
     }))
+}
+
+fn calculate_total_price_usd_by_lamports(lamports: u64, sol_price: f64) -> f64 {
+    sol_price * (lamports as f64) / solana_sdk::native_token::LAMPORTS_PER_SOL as f64
 }

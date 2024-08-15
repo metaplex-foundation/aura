@@ -2531,8 +2531,11 @@ mod tests {
         let cnt = 0;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let solana_price_updater =
-            SolanaPriceUpdater::new(env.rocks_env.storage.clone(), CoinGeckoPriceFetcher::new());
+        let solana_price_updater = SolanaPriceUpdater::new(
+            env.rocks_env.storage.clone(),
+            CoinGeckoPriceFetcher::new(),
+            30,
+        );
         solana_price_updater.update_price().await.unwrap();
         let mut mock_account_balance_getter = MockAccountBalanceGetter::new();
         mock_account_balance_getter

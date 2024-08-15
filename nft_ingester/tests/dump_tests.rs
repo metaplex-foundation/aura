@@ -103,12 +103,13 @@ mod mtg_441_tests {
     use testcontainers::clients::Cli;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
+    use interface::account_balance::MockAccountBalanceGetter;
     use usecase::proofs::MaybeProofChecker;
 
     const SLOT_UPDATED: u64 = 100;
 
-    fn get_das_api(env: &TestEnvironment) -> DasApi<MaybeProofChecker, JsonWorker, JsonWorker> {
-        DasApi::<MaybeProofChecker, JsonWorker, JsonWorker>::new(
+    fn get_das_api(env: &TestEnvironment) -> DasApi<MaybeProofChecker, JsonWorker, JsonWorker, MockAccountBalanceGetter> {
+        DasApi::<MaybeProofChecker, JsonWorker, JsonWorker, MockAccountBalanceGetter>::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
@@ -117,6 +118,7 @@ mod mtg_441_tests {
             None,
             None,
             JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
         )
     }
 

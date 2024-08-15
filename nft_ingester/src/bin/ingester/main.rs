@@ -999,8 +999,11 @@ pub async fn main() -> Result<(), IngesterError> {
         batch_mint_persister.persist_batch_mints(rx).await
     });
 
-    let solana_price_updater =
-        SolanaPriceUpdater::new(rocks_storage.clone(), CoinGeckoPriceFetcher::new());
+    let solana_price_updater = SolanaPriceUpdater::new(
+        rocks_storage.clone(),
+        CoinGeckoPriceFetcher::new(),
+        config.price_monitoring_interval_sec,
+    );
     let rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
         info!("Start monitoring solana price...");

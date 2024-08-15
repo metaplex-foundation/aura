@@ -52,6 +52,10 @@ where
     account_balance_getter: Arc<ABG>,
 }
 
+pub fn not_found() -> DasApiError {
+    DasApiError::NoDataFoundError
+}
+
 impl<PC, JD, JP, ABG> DasApi<PC, JD, JP, ABG>
 where
     PC: ProofChecker + Sync + Send + 'static,
@@ -69,7 +73,7 @@ where
         json_downloader: Option<Arc<JD>>,
         json_persister: Option<Arc<JP>>,
         json_middleware_config: JsonMiddlewareConfig,
-        client: Arc<ABG>,
+        account_balance_getter: Arc<ABG>,
     ) -> Self {
         DasApi {
             pg_client,
@@ -80,22 +84,10 @@ where
             json_downloader,
             json_persister,
             json_middleware_config,
-            account_balance_getter: client,
+            account_balance_getter,
         }
     }
-}
 
-pub fn not_found() -> DasApiError {
-    DasApiError::NoDataFoundError
-}
-
-impl<PC, JD, JP, ABG> DasApi<PC, JD, JP, ABG>
-where
-    PC: ProofChecker + Sync + Send + 'static,
-    JD: JsonDownloader + Sync + Send + 'static,
-    JP: JsonPersister + Sync + Send + 'static,
-    ABG: AccountBalanceGetter + Sync + Send + 'static,
-{
     pub async fn check_health(&self) -> Result<Value, DasApiError> {
         let label = "check_health";
         self.metrics.inc_requests(label);

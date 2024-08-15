@@ -12,7 +12,6 @@ use tracing::log::error;
 
 pub const SOLANA_CURRENCY: &str = "solana";
 const USD_CURRENCY: &str = "usd";
-const PRICE_MONITORING_INTERVAL_SEC: u64 = 30;
 
 pub struct CoinGeckoPriceFetcher {
     client: CoinGeckoClient,
@@ -55,13 +54,19 @@ impl PriceFetcher for CoinGeckoPriceFetcher {
 pub struct SolanaPriceUpdater<P: PriceFetcher> {
     price_fetcher: P,
     rocks_db: Arc<Storage>,
+    price_monitoring_interval: Duration,
 }
 
 impl<P: PriceFetcher> SolanaPriceUpdater<P> {
-    pub fn new(rocks_db: Arc<Storage>, price_fetcher: P) -> Self {
+    pub fn new(
+        rocks_db: Arc<Storage>,
+        price_fetcher: P,
+        price_monitoring_interval_sec: u64,
+    ) -> Self {
         Self {
             price_fetcher,
             rocks_db,
+            price_monitoring_interval: Duration::from_secs(price_monitoring_interval_sec),
         }
     }
 
@@ -74,7 +79,7 @@ impl<P: PriceFetcher> SolanaPriceUpdater<P> {
                 _ = rx.recv() => {
                     return;
                 }
-                _ = tokio::time::sleep(Duration::from_secs(PRICE_MONITORING_INTERVAL_SEC)) => {}
+                _ = tokio::time::sleep(self.price_monitoring_interval) => {}
             }
         }
     }

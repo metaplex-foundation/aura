@@ -53,6 +53,10 @@ const fn default_mpl_core_buffer_size() -> usize {
     10
 }
 
+const fn default_price_monitoring_interval_sec() -> u64 {
+    30
+}
+
 fn default_rocks_backup_url() -> String {
     String::from("127.0.0.1:3051/snapshot")
 }
@@ -167,6 +171,8 @@ pub struct IngesterConfig {
     #[serde(default = "default_heap_path")]
     pub heap_path: String,
     pub migration_storage_path: String,
+    #[serde(default = "default_price_monitoring_interval_sec")]
+    pub price_monitoring_interval_sec: u64,
 }
 
 const fn default_parallel_json_downloaders() -> i32 {
