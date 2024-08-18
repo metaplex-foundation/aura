@@ -454,14 +454,19 @@ impl Storage {
         if dynamic_info.url.value.trim().is_empty() {
             None
         } else {
+            // doing this check because there may be saved empty strings for some urls
+            // because of bug in previous code
+            let is_downloaded = self
+                .asset_offchain_data
+                .get(dynamic_info.url.value.clone())
+                .ok()
+                .flatten()
+                .map(|a| !a.metadata.is_empty())
+                .unwrap_or(false);
+
             Some(UrlWithStatus {
                 metadata_url: dynamic_info.url.value.clone(),
-                is_downloaded: self
-                    .asset_offchain_data
-                    .get(dynamic_info.url.value.clone())
-                    .ok()
-                    .flatten()
-                    .is_some(),
+                is_downloaded,
             })
         }
     }

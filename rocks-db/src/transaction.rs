@@ -1,6 +1,6 @@
 use async_trait::async_trait;
+use entities::models::OffChainData;
 use entities::models::{BatchMintToVerify, BufferedTransaction, SignatureWithSlot};
-use entities::models::{OffChainData, Task};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
@@ -85,7 +85,6 @@ pub struct AssetUpdate<T> {
 #[derive(Clone, Default)]
 pub struct InstructionResult {
     pub update: Option<AssetUpdateEvent>,
-    pub task: Option<Task>,
     pub decompressed: Option<AssetUpdate<AssetDynamicDetails>>,
     pub tree_update: Option<TreeUpdate>,
 }
@@ -94,16 +93,6 @@ impl From<AssetUpdateEvent> for InstructionResult {
     fn from(update: AssetUpdateEvent) -> Self {
         Self {
             update: Some(update),
-            ..Default::default()
-        }
-    }
-}
-
-impl From<(AssetUpdateEvent, Option<Task>)> for InstructionResult {
-    fn from((update, task): (AssetUpdateEvent, Option<Task>)) -> Self {
-        Self {
-            update: Some(update),
-            task,
             ..Default::default()
         }
     }
