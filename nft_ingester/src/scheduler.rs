@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use entities::models::OffChainData;
-use log::error;
 use rocks_db::asset_previews::UrlToDownload;
+use tracing::log::error;
 
 use rocks_db::Storage;
 
@@ -108,13 +108,13 @@ trait SchedulesStoreEx: SchedulesStore {
     fn mark_started(&self, sched: &mut ScheduledJob) {
         sched.last_run_status = JobRunState::Started;
         sched.update_with_current_time();
-        self.put_schedule(&sched);
+        self.put_schedule(sched);
     }
     fn mark_finished(&self, sched: &mut ScheduledJob, new_state: Option<Vec<u8>>) {
         sched.state = new_state;
         sched.update_with_current_time();
         sched.last_run_status = JobRunState::Finished;
-        self.put_schedule(&sched);
+        self.put_schedule(sched);
     }
     fn mark_failed(&self, sched: &mut ScheduledJob, new_state: Option<Option<Vec<u8>>>) {
         if let Some(state) = new_state {
@@ -122,12 +122,12 @@ trait SchedulesStoreEx: SchedulesStore {
         }
         sched.update_with_current_time();
         sched.last_run_status = JobRunState::Failed;
-        self.put_schedule(&sched);
+        self.put_schedule(sched);
     }
     fn update_state(&self, sched: &mut ScheduledJob, new_state: Option<Vec<u8>>) {
         sched.state = new_state;
         sched.update_with_current_time();
-        self.put_schedule(&sched);
+        self.put_schedule(sched);
     }
 }
 

@@ -81,6 +81,7 @@ pub struct UrlToDownload {
     pub download_attempts: u64,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for UrlToDownload {
     fn default() -> Self {
         Self {
@@ -147,7 +148,7 @@ impl UrlsToDownloadStore for Storage {
             info.timestamp = now;
             info.download_attempts += 1;
             self.urls_to_download
-                .put_with_batch(&mut batch, url.clone(), &info)?;
+                .put_with_batch(&mut batch, url.clone(), info)?;
         }
         self.urls_to_download.backend.write(batch)?;
 

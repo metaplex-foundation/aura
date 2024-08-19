@@ -364,6 +364,7 @@ where
         .await
     }
 
+    #[allow(clippy::type_complexity)]
     fn to_pairs_generic(
         &self,
         it: &mut dyn Iterator<Item = std::result::Result<(Box<[u8]>, Box<[u8]>), rocksdb::Error>>,
