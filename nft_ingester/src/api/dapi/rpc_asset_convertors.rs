@@ -47,6 +47,7 @@ pub fn file_from_str(str: String) -> File {
     let mime = get_mime_type_from_uri(str.clone());
     File {
         uri: Some(str),
+        cdn_uri: None,
         mime: Some(mime),
         quality: None,
         contexts: None,
@@ -179,6 +180,7 @@ pub fn parse_files_from_selector<'a>(
                             let file = if let Some(str_mime) = m.as_str() {
                                 File {
                                     uri: Some(str_uri.to_string()),
+                                    cdn_uri: None,
                                     mime: Some(str_mime.to_string()),
                                     quality: None,
                                     contexts: None,

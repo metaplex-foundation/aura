@@ -553,6 +553,7 @@ pub async fn main() -> Result<(), IngesterError> {
             api_config.batch_mint_service_port,
             api_config.file_storage_path_container.as_str(),
             account_balance_getter,
+            api_config.storage_service_base_url,
         )
         .await
         {
