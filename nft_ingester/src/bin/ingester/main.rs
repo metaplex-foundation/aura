@@ -2,6 +2,7 @@ use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
 use async_trait::async_trait;
 use nft_ingester::batch_mint::batch_mint_persister::{self, BatchMintPersister};
+use nft_ingester::scheduler::Scheduler;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -10,6 +11,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use futures::FutureExt;
+use grpc::asseturls::asset_url_service_server::AssetUrlServiceServer;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use nft_ingester::{backfiller, config, json_worker, transaction_ingester};
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
@@ -182,12 +184,10 @@ pub async fn main() -> Result<(), IngesterError> {
         )
         .await?,
     );
-
     index_storage
         .run_migration(PG_MIGRATIONS_PATH)
         .await
         .map_err(IngesterError::SqlxError)?;
-
     let tasks = JoinSet::new();
 
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -811,12 +811,14 @@ pub async fn main() -> Result<(), IngesterError> {
         Arc::new(bs),
         rocks_storage.clone(),
     );
+    let asset_url_serv = grpc::asseturls_impl::AssetUrlServiceImpl::new(rocks_storage.clone());
     let addr = format!("0.0.0.0:{}", config.peer_grpc_port).parse()?;
     // Spawn the gRPC server task and add to JoinSet
     let mut rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
         if let Err(e) = Server::builder()
             .add_service(GapFillerServiceServer::new(serv))
+            .add_service(AssetUrlServiceServer::new(asset_url_serv))
             .serve_with_shutdown(addr, rx.recv().map(|_| ()))
             .await
         {
@@ -824,6 +826,8 @@ pub async fn main() -> Result<(), IngesterError> {
         }
         Ok(())
     });
+
+    Scheduler::run_in_background(Scheduler::new(rocks_storage.clone())).await;
 
     let rocks_clone = rocks_storage.clone();
     let signature_fetcher = usecase::signature_fetcher::SignatureFetcher::new(
