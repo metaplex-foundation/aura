@@ -49,6 +49,7 @@ pub async fn populate_previews_slice(
         .map(|url| keccak::hash(url.as_bytes()).to_bytes())
         .collect::<Vec<_>>();
 
+    // order of elements in the result of `batch_get` is same as the order of input keys
     let previews = rocks_db.asset_previews.batch_get(hashes.clone()).await?;
 
     assets

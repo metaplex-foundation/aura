@@ -6,7 +6,7 @@ mod tests {
     use nft_ingester::api::dapi::rpc_asset_models::{Asset, Content, File, MetadataMap, Ownership};
     use rocks_db::asset_previews::AssetPreviews;
     use setup::rocks::RocksTestEnvironment;
-    use solana_sdk::keccak;
+    use solana_sdk::keccak::{self, HASH_BYTES};
 
     #[tokio::test]
     #[tracing_test::traced_test]
@@ -152,5 +152,112 @@ mod tests {
             external_plugins: None,
             unknown_external_plugins: None,
         }
+    }
+
+    // This test demostrates that elements in the result of batch_get call
+    // preserves same order as keys in argument
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_rocks_batch_get_order() {
+        let rocks_env = RocksTestEnvironment::new(&[]);
+
+        let cf = &rocks_env.storage.asset_previews;
+
+        for i in vec![1, 3, 4, 6, 8] {
+            cf.put(tst_url_hash(i), AssetPreviews::new(i as u32))
+                .unwrap();
+        }
+
+        // Fetch in not sorted order
+        {
+            let res = cf
+                .batch_get(vec![tst_url_hash(3), tst_url_hash(8), tst_url_hash(6)])
+                .await
+                .unwrap();
+
+            assert_eq!(
+                res,
+                vec![
+                    Some(AssetPreviews::new(3)),
+                    Some(AssetPreviews::new(8)),
+                    Some(AssetPreviews::new(6))
+                ]
+            );
+        }
+
+        // inserting more records to cause btree change
+        for i in vec![7, 0, 5, 2, 10, 9] {
+            cf.put(tst_url_hash(i), AssetPreviews::new(i as u32))
+                .unwrap();
+        }
+
+        // Fetch again
+        {
+            let res = cf
+                .batch_get(vec![tst_url_hash(3), tst_url_hash(8), tst_url_hash(6)])
+                .await
+                .unwrap();
+
+            assert_eq!(
+                res,
+                vec![
+                    Some(AssetPreviews::new(3)),
+                    Some(AssetPreviews::new(8)),
+                    Some(AssetPreviews::new(6))
+                ]
+            );
+        }
+
+        // Ensure order when requesting missed keys
+        {
+            let res = cf
+                .batch_get(vec![
+                    tst_url_hash(3),
+                    tst_url_hash(2),
+                    tst_url_hash(99),
+                    tst_url_hash(1),
+                ])
+                .await
+                .unwrap();
+
+            assert_eq!(
+                res,
+                vec![
+                    Some(AssetPreviews::new(3)),
+                    Some(AssetPreviews::new(2)),
+                    None,
+                    Some(AssetPreviews::new(1))
+                ]
+            );
+        }
+
+        for i in vec![3, 4, 5, 6] {
+            cf.delete(tst_url_hash(i)).unwrap();
+        }
+
+        // Ensure order after deleted part of keys
+        {
+            let res = cf
+                .batch_get(vec![tst_url_hash(3), tst_url_hash(2), tst_url_hash(1)])
+                .await
+                .unwrap();
+
+            assert_eq!(
+                res,
+                vec![
+                    None,
+                    Some(AssetPreviews::new(2)),
+                    Some(AssetPreviews::new(1))
+                ]
+            );
+        }
+    }
+
+    fn tst_url(i: u32) -> String {
+        format!("http://host/url_{i}")
+    }
+
+    fn tst_url_hash(i: u32) -> [u8; HASH_BYTES] {
+        keccak::hash(tst_url(i).as_bytes()).to_bytes()
     }
 }
