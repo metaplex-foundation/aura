@@ -151,6 +151,7 @@ pub async fn main() -> Result<(), IngesterError> {
             config.batch_mint_service_port,
             config.file_storage_path_container.as_str(),
             account_balance_getter,
+            config.storage_service_base_url,
         )
         .await
         {

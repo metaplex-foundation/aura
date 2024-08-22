@@ -1,4 +1,5 @@
 mod asset;
+pub mod asset_preview;
 mod change_logs;
 pub mod converters;
 mod get_asset;

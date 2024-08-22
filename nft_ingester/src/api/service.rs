@@ -65,6 +65,7 @@ pub async fn start_api(
     batch_mint_service_port: Option<u16>,
     file_storage_path: &str,
     account_balance_getter: Arc<AccountBalanceGetterImpl>,
+    storage_service_base_url: Option<String>,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -101,6 +102,7 @@ pub async fn start_api(
         json_persister,
         json_middleware_config.unwrap_or_default(),
         account_balance_getter,
+        storage_service_base_url,
     );
 
     run_api(

@@ -74,6 +74,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -496,6 +497,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -639,6 +641,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -760,6 +763,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -920,6 +924,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1088,6 +1093,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1236,6 +1242,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
 
         let first_tree = Pubkey::new_unique();
@@ -1451,6 +1458,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -1661,6 +1669,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -1912,6 +1921,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1970,6 +1980,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2025,6 +2036,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2080,6 +2092,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2183,6 +2196,7 @@ mod tests {
                 max_urls_to_parse: 10,
             },
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
 
         let pb = Pubkey::new_unique();
@@ -2333,6 +2347,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let asset_id = Pubkey::new_unique();
         let tree_id = Pubkey::new_unique();
@@ -2387,6 +2402,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let asset_fees_count = 1000;
         let mut asset_ids = Vec::with_capacity(asset_fees_count);
@@ -2472,6 +2488,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2556,6 +2573,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(mock_account_balance_getter),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));

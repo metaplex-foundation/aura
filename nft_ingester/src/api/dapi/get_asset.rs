@@ -13,6 +13,9 @@ use crate::api::dapi::asset;
 use crate::api::dapi::rpc_asset_convertors::asset_to_rpc;
 use crate::api::dapi::rpc_asset_models::Asset;
 
+use super::asset_preview::populate_previews_slice;
+
+#[allow(clippy::too_many_arguments)]
 pub async fn get_asset(
     rocks_db: Arc<Storage>,
     id: Pubkey,
@@ -21,9 +24,10 @@ pub async fn get_asset(
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    storage_service_base_path: Option<String>,
 ) -> Result<Option<Asset>, StorageError> {
     let assets = asset::get_by_ids(
-        rocks_db,
+        rocks_db.clone(),
         vec![id],
         options,
         json_downloader,
@@ -33,8 +37,16 @@ pub async fn get_asset(
     )
     .await?;
 
-    match &assets[0] {
+    let mut result = match &assets[0] {
         Some(asset) => asset_to_rpc(asset.clone()),
         None => Ok(None),
+    };
+
+    if let Ok(Some(asset)) = &mut result {
+        if let Some(base_url) = storage_service_base_path {
+            let _ = populate_previews_slice(&base_url, &rocks_db, &mut [asset]).await;
+        }
     }
+
+    result
 }
