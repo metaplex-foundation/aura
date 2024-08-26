@@ -84,7 +84,7 @@ impl InscriptionsProcessor {
             .inscriptions
             .merge_batch(
                 inscriptions
-                    .into_iter()
+                    .iter()
                     .map(|(_, inscription)| {
                         (
                             // root - address of nft this inscription related to
@@ -126,7 +126,7 @@ impl InscriptionsProcessor {
             .inscription_data
             .merge_batch(
                 inscriptions_data
-                    .into_iter()
+                    .iter()
                     .map(|(key, inscription)| {
                         (
                             *key,

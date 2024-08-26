@@ -174,8 +174,8 @@ impl Storage {
                 self.inscription_data
                     .batch_get(
                         inscriptions
-                            .iter()
-                            .map(|(_, inscription)| inscription.inscription_data)
+                            .values()
+                            .map(|inscription| inscription.inscription_data)
                             .collect(),
                     )
                     .await
