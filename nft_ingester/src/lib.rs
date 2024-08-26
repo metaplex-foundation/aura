@@ -10,6 +10,7 @@ pub mod fork_cleaner;
 pub mod gapfiller;
 pub mod index_syncronizer;
 pub mod init;
+pub mod inscription_raw_parsing;
 pub mod json_worker;
 pub mod message_handler;
 pub mod mpl_core_fee_indexing_processor;

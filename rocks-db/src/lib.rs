@@ -49,6 +49,7 @@ pub mod dump_client;
 pub mod editions;
 pub mod errors;
 pub mod fork_cleaner;
+pub mod inscriptions;
 pub mod key_encoders;
 pub mod migrations;
 pub mod migrator;

@@ -560,6 +560,7 @@ impl TypedColumn for columns::TokenAccount {
     }
 }
 
+#[macro_export]
 macro_rules! impl_merge_values {
     ($ty:ty) => {
         impl $ty {

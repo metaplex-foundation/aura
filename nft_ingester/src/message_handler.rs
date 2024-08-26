@@ -17,6 +17,7 @@ use blockbuster::{
 use chrono::Utc;
 use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
+use libreplex_inscriptions::instructions::legacy_inscriber;
 use solana_program::program_pack::Pack;
 use solana_sdk::pubkey::Pubkey;
 use tracing::{debug, error, warn};
@@ -126,12 +127,16 @@ impl MessageHandlerIngester {
         let account_info: plerkle::AccountInfo = PlerkleAccountInfo(account_info).try_into()?;
         let account_owner = account_info.owner;
 
+        // do not use match expression
+        // because match cases cannot contain function calls like spl_token::id()
         if account_owner == spl_token::id() {
             self.handle_spl_token_account(&account_info).await?;
         } else if account_owner == blockbuster::programs::token_metadata::token_metadata_id() {
             self.handle_token_metadata_account(&account_info).await?;
         } else if account_owner == self.mpl_core_parser.key() {
             self.handle_mpl_core_account(&account_info).await;
+        } else if account_owner == libreplex_inscriptions::id() {
+        } else if account_owner == legacy_inscriber::id() {
         }
 
         Ok(())

@@ -154,7 +154,8 @@ blockbuster = { git = "https://github.com/adm-metaex/blockbuster", branch = "fea
 mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum", branch = "feature/cleanup", features = ["serde"] }
 bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "0d529f5" }
 mpl-token-metadata = "4.1.1"
-
+libreplex_inscriptions = "0.5.1"
+#libreplex_legacy = "0.1.0"
 
 
 [profile.release]
