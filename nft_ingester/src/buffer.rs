@@ -27,6 +27,8 @@ pub struct Buffer {
     pub burnt_metadata_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub burnt_mpl_core_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub mpl_core_indexable_assets: Mutex<HashMap<Pubkey, IndexableAssetWithAccountInfo>>,
+    pub inscriptions: Mutex<HashMap<Pubkey, IndexableAssetWithAccountInfo>>,
+    pub inscriptions_data: Mutex<HashMap<Pubkey, IndexableAssetWithAccountInfo>>,
 }
 
 impl Buffer {
@@ -41,6 +43,8 @@ impl Buffer {
             burnt_metadata_at_slot: Mutex::new(HashMap::new()),
             burnt_mpl_core_at_slot: Mutex::new(HashMap::new()),
             mpl_core_indexable_assets: Mutex::new(HashMap::new()),
+            inscriptions: Mutex::new(HashMap::new()),
+            inscriptions_data: Mutex::new(HashMap::new()),
         }
     }
 

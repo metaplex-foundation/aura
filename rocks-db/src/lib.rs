@@ -26,6 +26,7 @@ use tokio::task::JoinSet;
 
 use crate::batch_mint::BatchMintWithStaker;
 use crate::errors::StorageError;
+use crate::inscriptions::{Inscription, InscriptionData};
 use crate::migrations::collection_authority::{
     AssetCollectionVersion0, CollectionAuthorityMigration,
 };
@@ -113,6 +114,8 @@ pub struct Storage {
     pub batch_mints: Column<BatchMintWithStaker>,
     pub migration_version: Column<MigrationVersions>,
     pub token_prices: Column<TokenPrice>,
+    pub inscriptions: Column<Inscription>,
+    pub inscription_data: Column<InscriptionData>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -159,6 +162,8 @@ impl Storage {
         let batch_mints = Self::column(db.clone(), red_metrics.clone());
         let migration_version = Self::column(db.clone(), red_metrics.clone());
         let token_prices = Self::column(db.clone(), red_metrics.clone());
+        let inscriptions = Self::column(db.clone(), red_metrics.clone());
+        let inscription_data = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -198,6 +203,8 @@ impl Storage {
             batch_mints,
             migration_version,
             token_prices,
+            inscriptions,
+            inscription_data,
         }
     }
 
@@ -270,6 +277,8 @@ impl Storage {
             Self::new_cf_descriptor::<FailedBatchMint>(migration_state),
             Self::new_cf_descriptor::<BatchMintWithStaker>(migration_state),
             Self::new_cf_descriptor::<TokenPrice>(migration_state),
+            Self::new_cf_descriptor::<Inscription>(migration_state),
+            Self::new_cf_descriptor::<InscriptionData>(migration_state),
         ]
     }
 
@@ -566,6 +575,18 @@ impl Storage {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_prices",
                     asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            Inscription::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_token_inscriptions",
+                    Inscription::merge_values,
+                );
+            }
+            InscriptionData::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_token_inscription_data",
+                    InscriptionData::merge_values,
                 );
             }
             _ => {}

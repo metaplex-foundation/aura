@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use std::{str::FromStr, sync::Arc};
+use std::fmt::Debug;
 
 use blockbuster::error::BlockbusterError;
 use blockbuster::programs::mpl_core_program::{
@@ -136,7 +137,7 @@ impl MessageHandlerIngester {
         } else if account_owner == self.mpl_core_parser.key() {
             self.handle_mpl_core_account(&account_info).await;
         } else if account_owner == libreplex_inscriptions::id() {
-        } else if account_owner == legacy_inscriber::id() {
+            self.handle_inscription_account(&account_info).await;
         }
 
         Ok(())
@@ -354,6 +355,20 @@ impl MessageHandlerIngester {
         }
     }
 
+    async fn handle_inscription_account<'a>(&self, account_info: &plerkle::AccountInfo) {
+        let acc_parse_result = crate::inscription_raw_parsing::handle_inscription_account(
+            account_info.data.as_slice(),
+        );
+        match acc_parse_result {
+            Ok(parsed_inscription) => {
+
+            }
+            Err(e) => {
+                account_parsing_error(e, account_info);
+            }
+        }
+    }
+
     async fn write_mpl_core_accounts_to_buffer(
         &self,
         account_update: &plerkle::AccountInfo,
@@ -446,7 +461,7 @@ fn map_account_info_fb_bytes(
     Ok(builder.finished_data().to_owned())
 }
 
-fn account_parsing_error(err: BlockbusterError, account_info: &plerkle::AccountInfo) {
+fn account_parsing_error(err: impl Debug, account_info: &plerkle::AccountInfo) {
     warn!(
         "Error while parsing account: {:?} {}",
         err, account_info.pubkey

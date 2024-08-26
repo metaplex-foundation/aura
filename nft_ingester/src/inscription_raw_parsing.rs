@@ -28,9 +28,7 @@ pub fn handle_inscription_account(
         InscriptionRankPage::DISCRIMINATOR
         | InscriptionSummary::DISCRIMINATOR
         | InscriptionV3::DISCRIMINATOR
-        | Migrator::DISCRIMINATOR => {
-            ParsedInscription::UnhandledAccount
-        }
+        | Migrator::DISCRIMINATOR => ParsedInscription::UnhandledAccount,
         // InscriptionData account does not contain DISCRIMINATOR because it is overwritten by blod data
         // so we decided which account is InscriptionData by exceptions all other account types
         _ => ParsedInscription::InscriptionData(account_data.to_vec()),
