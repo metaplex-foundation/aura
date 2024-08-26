@@ -8,6 +8,7 @@ use interface::signature_persistence::ProcessingDataGetter;
 use tokio::sync::Mutex;
 use tonic::async_trait;
 
+use crate::inscriptions_processor::{InscriptionDataInfo, InscriptionInfo};
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::columns::{Mint, TokenAccount};
 
@@ -27,8 +28,8 @@ pub struct Buffer {
     pub burnt_metadata_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub burnt_mpl_core_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub mpl_core_indexable_assets: Mutex<HashMap<Pubkey, IndexableAssetWithAccountInfo>>,
-    pub inscriptions: Mutex<HashMap<Pubkey, IndexableAssetWithAccountInfo>>,
-    pub inscriptions_data: Mutex<HashMap<Pubkey, IndexableAssetWithAccountInfo>>,
+    pub inscriptions: Mutex<HashMap<Pubkey, InscriptionInfo>>,
+    pub inscriptions_data: Mutex<HashMap<Pubkey, InscriptionDataInfo>>,
 }
 
 impl Buffer {

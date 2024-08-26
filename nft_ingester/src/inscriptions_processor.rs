@@ -1,11 +1,27 @@
-use std::sync::Arc;
-use std::time::SystemTime;
-use tokio::sync::broadcast::Receiver;
-use metrics_utils::IngesterMetricsConfig;
-use rocks_db::Storage;
 use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::process_accounts;
+use libreplex_inscriptions::Inscription;
+use metrics_utils::IngesterMetricsConfig;
+use rocks_db::Storage;
+use solana_program::pubkey::Pubkey;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Instant, SystemTime};
+use tokio::sync::broadcast::Receiver;
+use usecase::save_metrics::result_to_metrics;
+
+pub struct InscriptionInfo {
+    pub inscription: Inscription,
+    pub write_version: u64,
+    pub slot_updated: u64,
+}
+
+pub struct InscriptionDataInfo {
+    pub inscription_data: Vec<u8>,
+    pub write_version: u64,
+    pub slot_updated: u64,
+}
 
 #[derive(Clone)]
 pub struct InscriptionsProcessor {
@@ -35,57 +51,54 @@ impl InscriptionsProcessor {
         })
     }
 
-    pub async fn start_processing(&mut self, rx: Receiver<()>) {
+    pub async fn start_inscriptions_processing(&mut self, rx: Receiver<()>) {
         process_accounts!(
             self,
             rx,
-            self.buffer.mpl_core_fee_assets,
+            self.buffer.inscriptions,
             self.batch_size,
-            |s: CoreAssetFee| s,
-            self.last_received_mpl_asset_at,
-            Self::store_mpl_assets_fee,
-            "mpl_core_asset_fee"
+            |s: InscriptionInfo| s,
+            self.last_received_inscription_at,
+            Self::store_inscriptions,
+            "inscriptions"
         );
     }
 
-    pub async fn store_mpl_assets_fee(&self, metadata_info: &HashMap<Pubkey, CoreAssetFee>) {
-        let mut fees = Vec::new();
-        for (pk, asset) in metadata_info.iter() {
-            let rent = match self.calculate_rent_amount(asset).await {
-                Ok(rent) => rent,
-                Err(err) => {
-                    error!("calculate_rent_amount: {:?}", err);
-                    continue;
-                }
-            };
-
-            fees.push(CoreFee {
-                pubkey: *pk,
-                is_paid: asset.lamports <= rent,
-                current_balance: asset.lamports,
-                minimum_rent: rent,
-                slot_updated: asset.slot_updated,
-            });
-        }
-
+    pub async fn store_inscriptions(&self, inscriptions: &HashMap<Pubkey, InscriptionInfo>) {
         let begin_processing = Instant::now();
-        if let Err(err) = self.storage.save_core_fees(fees).await {
-            error!("save_core_fees: {}", err);
-        };
+        let res = self
+            .rocks_db
+            .inscriptions
+            .merge_batch(
+                inscriptions
+                    .into_iter()
+                    .map(|(key, inscription)| {
+                        (
+                            *key,
+                            rocks_db::inscriptions::Inscription {
+                                authority: inscription.inscription.authority,
+                                root: inscription.inscription.root,
+                                media_type: inscription.inscription.media_type.convert_to_string(),
+                                encoding_type: inscription
+                                    .inscription
+                                    .encoding_type
+                                    .convert_to_string(),
+                                inscription_data: inscription.inscription.inscription_data,
+                                order: inscription.inscription.order,
+                                size: inscription.inscription.size,
+                                validation_hash: inscription.inscription.validation_hash.clone(),
+                                write_version: inscription.write_version,
+                            },
+                        )
+                    })
+                    .collect(),
+            )
+            .await;
+
+        result_to_metrics(self.metrics.clone(), &res, "inscriptions_saving");
         self.metrics.set_latency(
-            "mpl_core_asset_fee",
+            "inscriptions_saving",
             begin_processing.elapsed().as_millis() as f64,
         );
-    }
-
-    async fn calculate_rent_amount(
-        &self,
-        account_info: &CoreAssetFee,
-    ) -> Result<u64, IngesterError> {
-        Ok(self
-            .rent
-            .read()
-            .await
-            .minimum_balance(account_info.data.len()))
     }
 }

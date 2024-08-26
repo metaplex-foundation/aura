@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use std::{str::FromStr, sync::Arc};
 use std::fmt::Debug;
+use std::{str::FromStr, sync::Arc};
 
 use blockbuster::error::BlockbusterError;
 use blockbuster::programs::mpl_core_program::{
@@ -18,7 +18,6 @@ use blockbuster::{
 use chrono::Utc;
 use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
-use libreplex_inscriptions::instructions::legacy_inscriber;
 use solana_program::program_pack::Pack;
 use solana_sdk::pubkey::Pubkey;
 use tracing::{debug, error, warn};
@@ -30,6 +29,8 @@ use rocks_db::editions::TokenMetadataEdition;
 use crate::buffer::{Buffer, FeesBuffer};
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
+use crate::inscription_raw_parsing::ParsedInscription;
+use crate::inscriptions_processor::{InscriptionDataInfo, InscriptionInfo};
 use crate::mplx_updates_processor::{
     BurntMetadataSlot, CoreAssetFee, IndexableAssetWithAccountInfo, MetadataInfo, TokenMetadata,
 };
@@ -360,9 +361,33 @@ impl MessageHandlerIngester {
             account_info.data.as_slice(),
         );
         match acc_parse_result {
-            Ok(parsed_inscription) => {
-
-            }
+            Ok(parsed_inscription) => match parsed_inscription {
+                ParsedInscription::Inscription(inscription) => {
+                    update_or_insert!(
+                        self.buffer.inscriptions,
+                        account_info.pubkey,
+                        InscriptionInfo {
+                            inscription,
+                            write_version: account_info.write_version,
+                            slot_updated: account_info.slot,
+                        },
+                        account_info.write_version
+                    );
+                }
+                ParsedInscription::InscriptionData(inscription_data) => {
+                    update_or_insert!(
+                        self.buffer.inscriptions_data,
+                        account_info.pubkey,
+                        InscriptionDataInfo {
+                            inscription_data,
+                            write_version: account_info.write_version,
+                            slot_updated: account_info.slot,
+                        },
+                        account_info.write_version
+                    );
+                }
+                ParsedInscription::UnhandledAccount => {}
+            },
             Err(e) => {
                 account_parsing_error(e, account_info);
             }
