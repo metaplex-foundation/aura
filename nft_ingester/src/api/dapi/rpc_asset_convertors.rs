@@ -472,6 +472,8 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
             .asset_dynamic
             .mpl_core_unknown_external_plugins
             .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
+        inscription: None,
+        spl20: None,
     }))
 }
 

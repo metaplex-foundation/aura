@@ -62,6 +62,7 @@ fn convert_rocks_asset_model(
         })
         .cloned();
 
+    let inscription = asset_selected_maps.inscriptions.get(asset_pubkey).cloned();
     Ok(FullAsset {
         asset_static: static_data.clone(),
         asset_owner: owner.clone(),
@@ -103,6 +104,15 @@ fn convert_rocks_asset_model(
             })
             .cloned(),
         collection_dynamic_data,
+        inscription_data: inscription
+            .as_ref()
+            .and_then(|inscription| {
+                asset_selected_maps
+                    .inscriptions_data
+                    .get(&inscription.inscription_data)
+            })
+            .cloned(),
+        inscription,
     })
 }
 
