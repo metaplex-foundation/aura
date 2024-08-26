@@ -424,6 +424,7 @@ async fn batch_mint_with_verified_creators_test() {
         None,
         JsonMiddlewareConfig::default(),
         Arc::new(MockAccountBalanceGetter::new()),
+        None,
     );
 
     let payload = GetAssetProof {
@@ -574,6 +575,7 @@ async fn batch_mint_with_unverified_creators_test() {
         None,
         JsonMiddlewareConfig::default(),
         Arc::new(MockAccountBalanceGetter::new()),
+        None,
     );
 
     let payload = GetAssetProof {
@@ -667,6 +669,7 @@ async fn batch_mint_persister_test() {
         None,
         JsonMiddlewareConfig::default(),
         Arc::new(MockAccountBalanceGetter::new()),
+        None,
     );
 
     let leaf_index = 4u32;

@@ -1,3 +1,5 @@
+use asset_previews::{AssetPreviews, UrlToDownload};
+use entities::schedule::ScheduledJob;
 use inflector::Inflector;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
@@ -37,6 +39,7 @@ use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
 pub mod asset;
 mod asset_client;
+pub mod asset_previews;
 pub mod asset_signatures;
 pub mod asset_streaming_client;
 pub mod backup_service;
@@ -59,6 +62,7 @@ pub mod parameters;
 pub mod processing_possibility;
 pub mod raw_block;
 pub mod raw_blocks_streaming_client;
+pub mod schedule;
 pub mod sequence_consistent;
 pub mod signature_client;
 pub mod slots_dumper;
@@ -114,6 +118,9 @@ pub struct Storage {
     pub batch_mints: Column<BatchMintWithStaker>,
     pub migration_version: Column<MigrationVersions>,
     pub token_prices: Column<TokenPrice>,
+    pub asset_previews: Column<AssetPreviews>,
+    pub urls_to_download: Column<UrlToDownload>,
+    pub schedules: Column<ScheduledJob>,
     pub inscriptions: Column<Inscription>,
     pub inscription_data: Column<InscriptionData>,
     assets_update_last_seq: AtomicU64,
@@ -162,6 +169,9 @@ impl Storage {
         let batch_mints = Self::column(db.clone(), red_metrics.clone());
         let migration_version = Self::column(db.clone(), red_metrics.clone());
         let token_prices = Self::column(db.clone(), red_metrics.clone());
+        let asset_previews = Self::column(db.clone(), red_metrics.clone());
+        let urls_to_download = Self::column(db.clone(), red_metrics.clone());
+        let schedules = Self::column(db.clone(), red_metrics.clone());
         let inscriptions = Self::column(db.clone(), red_metrics.clone());
         let inscription_data = Self::column(db.clone(), red_metrics.clone());
 
@@ -203,6 +213,9 @@ impl Storage {
             batch_mints,
             migration_version,
             token_prices,
+            asset_previews,
+            urls_to_download,
+            schedules,
             inscriptions,
             inscription_data,
         }
@@ -277,6 +290,9 @@ impl Storage {
             Self::new_cf_descriptor::<FailedBatchMint>(migration_state),
             Self::new_cf_descriptor::<BatchMintWithStaker>(migration_state),
             Self::new_cf_descriptor::<TokenPrice>(migration_state),
+            Self::new_cf_descriptor::<AssetPreviews>(migration_state),
+            Self::new_cf_descriptor::<UrlToDownload>(migration_state),
+            Self::new_cf_descriptor::<ScheduledJob>(migration_state),
             Self::new_cf_descriptor::<Inscription>(migration_state),
             Self::new_cf_descriptor::<InscriptionData>(migration_state),
         ]

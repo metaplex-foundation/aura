@@ -122,6 +122,7 @@ mod mtg_441_tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         )
     }
 

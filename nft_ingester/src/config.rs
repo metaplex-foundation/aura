@@ -286,6 +286,7 @@ pub struct ApiConfig {
     pub heap_path: String,
     #[serde(default = "default_consistence_backfilling_slots_threshold")]
     pub consistence_backfilling_slots_threshold: u64,
+    pub storage_service_base_url: Option<String>,
 }
 
 const fn default_synchronization_api_threshold() -> u64 {

@@ -1,3 +1,4 @@
+use crate::api::dapi::rpc_asset_convertors::parse_files;
 use crate::config::{setup_config, IngesterConfig, INGESTER_CONFIG_PREFIX};
 use async_trait::async_trait;
 use entities::enums::TaskStatus;
@@ -8,6 +9,7 @@ use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::tasks::UpdatedTask;
 use postgre_client::PgClient;
 use reqwest::{Client, ClientBuilder};
+use rocks_db::asset_previews::UrlToDownload;
 use rocks_db::Storage;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -392,11 +394,29 @@ impl JsonPersister for JsonWorker {
         }
 
         if !rocks_updates.is_empty() {
+            let urls_to_download = rocks_updates
+                .values()
+                .filter(|data| !data.metadata.is_empty())
+                .filter_map(|data| parse_files(&data.metadata))
+                .flat_map(|files| files.into_iter())
+                .filter_map(|file| file.uri)
+                .map(|uri| (uri, UrlToDownload::default()))
+                .collect::<HashMap<_, _>>();
+
             self.rocks_db
                 .asset_offchain_data
                 .put_batch(rocks_updates)
                 .await
                 .map_err(|e| JsonDownloaderError::MainStorageError(e.to_string()))?;
+
+            if let Err(e) = self
+                .rocks_db
+                .urls_to_download
+                .put_batch(urls_to_download)
+                .await
+            {
+                error!("Unable to persist URLs to download: {e}");
+            };
         }
 
         Ok(())
