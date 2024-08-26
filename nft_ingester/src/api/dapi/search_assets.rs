@@ -14,6 +14,8 @@ use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tracing::error;
 
+use super::asset_preview::populate_previews;
+
 #[allow(clippy::too_many_arguments)]
 pub async fn search_assets(
     index_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
@@ -31,6 +33,7 @@ pub async fn search_assets(
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     account_balance_getter: Arc<impl AccountBalanceGetter>,
+    storage_service_base_path: Option<String>,
 ) -> Result<AssetList, StorageError> {
     let show_native_balance = options.show_native_balance;
     let (asset_list, native_balance) = tokio::join!(
@@ -54,7 +57,7 @@ pub async fn search_assets(
             show_native_balance,
             filter.owner_address,
             account_balance_getter,
-            rocks_db,
+            rocks_db.clone(),
         )
     );
     let native_balance = native_balance.unwrap_or_else(|e| {
@@ -63,6 +66,10 @@ pub async fn search_assets(
     });
     let mut asset_list = asset_list?;
     asset_list.native_balance = native_balance;
+
+    if let Some(base_url) = storage_service_base_path.as_ref() {
+        let _ = populate_previews(base_url, &rocks_db, &mut asset_list.items).await;
+    }
 
     Ok(asset_list)
 }

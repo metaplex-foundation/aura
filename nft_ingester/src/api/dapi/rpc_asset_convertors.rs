@@ -47,6 +47,7 @@ pub fn file_from_str(str: String) -> File {
     let mime = get_mime_type_from_uri(str.clone());
     File {
         uri: Some(str),
+        cdn_uri: None,
         mime: Some(mime),
         quality: None,
         contexts: None,
@@ -124,6 +125,32 @@ pub fn get_content(
         meta.set_item("token_standard", standard.clone());
     }
 
+    let (links, mut files) = parse_files_from_selector(selector);
+
+    // List the defined image file before the other files (if one exists).
+    files.sort_by(|a, _: &File| match (a.uri.as_ref(), links.get("image")) {
+        (Some(x), Some(y)) => {
+            if x == y {
+                Ordering::Less
+            } else {
+                Ordering::Equal
+            }
+        }
+        _ => Ordering::Equal,
+    });
+
+    Ok(Content {
+        schema: "https://schema.metaplex.com/nft1.0.json".to_string(),
+        json_uri,
+        files: Some(files),
+        metadata: meta,
+        links: Some(links),
+    })
+}
+
+pub fn parse_files_from_selector<'a>(
+    selector: &mut impl FnMut(&str) -> Result<Vec<&'a Value>, JsonPathError>,
+) -> (HashMap<String, Value>, Vec<File>) {
     let mut links = HashMap::new();
     let link_fields = vec!["image", "animation_url", "external_url"];
     for f in link_fields {
@@ -153,6 +180,7 @@ pub fn get_content(
                             let file = if let Some(str_mime) = m.as_str() {
                                 File {
                                     uri: Some(str_uri.to_string()),
+                                    cdn_uri: None,
                                     mime: Some(str_mime.to_string()),
                                     quality: None,
                                     contexts: None,
@@ -182,27 +210,18 @@ pub fn get_content(
     track_top_level_file(&mut actual_files, links.get("image"));
     track_top_level_file(&mut actual_files, links.get("animation_url"));
 
-    let mut files: Vec<File> = actual_files.into_values().collect();
+    let files: Vec<File> = actual_files.into_values().collect();
+    (links, files)
+}
 
-    // List the defined image file before the other files (if one exists).
-    files.sort_by(|a, _: &File| match (a.uri.as_ref(), links.get("image")) {
-        (Some(x), Some(y)) => {
-            if x == y {
-                Ordering::Less
-            } else {
-                Ordering::Equal
-            }
-        }
-        _ => Ordering::Equal,
-    });
-
-    Ok(Content {
-        schema: "https://schema.metaplex.com/nft1.0.json".to_string(),
-        json_uri,
-        files: Some(files),
-        metadata: meta,
-        links: Some(links),
-    })
+pub fn parse_files(metadata: &str) -> Option<Vec<File>> {
+    serde_json::from_str(metadata)
+        .map(|metadata_json| {
+            let mut selector_fn = jsonpath_lib::selector(&metadata_json);
+            let (_, files) = parse_files_from_selector(&mut selector_fn);
+            files
+        })
+        .ok()
 }
 
 fn extract_collection_metadata(

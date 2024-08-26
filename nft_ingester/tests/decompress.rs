@@ -253,6 +253,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -338,6 +339,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -423,6 +425,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -508,6 +511,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
 
         let buffer = Arc::new(Buffer::new());

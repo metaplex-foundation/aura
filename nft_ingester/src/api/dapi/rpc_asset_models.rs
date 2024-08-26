@@ -52,6 +52,8 @@ pub struct File {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uri: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub cdn_uri: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mime: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<Quality>,

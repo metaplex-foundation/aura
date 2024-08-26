@@ -50,6 +50,8 @@ where
     json_persister: Option<Arc<JP>>,
     json_middleware_config: JsonMiddlewareConfig,
     account_balance_getter: Arc<ABG>,
+    /// E.g. https://storage-service.xyz/
+    storage_service_base_path: Option<String>,
 }
 
 pub fn not_found() -> DasApiError {
@@ -74,6 +76,7 @@ where
         json_persister: Option<Arc<JP>>,
         json_middleware_config: JsonMiddlewareConfig,
         account_balance_getter: Arc<ABG>,
+        storage_service_base_path: Option<String>,
     ) -> Self {
         DasApi {
             pg_client,
@@ -85,6 +88,7 @@ where
             json_persister,
             json_middleware_config,
             account_balance_getter,
+            storage_service_base_path,
         }
     }
 
@@ -227,6 +231,7 @@ where
             self.json_persister.clone(),
             self.json_middleware_config.max_urls_to_parse,
             tasks,
+            self.storage_service_base_path.clone(),
         )
         .await?;
 
@@ -271,6 +276,7 @@ where
             self.json_persister.clone(),
             self.json_middleware_config.max_urls_to_parse,
             tasks,
+            self.storage_service_base_path.clone(),
         )
         .await?;
 
@@ -628,6 +634,7 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
             self.account_balance_getter.clone(),
+            self.storage_service_base_path.clone(),
         )
         .await?;
 

@@ -1,4 +1,5 @@
 mod asset;
+pub mod asset_preview;
 mod change_logs;
 pub mod converters;
 mod get_asset;
@@ -8,7 +9,7 @@ pub mod get_core_fees;
 pub mod get_token_accounts;
 mod model;
 pub mod response;
-mod rpc_asset_convertors;
+pub mod rpc_asset_convertors;
 pub mod rpc_asset_models;
 mod search_assets;
 
