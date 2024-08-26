@@ -64,6 +64,19 @@ impl InscriptionsProcessor {
         );
     }
 
+    pub async fn start_inscriptions_data_processing(&mut self, rx: Receiver<()>) {
+        process_accounts!(
+            self,
+            rx,
+            self.buffer.inscriptions_data,
+            self.batch_size,
+            |s: InscriptionDataInfo| s,
+            self.last_received_inscription_data_at,
+            Self::store_inscriptions_data,
+            "inscriptions_data"
+        );
+    }
+
     pub async fn store_inscriptions(&self, inscriptions: &HashMap<Pubkey, InscriptionInfo>) {
         let begin_processing = Instant::now();
         let res = self
@@ -72,9 +85,10 @@ impl InscriptionsProcessor {
             .merge_batch(
                 inscriptions
                     .into_iter()
-                    .map(|(key, inscription)| {
+                    .map(|(_, inscription)| {
                         (
-                            *key,
+                            // root - address of nft this inscription related to
+                            inscription.inscription.root,
                             rocks_db::inscriptions::Inscription {
                                 authority: inscription.inscription.authority,
                                 root: inscription.inscription.root,
@@ -98,6 +112,38 @@ impl InscriptionsProcessor {
         result_to_metrics(self.metrics.clone(), &res, "inscriptions_saving");
         self.metrics.set_latency(
             "inscriptions_saving",
+            begin_processing.elapsed().as_millis() as f64,
+        );
+    }
+
+    pub async fn store_inscriptions_data(
+        &self,
+        inscriptions_data: &HashMap<Pubkey, InscriptionDataInfo>,
+    ) {
+        let begin_processing = Instant::now();
+        let res = self
+            .rocks_db
+            .inscription_data
+            .merge_batch(
+                inscriptions_data
+                    .into_iter()
+                    .map(|(key, inscription)| {
+                        (
+                            *key,
+                            rocks_db::inscriptions::InscriptionData {
+                                pubkey: *key,
+                                data: inscription.inscription_data.clone(),
+                                write_version: inscription.write_version,
+                            },
+                        )
+                    })
+                    .collect(),
+            )
+            .await;
+
+        result_to_metrics(self.metrics.clone(), &res, "inscriptions_data_saving");
+        self.metrics.set_latency(
+            "inscriptions_data_saving",
             begin_processing.elapsed().as_millis() as f64,
         );
     }

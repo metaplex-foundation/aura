@@ -8,6 +8,7 @@ use crate::editions::TokenMetadataEdition;
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
+use entities::api_req_params::Options;
 use entities::models::{EditionData, PubkeyWithSlot};
 use std::collections::HashMap;
 
@@ -86,7 +87,7 @@ impl Storage {
     pub async fn get_asset_selected_maps_async(
         &self,
         asset_ids: Vec<Pubkey>,
-        show_collection_metadata: bool,
+        options: &Options,
     ) -> Result<AssetSelectedMaps> {
         let assets_dynamic_fut = self.asset_dynamic_data.batch_get(asset_ids.clone());
         let assets_static_fut = self.asset_static_data.batch_get(asset_ids.clone());
@@ -131,33 +132,58 @@ impl Storage {
             .iter()
             .flat_map(|c| c.as_ref().map(|c| c.collection.value))
             .collect::<Vec<_>>();
-        let (collection_dynamic_data, collection_offchain_data) = if show_collection_metadata {
-            let collection_dynamic_data = to_map!(
-                self.asset_dynamic_data
-                    .batch_get(assets_collection_pks.clone())
+        let (collection_dynamic_data, collection_offchain_data) =
+            if options.show_collection_metadata {
+                let collection_dynamic_data = to_map!(
+                    self.asset_dynamic_data
+                        .batch_get(assets_collection_pks.clone())
+                        .await
+                );
+                let collection_urls: HashMap<_, _> = collection_dynamic_data
+                    .iter()
+                    .map(|(key, asset)| (key.to_string(), asset.url.value.clone()))
+                    .collect();
+                let collection_offchain_data = self
+                    .asset_offchain_data
+                    .batch_get(collection_urls.clone().into_values().collect::<Vec<_>>())
                     .await
-            );
-            let collection_urls: HashMap<_, _> = collection_dynamic_data
-                .iter()
-                .map(|(key, asset)| (key.to_string(), asset.url.value.clone()))
-                .collect();
-            let collection_offchain_data = self
-                .asset_offchain_data
-                .batch_get(collection_urls.clone().into_values().collect::<Vec<_>>())
-                .await
-                .map_err(|e| StorageError::Common(e.to_string()))?
-                .into_iter()
-                .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
-                .collect::<HashMap<_, _>>();
+                    .map_err(|e| StorageError::Common(e.to_string()))?
+                    .into_iter()
+                    .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
+                    .collect::<HashMap<_, _>>();
 
-            (collection_dynamic_data, collection_offchain_data)
-        } else {
-            (HashMap::new(), HashMap::new())
-        };
+                (collection_dynamic_data, collection_offchain_data)
+            } else {
+                (HashMap::new(), HashMap::new())
+            };
         let mpl_core_collections = self
             .asset_collection_data
             .batch_get(assets_collection_pks)
             .await;
+
+        let (inscriptions, inscriptions_data) = if options.show_inscription {
+            let inscriptions = self
+                .inscriptions
+                .batch_get(asset_ids.clone())
+                .await
+                .map_err(|e| StorageError::Common(e.to_string()))?
+                .into_iter()
+                .filter_map(|asset| asset.map(|a| (a.root, a)))
+                .collect::<HashMap<_, _>>();
+            let inscriptions_data = to_map!(
+                self.inscription_data
+                    .batch_get(
+                        inscriptions
+                            .iter()
+                            .map(|(_, inscription)| inscription.inscription_data)
+                            .collect(),
+                    )
+                    .await
+            );
+            (inscriptions, inscriptions_data)
+        } else {
+            (HashMap::new(), HashMap::new())
+        };
 
         Ok(AssetSelectedMaps {
             editions: self
@@ -179,6 +205,8 @@ impl Storage {
             mpl_core_collections: to_map!(mpl_core_collections),
             collection_dynamic_data,
             collection_offchain_data,
+            inscriptions,
+            inscriptions_data,
         })
     }
 

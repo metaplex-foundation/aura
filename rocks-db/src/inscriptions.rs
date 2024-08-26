@@ -38,6 +38,7 @@ impl_merge_values!(Inscription);
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InscriptionData {
+    pub pubkey: Pubkey,
     pub data: Vec<u8>,
     pub write_version: u64,
 }

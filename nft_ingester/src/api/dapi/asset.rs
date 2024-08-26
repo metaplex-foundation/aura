@@ -171,7 +171,7 @@ pub async fn get_by_ids(
 
     let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
     let mut asset_selected_maps = rocks_db
-        .get_asset_selected_maps_async(unique_asset_ids.clone(), options.show_collection_metadata)
+        .get_asset_selected_maps_async(unique_asset_ids.clone(), &options)
         .await?;
 
     if let Some(json_downloader) = json_downloader {
