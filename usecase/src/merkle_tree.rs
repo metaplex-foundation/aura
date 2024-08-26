@@ -13,7 +13,8 @@ macro_rules! check_proof {
         let tree = spl_concurrent_merkle_tree::concurrent_merkle_tree::ConcurrentMerkleTree::<
             $max_depth,
             $max_size,
-        >::load_bytes($bytes)?;
+        >::load_bytes($bytes)
+        .map_err(|e| interface::error::UsecaseError::Anchor(e.to_string()))?;
         Ok(tree.check_valid_proof($leaf, &proof, $leaf_index))
     }};
 }

@@ -1,25 +1,39 @@
-use anchor_lang::Discriminator;
-use anchor_lang::AccountDeserialize;
 use crate::error::IngesterError;
-use libreplex_inscriptions::{Inscription, InscriptionData};
+use anchor_lang::{AccountDeserialize, Discriminator};
+use libreplex_inscriptions::{
+    Inscription, InscriptionRankPage, InscriptionSummary, InscriptionV3, Migrator,
+};
 
 pub enum ParsedInscription {
     Inscription(Inscription),
-    InscriptionData(InscriptionData),
-    EmptyAccount,
+    InscriptionData(Vec<u8>),
+    UnhandledAccount,
 }
 
-pub fn handle_inscription_account(account_data: &[u8]) -> Result<ParsedInscription, IngesterError> {
+pub fn handle_inscription_account(
+    mut account_data: &[u8],
+) -> Result<ParsedInscription, IngesterError> {
     if account_data.len() < 8 {
         return Err(IngesterError::AccountParsingError("".to_string()));
     }
-    let discriminator = account_data[..8];
+    let mut discriminator = [0u8; 8];
+    discriminator.copy_from_slice(&account_data[..8]);
+
     let res = match discriminator {
-        &Inscription::DISCRIMINATOR => {
-            let inscription = Inscription::try_deserialize(&mut account_data.clone())?;
+        Inscription::DISCRIMINATOR => {
+            let inscription = Inscription::try_deserialize(&mut account_data)?;
             ParsedInscription::Inscription(inscription)
         }
-        &InscriptionData::DISCRIMINATOR => {}
+        // no need for indexing such accounts
+        InscriptionRankPage::DISCRIMINATOR
+        | InscriptionSummary::DISCRIMINATOR
+        | InscriptionV3::DISCRIMINATOR
+        | Migrator::DISCRIMINATOR => {
+            ParsedInscription::UnhandledAccount
+        }
+        // InscriptionData account does not contain DISCRIMINATOR because it is overwritten by blod data
+        // so we decided which account is InscriptionData by exceptions all other account types
+        _ => ParsedInscription::InscriptionData(account_data.to_vec()),
     };
 
     Ok(res)

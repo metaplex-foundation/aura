@@ -78,7 +78,6 @@ mime_guess = { workspace = true }
 url = { workspace = true }
 coingecko = { workspace = true }
 libreplex_inscriptions = { workspace = true }
-#libreplex_legacy = { workspace = true }
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }
