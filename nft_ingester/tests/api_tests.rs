@@ -2699,6 +2699,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));

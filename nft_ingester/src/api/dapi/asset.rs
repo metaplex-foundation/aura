@@ -57,7 +57,7 @@ fn convert_rocks_asset_model(
         .get(asset_pubkey)
         .and_then(|collection| {
             asset_selected_maps
-                .collection_dynamic_data
+                .assets_dynamic
                 .get(&collection.collection.value)
         })
         .cloned();
@@ -90,7 +90,7 @@ fn convert_rocks_asset_model(
             .get(asset_pubkey)
             .and_then(|collection| {
                 asset_selected_maps
-                    .mpl_core_collections
+                    .assets_collection
                     .get(&collection.collection.value)
             })
             .cloned(),
@@ -98,7 +98,7 @@ fn convert_rocks_asset_model(
             .as_ref()
             .and_then(|dynamic_data| {
                 asset_selected_maps
-                    .collection_offchain_data
+                    .offchain_data
                     .get(&dynamic_data.url.value)
             })
             .cloned(),

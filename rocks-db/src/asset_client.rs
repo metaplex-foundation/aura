@@ -95,8 +95,8 @@ impl Storage {
         let assets_owner_fut = self.asset_owner_data.batch_get(asset_ids.clone());
         let assets_leaf_fut = self.asset_leaf_data.batch_get(asset_ids.clone());
 
-        let assets_dynamic = to_map!(assets_dynamic_fut.await);
-        let urls: HashMap<_, _> = assets_dynamic
+        let mut assets_dynamic = to_map!(assets_dynamic_fut.await);
+        let mut urls: HashMap<_, _> = assets_dynamic
             .iter()
             .map(|(key, asset)| (key.to_string(), asset.url.value.clone()))
             .collect();
@@ -119,7 +119,7 @@ impl Storage {
             assets_leaf_fut,
             offchain_data_fut
         );
-        let offchain_data = offchain_data
+        let mut offchain_data = offchain_data
             .map_err(|e| StorageError::Common(e.to_string()))?
             .into_iter()
             .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
@@ -131,16 +131,18 @@ impl Storage {
             .iter()
             .flat_map(|c| c.as_ref().map(|c| c.collection.value))
             .collect::<Vec<_>>();
-        let (collection_dynamic_data, collection_offchain_data) = if show_collection_metadata {
+        if show_collection_metadata {
             let collection_dynamic_data = to_map!(
                 self.asset_dynamic_data
                     .batch_get(assets_collection_pks.clone())
                     .await
             );
+            assets_dynamic.extend(collection_dynamic_data.clone());
             let collection_urls: HashMap<_, _> = collection_dynamic_data
                 .iter()
                 .map(|(key, asset)| (key.to_string(), asset.url.value.clone()))
                 .collect();
+            urls.extend(collection_urls.clone());
             let collection_offchain_data = self
                 .asset_offchain_data
                 .batch_get(collection_urls.clone().into_values().collect::<Vec<_>>())
@@ -149,15 +151,15 @@ impl Storage {
                 .into_iter()
                 .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
                 .collect::<HashMap<_, _>>();
-
-            (collection_dynamic_data, collection_offchain_data)
-        } else {
-            (HashMap::new(), HashMap::new())
+            offchain_data.extend(collection_offchain_data)
         };
-        let mpl_core_collections = self
-            .asset_collection_data
-            .batch_get(assets_collection_pks)
-            .await;
+        let mpl_core_collections = to_map!(
+            self.asset_collection_data
+                .batch_get(assets_collection_pks)
+                .await
+        );
+        let mut assets_collection = to_map!(assets_collection);
+        assets_collection.extend(mpl_core_collections);
 
         Ok(AssetSelectedMaps {
             editions: self
@@ -171,14 +173,11 @@ impl Storage {
             assets_static,
             assets_dynamic,
             assets_authority: to_map!(assets_authority),
-            assets_collection: to_map!(assets_collection),
+            assets_collection,
             assets_owner: to_map!(assets_owner),
             assets_leaf: to_map!(assets_leaf),
             offchain_data,
             urls,
-            mpl_core_collections: to_map!(mpl_core_collections),
-            collection_dynamic_data,
-            collection_offchain_data,
         })
     }
 
