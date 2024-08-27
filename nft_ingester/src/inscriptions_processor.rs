@@ -16,6 +16,22 @@ pub struct InscriptionInfo {
     pub slot_updated: u64,
 }
 
+impl From<&InscriptionInfo> for rocks_db::inscriptions::Inscription {
+    fn from(value: &InscriptionInfo) -> Self {
+        Self {
+            authority: value.inscription.authority,
+            root: value.inscription.root,
+            content_type: value.inscription.media_type.convert_to_string(),
+            encoding: value.inscription.encoding_type.convert_to_string(),
+            inscription_data_account: value.inscription.inscription_data,
+            order: value.inscription.order,
+            size: value.inscription.size,
+            validation_hash: value.inscription.validation_hash.clone(),
+            write_version: value.write_version,
+        }
+    }
+}
+
 pub struct InscriptionDataInfo {
     pub inscription_data: Vec<u8>,
     pub write_version: u64,
@@ -86,22 +102,9 @@ impl InscriptionsProcessor {
                     .iter()
                     .map(|(_, inscription)| {
                         (
-                            // root - address of nft this inscription related to
+                            // root - address of the nft this inscription relates to
                             inscription.inscription.root,
-                            rocks_db::inscriptions::Inscription {
-                                authority: inscription.inscription.authority,
-                                root: inscription.inscription.root,
-                                content_type: inscription
-                                    .inscription
-                                    .media_type
-                                    .convert_to_string(),
-                                encoding: inscription.inscription.encoding_type.convert_to_string(),
-                                inscription_data_account: inscription.inscription.inscription_data,
-                                order: inscription.inscription.order,
-                                size: inscription.inscription.size,
-                                validation_hash: inscription.inscription.validation_hash.clone(),
-                                write_version: inscription.write_version,
-                            },
+                            inscription.into(),
                         )
                     })
                     .collect(),

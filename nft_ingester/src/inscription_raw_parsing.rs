@@ -14,7 +14,9 @@ pub fn handle_inscription_account(
     mut account_data: &[u8],
 ) -> Result<ParsedInscription, IngesterError> {
     if account_data.len() < 8 {
-        return Err(IngesterError::AccountParsingError("".to_string()));
+        return Err(IngesterError::AccountParsingError(
+            "Inscription data is too short".to_string(),
+        ));
     }
     let mut discriminator = [0u8; 8];
     discriminator.copy_from_slice(&account_data[..8]);
@@ -29,8 +31,8 @@ pub fn handle_inscription_account(
         | InscriptionSummary::DISCRIMINATOR
         | InscriptionV3::DISCRIMINATOR
         | Migrator::DISCRIMINATOR => ParsedInscription::UnhandledAccount,
-        // InscriptionData account does not contain DISCRIMINATOR because it is overwritten by blod data
-        // so we decided which account is InscriptionData by exceptions all other account types
+        // InscriptionData account does not contain DISCRIMINATOR because it is overwritten by binary data
+        // so we consider InscriptionData account to be the one not matching any other account types
         _ => ParsedInscription::InscriptionData(account_data.to_vec()),
     };
 

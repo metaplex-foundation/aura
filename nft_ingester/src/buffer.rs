@@ -51,7 +51,7 @@ impl Buffer {
 
     pub async fn debug(&self) {
         println!(
-            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\nToken Metadata Editions buffer: {}\nBurnt Metadata buffer: {}\nMpl Core full assets buffer: {}\nBurnt Mpl Core buffer: {}\n",
+            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\nToken Metadata Editions buffer: {}\nBurnt Metadata buffer: {}\nMpl Core full assets buffer: {}\nBurnt Mpl Core buffer: {}\nInscriptions buffer: {}\nInscriptions Data buffer: {}\n",
             self.mplx_metadata_info.lock().await.len(),
             self.transactions.lock().await.len(),
             self.token_accs.lock().await.len(),
@@ -61,6 +61,8 @@ impl Buffer {
             self.burnt_metadata_at_slot.lock().await.len(),
             self.mpl_core_indexable_assets.lock().await.len(),
             self.burnt_mpl_core_at_slot.lock().await.len(),
+            self.inscriptions.lock().await.len(),
+            self.inscriptions_data.lock().await.len(),
         );
     }
 
@@ -80,6 +82,11 @@ impl Buffer {
         metrics.set_buffer(
             "mpl_core",
             self.mpl_core_indexable_assets.lock().await.len() as i64,
+        );
+        metrics.set_buffer("inscriptions", self.inscriptions.lock().await.len() as i64);
+        metrics.set_buffer(
+            "inscriptions_data",
+            self.inscriptions_data.lock().await.len() as i64,
         );
     }
 
