@@ -109,7 +109,7 @@ fn convert_rocks_asset_model(
             .and_then(|inscription| {
                 asset_selected_maps
                     .inscriptions_data
-                    .get(&inscription.inscription_data)
+                    .get(&inscription.inscription_data_account)
             })
             .cloned(),
         inscription,

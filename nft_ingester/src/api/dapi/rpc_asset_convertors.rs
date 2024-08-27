@@ -496,9 +496,9 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
             .inscription
             .map(|inscription| InscriptionResponse {
                 authority: inscription.authority.to_string(),
-                content_type: inscription.media_type,
-                encoding: inscription.encoding_type,
-                inscription_data_account: inscription.inscription_data.to_string(),
+                content_type: inscription.content_type,
+                encoding: inscription.encoding,
+                inscription_data_account: inscription.inscription_data_account.to_string(),
                 order: inscription.order,
                 size: inscription.size,
                 validation_hash: inscription.validation_hash,

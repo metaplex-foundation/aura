@@ -1,5 +1,4 @@
 use crate::buffer::Buffer;
-use crate::error::IngesterError;
 use crate::process_accounts;
 use libreplex_inscriptions::Inscription;
 use metrics_utils::IngesterMetricsConfig;
@@ -35,20 +34,20 @@ pub struct InscriptionsProcessor {
 }
 
 impl InscriptionsProcessor {
-    pub async fn new(
+    pub fn new(
         rocks_db: Arc<Storage>,
         buffer: Arc<Buffer>,
         metrics: Arc<IngesterMetricsConfig>,
         batch_size: usize,
-    ) -> Result<Self, IngesterError> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             rocks_db,
             buffer,
             batch_size,
             metrics,
             last_received_inscription_at: None,
             last_received_inscription_data_at: None,
-        })
+        }
     }
 
     pub async fn start_inscriptions_processing(&mut self, rx: Receiver<()>) {
@@ -92,12 +91,12 @@ impl InscriptionsProcessor {
                             rocks_db::inscriptions::Inscription {
                                 authority: inscription.inscription.authority,
                                 root: inscription.inscription.root,
-                                media_type: inscription.inscription.media_type.convert_to_string(),
-                                encoding_type: inscription
+                                content_type: inscription
                                     .inscription
-                                    .encoding_type
+                                    .media_type
                                     .convert_to_string(),
-                                inscription_data: inscription.inscription.inscription_data,
+                                encoding: inscription.inscription.encoding_type.convert_to_string(),
+                                inscription_data_account: inscription.inscription.inscription_data,
                                 order: inscription.inscription.order,
                                 size: inscription.inscription.size,
                                 validation_hash: inscription.inscription.validation_hash.clone(),

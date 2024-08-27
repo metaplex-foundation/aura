@@ -175,7 +175,7 @@ impl Storage {
                     .batch_get(
                         inscriptions
                             .values()
-                            .map(|inscription| inscription.inscription_data)
+                            .map(|inscription| inscription.inscription_data_account)
                             .collect(),
                     )
                     .await

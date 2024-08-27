@@ -1,6 +1,8 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
+    use base64::engine::general_purpose;
+    use base64::Engine;
     use blockbuster::mpl_core::types::{
         AppData, ExternalPluginAdapter, ExternalPluginAdapterSchema, ExternalPluginAdapterType,
         FreezeDelegate, Plugin, PluginAuthority, PluginType, TransferDelegate, UpdateAuthority,
@@ -15,24 +17,23 @@ mod tests {
     use entities::models::{EditionV1, MasterEdition};
     use metrics_utils::IngesterMetricsConfig;
     use nft_ingester::buffer::Buffer;
+    use nft_ingester::inscriptions_processor::InscriptionsProcessor;
+    use nft_ingester::message_handler::MessageHandlerIngester;
     use nft_ingester::mpl_core_processor::MplCoreProcessor;
     use nft_ingester::mplx_updates_processor::{
         IndexableAssetWithAccountInfo, MetadataInfo, MplxAccsProcessor, TokenMetadata,
     };
+    use nft_ingester::plerkle;
     use nft_ingester::token_updates_processor::TokenAccsProcessor;
     use rocks_db::columns::{Mint, TokenAccount};
     use rocks_db::editions::TokenMetadataEdition;
     use rocks_db::AssetAuthority;
     use solana_program::pubkey::Pubkey;
     use std::collections::HashMap;
+    use std::ops::Deref;
     use std::str::FromStr;
     use std::sync::Arc;
-    use base64::Engine;
-    use base64::engine::general_purpose;
     use testcontainers::clients::Cli;
-    use nft_ingester::inscriptions_processor::InscriptionsProcessor;
-    use nft_ingester::message_handler::MessageHandlerIngester;
-    use nft_ingester::plerkle;
 
     pub fn generate_metadata(mint_key: Pubkey) -> MetadataInfo {
         MetadataInfo {
@@ -479,61 +480,113 @@ mod tests {
 
     #[tokio::test]
     async fn inscription_process() {
+        // real world accounts
         let inscription_account_data = general_purpose::STANDARD_NO_PAD.decode("ZAuXKuQmRbsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAF00JG/taM5xDErn+0mQMBbbBdJuhYeh30FuRLrqWSbfBhAAAABhcHBsaWNhdGlvbi90ZXh0AeOkcaHjppsua2rgJHv2TUkEEClH4Y96jMvvKr1caFZzE7QEAAAAAABDAAAAAUAAAABmNTMyMGVmMjhkNTM3NWQ3YjFhNmFlNzBlYzQzZWRkMTE1ZmQxMmVhOTMzZTAxNjUzMDZhNzg4ZGNiZWVjYTMxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").unwrap() ;
-        let inscription_data_account_data = general_purpose::STANDARD_NO_PAD.decode("eyJwIjoic3BsLTIwIiwib3AiOiJkZXBsb3kiLCJ0aWNrIjoiaGVsaXVzIiwibWF4IjoiMTAwMCIsImxpbSI6IjEifQ==").unwrap() ;
-        let inscription_pk = Pubkey::from_str("F5PvEHfUiSVuNKFdJbDo7iMHWp9x1aDBbvkt1DTGVQcJ").unwrap();
+        let inscription_data_account_data = general_purpose::STANDARD.decode("eyJwIjoic3BsLTIwIiwib3AiOiJkZXBsb3kiLCJ0aWNrIjoiaGVsaXVzIiwibWF4IjoiMTAwMCIsImxpbSI6IjEifQ==").unwrap() ;
+        let inscription_pk =
+            Pubkey::from_str("F5PvEHfUiSVuNKFdJbDo7iMHWp9x1aDBbvkt1DTGVQcJ").unwrap();
+        let inscription_data_pk =
+            Pubkey::from_str("GKcyym3BLXizQJWfH8H3YA5wLJTYVHrNMoGzbCsHtogn").unwrap();
         let buffer = Arc::new(Buffer::new());
         let message_handler = MessageHandlerIngester::new(buffer.clone());
-        message_handler.handle_inscription_account(&plerkle::AccountInfo {
-            slot: 100,
-            pubkey: Pubkey::from_str("F5PvEHfUiSVuNKFdJbDo7iMHWp9x1aDBbvkt1DTGVQcJ").unwrap(),
-            owner: libreplex_inscriptions::id(),
-            lamports: 1000,
-            rent_epoch: 100,
-            executable: false,
-            write_version: 100,
-            data: inscription_account_data,
-        }).await;
-        message_handler.handle_inscription_account(&plerkle::AccountInfo {
-            slot: 100,
-            pubkey: Pubkey::from_str("GKcyym3BLXizQJWfH8H3YA5wLJTYVHrNMoGzbCsHtogn").unwrap(),
-            owner: libreplex_inscriptions::id(),
-            lamports: 1000,
-            rent_epoch: 100,
-            executable: false,
-            write_version: 100,
-            data: inscription_data_account_data,
-        }).await;
-        let asset_pk = buffer.inscriptions.lock().await.get()
+        message_handler
+            .handle_inscription_account(&plerkle::AccountInfo {
+                slot: 100,
+                pubkey: inscription_pk,
+                owner: libreplex_inscriptions::id(),
+                lamports: 1000,
+                rent_epoch: 100,
+                executable: false,
+                write_version: 100,
+                data: inscription_account_data,
+            })
+            .await;
+        message_handler
+            .handle_inscription_account(&plerkle::AccountInfo {
+                slot: 100,
+                pubkey: inscription_data_pk,
+                owner: libreplex_inscriptions::id(),
+                lamports: 1000,
+                rent_epoch: 100,
+                executable: false,
+                write_version: 100,
+                data: inscription_data_account_data,
+            })
+            .await;
 
         let cnt = 20;
         let cli = Cli::default();
-        let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let asset_pk = generated_assets.static_details.first().unwrap().pubkey;
+        buffer
+            .inscriptions
+            .lock()
+            .await
+            .get_mut(&inscription_pk)
+            .unwrap()
+            .inscription
+            .root = asset_pk;
+
         let mpl_core_parser = InscriptionsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
-            1,
+            0,
         );
-        env.rocks_env
-            .storage
-            .asset_authority_data
-            .put(
-                second_authority,
-                AssetAuthority {
-                    pubkey: Default::default(),
-                    authority: second_owner,
-                    slot_updated: 0,
-                    write_version: None,
-                },
-            )
-            .unwrap();
-        let mut indexable_assets = HashMap::new();
-        indexable_assets.insert(first_mpl_core, first_mpl_core_to_save);
-        indexable_assets.insert(second_mpl_core, second_mpl_core_to_save);
         mpl_core_parser
-            .transform_and_store_mpl_assets(&indexable_assets)
+            .store_inscriptions(buffer.inscriptions.lock().await.deref())
+            .await;
+        mpl_core_parser
+            .store_inscriptions_data(buffer.inscriptions_data.lock().await.deref())
             .await;
 
+        let inscription = env
+            .rocks_env
+            .storage
+            .inscriptions
+            .get(asset_pk)
+            .unwrap()
+            .unwrap();
+        assert_eq!(inscription.inscription_data_account, inscription_data_pk);
+        assert_eq!(inscription.root, asset_pk);
+        assert_eq!(inscription.order, 308243);
+        assert_eq!(inscription.size, 67);
+        assert_eq!(inscription.content_type, "application/text");
+        assert_eq!(inscription.encoding, "base64");
+        assert_eq!(
+            inscription.validation_hash.unwrap(),
+            "f5320ef28d5375d7b1a6ae70ec43edd115fd12ea933e0165306a788dcbeeca31"
+        );
+        assert_eq!(inscription.authority, Pubkey::default());
+
+        let inscription_data = env
+            .rocks_env
+            .storage
+            .inscription_data
+            .get(inscription.inscription_data_account)
+            .unwrap()
+            .unwrap();
+        let inscription_data_json =
+            serde_json::from_slice::<serde_json::Value>(inscription_data.data.as_slice()).unwrap();
+        assert_eq!(
+            inscription_data_json.get("p").unwrap().as_str().unwrap(),
+            "spl-20"
+        );
+        assert_eq!(
+            inscription_data_json.get("op").unwrap().as_str().unwrap(),
+            "deploy"
+        );
+        assert_eq!(
+            inscription_data_json.get("tick").unwrap().as_str().unwrap(),
+            "helius"
+        );
+        assert_eq!(
+            inscription_data_json.get("max").unwrap().as_str().unwrap(),
+            "1000"
+        );
+        assert_eq!(
+            inscription_data_json.get("lim").unwrap().as_str().unwrap(),
+            "1"
+        );
     }
 }

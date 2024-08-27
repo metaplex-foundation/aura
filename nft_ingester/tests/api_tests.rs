@@ -2699,6 +2699,7 @@ mod tests {
             None,
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
+            None,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2712,6 +2713,7 @@ mod tests {
             options: Some(Options {
                 show_unverified_collections: true,
                 show_collection_metadata: true,
+                show_inscription: false,
             }),
         };
         let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -2798,6 +2800,7 @@ mod tests {
             options: Some(Options {
                 show_unverified_collections: true,
                 show_collection_metadata: false,
+                show_inscription: false,
             }),
         };
         let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();

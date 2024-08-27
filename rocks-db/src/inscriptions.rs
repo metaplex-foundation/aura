@@ -11,9 +11,9 @@ use tracing::error;
 pub struct Inscription {
     pub authority: Pubkey,
     pub root: Pubkey,
-    pub media_type: String,
-    pub encoding_type: String,
-    pub inscription_data: Pubkey,
+    pub content_type: String,
+    pub encoding: String,
+    pub inscription_data_account: Pubkey,
     pub order: u64,
     pub size: u32,
     pub validation_hash: Option<String>,
