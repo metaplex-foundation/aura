@@ -25,9 +25,6 @@ pub struct AssetSelectedMaps {
     pub offchain_data: HashMap<String, OffChainData>,
     pub urls: HashMap<String, String>,
     pub editions: HashMap<Pubkey, EditionData>,
-    pub mpl_core_collections: HashMap<Pubkey, AssetCollection>,
-    pub collection_dynamic_data: HashMap<Pubkey, AssetDynamicDetails>,
-    pub collection_offchain_data: HashMap<String, OffChainData>,
     pub inscriptions: HashMap<Pubkey, Inscription>,
     pub inscriptions_data: HashMap<Pubkey, InscriptionData>,
 }
