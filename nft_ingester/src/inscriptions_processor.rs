@@ -66,7 +66,7 @@ impl InscriptionsProcessor {
         }
     }
 
-    pub async fn start_inscriptions_processing(&mut self, rx: Receiver<()>) {
+    pub async fn process_inscriptions(&mut self, rx: Receiver<()>) {
         process_accounts!(
             self,
             rx,
@@ -79,7 +79,7 @@ impl InscriptionsProcessor {
         );
     }
 
-    pub async fn start_inscriptions_data_processing(&mut self, rx: Receiver<()>) {
+    pub async fn process_inscriptions_data(&mut self, rx: Receiver<()>) {
         process_accounts!(
             self,
             rx,
