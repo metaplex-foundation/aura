@@ -1,6 +1,9 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
+    use base64::engine::general_purpose;
+    use base64::Engine;
+    use std::str::FromStr;
     use std::{collections::HashMap, sync::Arc};
 
     use blockbuster::token_metadata::accounts::Metadata;
@@ -40,6 +43,7 @@ mod tests {
         token_updates_processor::TokenAccsProcessor,
     };
     use rocks_db::asset::AssetLeaf;
+    use rocks_db::inscriptions::{Inscription, InscriptionData};
     use rocks_db::tree_seq::TreesGaps;
     use rocks_db::{
         columns::{Mint, TokenAccount},
@@ -2814,5 +2818,92 @@ mod tests {
             .unwrap()
             .collection_metadata
             .is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_inscriptions() {
+        let inscription_data_pk =
+            Pubkey::from_str("GKcyym3BLXizQJWfH8H3YA5wLJTYVHrNMoGzbCsHtogn").unwrap();
+        let cnt = 10;
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let asset_pk = generated_assets.static_details.first().unwrap().pubkey;
+        env.rocks_env
+            .storage
+            .inscriptions
+            .put(
+                asset_pk,
+                Inscription {
+                    authority: Pubkey::default(),
+                    root: asset_pk,
+                    content_type: "application/text".to_string(),
+                    encoding: "base64".to_string(),
+                    inscription_data_account: inscription_data_pk,
+                    order: 308243,
+                    size: 67,
+                    validation_hash: Some(
+                        "f5320ef28d5375d7b1a6ae70ec43edd115fd12ea933e0165306a788dcbeeca31"
+                            .to_string(),
+                    ),
+                    write_version: 100,
+                },
+            )
+            .unwrap();
+        env.rocks_env.storage.inscription_data.put(inscription_data_pk, InscriptionData {
+            pubkey: inscription_data_pk,
+            data: general_purpose::STANDARD.decode("eyJwIjoic3BsLTIwIiwib3AiOiJkZXBsb3kiLCJ0aWNrIjoiaGVsaXVzIiwibWF4IjoiMTAwMCIsImxpbSI6IjEifQ==").unwrap(),
+            write_version: 1000,
+        }).unwrap();
+
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+            None,
+        );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+        let payload = GetAsset {
+            id: asset_pk.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+                show_inscription: true,
+                ..Default::default()
+            }),
+        };
+        let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: Asset = serde_json::from_value(res).unwrap();
+        assert_eq!(
+            res.inscription.unwrap().validation_hash.unwrap(),
+            "f5320ef28d5375d7b1a6ae70ec43edd115fd12ea933e0165306a788dcbeeca31"
+        );
+        assert_eq!(
+            res.spl20.unwrap().get("op").unwrap().as_str().unwrap(),
+            "deploy"
+        );
+
+        let payload = GetAsset {
+            id: asset_pk.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+                show_inscription: false,
+                ..Default::default()
+            }),
+        };
+        let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: Asset = serde_json::from_value(res).unwrap();
+        assert_eq!(res.inscription, None);
+        assert_eq!(res.spl20, None);
     }
 }
