@@ -4525,6 +4525,7 @@ dependencies = [
  "async-channel 2.3.1",
  "async-trait",
  "backfill-rpc",
+ "base64 0.21.7",
  "bincode",
  "blockbuster",
  "bs58 0.4.0",

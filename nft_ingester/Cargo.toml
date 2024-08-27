@@ -88,6 +88,7 @@ zip-extract = { workspace = true }
 csv = { workspace = true }
 rand = { workspace = true }
 assertables = "7"
+base64 = { workspace = true }
 
 [[bench]]
 name = "integrated_benchmark"

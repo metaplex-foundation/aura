@@ -356,7 +356,7 @@ impl MessageHandlerIngester {
         }
     }
 
-    async fn handle_inscription_account<'a>(&self, account_info: &plerkle::AccountInfo) {
+    pub async fn handle_inscription_account<'a>(&self, account_info: &plerkle::AccountInfo) {
         let acc_parse_result = crate::inscription_raw_parsing::handle_inscription_account(
             account_info.data.as_slice(),
         );

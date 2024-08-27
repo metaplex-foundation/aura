@@ -25,8 +25,14 @@ mod tests {
     use rocks_db::AssetAuthority;
     use solana_program::pubkey::Pubkey;
     use std::collections::HashMap;
+    use std::str::FromStr;
     use std::sync::Arc;
+    use base64::Engine;
+    use base64::engine::general_purpose;
     use testcontainers::clients::Cli;
+    use nft_ingester::inscriptions_processor::InscriptionsProcessor;
+    use nft_ingester::message_handler::MessageHandlerIngester;
+    use nft_ingester::plerkle;
 
     pub fn generate_metadata(mint_key: Pubkey) -> MetadataInfo {
         MetadataInfo {
@@ -469,5 +475,65 @@ mod tests {
                 .value,
             "[{\"data_len\":500,\"index\":0,\"offset\":0,\"authority\":{\"type\":\"UpdateAuthority\",\"address\":null},\"lifecycle_checks\":{\"transfer\":[\"CanReject\"],\"create\":[\"CanApprove\"],\"update\":[\"CanListen\"],\"burn\":[\"CanReject\",\"CanApprove\"]},\"type\":\"LifecycleHook\",\"adapter_config\":{\"data_authority\":{\"type\":\"Owner\",\"address\":null},\"schema\":\"Binary\"},\"data_offset\":254,\"data\":\"asdfasdf\"}]".to_string()
         );
+    }
+
+    #[tokio::test]
+    async fn inscription_process() {
+        let inscription_account_data = general_purpose::STANDARD_NO_PAD.decode("ZAuXKuQmRbsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAF00JG/taM5xDErn+0mQMBbbBdJuhYeh30FuRLrqWSbfBhAAAABhcHBsaWNhdGlvbi90ZXh0AeOkcaHjppsua2rgJHv2TUkEEClH4Y96jMvvKr1caFZzE7QEAAAAAABDAAAAAUAAAABmNTMyMGVmMjhkNTM3NWQ3YjFhNmFlNzBlYzQzZWRkMTE1ZmQxMmVhOTMzZTAxNjUzMDZhNzg4ZGNiZWVjYTMxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").unwrap() ;
+        let inscription_data_account_data = general_purpose::STANDARD_NO_PAD.decode("eyJwIjoic3BsLTIwIiwib3AiOiJkZXBsb3kiLCJ0aWNrIjoiaGVsaXVzIiwibWF4IjoiMTAwMCIsImxpbSI6IjEifQ==").unwrap() ;
+        let inscription_pk = Pubkey::from_str("F5PvEHfUiSVuNKFdJbDo7iMHWp9x1aDBbvkt1DTGVQcJ").unwrap();
+        let buffer = Arc::new(Buffer::new());
+        let message_handler = MessageHandlerIngester::new(buffer.clone());
+        message_handler.handle_inscription_account(&plerkle::AccountInfo {
+            slot: 100,
+            pubkey: Pubkey::from_str("F5PvEHfUiSVuNKFdJbDo7iMHWp9x1aDBbvkt1DTGVQcJ").unwrap(),
+            owner: libreplex_inscriptions::id(),
+            lamports: 1000,
+            rent_epoch: 100,
+            executable: false,
+            write_version: 100,
+            data: inscription_account_data,
+        }).await;
+        message_handler.handle_inscription_account(&plerkle::AccountInfo {
+            slot: 100,
+            pubkey: Pubkey::from_str("GKcyym3BLXizQJWfH8H3YA5wLJTYVHrNMoGzbCsHtogn").unwrap(),
+            owner: libreplex_inscriptions::id(),
+            lamports: 1000,
+            rent_epoch: 100,
+            executable: false,
+            write_version: 100,
+            data: inscription_data_account_data,
+        }).await;
+        let asset_pk = buffer.inscriptions.lock().await.get()
+
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let mpl_core_parser = InscriptionsProcessor::new(
+            env.rocks_env.storage.clone(),
+            buffer.clone(),
+            Arc::new(IngesterMetricsConfig::new()),
+            1,
+        );
+        env.rocks_env
+            .storage
+            .asset_authority_data
+            .put(
+                second_authority,
+                AssetAuthority {
+                    pubkey: Default::default(),
+                    authority: second_owner,
+                    slot_updated: 0,
+                    write_version: None,
+                },
+            )
+            .unwrap();
+        let mut indexable_assets = HashMap::new();
+        indexable_assets.insert(first_mpl_core, first_mpl_core_to_save);
+        indexable_assets.insert(second_mpl_core, second_mpl_core_to_save);
+        mpl_core_parser
+            .transform_and_store_mpl_assets(&indexable_assets)
+            .await;
+
     }
 }
