@@ -23,6 +23,7 @@ use super::rpc_asset_models::{
 };
 use crate::api::dapi::asset::COLLECTION_GROUP_KEY;
 use crate::api::dapi::model::ChainMutability;
+use crate::api::dapi::response::InscriptionResponse;
 use entities::api_req_params::Pagination;
 use entities::enums::{Interface, SpecificationVersions};
 use rocks_db::asset::AssetCollection;
@@ -491,6 +492,23 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
             .asset_dynamic
             .mpl_core_unknown_external_plugins
             .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
+        inscription: full_asset
+            .inscription
+            .map(|inscription| InscriptionResponse {
+                authority: inscription.authority.to_string(),
+                content_type: inscription.content_type,
+                encoding: inscription.encoding,
+                inscription_data_account: inscription.inscription_data_account.to_string(),
+                order: inscription.order,
+                size: inscription.size,
+                validation_hash: inscription.validation_hash,
+            }),
+        spl20: full_asset
+            .inscription_data
+            .map(|inscription_data| serde_json::from_slice(inscription_data.data.as_slice()))
+            .transpose()
+            .ok()
+            .flatten(),
     }))
 }
 

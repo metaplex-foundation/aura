@@ -62,6 +62,7 @@ fn convert_rocks_asset_model(
         })
         .cloned();
 
+    let inscription = asset_selected_maps.inscriptions.get(asset_pubkey).cloned();
     Ok(FullAsset {
         asset_static: static_data.clone(),
         asset_owner: owner.clone(),
@@ -103,6 +104,15 @@ fn convert_rocks_asset_model(
             })
             .cloned(),
         collection_dynamic_data,
+        inscription_data: inscription
+            .as_ref()
+            .and_then(|inscription| {
+                asset_selected_maps
+                    .inscriptions_data
+                    .get(&inscription.inscription_data_account)
+            })
+            .cloned(),
+        inscription,
     })
 }
 
@@ -171,7 +181,7 @@ pub async fn get_by_ids(
 
     let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
     let mut asset_selected_maps = rocks_db
-        .get_asset_selected_maps_async(unique_asset_ids.clone(), options.show_collection_metadata)
+        .get_asset_selected_maps_async(unique_asset_ids.clone(), &options)
         .await?;
 
     if let Some(json_downloader) = json_downloader {

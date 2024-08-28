@@ -75,7 +75,8 @@ pub fn validate_proofs(
 ) -> core::result::Result<bool, IntegrityVerificationError> {
     let (header_bytes, rest) = tree_acc_info.split_at_mut(CONCURRENT_MERKLE_TREE_HEADER_SIZE_V1);
     let header = ConcurrentMerkleTreeHeader::try_from_slice(header_bytes)?;
-    let merkle_tree_size = merkle_tree_get_size(&header)?;
+    let merkle_tree_size = merkle_tree_get_size(&header)
+        .map_err(|e| IntegrityVerificationError::Anchor(e.to_string()))?;
     let (tree_bytes, canopy_bytes) = rest.split_at_mut(merkle_tree_size);
 
     let mut initial_proofs = initial_proofs
@@ -87,7 +88,8 @@ pub fn validate_proofs(
         header.get_max_depth(),
         leaf_index,
         &mut initial_proofs,
-    )?;
+    )
+    .map_err(|e| IntegrityVerificationError::Anchor(e.to_string()))?;
 
     crate::merkle_tree::check_proof(&header, tree_bytes, initial_proofs, leaf, leaf_index)
         .map_err(|e| IntegrityVerificationError::RollupValidation(e.to_string()))

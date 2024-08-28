@@ -125,6 +125,8 @@ pub enum IngesterError {
     BatchMintValidation(String),
     #[error("FileChecksumMismatch: expected {0}, actual file hash {1}")]
     FileChecksumMismatch(String, String),
+    #[error("Anchor {0}")]
+    Anchor(String),
 }
 
 impl From<reqwest::Error> for IngesterError {
@@ -294,5 +296,11 @@ impl From<solana_client::client_error::ClientError> for IngesterError {
 impl From<BatchMintValidationError> for IngesterError {
     fn from(err: BatchMintValidationError) -> Self {
         IngesterError::BatchMintValidation(err.to_string())
+    }
+}
+
+impl From<anchor_lang::error::Error> for IngesterError {
+    fn from(err: anchor_lang::error::Error) -> Self {
+        IngesterError::Anchor(err.to_string())
     }
 }

@@ -8,6 +8,7 @@ use crate::editions::TokenMetadataEdition;
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
+use entities::api_req_params::Options;
 use entities::models::{EditionData, PubkeyWithSlot};
 use std::collections::HashMap;
 
@@ -86,7 +87,7 @@ impl Storage {
     pub async fn get_asset_selected_maps_async(
         &self,
         asset_ids: Vec<Pubkey>,
-        show_collection_metadata: bool,
+        options: &Options,
     ) -> Result<AssetSelectedMaps> {
         let assets_dynamic_fut = self.asset_dynamic_data.batch_get(asset_ids.clone());
         let assets_static_fut = self.asset_static_data.batch_get(asset_ids.clone());
@@ -131,7 +132,7 @@ impl Storage {
             .iter()
             .flat_map(|c| c.as_ref().map(|c| c.collection.value))
             .collect::<Vec<_>>();
-        if show_collection_metadata {
+        if options.show_collection_metadata {
             let collection_dynamic_data = to_map!(
                 self.asset_dynamic_data
                     .batch_get(assets_collection_pks.clone())
@@ -161,6 +162,30 @@ impl Storage {
         let mut assets_collection = to_map!(assets_collection);
         assets_collection.extend(mpl_core_collections);
 
+        let (inscriptions, inscriptions_data) = if options.show_inscription {
+            let inscriptions = self
+                .inscriptions
+                .batch_get(asset_ids.clone())
+                .await
+                .map_err(|e| StorageError::Common(e.to_string()))?
+                .into_iter()
+                .filter_map(|asset| asset.map(|a| (a.root, a)))
+                .collect::<HashMap<_, _>>();
+            let inscriptions_data = to_map!(
+                self.inscription_data
+                    .batch_get(
+                        inscriptions
+                            .values()
+                            .map(|inscription| inscription.inscription_data_account)
+                            .collect(),
+                    )
+                    .await
+            );
+            (inscriptions, inscriptions_data)
+        } else {
+            (HashMap::new(), HashMap::new())
+        };
+
         Ok(AssetSelectedMaps {
             editions: self
                 .get_editions(
@@ -178,6 +203,8 @@ impl Storage {
             assets_leaf: to_map!(assets_leaf),
             offchain_data,
             urls,
+            inscriptions,
+            inscriptions_data,
         })
     }
 

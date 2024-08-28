@@ -151,6 +151,8 @@ mod tests {
             mpl_core_info: None,
             external_plugins: None,
             unknown_external_plugins: None,
+            inscription: None,
+            spl20: None,
         }
     }
 

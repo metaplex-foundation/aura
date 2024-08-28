@@ -8,6 +8,7 @@ use interface::signature_persistence::ProcessingDataGetter;
 use tokio::sync::Mutex;
 use tonic::async_trait;
 
+use crate::inscriptions_processor::{InscriptionDataInfo, InscriptionInfo};
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::columns::{Mint, TokenAccount};
 
@@ -27,6 +28,8 @@ pub struct Buffer {
     pub burnt_metadata_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub burnt_mpl_core_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
     pub mpl_core_indexable_assets: Mutex<HashMap<Pubkey, IndexableAssetWithAccountInfo>>,
+    pub inscriptions: Mutex<HashMap<Pubkey, InscriptionInfo>>,
+    pub inscriptions_data: Mutex<HashMap<Pubkey, InscriptionDataInfo>>,
 }
 
 impl Buffer {
@@ -41,12 +44,14 @@ impl Buffer {
             burnt_metadata_at_slot: Mutex::new(HashMap::new()),
             burnt_mpl_core_at_slot: Mutex::new(HashMap::new()),
             mpl_core_indexable_assets: Mutex::new(HashMap::new()),
+            inscriptions: Mutex::new(HashMap::new()),
+            inscriptions_data: Mutex::new(HashMap::new()),
         }
     }
 
     pub async fn debug(&self) {
         println!(
-            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\nToken Metadata Editions buffer: {}\nBurnt Metadata buffer: {}\nMpl Core full assets buffer: {}\nBurnt Mpl Core buffer: {}\n",
+            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\nToken Metadata Editions buffer: {}\nBurnt Metadata buffer: {}\nMpl Core full assets buffer: {}\nBurnt Mpl Core buffer: {}\nInscriptions buffer: {}\nInscriptions Data buffer: {}\n",
             self.mplx_metadata_info.lock().await.len(),
             self.transactions.lock().await.len(),
             self.token_accs.lock().await.len(),
@@ -56,6 +61,8 @@ impl Buffer {
             self.burnt_metadata_at_slot.lock().await.len(),
             self.mpl_core_indexable_assets.lock().await.len(),
             self.burnt_mpl_core_at_slot.lock().await.len(),
+            self.inscriptions.lock().await.len(),
+            self.inscriptions_data.lock().await.len(),
         );
     }
 
@@ -75,6 +82,11 @@ impl Buffer {
         metrics.set_buffer(
             "mpl_core",
             self.mpl_core_indexable_assets.lock().await.len() as i64,
+        );
+        metrics.set_buffer("inscriptions", self.inscriptions.lock().await.len() as i64);
+        metrics.set_buffer(
+            "inscriptions_data",
+            self.inscriptions_data.lock().await.len() as i64,
         );
     }
 

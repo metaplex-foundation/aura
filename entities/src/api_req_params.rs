@@ -57,6 +57,8 @@ pub struct Options {
     pub show_unverified_collections: bool,
     #[serde(default)]
     pub show_collection_metadata: bool,
+    #[serde(default)]
+    pub show_inscription: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
@@ -70,6 +72,8 @@ pub struct SearchAssetsOptions {
     pub show_native_balance: bool,
     #[serde(default)]
     pub show_collection_metadata: bool,
+    #[serde(default)]
+    pub show_inscription: bool,
 }
 
 impl From<&SearchAssetsOptions> for Options {
@@ -77,6 +81,7 @@ impl From<&SearchAssetsOptions> for Options {
         Self {
             show_unverified_collections: value.show_unverified_collections,
             show_collection_metadata: value.show_collection_metadata,
+            show_inscription: value.show_inscription,
         }
     }
 }
@@ -395,6 +400,7 @@ impl From<GetAssetV0> for GetAsset {
             options: Some(Options {
                 show_unverified_collections: true,
                 show_collection_metadata: false,
+                show_inscription: false,
             }),
         }
     }
@@ -413,6 +419,7 @@ impl From<GetAssetBatchV0> for GetAssetBatch {
             options: Some(Options {
                 show_unverified_collections: true,
                 show_collection_metadata: false,
+                show_inscription: false,
             }),
         }
     }
