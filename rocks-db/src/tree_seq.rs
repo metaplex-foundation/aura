@@ -8,6 +8,13 @@ pub struct TreeSeqIdx {
     pub slot: u64,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct TreeSeqIdxAllData {
+    pub tree: Pubkey,
+    pub seq: u64,
+    pub slot: u64,
+}
+
 impl TypedColumn for TreeSeqIdx {
     const NAME: &'static str = "TREE_SEQ_IDX";
 

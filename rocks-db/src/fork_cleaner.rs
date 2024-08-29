@@ -1,16 +1,19 @@
 use crate::{
-    cl_items::ClItemKey, Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION,
-    RAW_BLOCKS_CBOR_ENDPOINT, ROCKS_COMPONENT,
+    cl_items::ClItemKey,
+    column::TypedColumn,
+    tree_seq::{TreeSeqIdx, TreeSeqIdxAllData},
+    Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION, RAW_BLOCKS_CBOR_ENDPOINT,
+    ROCKS_COMPONENT,
 };
 use async_trait::async_trait;
 use entities::models::{ClItem, ForkedItem};
-use interface::fork_cleaner::{ClItemsManager, ForkChecker};
+use interface::fork_cleaner::{CompressedTreeChangesManager, ForkChecker};
 use std::collections::HashSet;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
 
 #[async_trait]
-impl ClItemsManager for Storage {
+impl CompressedTreeChangesManager<ClItem> for Storage {
     fn items_iter(&self) -> impl Iterator<Item = ClItem> {
         self.cl_items
             .iter_start()
@@ -20,26 +23,57 @@ impl ClItemsManager for Storage {
 
     async fn delete_items(&self, keys: Vec<ForkedItem>) {
         let start_time = chrono::Utc::now();
-        let (cl_items_res, tree_seq_idx_res) = tokio::join!(
-            self.cl_items.delete_batch(
+
+        if let Err(e) = self
+            .cl_items
+            .delete_batch(
                 keys.iter()
                     .map(|key| ClItemKey::new(key.node_idx, key.tree))
-                    .collect()
-            ),
-            // Indicate gap in sequences, so SequenceConsistentChecker will fill it in future
-            self.tree_seq_idx
-                .delete_batch(keys.iter().map(|key| (key.tree, key.seq)).collect())
-        );
-        for res in [
-            (cl_items_res, "Cl items delete"),
-            (tree_seq_idx_res, "Tree sequence delete"),
-        ] {
-            if let Err(e) = res.0 {
-                error!("{}: {}", res.1, e);
-            }
+                    .collect(),
+            )
+            .await
+        {
+            error!("Cl items delete: {}", e.to_string());
         }
+
         self.red_metrics
             .observe_request(ROCKS_COMPONENT, DROP_ACTION, "cl_items", start_time);
+    }
+}
+
+#[async_trait]
+impl CompressedTreeChangesManager<TreeSeqIdxAllData> for Storage {
+    fn items_iter(&self) -> impl Iterator<Item = TreeSeqIdxAllData> {
+        self.tree_seq_idx.iter_start().filter_map(|result| {
+            result.ok().and_then(|(key, value)| {
+                bincode::deserialize::<TreeSeqIdx>(value.as_ref())
+                    .ok()
+                    .and_then(|tree_seq_idx| {
+                        TreeSeqIdx::decode_key(key.to_vec())
+                            .ok()
+                            .map(|(tree, seq)| TreeSeqIdxAllData {
+                                tree,
+                                seq,
+                                slot: tree_seq_idx.slot,
+                            })
+                    })
+            })
+        })
+    }
+
+    async fn delete_items(&self, keys: Vec<ForkedItem>) {
+        let start_time = chrono::Utc::now();
+
+        if let Err(e) = self
+            .tree_seq_idx
+            .delete_batch(keys.iter().map(|key| (key.tree, key.seq)).collect())
+            .await
+        {
+            error!("Tree sequence delete: {}", e.to_string());
+        }
+
+        self.red_metrics
+            .observe_request(ROCKS_COMPONENT, DROP_ACTION, "tree_seq_idx", start_time);
     }
 }
 

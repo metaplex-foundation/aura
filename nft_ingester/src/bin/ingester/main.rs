@@ -943,6 +943,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let fork_cleaner = ForkCleaner::new(
             rocks_storage.clone(),
             rocks_storage.clone(),
+            rocks_storage.clone(),
             metrics_state.fork_cleaner_metrics.clone(),
         );
         let mut rx = shutdown_rx.resubscribe();

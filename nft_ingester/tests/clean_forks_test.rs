@@ -302,12 +302,13 @@ async fn test_clean_forks() {
         .await
         .unwrap();
     // Need for SLOT_CHECK_OFFSET
+    // Also take in account MAX_DELAY_FOR_UNKNOWN_SLOT
     storage
         .raw_blocks_cbor
         .put_async(
-            20005,
+            30000,
             RawBlock {
-                slot: 20000,
+                slot: 30000,
                 block: UiConfirmedBlock {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
@@ -379,6 +380,13 @@ async fn test_clean_forks() {
         .put_async((second_tree_key, 10003), TreeSeqIdx { slot: 10006 })
         .await
         .unwrap();
+    // intentionally save data only to tree_seq_idx
+    // to check if fork cleaner detect it and drop
+    storage
+        .tree_seq_idx
+        .put_async((second_tree_key, 10004), TreeSeqIdx { slot: 10007 })
+        .await
+        .unwrap();
 
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
@@ -387,6 +395,7 @@ async fn test_clean_forks() {
     let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     let rx = shutdown_rx.resubscribe();
     let fork_cleaner = ForkCleaner::new(
+        storage.clone(),
         storage.clone(),
         storage.clone(),
         metrics_state.fork_cleaner_metrics.clone(),
@@ -413,8 +422,10 @@ async fn test_clean_forks() {
         .get(ClItemKey::new(104, second_tree_key))
         .unwrap();
     let forked_second_key_first_seq = storage.tree_seq_idx.get((second_tree_key, 10002)).unwrap();
+    let forked_second_key_fourth_seq = storage.tree_seq_idx.get((second_tree_key, 10004)).unwrap();
     assert_eq!(forked_second_key_first_item, None);
     assert_eq!(forked_second_key_first_seq, None);
+    assert_eq!(forked_second_key_fourth_seq, None);
 
     let non_forked_first_key_item = storage
         .cl_items

@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use entities::models::{ClItem, ForkedItem};
+use entities::models::ForkedItem;
 use std::collections::HashSet;
 use tokio::sync::broadcast::Receiver;
 
 #[async_trait]
-pub trait ClItemsManager {
-    fn items_iter(&self) -> impl Iterator<Item = ClItem>;
+pub trait CompressedTreeChangesManager<T> {
+    fn items_iter(&self) -> impl Iterator<Item = T>;
     async fn delete_items(&self, keys: Vec<ForkedItem>);
 }
 
