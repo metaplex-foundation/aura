@@ -53,6 +53,7 @@ mod tests {
                 after,
                 &Options {
                     show_unverified_collections: true,
+                    ..Default::default()
                 },
             )
             .await
@@ -123,6 +124,7 @@ mod tests {
                 None,
                 &Options {
                     show_unverified_collections: true,
+                    ..Default::default()
                 },
             )
             .await
@@ -147,6 +149,7 @@ mod tests {
                     None,
                     &Options {
                         show_unverified_collections: true,
+                        ..Default::default()
                     },
                 )
                 .await
@@ -176,6 +179,7 @@ mod tests {
                     after,
                     &Options {
                         show_unverified_collections: true,
+                        ..Default::default()
                     },
                 )
                 .await
@@ -200,6 +204,7 @@ mod tests {
                     None,
                     &Options {
                         show_unverified_collections: true,
+                        ..Default::default()
                     },
                 )
                 .await
@@ -227,6 +232,7 @@ mod tests {
                 None,
                 &Options {
                     show_unverified_collections: true,
+                    ..Default::default()
                 },
             )
             .await
@@ -249,6 +255,7 @@ mod tests {
                 None,
                 &Options {
                     show_unverified_collections: true,
+                    ..Default::default()
                 },
             )
             .await
@@ -311,6 +318,7 @@ mod tests {
                 None,
                 &Options {
                     show_unverified_collections: true,
+                    ..Default::default()
                 },
             )
             .await

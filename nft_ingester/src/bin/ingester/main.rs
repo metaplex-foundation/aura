@@ -65,6 +65,7 @@ use nft_ingester::backfiller::{
 use nft_ingester::batch_mint::batch_mint_processor::{BatchMintProcessor, NoopBatchMintTxSender};
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
+use nft_ingester::inscriptions_processor::InscriptionsProcessor;
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
 use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater};
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
@@ -368,6 +369,12 @@ pub async fn main() -> Result<(), IngesterError> {
         metrics_state.ingester_metrics.clone(),
         config.mpl_core_buffer_size,
     );
+    let inscription_parser = InscriptionsProcessor::new(
+        rocks_storage.clone(),
+        buffer.clone(),
+        metrics_state.ingester_metrics.clone(),
+        config.inscription_buffer_size,
+    );
 
     for _ in 0..config.parsing_workers {
         let mut cloned_mplx_parser = mplx_accs_parser.clone();
@@ -418,6 +425,24 @@ pub async fn main() -> Result<(), IngesterError> {
         let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
             cloned_core_parser.process_mpl_asset_burn(cloned_rx).await;
+            Ok(())
+        });
+
+        let mut cloned_inscription_parser = inscription_parser.clone();
+        let cloned_rx = shutdown_rx.resubscribe();
+        mutexed_tasks.lock().await.spawn(async move {
+            cloned_inscription_parser
+                .process_inscriptions(cloned_rx)
+                .await;
+            Ok(())
+        });
+
+        let mut cloned_inscription_parser = inscription_parser.clone();
+        let cloned_rx = shutdown_rx.resubscribe();
+        mutexed_tasks.lock().await.spawn(async move {
+            cloned_inscription_parser
+                .process_inscriptions_data(cloned_rx)
+                .await;
             Ok(())
         });
     }

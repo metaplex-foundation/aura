@@ -23,6 +23,7 @@ use super::rpc_asset_models::{
 };
 use crate::api::dapi::asset::COLLECTION_GROUP_KEY;
 use crate::api::dapi::model::ChainMutability;
+use crate::api::dapi::response::InscriptionResponse;
 use entities::api_req_params::Pagination;
 use entities::enums::{Interface, SpecificationVersions};
 use rocks_db::asset::AssetCollection;
@@ -224,6 +225,51 @@ pub fn parse_files(metadata: &str) -> Option<Vec<File>> {
         .ok()
 }
 
+fn extract_collection_metadata(
+    asset_dynamic: &AssetDynamicDetails,
+    offchain_data: &OffChainData,
+) -> MetadataMap {
+    let metadata: Value = serde_json::from_str(&offchain_data.metadata).unwrap_or(Value::Null);
+    let chain_data: Value = serde_json::from_str(
+        asset_dynamic
+            .onchain_data
+            .as_ref()
+            .map_or("{}", |data| &data.value),
+    )
+    .unwrap_or(Value::Null);
+
+    let mut selector_fn = jsonpath_lib::selector(&metadata);
+    let mut chain_data_selector_fn = jsonpath_lib::selector(&chain_data);
+    let selector = &mut selector_fn;
+    let chain_data_selector = &mut chain_data_selector_fn;
+    let mut meta: MetadataMap = MetadataMap::new();
+
+    let name = safe_select(chain_data_selector, "$.name");
+    if let Some(name) = name {
+        meta.set_item("name", name.clone());
+    }
+
+    let symbol = safe_select(chain_data_selector, "$.symbol");
+    if let Some(symbol) = symbol {
+        meta.set_item("symbol", symbol.clone());
+    }
+
+    let desc = safe_select(selector, "$.description");
+    if let Some(desc) = desc {
+        meta.set_item("description", desc.clone());
+    }
+
+    let link_fields = vec!["image", "external_url"];
+    for f in link_fields {
+        let l = safe_select(selector, format!("$.{}", f).as_str());
+        if let Some(l) = l {
+            meta.set_item(f, l.to_owned());
+        }
+    }
+
+    meta
+}
+
 pub fn to_authority(
     authority: &AssetAuthority,
     mpl_core_collection: &Option<AssetCollection>,
@@ -253,12 +299,22 @@ pub fn to_creators(asset_dynamic: &AssetDynamicDetails) -> Vec<Creator> {
         .collect()
 }
 
-pub fn to_grouping(asset_collection: &Option<AssetCollection>) -> Vec<Group> {
+pub fn to_grouping(
+    asset_collection: &Option<AssetCollection>,
+    collection_dynamic_data: &Option<AssetDynamicDetails>,
+    collection_offchain_data: &Option<OffChainData>,
+) -> Vec<Group> {
     asset_collection.clone().map_or(vec![], |collection| {
         vec![Group {
             group_key: COLLECTION_GROUP_KEY.to_string(),
             group_value: Some(collection.collection.value.to_string()),
             verified: Some(collection.is_collection_verified.value),
+            collection_metadata: collection_dynamic_data
+                .as_ref()
+                .zip(collection_offchain_data.as_ref())
+                .map(|(collection_dynamic_data, collection_offchain_data)| {
+                    extract_collection_metadata(collection_dynamic_data, collection_offchain_data)
+                }),
         }]
     })
 }
@@ -276,7 +332,11 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
         &full_asset.mpl_core_collections,
     );
     let rpc_creators = to_creators(&full_asset.asset_dynamic);
-    let rpc_groups = to_grouping(&full_asset.asset_collections);
+    let rpc_groups = to_grouping(
+        &full_asset.asset_collections,
+        &full_asset.collection_dynamic_data,
+        &full_asset.collection_offchain_data,
+    );
     let interface = get_interface(&full_asset.asset_static)?;
 
     let mut owner = full_asset
@@ -432,6 +492,23 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
             .asset_dynamic
             .mpl_core_unknown_external_plugins
             .map(|plugins| serde_json::from_str(&plugins.value).unwrap_or(serde_json::Value::Null)),
+        inscription: full_asset
+            .inscription
+            .map(|inscription| InscriptionResponse {
+                authority: inscription.authority.to_string(),
+                content_type: inscription.content_type,
+                encoding: inscription.encoding,
+                inscription_data_account: inscription.inscription_data_account.to_string(),
+                order: inscription.order,
+                size: inscription.size,
+                validation_hash: inscription.validation_hash,
+            }),
+        spl20: full_asset
+            .inscription_data
+            .map(|inscription_data| serde_json::from_slice(inscription_data.data.as_slice()))
+            .transpose()
+            .ok()
+            .flatten(),
     }))
 }
 

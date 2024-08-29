@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use std::fmt::Debug;
 use std::{str::FromStr, sync::Arc};
 
 use blockbuster::error::BlockbusterError;
@@ -28,6 +29,8 @@ use rocks_db::editions::TokenMetadataEdition;
 use crate::buffer::{Buffer, FeesBuffer};
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
+use crate::inscription_raw_parsing::ParsedInscription;
+use crate::inscriptions_processor::{InscriptionDataInfo, InscriptionInfo};
 use crate::mplx_updates_processor::{
     BurntMetadataSlot, CoreAssetFee, IndexableAssetWithAccountInfo, MetadataInfo, TokenMetadata,
 };
@@ -126,12 +129,16 @@ impl MessageHandlerIngester {
         let account_info: plerkle::AccountInfo = PlerkleAccountInfo(account_info).try_into()?;
         let account_owner = account_info.owner;
 
+        // do not use match expression
+        // because match cases cannot contain function calls like spl_token::id()
         if account_owner == spl_token::id() {
             self.handle_spl_token_account(&account_info).await?;
         } else if account_owner == blockbuster::programs::token_metadata::token_metadata_id() {
             self.handle_token_metadata_account(&account_info).await?;
         } else if account_owner == self.mpl_core_parser.key() {
             self.handle_mpl_core_account(&account_info).await;
+        } else if account_owner == libreplex_inscriptions::id() {
+            self.handle_inscription_account(&account_info).await;
         }
 
         Ok(())
@@ -349,6 +356,44 @@ impl MessageHandlerIngester {
         }
     }
 
+    pub async fn handle_inscription_account<'a>(&self, account_info: &plerkle::AccountInfo) {
+        let acc_parse_result = crate::inscription_raw_parsing::handle_inscription_account(
+            account_info.data.as_slice(),
+        );
+        match acc_parse_result {
+            Ok(parsed_inscription) => match parsed_inscription {
+                ParsedInscription::Inscription(inscription) => {
+                    update_or_insert!(
+                        self.buffer.inscriptions,
+                        account_info.pubkey,
+                        InscriptionInfo {
+                            inscription,
+                            write_version: account_info.write_version,
+                            slot_updated: account_info.slot,
+                        },
+                        account_info.write_version
+                    );
+                }
+                ParsedInscription::InscriptionData(inscription_data) => {
+                    update_or_insert!(
+                        self.buffer.inscriptions_data,
+                        account_info.pubkey,
+                        InscriptionDataInfo {
+                            inscription_data,
+                            write_version: account_info.write_version,
+                            slot_updated: account_info.slot,
+                        },
+                        account_info.write_version
+                    );
+                }
+                ParsedInscription::UnhandledAccount => {}
+            },
+            Err(e) => {
+                account_parsing_error(e, account_info);
+            }
+        }
+    }
+
     async fn write_mpl_core_accounts_to_buffer(
         &self,
         account_update: &plerkle::AccountInfo,
@@ -441,7 +486,7 @@ fn map_account_info_fb_bytes(
     Ok(builder.finished_data().to_owned())
 }
 
-fn account_parsing_error(err: BlockbusterError, account_info: &plerkle::AccountInfo) {
+fn account_parsing_error(err: impl Debug, account_info: &plerkle::AccountInfo) {
     warn!(
         "Error while parsing account: {:?} {}",
         err, account_info.pubkey

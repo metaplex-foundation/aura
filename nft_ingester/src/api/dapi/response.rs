@@ -27,6 +27,18 @@ pub struct NativeBalance {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
+#[serde(default, rename_all = "camelCase")]
+pub struct InscriptionResponse {
+    pub authority: String,
+    pub content_type: String,
+    pub encoding: String,
+    pub inscription_data_account: String,
+    pub order: u64,
+    pub size: u32,
+    pub validation_hash: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
 #[serde(default)]
 pub struct AssetList {
     pub total: u32,

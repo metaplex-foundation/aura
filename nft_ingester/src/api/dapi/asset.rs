@@ -52,6 +52,17 @@ fn convert_rocks_asset_model(
         .cloned()
         .unwrap_or(AssetLeaf::default()); // Asset may not have a leaf but we still can make the conversion
 
+    let collection_dynamic_data = asset_selected_maps
+        .assets_collection
+        .get(asset_pubkey)
+        .and_then(|collection| {
+            asset_selected_maps
+                .assets_dynamic
+                .get(&collection.collection.value)
+        })
+        .cloned();
+
+    let inscription = asset_selected_maps.inscriptions.get(asset_pubkey).cloned();
     Ok(FullAsset {
         asset_static: static_data.clone(),
         asset_owner: owner.clone(),
@@ -80,10 +91,28 @@ fn convert_rocks_asset_model(
             .get(asset_pubkey)
             .and_then(|collection| {
                 asset_selected_maps
-                    .mpl_core_collections
+                    .assets_collection
                     .get(&collection.collection.value)
             })
             .cloned(),
+        collection_offchain_data: collection_dynamic_data
+            .as_ref()
+            .and_then(|dynamic_data| {
+                asset_selected_maps
+                    .offchain_data
+                    .get(&dynamic_data.url.value)
+            })
+            .cloned(),
+        collection_dynamic_data,
+        inscription_data: inscription
+            .as_ref()
+            .and_then(|inscription| {
+                asset_selected_maps
+                    .inscriptions_data
+                    .get(&inscription.inscription_data_account)
+            })
+            .cloned(),
+        inscription,
     })
 }
 
@@ -152,7 +181,7 @@ pub async fn get_by_ids(
 
     let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
     let mut asset_selected_maps = rocks_db
-        .get_asset_selected_maps_async(unique_asset_ids.clone())
+        .get_asset_selected_maps_async(unique_asset_ids.clone(), &options)
         .await?;
 
     if let Some(json_downloader) = json_downloader {

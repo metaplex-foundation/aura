@@ -287,6 +287,7 @@ mod tests {
             id: mint.to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
+                ..Default::default()
             }),
         };
         let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -372,6 +373,7 @@ mod tests {
             id: mint.to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
+                ..Default::default()
             }),
         };
         let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -457,6 +459,7 @@ mod tests {
             id: mint.to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
+                ..Default::default()
             }),
         };
         let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -542,6 +545,7 @@ mod tests {
             id: mint.to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
+                ..Default::default()
             }),
         };
         let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();

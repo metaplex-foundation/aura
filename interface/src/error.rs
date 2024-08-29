@@ -39,7 +39,7 @@ pub enum UsecaseError {
     #[error("Serialization: {0}")]
     Serialization(String),
     #[error("Anchor {0}")]
-    Anchor(#[from] anchor_lang::error::Error),
+    Anchor(String),
     #[error("BatchMintValidation {0}")]
     BatchMintValidation(
         #[from] bubblegum_batch_sdk::batch_mint_validations::BatchMintValidationError,
@@ -61,6 +61,11 @@ impl From<reqwest::Error> for UsecaseError {
 impl From<serde_json::Error> for UsecaseError {
     fn from(value: serde_json::Error) -> Self {
         Self::Serialization(value.to_string())
+    }
+}
+impl From<anchor_lang::error::Error> for UsecaseError {
+    fn from(value: anchor_lang::error::Error) -> Self {
+        Self::Anchor(value.to_string())
     }
 }
 
@@ -107,11 +112,17 @@ pub enum IntegrityVerificationError {
     #[error("ParsePubkey {0}")]
     ParsePubkey(#[from] ParsePubkeyError),
     #[error("Anchor {0}")]
-    Anchor(#[from] anchor_lang::error::Error),
+    Anchor(String),
     #[error("RollupValidation: {0}")]
     RollupValidation(String),
     #[error("TreeAccountNotFound {0}")]
     TreeAccountNotFound(String),
+}
+
+impl From<anchor_lang::error::Error> for IntegrityVerificationError {
+    fn from(value: anchor_lang::error::Error) -> Self {
+        Self::Anchor(value.to_string())
+    }
 }
 
 #[derive(Debug, Clone)]

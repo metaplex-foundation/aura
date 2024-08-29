@@ -53,6 +53,10 @@ const fn default_mpl_core_buffer_size() -> usize {
     10
 }
 
+const fn default_inscription_buffer_size() -> usize {
+    10
+}
+
 const fn default_price_monitoring_interval_sec() -> u64 {
     30
 }
@@ -118,6 +122,8 @@ pub struct IngesterConfig {
     pub spl_buffer_size: usize,
     #[serde(default = "default_mpl_core_buffer_size")]
     pub mpl_core_buffer_size: usize,
+    #[serde(default = "default_inscription_buffer_size")]
+    pub inscription_buffer_size: usize,
     pub metrics_port: Option<u16>,
     pub rocks_db_path_container: Option<String>,
     #[serde(default = "default_rocks_backup_url")]

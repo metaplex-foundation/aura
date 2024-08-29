@@ -146,15 +146,14 @@ spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
 
 
 # Anchor ecosystem
-anchor-lang = "0.29.0"
-
+anchor-lang = "=0.30.1"
 
 # Metaplex ecosystem
 blockbuster = { git = "https://github.com/adm-metaex/blockbuster", branch = "feat/create-tree-with-root" }
 mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum", branch = "feature/cleanup", features = ["serde"] }
 bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "0d529f5" }
 mpl-token-metadata = "4.1.1"
-
+libreplex_inscriptions = "0.5.1"
 
 
 [profile.release]

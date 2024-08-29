@@ -74,6 +74,7 @@ mod tests {
                 None,
                 &Options {
                     show_unverified_collections: true,
+                    ..Default::default()
                 },
             )
             .await
@@ -158,6 +159,7 @@ mod mtg_441_tests {
                     id: first_pubkey.to_string(),
                     options: Some(Options {
                         show_unverified_collections: true,
+                        ..Default::default()
                     }),
                 },
                 mutexed_tasks,
@@ -199,6 +201,7 @@ mod mtg_441_tests {
                     id: first_pubkey.to_string(),
                     options: Some(Options {
                         show_unverified_collections: true,
+                        ..Default::default()
                     }),
                 },
                 mutexed_tasks,
@@ -239,6 +242,7 @@ mod mtg_441_tests {
                     id: first_pubkey.to_string(),
                     options: Some(Options {
                         show_unverified_collections: true,
+                        ..Default::default()
                     }),
                 },
                 mutexed_tasks,
@@ -279,6 +283,7 @@ mod mtg_441_tests {
                     id: first_pubkey.to_string(),
                     options: Some(Options {
                         show_unverified_collections: true,
+                        ..Default::default()
                     }),
                 },
                 mutexed_tasks,

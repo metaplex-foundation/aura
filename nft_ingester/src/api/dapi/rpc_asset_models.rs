@@ -7,9 +7,11 @@ use {
     std::collections::HashMap,
 };
 
+use crate::api::dapi::response::InscriptionResponse;
 use entities::enums::{Interface, OwnershipModel, RoyaltyModel, UseMethod};
 use entities::models::{EditionData, OffChainData};
 use rocks_db::asset::{AssetCollection, AssetLeaf};
+use rocks_db::inscriptions::{Inscription, InscriptionData};
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -147,6 +149,8 @@ pub struct Group {
     pub group_value: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verified: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collection_metadata: Option<MetadataMap>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -240,6 +244,10 @@ pub struct Asset {
     pub external_plugins: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unknown_external_plugins: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inscription: Option<InscriptionResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spl20: Option<Value>,
 }
 
 #[derive(Clone, Debug)]
@@ -253,6 +261,10 @@ pub struct FullAsset {
     pub assets_authority: AssetAuthority,
     pub edition_data: Option<EditionData>,
     pub mpl_core_collections: Option<AssetCollection>,
+    pub collection_dynamic_data: Option<AssetDynamicDetails>,
+    pub collection_offchain_data: Option<OffChainData>,
+    pub inscription: Option<Inscription>,
+    pub inscription_data: Option<InscriptionData>,
 }
 
 pub struct FullAssetList {
