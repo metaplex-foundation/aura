@@ -16,6 +16,7 @@ use blockbuster::{
     },
 };
 use chrono::Utc;
+use entities::enums::MessageDataType;
 use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
 use solana_program::program_pack::Pack;
@@ -77,27 +78,25 @@ impl MessageHandler for MessageHandlerIngester {
 
         match prefix {
             BYTE_PREFIX_ACCOUNT_FINALIZED | BYTE_PREFIX_ACCOUNT_PROCESSED => {
-                if let Err(err) = self.handle_account(data).await {
+                if let Err(err) = self.handle_account(data, true).await {
                     error!("handle_account: {:?}", err)
                 }
             }
             BYTE_PREFIX_TX_SIMPLE_FINALIZED
             | BYTE_PREFIX_TX_FINALIZED
-            | BYTE_PREFIX_TX_PROCESSED => {
-                let status = utils::flatbuffer::transaction_info_generated::transaction_info::root_as_transaction_info(
-                    &data,
-                ).ok().and_then(|tx| tx.transaction_meta().and_then(|meta| meta.status()));
-                // status is None if there no error with tx
-                if status.is_some() {
-                    return;
-                }
-                let mut res = self.buffer.transactions.lock().await;
-                res.push_back(BufferedTransaction {
-                    transaction: data,
-                    map_flatbuffer: true,
-                });
-            }
+            | BYTE_PREFIX_TX_PROCESSED => self.handle_transaction(data, true).await,
             _ => {}
+        }
+    }
+
+    async fn recv(&self, msg: Vec<u8>, message_type: MessageDataType) {
+        match message_type {
+            MessageDataType::Account => {
+                if let Err(err) = self.handle_account(msg, false).await {
+                    error!("handle_account: {:?}", err)
+                }
+            }
+            MessageDataType::Transaction => self.handle_transaction(msg, false).await,
         }
     }
 }
@@ -116,11 +115,39 @@ impl MessageHandlerIngester {
         }
     }
 
-    async fn handle_account(&self, data: Vec<u8>) -> Result<(), IngesterError> {
-        let account_update =
-            utils::flatbuffer::account_info_generated::account_info::root_as_account_info(&data)?;
+    async fn handle_transaction(&self, data: Vec<u8>, map_flatbuffer: bool) {
+        // If we use Redis as messanger there no need to check if transaction failed because txs with error
+        // do not fall into Redis queues
+        if map_flatbuffer {
+            let status = utils::flatbuffer::transaction_info_generated::transaction_info::root_as_transaction_info(
+                &data,
+            ).ok().and_then(|tx| tx.transaction_meta().and_then(|meta| meta.status()));
+            // status is None if there no error with tx
+            if status.is_some() {
+                return;
+            }
+        }
+        let mut res = self.buffer.transactions.lock().await;
+        res.push_back(BufferedTransaction {
+            transaction: data,
+            map_flatbuffer,
+        });
+    }
 
-        let account_info_bytes = map_account_info_fb_bytes(account_update)?;
+    async fn handle_account(
+        &self,
+        data: Vec<u8>,
+        map_flatbuffer: bool,
+    ) -> Result<(), IngesterError> {
+        let account_info_bytes = if map_flatbuffer {
+            let account_update =
+                utils::flatbuffer::account_info_generated::account_info::root_as_account_info(
+                    &data,
+                )?;
+            map_account_info_fb_bytes(account_update)?
+        } else {
+            data
+        };
 
         let account_info = plerkle_serialization::root_as_account_info(account_info_bytes.as_ref())
             .map_err(|e| IngesterError::AccountParsingError(e.to_string()))
@@ -506,11 +533,22 @@ impl MessageHandler for MessageHandlerCoreIndexing {
 
         match prefix {
             BYTE_PREFIX_ACCOUNT_FINALIZED | BYTE_PREFIX_ACCOUNT_PROCESSED => {
-                if let Err(err) = self.handle_account(data).await {
+                if let Err(err) = self.handle_account(data, true).await {
                     error!("handle_account: {:?}", err)
                 }
             }
             _ => {}
+        }
+    }
+
+    async fn recv(&self, msg: Vec<u8>, message_type: MessageDataType) {
+        match message_type {
+            MessageDataType::Account => {
+                if let Err(err) = self.handle_account(msg, false).await {
+                    error!("handle_account: {:?}", err)
+                }
+            }
+            MessageDataType::Transaction => {}
         }
     }
 }
@@ -523,12 +561,20 @@ impl MessageHandlerCoreIndexing {
         }
     }
 
-    async fn handle_account(&self, data: Vec<u8>) -> Result<(), IngesterError> {
-        let account_update =
-            utils::flatbuffer::account_info_generated::account_info::root_as_account_info(&data)?;
-
-        let account_info_bytes = map_account_info_fb_bytes(account_update)?;
-
+    async fn handle_account(
+        &self,
+        data: Vec<u8>,
+        map_flatbuffer: bool,
+    ) -> Result<(), IngesterError> {
+        let account_info_bytes = if map_flatbuffer {
+            let account_update =
+                utils::flatbuffer::account_info_generated::account_info::root_as_account_info(
+                    &data,
+                )?;
+            map_account_info_fb_bytes(account_update)?
+        } else {
+            data
+        };
         let account_info = plerkle_serialization::root_as_account_info(account_info_bytes.as_ref())
             .map_err(|e| IngesterError::AccountParsingError(e.to_string()))
             .unwrap();

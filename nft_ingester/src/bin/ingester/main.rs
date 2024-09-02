@@ -14,6 +14,7 @@ use futures::FutureExt;
 use grpc::asseturls::asset_url_service_server::AssetUrlServiceServer;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use nft_ingester::{backfiller, config, json_worker, transaction_ingester};
+use plerkle_messenger::ConsumptionType;
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
@@ -40,7 +41,7 @@ use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
-    setup_config, ApiConfig, BackfillerConfig, BackfillerSourceMode, IngesterConfig,
+    setup_config, ApiConfig, BackfillerConfig, BackfillerSourceMode, IngesterConfig, MessageSource,
     INGESTER_BACKUP_NAME, INGESTER_CONFIG_PREFIX,
 };
 use nft_ingester::index_syncronizer::Synchronizer;
@@ -68,6 +69,7 @@ use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_s
 use nft_ingester::inscriptions_processor::InscriptionsProcessor;
 use nft_ingester::mpl_core_processor::MplCoreProcessor;
 use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater};
+use nft_ingester::redis_receiver::RedisReceiver;
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
 use rocks_db::migrator::MigrationState;
 use usecase::bigtable::BigTableClient;
@@ -273,10 +275,17 @@ pub async fn main() -> Result<(), IngesterError> {
         message_handler.clone(),
         config.tcp_config.get_tcp_receiver_reconnect_interval()?,
     );
+    // For now there no snapshot mechanism via Redis so we use snapshot_tcp_receiver for such purpose
     let snapshot_tcp_receiver = TcpReceiver::new(
         message_handler.clone(),
         config.tcp_config.get_tcp_receiver_reconnect_interval()? * 2,
     );
+
+    let redis_receiver = Arc::new(RedisReceiver::new(
+        config.redis_messenger_config.clone(),
+        ConsumptionType::Redeliver,
+        message_handler.clone(),
+    ));
 
     let snapshot_addr = config.tcp_config.get_snapshot_addr_ingester()?;
     let geyser_addr = config.tcp_config.get_tcp_receiver_addr_ingester()?;
@@ -284,21 +293,41 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_rx = shutdown_rx.resubscribe();
 
     mutexed_tasks.lock().await.spawn(async move {
-        let geyser_tcp_receiver = Arc::new(geyser_tcp_receiver);
-        while cloned_rx.is_empty() {
-            let geyser_tcp_receiver_clone = geyser_tcp_receiver.clone();
-            let cl_rx = cloned_rx.resubscribe();
-            if let Err(e) = tokio::spawn(async move {
-                geyser_tcp_receiver_clone
-                    .connect(geyser_addr, cl_rx)
+        match config.message_source {
+            MessageSource::Redis => {
+                while cloned_rx.is_empty() {
+                    let redis_receiver_clone = redis_receiver.clone();
+                    let cl_rx = cloned_rx.resubscribe();
+                    if let Err(e) = tokio::spawn(async move {
+                        redis_receiver_clone
+                            .receive_transactions(cl_rx)
+                            .await
+                            .unwrap()
+                    })
                     .await
-                    .unwrap()
-            })
-            .await
-            {
-                error!("geyser_tcp_receiver panic: {:?}", e);
+                    {
+                        error!("redis_receiver panic: {:?}", e);
+                    }
+                }
             }
-        }
+            MessageSource::TCP => {
+                let geyser_tcp_receiver = Arc::new(geyser_tcp_receiver);
+                while cloned_rx.is_empty() {
+                    let geyser_tcp_receiver_clone = geyser_tcp_receiver.clone();
+                    let cl_rx = cloned_rx.resubscribe();
+                    if let Err(e) = tokio::spawn(async move {
+                        geyser_tcp_receiver_clone
+                            .connect(geyser_addr, cl_rx)
+                            .await
+                            .unwrap()
+                    })
+                    .await
+                    {
+                        error!("geyser_tcp_receiver panic: {:?}", e);
+                    }
+                }
+            }
+        };
         Ok(())
     });
 

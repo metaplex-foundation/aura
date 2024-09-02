@@ -3,6 +3,7 @@ use std::net::{SocketAddr, ToSocketAddrs};
 
 use figment::{providers::Env, Figment};
 use interface::asset_streaming_and_discovery::PeerDiscovery;
+use plerkle_messenger::MessengerConfig;
 use serde::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
 use tracing_subscriber::fmt;
@@ -100,6 +101,13 @@ pub enum BackfillerSourceMode {
     RPC,
 }
 
+#[derive(Deserialize, Default, PartialEq, Debug, Clone, Copy)]
+pub enum MessageSource {
+    #[default]
+    Redis,
+    TCP,
+}
+
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct RawBackfillConfig {
     #[serde(default = "default_log_level")]
@@ -117,6 +125,8 @@ pub struct RawBackfillConfig {
 pub struct IngesterConfig {
     pub database_config: DatabaseConfig,
     pub tcp_config: TcpConfig,
+    pub redis_messenger_config: MessengerConfig,
+    pub message_source: MessageSource,
     pub mplx_buffer_size: usize,
     pub parsing_workers: u32,
     pub spl_buffer_size: usize,
