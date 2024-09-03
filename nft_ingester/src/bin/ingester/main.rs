@@ -291,12 +291,12 @@ pub async fn main() -> Result<(), IngesterError> {
     let geyser_addr = config.tcp_config.get_tcp_receiver_addr_ingester()?;
 
     let cloned_rx = shutdown_rx.resubscribe();
-
-    mutexed_tasks.lock().await.spawn(async move {
-        match config.message_source {
-            MessageSource::Redis => {
+    match config.message_source {
+        MessageSource::Redis => {
+            let redis_receiver_clone = redis_receiver.clone();
+            mutexed_tasks.lock().await.spawn(async move {
                 while cloned_rx.is_empty() {
-                    let redis_receiver_clone = redis_receiver.clone();
+                    let redis_receiver_clone = redis_receiver_clone.clone();
                     let cl_rx = cloned_rx.resubscribe();
                     if let Err(e) = tokio::spawn(async move {
                         redis_receiver_clone
@@ -306,11 +306,29 @@ pub async fn main() -> Result<(), IngesterError> {
                     })
                     .await
                     {
-                        error!("redis_receiver panic: {:?}", e);
+                        error!("redis_receiver txs panic: {:?}", e);
                     }
                 }
-            }
-            MessageSource::TCP => {
+                Ok(())
+            });
+            let cloned_rx = shutdown_rx.resubscribe();
+            mutexed_tasks.lock().await.spawn(async move {
+                while cloned_rx.is_empty() {
+                    let redis_receiver_clone = redis_receiver.clone();
+                    let cl_rx = cloned_rx.resubscribe();
+                    if let Err(e) = tokio::spawn(async move {
+                        redis_receiver_clone.receive_accounts(cl_rx).await.unwrap()
+                    })
+                    .await
+                    {
+                        error!("redis_receiver accounts panic: {:?}", e);
+                    }
+                }
+                Ok(())
+            });
+        }
+        MessageSource::TCP => {
+            mutexed_tasks.lock().await.spawn(async move {
                 let geyser_tcp_receiver = Arc::new(geyser_tcp_receiver);
                 while cloned_rx.is_empty() {
                     let geyser_tcp_receiver_clone = geyser_tcp_receiver.clone();
@@ -326,10 +344,10 @@ pub async fn main() -> Result<(), IngesterError> {
                         error!("geyser_tcp_receiver panic: {:?}", e);
                     }
                 }
-            }
-        };
-        Ok(())
-    });
+                Ok(())
+            });
+        }
+    };
 
     let cloned_rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
