@@ -1,12 +1,16 @@
 use async_trait::async_trait;
-use entities::models::ForkedItem;
+use entities::models::{ClItem, ForkedItem, LeafSignatureAllData};
+use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use std::collections::HashSet;
 use tokio::sync::broadcast::Receiver;
 
 #[async_trait]
-pub trait CompressedTreeChangesManager<T> {
-    fn items_iter(&self) -> impl Iterator<Item = T>;
-    async fn delete_items(&self, keys: Vec<ForkedItem>);
+pub trait CompressedTreeChangesManager {
+    fn tree_seq_idx_iter(&self) -> impl Iterator<Item = LeafSignatureAllData>;
+    fn cl_items_iter(&self) -> impl Iterator<Item = ClItem>;
+    async fn delete_tree_seq_idx(&self, keys: Vec<ForkedItem>);
+    async fn delete_cl_items(&self, keys: Vec<ForkedItem>);
+    async fn delete_signatures(&self, keys: Vec<(Signature, Pubkey, u64)>);
 }
 
 #[async_trait]

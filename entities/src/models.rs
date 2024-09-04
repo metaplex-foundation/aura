@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
 use sqlx::types::chrono;
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::{HashMap, HashSet}};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Eq, Hash)]
 pub struct UrlWithStatus {
@@ -471,6 +471,14 @@ impl From<(&[u8], i64, CoreFeesAccount)> for CoreFeesAccountWithSortingID {
             fees_account: value,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LeafSignatureAllData {
+    pub tree: Pubkey,
+    pub signature: Signature,
+    pub leaf_idx: u64,
+    pub slot_sequences: HashMap<u64, HashSet<u64>>,
 }
 
 #[cfg(test)]

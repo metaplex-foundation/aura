@@ -40,7 +40,9 @@ pub struct TreeUpdate {
     pub seq: u64,
     pub slot: u64,
     pub event: CopyableChangeLogEventV1,
+    /// Instruction name
     pub instruction: String,
+    /// Solana transaction signature
     pub tx: String,
 }
 

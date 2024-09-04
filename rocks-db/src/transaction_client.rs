@@ -159,7 +159,8 @@ impl Storage {
         if let Some(ref tree_update) = ix.tree_update {
             self.save_changelog_with_batch(batch, &tree_update.event, tree_update.slot);
             self.save_tree_with_batch(batch, tree_update);
-            self.save_asset_signature_with_batch(batch, tree_update)
+            self.save_asset_signature_with_batch(batch, tree_update);
+            self.save_leaf_signature_with_batch(batch, tree_update)?;
         }
 
         Ok(())
