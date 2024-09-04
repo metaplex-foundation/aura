@@ -21,10 +21,10 @@ mod tests {
     use nft_ingester::message_handler::MessageHandlerIngester;
     use nft_ingester::mpl_core_processor::MplCoreProcessor;
     use nft_ingester::mplx_updates_processor::{
-        IndexableAssetWithAccountInfo, MetadataInfo, MplxAccsProcessor, TokenMetadata,
+        IndexableAssetWithAccountInfo, MetadataInfo, MplxAccountsProcessor, TokenMetadata,
     };
     use nft_ingester::plerkle;
-    use nft_ingester::token_updates_processor::TokenAccsProcessor;
+    use nft_ingester::token_updates_processor::TokenAccountsProcessor;
     use rocks_db::columns::{Mint, TokenAccount};
     use rocks_db::editions::TokenMetadataEdition;
     use rocks_db::AssetAuthority;
@@ -126,17 +126,17 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let spl_token_accs_parser = TokenAccsProcessor::new(
+        let spl_token_accs_parser = TokenAccountsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,
         );
         spl_token_accs_parser
-            .transform_and_save_token_accs(&token_accs)
+            .transform_and_save_token_account(&token_accs)
             .await;
         spl_token_accs_parser
-            .transform_and_save_mint_accs(&mints)
+            .transform_and_save_mint_account(&mints)
             .await;
 
         let first_owner_from_db = env
@@ -222,7 +222,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let mplx_accs_parser = MplxAccsProcessor::new(
+        let mplx_accs_parser = MplxAccountsProcessor::new(
             1,
             buffer.clone(),
             env.rocks_env.storage.clone(),

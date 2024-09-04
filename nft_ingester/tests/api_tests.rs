@@ -39,8 +39,8 @@ mod tests {
         buffer::Buffer,
         config::JsonMiddlewareConfig,
         json_worker::JsonWorker,
-        mplx_updates_processor::{BurntMetadataSlot, MetadataInfo, MplxAccsProcessor},
-        token_updates_processor::TokenAccsProcessor,
+        mplx_updates_processor::{BurntMetadataSlot, MetadataInfo, MplxAccountsProcessor},
+        token_updates_processor::TokenAccountsProcessor,
     };
     use rocks_db::asset::AssetLeaf;
     use rocks_db::inscriptions::{Inscription, InscriptionData};
@@ -777,13 +777,13 @@ mod tests {
 
         let buffer = Arc::new(Buffer::new());
 
-        let token_updates_processor = TokenAccsProcessor::new(
+        let token_updates_processor = TokenAccountsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,
         );
-        let mplx_updates_processor = MplxAccsProcessor::new(
+        let mplx_updates_processor = MplxAccountsProcessor::new(
             1,
             buffer.clone(),
             env.rocks_env.storage.clone(),
@@ -859,10 +859,12 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
+            .transform_and_save_mint_account(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
         token_updates_processor
-            .transform_and_save_token_accs(&[(token_acc.pubkey, token_acc)].into_iter().collect())
+            .transform_and_save_token_account(
+                &[(token_acc.pubkey, token_acc)].into_iter().collect(),
+            )
             .await;
 
         mplx_updates_processor
@@ -893,7 +895,7 @@ mod tests {
         };
 
         token_updates_processor
-            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
+            .transform_and_save_mint_account(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
 
         let payload = GetAsset {
@@ -940,13 +942,13 @@ mod tests {
 
         let buffer = Arc::new(Buffer::new());
 
-        let token_updates_processor = TokenAccsProcessor::new(
+        let token_updates_processor = TokenAccountsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,
         );
-        let mplx_updates_processor = MplxAccsProcessor::new(
+        let mplx_updates_processor = MplxAccountsProcessor::new(
             1,
             buffer.clone(),
             env.rocks_env.storage.clone(),
@@ -1035,7 +1037,7 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_accs(
+            .transform_and_save_mint_account(
                 &mint_accs
                     .clone()
                     .into_iter()
@@ -1044,7 +1046,7 @@ mod tests {
             )
             .await;
         token_updates_processor
-            .transform_and_save_token_accs(
+            .transform_and_save_token_account(
                 &token_accs
                     .into_iter()
                     .map(|token_acc| (token_acc.pubkey, token_acc))
@@ -1111,13 +1113,13 @@ mod tests {
 
         let buffer = Arc::new(Buffer::new());
 
-        let token_updates_processor = TokenAccsProcessor::new(
+        let token_updates_processor = TokenAccountsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             1,
         );
-        let mplx_updates_processor = MplxAccsProcessor::new(
+        let mplx_updates_processor = MplxAccountsProcessor::new(
             1,
             buffer.clone(),
             env.rocks_env.storage.clone(),
@@ -1211,10 +1213,12 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
+            .transform_and_save_mint_account(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
         token_updates_processor
-            .transform_and_save_token_accs(&[(token_acc.pubkey, token_acc)].into_iter().collect())
+            .transform_and_save_token_account(
+                &[(token_acc.pubkey, token_acc)].into_iter().collect(),
+            )
             .await;
 
         let payload = GetAsset {
@@ -1474,7 +1478,7 @@ mod tests {
         );
 
         let buffer = Arc::new(Buffer::new());
-        let token_updates_processor = TokenAccsProcessor::new(
+        let token_updates_processor = TokenAccountsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
@@ -1571,7 +1575,7 @@ mod tests {
         }
 
         token_updates_processor
-            .transform_and_save_token_accs(&token_accounts)
+            .transform_and_save_token_account(&token_accounts)
             .await;
 
         let payload = GetTokenAccounts {
@@ -1685,7 +1689,7 @@ mod tests {
         );
 
         let buffer = Arc::new(Buffer::new());
-        let token_updates_processor = TokenAccsProcessor::new(
+        let token_updates_processor = TokenAccountsProcessor::new(
             env.rocks_env.storage.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
@@ -1747,7 +1751,7 @@ mod tests {
         }
 
         token_updates_processor
-            .transform_and_save_token_accs(&token_accounts)
+            .transform_and_save_token_account(&token_accounts)
             .await;
 
         check_pagination(&api, Some(first_owner.to_string()), None).await;

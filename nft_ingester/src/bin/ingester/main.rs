@@ -36,6 +36,7 @@ use metrics_utils::{
     BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait,
     SequenceConsistentGapfillMetricsConfig,
 };
+use nft_ingester::accounts_processor::AccountsProcessor;
 use nft_ingester::api::account_balance::AccountBalanceGetterImpl;
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
@@ -48,9 +49,7 @@ use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::json_worker::JsonWorker;
 use nft_ingester::message_handler::MessageHandlerIngester;
-use nft_ingester::mplx_updates_processor::MplxAccsProcessor;
 use nft_ingester::tcp_receiver::TcpReceiver;
-use nft_ingester::token_updates_processor::TokenAccsProcessor;
 use nft_ingester::{config::init_logger, error::IngesterError};
 use postgre_client::PgClient;
 use rocks_db::backup_service::BackupService;
@@ -66,8 +65,6 @@ use nft_ingester::backfiller::{
 use nft_ingester::batch_mint::batch_mint_processor::{BatchMintProcessor, NoopBatchMintTxSender};
 use nft_ingester::fork_cleaner::ForkCleaner;
 use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
-use nft_ingester::inscriptions_processor::InscriptionsProcessor;
-use nft_ingester::mpl_core_processor::MplCoreProcessor;
 use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater};
 use nft_ingester::redis_receiver::RedisReceiver;
 use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
@@ -397,99 +394,17 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
 
-    let mplx_accs_parser = MplxAccsProcessor::new(
+    let account_processor = Arc::new(AccountsProcessor::build(
         config.mplx_buffer_size,
-        buffer.clone(),
-        rocks_storage.clone(),
-        metrics_state.ingester_metrics.clone(),
-    );
-
-    let token_accs_parser = TokenAccsProcessor::new(
         rocks_storage.clone(),
         buffer.clone(),
         metrics_state.ingester_metrics.clone(),
-        config.spl_buffer_size,
-    );
-    let mpl_core_parser = MplCoreProcessor::new(
-        rocks_storage.clone(),
-        buffer.clone(),
-        metrics_state.ingester_metrics.clone(),
-        config.mpl_core_buffer_size,
-    );
-    let inscription_parser = InscriptionsProcessor::new(
-        rocks_storage.clone(),
-        buffer.clone(),
-        metrics_state.ingester_metrics.clone(),
-        config.inscription_buffer_size,
-    );
-
+    ));
     for _ in 0..config.parsing_workers {
-        let mut cloned_mplx_parser = mplx_accs_parser.clone();
-
+        let cloned_account_processor = account_processor.clone();
         let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            cloned_mplx_parser.process_metadata_accs(cloned_rx).await;
-            Ok(())
-        });
-
-        let mut cloned_token_parser = token_accs_parser.clone();
-
-        let cloned_rx = shutdown_rx.resubscribe();
-        mutexed_tasks.lock().await.spawn(async move {
-            cloned_token_parser.process_token_accs(cloned_rx).await;
-            Ok(())
-        });
-        let mut cloned_mplx_parser = mplx_accs_parser.clone();
-        let cloned_rx = shutdown_rx.resubscribe();
-        mutexed_tasks.lock().await.spawn(async move {
-            cloned_mplx_parser.process_burnt_accs(cloned_rx).await;
-            Ok(())
-        });
-
-        let mut cloned_token_parser = token_accs_parser.clone();
-
-        let cloned_rx = shutdown_rx.resubscribe();
-        mutexed_tasks.lock().await.spawn(async move {
-            cloned_token_parser.process_mint_accs(cloned_rx).await;
-            Ok(())
-        });
-
-        let mut cloned_mplx_parser = mplx_accs_parser.clone();
-        let cloned_rx = shutdown_rx.resubscribe();
-        mutexed_tasks.lock().await.spawn(async move {
-            cloned_mplx_parser.process_edition_accs(cloned_rx).await;
-            Ok(())
-        });
-
-        let mut cloned_core_parser = mpl_core_parser.clone();
-        let cloned_rx = shutdown_rx.resubscribe();
-        mutexed_tasks.lock().await.spawn(async move {
-            cloned_core_parser.process_mpl_assets(cloned_rx).await;
-            Ok(())
-        });
-
-        let mut cloned_core_parser = mpl_core_parser.clone();
-        let cloned_rx = shutdown_rx.resubscribe();
-        mutexed_tasks.lock().await.spawn(async move {
-            cloned_core_parser.process_mpl_asset_burn(cloned_rx).await;
-            Ok(())
-        });
-
-        let mut cloned_inscription_parser = inscription_parser.clone();
-        let cloned_rx = shutdown_rx.resubscribe();
-        mutexed_tasks.lock().await.spawn(async move {
-            cloned_inscription_parser
-                .process_inscriptions(cloned_rx)
-                .await;
-            Ok(())
-        });
-
-        let mut cloned_inscription_parser = inscription_parser.clone();
-        let cloned_rx = shutdown_rx.resubscribe();
-        mutexed_tasks.lock().await.spawn(async move {
-            cloned_inscription_parser
-                .process_inscriptions_data(cloned_rx)
-                .await;
+            cloned_account_processor.process_accounts(cloned_rx).await;
             Ok(())
         });
     }

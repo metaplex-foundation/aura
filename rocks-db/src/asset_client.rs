@@ -4,11 +4,11 @@ use std::sync::atomic::Ordering;
 
 use crate::asset::{AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey};
 use crate::column::Column;
-use crate::editions::TokenMetadataEdition;
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
 use entities::api_req_params::Options;
+use entities::enums::TokenMetadataEdition;
 use entities::models::{EditionData, PubkeyWithSlot};
 use std::collections::HashMap;
 
@@ -49,7 +49,7 @@ impl Storage {
         Ok(())
     }
 
-    pub(crate) fn asset_updated_with_batch(
+    pub fn asset_updated_with_batch(
         &self,
         batch: &mut rocksdb::WriteBatchWithTransaction<false>,
         slot: u64,

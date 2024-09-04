@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::{str::FromStr, sync::Arc};
 
@@ -16,25 +17,19 @@ use blockbuster::{
     },
 };
 use chrono::Utc;
-use entities::enums::MessageDataType;
+use entities::enums::{MessageDataType, UnprocessedAccount};
 use entities::models::BufferedTransaction;
 use flatbuffers::FlatBufferBuilder;
 use solana_program::program_pack::Pack;
 use solana_sdk::pubkey::Pubkey;
+use tokio::sync::Mutex;
 use tracing::{debug, error, warn};
 use utils::flatbuffer::account_data_generated::account_data::root_as_account_data;
 
-use rocks_db::columns::{Mint, TokenAccount};
-use rocks_db::editions::TokenMetadataEdition;
-
-use crate::buffer::{Buffer, FeesBuffer};
+use crate::buffer::Buffer;
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
 use crate::inscription_raw_parsing::ParsedInscription;
-use crate::inscriptions_processor::{InscriptionDataInfo, InscriptionInfo};
-use crate::mplx_updates_processor::{
-    BurntMetadataSlot, CoreAssetFee, IndexableAssetWithAccountInfo, MetadataInfo, TokenMetadata,
-};
 use crate::plerkle;
 use crate::plerkle::PlerkleAccountInfo;
 use entities::models::{EditionV1, MasterEdition};
@@ -53,21 +48,70 @@ pub struct MessageHandlerIngester {
     mpl_core_parser: Arc<MplCoreParser>,
 }
 
-macro_rules! update_or_insert {
-    ($map:expr, $key:expr, $value:expr, $update_write_version:expr) => {{
-        let mut map = $map.lock().await;
-        let entry = map.entry($key);
-        match entry {
-            std::collections::hash_map::Entry::Occupied(mut o) => {
-                if o.get().write_version < $update_write_version {
-                    o.insert($value);
+async fn update_or_insert_account(
+    accounts_buffer: &Mutex<HashMap<Pubkey, UnprocessedAccount>>,
+    account: UnprocessedAccount,
+    key: Pubkey,
+    write_version: u64,
+) {
+    let mut map = accounts_buffer.lock().await;
+    let entry = map.entry(key);
+    match entry {
+        std::collections::hash_map::Entry::Occupied(mut o) => match o.get() {
+            UnprocessedAccount::MetadataInfo(entity) => {
+                if entity.write_version < write_version {
+                    o.insert(account);
                 }
             }
-            std::collections::hash_map::Entry::Vacant(v) => {
-                v.insert($value);
+            UnprocessedAccount::Token(entity) => {
+                if entity.write_version < write_version {
+                    o.insert(account);
+                }
             }
+            UnprocessedAccount::Mint(entity) => {
+                if entity.write_version < write_version {
+                    o.insert(account);
+                }
+            }
+            UnprocessedAccount::Edition(entity) => {
+                if entity.write_version < write_version {
+                    o.insert(account);
+                }
+            }
+            UnprocessedAccount::BurnMetadata(entity) => {
+                if entity.write_version < write_version {
+                    o.insert(account);
+                }
+            }
+            UnprocessedAccount::BurnMplCore(entity) => {
+                if entity.write_version < write_version {
+                    o.insert(account);
+                }
+            }
+            UnprocessedAccount::MplCore(entity) => {
+                if entity.write_version < write_version {
+                    o.insert(account);
+                }
+            }
+            UnprocessedAccount::Inscription(entity) => {
+                if entity.write_version < write_version {
+                    o.insert(account);
+                }
+            }
+            UnprocessedAccount::InscriptionData(entity) => {
+                if entity.write_version < write_version {
+                    o.insert(account);
+                }
+            } // UnprocessedAccount::MplCoreFee(entity) => {
+              //     if entity.write_version < write_version {
+              //         o.insert(account);
+              //     }
+              // }
+        },
+        std::collections::hash_map::Entry::Vacant(v) => {
+            v.insert(account);
         }
-    }};
+    }
 }
 
 #[async_trait]
@@ -214,10 +258,9 @@ impl MessageHandlerIngester {
         match &parsing_result {
             TokenProgramAccount::TokenAccount(ta) => {
                 let frozen = matches!(ta.state, spl_token::state::AccountState::Frozen);
-                update_or_insert!(
-                    self.buffer.token_accs,
-                    key,
-                    TokenAccount {
+                update_or_insert_account(
+                    &self.buffer.accounts,
+                    UnprocessedAccount::Token(entities::models::TokenAccount {
                         pubkey: key,
                         mint: ta.mint,
                         delegate: ta.delegate.into(),
@@ -227,15 +270,16 @@ impl MessageHandlerIngester {
                         slot_updated: account_update.slot as i64,
                         amount: ta.amount as i64,
                         write_version: account_update.write_version,
-                    },
-                    account_update.write_version
-                );
+                    }),
+                    key,
+                    account_update.write_version,
+                )
+                .await;
             }
             TokenProgramAccount::Mint(m) => {
-                update_or_insert!(
-                    self.buffer.mints,
-                    key.to_bytes().to_vec(),
-                    Mint {
+                update_or_insert_account(
+                    &self.buffer.accounts,
+                    UnprocessedAccount::Mint(entities::models::Mint {
                         pubkey: key,
                         slot_updated: account_update.slot as i64,
                         supply: m.supply as i64,
@@ -243,9 +287,11 @@ impl MessageHandlerIngester {
                         mint_authority: m.mint_authority.into(),
                         freeze_authority: m.freeze_authority.into(),
                         write_version: account_update.write_version,
-                    },
-                    account_update.write_version
-                );
+                    }),
+                    key,
+                    account_update.write_version,
+                )
+                .await;
             }
         };
     }
@@ -266,85 +312,102 @@ impl MessageHandlerIngester {
                         let key = account_info.pubkey;
                         match &parsing_result.data {
                             TokenMetadataAccountData::EmptyAccount => {
-                                let mut buff = self.buffer.burnt_metadata_at_slot.lock().await;
-
-                                buff.insert(
+                                update_or_insert_account(
+                                    &self.buffer.accounts,
+                                    UnprocessedAccount::BurnMetadata(
+                                        entities::models::BurntMetadataSlot {
+                                            slot_updated: account_info.slot,
+                                            write_version: account_info.write_version,
+                                        },
+                                    ),
                                     key,
-                                    BurntMetadataSlot {
-                                        slot_updated: account_info.slot,
-                                    },
-                                );
+                                    account_info.write_version,
+                                )
+                                .await;
                             }
                             TokenMetadataAccountData::MetadataV1(m) => {
-                                update_or_insert!(
-                                    self.buffer.mplx_metadata_info,
-                                    key.to_bytes().to_vec(),
-                                    MetadataInfo {
-                                        metadata: m.clone(),
-                                        slot_updated: account_info.slot,
-                                        write_version: account_info.write_version,
-                                        lamports: account_info.lamports,
-                                        executable: account_info.executable,
-                                        rent_epoch: account_info.rent_epoch,
-                                        metadata_owner: Some(account_info.owner.to_string()),
-                                    },
-                                    account_info.write_version
-                                );
+                                update_or_insert_account(
+                                    &self.buffer.accounts,
+                                    UnprocessedAccount::MetadataInfo(
+                                        entities::models::MetadataInfo {
+                                            metadata: m.clone(),
+                                            slot_updated: account_info.slot,
+                                            write_version: account_info.write_version,
+                                            lamports: account_info.lamports,
+                                            executable: account_info.executable,
+                                            rent_epoch: account_info.rent_epoch,
+                                            metadata_owner: Some(account_info.owner.to_string()),
+                                        },
+                                    ),
+                                    key,
+                                    account_info.write_version,
+                                )
+                                .await;
                             }
                             TokenMetadataAccountData::MasterEditionV1(m) => {
-                                update_or_insert!(
-                                    self.buffer.token_metadata_editions,
+                                update_or_insert_account(
+                                    &self.buffer.accounts,
+                                    UnprocessedAccount::Edition(
+                                        entities::models::EditionMetadata {
+                                            edition: entities::enums::TokenMetadataEdition::MasterEdition(
+                                                MasterEdition {
+                                                    key,
+                                                    supply: m.supply,
+                                                    max_supply: m.max_supply,
+                                                    write_version: account_info.write_version
+                                                },
+                                            ),
+                                            write_version: account_info.write_version,
+                                            slot_updated: account_info.slot,
+                                        }
+                                    ),
                                     key,
-                                    TokenMetadata {
-                                        edition: TokenMetadataEdition::MasterEdition(
-                                            MasterEdition {
-                                                key,
-                                                supply: m.supply,
-                                                max_supply: m.max_supply,
-                                                write_version: account_info.write_version
-                                            },
-                                        ),
-                                        write_version: account_info.write_version,
-                                        slot_updated: account_info.slot,
-                                    },
                                     account_info.write_version
-                                );
+                                ).await;
                             }
                             TokenMetadataAccountData::MasterEditionV2(m) => {
-                                update_or_insert!(
-                                    self.buffer.token_metadata_editions,
+                                update_or_insert_account(
+                                    &self.buffer.accounts,
+                                    UnprocessedAccount::Edition(
+                                        entities::models::EditionMetadata {
+                                            edition: entities::enums::TokenMetadataEdition::MasterEdition(
+                                                MasterEdition {
+                                                    key,
+                                                    supply: m.supply,
+                                                    max_supply: m.max_supply,
+                                                    write_version: account_info.write_version
+                                                },
+                                            ),
+                                            write_version: account_info.write_version,
+                                            slot_updated: account_info.slot,
+                                        }
+                                    ),
                                     key,
-                                    TokenMetadata {
-                                        edition: TokenMetadataEdition::MasterEdition(
-                                            MasterEdition {
-                                                key,
-                                                supply: m.supply,
-                                                max_supply: m.max_supply,
-                                                write_version: account_info.write_version
-                                            },
-                                        ),
-                                        write_version: account_info.write_version,
-                                        slot_updated: account_info.slot,
-                                    },
                                     account_info.write_version
-                                );
+                                ).await;
                             }
                             TokenMetadataAccountData::EditionV1(e) => {
-                                update_or_insert!(
-                                    self.buffer.token_metadata_editions,
+                                update_or_insert_account(
+                                    &self.buffer.accounts,
+                                    UnprocessedAccount::Edition(
+                                        entities::models::EditionMetadata {
+                                            edition:
+                                                entities::enums::TokenMetadataEdition::EditionV1(
+                                                    EditionV1 {
+                                                        key,
+                                                        parent: e.parent,
+                                                        edition: e.edition,
+                                                        write_version: account_info.write_version,
+                                                    },
+                                                ),
+                                            write_version: account_info.write_version,
+                                            slot_updated: account_info.slot,
+                                        },
+                                    ),
                                     key,
-                                    TokenMetadata {
-                                        edition: TokenMetadataEdition::EditionV1(EditionV1 {
-                                            key,
-                                            parent: e.parent,
-                                            edition: e.edition,
-                                            write_version: account_info.write_version
-                                        },),
-                                        write_version: account_info.write_version,
-                                        slot_updated: account_info.slot,
-                                    },
-                                    account_info.write_version
-                                );
+                                    account_info.write_version,
+                                )
+                                .await;
                             }
                             _ => debug!("Not implemented"),
                         };
@@ -390,28 +453,32 @@ impl MessageHandlerIngester {
         match acc_parse_result {
             Ok(parsed_inscription) => match parsed_inscription {
                 ParsedInscription::Inscription(inscription) => {
-                    update_or_insert!(
-                        self.buffer.inscriptions,
-                        account_info.pubkey,
-                        InscriptionInfo {
+                    update_or_insert_account(
+                        &self.buffer.accounts,
+                        UnprocessedAccount::Inscription(entities::models::InscriptionInfo {
                             inscription,
                             write_version: account_info.write_version,
                             slot_updated: account_info.slot,
-                        },
-                        account_info.write_version
-                    );
+                        }),
+                        account_info.pubkey,
+                        account_info.write_version,
+                    )
+                    .await;
                 }
                 ParsedInscription::InscriptionData(inscription_data) => {
-                    update_or_insert!(
-                        self.buffer.inscriptions_data,
+                    update_or_insert_account(
+                        &self.buffer.accounts,
+                        UnprocessedAccount::InscriptionData(
+                            entities::models::InscriptionDataInfo {
+                                inscription_data,
+                                write_version: account_info.write_version,
+                                slot_updated: account_info.slot,
+                            },
+                        ),
                         account_info.pubkey,
-                        InscriptionDataInfo {
-                            inscription_data,
-                            write_version: account_info.write_version,
-                            slot_updated: account_info.slot,
-                        },
-                        account_info.write_version
-                    );
+                        account_info.write_version,
+                    )
+                    .await;
                 }
                 ParsedInscription::UnhandledAccount => {}
             },
@@ -429,29 +496,32 @@ impl MessageHandlerIngester {
         let key = account_update.pubkey;
         match &parsing_result.data {
             MplCoreAccountData::EmptyAccount => {
-                let mut buff = self.buffer.burnt_mpl_core_at_slot.lock().await;
-
-                buff.insert(
-                    key,
-                    BurntMetadataSlot {
+                update_or_insert_account(
+                    &self.buffer.accounts,
+                    UnprocessedAccount::BurnMplCore(entities::models::BurntMetadataSlot {
                         slot_updated: account_update.slot,
-                    },
-                );
+                        write_version: account_update.write_version,
+                    }),
+                    key,
+                    account_update.write_version,
+                )
+                .await;
             }
             MplCoreAccountData::Asset(_) | MplCoreAccountData::Collection(_) => {
-                update_or_insert!(
-                    self.buffer.mpl_core_indexable_assets,
-                    key,
-                    IndexableAssetWithAccountInfo {
+                update_or_insert_account(
+                    &self.buffer.accounts,
+                    UnprocessedAccount::MplCore(entities::models::IndexableAssetWithAccountInfo {
                         indexable_asset: parsing_result.data.clone(),
                         slot_updated: account_update.slot,
                         write_version: account_update.write_version,
                         lamports: account_update.lamports,
                         executable: account_update.executable,
                         rent_epoch: account_update.rent_epoch,
-                    },
-                    account_update.write_version
-                );
+                    }),
+                    key,
+                    account_update.write_version,
+                )
+                .await;
             }
             _ => debug!("Not implemented"),
         };
@@ -521,7 +591,6 @@ fn account_parsing_error(err: impl Debug, account_info: &plerkle::AccountInfo) {
 }
 
 pub struct MessageHandlerCoreIndexing {
-    buffer: Arc<FeesBuffer>,
     mpl_core_parser: Arc<MplCoreParser>,
 }
 
@@ -553,10 +622,15 @@ impl MessageHandler for MessageHandlerCoreIndexing {
     }
 }
 
+impl Default for MessageHandlerCoreIndexing {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MessageHandlerCoreIndexing {
-    pub fn new(buffer: Arc<FeesBuffer>) -> Self {
+    pub fn new() -> Self {
         Self {
-            buffer,
             mpl_core_parser: Arc::new(MplCoreParser {}),
         }
     }
@@ -614,24 +688,25 @@ impl MessageHandlerCoreIndexing {
         account_update: &plerkle::AccountInfo,
         parsing_result: &MplCoreAccountState,
     ) {
-        let key = account_update.pubkey;
+        let _key = account_update.pubkey;
         match &parsing_result.data {
             MplCoreAccountData::Asset(_)
             | MplCoreAccountData::EmptyAccount
             | MplCoreAccountData::HashedAsset => {
-                update_or_insert!(
-                    self.buffer.mpl_core_fee_assets,
-                    key,
-                    CoreAssetFee {
-                        indexable_asset: parsing_result.data.clone(),
-                        data: account_update.data.clone(),
-                        slot_updated: account_update.slot,
-                        write_version: account_update.write_version,
-                        lamports: account_update.lamports,
-                        rent_epoch: account_update.rent_epoch,
-                    },
-                    account_update.write_version
-                );
+                // update_or_insert_account(
+                //     &self.buffer.accounts,
+                //     UnprocessedAccount::MplCoreFee(entities::models::CoreAssetFee {
+                //         indexable_asset: parsing_result.data.clone(),
+                //         data: account_update.data.clone(),
+                //         slot_updated: account_update.slot,
+                //         write_version: account_update.write_version,
+                //         lamports: account_update.lamports,
+                //         rent_epoch: account_update.rent_epoch,
+                //     }),
+                //     key,
+                //     account_update.write_version,
+                // )
+                // .await;
             }
             _ => debug!("Not implemented"),
         };

@@ -1,8 +1,6 @@
 use crate::buffer::FeesBuffer;
 use crate::error::IngesterError;
-use crate::mplx_updates_processor::CoreAssetFee;
-use crate::process_accounts;
-use entities::models::CoreFee;
+use entities::models::{CoreAssetFee, CoreFee};
 use metrics_utils::IngesterMetricsConfig;
 use postgre_client::PgClient;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -11,7 +9,7 @@ use solana_program::rent::Rent;
 use solana_program::sysvar::rent;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinSet;
@@ -29,8 +27,6 @@ pub struct MplCoreFeeProcessor {
     rpc_client: Arc<RpcClient>,
     rent: Arc<RwLock<Rent>>,
     join_set: Arc<Mutex<JoinSet<Result<(), tokio::task::JoinError>>>>,
-
-    last_received_mpl_asset_at: Option<SystemTime>,
 }
 
 impl MplCoreFeeProcessor {
@@ -50,7 +46,6 @@ impl MplCoreFeeProcessor {
             batch_size,
             metrics,
             rpc_client,
-            last_received_mpl_asset_at: None,
             rent: Arc::new(RwLock::new(rent)),
             join_set,
         })
@@ -58,16 +53,16 @@ impl MplCoreFeeProcessor {
 
     pub async fn start_processing(&mut self, rx: Receiver<()>) {
         self.update_rent(rx.resubscribe()).await;
-        process_accounts!(
-            self,
-            rx,
-            self.buffer.mpl_core_fee_assets,
-            self.batch_size,
-            |s: CoreAssetFee| s,
-            self.last_received_mpl_asset_at,
-            Self::store_mpl_assets_fee,
-            "mpl_core_asset_fee"
-        );
+        // process_accounts!(
+        //     self,
+        //     rx,
+        //     self.buffer.mpl_core_fee_assets,
+        //     self.batch_size,
+        //     |s: CoreAssetFee| s,
+        //     self.last_received_mpl_asset_at,
+        //     Self::store_mpl_assets_fee,
+        //     "mpl_core_asset_fee"
+        // );
     }
 
     // on-chain programs can fetch rent without RPC call

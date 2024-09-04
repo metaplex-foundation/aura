@@ -58,7 +58,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     let buffer = Arc::new(FeesBuffer::new());
 
-    let message_handler = Arc::new(MessageHandlerCoreIndexing::new(buffer.clone()));
+    let message_handler = Arc::new(MessageHandlerCoreIndexing::new());
 
     let geyser_tcp_receiver = TcpReceiver::new(
         message_handler.clone(),

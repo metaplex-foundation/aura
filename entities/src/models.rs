@@ -1,10 +1,13 @@
 use crate::enums::{
     BatchMintState, ChainMutability, FailedBatchMintState, OwnerType, PersistingBatchMintState,
-    RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TaskStatus, TokenStandard,
-    UseMethod,
+    RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TaskStatus,
+    TokenMetadataEdition, TokenStandard, UseMethod,
 };
 use base64::engine::general_purpose;
 use base64::Engine;
+use blockbuster::programs::mpl_core_program::MplCoreAccountData;
+use libreplex_inscriptions::Inscription;
+use mpl_token_metadata::accounts::Metadata;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -357,7 +360,7 @@ pub struct TokenAccountIterableIdx {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
 #[serde(default)]
-pub struct TokenAccount {
+pub struct ResponseTokenAccount {
     pub address: String,
     pub mint: String,
     pub owner: String,
@@ -367,7 +370,7 @@ pub struct TokenAccount {
 }
 
 pub struct TokenAccResponse {
-    pub token_acc: TokenAccount,
+    pub token_acc: ResponseTokenAccount,
     pub sorting_id: String,
 }
 
@@ -473,6 +476,86 @@ impl From<(&[u8], i64, CoreFeesAccount)> for CoreFeesAccountWithSortingID {
     }
 }
 
+#[derive(Clone)]
+pub struct MetadataInfo {
+    pub metadata: Metadata,
+    pub slot_updated: u64,
+    pub write_version: u64,
+    pub lamports: u64,
+    pub rent_epoch: u64,
+    pub executable: bool,
+    pub metadata_owner: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct EditionMetadata {
+    pub edition: TokenMetadataEdition,
+    pub write_version: u64,
+    pub slot_updated: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct BurntMetadataSlot {
+    pub slot_updated: u64,
+    pub write_version: u64,
+}
+
+#[derive(Clone)]
+pub struct IndexableAssetWithAccountInfo {
+    pub indexable_asset: MplCoreAccountData,
+    pub lamports: u64,
+    pub executable: bool,
+    pub slot_updated: u64,
+    pub write_version: u64,
+    pub rent_epoch: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenAccount {
+    pub pubkey: Pubkey,
+    pub mint: Pubkey,
+    pub delegate: Option<Pubkey>,
+    pub owner: Pubkey,
+    pub frozen: bool,
+    pub delegated_amount: i64,
+    pub slot_updated: i64,
+    pub amount: i64,
+    pub write_version: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Mint {
+    pub pubkey: Pubkey,
+    pub slot_updated: i64,
+    pub supply: i64,
+    pub decimals: i32,
+    pub mint_authority: Option<Pubkey>,
+    pub freeze_authority: Option<Pubkey>,
+    pub write_version: u64,
+}
+
+pub struct InscriptionInfo {
+    pub inscription: Inscription,
+    pub write_version: u64,
+    pub slot_updated: u64,
+}
+
+#[derive(Clone)]
+pub struct InscriptionDataInfo {
+    pub inscription_data: Vec<u8>,
+    pub write_version: u64,
+    pub slot_updated: u64,
+}
+
+#[derive(Clone)]
+pub struct CoreAssetFee {
+    pub indexable_asset: MplCoreAccountData,
+    pub data: Vec<u8>,
+    pub lamports: u64,
+    pub rent_epoch: u64,
+    pub slot_updated: u64,
+    pub write_version: u64,
+}
 #[cfg(test)]
 mod tests {
     use super::*;

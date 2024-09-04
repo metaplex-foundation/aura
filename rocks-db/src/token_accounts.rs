@@ -1,15 +1,173 @@
 use crate::column::TypedColumn;
-use crate::columns::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
+use crate::key_encoders::{decode_pubkeyx2, decode_pubkeyx3, encode_pubkeyx2, encode_pubkeyx3};
+use crate::Result;
 use crate::Storage;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
+use bincode::deserialize;
 use entities::models::{
-    TokenAccResponse, TokenAccount, TokenAccountIterableIdx, TokenAccountMintOwnerIdxKey,
-    TokenAccountOwnerIdxKey,
+    ResponseTokenAccount, TokenAccResponse, TokenAccount, TokenAccountIterableIdx,
+    TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey,
 };
 use interface::error::UsecaseError;
 use interface::token_accounts::TokenAccountsGetter;
+use rocksdb::MergeOperands;
+use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
+use tracing::log::error;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenAccountOwnerIdx {
+    pub is_zero_balance: bool,
+    pub write_version: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenAccountMintOwnerIdx {
+    pub is_zero_balance: bool,
+    pub write_version: u64,
+}
+
+impl TypedColumn for TokenAccountOwnerIdx {
+    type KeyType = TokenAccountOwnerIdxKey;
+
+    type ValueType = Self;
+    const NAME: &'static str = "TOKEN_ACCOUNTS_OWNER_IDX";
+
+    fn encode_key(key: TokenAccountOwnerIdxKey) -> Vec<u8> {
+        encode_pubkeyx2((key.owner, key.token_account))
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        let (owner, token_account) = decode_pubkeyx2(bytes)?;
+        Ok(TokenAccountOwnerIdxKey {
+            owner,
+            token_account,
+        })
+    }
+}
+
+impl TypedColumn for TokenAccountMintOwnerIdx {
+    type KeyType = TokenAccountMintOwnerIdxKey;
+
+    type ValueType = Self;
+    const NAME: &'static str = "TOKEN_ACCOUNTS_MINT_OWNER_IDX";
+
+    fn encode_key(key: TokenAccountMintOwnerIdxKey) -> Vec<u8> {
+        encode_pubkeyx3((key.mint, key.owner, key.token_account))
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        let (mint, owner, token_account) = decode_pubkeyx3(bytes)?;
+        Ok(TokenAccountMintOwnerIdxKey {
+            mint,
+            owner,
+            token_account,
+        })
+    }
+}
+
+impl TypedColumn for TokenAccount {
+    type KeyType = Pubkey;
+
+    type ValueType = Self;
+    const NAME: &'static str = "TOKEN_ACCOUNTS";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        pubkey.to_bytes().to_vec()
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        let key = Pubkey::try_from(&bytes[0..32])?;
+        Ok(key)
+    }
+}
+
+#[macro_export]
+macro_rules! impl_merge_values {
+    ($ty:ty) => {
+        impl $ty {
+            pub fn merge_values(
+                _new_key: &[u8],
+                existing_val: Option<&[u8]>,
+                operands: &MergeOperands,
+            ) -> Option<Vec<u8>> {
+                let mut result = vec![];
+                let mut write_version = 0;
+                if let Some(existing_val) = existing_val {
+                    match deserialize::<Self>(existing_val) {
+                        Ok(value) => {
+                            write_version = value.write_version;
+                            result = existing_val.to_vec();
+                        }
+                        Err(e) => {
+                            error!(
+                                "RocksDB: {} deserialize existing_val: {}",
+                                stringify!($ty),
+                                e
+                            )
+                        }
+                    }
+                }
+
+                for op in operands {
+                    match deserialize::<Self>(op) {
+                        Ok(new_val) => {
+                            if new_val.write_version > write_version {
+                                write_version = new_val.write_version;
+                                result = op.to_vec();
+                            }
+                        }
+                        Err(e) => {
+                            error!("RocksDB: {} deserialize new_val: {}", stringify!($ty), e)
+                        }
+                    }
+                }
+
+                Some(result)
+            }
+        }
+    };
+}
+
+pub fn merge_token_accounts(
+    _new_key: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: &MergeOperands,
+) -> Option<Vec<u8>> {
+    let mut result = vec![];
+    let mut write_version = 0;
+    if let Some(existing_val) = existing_val {
+        match deserialize::<TokenAccount>(existing_val) {
+            Ok(value) => {
+                write_version = value.write_version;
+                result = existing_val.to_vec();
+            }
+            Err(e) => {
+                error!("RocksDB: TokenAccount deserialize existing_val: {}", e)
+            }
+        }
+    }
+
+    for op in operands {
+        match deserialize::<TokenAccount>(op) {
+            Ok(new_val) => {
+                if new_val.write_version > write_version {
+                    write_version = new_val.write_version;
+                    result = op.to_vec();
+                }
+            }
+            Err(e) => {
+                error!("RocksDB: TokenAccount deserialize new_val: {}", e)
+            }
+        }
+    }
+
+    Some(result)
+}
+
+impl_merge_values!(TokenAccountOwnerIdx);
+impl_merge_values!(TokenAccountMintOwnerIdx);
 
 #[async_trait]
 impl TokenAccountsGetter for Storage {
@@ -22,7 +180,7 @@ impl TokenAccountsGetter for Storage {
         page: Option<u64>,
         limit: u64,
         show_zero_balance: bool,
-    ) -> Result<impl Iterator<Item = TokenAccountIterableIdx>, UsecaseError> {
+    ) -> std::result::Result<impl Iterator<Item = TokenAccountIterableIdx>, UsecaseError> {
         if (mint, owner) == (None, None) {
             return Err(UsecaseError::InvalidParameters(
                 "Owner or mint must be provided".to_string(),
@@ -116,7 +274,7 @@ impl TokenAccountsGetter for Storage {
         page: Option<u64>,
         limit: u64,
         show_zero_balance: bool,
-    ) -> Result<Vec<TokenAccResponse>, UsecaseError> {
+    ) -> std::result::Result<Vec<TokenAccResponse>, UsecaseError> {
         let mut reverse = false;
 
         let start_from = if let Some(after) = &after {
@@ -188,7 +346,7 @@ impl TokenAccountsGetter for Storage {
             .into_iter()
             .flat_map(|ta| {
                 ta.map(|ta| TokenAccResponse {
-                    token_acc: TokenAccount {
+                    token_acc: ResponseTokenAccount {
                         address: ta.pubkey.to_string(),
                         mint: ta.mint.to_string(),
                         owner: ta.owner.to_string(),
@@ -213,7 +371,7 @@ pub fn encode_sorting_key(owner: &Pubkey, token_account: &Pubkey) -> String {
     general_purpose::STANDARD_NO_PAD.encode(v)
 }
 
-pub fn decode_sorting_key(key: &String) -> Result<(Pubkey, Pubkey), String> {
+pub fn decode_sorting_key(key: &String) -> std::result::Result<(Pubkey, Pubkey), String> {
     let decoded = general_purpose::STANDARD_NO_PAD
         .decode(key)
         .map_err(|e| e.to_string())?;

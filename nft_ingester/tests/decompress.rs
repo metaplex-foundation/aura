@@ -14,8 +14,8 @@ mod tests {
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
         buffer::Buffer,
-        mplx_updates_processor::{MetadataInfo, MplxAccsProcessor},
-        token_updates_processor::TokenAccsProcessor,
+        mplx_updates_processor::{MetadataInfo, MplxAccountsProcessor},
+        token_updates_processor::TokenAccountsProcessor,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
     use rocks_db::migrator::MigrationState;
@@ -116,14 +116,14 @@ mod tests {
         nft_created_slot: i64,
         mint: &Pubkey,
     ) {
-        let mplx_accs_parser = MplxAccsProcessor::new(
+        let mplx_accs_parser = MplxAccountsProcessor::new(
             1,
             buffer.clone(),
             env_rocks.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
 
-        let spl_token_accs_parser = TokenAccsProcessor::new(
+        let spl_token_accs_parser = TokenAccountsProcessor::new(
             env_rocks.clone(),
             buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
@@ -157,11 +157,13 @@ mod tests {
         };
 
         spl_token_accs_parser
-            .transform_and_save_token_accs(&[(token_acc.pubkey, token_acc)].into_iter().collect())
+            .transform_and_save_token_account(
+                &[(token_acc.pubkey, token_acc)].into_iter().collect(),
+            )
             .await;
 
         spl_token_accs_parser
-            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
+            .transform_and_save_mint_account(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
             .await;
 
         let decompressed_token_data = MetadataInfo {

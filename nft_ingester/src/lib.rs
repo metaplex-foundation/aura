@@ -1,3 +1,4 @@
+pub mod accounts_processor;
 pub mod api;
 pub mod backfiller;
 pub mod batch_mint;

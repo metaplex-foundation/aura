@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use entities::enums::TokenMetadataEdition;
 use entities::models::{CompleteAssetDetails, OffChainData, Updated};
 use interface::asset_streaming_and_discovery::{
     AssetDetailsStream, AssetDetailsStreamer, AsyncError,
@@ -12,7 +13,6 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::asset::SlotAssetIdxKey;
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
-use crate::editions::TokenMetadataEdition;
 use crate::{
     asset::{AssetCollection, AssetLeaf, SlotAssetIdx},
     column::TypedColumn,
