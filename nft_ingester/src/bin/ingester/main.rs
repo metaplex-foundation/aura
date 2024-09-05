@@ -278,73 +278,35 @@ pub async fn main() -> Result<(), IngesterError> {
         config.tcp_config.get_tcp_receiver_reconnect_interval()? * 2,
     );
 
-    let redis_receiver = Arc::new(RedisReceiver::new(
+    let _redis_receiver = Arc::new(RedisReceiver::new(
         config.redis_messenger_config.clone(),
-        ConsumptionType::Redeliver,
-        message_handler.clone(),
-    ));
+        ConsumptionType::All,
+    ).await.unwrap());
 
     let snapshot_addr = config.tcp_config.get_snapshot_addr_ingester()?;
     let geyser_addr = config.tcp_config.get_tcp_receiver_addr_ingester()?;
 
     let cloned_rx = shutdown_rx.resubscribe();
-    match config.message_source {
-        MessageSource::Redis => {
-            let redis_receiver_clone = redis_receiver.clone();
-            mutexed_tasks.lock().await.spawn(async move {
-                while cloned_rx.is_empty() {
-                    let redis_receiver_clone = redis_receiver_clone.clone();
-                    let cl_rx = cloned_rx.resubscribe();
-                    if let Err(e) = tokio::spawn(async move {
-                        redis_receiver_clone
-                            .receive_transactions(cl_rx)
-                            .await
-                            .unwrap()
-                    })
-                    .await
-                    {
-                        error!("redis_receiver txs panic: {:?}", e);
-                    }
+    if matches!(config.message_source, MessageSource::TCP) {
+        mutexed_tasks.lock().await.spawn(async move {
+            let geyser_tcp_receiver = Arc::new(geyser_tcp_receiver);
+            while cloned_rx.is_empty() {
+                let geyser_tcp_receiver_clone = geyser_tcp_receiver.clone();
+                let cl_rx = cloned_rx.resubscribe();
+                if let Err(e) = tokio::spawn(async move {
+                    geyser_tcp_receiver_clone
+                        .connect(geyser_addr, cl_rx)
+                        .await
+                        .unwrap()
+                })
+                .await
+                {
+                    error!("geyser_tcp_receiver panic: {:?}", e);
                 }
-                Ok(())
-            });
-            let cloned_rx = shutdown_rx.resubscribe();
-            mutexed_tasks.lock().await.spawn(async move {
-                while cloned_rx.is_empty() {
-                    let redis_receiver_clone = redis_receiver.clone();
-                    let cl_rx = cloned_rx.resubscribe();
-                    if let Err(e) = tokio::spawn(async move {
-                        redis_receiver_clone.receive_accounts(cl_rx).await.unwrap()
-                    })
-                    .await
-                    {
-                        error!("redis_receiver accounts panic: {:?}", e);
-                    }
-                }
-                Ok(())
-            });
-        }
-        MessageSource::TCP => {
-            mutexed_tasks.lock().await.spawn(async move {
-                let geyser_tcp_receiver = Arc::new(geyser_tcp_receiver);
-                while cloned_rx.is_empty() {
-                    let geyser_tcp_receiver_clone = geyser_tcp_receiver.clone();
-                    let cl_rx = cloned_rx.resubscribe();
-                    if let Err(e) = tokio::spawn(async move {
-                        geyser_tcp_receiver_clone
-                            .connect(geyser_addr, cl_rx)
-                            .await
-                            .unwrap()
-                    })
-                    .await
-                    {
-                        error!("geyser_tcp_receiver panic: {:?}", e);
-                    }
-                }
-                Ok(())
-            });
-        }
-    };
+            }
+            Ok(())
+        });
+    }
 
     let cloned_rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
@@ -394,17 +356,16 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
 
-    let account_processor = Arc::new(AccountsProcessor::build(
-        config.mplx_buffer_size,
-        rocks_storage.clone(),
-        buffer.clone(),
-        metrics_state.ingester_metrics.clone(),
-    ));
     for _ in 0..config.parsing_workers {
-        let cloned_account_processor = account_processor.clone();
+        let account_processor = AccountsProcessor::build(
+            config.mplx_buffer_size,
+            rocks_storage.clone(),
+            buffer.clone(),
+            metrics_state.ingester_metrics.clone(),
+        );
         let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            cloned_account_processor.process_accounts(cloned_rx).await;
+            account_processor.process_accounts(cloned_rx).await;
             Ok(())
         });
     }

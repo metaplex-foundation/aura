@@ -4,7 +4,8 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use entities::enums::UnprocessedAccount;
-use entities::models::{BufferedTransaction, CoreAssetFee, Task};
+use entities::models::{BufferedTransaction, CoreAssetFee, Task, UnprocessedAccountMessage};
+use interface::error::UsecaseError;
 use interface::signature_persistence::ProcessingDataGetter;
 use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
 use tokio::sync::Mutex;
@@ -61,13 +62,20 @@ impl ProcessingDataGetter for Buffer {
 
 #[async_trait]
 impl UnprocessedAccountsGetter for Buffer {
-    async fn next_account(&self) -> Option<(Pubkey, UnprocessedAccount)> {
+    async fn next_accounts(&self) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError> {
         let mut buffer = self.accounts.lock().await;
-        buffer
+        //todo!
+        Ok(vec![buffer
             .keys()
             .next()
             .cloned()
             .and_then(|key| buffer.remove_entry(&key))
+            .map(|f| UnprocessedAccountMessage {
+                account: f.1,
+                key: f.0,
+                id: "".to_string(),
+            })
+            .unwrap()])
     }
 }
 

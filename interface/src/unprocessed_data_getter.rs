@@ -1,8 +1,8 @@
+use crate::error::UsecaseError;
 use async_trait::async_trait;
-use entities::enums::UnprocessedAccount;
-use solana_program::pubkey::Pubkey;
+use entities::models::UnprocessedAccountMessage;
 
 #[async_trait]
 pub trait UnprocessedAccountsGetter {
-    async fn next_account(&self) -> Option<(Pubkey, UnprocessedAccount)>;
+    async fn next_accounts(&self) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError>;
 }

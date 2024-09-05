@@ -1,7 +1,7 @@
 use crate::enums::{
     BatchMintState, ChainMutability, FailedBatchMintState, OwnerType, PersistingBatchMintState,
     RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TaskStatus,
-    TokenMetadataEdition, TokenStandard, UseMethod,
+    TokenMetadataEdition, TokenStandard, UnprocessedAccount, UseMethod,
 };
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -556,6 +556,13 @@ pub struct CoreAssetFee {
     pub slot_updated: u64,
     pub write_version: u64,
 }
+
+pub struct UnprocessedAccountMessage {
+    pub account: UnprocessedAccount,
+    pub key: Pubkey,
+    pub id: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
