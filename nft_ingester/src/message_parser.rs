@@ -48,7 +48,7 @@ impl MessageParser {
         }
     }
 
-    pub(crate) async fn parse_transaction(
+    pub(crate) fn parse_transaction(
         &self,
         data: Vec<u8>,
         map_flatbuffer: bool,

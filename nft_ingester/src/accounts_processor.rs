@@ -141,8 +141,8 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                     batch = rocksdb::WriteBatchWithTransaction::<false>::default();
                     match write_batch_result {
                         Ok(_) => {
-                            // todo: acking
-                            ack_ids.clear();
+                            self.unprocessed_account_getter
+                                .ack(std::mem::take(&mut ack_ids));
                         }
                         Err(err) => {
                             error!("Write batch: {}", err);
@@ -156,8 +156,8 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 batch = rocksdb::WriteBatchWithTransaction::<false>::default();
                 match write_batch_result {
                     Ok(_) => {
-                        // todo: acking
-                        ack_ids.clear();
+                        self.unprocessed_account_getter
+                            .ack(std::mem::take(&mut ack_ids));
                     }
                     Err(err) => {
                         error!("Write batch: {}", err);

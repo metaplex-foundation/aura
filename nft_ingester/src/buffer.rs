@@ -4,7 +4,9 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use entities::enums::UnprocessedAccount;
-use entities::models::{BufferedTransaction, CoreAssetFee, Task, UnprocessedAccountMessage};
+use entities::models::{
+    BufferedTransaction, BufferedTxWithID, CoreAssetFee, Task, UnprocessedAccountMessage,
+};
 use interface::error::UsecaseError;
 use interface::signature_persistence::ProcessingDataGetter;
 use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
@@ -54,9 +56,17 @@ impl Buffer {
 
 #[async_trait]
 impl ProcessingDataGetter for Buffer {
-    async fn get_processing_transaction(&self) -> Option<BufferedTransaction> {
+    async fn next_transactions(&self) -> Result<Vec<BufferedTxWithID>, UsecaseError> {
         let mut buffer = self.transactions.lock().await;
-        buffer.pop_front()
+        // todo!()
+        Ok(vec![BufferedTxWithID {
+            tx: buffer.pop_front().unwrap(),
+            id: "".to_string(),
+        }])
+    }
+
+    fn ack(&self, _id: String) {
+        return;
     }
 }
 
@@ -76,6 +86,10 @@ impl UnprocessedAccountsGetter for Buffer {
                 id: "".to_string(),
             })
             .unwrap()])
+    }
+
+    fn ack(&self, _ids: Vec<String>) {
+        return;
     }
 }
 

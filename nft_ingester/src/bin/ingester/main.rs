@@ -37,6 +37,7 @@ use metrics_utils::{
     SequenceConsistentGapfillMetricsConfig,
 };
 use nft_ingester::accounts_processor::AccountsProcessor;
+use nft_ingester::ack::create_ack_channel;
 use nft_ingester::api::account_balance::AccountBalanceGetterImpl;
 use nft_ingester::api::service::start_api;
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
@@ -278,10 +279,22 @@ pub async fn main() -> Result<(), IngesterError> {
         config.tcp_config.get_tcp_receiver_reconnect_interval()? * 2,
     );
 
-    let _redis_receiver = Arc::new(RedisReceiver::new(
+    let cloned_rx = shutdown_rx.resubscribe();
+    let ack_channel = create_ack_channel(
+        cloned_rx,
         config.redis_messenger_config.clone(),
-        ConsumptionType::All,
-    ).await.unwrap());
+        mutexed_tasks.clone(),
+    )
+    .await;
+    let _redis_receiver = Arc::new(
+        RedisReceiver::new(
+            config.redis_messenger_config.clone(),
+            ConsumptionType::All,
+            ack_channel.clone(),
+        )
+        .await
+        .unwrap(),
+    );
 
     let snapshot_addr = config.tcp_config.get_snapshot_addr_ingester()?;
     let geyser_addr = config.tcp_config.get_tcp_receiver_addr_ingester()?;
@@ -523,13 +536,24 @@ pub async fn main() -> Result<(), IngesterError> {
     let buffer_clone = buffer.clone();
     mutexed_tasks.lock().await.spawn(async move {
         while cloned_rx.is_empty() {
-            if let Some(tx) = buffer_clone.get_processing_transaction().await {
-                if let Err(e) = geyser_bubblegum_updates_processor
-                    .process_transaction(tx)
+            let txs = match buffer_clone.next_transactions().await {
+                Ok(txs) => txs,
+                Err(err) => {
+                    error!("Get next transactions: {}", err);
+                    tokio::time::sleep(Duration::from_millis(250)).await;
+                    continue;
+                }
+            };
+            for tx in txs {
+                match geyser_bubblegum_updates_processor
+                    .process_transaction(tx.tx)
                     .await
                 {
-                    if e != IngesterError::NotImplemented {
-                        error!("Background saver could not process received data: {}", e);
+                    Ok(_) => buffer_clone.ack(tx.id),
+                    Err(err) => {
+                        if err != IngesterError::NotImplemented {
+                            error!("Background saver could not process received data: {}", err);
+                        }
                     }
                 }
             }

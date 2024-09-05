@@ -563,6 +563,11 @@ pub struct UnprocessedAccountMessage {
     pub id: String,
 }
 
+pub struct BufferedTxWithID {
+    pub tx: BufferedTransaction,
+    pub id: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::error::{BlockConsumeError, StorageError};
+use crate::error::{BlockConsumeError, StorageError, UsecaseError};
 use async_trait::async_trait;
-use entities::models::{BufferedTransaction, SignatureWithSlot};
+use entities::models::{BufferedTransaction, BufferedTxWithID, SignatureWithSlot};
 use mockall::automock;
 use solana_sdk::pubkey::Pubkey;
 
@@ -37,7 +37,8 @@ pub trait TransactionIngester: Sync + Send + 'static {
 }
 #[async_trait]
 pub trait ProcessingDataGetter {
-    async fn get_processing_transaction(&self) -> Option<BufferedTransaction>;
+    async fn next_transactions(&self) -> Result<Vec<BufferedTxWithID>, UsecaseError>;
+    fn ack(&self, id: String);
 }
 
 #[async_trait]

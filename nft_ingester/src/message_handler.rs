@@ -127,7 +127,7 @@ impl MessageHandler for MessageHandlerIngester {
             BYTE_PREFIX_TX_SIMPLE_FINALIZED
             | BYTE_PREFIX_TX_FINALIZED
             | BYTE_PREFIX_TX_PROCESSED => {
-                let Some(tx) = self.message_parser.parse_transaction(data, true).await else {
+                let Some(tx) = self.message_parser.parse_transaction(data, true) else {
                     return;
                 };
                 let mut res = self.buffer.transactions.lock().await;
