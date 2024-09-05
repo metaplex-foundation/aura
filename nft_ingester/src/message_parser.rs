@@ -15,6 +15,7 @@ use chrono::Utc;
 use entities::enums::UnprocessedAccount;
 use entities::models::{BufferedTransaction, EditionV1, MasterEdition};
 use flatbuffers::FlatBufferBuilder;
+use itertools::Itertools;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
 use std::fmt::Debug;
@@ -30,9 +31,15 @@ pub struct MessageParser {
 }
 
 pub struct UnprocessedAccountWithMetadata {
-    pub unprocessed_account: Option<UnprocessedAccount>,
+    pub unprocessed_account: UnprocessedAccount,
     pub pubkey: Pubkey,
     pub write_version: u64,
+}
+
+impl Default for MessageParser {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MessageParser {
@@ -75,7 +82,7 @@ impl MessageParser {
         &self,
         data: Vec<u8>,
         map_flatbuffer: bool,
-    ) -> Result<UnprocessedAccountWithMetadata, IngesterError> {
+    ) -> Result<Vec<UnprocessedAccountWithMetadata>, IngesterError> {
         let account_info_bytes = if map_flatbuffer {
             let account_update =
                 utils::flatbuffer::account_info_generated::account_info::root_as_account_info(
@@ -95,23 +102,35 @@ impl MessageParser {
 
         // do not use match expression
         // because match cases cannot contain function calls like spl_token::id()
-        let account = if account_owner == spl_token::id() {
-            self.handle_spl_token_account(&account_info).await
+        let accounts = if account_owner == spl_token::id() {
+            self.handle_spl_token_account(&account_info)
+                .await
+                .into_iter()
+                .collect_vec()
         } else if account_owner == blockbuster::programs::token_metadata::token_metadata_id() {
-            self.handle_token_metadata_account(&account_info).await
+            self.handle_token_metadata_account(&account_info)
+                .await
+                .into_iter()
+                .collect_vec()
         } else if account_owner == self.mpl_core_parser.key() {
             self.handle_mpl_core_account(&account_info).await
         } else if account_owner == libreplex_inscriptions::id() {
-            self.handle_inscription_account(&account_info).await
+            self.handle_inscription_account(&account_info)
+                .await
+                .into_iter()
+                .collect_vec()
         } else {
-            None
+            Vec::new()
         };
 
-        Ok(UnprocessedAccountWithMetadata {
-            unprocessed_account: account,
-            pubkey: account_info.pubkey,
-            write_version: account_info.write_version,
-        })
+        Ok(accounts
+            .into_iter()
+            .map(|account| UnprocessedAccountWithMetadata {
+                unprocessed_account: account,
+                pubkey: account_info.pubkey,
+                write_version: account_info.write_version,
+            })
+            .collect())
     }
 
     async fn handle_spl_token_account(
@@ -144,7 +163,7 @@ impl MessageParser {
             }
         }
 
-        return None;
+        None
     }
 
     async fn parse_spl_accounts(
@@ -153,7 +172,7 @@ impl MessageParser {
         parsing_result: &TokenProgramAccount,
     ) -> UnprocessedAccount {
         let key = account_update.pubkey;
-        return match &parsing_result {
+        match &parsing_result {
             TokenProgramAccount::TokenAccount(ta) => {
                 let frozen = matches!(ta.state, spl_token::state::AccountState::Frozen);
                 UnprocessedAccount::Token(entities::models::TokenAccount {
@@ -177,7 +196,7 @@ impl MessageParser {
                 freeze_authority: m.freeze_authority.into(),
                 write_version: account_update.write_version,
             }),
-        };
+        }
     }
 
     async fn handle_token_metadata_account(
@@ -279,13 +298,13 @@ impl MessageParser {
             },
         }
 
-        return None;
+        None
     }
 
     async fn handle_mpl_core_account<'a>(
         &self,
         account_info: &plerkle::AccountInfo,
-    ) -> Option<UnprocessedAccount> {
+    ) -> Vec<UnprocessedAccount> {
         let acc_parse_result = self
             .mpl_core_parser
             .handle_account(account_info.data.as_slice());
@@ -306,7 +325,7 @@ impl MessageParser {
             }
         }
 
-        return None;
+        Vec::new()
     }
 
     pub async fn handle_inscription_account<'a>(
@@ -343,39 +362,51 @@ impl MessageParser {
             }
         }
 
-        return None;
+        None
     }
 
     async fn parse_mpl_core_accounts(
         &self,
         account_update: &plerkle::AccountInfo,
         parsing_result: &MplCoreAccountState,
-    ) -> Option<UnprocessedAccount> {
+    ) -> Vec<UnprocessedAccount> {
+        let mut response = Vec::new();
         match &parsing_result.data {
-            MplCoreAccountData::EmptyAccount => {
-                return Some(UnprocessedAccount::BurnMplCore(
-                    entities::models::BurntMetadataSlot {
-                        slot_updated: account_update.slot,
-                        write_version: account_update.write_version,
-                    },
-                ))
-            }
-            MplCoreAccountData::Asset(_) | MplCoreAccountData::Collection(_) => {
-                return Some(UnprocessedAccount::MplCore(
-                    entities::models::IndexableAssetWithAccountInfo {
-                        indexable_asset: parsing_result.data.clone(),
-                        slot_updated: account_update.slot,
-                        write_version: account_update.write_version,
-                        lamports: account_update.lamports,
-                        executable: account_update.executable,
-                        rent_epoch: account_update.rent_epoch,
-                    },
-                ))
-            }
+            MplCoreAccountData::EmptyAccount => response.push(UnprocessedAccount::BurnMplCore(
+                entities::models::BurntMetadataSlot {
+                    slot_updated: account_update.slot,
+                    write_version: account_update.write_version,
+                },
+            )),
+            MplCoreAccountData::Asset(_) | MplCoreAccountData::Collection(_) => response.push(
+                UnprocessedAccount::MplCore(entities::models::IndexableAssetWithAccountInfo {
+                    indexable_asset: parsing_result.data.clone(),
+                    slot_updated: account_update.slot,
+                    write_version: account_update.write_version,
+                    lamports: account_update.lamports,
+                    executable: account_update.executable,
+                    rent_epoch: account_update.rent_epoch,
+                }),
+            ),
             _ => debug!("Not implemented"),
         };
+        match &parsing_result.data {
+            MplCoreAccountData::Asset(_)
+            | MplCoreAccountData::EmptyAccount
+            | MplCoreAccountData::HashedAsset => response.push(UnprocessedAccount::MplCoreFee(
+                entities::models::CoreAssetFee {
+                    indexable_asset: parsing_result.data.clone(),
+                    data: account_update.data.clone(),
+                    slot_updated: account_update.slot,
+                    write_version: account_update.write_version,
+                    lamports: account_update.lamports,
+                    rent_epoch: account_update.rent_epoch,
+                },
+            )),
+            _ => {}
+        };
 
-        return None;
+        response
     }
 }
 

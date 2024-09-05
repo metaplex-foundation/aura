@@ -29,11 +29,12 @@ use tracing::{error, info, warn};
 use backfill_rpc::rpc::BackfillRPC;
 use grpc::client::Client;
 use interface::error::{StorageError, UsecaseError};
-use interface::signature_persistence::{BlockProducer, ProcessingDataGetter};
+use interface::signature_persistence::{BlockProducer, UnprocessedTransactionsGetter};
 use interface::slots_dumper::SlotsDumper;
+use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{
-    BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait,
+    BackfillerMetricsConfig, IngesterMetricsConfig, MetricState, MetricStatus, MetricsTrait,
     SequenceConsistentGapfillMetricsConfig,
 };
 use nft_ingester::accounts_processor::AccountsProcessor;
@@ -286,15 +287,6 @@ pub async fn main() -> Result<(), IngesterError> {
         mutexed_tasks.clone(),
     )
     .await;
-    let _redis_receiver = Arc::new(
-        RedisReceiver::new(
-            config.redis_messenger_config.clone(),
-            ConsumptionType::All,
-            ack_channel.clone(),
-        )
-        .await
-        .unwrap(),
-    );
 
     let snapshot_addr = config.tcp_config.get_snapshot_addr_ingester()?;
     let geyser_addr = config.tcp_config.get_tcp_receiver_addr_ingester()?;
@@ -370,17 +362,39 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     for _ in 0..config.parsing_workers {
-        let account_processor = AccountsProcessor::build(
-            config.mplx_buffer_size,
-            rocks_storage.clone(),
-            buffer.clone(),
-            metrics_state.ingester_metrics.clone(),
-        );
-        let cloned_rx = shutdown_rx.resubscribe();
-        mutexed_tasks.lock().await.spawn(async move {
-            account_processor.process_accounts(cloned_rx).await;
-            Ok(())
-        });
+        match config.message_source {
+            MessageSource::Redis => {
+                let redis_receiver = Arc::new(
+                    RedisReceiver::new(
+                        config.redis_messenger_config.clone(),
+                        ConsumptionType::All,
+                        ack_channel.clone(),
+                    )
+                    .await
+                    .unwrap(),
+                );
+                run_accounts_processor(
+                    shutdown_rx.resubscribe(),
+                    mutexed_tasks.clone(),
+                    redis_receiver,
+                    rocks_storage.clone(),
+                    config.mplx_buffer_size,
+                    metrics_state.ingester_metrics.clone(),
+                )
+                .await;
+            }
+            MessageSource::TCP => {
+                run_accounts_processor(
+                    shutdown_rx.resubscribe(),
+                    mutexed_tasks.clone(),
+                    buffer.clone(),
+                    rocks_storage.clone(),
+                    config.mplx_buffer_size,
+                    metrics_state.ingester_metrics.clone(),
+                )
+                .await;
+            }
+        }
     }
 
     let first_processed_slot = Arc::new(AtomicU64::new(0));
@@ -532,35 +546,37 @@ pub async fn main() -> Result<(), IngesterError> {
         buffer.json_tasks.clone(),
     ));
 
-    let cloned_rx = shutdown_rx.resubscribe();
-    let buffer_clone = buffer.clone();
-    mutexed_tasks.lock().await.spawn(async move {
-        while cloned_rx.is_empty() {
-            let txs = match buffer_clone.next_transactions().await {
-                Ok(txs) => txs,
-                Err(err) => {
-                    error!("Get next transactions: {}", err);
-                    tokio::time::sleep(Duration::from_millis(250)).await;
-                    continue;
-                }
-            };
-            for tx in txs {
-                match geyser_bubblegum_updates_processor
-                    .process_transaction(tx.tx)
+    for _ in 0..config.parsing_workers {
+        match config.message_source {
+            MessageSource::Redis => {
+                let redis_receiver = Arc::new(
+                    RedisReceiver::new(
+                        config.redis_messenger_config.clone(),
+                        ConsumptionType::All,
+                        ack_channel.clone(),
+                    )
                     .await
-                {
-                    Ok(_) => buffer_clone.ack(tx.id),
-                    Err(err) => {
-                        if err != IngesterError::NotImplemented {
-                            error!("Background saver could not process received data: {}", err);
-                        }
-                    }
-                }
+                    .unwrap(),
+                );
+                run_transaction_processor(
+                    shutdown_rx.resubscribe(),
+                    mutexed_tasks.clone(),
+                    redis_receiver,
+                    geyser_bubblegum_updates_processor.clone(),
+                )
+                .await;
+            }
+            MessageSource::TCP => {
+                run_transaction_processor(
+                    shutdown_rx.resubscribe(),
+                    mutexed_tasks.clone(),
+                    buffer.clone(),
+                    geyser_bubblegum_updates_processor.clone(),
+                )
+                .await;
             }
         }
-
-        Ok(())
-    });
+    }
 
     let cloned_rx = shutdown_rx.resubscribe();
     let cloned_js = json_processor.clone();
@@ -1043,6 +1059,61 @@ async fn run_sequence_consistent_gapfiller<T, R>(
                 };
         }
 
+        Ok(())
+    });
+}
+
+async fn run_transaction_processor<TG: UnprocessedTransactionsGetter + Send + Sync + 'static>(
+    rx: Receiver<()>,
+    mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    unprocessed_transactions_getter: Arc<TG>,
+    geyser_bubblegum_updates_processor: Arc<BubblegumTxProcessor>,
+) {
+    mutexed_tasks.lock().await.spawn(async move {
+        while rx.is_empty() {
+            let txs = match unprocessed_transactions_getter.next_transactions().await {
+                Ok(txs) => txs,
+                Err(err) => {
+                    error!("Get next transactions: {}", err);
+                    tokio::time::sleep(Duration::from_millis(250)).await;
+                    continue;
+                }
+            };
+            for tx in txs {
+                match geyser_bubblegum_updates_processor
+                    .process_transaction(tx.tx)
+                    .await
+                {
+                    Ok(_) => unprocessed_transactions_getter.ack(tx.id),
+                    Err(err) => {
+                        if err != IngesterError::NotImplemented {
+                            error!("Background saver could not process received data: {}", err);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    });
+}
+
+async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send + 'static>(
+    rx: Receiver<()>,
+    mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    unprocessed_transactions_getter: Arc<AG>,
+    rocks_storage: Arc<Storage>,
+    buffer_size: usize,
+    metrics: Arc<IngesterMetricsConfig>,
+) {
+    let account_processor = AccountsProcessor::build(
+        buffer_size,
+        rocks_storage,
+        unprocessed_transactions_getter,
+        metrics,
+    );
+    mutexed_tasks.lock().await.spawn(async move {
+        account_processor.process_accounts(rx).await;
         Ok(())
     });
 }

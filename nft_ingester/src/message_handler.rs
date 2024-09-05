@@ -1,29 +1,14 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
-use std::fmt::Debug;
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
-use blockbuster::programs::mpl_core_program::{
-    MplCoreAccountData, MplCoreAccountState, MplCoreParser,
-};
-use blockbuster::{
-    program_handler::ProgramParser,
-    programs::{
-        token_metadata::{TokenMetadataAccountData, TokenMetadataParser},
-        ProgramParseResult,
-    },
-};
 use entities::enums::UnprocessedAccount;
-use flatbuffers::FlatBufferBuilder;
-use solana_program::program_pack::Pack;
 use solana_sdk::pubkey::Pubkey;
 use tokio::sync::Mutex;
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::buffer::Buffer;
-use crate::error::IngesterError;
 use crate::message_parser::MessageParser;
-use crate::plerkle;
 use interface::message_handler::MessageHandler;
 
 const BYTE_PREFIX_TX_SIMPLE_FINALIZED: u8 = 22;
@@ -87,6 +72,11 @@ async fn update_or_insert_account(
                     o.insert(account);
                 }
             }
+            UnprocessedAccount::MplCoreFee(entity) => {
+                if entity.write_version < write_version {
+                    o.insert(account);
+                }
+            }
         },
         std::collections::hash_map::Entry::Vacant(v) => {
             v.insert(account);
@@ -108,11 +98,11 @@ impl MessageHandler for MessageHandlerIngester {
         match prefix {
             BYTE_PREFIX_ACCOUNT_FINALIZED | BYTE_PREFIX_ACCOUNT_PROCESSED => {
                 match self.message_parser.parse_account(data, true).await {
-                    Ok(account) => {
-                        if let Some(unprocessed_account) = account.unprocessed_account {
+                    Ok(accounts) => {
+                        for account in accounts {
                             update_or_insert_account(
                                 &self.buffer.accounts,
-                                unprocessed_account,
+                                account.unprocessed_account,
                                 account.pubkey,
                                 account.write_version,
                             )
@@ -146,118 +136,6 @@ impl MessageHandlerIngester {
             buffer,
             message_parser,
         }
-    }
-}
-
-pub struct MessageHandlerCoreIndexing {
-    mpl_core_parser: Arc<MplCoreParser>,
-}
-
-#[async_trait]
-impl MessageHandler for MessageHandlerCoreIndexing {
-    async fn call(&self, msg: Vec<u8>) {
-        let prefix = msg[0];
-        let data = msg[1..].to_vec();
-
-        match prefix {
-            BYTE_PREFIX_ACCOUNT_FINALIZED | BYTE_PREFIX_ACCOUNT_PROCESSED => {
-                if let Err(err) = self.handle_account(data, true).await {
-                    error!("handle_account: {:?}", err)
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-impl Default for MessageHandlerCoreIndexing {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl MessageHandlerCoreIndexing {
-    pub fn new() -> Self {
-        Self {
-            mpl_core_parser: Arc::new(MplCoreParser {}),
-        }
-    }
-
-    async fn handle_account(
-        &self,
-        data: Vec<u8>,
-        map_flatbuffer: bool,
-    ) -> Result<(), IngesterError> {
-        // let account_info_bytes = if map_flatbuffer {
-        //     let account_update =
-        //         utils::flatbuffer::account_info_generated::account_info::root_as_account_info(
-        //             &data,
-        //         )?;
-        //     map_account_info_fb_bytes(account_update)?
-        // } else {
-        //     data
-        // };
-        // let account_info = plerkle_serialization::root_as_account_info(account_info_bytes.as_ref())
-        //     .map_err(|e| IngesterError::AccountParsingError(e.to_string()))
-        //     .unwrap();
-        //
-        // let account_info: plerkle::AccountInfo = PlerkleAccountInfo(account_info).try_into()?;
-        // let account_owner = account_info.owner;
-        // if account_owner == self.mpl_core_parser.key() {
-        //     self.handle_mpl_core_account(&account_info).await;
-        // }
-
-        Ok(())
-    }
-
-    async fn handle_mpl_core_account<'a>(&self, account_info: &plerkle::AccountInfo) {
-        // let acc_parse_result = self
-        //     .mpl_core_parser
-        //     .handle_account(account_info.data.as_slice());
-        // match acc_parse_result {
-        //     Ok(acc_parsed) => {
-        //         let concrete = acc_parsed.result_type();
-        //         match concrete {
-        //             ProgramParseResult::MplCore(parsing_result) => {
-        //                 self.write_mpl_core_accounts_to_buffer(account_info, parsing_result)
-        //                     .await
-        //             }
-        //             _ => debug!("\nUnexpected message\n"),
-        //         };
-        //     }
-        //     Err(e) => {
-        //         account_parsing_error(e, account_info);
-        //     }
-        // }
-    }
-
-    async fn write_mpl_core_accounts_to_buffer(
-        &self,
-        account_update: &plerkle::AccountInfo,
-        parsing_result: &MplCoreAccountState,
-    ) {
-        let _key = account_update.pubkey;
-        match &parsing_result.data {
-            MplCoreAccountData::Asset(_)
-            | MplCoreAccountData::EmptyAccount
-            | MplCoreAccountData::HashedAsset => {
-                // update_or_insert_account(
-                //     &self.buffer.accounts,
-                //     UnprocessedAccount::MplCoreFee(entities::models::CoreAssetFee {
-                //         indexable_asset: parsing_result.data.clone(),
-                //         data: account_update.data.clone(),
-                //         slot_updated: account_update.slot,
-                //         write_version: account_update.write_version,
-                //         lamports: account_update.lamports,
-                //         rent_epoch: account_update.rent_epoch,
-                //     }),
-                //     key,
-                //     account_update.write_version,
-                // )
-                // .await;
-            }
-            _ => debug!("Not implemented"),
-        };
     }
 }
 

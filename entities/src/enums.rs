@@ -1,5 +1,5 @@
 use crate::models::{
-    BurntMetadataSlot, EditionMetadata, EditionV1, IndexableAssetWithAccountInfo,
+    BurntMetadataSlot, CoreAssetFee, EditionMetadata, EditionV1, IndexableAssetWithAccountInfo,
     InscriptionDataInfo, InscriptionInfo, MasterEdition, MetadataInfo, Mint, TokenAccount,
 };
 use num_derive::FromPrimitive;
@@ -369,4 +369,5 @@ pub enum UnprocessedAccount {
     MplCore(IndexableAssetWithAccountInfo),
     Inscription(InscriptionInfo),
     InscriptionData(InscriptionDataInfo),
+    MplCoreFee(CoreAssetFee),
 }

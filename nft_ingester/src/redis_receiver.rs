@@ -1,10 +1,11 @@
 use crate::error::IngesterError;
 use crate::message_parser::MessageParser;
 use async_trait::async_trait;
-use entities::models::{BufferedTransaction, BufferedTxWithID, UnprocessedAccountMessage};
+use entities::models::{BufferedTxWithID, UnprocessedAccountMessage};
 use interface::error::UsecaseError;
-use interface::signature_persistence::ProcessingDataGetter;
+use interface::signature_persistence::UnprocessedTransactionsGetter;
 use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
+use num_traits::Zero;
 use plerkle_messenger::redis_messenger::RedisMessenger;
 use plerkle_messenger::{
     ConsumptionType, Messenger, MessengerConfig, ACCOUNT_STREAM, TRANSACTION_STREAM,
@@ -39,7 +40,7 @@ impl RedisReceiver {
 }
 
 #[async_trait]
-impl ProcessingDataGetter for RedisReceiver {
+impl UnprocessedTransactionsGetter for RedisReceiver {
     async fn next_transactions(&self) -> Result<Vec<BufferedTxWithID>, UsecaseError> {
         let recv_data = self
             .messanger
@@ -78,16 +79,21 @@ impl UnprocessedAccountsGetter for RedisReceiver {
         let mut result = Vec::new();
         for item in recv_data {
             match self.message_parser.parse_account(item.data, false).await {
-                Ok(parsed_account) => {
-                    parsed_account
-                        .unprocessed_account
-                        .map(|unprocessed_account| {
-                            result.push(UnprocessedAccountMessage {
-                                account: unprocessed_account,
-                                key: parsed_account.pubkey,
-                                id: item.id,
-                            })
+                Ok(accounts) => {
+                    for (i, account) in accounts.into_iter().enumerate() {
+                        // no need to ack same element twice
+                        let id = if i.is_zero() {
+                            item.id.clone()
+                        } else {
+                            String::new()
+                        };
+
+                        result.push(UnprocessedAccountMessage {
+                            account: account.unprocessed_account,
+                            key: account.pubkey,
+                            id,
                         });
+                    }
                 }
                 Err(err) => {
                     error!("Parsing account: {}", err)
@@ -100,6 +106,9 @@ impl UnprocessedAccountsGetter for RedisReceiver {
 
     fn ack(&self, ids: Vec<String>) {
         for id in ids {
+            if id.is_empty() {
+                continue;
+            }
             let send = self.ack_channel.send((ACCOUNT_STREAM, id));
             if let Err(err) = send {
                 error!("Account stream ack error: {}", err);

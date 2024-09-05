@@ -1,4 +1,3 @@
-use crate::buffer::FeesBuffer;
 use crate::error::IngesterError;
 use entities::models::{CoreAssetFee, CoreFee};
 use metrics_utils::IngesterMetricsConfig;
@@ -22,7 +21,7 @@ const FETCH_RENT_INTERVAL: Duration = Duration::from_secs(60 * 60 * 24);
 pub struct MplCoreFeeProcessor {
     pub storage: Arc<PgClient>,
     pub batch_size: usize,
-    pub buffer: Arc<FeesBuffer>,
+    // pub buffer: Arc<FeesBuffer>,
     pub metrics: Arc<IngesterMetricsConfig>,
     rpc_client: Arc<RpcClient>,
     rent: Arc<RwLock<Rent>>,
@@ -32,7 +31,7 @@ pub struct MplCoreFeeProcessor {
 impl MplCoreFeeProcessor {
     pub async fn build(
         storage: Arc<PgClient>,
-        buffer: Arc<FeesBuffer>,
+        // buffer: Arc<FeesBuffer>,
         metrics: Arc<IngesterMetricsConfig>,
         rpc_client: Arc<RpcClient>,
         join_set: Arc<Mutex<JoinSet<Result<(), tokio::task::JoinError>>>>,
@@ -42,7 +41,7 @@ impl MplCoreFeeProcessor {
         let rent: Rent = bincode::deserialize(&rent_account.data)?;
         Ok(Self {
             storage,
-            buffer,
+            // buffer,
             batch_size,
             metrics,
             rpc_client,

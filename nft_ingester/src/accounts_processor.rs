@@ -130,6 +130,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                             &inscription_data,
                         )
                     }
+                    UnprocessedAccount::MplCoreFee(_) => todo!(),
                 };
                 if let Err(err) = processing_result {
                     error!("Processing account {}: {}", unprocessed_account.key, err);

@@ -4,11 +4,9 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use entities::enums::UnprocessedAccount;
-use entities::models::{
-    BufferedTransaction, BufferedTxWithID, CoreAssetFee, Task, UnprocessedAccountMessage,
-};
+use entities::models::{BufferedTransaction, BufferedTxWithID, Task, UnprocessedAccountMessage};
 use interface::error::UsecaseError;
-use interface::signature_persistence::ProcessingDataGetter;
+use interface::signature_persistence::UnprocessedTransactionsGetter;
 use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
 use tokio::sync::Mutex;
 use tonic::async_trait;
@@ -55,7 +53,7 @@ impl Buffer {
 }
 
 #[async_trait]
-impl ProcessingDataGetter for Buffer {
+impl UnprocessedTransactionsGetter for Buffer {
     async fn next_transactions(&self) -> Result<Vec<BufferedTxWithID>, UsecaseError> {
         let mut buffer = self.transactions.lock().await;
         // todo!()
@@ -65,9 +63,7 @@ impl ProcessingDataGetter for Buffer {
         }])
     }
 
-    fn ack(&self, _id: String) {
-        return;
-    }
+    fn ack(&self, _id: String) {}
 }
 
 #[async_trait]
@@ -88,21 +84,5 @@ impl UnprocessedAccountsGetter for Buffer {
             .unwrap()])
     }
 
-    fn ack(&self, _ids: Vec<String>) {
-        return;
-    }
-}
-
-#[derive(Default)]
-pub struct FeesBuffer {
-    pub mpl_core_fee_assets: Mutex<HashMap<Pubkey, CoreAssetFee>>,
-    pub accounts: Mutex<HashMap<Pubkey, UnprocessedAccount>>,
-}
-impl FeesBuffer {
-    pub fn new() -> Self {
-        Self {
-            mpl_core_fee_assets: Mutex::new(HashMap::new()),
-            accounts: Mutex::new(HashMap::new()),
-        }
-    }
+    fn ack(&self, _ids: Vec<String>) {}
 }

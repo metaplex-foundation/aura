@@ -13,7 +13,7 @@ use tokio::{
 use tracing::log::error;
 
 pub async fn create_ack_channel(
-    rx: Receiver<()>,
+    shutdown_rx: Receiver<()>,
     config: MessengerConfig,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 ) -> UnboundedSender<(&'static str, String)> {
@@ -23,13 +23,12 @@ pub async fn create_ack_channel(
         let mut acks: HashMap<&str, Vec<String>> = HashMap::new();
         let source = RedisMessenger::new(config).await;
         if let Ok(mut msg) = source {
-            while rx.is_empty() {
+            while shutdown_rx.is_empty() {
                 tokio::select! {
                     _ = interval.tick() => {
                         if acks.is_empty() {
                             continue;
                         }
-                        let len = acks.len();
                         for (stream, msgs)  in acks.iter_mut() {
                             if let Err(e) = msg.ack_msg(stream, msgs).await {
                                 error!("Error acking message: {}", e);

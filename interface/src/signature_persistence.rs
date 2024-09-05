@@ -36,7 +36,7 @@ pub trait TransactionIngester: Sync + Send + 'static {
     async fn ingest_transaction(&self, tx: BufferedTransaction) -> Result<(), StorageError>;
 }
 #[async_trait]
-pub trait ProcessingDataGetter {
+pub trait UnprocessedTransactionsGetter {
     async fn next_transactions(&self) -> Result<Vec<BufferedTxWithID>, UsecaseError>;
     fn ack(&self, id: String);
 }
