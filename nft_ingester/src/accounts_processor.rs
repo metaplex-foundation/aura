@@ -1,13 +1,20 @@
+use crate::error::IngesterError;
 use crate::inscriptions_processor::InscriptionsProcessor;
+use crate::mpl_core_fee_indexing_processor::MplCoreFeeProcessor;
 use crate::mpl_core_processor::MplCoreProcessor;
 use crate::mplx_updates_processor::MplxAccountsProcessor;
 use crate::token_updates_processor::TokenAccountsProcessor;
 use entities::enums::UnprocessedAccount;
 use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
 use metrics_utils::IngesterMetricsConfig;
+use postgre_client::PgClient;
 use rocks_db::Storage;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
+use tokio::sync::Mutex;
+use tokio::task::JoinSet;
 use tracing::error;
 
 // interval after which buffer is flushed
@@ -17,23 +24,30 @@ const _FLUSH_INTERVAL_SEC: u64 = 5;
 
 #[derive(Clone)]
 pub struct AccountsProcessor<T: UnprocessedAccountsGetter> {
-    pub batch_size: usize,
-    pub rocks_db: Arc<Storage>,
-    pub unprocessed_account_getter: Arc<T>,
-    pub metrics: Arc<IngesterMetricsConfig>,
+    accounts_batch_size: usize,
+    fees_batch_size: usize,
+    rocks_db: Arc<Storage>,
+    unprocessed_account_getter: Arc<T>,
     mplx_accounts_processor: Arc<MplxAccountsProcessor>,
     token_accounts_processor: Arc<TokenAccountsProcessor>,
     mpl_core_processor: Arc<MplCoreProcessor>,
     inscription_processor: Arc<InscriptionsProcessor>,
+    core_fees_processor: Arc<MplCoreFeeProcessor>,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
-    pub fn build(
-        batch_size: usize,
+    pub async fn build(
+        rx: Receiver<()>,
+        accounts_batch_size: usize,
+        fees_batch_size: usize,
         rocks_db: Arc<Storage>,
         unprocessed_account_getter: Arc<T>,
         metrics: Arc<IngesterMetricsConfig>,
-    ) -> Self {
+        postgre_client: Arc<PgClient>,
+        rpc_client: Arc<RpcClient>,
+        join_set: Arc<Mutex<JoinSet<Result<(), tokio::task::JoinError>>>>,
+    ) -> Result<Self, IngesterError> {
         let mplx_accounts_processor = Arc::new(MplxAccountsProcessor::new(
             rocks_db.clone(),
             metrics.clone(),
@@ -47,21 +61,28 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             rocks_db.clone(),
             metrics.clone(),
         ));
+        let core_fees_processor = Arc::new(
+            MplCoreFeeProcessor::build(postgre_client, metrics.clone(), rpc_client, join_set)
+                .await?,
+        );
+        core_fees_processor.update_rent(rx).await;
 
-        Self {
-            batch_size,
+        Ok(Self {
+            accounts_batch_size,
+            fees_batch_size,
             rocks_db,
             unprocessed_account_getter,
-            metrics,
             mplx_accounts_processor,
             token_accounts_processor,
             mpl_core_processor,
             inscription_processor,
-        }
+            core_fees_processor,
+        })
     }
 
     pub async fn process_accounts(&self, rx: Receiver<()>) {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        let mut core_fees = HashMap::new();
         let mut ack_ids = Vec::new();
         while rx.is_empty() {
             let unprocessed_accounts = match self.unprocessed_account_getter.next_accounts().await {
@@ -130,14 +151,17 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                             &inscription_data,
                         )
                     }
-                    UnprocessedAccount::MplCoreFee(_) => todo!(),
+                    UnprocessedAccount::MplCoreFee(core_fee) => {
+                        core_fees.insert(unprocessed_account.key, core_fee);
+                        Ok(())
+                    }
                 };
                 if let Err(err) = processing_result {
                     error!("Processing account {}: {}", unprocessed_account.key, err);
                     continue;
                 }
                 ack_ids.push(unprocessed_account.id);
-                if batch.len() >= self.batch_size {
+                if batch.len() >= self.accounts_batch_size {
                     let write_batch_result = self.rocks_db.db.write(batch);
                     batch = rocksdb::WriteBatchWithTransaction::<false>::default();
                     match write_batch_result {
@@ -151,21 +175,27 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                         }
                     }
                 }
-            }
-            if batch.len() >= self.batch_size {
-                let write_batch_result = self.rocks_db.db.write(batch);
-                batch = rocksdb::WriteBatchWithTransaction::<false>::default();
-                match write_batch_result {
-                    Ok(_) => {
-                        self.unprocessed_account_getter
-                            .ack(std::mem::take(&mut ack_ids));
-                    }
-                    Err(err) => {
-                        error!("Write batch: {}", err);
-                        ack_ids.clear();
-                    }
+                if core_fees.len() > self.fees_batch_size {
+                    self.core_fees_processor
+                        .store_mpl_assets_fee(&std::mem::take(&mut core_fees))
+                        .await;
                 }
             }
+            let write_batch_result = self.rocks_db.db.write(batch);
+            batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+            match write_batch_result {
+                Ok(_) => {
+                    self.unprocessed_account_getter
+                        .ack(std::mem::take(&mut ack_ids));
+                }
+                Err(err) => {
+                    error!("Write batch: {}", err);
+                    ack_ids.clear();
+                }
+            }
+            self.core_fees_processor
+                .store_mpl_assets_fee(&std::mem::take(&mut core_fees))
+                .await;
         }
     }
 }

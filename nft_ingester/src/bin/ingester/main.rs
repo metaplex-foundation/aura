@@ -338,8 +338,10 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_metrics = metrics_state.ingester_metrics.clone();
     mutexed_tasks.lock().await.spawn(async move {
         while cloned_rx.is_empty() {
-            cloned_buffer.debug().await;
-            cloned_buffer.capture_metrics(&cloned_metrics).await;
+            if matches!(config.message_source, MessageSource::TCP) {
+                cloned_buffer.debug().await;
+                cloned_buffer.capture_metrics(&cloned_metrics).await;
+            }
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
 
@@ -361,6 +363,7 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
 
+    let rpc_client = Arc::new(RpcClient::new(config.rpc_host.clone()));
     for _ in 0..config.parsing_workers {
         match config.message_source {
             MessageSource::Redis => {
@@ -378,8 +381,12 @@ pub async fn main() -> Result<(), IngesterError> {
                     mutexed_tasks.clone(),
                     redis_receiver,
                     rocks_storage.clone(),
-                    config.mplx_buffer_size,
+                    config.accounts_buffer_size,
+                    config.mpl_core_fees_buffer_size,
                     metrics_state.ingester_metrics.clone(),
+                    index_storage.clone(),
+                    rpc_client.clone(),
+                    mutexed_tasks.clone(),
                 )
                 .await;
             }
@@ -389,8 +396,12 @@ pub async fn main() -> Result<(), IngesterError> {
                     mutexed_tasks.clone(),
                     buffer.clone(),
                     rocks_storage.clone(),
-                    config.mplx_buffer_size,
+                    config.accounts_buffer_size,
+                    config.mpl_core_fees_buffer_size,
                     metrics_state.ingester_metrics.clone(),
+                    index_storage.clone(),
+                    rpc_client.clone(),
+                    mutexed_tasks.clone(),
                 )
                 .await;
             }
@@ -487,7 +498,6 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let cloned_rocks_storage = rocks_storage.clone();
     let cloned_api_metrics = metrics_state.api_metrics.clone();
-    let rpc_client = Arc::new(RpcClient::new(config.rpc_host.clone()));
     let account_balance_getter = Arc::new(AccountBalanceGetterImpl::new(rpc_client.clone()));
     let proof_checker = config
         .check_proofs
@@ -1098,20 +1108,32 @@ async fn run_transaction_processor<TG: UnprocessedTransactionsGetter + Send + Sy
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send + 'static>(
     rx: Receiver<()>,
     mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     unprocessed_transactions_getter: Arc<AG>,
     rocks_storage: Arc<Storage>,
-    buffer_size: usize,
+    account_buffer_size: usize,
+    fees_buffer_size: usize,
     metrics: Arc<IngesterMetricsConfig>,
+    postgre_client: Arc<PgClient>,
+    rpc_client: Arc<RpcClient>,
+    join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 ) {
     let account_processor = AccountsProcessor::build(
-        buffer_size,
+        rx.resubscribe(),
+        account_buffer_size,
+        fees_buffer_size,
         rocks_storage,
         unprocessed_transactions_getter,
         metrics,
-    );
+        postgre_client,
+        rpc_client,
+        join_set,
+    )
+    .await
+    .unwrap();
     mutexed_tasks.lock().await.spawn(async move {
         account_processor.process_accounts(rx).await;
         Ok(())

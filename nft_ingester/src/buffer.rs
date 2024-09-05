@@ -14,6 +14,9 @@ use tracing::log::info;
 
 use metrics_utils::IngesterMetricsConfig;
 
+const ACCOUNT_BATCH_SIZE: usize = 50;
+const TXS_BATCH_SIZE: usize = 10;
+
 #[derive(Default)]
 pub struct Buffer {
     pub transactions: Mutex<VecDeque<BufferedTransaction>>,
@@ -56,11 +59,18 @@ impl Buffer {
 impl UnprocessedTransactionsGetter for Buffer {
     async fn next_transactions(&self) -> Result<Vec<BufferedTxWithID>, UsecaseError> {
         let mut buffer = self.transactions.lock().await;
-        // todo!()
-        Ok(vec![BufferedTxWithID {
-            tx: buffer.pop_front().unwrap(),
-            id: "".to_string(),
-        }])
+        let mut result = Vec::with_capacity(TXS_BATCH_SIZE);
+
+        while let Some(tx) = buffer.pop_front() {
+            if result.len() >= TXS_BATCH_SIZE {
+                break;
+            }
+            result.push(BufferedTxWithID {
+                tx,
+                id: String::new(),
+            })
+        }
+        Ok(result)
     }
 
     fn ack(&self, _id: String) {}
@@ -70,18 +80,25 @@ impl UnprocessedTransactionsGetter for Buffer {
 impl UnprocessedAccountsGetter for Buffer {
     async fn next_accounts(&self) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError> {
         let mut buffer = self.accounts.lock().await;
-        //todo!
-        Ok(vec![buffer
-            .keys()
-            .next()
-            .cloned()
-            .and_then(|key| buffer.remove_entry(&key))
-            .map(|f| UnprocessedAccountMessage {
-                account: f.1,
-                key: f.0,
-                id: "".to_string(),
-            })
-            .unwrap()])
+        let mut result = Vec::with_capacity(ACCOUNT_BATCH_SIZE);
+        let mut keys_to_remove = Vec::with_capacity(ACCOUNT_BATCH_SIZE);
+        for key in buffer.keys().cloned() {
+            if result.len() >= ACCOUNT_BATCH_SIZE {
+                break;
+            }
+            keys_to_remove.push(key);
+        }
+        for key in keys_to_remove {
+            if let Some((key, account)) = buffer.remove_entry(&key) {
+                result.push(UnprocessedAccountMessage {
+                    account,
+                    key,
+                    id: String::new(),
+                });
+            }
+        }
+
+        Ok(result)
     }
 
     fn ack(&self, _ids: Vec<String>) {}
