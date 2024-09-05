@@ -78,7 +78,7 @@ impl MessageParser {
         })
     }
 
-    pub(crate) async fn parse_account(
+    pub async fn parse_account(
         &self,
         data: Vec<u8>,
         map_flatbuffer: bool,

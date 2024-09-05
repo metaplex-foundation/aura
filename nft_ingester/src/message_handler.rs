@@ -141,6 +141,7 @@ impl MessageHandlerIngester {
 
 #[test]
 fn test_mint_uninitialized() {
+    use solana_sdk::program_pack::Pack;
     let unpack_res = spl_token::state::Mint::unpack(&[0; 82]);
     assert_eq!(
         Err(solana_program::program_error::ProgramError::UninitializedAccount),
@@ -150,6 +151,7 @@ fn test_mint_uninitialized() {
 
 #[test]
 fn test_token_account_uninitialized() {
+    use solana_sdk::program_pack::Pack;
     let unpack_res = spl_token::state::Account::unpack(&[0; 165]);
     assert_eq!(
         Err(solana_program::program_error::ProgramError::UninitializedAccount),

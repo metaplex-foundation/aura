@@ -14,23 +14,22 @@ mod tests {
     use blockbuster::programs::mpl_core_program::MplCoreAccountData;
     use blockbuster::token_metadata::accounts::Metadata;
     use blockbuster::token_metadata::types::{Key, TokenStandard};
-    use entities::models::{EditionV1, MasterEdition};
+    use entities::enums::{TokenMetadataEdition, UnprocessedAccount};
+    use entities::models::{
+        EditionMetadata, EditionV1, IndexableAssetWithAccountInfo, MasterEdition, MetadataInfo,
+        Mint, TokenAccount,
+    };
     use metrics_utils::IngesterMetricsConfig;
     use nft_ingester::buffer::Buffer;
     use nft_ingester::inscriptions_processor::InscriptionsProcessor;
-    use nft_ingester::message_handler::MessageHandlerIngester;
+    use nft_ingester::message_parser::MessageParser;
     use nft_ingester::mpl_core_processor::MplCoreProcessor;
-    use nft_ingester::mplx_updates_processor::{
-        IndexableAssetWithAccountInfo, MetadataInfo, MplxAccountsProcessor, TokenMetadata,
-    };
+    use nft_ingester::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::plerkle;
     use nft_ingester::token_updates_processor::TokenAccountsProcessor;
-    use rocks_db::columns::{Mint, TokenAccount};
-    use rocks_db::editions::TokenMetadataEdition;
     use rocks_db::AssetAuthority;
     use solana_program::pubkey::Pubkey;
     use std::collections::HashMap;
-    use std::ops::Deref;
     use std::str::FromStr;
     use std::sync::Arc;
     use testcontainers::clients::Cli;
@@ -66,8 +65,6 @@ mod tests {
 
     #[tokio::test]
     async fn token_update_process() {
-        use std::collections::HashMap;
-
         let first_mint = Pubkey::new_unique();
         let second_mint = Pubkey::new_unique();
         let first_token_account = Pubkey::new_unique();
@@ -116,28 +113,36 @@ mod tests {
             write_version: 1,
         };
 
-        let buffer = Arc::new(Buffer::new());
-        let mut token_accs = HashMap::new();
-        let mut mints = HashMap::new();
-        mints.insert(first_mint.to_bytes().to_vec(), first_mint_to_save);
-        mints.insert(second_mint.to_bytes().to_vec(), second_mint_to_save);
-        token_accs.insert(first_token_account, first_token_account_to_save);
-        token_accs.insert(second_token_account, second_token_account_to_save);
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
         let spl_token_accs_parser = TokenAccountsProcessor::new(
             env.rocks_env.storage.clone(),
-            buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
-            1,
         );
+
+        let mut db_batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         spl_token_accs_parser
-            .transform_and_save_token_account(&token_accs)
-            .await;
+            .transform_and_save_token_account(
+                &mut db_batch,
+                first_token_account,
+                &first_token_account_to_save,
+            )
+            .unwrap();
         spl_token_accs_parser
-            .transform_and_save_mint_account(&mints)
-            .await;
+            .transform_and_save_token_account(
+                &mut db_batch,
+                second_token_account,
+                &second_token_account_to_save,
+            )
+            .unwrap();
+        spl_token_accs_parser
+            .transform_and_save_mint_account(&mut db_batch, &first_mint_to_save)
+            .unwrap();
+        spl_token_accs_parser
+            .transform_and_save_mint_account(&mut db_batch, &second_mint_to_save)
+            .unwrap();
+        env.rocks_env.storage.db.write(db_batch).unwrap();
 
         let first_owner_from_db = env
             .rocks_env
@@ -176,8 +181,6 @@ mod tests {
 
     #[tokio::test]
     async fn mplx_update_process() {
-        use std::collections::HashMap;
-
         let first_mint = Pubkey::new_unique();
         let second_mint = Pubkey::new_unique();
         let first_edition = Pubkey::new_unique();
@@ -187,7 +190,7 @@ mod tests {
 
         let first_metadata_to_save = generate_metadata(first_mint);
         let second_metadata_to_save = generate_metadata(second_mint);
-        let first_edition_to_save = TokenMetadata {
+        let first_edition_to_save = EditionMetadata {
             edition: TokenMetadataEdition::EditionV1 {
                 0: EditionV1 {
                     key: Default::default(),
@@ -199,7 +202,7 @@ mod tests {
             write_version: 1,
             slot_updated: 1,
         };
-        let second_edition_to_save = TokenMetadata {
+        let second_edition_to_save = EditionMetadata {
             edition: TokenMetadataEdition::MasterEdition {
                 0: MasterEdition {
                     key: Default::default(),
@@ -212,29 +215,44 @@ mod tests {
             slot_updated: 1,
         };
 
-        let buffer = Arc::new(Buffer::new());
-        let mut mplx_metadata_info = HashMap::new();
-        let mut token_metadata_editions = HashMap::new();
-        mplx_metadata_info.insert(first_mint.to_bytes().to_vec(), first_metadata_to_save);
-        mplx_metadata_info.insert(second_mint.to_bytes().to_vec(), second_metadata_to_save);
-        token_metadata_editions.insert(first_edition, first_edition_to_save.edition);
-        token_metadata_editions.insert(second_edition, second_edition_to_save.edition);
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
         let mplx_accs_parser = MplxAccountsProcessor::new(
-            1,
-            buffer.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
         );
 
+        let mut db_batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         mplx_accs_parser
-            .transform_and_store_metadata_accs(&mplx_metadata_info)
-            .await;
+            .transform_and_store_metadata_account(
+                &mut db_batch,
+                first_mint,
+                &first_metadata_to_save,
+            )
+            .unwrap();
         mplx_accs_parser
-            .transform_and_store_edition_accs(&token_metadata_editions)
-            .await;
+            .transform_and_store_metadata_account(
+                &mut db_batch,
+                second_mint,
+                &second_metadata_to_save,
+            )
+            .unwrap();
+        mplx_accs_parser
+            .transform_and_store_edition_account(
+                &mut db_batch,
+                first_edition,
+                &first_edition_to_save.edition,
+            )
+            .unwrap();
+        mplx_accs_parser
+            .transform_and_store_edition_account(
+                &mut db_batch,
+                second_edition,
+                &second_edition_to_save.edition,
+            )
+            .unwrap();
+        env.rocks_env.storage.db.write(db_batch).unwrap();
 
         let first_static_from_db = env
             .rocks_env
@@ -377,15 +395,12 @@ mod tests {
             rent_epoch: 0,
         };
 
-        let buffer = Arc::new(Buffer::new());
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
         let mpl_core_parser = MplCoreProcessor::new(
             env.rocks_env.storage.clone(),
-            buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
-            1,
         );
         env.rocks_env
             .storage
@@ -400,12 +415,15 @@ mod tests {
                 },
             )
             .unwrap();
-        let mut indexable_assets = HashMap::new();
-        indexable_assets.insert(first_mpl_core, first_mpl_core_to_save);
-        indexable_assets.insert(second_mpl_core, second_mpl_core_to_save);
+
+        let mut db_batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         mpl_core_parser
-            .transform_and_store_mpl_assets(&indexable_assets)
-            .await;
+            .transform_and_store_mpl_asset(&mut db_batch, first_mpl_core, &first_mpl_core_to_save)
+            .unwrap();
+        mpl_core_parser
+            .transform_and_store_mpl_asset(&mut db_batch, second_mpl_core, &second_mpl_core_to_save)
+            .unwrap();
+        env.rocks_env.storage.db.write(db_batch).unwrap();
 
         let first_dynamic_from_db = env
             .rocks_env
@@ -488,8 +506,9 @@ mod tests {
         let inscription_data_pk =
             Pubkey::from_str("GKcyym3BLXizQJWfH8H3YA5wLJTYVHrNMoGzbCsHtogn").unwrap();
         let buffer = Arc::new(Buffer::new());
-        let message_handler = MessageHandlerIngester::new(buffer.clone());
-        message_handler
+        let message_parser = MessageParser::new();
+
+        let parsed_inscription_account = message_parser
             .handle_inscription_account(&plerkle::AccountInfo {
                 slot: 100,
                 pubkey: inscription_pk,
@@ -500,8 +519,9 @@ mod tests {
                 write_version: 100,
                 data: inscription_account_data,
             })
-            .await;
-        message_handler
+            .await
+            .unwrap();
+        let parsed_inscription_account_data = message_parser
             .handle_inscription_account(&plerkle::AccountInfo {
                 slot: 100,
                 pubkey: inscription_data_pk,
@@ -512,33 +532,67 @@ mod tests {
                 write_version: 100,
                 data: inscription_data_account_data,
             })
-            .await;
+            .await
+            .unwrap();
+        buffer
+            .accounts
+            .lock()
+            .await
+            .insert(inscription_pk, parsed_inscription_account);
+        buffer
+            .accounts
+            .lock()
+            .await
+            .insert(inscription_data_pk, parsed_inscription_account_data);
 
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
         let asset_pk = generated_assets.static_details.first().unwrap().pubkey;
-        buffer
-            .inscriptions
+
+        match buffer
+            .accounts
             .lock()
             .await
             .get_mut(&inscription_pk)
             .unwrap()
-            .inscription
-            .root = asset_pk;
+        {
+            UnprocessedAccount::Inscription(i) => {
+                i.inscription.root = asset_pk;
+            }
+            _ => panic!("Invalid account type"),
+        };
 
         let mpl_core_parser = InscriptionsProcessor::new(
             env.rocks_env.storage.clone(),
-            buffer.clone(),
             Arc::new(IngesterMetricsConfig::new()),
-            0,
         );
-        mpl_core_parser
-            .store_inscriptions(buffer.inscriptions.lock().await.deref())
-            .await;
-        mpl_core_parser
-            .store_inscriptions_data(buffer.inscriptions_data.lock().await.deref())
-            .await;
+
+        let mut db_batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        match buffer.accounts.lock().await.get(&inscription_pk).unwrap() {
+            UnprocessedAccount::Inscription(inscription) => {
+                mpl_core_parser
+                    .store_inscription(&mut db_batch, inscription)
+                    .unwrap();
+            }
+            _ => panic!("Invalid account type"),
+        };
+        match buffer
+            .accounts
+            .lock()
+            .await
+            .get(&inscription_data_pk)
+            .unwrap()
+        {
+            UnprocessedAccount::InscriptionData(inscription_data) => {
+                mpl_core_parser
+                    .store_inscription_data(&mut db_batch, inscription_data_pk, inscription_data)
+                    .unwrap();
+            }
+            _ => panic!("Invalid account type"),
+        };
+
+        env.rocks_env.storage.db.write(db_batch).unwrap();
 
         let inscription = env
             .rocks_env
