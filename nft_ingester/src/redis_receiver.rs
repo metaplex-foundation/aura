@@ -1,5 +1,4 @@
 use crate::error::IngesterError;
-use entities::enums::MessageDataType;
 use interface::message_handler::MessageHandler;
 use plerkle_messenger::redis_messenger::RedisMessenger;
 use plerkle_messenger::{
@@ -35,12 +34,12 @@ impl<M: MessageHandler> RedisReceiver<M> {
                 .recv(TRANSACTION_STREAM, self.consumption_type.clone())
                 .await;
             match e {
-                Ok(data) => {
-                    for item in data {
-                        self.message_handler
-                            .recv(item.data, MessageDataType::Transaction)
-                            .await;
-                    }
+                Ok(_data) => {
+                    // for item in data {
+                    //     self.message_handler
+                    //         .recv(item.data, MessageDataType::Transaction)
+                    //         .await;
+                    // }
                 }
                 Err(e) => {
                     error!("Error receiving from txn stream: {}", e);
@@ -57,12 +56,12 @@ impl<M: MessageHandler> RedisReceiver<M> {
                 .recv(ACCOUNT_STREAM, self.consumption_type.clone())
                 .await;
             match e {
-                Ok(data) => {
-                    for item in data {
-                        self.message_handler
-                            .recv(item.data, MessageDataType::Account)
-                            .await;
-                    }
+                Ok(_data) => {
+                    // for item in data {
+                    //     self.message_handler
+                    //         .recv(item.data, MessageDataType::Account)
+                    //         .await;
+                    // }
                 }
                 Err(e) => {
                     error!("Error receiving from account stream: {}", e);

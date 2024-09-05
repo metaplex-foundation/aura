@@ -353,12 +353,6 @@ impl TryFrom<u8> for FailedBatchMintState {
     }
 }
 
-#[derive(Copy, Clone)]
-pub enum MessageDataType {
-    Account,
-    Transaction,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum TokenMetadataEdition {
     EditionV1(EditionV1),
