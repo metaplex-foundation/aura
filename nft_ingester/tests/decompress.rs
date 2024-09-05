@@ -338,6 +338,7 @@ mod tests {
             &mint,
         )
         .await;
+        env.rocks_env.storage.db.write(db_batch).unwrap();
 
         process_bubblegum_transactions(
             mutexed_tasks.clone(),

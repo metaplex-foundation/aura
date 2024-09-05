@@ -1178,6 +1178,9 @@ mod tests {
         mplx_updates_processor
             .transform_and_store_metadata_account(&mut db_batch, metadata_key, &metadata)
             .unwrap();
+        // save metadata_mint map
+        env.rocks_env.storage.db.write(db_batch).unwrap();
+        let mut db_batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         mplx_updates_processor
             .transform_and_store_burnt_metadata(
                 &mut db_batch,
