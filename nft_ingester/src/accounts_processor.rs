@@ -12,6 +12,7 @@ use rocks_db::Storage;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::SystemTime;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -20,7 +21,7 @@ use tracing::error;
 // interval after which buffer is flushed
 const WORKER_IDLE_TIMEOUT_MS: u64 = 100;
 // worker idle timeout
-const _FLUSH_INTERVAL_SEC: u64 = 5;
+const FLUSH_INTERVAL_SEC: u64 = 5;
 
 #[derive(Clone)]
 pub struct AccountsProcessor<T: UnprocessedAccountsGetter> {
@@ -84,7 +85,16 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         let mut core_fees = HashMap::new();
         let mut ack_ids = Vec::new();
+        let mut last_received_at = SystemTime::now();
         while rx.is_empty() {
+            if !batch.is_empty()
+                && last_received_at
+                    .elapsed()
+                    .is_ok_and(|e| e.as_secs() >= FLUSH_INTERVAL_SEC)
+            {
+                self.write_batch(batch, &mut ack_ids).await;
+                batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+            };
             let unprocessed_accounts = match self.unprocessed_account_getter.next_accounts().await {
                 Ok(unprocessed_accounts) => unprocessed_accounts,
                 Err(err) => {
@@ -94,6 +104,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                     continue;
                 }
             };
+            last_received_at = SystemTime::now();
             for unprocessed_account in unprocessed_accounts {
                 let processing_result = match unprocessed_account.account {
                     UnprocessedAccount::MetadataInfo(metadata_info) => self
@@ -162,18 +173,8 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 }
                 ack_ids.push(unprocessed_account.id);
                 if batch.len() >= self.accounts_batch_size {
-                    let write_batch_result = self.rocks_db.db.write(batch);
+                    self.write_batch(batch, &mut ack_ids).await;
                     batch = rocksdb::WriteBatchWithTransaction::<false>::default();
-                    match write_batch_result {
-                        Ok(_) => {
-                            self.unprocessed_account_getter
-                                .ack(std::mem::take(&mut ack_ids));
-                        }
-                        Err(err) => {
-                            error!("Write batch: {}", err);
-                            ack_ids.clear();
-                        }
-                    }
                 }
                 if core_fees.len() > self.fees_batch_size {
                     self.core_fees_processor
@@ -181,21 +182,28 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                         .await;
                 }
             }
-            let write_batch_result = self.rocks_db.db.write(batch);
+            self.write_batch(batch, &mut ack_ids).await;
             batch = rocksdb::WriteBatchWithTransaction::<false>::default();
-            match write_batch_result {
-                Ok(_) => {
-                    self.unprocessed_account_getter
-                        .ack(std::mem::take(&mut ack_ids));
-                }
-                Err(err) => {
-                    error!("Write batch: {}", err);
-                    ack_ids.clear();
-                }
-            }
             self.core_fees_processor
                 .store_mpl_assets_fee(&std::mem::take(&mut core_fees))
                 .await;
+        }
+    }
+
+    async fn write_batch(
+        &self,
+        batch: rocksdb::WriteBatchWithTransaction<false>,
+        ack_ids: &mut Vec<String>,
+    ) {
+        let write_batch_result = self.rocks_db.db.write(batch);
+        match write_batch_result {
+            Ok(_) => {
+                self.unprocessed_account_getter.ack(std::mem::take(ack_ids));
+            }
+            Err(err) => {
+                error!("Write batch: {}", err);
+                ack_ids.clear();
+            }
         }
     }
 }
