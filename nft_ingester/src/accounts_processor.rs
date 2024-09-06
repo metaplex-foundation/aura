@@ -85,14 +85,15 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         let mut core_fees = HashMap::new();
         let mut ack_ids = Vec::new();
-        let mut last_received_at = SystemTime::now();
+        let mut last_flushed_at = SystemTime::now();
         while rx.is_empty() {
             if !batch.is_empty()
-                && last_received_at
+                && last_flushed_at
                     .elapsed()
                     .is_ok_and(|e| e.as_secs() >= FLUSH_INTERVAL_SEC)
             {
-                self.write_batch(batch, &mut ack_ids).await;
+                self.write_batch(batch, &mut ack_ids, &mut last_flushed_at)
+                    .await;
                 batch = rocksdb::WriteBatchWithTransaction::<false>::default();
             };
             let unprocessed_accounts = match self.unprocessed_account_getter.next_accounts().await {
@@ -104,7 +105,6 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                     continue;
                 }
             };
-            last_received_at = SystemTime::now();
             for unprocessed_account in unprocessed_accounts {
                 let processing_result = match unprocessed_account.account {
                     UnprocessedAccount::MetadataInfo(metadata_info) => self
@@ -173,7 +173,8 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 }
                 ack_ids.push(unprocessed_account.id);
                 if batch.len() >= self.accounts_batch_size {
-                    self.write_batch(batch, &mut ack_ids).await;
+                    self.write_batch(batch, &mut ack_ids, &mut last_flushed_at)
+                        .await;
                     batch = rocksdb::WriteBatchWithTransaction::<false>::default();
                 }
                 if core_fees.len() > self.fees_batch_size {
@@ -182,7 +183,8 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                         .await;
                 }
             }
-            self.write_batch(batch, &mut ack_ids).await;
+            self.write_batch(batch, &mut ack_ids, &mut last_flushed_at)
+                .await;
             batch = rocksdb::WriteBatchWithTransaction::<false>::default();
             self.core_fees_processor
                 .store_mpl_assets_fee(&std::mem::take(&mut core_fees))
@@ -194,6 +196,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         &self,
         batch: rocksdb::WriteBatchWithTransaction<false>,
         ack_ids: &mut Vec<String>,
+        last_flushed_at: &mut SystemTime,
     ) {
         let write_batch_result = self.rocks_db.db.write(batch);
         match write_batch_result {
@@ -205,5 +208,6 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 ack_ids.clear();
             }
         }
+        *last_flushed_at = SystemTime::now();
     }
 }
