@@ -21,7 +21,7 @@ pub use asset::{
 pub use column::columns;
 use column::{Column, TypedColumn};
 use entities::models::{
-    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock
+    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
@@ -56,6 +56,7 @@ pub mod errors;
 pub mod fork_cleaner;
 pub mod inscriptions;
 pub mod key_encoders;
+pub mod leaf_signatures;
 pub mod migrations;
 pub mod migrator;
 pub mod offchain_data;
@@ -73,7 +74,6 @@ pub mod token_prices;
 pub mod transaction;
 pub mod transaction_client;
 pub mod tree_seq;
-pub mod leaf_signatures;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
@@ -612,7 +612,10 @@ impl Storage {
                 );
             }
             LeafSignature::NAME => {
-                cf_options.set_merge_operator_associative("merge_fn_leaf_signature", LeafSignature::merge_leaf_signatures);
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_leaf_signature",
+                    LeafSignature::merge_leaf_signatures,
+                );
             }
             _ => {}
         }

@@ -7,8 +7,8 @@ use crate::transaction::TreeUpdate;
 use crate::{Result, Storage};
 use bincode::{deserialize, serialize};
 use rocksdb::MergeOperands;
-use solana_sdk::pubkey::Pubkey;
 use serde::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use tracing::error;
 
@@ -93,10 +93,13 @@ impl LeafSignature {
             }
         }
 
-        match serialize(&LeafSignature{data: final_map}) {
+        match serialize(&LeafSignature { data: final_map }) {
             Ok(serialized_data) => Some(serialized_data),
             Err(e) => {
-                error!("RocksDB: error serializing final merge result for LeafSignature: {:?}", e);
+                error!(
+                    "RocksDB: error serializing final merge result for LeafSignature: {:?}",
+                    e
+                );
                 Some(vec![])
             }
         }
@@ -114,12 +117,19 @@ impl Storage {
         let mut slot_sequence_map = HashMap::new();
         slot_sequence_map.insert(tree.slot, sequence_set);
 
-        let signature = Signature::from_str(&tree.tx).map_err(|e| StorageError::Common(format!("RocksDB: could not convert tree.tx into Signature: {}", e)))?;
+        let signature = Signature::from_str(&tree.tx).map_err(|e| {
+            StorageError::Common(format!(
+                "RocksDB: could not convert tree.tx into Signature: {}",
+                e
+            ))
+        })?;
 
         if let Err(e) = self.leaf_signature.merge_with_batch(
             batch,
             (signature, tree.tree, tree.event.index as u64),
-            &LeafSignature {data: slot_sequence_map},
+            &LeafSignature {
+                data: slot_sequence_map,
+            },
         ) {
             error!("Error while saving tree update: {}", e);
         };

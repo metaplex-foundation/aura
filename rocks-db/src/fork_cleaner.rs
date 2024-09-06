@@ -1,5 +1,6 @@
 use crate::{
-    cl_items::ClItemKey, column::TypedColumn, leaf_signatures::LeafSignature, Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION, RAW_BLOCKS_CBOR_ENDPOINT, ROCKS_COMPONENT
+    cl_items::ClItemKey, column::TypedColumn, leaf_signatures::LeafSignature, Storage, DROP_ACTION,
+    FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION, RAW_BLOCKS_CBOR_ENDPOINT, ROCKS_COMPONENT,
 };
 use async_trait::async_trait;
 use entities::models::{ClItem, ForkedItem, LeafSignatureAllData};
@@ -15,24 +16,24 @@ impl CompressedTreeChangesManager for Storage {
         self.leaf_signature
             .iter_start()
             .filter_map(Result::ok)
-            .flat_map(|(key, value)| {
-                match LeafSignature::decode_key(key.to_vec()) {
+            .flat_map(
+                |(key, value)| match LeafSignature::decode_key(key.to_vec()) {
                     Ok((signature, tree, leaf_idx)) => {
                         match bincode::deserialize::<LeafSignature>(value.as_ref()) {
-                            Ok(slot_sequences) => {
-                                Ok(LeafSignatureAllData {
-                                    tree,
-                                    signature,
-                                    leaf_idx,
-                                    slot_sequences: slot_sequences.data,
-                                })
+                            Ok(slot_sequences) => Ok(LeafSignatureAllData {
+                                tree,
+                                signature,
+                                leaf_idx,
+                                slot_sequences: slot_sequences.data,
+                            }),
+                            Err(e) => {
+                                Err(format!("Value deserialization error: {:?}", e.to_string()))
                             }
-                            Err(e) => {Err(format!("Value deserialization error: {:?}", e.to_string()))}
                         }
                     }
-                    Err(e) => {Err(format!("Key deserialization error: {:?}", e.to_string()))}
-                }
-            })
+                    Err(e) => Err(format!("Key deserialization error: {:?}", e.to_string())),
+                },
+            )
     }
 
     fn cl_items_iter(&self) -> impl Iterator<Item = ClItem> {
@@ -83,8 +84,12 @@ impl CompressedTreeChangesManager for Storage {
             error!("Leaf signatures delete: {}", e.to_string());
         }
 
-        self.red_metrics
-            .observe_request(ROCKS_COMPONENT, DROP_ACTION, "leaf_signature", start_time);
+        self.red_metrics.observe_request(
+            ROCKS_COMPONENT,
+            DROP_ACTION,
+            "leaf_signature",
+            start_time,
+        );
     }
 }
 

@@ -54,15 +54,15 @@ where
         // so even if transaction was in fork this column family has it
         for signature in self.cl_items_manager.tree_seq_idx_iter() {
             if let Some(max_slot) = signature.slot_sequences.keys().max() {
-                // if max slot for selected transaction(tx) is greater then last_slot_for_check
-                // it means that tx is fresh and we should not check it such as there is high possibility
-                // that it's updates will be overwritten
+                // if the max slot for selected transaction(tx) is greater then last_slot_for_check
+                // it means that the tx is fresh and we should not check it as there is a high possibility
+                // that its updates will be overwritten
                 if max_slot > &last_slot_for_check {
                     continue;
                 }
 
-                // here we have a vector because forked transaction can appear in different slots with same sequence
-                // in such case we have to check if one of those blocks is in fork
+                // here we have a vector because forked transaction can appear in different slots with the same sequence
+                // in such a case we have to check if one of those blocks is in a fork
                 let mut slots_with_highest_sequence = vec![];
                 // looking for a block with highest sequence because CLItems merge function checks that value
                 // meaning CLItems will contain updates from the transaction with highest sequence, even if it has the lowest slot number
@@ -86,17 +86,14 @@ where
                     }
                 }
 
-                let mut clean_up = false;
                 // check if either of slots appeared in fork
                 for slot in slots_with_highest_sequence {
                     if !all_non_forked_slots.contains(&slot) {
-                        clean_up = true;
-
                         forked_slots.insert(slot);
                     }
                 }
 
-                if clean_up {
+                if !forked_slots.is_empty() {
                     // if at least one of the blocks appeared in a fork we need to drop all the tree sequences which are related to transaction
                     // which fork cleaner is processing at the moment.
                     //
@@ -139,7 +136,7 @@ where
                 return;
             }
 
-            if forked_slots.contains(&cl_item.slot_updated) {
+            if !all_non_forked_slots.contains(&cl_item.slot_updated) {
                 delete_items.push(ForkedItem {
                     tree: cl_item.cli_tree_key,
                     seq: cl_item.cli_seq,

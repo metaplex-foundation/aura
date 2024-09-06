@@ -59,6 +59,7 @@ pub struct CopyableChangeLogEventV1 {
     pub seq: u64,
 
     /// Bitmap of node parity (used when hashing)
+    /// Leaf id
     pub index: u32,
 }
 
