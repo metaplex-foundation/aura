@@ -78,7 +78,7 @@ impl UnprocessedAccountsGetter for RedisReceiver {
             .map_err(|e| UsecaseError::Messenger(e.to_string()))?;
         let mut result = Vec::new();
         for item in recv_data {
-            match self.message_parser.parse_account(item.data, false).await {
+            match self.message_parser.parse_account(item.data, false) {
                 Ok(accounts) => {
                     for (i, account) in accounts.into_iter().enumerate() {
                         // no need to ack same element twice

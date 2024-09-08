@@ -1,47 +1,45 @@
 use entities::enums::OwnerType;
-use entities::models::{
-    Mint, PubkeyWithSlot, TokenAccount, TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey,
-    UpdateVersion, Updated,
-};
+use entities::models::{Mint, PubkeyWithSlot, TokenAccount, UpdateVersion, Updated};
 use metrics_utils::IngesterMetricsConfig;
-use num_traits::Zero;
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
+use rocks_db::batch_savers::BatchSaveStorage;
 use rocks_db::errors::StorageError;
-use rocks_db::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
-use rocks_db::Storage;
 use solana_program::pubkey::Pubkey;
+use std::cell::RefCell;
+use std::ops::DerefMut;
+use std::rc::Rc;
 use std::sync::Arc;
 use tokio::time::Instant;
 use usecase::save_metrics::result_to_metrics;
 
-#[derive(Clone)]
 pub struct TokenAccountsProcessor {
-    pub rocks_db: Arc<Storage>,
-    pub metrics: Arc<IngesterMetricsConfig>,
+    storage: Rc<RefCell<BatchSaveStorage>>,
+    metrics: Arc<IngesterMetricsConfig>,
 }
 
 impl TokenAccountsProcessor {
-    pub fn new(rocks_db: Arc<Storage>, metrics: Arc<IngesterMetricsConfig>) -> Self {
-        Self { rocks_db, metrics }
+    pub fn new(
+        storage: Rc<RefCell<BatchSaveStorage>>,
+        metrics: Arc<IngesterMetricsConfig>,
+    ) -> Self {
+        Self { storage, metrics }
     }
 
     fn finalize_processing<T, F>(
-        &self,
-        db_batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        &mut self,
         operation: F,
         asset_update: PubkeyWithSlot,
         metric_name: &str,
     ) -> Result<(), StorageError>
     where
-        F: Fn(&mut rocksdb::WriteBatchWithTransaction<false>) -> Result<T, StorageError>,
+        F: Fn(&mut BatchSaveStorage) -> Result<T, StorageError>,
     {
         let begin_processing = Instant::now();
-        operation(db_batch)?;
-        let res = self.rocks_db.asset_updated_with_batch(
-            db_batch,
-            asset_update.slot,
-            asset_update.pubkey,
-        );
+        operation(self.storage.borrow_mut().deref_mut())?;
+        let res = self
+            .storage
+            .borrow_mut()
+            .asset_updated_with_batch(asset_update.slot, asset_update.pubkey);
         self.metrics
             .set_latency(metric_name, begin_processing.elapsed().as_millis() as f64);
         result_to_metrics(self.metrics.clone(), &res, metric_name);
@@ -49,12 +47,11 @@ impl TokenAccountsProcessor {
     }
 
     pub fn transform_and_save_token_account(
-        &self,
-        db_batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        &mut self,
         key: Pubkey,
         token_account: &TokenAccount,
     ) -> Result<(), StorageError> {
-        self.save_token_account_with_idxs(db_batch, key, token_account)?;
+        self.save_token_account_with_idxs(key, token_account)?;
         let asset_owner_details = AssetOwner {
             pubkey: token_account.mint,
             owner: Updated::new(
@@ -84,19 +81,11 @@ impl TokenAccountsProcessor {
             ..Default::default()
         };
 
+        let metrics = self.metrics.clone();
         self.finalize_processing(
-            db_batch,
-            |batch| {
-                self.rocks_db.asset_owner_data.merge_with_batch(
-                    batch,
-                    token_account.mint,
-                    &asset_owner_details,
-                )?;
-                self.rocks_db.asset_dynamic_data.merge_with_batch(
-                    batch,
-                    token_account.mint,
-                    &asset_dynamic_details,
-                )
+            |storage: &mut BatchSaveStorage| {
+                storage.store_owner(&asset_owner_details, metrics.clone())?;
+                storage.store_dynamic(&asset_dynamic_details, metrics.clone())
             },
             PubkeyWithSlot {
                 pubkey: token_account.mint,
@@ -106,11 +95,7 @@ impl TokenAccountsProcessor {
         )
     }
 
-    pub fn transform_and_save_mint_account(
-        &self,
-        db_batch: &mut rocksdb::WriteBatchWithTransaction<false>,
-        mint: &Mint,
-    ) -> Result<(), StorageError> {
+    pub fn transform_and_save_mint_account(&mut self, mint: &Mint) -> Result<(), StorageError> {
         let asset_dynamic_details = AssetDynamicDetails {
             pubkey: mint.pubkey,
             supply: Some(Updated::new(
@@ -135,19 +120,11 @@ impl TokenAccountsProcessor {
             ..Default::default()
         };
 
+        let metrics = self.metrics.clone();
         self.finalize_processing(
-            db_batch,
-            |batch| {
-                self.rocks_db.asset_dynamic_data.merge_with_batch(
-                    batch,
-                    mint.pubkey,
-                    &asset_dynamic_details,
-                )?;
-                self.rocks_db.asset_owner_data.merge_with_batch(
-                    batch,
-                    mint.pubkey,
-                    &asset_owner_details,
-                )
+            |storage: &mut BatchSaveStorage| {
+                storage.store_owner(&asset_owner_details, metrics.clone())?;
+                storage.store_dynamic(&asset_dynamic_details, metrics.clone())
             },
             PubkeyWithSlot {
                 pubkey: mint.pubkey,
@@ -158,40 +135,13 @@ impl TokenAccountsProcessor {
     }
 
     pub fn save_token_account_with_idxs(
-        &self,
-        db_batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        &mut self,
         key: Pubkey,
         token_account: &TokenAccount,
     ) -> Result<(), StorageError> {
         self.finalize_processing(
-            db_batch,
-            |batch| {
-                self.rocks_db
-                    .token_accounts
-                    .merge_with_batch(batch, key, token_account)?;
-                self.rocks_db.token_account_owner_idx.merge_with_batch(
-                    batch,
-                    TokenAccountOwnerIdxKey {
-                        owner: token_account.owner,
-                        token_account: token_account.pubkey,
-                    },
-                    &TokenAccountOwnerIdx {
-                        is_zero_balance: token_account.amount.is_zero(),
-                        write_version: token_account.write_version,
-                    },
-                )?;
-                self.rocks_db.token_account_mint_owner_idx.merge_with_batch(
-                    batch,
-                    TokenAccountMintOwnerIdxKey {
-                        mint: token_account.mint,
-                        owner: token_account.owner,
-                        token_account: token_account.pubkey,
-                    },
-                    &TokenAccountMintOwnerIdx {
-                        is_zero_balance: token_account.amount.is_zero(),
-                        write_version: token_account.write_version,
-                    },
-                )
+            |storage: &mut BatchSaveStorage| {
+                storage.save_token_account_with_idxs(key, token_account)
             },
             PubkeyWithSlot {
                 pubkey: token_account.mint,

@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use blockbuster::token_metadata::types::TokenStandard;
@@ -15,30 +17,30 @@ use metrics_utils::IngesterMetricsConfig;
 use rocks_db::asset::{
     AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails, MetadataMintMap,
 };
-use rocks_db::batch_savers::MetadataModels;
+use rocks_db::batch_savers::{BatchSaveStorage, MetadataModels};
 use rocks_db::errors::StorageError;
-use rocks_db::Storage;
 use usecase::save_metrics::result_to_metrics;
 
-#[derive(Clone)]
 pub struct MplxAccountsProcessor {
-    rocks_db: Arc<Storage>,
+    storage: Rc<RefCell<BatchSaveStorage>>,
     metrics: Arc<IngesterMetricsConfig>,
 }
 
 impl MplxAccountsProcessor {
-    pub fn new(rocks_db: Arc<Storage>, metrics: Arc<IngesterMetricsConfig>) -> Self {
-        Self { rocks_db, metrics }
+    pub fn new(
+        storage: Rc<RefCell<BatchSaveStorage>>,
+        metrics: Arc<IngesterMetricsConfig>,
+    ) -> Self {
+        Self { storage, metrics }
     }
 
     pub fn transform_and_store_burnt_metadata(
-        &self,
-        db_batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        &mut self,
         key: Pubkey,
         burnt_metadata_slot: &BurntMetadataSlot,
     ) -> Result<(), StorageError> {
         let begin_processing = Instant::now();
-        let res = self.mark_metadata_as_burnt(db_batch, key, burnt_metadata_slot);
+        let res = self.mark_metadata_as_burnt(key, burnt_metadata_slot);
 
         self.metrics.set_latency(
             "burn_metadata_saving",
@@ -48,17 +50,17 @@ impl MplxAccountsProcessor {
     }
 
     pub fn transform_and_store_metadata_account(
-        &self,
-        db_batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        &mut self,
         key: Pubkey,
         metadata_info: &MetadataInfo,
     ) -> Result<(), StorageError> {
         let metadata_models = self.create_rocks_metadata_models(key, metadata_info);
 
         let begin_processing = Instant::now();
-        let res =
-            self.rocks_db
-                .store_metadata_models(db_batch, &metadata_models, self.metrics.clone());
+        let res = self
+            .storage
+            .borrow_mut()
+            .store_metadata_models(&metadata_models, self.metrics.clone());
         self.metrics.set_latency(
             "metadata_accounts_saving",
             begin_processing.elapsed().as_millis() as f64,
@@ -67,16 +69,12 @@ impl MplxAccountsProcessor {
     }
 
     pub fn transform_and_store_edition_account(
-        &self,
-        db_batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        &mut self,
         key: Pubkey,
         edition: &TokenMetadataEdition,
     ) -> Result<(), StorageError> {
         let begin_processing = Instant::now();
-        let res = self
-            .rocks_db
-            .token_metadata_edition_cbor
-            .merge_with_batch_cbor(db_batch, key, edition);
+        let res = self.storage.borrow_mut().store_edition(key, edition);
 
         result_to_metrics(self.metrics.clone(), &res, "editions_saving");
         self.metrics.set_latency(
@@ -253,15 +251,14 @@ impl MplxAccountsProcessor {
     }
 
     fn mark_metadata_as_burnt(
-        &self,
-        db_batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        &mut self,
         key: Pubkey,
         burnt_metadata_slot: &BurntMetadataSlot,
     ) -> Result<(), StorageError> {
         let Some(asset_dynamic_details) =
-            self.rocks_db
-                .metadata_mint_map
-                .get(key)?
+            self.storage
+                .borrow()
+                .get_mint_map(key)?
                 .map(|map| AssetDynamicDetails {
                     pubkey: map.mint_key,
                     is_burnt: Updated::new(
@@ -275,7 +272,8 @@ impl MplxAccountsProcessor {
             return Ok(());
         };
 
-        self.rocks_db
-            .store_dynamic(db_batch, &asset_dynamic_details, self.metrics.clone())
+        self.storage
+            .borrow_mut()
+            .store_dynamic(&asset_dynamic_details, self.metrics.clone())
     }
 }

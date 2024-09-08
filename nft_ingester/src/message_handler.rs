@@ -97,7 +97,7 @@ impl MessageHandler for MessageHandlerIngester {
 
         match prefix {
             BYTE_PREFIX_ACCOUNT_FINALIZED | BYTE_PREFIX_ACCOUNT_PROCESSED => {
-                match self.message_parser.parse_account(data, true).await {
+                match self.message_parser.parse_account(data, true) {
                     Ok(accounts) => {
                         for account in accounts {
                             update_or_insert_account(

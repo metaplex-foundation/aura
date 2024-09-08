@@ -78,7 +78,7 @@ impl MessageParser {
         })
     }
 
-    pub async fn parse_account(
+    pub fn parse_account(
         &self,
         data: Vec<u8>,
         map_flatbuffer: bool,
@@ -104,19 +104,16 @@ impl MessageParser {
         // because match cases cannot contain function calls like spl_token::id()
         let accounts = if account_owner == spl_token::id() {
             self.handle_spl_token_account(&account_info)
-                .await
                 .into_iter()
                 .collect_vec()
         } else if account_owner == blockbuster::programs::token_metadata::token_metadata_id() {
             self.handle_token_metadata_account(&account_info)
-                .await
                 .into_iter()
                 .collect_vec()
         } else if account_owner == self.mpl_core_parser.key() {
-            self.handle_mpl_core_account(&account_info).await
+            self.handle_mpl_core_account(&account_info)
         } else if account_owner == libreplex_inscriptions::id() {
             self.handle_inscription_account(&account_info)
-                .await
                 .into_iter()
                 .collect_vec()
         } else {
@@ -133,7 +130,7 @@ impl MessageParser {
             .collect())
     }
 
-    async fn handle_spl_token_account(
+    fn handle_spl_token_account(
         &self,
         account_info: &plerkle::AccountInfo,
     ) -> Option<UnprocessedAccount> {
@@ -153,7 +150,7 @@ impl MessageParser {
                 let concrete = acc_parsed.result_type();
                 match concrete {
                     ProgramParseResult::TokenProgramAccount(parsing_result) => {
-                        return Some(self.parse_spl_accounts(account_info, parsing_result).await)
+                        return Some(self.parse_spl_accounts(account_info, parsing_result))
                     }
                     _ => debug!("\nUnexpected message\n"),
                 };
@@ -166,7 +163,7 @@ impl MessageParser {
         None
     }
 
-    async fn parse_spl_accounts(
+    fn parse_spl_accounts(
         &self,
         account_update: &plerkle::AccountInfo,
         parsing_result: &TokenProgramAccount,
@@ -199,7 +196,7 @@ impl MessageParser {
         }
     }
 
-    async fn handle_token_metadata_account(
+    fn handle_token_metadata_account(
         &self,
         account_info: &plerkle::AccountInfo,
     ) -> Option<UnprocessedAccount> {
@@ -301,7 +298,7 @@ impl MessageParser {
         None
     }
 
-    async fn handle_mpl_core_account<'a>(
+    fn handle_mpl_core_account(
         &self,
         account_info: &plerkle::AccountInfo,
     ) -> Vec<UnprocessedAccount> {
@@ -313,9 +310,7 @@ impl MessageParser {
                 let concrete = acc_parsed.result_type();
                 match concrete {
                     ProgramParseResult::MplCore(parsing_result) => {
-                        return self
-                            .parse_mpl_core_accounts(account_info, parsing_result)
-                            .await
+                        return self.parse_mpl_core_accounts(account_info, parsing_result)
                     }
                     _ => debug!("\nUnexpected message\n"),
                 };
@@ -328,7 +323,7 @@ impl MessageParser {
         Vec::new()
     }
 
-    pub async fn handle_inscription_account<'a>(
+    pub fn handle_inscription_account(
         &self,
         account_info: &plerkle::AccountInfo,
     ) -> Option<UnprocessedAccount> {
@@ -365,7 +360,7 @@ impl MessageParser {
         None
     }
 
-    async fn parse_mpl_core_accounts(
+    fn parse_mpl_core_accounts(
         &self,
         account_update: &plerkle::AccountInfo,
         parsing_result: &MplCoreAccountState,

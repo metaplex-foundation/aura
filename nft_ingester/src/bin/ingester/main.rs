@@ -1126,7 +1126,7 @@ async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send + 's
     rpc_client: Arc<RpcClient>,
     join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 ) {
-    let account_processor = AccountsProcessor::build(
+    let mut account_processor = AccountsProcessor::build(
         rx.resubscribe(),
         account_buffer_size,
         fees_buffer_size,
@@ -1139,6 +1139,7 @@ async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send + 's
     )
     .await
     .unwrap();
+
     mutexed_tasks.lock().await.spawn(async move {
         account_processor.process_accounts(rx).await;
         Ok(())
