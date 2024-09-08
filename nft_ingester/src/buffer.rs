@@ -62,13 +62,13 @@ impl UnprocessedTransactionsGetter for Buffer {
         let mut result = Vec::with_capacity(TXS_BATCH_SIZE);
 
         while let Some(tx) = buffer.pop_front() {
-            if result.len() >= TXS_BATCH_SIZE {
-                break;
-            }
             result.push(BufferedTxWithID {
                 tx,
                 id: String::new(),
-            })
+            });
+            if result.len() >= TXS_BATCH_SIZE {
+                break;
+            }
         }
         Ok(result)
     }
@@ -83,10 +83,10 @@ impl UnprocessedAccountsGetter for Buffer {
         let mut result = Vec::with_capacity(ACCOUNT_BATCH_SIZE);
         let mut keys_to_remove = Vec::with_capacity(ACCOUNT_BATCH_SIZE);
         for key in buffer.keys().cloned() {
+            keys_to_remove.push(key);
             if result.len() >= ACCOUNT_BATCH_SIZE {
                 break;
             }
-            keys_to_remove.push(key);
         }
         for key in keys_to_remove {
             if let Some((key, account)) = buffer.remove_entry(&key) {

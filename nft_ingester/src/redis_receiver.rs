@@ -48,7 +48,7 @@ impl UnprocessedTransactionsGetter for RedisReceiver {
             .await
             .recv(TRANSACTION_STREAM, self.consumption_type.clone())
             .await
-            .map_err(|e| UsecaseError::Messanger(e.to_string()))?;
+            .map_err(|e| UsecaseError::Messenger(e.to_string()))?;
         let mut result = Vec::new();
         for item in recv_data {
             if let Some(tx) = self.message_parser.parse_transaction(item.data, false) {
@@ -75,7 +75,7 @@ impl UnprocessedAccountsGetter for RedisReceiver {
             .await
             .recv(ACCOUNT_STREAM, self.consumption_type.clone())
             .await
-            .map_err(|e| UsecaseError::Messanger(e.to_string()))?;
+            .map_err(|e| UsecaseError::Messenger(e.to_string()))?;
         let mut result = Vec::new();
         for item in recv_data {
             match self.message_parser.parse_account(item.data, false).await {

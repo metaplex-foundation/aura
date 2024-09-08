@@ -18,10 +18,10 @@ use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use tracing::error;
 
-// interval after which buffer is flushed
-const WORKER_IDLE_TIMEOUT_MS: u64 = 100;
 // worker idle timeout
-const FLUSH_INTERVAL_SEC: u64 = 5;
+const WORKER_IDLE_TIMEOUT_MS: u64 = 100;
+// interval after which buffer is flushed
+const FLUSH_INTERVAL_SEC: u64 = 1;
 
 #[derive(Clone)]
 pub struct AccountsProcessor<T: UnprocessedAccountsGetter> {

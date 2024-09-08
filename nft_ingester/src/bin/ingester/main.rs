@@ -274,7 +274,7 @@ pub async fn main() -> Result<(), IngesterError> {
         message_handler.clone(),
         config.tcp_config.get_tcp_receiver_reconnect_interval()?,
     );
-    // For now there no snapshot mechanism via Redis so we use snapshot_tcp_receiver for such purpose
+    // For now there is no snapshot mechanism via Redis so we use snapshot_tcp_receiver for this purpose
     let snapshot_tcp_receiver = TcpReceiver::new(
         message_handler.clone(),
         config.tcp_config.get_tcp_receiver_reconnect_interval()? * 2,
@@ -336,17 +336,17 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_buffer = buffer.clone();
     let cloned_rx = shutdown_rx.resubscribe();
     let cloned_metrics = metrics_state.ingester_metrics.clone();
-    mutexed_tasks.lock().await.spawn(async move {
-        while cloned_rx.is_empty() {
-            if matches!(config.message_source, MessageSource::TCP) {
+    if matches!(config.message_source, MessageSource::TCP) {
+        mutexed_tasks.lock().await.spawn(async move {
+            while cloned_rx.is_empty() {
                 cloned_buffer.debug().await;
                 cloned_buffer.capture_metrics(&cloned_metrics).await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
-            tokio::time::sleep(Duration::from_secs(5)).await;
-        }
 
-        Ok(())
-    });
+            Ok(())
+        });
+    }
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;
@@ -1073,6 +1073,8 @@ async fn run_sequence_consistent_gapfiller<T, R>(
     });
 }
 
+const TRANSACTIONS_GETTER_IDLE_TIMEOUT_MILLIS: u64 = 250;
+
 async fn run_transaction_processor<TG: UnprocessedTransactionsGetter + Send + Sync + 'static>(
     rx: Receiver<()>,
     mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
@@ -1085,7 +1087,10 @@ async fn run_transaction_processor<TG: UnprocessedTransactionsGetter + Send + Sy
                 Ok(txs) => txs,
                 Err(err) => {
                     error!("Get next transactions: {}", err);
-                    tokio::time::sleep(Duration::from_millis(250)).await;
+                    tokio::time::sleep(Duration::from_millis(
+                        TRANSACTIONS_GETTER_IDLE_TIMEOUT_MILLIS,
+                    ))
+                    .await;
                     continue;
                 }
             };
