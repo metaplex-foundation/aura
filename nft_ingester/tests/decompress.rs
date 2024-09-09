@@ -18,6 +18,7 @@ mod tests {
         token_updates_processor::TokenAccountsProcessor,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
+    use rocks_db::batch_savers::BatchSaveStorage;
     use rocks_db::migrator::MigrationState;
     use rocks_db::{bubblegum_slots::BubblegumSlotGetter, Storage};
     use solana_sdk::pubkey::Pubkey;
@@ -104,16 +105,14 @@ mod tests {
     }
 
     async fn process_accounts(
-        db_batch: &mut rocksdb::WriteBatchWithTransaction<false>,
-        env_rocks: Arc<Storage>,
+        storage: &mut BatchSaveStorage,
         nft_created_slot: i64,
         mint: &Pubkey,
     ) {
-        let mplx_accs_parser =
-            MplxAccountsProcessor::new(env_rocks.clone(), Arc::new(IngesterMetricsConfig::new()));
+        let mplx_accs_parser = MplxAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
         let spl_token_accs_parser =
-            TokenAccountsProcessor::new(env_rocks.clone(), Arc::new(IngesterMetricsConfig::new()));
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
         let owner = Pubkey::from_str("3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM").unwrap();
 
@@ -142,11 +141,11 @@ mod tests {
         };
 
         spl_token_accs_parser
-            .transform_and_save_token_account(db_batch, token_acc.pubkey, &token_acc)
+            .transform_and_save_token_account(storage, token_acc.pubkey, &token_acc)
             .unwrap();
 
         spl_token_accs_parser
-            .transform_and_save_mint_account(db_batch, &mint_acc)
+            .transform_and_save_mint_account(storage, &mint_acc)
             .unwrap();
 
         let decompressed_token_data = MetadataInfo {
@@ -196,7 +195,7 @@ mod tests {
         };
 
         mplx_accs_parser
-            .transform_and_store_metadata_account(db_batch, *mint, &decompressed_token_data)
+            .transform_and_store_metadata_account(storage, *mint, &decompressed_token_data)
             .unwrap();
     }
 
@@ -249,15 +248,9 @@ mod tests {
         )
         .await;
 
-        let mut db_batch = rocksdb::WriteBatchWithTransaction::<false>::default();
-        process_accounts(
-            &mut db_batch,
-            env.rocks_env.storage.clone(),
-            242856151,
-            &mint,
-        )
-        .await;
-        env.rocks_env.storage.db.write(db_batch).unwrap();
+        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        process_accounts(&mut batch_storage, 242856151, &mint).await;
+        batch_storage.flush().unwrap();
 
         let file = File::open("./tests/artifacts/expected_decompress_result.json").unwrap();
         let mut reader = io::BufReader::new(file);
@@ -330,15 +323,9 @@ mod tests {
 
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
-        let mut db_batch = rocksdb::WriteBatchWithTransaction::<false>::default();
-        process_accounts(
-            &mut db_batch,
-            env.rocks_env.storage.clone(),
-            242856151,
-            &mint,
-        )
-        .await;
-        env.rocks_env.storage.db.write(db_batch).unwrap();
+        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        process_accounts(&mut batch_storage, 242856151, &mint).await;
+        batch_storage.flush().unwrap();
 
         process_bubblegum_transactions(
             mutexed_tasks.clone(),
@@ -418,15 +405,9 @@ mod tests {
 
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
-        let mut db_batch = rocksdb::WriteBatchWithTransaction::<false>::default();
-        process_accounts(
-            &mut db_batch,
-            env.rocks_env.storage.clone(),
-            252856151,
-            &mint,
-        )
-        .await;
-        env.rocks_env.storage.db.write(db_batch).unwrap();
+        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        process_accounts(&mut batch_storage, 252856151, &mint).await;
+        batch_storage.flush().unwrap();
 
         process_bubblegum_transactions(
             mutexed_tasks.clone(),
@@ -513,15 +494,9 @@ mod tests {
         )
         .await;
 
-        let mut db_batch = rocksdb::WriteBatchWithTransaction::<false>::default();
-        process_accounts(
-            &mut db_batch,
-            env.rocks_env.storage.clone(),
-            252856151,
-            &mint,
-        )
-        .await;
-        env.rocks_env.storage.db.write(db_batch).unwrap();
+        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        process_accounts(&mut batch_storage, 252856151, &mint).await;
+        batch_storage.flush().unwrap();
 
         let file = File::open("./tests/artifacts/expected_decompress_result.json").unwrap();
         let mut reader = io::BufReader::new(file);

@@ -1126,22 +1126,21 @@ async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send + 's
     rpc_client: Arc<RpcClient>,
     join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 ) {
-    let mut account_processor = AccountsProcessor::build(
-        rx.resubscribe(),
-        account_buffer_size,
-        fees_buffer_size,
-        rocks_storage,
-        unprocessed_transactions_getter,
-        metrics,
-        postgre_client,
-        rpc_client,
-        join_set,
-    )
-    .await
-    .unwrap();
-
     mutexed_tasks.lock().await.spawn(async move {
-        account_processor.process_accounts(rx).await;
+        let account_processor = AccountsProcessor::build(
+            rx.resubscribe(),
+            fees_buffer_size,
+            unprocessed_transactions_getter,
+            metrics,
+            postgre_client,
+            rpc_client,
+            join_set,
+        )
+        .await
+        .unwrap();
+        account_processor
+            .process_accounts(rx, rocks_storage, account_buffer_size)
+            .await;
         Ok(())
     });
 }

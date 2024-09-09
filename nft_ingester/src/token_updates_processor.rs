@@ -5,28 +5,22 @@ use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
 use rocks_db::batch_savers::BatchSaveStorage;
 use rocks_db::errors::StorageError;
 use solana_program::pubkey::Pubkey;
-use std::cell::RefCell;
-use std::ops::DerefMut;
-use std::rc::Rc;
 use std::sync::Arc;
 use tokio::time::Instant;
 use usecase::save_metrics::result_to_metrics;
 
 pub struct TokenAccountsProcessor {
-    storage: Rc<RefCell<BatchSaveStorage>>,
     metrics: Arc<IngesterMetricsConfig>,
 }
 
 impl TokenAccountsProcessor {
-    pub fn new(
-        storage: Rc<RefCell<BatchSaveStorage>>,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Self {
-        Self { storage, metrics }
+    pub fn new(metrics: Arc<IngesterMetricsConfig>) -> Self {
+        Self { metrics }
     }
 
     fn finalize_processing<T, F>(
-        &mut self,
+        &self,
+        storage: &mut BatchSaveStorage,
         operation: F,
         asset_update: PubkeyWithSlot,
         metric_name: &str,
@@ -35,11 +29,8 @@ impl TokenAccountsProcessor {
         F: Fn(&mut BatchSaveStorage) -> Result<T, StorageError>,
     {
         let begin_processing = Instant::now();
-        operation(self.storage.borrow_mut().deref_mut())?;
-        let res = self
-            .storage
-            .borrow_mut()
-            .asset_updated_with_batch(asset_update.slot, asset_update.pubkey);
+        operation(storage)?;
+        let res = storage.asset_updated_with_batch(asset_update.slot, asset_update.pubkey);
         self.metrics
             .set_latency(metric_name, begin_processing.elapsed().as_millis() as f64);
         result_to_metrics(self.metrics.clone(), &res, metric_name);
@@ -47,11 +38,12 @@ impl TokenAccountsProcessor {
     }
 
     pub fn transform_and_save_token_account(
-        &mut self,
+        &self,
+        storage: &mut BatchSaveStorage,
         key: Pubkey,
         token_account: &TokenAccount,
     ) -> Result<(), StorageError> {
-        self.save_token_account_with_idxs(key, token_account)?;
+        self.save_token_account_with_idxs(storage, key, token_account)?;
         let asset_owner_details = AssetOwner {
             pubkey: token_account.mint,
             owner: Updated::new(
@@ -83,6 +75,7 @@ impl TokenAccountsProcessor {
 
         let metrics = self.metrics.clone();
         self.finalize_processing(
+            storage,
             |storage: &mut BatchSaveStorage| {
                 storage.store_owner(&asset_owner_details, metrics.clone())?;
                 storage.store_dynamic(&asset_dynamic_details, metrics.clone())
@@ -95,7 +88,11 @@ impl TokenAccountsProcessor {
         )
     }
 
-    pub fn transform_and_save_mint_account(&mut self, mint: &Mint) -> Result<(), StorageError> {
+    pub fn transform_and_save_mint_account(
+        &self,
+        storage: &mut BatchSaveStorage,
+        mint: &Mint,
+    ) -> Result<(), StorageError> {
         let asset_dynamic_details = AssetDynamicDetails {
             pubkey: mint.pubkey,
             supply: Some(Updated::new(
@@ -122,6 +119,7 @@ impl TokenAccountsProcessor {
 
         let metrics = self.metrics.clone();
         self.finalize_processing(
+            storage,
             |storage: &mut BatchSaveStorage| {
                 storage.store_owner(&asset_owner_details, metrics.clone())?;
                 storage.store_dynamic(&asset_dynamic_details, metrics.clone())
@@ -135,11 +133,13 @@ impl TokenAccountsProcessor {
     }
 
     pub fn save_token_account_with_idxs(
-        &mut self,
+        &self,
+        storage: &mut BatchSaveStorage,
         key: Pubkey,
         token_account: &TokenAccount,
     ) -> Result<(), StorageError> {
         self.finalize_processing(
+            storage,
             |storage: &mut BatchSaveStorage| {
                 storage.save_token_account_with_idxs(key, token_account)
             },

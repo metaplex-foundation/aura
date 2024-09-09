@@ -14,41 +14,33 @@ use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetai
 use serde_json::Map;
 use serde_json::{json, Value};
 use solana_program::pubkey::Pubkey;
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Instant;
 
 pub struct MplCoreProcessor {
-    storage: Rc<RefCell<BatchSaveStorage>>,
     metrics: Arc<IngesterMetricsConfig>,
 }
 
 impl MplCoreProcessor {
-    pub fn new(
-        storage: Rc<RefCell<BatchSaveStorage>>,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Self {
-        Self { storage, metrics }
+    pub fn new(metrics: Arc<IngesterMetricsConfig>) -> Self {
+        Self { metrics }
     }
 
     pub fn transform_and_store_mpl_asset(
-        &mut self,
+        &self,
+        storage: &mut BatchSaveStorage,
         key: Pubkey,
         indexable_asset: &IndexableAssetWithAccountInfo,
     ) -> Result<(), StorageError> {
         let Some(metadata_models) = self
-            .create_mpl_asset_models(key, indexable_asset)
+            .create_mpl_asset_models(storage, key, indexable_asset)
             .map_err(|e| StorageError::Common(e.to_string()))?
         else {
             return Ok(());
         };
 
         let begin_processing = Instant::now();
-        let res = self
-            .storage
-            .borrow_mut()
-            .store_metadata_models(&metadata_models, self.metrics.clone());
+        let res = storage.store_metadata_models(&metadata_models, self.metrics.clone());
         self.metrics.set_latency(
             "mpl_core_asset_saving",
             begin_processing.elapsed().as_millis() as f64,
@@ -58,6 +50,7 @@ impl MplCoreProcessor {
 
     pub fn create_mpl_asset_models(
         &self,
+        storage: &mut BatchSaveStorage,
         asset_key: Pubkey,
         account_data: &IndexableAssetWithAccountInfo,
     ) -> Result<Option<MetadataModels>, IngesterError> {
@@ -77,7 +70,7 @@ impl MplCoreProcessor {
         // use the collection's authority.
         let update_authority = match asset.update_authority {
             UpdateAuthority::Address(address) => address,
-            UpdateAuthority::Collection(address) => self.storage.borrow().get_authority(address),
+            UpdateAuthority::Collection(address) => storage.get_authority(address),
             UpdateAuthority::None => Pubkey::default(),
         };
 
@@ -411,12 +404,13 @@ impl MplCoreProcessor {
     }
 
     pub fn transform_and_store_burnt_mpl_asset(
-        &mut self,
+        &self,
+        storage: &mut BatchSaveStorage,
         key: Pubkey,
         burnt_slot: &BurntMetadataSlot,
     ) -> Result<(), StorageError> {
         let begin_processing = Instant::now();
-        let res = self.mark_mpl_asset_as_burnt(key, burnt_slot);
+        let res = self.mark_mpl_asset_as_burnt(storage, key, burnt_slot);
         self.metrics.set_latency(
             "burn_mpl_assets",
             begin_processing.elapsed().as_millis() as f64,
@@ -425,11 +419,12 @@ impl MplCoreProcessor {
     }
 
     fn mark_mpl_asset_as_burnt(
-        &mut self,
+        &self,
+        storage: &mut BatchSaveStorage,
         key: Pubkey,
         burnt_slot: &BurntMetadataSlot,
     ) -> Result<(), StorageError> {
-        self.storage.borrow_mut().store_dynamic(
+        storage.store_dynamic(
             &AssetDynamicDetails {
                 pubkey: key,
                 is_burnt: Updated::new(
