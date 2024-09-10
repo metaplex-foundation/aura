@@ -36,6 +36,11 @@ pub struct AccountsProcessor<T: UnprocessedAccountsGetter> {
     core_fees_processor: MplCoreFeeProcessor,
 }
 
+// AccountsProcessor responsible for processing all account updates received
+// from Geyser plugin.
+// unprocessed_account_getter field represents a source of parsed accounts
+// It can be either Redis or Buffer filled by TCP-stream.
+// Each account is process by corresponding processor
 #[allow(clippy::too_many_arguments)]
 impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
     pub async fn build(
@@ -93,6 +98,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                     },
                 _ = interval.tick() => {
                     self.flush(&mut batch_storage, &mut ack_ids, &mut interval);
+                    self.core_fees_processor.store_mpl_assets_fee(&std::mem::take(&mut core_fees)).await;
                 }
             }
         }

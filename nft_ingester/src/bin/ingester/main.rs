@@ -1075,6 +1075,7 @@ async fn run_sequence_consistent_gapfiller<T, R>(
 
 const TRANSACTIONS_GETTER_IDLE_TIMEOUT_MILLIS: u64 = 250;
 
+// todo: move all inner processing logic into separate file
 async fn run_transaction_processor<TG: UnprocessedTransactionsGetter + Send + Sync + 'static>(
     rx: Receiver<()>,
     mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
