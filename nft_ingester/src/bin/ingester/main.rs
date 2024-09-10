@@ -539,11 +539,14 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_api_metrics = metrics_state.api_metrics.clone();
     let rpc_client = Arc::new(RpcClient::new(config.rpc_host.clone()));
     let account_balance_getter = Arc::new(AccountBalanceGetterImpl::new(rpc_client.clone()));
-    let proof_checker = config.check_proofs.then(Arc::new(MaybeProofChecker::new(
-        rpc_client.clone(),
-        config.check_proofs_probability,
-        config.check_proofs_commitment,
-    )));
+    let mut proof_checker = None;
+    if config.check_proofs {
+        proof_checker = Some(Arc::new(MaybeProofChecker::new(
+            rpc_client.clone(),
+            config.check_proofs_probability,
+            config.check_proofs_commitment,
+        )))
+    }
     let tasks_clone = mutexed_tasks.clone();
     let cloned_rx = shutdown_rx.resubscribe();
 
