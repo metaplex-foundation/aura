@@ -541,7 +541,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let account_balance_getter = Arc::new(AccountBalanceGetterImpl::new(rpc_client.clone()));
     let proof_checker = config
         .check_proofs
-        .then_some(Arc::new(MaybeProofChecker::new(
+        .then(Arc::new(MaybeProofChecker::new(
             rpc_client.clone(),
             config.check_proofs_probability,
             config.check_proofs_commitment,

@@ -159,7 +159,7 @@ async fn fetch_assets(
             None,
         )
     };
-    let grand_total = options.show_grand_total.then_some(
+    let grand_total = options.show_grand_total.then(
         index_client
             .get_grand_total(filter, &(&options).into())
             .await

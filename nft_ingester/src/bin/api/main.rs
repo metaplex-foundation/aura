@@ -104,7 +104,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_rocks_storage = rocks_storage.clone();
     let proof_checker = config
         .check_proofs
-        .then_some(Arc::new(MaybeProofChecker::new(
+        .then(Arc::new(MaybeProofChecker::new(
             rpc_client.clone(),
             config.check_proofs_probability,
             config.check_proofs_commitment,
