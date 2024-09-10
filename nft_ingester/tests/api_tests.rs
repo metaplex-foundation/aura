@@ -11,7 +11,10 @@ mod tests {
         DisplayOptions, GetAssetProof, GetAssetSignatures, GetCoreFees, GetTokenAccounts, Options,
         SearchAssetsOptions,
     };
-    use entities::models::{AssetSignature, AssetSignatureKey, OffChainData};
+    use entities::models::{
+        AssetSignature, AssetSignatureKey, BurntMetadataSlot, MetadataInfo, Mint, OffChainData,
+        TokenAccount,
+    };
     use entities::{
         api_req_params::{
             AssetSortBy, AssetSortDirection, AssetSorting, GetAsset, GetAssetsByAuthority,
@@ -34,21 +37,17 @@ mod tests {
     };
     use nft_ingester::api::dapi::rpc_asset_models::Asset;
     use nft_ingester::api::error::DasApiError;
+    use nft_ingester::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater};
     use nft_ingester::{
-        buffer::Buffer,
-        config::JsonMiddlewareConfig,
-        json_worker::JsonWorker,
-        mplx_updates_processor::{BurntMetadataSlot, MetadataInfo, MplxAccsProcessor},
-        token_updates_processor::TokenAccsProcessor,
+        config::JsonMiddlewareConfig, json_worker::JsonWorker,
+        token_updates_processor::TokenAccountsProcessor,
     };
     use rocks_db::asset::AssetLeaf;
+    use rocks_db::batch_savers::BatchSaveStorage;
     use rocks_db::inscriptions::{Inscription, InscriptionData};
     use rocks_db::tree_seq::TreesGaps;
-    use rocks_db::{
-        columns::{Mint, TokenAccount},
-        AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
-    };
+    use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
     use serde_json::{json, Value};
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
@@ -775,20 +774,10 @@ mod tests {
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
-        let buffer = Arc::new(Buffer::new());
-
-        let token_updates_processor = TokenAccsProcessor::new(
-            env.rocks_env.storage.clone(),
-            buffer.clone(),
-            Arc::new(IngesterMetricsConfig::new()),
-            1,
-        );
-        let mplx_updates_processor = MplxAccsProcessor::new(
-            1,
-            buffer.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(IngesterMetricsConfig::new()),
-        );
+        let token_updates_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        let mplx_updates_processor =
+            MplxAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
         let token_key = Pubkey::new_unique();
         let mint_key = Pubkey::new_unique();
@@ -844,10 +833,7 @@ mod tests {
             metadata_owner: None,
             rent_epoch: 0,
         };
-        let mut metadata_info = HashMap::new();
-        metadata_info.insert(mint_key.to_bytes().to_vec(), metadata);
-
-        let metadata = OffChainData {
+        let offchain_data = OffChainData {
             url: "https://ping-pong".to_string(),
             metadata: "{\"msg\": \"hallo\"}".to_string(),
         };
@@ -855,19 +841,21 @@ mod tests {
         env.rocks_env
             .storage
             .asset_offchain_data
-            .put(metadata.url.clone(), metadata)
+            .put(offchain_data.url.clone(), offchain_data)
             .unwrap();
 
+        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
         token_updates_processor
-            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
-            .await;
+            .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
+            .unwrap();
         token_updates_processor
-            .transform_and_save_token_accs(&[(token_acc.pubkey, token_acc)].into_iter().collect())
-            .await;
+            .transform_and_save_token_account(&mut batch_storage, token_acc.pubkey, &token_acc)
+            .unwrap();
 
         mplx_updates_processor
-            .transform_and_store_metadata_accs(&metadata_info)
-            .await;
+            .transform_and_store_metadata_account(&mut batch_storage, mint_key, &metadata)
+            .unwrap();
+        batch_storage.flush().unwrap();
 
         let payload = GetAsset {
             id: mint_key.to_string(),
@@ -892,9 +880,11 @@ mod tests {
             write_version: 2,
         };
 
+        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
         token_updates_processor
-            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
-            .await;
+            .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
+            .unwrap();
+        batch_storage.flush().unwrap();
 
         let payload = GetAsset {
             id: mint_key.to_string(),
@@ -938,20 +928,10 @@ mod tests {
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
-        let buffer = Arc::new(Buffer::new());
-
-        let token_updates_processor = TokenAccsProcessor::new(
-            env.rocks_env.storage.clone(),
-            buffer.clone(),
-            Arc::new(IngesterMetricsConfig::new()),
-            1,
-        );
-        let mplx_updates_processor = MplxAccsProcessor::new(
-            1,
-            buffer.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(IngesterMetricsConfig::new()),
-        );
+        let token_updates_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        let mplx_updates_processor =
+            MplxAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
         let mut metadata_info = HashMap::new();
         let mut mint_accs = Vec::new();
@@ -1018,7 +998,7 @@ mod tests {
                 rent_epoch: 0,
             };
 
-            metadata_info.insert(mint_key.to_bytes().to_vec(), metadata);
+            metadata_info.insert(mint_key, metadata);
             mint_accs.push(mint_acc);
             token_accs.push(token_acc);
         }
@@ -1034,27 +1014,27 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        token_updates_processor
-            .transform_and_save_mint_accs(
-                &mint_accs
-                    .clone()
-                    .into_iter()
-                    .map(|mint| (mint.pubkey.to_bytes().to_vec(), mint))
-                    .collect(),
-            )
-            .await;
-        token_updates_processor
-            .transform_and_save_token_accs(
-                &token_accs
-                    .into_iter()
-                    .map(|token_acc| (token_acc.pubkey, token_acc))
-                    .collect(),
-            )
-            .await;
-
-        mplx_updates_processor
-            .transform_and_store_metadata_accs(&metadata_info)
-            .await;
+        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        for mint in mint_accs.iter() {
+            token_updates_processor
+                .transform_and_save_mint_account(&mut batch_storage, mint)
+                .unwrap();
+        }
+        for token_account in token_accs.iter() {
+            token_updates_processor
+                .transform_and_save_token_account(
+                    &mut batch_storage,
+                    token_account.pubkey,
+                    token_account,
+                )
+                .unwrap();
+        }
+        for (key, metadata) in metadata_info.iter() {
+            mplx_updates_processor
+                .transform_and_store_metadata_account(&mut batch_storage, *key, metadata)
+                .unwrap();
+        }
+        batch_storage.flush().unwrap();
 
         let payload = GetAsset {
             id: mint_accs[0].pubkey.to_string(),
@@ -1109,20 +1089,10 @@ mod tests {
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
-        let buffer = Arc::new(Buffer::new());
-
-        let token_updates_processor = TokenAccsProcessor::new(
-            env.rocks_env.storage.clone(),
-            buffer.clone(),
-            Arc::new(IngesterMetricsConfig::new()),
-            1,
-        );
-        let mplx_updates_processor = MplxAccsProcessor::new(
-            1,
-            buffer.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(IngesterMetricsConfig::new()),
-        );
+        let token_updates_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        let mplx_updates_processor =
+            MplxAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
         let token_key = Pubkey::new_unique();
         let mint_key = Pubkey::new_unique();
@@ -1192,18 +1162,23 @@ mod tests {
             ],
             &blockbuster::programs::token_metadata::token_metadata_id(),
         );
-        let mut mplx_metadata_info: HashMap<Vec<u8>, MetadataInfo> = HashMap::new();
-        mplx_metadata_info.insert(metadata_key.to_bytes().to_vec(), metadata);
 
-        let mut burnt_buff: HashMap<Pubkey, BurntMetadataSlot> = HashMap::new();
-        burnt_buff.insert(metadata_key, BurntMetadataSlot { slot_updated: 2 });
-
+        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
         mplx_updates_processor
-            .transform_and_store_metadata_accs(&mplx_metadata_info)
-            .await;
+            .transform_and_store_metadata_account(&mut batch_storage, metadata_key, &metadata)
+            .unwrap();
+        // save metadata_mint map
+        batch_storage.flush().unwrap();
         mplx_updates_processor
-            .transform_and_store_burnt_metadata(&burnt_buff)
-            .await;
+            .transform_and_store_burnt_metadata(
+                &mut batch_storage,
+                metadata_key,
+                &BurntMetadataSlot {
+                    slot_updated: 2,
+                    write_version: 100,
+                },
+            )
+            .unwrap();
         env.rocks_env
             .storage
             .asset_offchain_data
@@ -1211,11 +1186,12 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
-            .await;
+            .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
+            .unwrap();
         token_updates_processor
-            .transform_and_save_token_accs(&[(token_acc.pubkey, token_acc)].into_iter().collect())
-            .await;
+            .transform_and_save_token_account(&mut batch_storage, token_acc.pubkey, &token_acc)
+            .unwrap();
+        batch_storage.flush().unwrap();
 
         let payload = GetAsset {
             id: mint_key.to_string(),
@@ -1473,13 +1449,8 @@ mod tests {
             None,
         );
 
-        let buffer = Arc::new(Buffer::new());
-        let token_updates_processor = TokenAccsProcessor::new(
-            env.rocks_env.storage.clone(),
-            buffer.clone(),
-            Arc::new(IngesterMetricsConfig::new()),
-            1,
-        );
+        let token_updates_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
         let mut token_accounts = HashMap::new();
         let first_owner = Pubkey::new_unique();
@@ -1570,9 +1541,13 @@ mod tests {
             );
         }
 
-        token_updates_processor
-            .transform_and_save_token_accs(&token_accounts)
-            .await;
+        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        for (key, token_account) in token_accounts.iter() {
+            token_updates_processor
+                .transform_and_save_token_account(&mut batch_storage, *key, &token_account)
+                .unwrap();
+        }
+        batch_storage.flush().unwrap();
 
         let payload = GetTokenAccounts {
             limit: Some(10),
@@ -1684,13 +1659,8 @@ mod tests {
             None,
         );
 
-        let buffer = Arc::new(Buffer::new());
-        let token_updates_processor = TokenAccsProcessor::new(
-            env.rocks_env.storage.clone(),
-            buffer.clone(),
-            Arc::new(IngesterMetricsConfig::new()),
-            1,
-        );
+        let token_updates_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
         let mut token_accounts = HashMap::new();
 
@@ -1746,9 +1716,13 @@ mod tests {
             );
         }
 
-        token_updates_processor
-            .transform_and_save_token_accs(&token_accounts)
-            .await;
+        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        for (key, token_account) in token_accounts.iter() {
+            token_updates_processor
+                .transform_and_save_token_account(&mut batch_storage, *key, &token_account)
+                .unwrap();
+        }
+        batch_storage.flush().unwrap();
 
         check_pagination(&api, Some(first_owner.to_string()), None).await;
 

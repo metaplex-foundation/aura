@@ -1,8 +1,5 @@
-use crate::buffer::FeesBuffer;
 use crate::error::IngesterError;
-use crate::mplx_updates_processor::CoreAssetFee;
-use crate::process_accounts;
-use entities::models::CoreFee;
+use entities::models::{CoreAssetFee, CoreFee};
 use metrics_utils::IngesterMetricsConfig;
 use postgre_client::PgClient;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -11,7 +8,7 @@ use solana_program::rent::Rent;
 use solana_program::sysvar::rent;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinSet;
@@ -23,57 +20,34 @@ const FETCH_RENT_INTERVAL: Duration = Duration::from_secs(60 * 60 * 24);
 #[derive(Clone)]
 pub struct MplCoreFeeProcessor {
     pub storage: Arc<PgClient>,
-    pub batch_size: usize,
-    pub buffer: Arc<FeesBuffer>,
     pub metrics: Arc<IngesterMetricsConfig>,
     rpc_client: Arc<RpcClient>,
     rent: Arc<RwLock<Rent>>,
     join_set: Arc<Mutex<JoinSet<Result<(), tokio::task::JoinError>>>>,
-
-    last_received_mpl_asset_at: Option<SystemTime>,
 }
 
 impl MplCoreFeeProcessor {
     pub async fn build(
         storage: Arc<PgClient>,
-        buffer: Arc<FeesBuffer>,
         metrics: Arc<IngesterMetricsConfig>,
         rpc_client: Arc<RpcClient>,
         join_set: Arc<Mutex<JoinSet<Result<(), tokio::task::JoinError>>>>,
-        batch_size: usize,
     ) -> Result<Self, IngesterError> {
         let rent_account = rpc_client.get_account(&rent::ID).await?;
         let rent: Rent = bincode::deserialize(&rent_account.data)?;
         Ok(Self {
             storage,
-            buffer,
-            batch_size,
             metrics,
             rpc_client,
-            last_received_mpl_asset_at: None,
             rent: Arc::new(RwLock::new(rent)),
             join_set,
         })
     }
 
-    pub async fn start_processing(&mut self, rx: Receiver<()>) {
-        self.update_rent(rx.resubscribe()).await;
-        process_accounts!(
-            self,
-            rx,
-            self.buffer.mpl_core_fee_assets,
-            self.batch_size,
-            |s: CoreAssetFee| s,
-            self.last_received_mpl_asset_at,
-            Self::store_mpl_assets_fee,
-            "mpl_core_asset_fee"
-        );
-    }
-
     // on-chain programs can fetch rent without RPC call
     // but off-chain indexer need to make such calls in order
     // to get actual rent data
-    async fn update_rent(&self, mut rx: Receiver<()>) {
+    pub async fn update_rent(&self, mut rx: Receiver<()>) {
         let rpc_client = self.rpc_client.clone();
         let rent = self.rent.clone();
         self.join_set.lock().await.spawn(tokio::spawn(async move {
@@ -106,9 +80,9 @@ impl MplCoreFeeProcessor {
         Ok(())
     }
 
-    pub async fn store_mpl_assets_fee(&self, metadata_info: &HashMap<Pubkey, CoreAssetFee>) {
+    pub async fn store_mpl_assets_fee(&self, asset_fees: &HashMap<Pubkey, CoreAssetFee>) {
         let mut fees = Vec::new();
-        for (pk, asset) in metadata_info.iter() {
+        for (pk, asset) in asset_fees.iter() {
             let rent = match self.calculate_rent_amount(asset).await {
                 Ok(rent) => rent,
                 Err(err) => {

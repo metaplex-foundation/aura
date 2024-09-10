@@ -3,66 +3,42 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use entities::models::{BufferedTransaction, Task};
-use interface::signature_persistence::ProcessingDataGetter;
+use entities::enums::UnprocessedAccount;
+use entities::models::{BufferedTransaction, BufferedTxWithID, Task, UnprocessedAccountMessage};
+use interface::error::UsecaseError;
+use interface::signature_persistence::UnprocessedTransactionsGetter;
+use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
 use tokio::sync::Mutex;
 use tonic::async_trait;
+use tracing::log::info;
 
-use crate::inscriptions_processor::{InscriptionDataInfo, InscriptionInfo};
 use metrics_utils::IngesterMetricsConfig;
-use rocks_db::columns::{Mint, TokenAccount};
 
-use crate::mplx_updates_processor::{
-    BurntMetadataSlot, IndexableAssetWithAccountInfo, TokenMetadata,
-};
-use crate::mplx_updates_processor::{CoreAssetFee, MetadataInfo};
+const ACCOUNT_BATCH_SIZE: usize = 50;
+const TXS_BATCH_SIZE: usize = 10;
 
 #[derive(Default)]
 pub struct Buffer {
     pub transactions: Mutex<VecDeque<BufferedTransaction>>,
-    pub mplx_metadata_info: Mutex<HashMap<Vec<u8>, MetadataInfo>>,
-    pub token_accs: Mutex<HashMap<Pubkey, TokenAccount>>,
-    pub mints: Mutex<HashMap<Vec<u8>, Mint>>,
     pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
-    pub token_metadata_editions: Mutex<HashMap<Pubkey, TokenMetadata>>,
-    pub burnt_metadata_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
-    pub burnt_mpl_core_at_slot: Mutex<HashMap<Pubkey, BurntMetadataSlot>>,
-    pub mpl_core_indexable_assets: Mutex<HashMap<Pubkey, IndexableAssetWithAccountInfo>>,
-    pub inscriptions: Mutex<HashMap<Pubkey, InscriptionInfo>>,
-    pub inscriptions_data: Mutex<HashMap<Pubkey, InscriptionDataInfo>>,
+    pub accounts: Mutex<HashMap<Pubkey, UnprocessedAccount>>,
 }
 
 impl Buffer {
     pub fn new() -> Self {
         Self {
             transactions: Mutex::new(VecDeque::<BufferedTransaction>::new()),
-            mplx_metadata_info: Mutex::new(HashMap::new()),
-            token_accs: Mutex::new(HashMap::new()),
-            mints: Mutex::new(HashMap::new()),
             json_tasks: Arc::new(Mutex::new(VecDeque::<Task>::new())),
-            token_metadata_editions: Mutex::new(HashMap::new()),
-            burnt_metadata_at_slot: Mutex::new(HashMap::new()),
-            burnt_mpl_core_at_slot: Mutex::new(HashMap::new()),
-            mpl_core_indexable_assets: Mutex::new(HashMap::new()),
-            inscriptions: Mutex::new(HashMap::new()),
-            inscriptions_data: Mutex::new(HashMap::new()),
+            accounts: Mutex::new(HashMap::new()),
         }
     }
 
     pub async fn debug(&self) {
-        println!(
-            "\nMplx metadata info buffer: {}\nTransactions buffer: {}\nSPL Tokens buffer: {}\nSPL Mints buffer: {}\nJson tasks buffer: {}\nToken Metadata Editions buffer: {}\nBurnt Metadata buffer: {}\nMpl Core full assets buffer: {}\nBurnt Mpl Core buffer: {}\nInscriptions buffer: {}\nInscriptions Data buffer: {}\n",
-            self.mplx_metadata_info.lock().await.len(),
+        info!(
+            "\nTransactions buffer: {}\nJson tasks buffer: {}\nAccounts buffer: {}\n",
             self.transactions.lock().await.len(),
-            self.token_accs.lock().await.len(),
-            self.mints.lock().await.len(),
             self.json_tasks.lock().await.len(),
-            self.token_metadata_editions.lock().await.len(),
-            self.burnt_metadata_at_slot.lock().await.len(),
-            self.mpl_core_indexable_assets.lock().await.len(),
-            self.burnt_mpl_core_at_slot.lock().await.len(),
-            self.inscriptions.lock().await.len(),
-            self.inscriptions_data.lock().await.len(),
+            self.accounts.lock().await.len(),
         );
     }
 
@@ -72,45 +48,58 @@ impl Buffer {
             self.transactions.lock().await.len() as i64,
         );
         metrics.set_buffer(
-            "buffer_mplx_accounts",
-            self.mplx_metadata_info.lock().await.len() as i64,
+            "buffer_json_tasks",
+            self.json_tasks.lock().await.len() as i64,
         );
-        metrics.set_buffer(
-            "buffer_editions",
-            self.token_metadata_editions.lock().await.len() as i64,
-        );
-        metrics.set_buffer(
-            "mpl_core",
-            self.mpl_core_indexable_assets.lock().await.len() as i64,
-        );
-        metrics.set_buffer("inscriptions", self.inscriptions.lock().await.len() as i64);
-        metrics.set_buffer(
-            "inscriptions_data",
-            self.inscriptions_data.lock().await.len() as i64,
-        );
-    }
-
-    pub async fn mplx_metadata_len(&self) -> usize {
-        self.mplx_metadata_info.lock().await.len()
+        metrics.set_buffer("buffer_accounts", self.accounts.lock().await.len() as i64);
     }
 }
 
 #[async_trait]
-impl ProcessingDataGetter for Buffer {
-    async fn get_processing_transaction(&self) -> Option<BufferedTransaction> {
+impl UnprocessedTransactionsGetter for Buffer {
+    async fn next_transactions(&self) -> Result<Vec<BufferedTxWithID>, UsecaseError> {
         let mut buffer = self.transactions.lock().await;
-        buffer.pop_front()
+        let mut result = Vec::with_capacity(TXS_BATCH_SIZE);
+
+        while let Some(tx) = buffer.pop_front() {
+            result.push(BufferedTxWithID {
+                tx,
+                id: String::new(),
+            });
+            if result.len() >= TXS_BATCH_SIZE {
+                break;
+            }
+        }
+        Ok(result)
     }
+
+    fn ack(&self, _id: String) {}
 }
 
-#[derive(Default)]
-pub struct FeesBuffer {
-    pub mpl_core_fee_assets: Mutex<HashMap<Pubkey, CoreAssetFee>>,
-}
-impl FeesBuffer {
-    pub fn new() -> Self {
-        Self {
-            mpl_core_fee_assets: Mutex::new(HashMap::new()),
+#[async_trait]
+impl UnprocessedAccountsGetter for Buffer {
+    async fn next_accounts(&self) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError> {
+        let mut buffer = self.accounts.lock().await;
+        let mut result = Vec::with_capacity(ACCOUNT_BATCH_SIZE);
+        let mut keys_to_remove = Vec::with_capacity(ACCOUNT_BATCH_SIZE);
+        for key in buffer.keys().cloned() {
+            keys_to_remove.push(key);
+            if result.len() >= ACCOUNT_BATCH_SIZE {
+                break;
+            }
         }
+        for key in keys_to_remove {
+            if let Some((key, account)) = buffer.remove_entry(&key) {
+                result.push(UnprocessedAccountMessage {
+                    account,
+                    key,
+                    id: String::new(),
+                });
+            }
+        }
+
+        Ok(result)
     }
+
+    fn ack(&self, _ids: Vec<String>) {}
 }

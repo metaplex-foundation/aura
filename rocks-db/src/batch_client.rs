@@ -1,14 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
-use entities::enums::SpecificationVersions;
+use entities::enums::{SpecificationVersions, TokenMetadataEdition};
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::asset::{AssetCollection, AssetLeaf, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey};
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
 use crate::column::TypedColumn;
-use crate::editions::TokenMetadataEdition;
 use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
 use crate::storage_traits::{

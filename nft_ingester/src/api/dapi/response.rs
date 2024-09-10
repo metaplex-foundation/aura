@@ -1,5 +1,5 @@
 use crate::api::dapi::rpc_asset_models::Asset;
-use entities::models::{AssetSignature, CoreFeesAccount, TokenAccount};
+use entities::models::{AssetSignature, CoreFeesAccount, ResponseTokenAccount};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -133,7 +133,7 @@ pub struct TokenAccountsList {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub token_accounts: Vec<TokenAccount>,
+    pub token_accounts: Vec<ResponseTokenAccount>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]

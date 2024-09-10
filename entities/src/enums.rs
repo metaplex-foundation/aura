@@ -1,3 +1,7 @@
+use crate::models::{
+    BurntMetadataSlot, CoreAssetFee, EditionMetadata, EditionV1, IndexableAssetWithAccountInfo,
+    InscriptionDataInfo, InscriptionInfo, MasterEdition, MetadataInfo, Mint, TokenAccount,
+};
 use num_derive::FromPrimitive;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -347,4 +351,23 @@ impl TryFrom<u8> for FailedBatchMintState {
             _ => Err("Wrong enum value".to_string()),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum TokenMetadataEdition {
+    EditionV1(EditionV1),
+    MasterEdition(MasterEdition),
+}
+
+pub enum UnprocessedAccount {
+    MetadataInfo(MetadataInfo),
+    Token(TokenAccount),
+    Mint(Mint),
+    Edition(EditionMetadata),
+    BurnMetadata(BurntMetadataSlot),
+    BurnMplCore(BurntMetadataSlot),
+    MplCore(IndexableAssetWithAccountInfo),
+    Inscription(InscriptionInfo),
+    InscriptionData(InscriptionDataInfo),
+    MplCoreFee(CoreAssetFee),
 }

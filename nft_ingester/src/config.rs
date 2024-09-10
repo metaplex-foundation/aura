@@ -3,6 +3,7 @@ use std::net::{SocketAddr, ToSocketAddrs};
 
 use figment::{providers::Env, Figment};
 use interface::asset_streaming_and_discovery::PeerDiscovery;
+use plerkle_messenger::MessengerConfig;
 use serde::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
 use tracing_subscriber::fmt;
@@ -49,12 +50,8 @@ const fn default_permitted_tasks() -> usize {
     500
 }
 
-const fn default_mpl_core_buffer_size() -> usize {
-    10
-}
-
-const fn default_inscription_buffer_size() -> usize {
-    10
+const fn default_mpl_core_fees_buffer_size() -> usize {
+    50
 }
 
 const fn default_price_monitoring_interval_sec() -> u64 {
@@ -100,6 +97,13 @@ pub enum BackfillerSourceMode {
     RPC,
 }
 
+#[derive(Deserialize, Default, PartialEq, Debug, Clone, Copy)]
+pub enum MessageSource {
+    #[default]
+    Redis,
+    TCP,
+}
+
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct RawBackfillConfig {
     #[serde(default = "default_log_level")]
@@ -117,13 +121,12 @@ pub struct RawBackfillConfig {
 pub struct IngesterConfig {
     pub database_config: DatabaseConfig,
     pub tcp_config: TcpConfig,
-    pub mplx_buffer_size: usize,
+    pub redis_messenger_config: MessengerConfig,
+    pub message_source: MessageSource,
+    pub accounts_buffer_size: usize,
     pub parsing_workers: u32,
-    pub spl_buffer_size: usize,
-    #[serde(default = "default_mpl_core_buffer_size")]
-    pub mpl_core_buffer_size: usize,
-    #[serde(default = "default_inscription_buffer_size")]
-    pub inscription_buffer_size: usize,
+    #[serde(default = "default_mpl_core_fees_buffer_size")]
+    pub mpl_core_fees_buffer_size: usize,
     pub metrics_port: Option<u16>,
     pub rocks_db_path_container: Option<String>,
     #[serde(default = "default_rocks_backup_url")]

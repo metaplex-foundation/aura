@@ -1,15 +1,12 @@
 use std::fmt::Debug;
-use std::{collections::HashMap, marker::PhantomData, sync::Arc, vec};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use bincode::{deserialize, serialize};
-use entities::models::{TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey};
-use metrics_utils::red::RequestErrorDurationMetrics;
-use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, MergeOperands, DB};
-use serde::{de::DeserializeOwned, Serialize};
-use solana_sdk::pubkey::Pubkey;
-use tracing::error;
 
-use crate::key_encoders::{decode_pubkeyx2, decode_pubkeyx3, encode_pubkeyx2, encode_pubkeyx3};
+use metrics_utils::red::RequestErrorDurationMetrics;
+use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, DB};
+use serde::{de::DeserializeOwned, Serialize};
+
 use crate::{Result, StorageError, BATCH_GET_ACTION, ROCKS_COMPONENT};
 pub trait TypedColumn {
     type KeyType: Sync + Clone + Send + Debug;
@@ -123,7 +120,7 @@ where
         Ok(())
     }
 
-    pub(crate) fn merge_with_batch(
+    pub fn merge_with_batch(
         &self,
         batch: &mut rocksdb::WriteBatchWithTransaction<false>,
         key: C::KeyType,
@@ -134,7 +131,7 @@ where
         })
     }
 
-    pub(crate) fn merge_with_batch_cbor(
+    pub fn merge_with_batch_cbor(
         &self,
         batch: &mut rocksdb::WriteBatchWithTransaction<false>,
         key: C::KeyType,
@@ -495,150 +492,3 @@ where
         Ok(res.is_some())
     }
 }
-
-pub mod columns {
-    use serde::{Deserialize, Serialize};
-    use solana_sdk::pubkey::Pubkey;
-
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct TokenAccount {
-        pub pubkey: Pubkey,
-        pub mint: Pubkey,
-        pub delegate: Option<Pubkey>,
-        pub owner: Pubkey,
-        pub frozen: bool,
-        pub delegated_amount: i64,
-        pub slot_updated: i64,
-        pub amount: i64,
-        pub write_version: u64,
-    }
-
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct Mint {
-        pub pubkey: Pubkey,
-        pub slot_updated: i64,
-        pub supply: i64,
-        pub decimals: i32,
-        pub mint_authority: Option<Pubkey>,
-        pub freeze_authority: Option<Pubkey>,
-        pub write_version: u64,
-    }
-
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct TokenAccountOwnerIdx {
-        pub is_zero_balance: bool,
-        pub write_version: u64,
-    }
-
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct TokenAccountMintOwnerIdx {
-        pub is_zero_balance: bool,
-        pub write_version: u64,
-    }
-}
-
-impl TypedColumn for columns::TokenAccountOwnerIdx {
-    type KeyType = TokenAccountOwnerIdxKey;
-
-    type ValueType = Self;
-    const NAME: &'static str = "TOKEN_ACCOUNTS_OWNER_IDX";
-
-    fn encode_key(key: TokenAccountOwnerIdxKey) -> Vec<u8> {
-        encode_pubkeyx2((key.owner, key.token_account))
-    }
-
-    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        let (owner, token_account) = decode_pubkeyx2(bytes)?;
-        Ok(TokenAccountOwnerIdxKey {
-            owner,
-            token_account,
-        })
-    }
-}
-
-impl TypedColumn for columns::TokenAccountMintOwnerIdx {
-    type KeyType = TokenAccountMintOwnerIdxKey;
-
-    type ValueType = Self;
-    const NAME: &'static str = "TOKEN_ACCOUNTS_MINT_OWNER_IDX";
-
-    fn encode_key(key: TokenAccountMintOwnerIdxKey) -> Vec<u8> {
-        encode_pubkeyx3((key.mint, key.owner, key.token_account))
-    }
-
-    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        let (mint, owner, token_account) = decode_pubkeyx3(bytes)?;
-        Ok(TokenAccountMintOwnerIdxKey {
-            mint,
-            owner,
-            token_account,
-        })
-    }
-}
-
-impl TypedColumn for columns::TokenAccount {
-    const NAME: &'static str = "TOKEN_ACCOUNTS";
-
-    type KeyType = Pubkey;
-    type ValueType = Self;
-
-    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
-        pubkey.to_bytes().to_vec()
-    }
-
-    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
-        let key = Pubkey::try_from(&bytes[0..32])?;
-        Ok(key)
-    }
-}
-
-#[macro_export]
-macro_rules! impl_merge_values {
-    ($ty:ty) => {
-        impl $ty {
-            pub fn merge_values(
-                _new_key: &[u8],
-                existing_val: Option<&[u8]>,
-                operands: &MergeOperands,
-            ) -> Option<Vec<u8>> {
-                let mut result = vec![];
-                let mut write_version = 0;
-                if let Some(existing_val) = existing_val {
-                    match deserialize::<Self>(existing_val) {
-                        Ok(value) => {
-                            write_version = value.write_version;
-                            result = existing_val.to_vec();
-                        }
-                        Err(e) => {
-                            error!(
-                                "RocksDB: {} deserialize existing_val: {}",
-                                stringify!($ty),
-                                e
-                            )
-                        }
-                    }
-                }
-
-                for op in operands {
-                    match deserialize::<Self>(op) {
-                        Ok(new_val) => {
-                            if new_val.write_version > write_version {
-                                write_version = new_val.write_version;
-                                result = op.to_vec();
-                            }
-                        }
-                        Err(e) => {
-                            error!("RocksDB: {} deserialize new_val: {}", stringify!($ty), e)
-                        }
-                    }
-                }
-
-                Some(result)
-            }
-        }
-    };
-}
-
-impl_merge_values!(columns::TokenAccount);
-impl_merge_values!(columns::TokenAccountOwnerIdx);
-impl_merge_values!(columns::TokenAccountMintOwnerIdx);

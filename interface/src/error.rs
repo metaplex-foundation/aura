@@ -46,6 +46,8 @@ pub enum UsecaseError {
     ),
     #[error("EmptyPriceFetcherResponse {0}")]
     EmptyPriceFetcherResponse(String),
+    #[error("Messenger {0}")]
+    Messenger(String),
 }
 
 impl From<ClientError> for UsecaseError {
