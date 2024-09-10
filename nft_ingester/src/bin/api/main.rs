@@ -102,13 +102,11 @@ pub async fn main() -> Result<(), IngesterError> {
     let rpc_client = Arc::new(RpcClient::new(config.rpc_host));
     let account_balance_getter = Arc::new(AccountBalanceGetterImpl::new(rpc_client.clone()));
     let cloned_rocks_storage = rocks_storage.clone();
-    let proof_checker = config
-        .check_proofs
-        .then(Arc::new(MaybeProofChecker::new(
-            rpc_client.clone(),
-            config.check_proofs_probability,
-            config.check_proofs_commitment,
-        )));
+    let proof_checker = config.check_proofs.then(Arc::new(MaybeProofChecker::new(
+        rpc_client.clone(),
+        config.check_proofs_probability,
+        config.check_proofs_commitment,
+    )));
 
     let json_worker = {
         if let Some(middleware_config) = &config.json_middleware_config {
