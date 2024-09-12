@@ -24,9 +24,9 @@ impl InscriptionsProcessor {
         let begin_processing = Instant::now();
         let res = storage.store_inscription(inscription);
 
-        result_to_metrics(self.metrics.clone(), &res, "inscriptions_saving");
+        result_to_metrics(self.metrics.clone(), &res, "inscriptions_merge_with_batch");
         self.metrics.set_latency(
-            "inscriptions_saving",
+            "inscriptions_merge_with_batch",
             begin_processing.elapsed().as_millis() as f64,
         );
         res
@@ -41,9 +41,13 @@ impl InscriptionsProcessor {
         let begin_processing = Instant::now();
         let res = storage.store_inscription_data(key, inscription_data);
 
-        result_to_metrics(self.metrics.clone(), &res, "inscriptions_data_saving");
+        result_to_metrics(
+            self.metrics.clone(),
+            &res,
+            "inscriptions_data_merge_with_batch",
+        );
         self.metrics.set_latency(
-            "inscriptions_data_saving",
+            "inscriptions_data_merge_with_batch",
             begin_processing.elapsed().as_millis() as f64,
         );
         res

@@ -11,6 +11,7 @@ use metrics_utils::IngesterMetricsConfig;
 use num_traits::Zero;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
+use tokio::time::Instant;
 use tracing::error;
 use usecase::save_metrics::result_to_metrics;
 
@@ -18,6 +19,7 @@ pub struct BatchSaveStorage {
     storage: Arc<Storage>,
     batch: rocksdb::WriteBatchWithTransaction<false>,
     batch_size: usize,
+    metrics: Arc<IngesterMetricsConfig>,
 }
 
 #[derive(Default, Debug)]
@@ -32,110 +34,96 @@ pub struct MetadataModels {
 
 #[macro_export]
 macro_rules! store_assets {
-    ($self:expr, $asset:expr, $metrics:expr, $db_field:ident, $metric_name:expr) => {{
+    ($self:expr, $asset:expr, $db_field:ident, $metric_name:expr) => {{
         let res = $self
             .storage
             .$db_field
             .merge_with_batch(&mut $self.batch, $asset.pubkey, $asset);
 
-        result_to_metrics($metrics, &res, $metric_name);
+        result_to_metrics($self.metrics.clone(), &res, $metric_name);
         res
     }};
 }
 
 impl BatchSaveStorage {
-    pub fn new(storage: Arc<Storage>, batch_size: usize) -> Self {
+    pub fn new(
+        storage: Arc<Storage>,
+        batch_size: usize,
+        metrics: Arc<IngesterMetricsConfig>,
+    ) -> Self {
         Self {
             storage,
             batch_size,
             batch: Default::default(),
+            metrics,
         }
     }
 
     pub fn flush(&mut self) -> Result<()> {
-        self.storage
+        self.metrics
+            .set_buffer("accounts_batch_size", self.batch.len() as i64);
+        let begin_processing = Instant::now();
+        let res = self
+            .storage
             .db
             .write(std::mem::take(&mut self.batch))
-            .map_err(Into::into)
+            .map_err(Into::into);
+
+        result_to_metrics(self.metrics.clone(), &res, "accounts_batch_flush");
+        self.metrics.set_latency(
+            "accounts_batch_flush",
+            begin_processing.elapsed().as_millis() as f64,
+        );
+        res
     }
     pub fn batch_filled(&self) -> bool {
         self.batch.len() >= self.batch_size
     }
 
-    fn store_static(
-        &mut self,
-        asset_static: &AssetStaticDetails,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    fn store_static(&mut self, asset_static: &AssetStaticDetails) -> Result<()> {
         store_assets!(
             self,
             asset_static,
-            metrics,
             asset_static_data,
-            "accounts_saving_static"
+            "accounts_static_merge_with_batch"
         )
     }
-    pub fn store_owner(
-        &mut self,
-        asset_owner: &AssetOwner,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    pub fn store_owner(&mut self, asset_owner: &AssetOwner) -> Result<()> {
         store_assets!(
             self,
             asset_owner,
-            metrics,
             asset_owner_data,
-            "accounts_merge_with_batch_owner"
+            "accounts_owner_merge_with_batch"
         )
     }
-    pub fn store_dynamic(
-        &mut self,
-        asset_dynamic: &AssetDynamicDetails,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    pub fn store_dynamic(&mut self, asset_dynamic: &AssetDynamicDetails) -> Result<()> {
         store_assets!(
             self,
             asset_dynamic,
-            metrics,
             asset_dynamic_data,
-            "accounts_merge_with_batch_dynamic"
+            "accounts_dynamic_merge_with_batch"
         )
     }
-    fn store_authority(
-        &mut self,
-        asset_authority: &AssetAuthority,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    fn store_authority(&mut self, asset_authority: &AssetAuthority) -> Result<()> {
         store_assets!(
             self,
             asset_authority,
-            metrics,
             asset_authority_data,
-            "accounts_merge_with_batch_authority"
+            "accounts_authority_merge_with_batch"
         )
     }
-    fn store_collection(
-        &mut self,
-        asset_collection: &AssetCollection,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    fn store_collection(&mut self, asset_collection: &AssetCollection) -> Result<()> {
         store_assets!(
             self,
             asset_collection,
-            metrics,
             asset_collection_data,
-            "accounts_merge_with_batch_collection"
+            "accounts_collection_merge_with_batch"
         )
     }
-    fn store_metadata_mint(
-        &mut self,
-        metadata_mint_map: &MetadataMintMap,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    fn store_metadata_mint(&mut self, metadata_mint_map: &MetadataMintMap) -> Result<()> {
         store_assets!(
             self,
             metadata_mint_map,
-            metrics,
             metadata_mint_map,
             "metadata_mint_map_merge_with_batch"
         )
@@ -220,40 +208,36 @@ impl BatchSaveStorage {
         self.storage.metadata_mint_map.get(key)
     }
 
-    pub fn store_metadata_models(
-        &mut self,
-        metadata_models: &MetadataModels,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    pub fn store_metadata_models(&mut self, metadata_models: &MetadataModels) -> Result<()> {
         let mut slot_updated = 0;
         let mut key = None;
         if let Some(asset_static) = &metadata_models.asset_static {
-            self.store_static(asset_static, metrics.clone())?;
+            self.store_static(asset_static)?;
             key = Some(asset_static.pubkey);
         }
         if let Some(asset_dynamic) = &metadata_models.asset_dynamic {
-            self.store_dynamic(asset_dynamic, metrics.clone())?;
+            self.store_dynamic(asset_dynamic)?;
             key = Some(asset_dynamic.pubkey);
             if asset_dynamic.get_slot_updated() > slot_updated {
                 slot_updated = asset_dynamic.get_slot_updated()
             }
         }
         if let Some(asset_authority) = &metadata_models.asset_authority {
-            self.store_authority(asset_authority, metrics.clone())?;
+            self.store_authority(asset_authority)?;
             key = Some(asset_authority.pubkey);
         }
         if let Some(asset_collection) = &metadata_models.asset_collection {
-            self.store_collection(asset_collection, metrics.clone())?;
+            self.store_collection(asset_collection)?;
             key = Some(asset_collection.pubkey);
             if asset_collection.get_slot_updated() > slot_updated {
                 slot_updated = asset_collection.get_slot_updated()
             }
         }
         if let Some(metadata_mint) = &metadata_models.metadata_mint {
-            self.store_metadata_mint(metadata_mint, metrics.clone())?;
+            self.store_metadata_mint(metadata_mint)?;
         }
         if let Some(asset_owner) = &metadata_models.asset_owner {
-            self.store_owner(asset_owner, metrics.clone())?;
+            self.store_owner(asset_owner)?;
             key = Some(asset_owner.pubkey);
             if asset_owner.get_slot_updated() > slot_updated {
                 slot_updated = asset_owner.get_slot_updated()

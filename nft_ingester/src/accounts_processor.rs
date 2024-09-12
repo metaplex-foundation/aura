@@ -19,6 +19,7 @@ use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
+use tokio::time::Instant;
 use tracing::error;
 
 // worker idle timeout
@@ -34,6 +35,7 @@ pub struct AccountsProcessor<T: UnprocessedAccountsGetter> {
     mpl_core_processor: MplCoreProcessor,
     inscription_processor: InscriptionsProcessor,
     core_fees_processor: MplCoreFeeProcessor,
+    metrics: Arc<IngesterMetricsConfig>,
 }
 
 // AccountsProcessor responsible for processing all account updates received
@@ -69,6 +71,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             mpl_core_processor,
             inscription_processor,
             core_fees_processor,
+            metrics,
         })
     }
 
@@ -78,10 +81,12 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         storage: Arc<Storage>,
         accounts_batch_size: usize,
     ) {
-        let mut batch_storage = BatchSaveStorage::new(storage, accounts_batch_size);
+        let mut batch_storage =
+            BatchSaveStorage::new(storage, accounts_batch_size, self.metrics.clone());
         let mut core_fees = HashMap::new();
         let mut ack_ids = Vec::new();
         let mut interval = tokio::time::interval(FLUSH_INTERVAL);
+        let mut batch_fill_interval = Instant::now();
         while rx.is_empty() {
             tokio::select! {
                 unprocessed_accounts = self.unprocessed_account_getter.next_accounts() => {
@@ -94,15 +99,20 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                                 continue;
                             }
                         };
-                        self.process_account(&mut batch_storage, unprocessed_accounts, &mut core_fees, &mut ack_ids, &mut interval).await;
+                        self.process_account(&mut batch_storage, unprocessed_accounts, &mut core_fees, &mut ack_ids, &mut interval, &mut batch_fill_interval).await;
                     },
                 _ = interval.tick() => {
-                    self.flush(&mut batch_storage, &mut ack_ids, &mut interval);
+                    self.flush(&mut batch_storage, &mut ack_ids, &mut interval, &mut batch_fill_interval);
                     self.core_fees_processor.store_mpl_assets_fee(&std::mem::take(&mut core_fees)).await;
                 }
             }
         }
-        self.flush(&mut batch_storage, &mut ack_ids, &mut interval);
+        self.flush(
+            &mut batch_storage,
+            &mut ack_ids,
+            &mut interval,
+            &mut batch_fill_interval,
+        );
         self.core_fees_processor
             .store_mpl_assets_fee(&std::mem::take(&mut core_fees))
             .await;
@@ -115,6 +125,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         core_fees: &mut HashMap<Pubkey, CoreAssetFee>,
         ack_ids: &mut Vec<String>,
         interval: &mut tokio::time::Interval,
+        batch_fill_interval: &mut Instant,
     ) {
         for unprocessed_account in unprocessed_accounts {
             let processing_result = match unprocessed_account.account {
@@ -184,7 +195,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             }
             ack_ids.push(unprocessed_account.id);
             if batch_storage.batch_filled() {
-                self.flush(batch_storage, ack_ids, interval);
+                self.flush(batch_storage, ack_ids, interval, batch_fill_interval);
             }
             if core_fees.len() > self.fees_batch_size {
                 self.core_fees_processor
@@ -199,6 +210,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         storage: &mut BatchSaveStorage,
         ack_ids: &mut Vec<String>,
         interval: &mut tokio::time::Interval,
+        batch_fill_interval: &mut Instant,
     ) {
         let write_batch_result = storage.flush();
         match write_batch_result {
@@ -211,5 +223,10 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             }
         }
         interval.reset();
+        self.metrics.set_latency(
+            "accounts_batch_filling",
+            batch_fill_interval.elapsed().as_millis() as f64,
+        );
+        *batch_fill_interval = Instant::now();
     }
 }

@@ -844,7 +844,11 @@ mod tests {
             .put(offchain_data.url.clone(), offchain_data)
             .unwrap();
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         token_updates_processor
             .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
             .unwrap();
@@ -880,7 +884,11 @@ mod tests {
             write_version: 2,
         };
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         token_updates_processor
             .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
             .unwrap();
@@ -1014,7 +1022,11 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         for mint in mint_accs.iter() {
             token_updates_processor
                 .transform_and_save_mint_account(&mut batch_storage, mint)
@@ -1163,7 +1175,11 @@ mod tests {
             &blockbuster::programs::token_metadata::token_metadata_id(),
         );
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         mplx_updates_processor
             .transform_and_store_metadata_account(&mut batch_storage, metadata_key, &metadata)
             .unwrap();
@@ -1541,7 +1557,11 @@ mod tests {
             );
         }
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         for (key, token_account) in token_accounts.iter() {
             token_updates_processor
                 .transform_and_save_token_account(&mut batch_storage, *key, &token_account)
@@ -1716,7 +1736,11 @@ mod tests {
             );
         }
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         for (key, token_account) in token_accounts.iter() {
             token_updates_processor
                 .transform_and_save_token_account(&mut batch_storage, *key, &token_account)
