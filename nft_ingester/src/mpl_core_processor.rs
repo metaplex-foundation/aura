@@ -16,6 +16,7 @@ use serde_json::{json, Value};
 use solana_program::pubkey::Pubkey;
 use std::sync::Arc;
 use std::time::Instant;
+use usecase::save_metrics::result_to_metrics;
 
 pub struct MplCoreProcessor {
     metrics: Arc<IngesterMetricsConfig>,
@@ -40,9 +41,14 @@ impl MplCoreProcessor {
         };
 
         let begin_processing = Instant::now();
-        let res = storage.store_metadata_models(&metadata_models, self.metrics.clone());
+        let res = storage.store_metadata_models(&metadata_models);
+        result_to_metrics(
+            self.metrics.clone(),
+            &res,
+            "mpl_core_asset_merge_with_batch",
+        );
         self.metrics.set_latency(
-            "mpl_core_asset_saving",
+            "mpl_core_asset_merge_with_batch",
             begin_processing.elapsed().as_millis() as f64,
         );
         res
@@ -411,8 +417,13 @@ impl MplCoreProcessor {
     ) -> Result<(), StorageError> {
         let begin_processing = Instant::now();
         let res = self.mark_mpl_asset_as_burnt(storage, key, burnt_slot);
+        result_to_metrics(
+            self.metrics.clone(),
+            &res,
+            "burn_mpl_assets_merge_with_batch",
+        );
         self.metrics.set_latency(
-            "burn_mpl_assets",
+            "burn_mpl_assets_merge_with_batch",
             begin_processing.elapsed().as_millis() as f64,
         );
         res
@@ -424,18 +435,15 @@ impl MplCoreProcessor {
         key: Pubkey,
         burnt_slot: &BurntMetadataSlot,
     ) -> Result<(), StorageError> {
-        storage.store_dynamic(
-            &AssetDynamicDetails {
-                pubkey: key,
-                is_burnt: Updated::new(
-                    burnt_slot.slot_updated,
-                    None, // once we got burn we may not even check write version
-                    true,
-                ),
-                ..Default::default()
-            },
-            self.metrics.clone(),
-        )
+        storage.store_dynamic(&AssetDynamicDetails {
+            pubkey: key,
+            is_burnt: Updated::new(
+                burnt_slot.slot_updated,
+                None, // once we got burn we may not even check write version
+                true,
+            ),
+            ..Default::default()
+        })
     }
 }
 

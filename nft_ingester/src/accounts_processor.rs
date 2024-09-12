@@ -19,6 +19,7 @@ use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
+use tokio::time::Instant;
 use tracing::error;
 
 // worker idle timeout
@@ -34,6 +35,7 @@ pub struct AccountsProcessor<T: UnprocessedAccountsGetter> {
     mpl_core_processor: MplCoreProcessor,
     inscription_processor: InscriptionsProcessor,
     core_fees_processor: MplCoreFeeProcessor,
+    metrics: Arc<IngesterMetricsConfig>,
 }
 
 // AccountsProcessor responsible for processing all account updates received
@@ -69,6 +71,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             mpl_core_processor,
             inscription_processor,
             core_fees_processor,
+            metrics,
         })
     }
 
@@ -78,10 +81,12 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         storage: Arc<Storage>,
         accounts_batch_size: usize,
     ) {
-        let mut batch_storage = BatchSaveStorage::new(storage, accounts_batch_size);
+        let mut batch_storage =
+            BatchSaveStorage::new(storage, accounts_batch_size, self.metrics.clone());
         let mut core_fees = HashMap::new();
         let mut ack_ids = Vec::new();
         let mut interval = tokio::time::interval(FLUSH_INTERVAL);
+        let mut batch_fill_instant = Instant::now();
         while rx.is_empty() {
             tokio::select! {
                 unprocessed_accounts = self.unprocessed_account_getter.next_accounts() => {
@@ -94,15 +99,20 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                                 continue;
                             }
                         };
-                        self.process_account(&mut batch_storage, unprocessed_accounts, &mut core_fees, &mut ack_ids, &mut interval).await;
+                        self.process_account(&mut batch_storage, unprocessed_accounts, &mut core_fees, &mut ack_ids, &mut interval, &mut batch_fill_instant).await;
                     },
                 _ = interval.tick() => {
-                    self.flush(&mut batch_storage, &mut ack_ids, &mut interval);
+                    self.flush(&mut batch_storage, &mut ack_ids, &mut interval, &mut batch_fill_instant);
                     self.core_fees_processor.store_mpl_assets_fee(&std::mem::take(&mut core_fees)).await;
                 }
             }
         }
-        self.flush(&mut batch_storage, &mut ack_ids, &mut interval);
+        self.flush(
+            &mut batch_storage,
+            &mut ack_ids,
+            &mut interval,
+            &mut batch_fill_instant,
+        );
         self.core_fees_processor
             .store_mpl_assets_fee(&std::mem::take(&mut core_fees))
             .await;
@@ -115,26 +125,27 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         core_fees: &mut HashMap<Pubkey, CoreAssetFee>,
         ack_ids: &mut Vec<String>,
         interval: &mut tokio::time::Interval,
+        batch_fill_instant: &mut Instant,
     ) {
         for unprocessed_account in unprocessed_accounts {
-            let processing_result = match unprocessed_account.account {
+            let processing_result = match &unprocessed_account.account {
                 UnprocessedAccount::MetadataInfo(metadata_info) => self
                     .mplx_accounts_processor
                     .transform_and_store_metadata_account(
                         batch_storage,
                         unprocessed_account.key,
-                        &metadata_info,
+                        metadata_info,
                     ),
                 UnprocessedAccount::Token(token_account) => self
                     .token_accounts_processor
                     .transform_and_save_token_account(
                         batch_storage,
                         unprocessed_account.key,
-                        &token_account,
+                        token_account,
                     ),
                 UnprocessedAccount::Mint(mint) => self
                     .token_accounts_processor
-                    .transform_and_save_mint_account(batch_storage, &mint),
+                    .transform_and_save_mint_account(batch_storage, mint),
                 UnprocessedAccount::Edition(edition) => self
                     .mplx_accounts_processor
                     .transform_and_store_edition_account(
@@ -147,34 +158,34 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                     .transform_and_store_burnt_metadata(
                         batch_storage,
                         unprocessed_account.key,
-                        &burn_metadata,
+                        burn_metadata,
                     ),
                 UnprocessedAccount::BurnMplCore(burn_mpl_core) => {
                     self.mpl_core_processor.transform_and_store_burnt_mpl_asset(
                         batch_storage,
                         unprocessed_account.key,
-                        &burn_mpl_core,
+                        burn_mpl_core,
                     )
                 }
                 UnprocessedAccount::MplCore(mpl_core) => {
                     self.mpl_core_processor.transform_and_store_mpl_asset(
                         batch_storage,
                         unprocessed_account.key,
-                        &mpl_core,
+                        mpl_core,
                     )
                 }
                 UnprocessedAccount::Inscription(inscription) => self
                     .inscription_processor
-                    .store_inscription(batch_storage, &inscription),
+                    .store_inscription(batch_storage, inscription),
                 UnprocessedAccount::InscriptionData(inscription_data) => {
                     self.inscription_processor.store_inscription_data(
                         batch_storage,
                         unprocessed_account.key,
-                        &inscription_data,
+                        inscription_data,
                     )
                 }
                 UnprocessedAccount::MplCoreFee(core_fee) => {
-                    core_fees.insert(unprocessed_account.key, core_fee);
+                    core_fees.insert(unprocessed_account.key, core_fee.clone());
                     Ok(())
                 }
             };
@@ -182,9 +193,11 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 error!("Processing account {}: {}", unprocessed_account.key, err);
                 continue;
             }
+            self.metrics
+                .inc_accounts(unprocessed_account.account.into());
             ack_ids.push(unprocessed_account.id);
             if batch_storage.batch_filled() {
-                self.flush(batch_storage, ack_ids, interval);
+                self.flush(batch_storage, ack_ids, interval, batch_fill_instant);
             }
             if core_fees.len() > self.fees_batch_size {
                 self.core_fees_processor
@@ -199,6 +212,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         storage: &mut BatchSaveStorage,
         ack_ids: &mut Vec<String>,
         interval: &mut tokio::time::Interval,
+        batch_fill_instant: &mut Instant,
     ) {
         let write_batch_result = storage.flush();
         match write_batch_result {
@@ -211,5 +225,10 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             }
         }
         interval.reset();
+        self.metrics.set_latency(
+            "accounts_batch_filling",
+            batch_fill_instant.elapsed().as_millis() as f64,
+        );
+        *batch_fill_instant = Instant::now();
     }
 }

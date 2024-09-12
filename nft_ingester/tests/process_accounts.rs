@@ -120,7 +120,11 @@ mod tests {
         let spl_token_accs_parser =
             TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         spl_token_accs_parser
             .transform_and_save_token_account(
                 &mut batch_storage,
@@ -219,7 +223,11 @@ mod tests {
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
         let mplx_accs_parser = MplxAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         mplx_accs_parser
             .transform_and_store_metadata_account(
                 &mut batch_storage,
@@ -409,7 +417,11 @@ mod tests {
             )
             .unwrap();
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         mpl_core_parser
             .transform_and_store_mpl_asset(
                 &mut batch_storage,
@@ -564,7 +576,11 @@ mod tests {
 
         let mpl_core_parser = InscriptionsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         match buffer.accounts.lock().await.get(&inscription_pk).unwrap() {
             UnprocessedAccount::Inscription(inscription) => {
                 mpl_core_parser

@@ -248,7 +248,11 @@ mod tests {
         )
         .await;
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         process_accounts(&mut batch_storage, 242856151, &mint).await;
         batch_storage.flush().unwrap();
 
@@ -323,7 +327,11 @@ mod tests {
 
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         process_accounts(&mut batch_storage, 242856151, &mint).await;
         batch_storage.flush().unwrap();
 
@@ -405,7 +413,11 @@ mod tests {
 
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         process_accounts(&mut batch_storage, 252856151, &mint).await;
         batch_storage.flush().unwrap();
 
@@ -494,7 +506,11 @@ mod tests {
         )
         .await;
 
-        let mut batch_storage = BatchSaveStorage::new(env.rocks_env.storage.clone(), 10);
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
         process_accounts(&mut batch_storage, 252856151, &mint).await;
         batch_storage.flush().unwrap();
 

@@ -37,8 +37,9 @@ impl MplxAccountsProcessor {
         let begin_processing = Instant::now();
         let res = self.mark_metadata_as_burnt(storage, key, burnt_metadata_slot);
 
+        result_to_metrics(self.metrics.clone(), &res, "burn_metadata_merge_with_batch");
         self.metrics.set_latency(
-            "burn_metadata_saving",
+            "burn_metadata_merge_with_batch",
             begin_processing.elapsed().as_millis() as f64,
         );
         res
@@ -53,9 +54,14 @@ impl MplxAccountsProcessor {
         let metadata_models = self.create_rocks_metadata_models(key, metadata_info);
 
         let begin_processing = Instant::now();
-        let res = storage.store_metadata_models(&metadata_models, self.metrics.clone());
+        let res = storage.store_metadata_models(&metadata_models);
+        result_to_metrics(
+            self.metrics.clone(),
+            &res,
+            "metadata_accounts_merge_with_batch",
+        );
         self.metrics.set_latency(
-            "metadata_accounts_saving",
+            "metadata_accounts_merge_with_batch",
             begin_processing.elapsed().as_millis() as f64,
         );
         res
@@ -70,9 +76,9 @@ impl MplxAccountsProcessor {
         let begin_processing = Instant::now();
         let res = storage.store_edition(key, edition);
 
-        result_to_metrics(self.metrics.clone(), &res, "editions_saving");
+        result_to_metrics(self.metrics.clone(), &res, "editions_merge_with_batch");
         self.metrics.set_latency(
-            "editions_saving",
+            "editions_merge_with_batch",
             begin_processing.elapsed().as_millis() as f64,
         );
         res
@@ -264,6 +270,6 @@ impl MplxAccountsProcessor {
             return Ok(());
         };
 
-        storage.store_dynamic(&asset_dynamic_details, self.metrics.clone())
+        storage.store_dynamic(&asset_dynamic_details)
     }
 }

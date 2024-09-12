@@ -73,18 +73,17 @@ impl TokenAccountsProcessor {
             ..Default::default()
         };
 
-        let metrics = self.metrics.clone();
         self.finalize_processing(
             storage,
             |storage: &mut BatchSaveStorage| {
-                storage.store_owner(&asset_owner_details, metrics.clone())?;
-                storage.store_dynamic(&asset_dynamic_details, metrics.clone())
+                storage.store_owner(&asset_owner_details)?;
+                storage.store_dynamic(&asset_dynamic_details)
             },
             PubkeyWithSlot {
                 pubkey: token_account.mint,
                 slot: token_account.slot_updated as u64,
             },
-            "token_accounts_asset_saving",
+            "token_accounts_asset_components_merge_with_batch",
         )
     }
 
@@ -117,18 +116,17 @@ impl TokenAccountsProcessor {
             ..Default::default()
         };
 
-        let metrics = self.metrics.clone();
         self.finalize_processing(
             storage,
             |storage: &mut BatchSaveStorage| {
-                storage.store_owner(&asset_owner_details, metrics.clone())?;
-                storage.store_dynamic(&asset_dynamic_details, metrics.clone())
+                storage.store_owner(&asset_owner_details)?;
+                storage.store_dynamic(&asset_dynamic_details)
             },
             PubkeyWithSlot {
                 pubkey: mint.pubkey,
                 slot: mint.slot_updated as u64,
             },
-            "mint_accounts_saving",
+            "mint_accounts_merge_with_batch",
         )
     }
 
@@ -147,7 +145,7 @@ impl TokenAccountsProcessor {
                 pubkey: token_account.mint,
                 slot: token_account.slot_updated as u64,
             },
-            "token_accounts_saving",
+            "token_accounts_with_idx_merge_with_batch",
         )
     }
 }
