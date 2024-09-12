@@ -371,3 +371,20 @@ pub enum UnprocessedAccount {
     InscriptionData(InscriptionDataInfo),
     MplCoreFee(CoreAssetFee),
 }
+
+impl From<UnprocessedAccount> for &str {
+    fn from(value: UnprocessedAccount) -> Self {
+        match value {
+            UnprocessedAccount::MetadataInfo(_) => "MetadataInfo",
+            UnprocessedAccount::Token(_) => "TokenAccount",
+            UnprocessedAccount::Mint(_) => "Mint",
+            UnprocessedAccount::Edition(_) => "Edition",
+            UnprocessedAccount::BurnMetadata(_) => "BurnMetadata",
+            UnprocessedAccount::BurnMplCore(_) => "BurnMplCore",
+            UnprocessedAccount::MplCore(_) => "MplCore",
+            UnprocessedAccount::Inscription(_) => "Inscription",
+            UnprocessedAccount::InscriptionData(_) => "InscriptionData",
+            UnprocessedAccount::MplCoreFee(_) => "MplCoreFee",
+        }
+    }
+}

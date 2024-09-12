@@ -128,24 +128,24 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         batch_fill_interval: &mut Instant,
     ) {
         for unprocessed_account in unprocessed_accounts {
-            let processing_result = match unprocessed_account.account {
+            let processing_result = match &unprocessed_account.account {
                 UnprocessedAccount::MetadataInfo(metadata_info) => self
                     .mplx_accounts_processor
                     .transform_and_store_metadata_account(
                         batch_storage,
                         unprocessed_account.key,
-                        &metadata_info,
+                        metadata_info,
                     ),
                 UnprocessedAccount::Token(token_account) => self
                     .token_accounts_processor
                     .transform_and_save_token_account(
                         batch_storage,
                         unprocessed_account.key,
-                        &token_account,
+                        token_account,
                     ),
                 UnprocessedAccount::Mint(mint) => self
                     .token_accounts_processor
-                    .transform_and_save_mint_account(batch_storage, &mint),
+                    .transform_and_save_mint_account(batch_storage, mint),
                 UnprocessedAccount::Edition(edition) => self
                     .mplx_accounts_processor
                     .transform_and_store_edition_account(
@@ -158,34 +158,34 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                     .transform_and_store_burnt_metadata(
                         batch_storage,
                         unprocessed_account.key,
-                        &burn_metadata,
+                        burn_metadata,
                     ),
                 UnprocessedAccount::BurnMplCore(burn_mpl_core) => {
                     self.mpl_core_processor.transform_and_store_burnt_mpl_asset(
                         batch_storage,
                         unprocessed_account.key,
-                        &burn_mpl_core,
+                        burn_mpl_core,
                     )
                 }
                 UnprocessedAccount::MplCore(mpl_core) => {
                     self.mpl_core_processor.transform_and_store_mpl_asset(
                         batch_storage,
                         unprocessed_account.key,
-                        &mpl_core,
+                        mpl_core,
                     )
                 }
                 UnprocessedAccount::Inscription(inscription) => self
                     .inscription_processor
-                    .store_inscription(batch_storage, &inscription),
+                    .store_inscription(batch_storage, inscription),
                 UnprocessedAccount::InscriptionData(inscription_data) => {
                     self.inscription_processor.store_inscription_data(
                         batch_storage,
                         unprocessed_account.key,
-                        &inscription_data,
+                        inscription_data,
                     )
                 }
                 UnprocessedAccount::MplCoreFee(core_fee) => {
-                    core_fees.insert(unprocessed_account.key, core_fee);
+                    core_fees.insert(unprocessed_account.key, core_fee.clone());
                     Ok(())
                 }
             };
@@ -193,6 +193,8 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 error!("Processing account {}: {}", unprocessed_account.key, err);
                 continue;
             }
+            self.metrics
+                .inc_accounts(unprocessed_account.account.into());
             ack_ids.push(unprocessed_account.id);
             if batch_storage.batch_filled() {
                 self.flush(batch_storage, ack_ids, interval, batch_fill_interval);
