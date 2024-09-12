@@ -254,12 +254,7 @@ fn extract_collection_metadata(
         meta.set_item("symbol", symbol.clone());
     }
 
-    let desc = safe_select(selector, "$.description");
-    if let Some(desc) = desc {
-        meta.set_item("description", desc.clone());
-    }
-
-    let link_fields = vec!["image", "external_url"];
+    let link_fields = vec!["image", "external_url", "description"];
     for f in link_fields {
         let l = safe_select(selector, format!("$.{}", f).as_str());
         if let Some(l) = l {

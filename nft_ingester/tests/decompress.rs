@@ -4,34 +4,28 @@ mod tests {
     use blockbuster::token_metadata::accounts::Metadata;
     use blockbuster::token_metadata::types::{Collection, Creator, Key};
     use entities::api_req_params::{GetAsset, Options};
-    use entities::models::OffChainData;
+    use entities::models::{MetadataInfo, Mint, OffChainData, TokenAccount};
     use interface::account_balance::MockAccountBalanceGetter;
     use metrics_utils::red::RequestErrorDurationMetrics;
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::config::JsonMiddlewareConfig;
     use nft_ingester::json_worker::JsonWorker;
+    use nft_ingester::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
         buffer::Buffer,
-        mplx_updates_processor::{MetadataInfo, MplxAccsProcessor},
-        token_updates_processor::TokenAccsProcessor,
+        token_updates_processor::TokenAccountsProcessor,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
+    use rocks_db::batch_savers::BatchSaveStorage;
     use rocks_db::migrator::MigrationState;
-    use rocks_db::{
-        bubblegum_slots::BubblegumSlotGetter,
-        columns::{Mint, TokenAccount},
-        Storage,
-    };
+    use rocks_db::{bubblegum_slots::BubblegumSlotGetter, Storage};
     use solana_sdk::pubkey::Pubkey;
     use std::fs::File;
+    use std::io::{self, Read};
     use std::str::FromStr;
     use std::sync::Arc;
-    use std::{
-        collections::HashMap,
-        io::{self, Read},
-    };
     use testcontainers::clients::Cli;
     use tokio::sync::broadcast;
     use tokio::sync::Mutex;
@@ -111,24 +105,14 @@ mod tests {
     }
 
     async fn process_accounts(
-        buffer: Arc<Buffer>,
-        env_rocks: Arc<Storage>,
+        storage: &mut BatchSaveStorage,
         nft_created_slot: i64,
         mint: &Pubkey,
     ) {
-        let mplx_accs_parser = MplxAccsProcessor::new(
-            1,
-            buffer.clone(),
-            env_rocks.clone(),
-            Arc::new(IngesterMetricsConfig::new()),
-        );
+        let mplx_accs_parser = MplxAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
-        let spl_token_accs_parser = TokenAccsProcessor::new(
-            env_rocks.clone(),
-            buffer.clone(),
-            Arc::new(IngesterMetricsConfig::new()),
-            1,
-        );
+        let spl_token_accs_parser =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
         let owner = Pubkey::from_str("3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM").unwrap();
 
@@ -157,12 +141,12 @@ mod tests {
         };
 
         spl_token_accs_parser
-            .transform_and_save_token_accs(&[(token_acc.pubkey, token_acc)].into_iter().collect())
-            .await;
+            .transform_and_save_token_account(storage, token_acc.pubkey, &token_acc)
+            .unwrap();
 
         spl_token_accs_parser
-            .transform_and_save_mint_accs(&[(Vec::<u8>::new(), mint_acc)].into_iter().collect())
-            .await;
+            .transform_and_save_mint_account(storage, &mint_acc)
+            .unwrap();
 
         let decompressed_token_data = MetadataInfo {
             metadata: Metadata {
@@ -210,12 +194,9 @@ mod tests {
             rent_epoch: 0,
         };
 
-        let mut map = HashMap::new();
-        map.insert(mint.to_bytes().to_vec(), decompressed_token_data);
-
         mplx_accs_parser
-            .transform_and_store_metadata_accs(&map)
-            .await;
+            .transform_and_store_metadata_account(storage, *mint, &decompressed_token_data)
+            .unwrap();
     }
 
     #[tokio::test]
@@ -267,13 +248,13 @@ mod tests {
         )
         .await;
 
-        process_accounts(
-            buffer.clone(),
+        let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),
-            242856151,
-            &mint,
-        )
-        .await;
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        process_accounts(&mut batch_storage, 242856151, &mint).await;
+        batch_storage.flush().unwrap();
 
         let file = File::open("./tests/artifacts/expected_decompress_result.json").unwrap();
         let mut reader = io::BufReader::new(file);
@@ -346,13 +327,13 @@ mod tests {
 
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
-        process_accounts(
-            buffer.clone(),
+        let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),
-            242856151,
-            &mint,
-        )
-        .await;
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        process_accounts(&mut batch_storage, 242856151, &mint).await;
+        batch_storage.flush().unwrap();
 
         process_bubblegum_transactions(
             mutexed_tasks.clone(),
@@ -432,13 +413,13 @@ mod tests {
 
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
-        process_accounts(
-            buffer.clone(),
+        let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),
-            252856151,
-            &mint,
-        )
-        .await;
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        process_accounts(&mut batch_storage, 252856151, &mint).await;
+        batch_storage.flush().unwrap();
 
         process_bubblegum_transactions(
             mutexed_tasks.clone(),
@@ -525,13 +506,13 @@ mod tests {
         )
         .await;
 
-        process_accounts(
-            buffer.clone(),
+        let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),
-            252856151,
-            &mint,
-        )
-        .await;
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        process_accounts(&mut batch_storage, 252856151, &mint).await;
+        batch_storage.flush().unwrap();
 
         let file = File::open("./tests/artifacts/expected_decompress_result.json").unwrap();
         let mut reader = io::BufReader::new(file);

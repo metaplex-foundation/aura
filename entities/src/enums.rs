@@ -1,3 +1,7 @@
+use crate::models::{
+    BurntMetadataSlot, CoreAssetFee, EditionMetadata, EditionV1, IndexableAssetWithAccountInfo,
+    InscriptionDataInfo, InscriptionInfo, MasterEdition, MetadataInfo, Mint, TokenAccount,
+};
 use num_derive::FromPrimitive;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -345,6 +349,42 @@ impl TryFrom<u8> for FailedBatchMintState {
             2 => Ok(FailedBatchMintState::BatchMintVerifyFailed),
             3 => Ok(FailedBatchMintState::FileSerialization),
             _ => Err("Wrong enum value".to_string()),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum TokenMetadataEdition {
+    EditionV1(EditionV1),
+    MasterEdition(MasterEdition),
+}
+
+pub enum UnprocessedAccount {
+    MetadataInfo(MetadataInfo),
+    Token(TokenAccount),
+    Mint(Mint),
+    Edition(EditionMetadata),
+    BurnMetadata(BurntMetadataSlot),
+    BurnMplCore(BurntMetadataSlot),
+    MplCore(IndexableAssetWithAccountInfo),
+    Inscription(InscriptionInfo),
+    InscriptionData(InscriptionDataInfo),
+    MplCoreFee(CoreAssetFee),
+}
+
+impl From<UnprocessedAccount> for &str {
+    fn from(value: UnprocessedAccount) -> Self {
+        match value {
+            UnprocessedAccount::MetadataInfo(_) => "MetadataInfo",
+            UnprocessedAccount::Token(_) => "TokenAccount",
+            UnprocessedAccount::Mint(_) => "Mint",
+            UnprocessedAccount::Edition(_) => "Edition",
+            UnprocessedAccount::BurnMetadata(_) => "BurnMetadata",
+            UnprocessedAccount::BurnMplCore(_) => "BurnMplCore",
+            UnprocessedAccount::MplCore(_) => "MplCore",
+            UnprocessedAccount::Inscription(_) => "Inscription",
+            UnprocessedAccount::InscriptionData(_) => "InscriptionData",
+            UnprocessedAccount::MplCoreFee(_) => "MplCoreFee",
         }
     }
 }

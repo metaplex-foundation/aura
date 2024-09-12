@@ -19,3 +19,4 @@ pub mod slot_getter;
 pub mod slots_dumper;
 pub mod solana_rpc;
 pub mod token_accounts;
+pub mod unprocessed_data_getter;

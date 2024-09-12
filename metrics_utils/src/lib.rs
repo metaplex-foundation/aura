@@ -678,6 +678,7 @@ pub struct IngesterMetricsConfig {
     retries: Family<MetricLabel, Counter>,
     rocksdb_backup_latency: Histogram,
     instructions: Family<MetricLabel, Counter>,
+    accounts: Family<MetricLabel, Counter>,
     last_processed_slot: Family<MetricLabel, Gauge>,
 }
 
@@ -698,6 +699,7 @@ impl IngesterMetricsConfig {
                 .into_iter(),
             ),
             instructions: Family::<MetricLabel, Counter>::default(),
+            accounts: Family::<MetricLabel, Counter>::default(),
             last_processed_slot: Family::<MetricLabel, Gauge>::default(),
         }
     }
@@ -750,6 +752,14 @@ impl IngesterMetricsConfig {
             .inc()
     }
 
+    pub fn inc_accounts(&self, label: &str) -> u64 {
+        self.accounts
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc()
+    }
+
     pub fn set_last_processed_slot(&self, label: &str, slot: i64) -> i64 {
         self.last_processed_slot
             .get_or_create(&MetricLabel {
@@ -786,6 +796,11 @@ impl IngesterMetricsConfig {
             "ingester_bublegum_instructions",
             "Total number of bubblegum instructions processed",
             self.instructions.clone(),
+        );
+        registry.register(
+            "ingester_accounts",
+            "Total number of accounts processed",
+            self.accounts.clone(),
         );
         registry.register(
             "ingester_rocksdb_backup_latency",

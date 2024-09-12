@@ -173,6 +173,7 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         batch_mint_to_verify: &mut BatchMintToVerify,
         batch_mint: &mut Option<Box<BatchMint>>,
     ) -> Result<(), IngesterError> {
+        let begin_processing = Instant::now();
         if batch_mint.is_some() {
             batch_mint_to_verify.persisting_state = PersistingBatchMintState::SuccessfullyDownload;
             return Ok(());
@@ -265,6 +266,10 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
                 return Err(IngesterError::Usecase(e.to_string()));
             }
         }
+        self.metrics.set_persisting_latency(
+            "batch_mint_download",
+            begin_processing.elapsed().as_millis() as f64,
+        );
         Ok(())
     }
 
@@ -273,6 +278,7 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         batch_mint_to_verify: &mut BatchMintToVerify,
         batch_mint: &BatchMint,
     ) {
+        let begin_processing = Instant::now();
         if let Err(e) = bubblegum_batch_sdk::batch_mint_validations::validate_batch_mint(
             batch_mint,
             batch_mint_to_verify.collection_mint,
@@ -297,6 +303,10 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         }
         self.metrics
             .inc_batch_mints_with_status("batch_mint_validating", MetricStatus::SUCCESS);
+        self.metrics.set_persisting_latency(
+            "batch_mint_validation",
+            begin_processing.elapsed().as_millis() as f64,
+        );
         batch_mint_to_verify.persisting_state = PersistingBatchMintState::SuccessfullyValidate;
     }
 
@@ -305,6 +315,7 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         batch_mint_to_verify: &mut BatchMintToVerify,
         batch_mint: &BatchMint,
     ) {
+        let begin_processing = Instant::now();
         if BubblegumTxProcessor::store_batch_mint_update(
             batch_mint_to_verify.created_at_slot,
             batch_mint,
@@ -321,6 +332,10 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         }
         self.metrics
             .inc_batch_mints_with_status("batch_mint_persist", MetricStatus::SUCCESS);
+        self.metrics.set_persisting_latency(
+            "batch_mint_store_into_db",
+            begin_processing.elapsed().as_millis() as f64,
+        );
         batch_mint_to_verify.persisting_state = PersistingBatchMintState::StoredUpdate;
     }
 

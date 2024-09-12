@@ -2,6 +2,7 @@ use crate::column::TypedColumn;
 use crate::key_encoders::{decode_pubkey, encode_pubkey};
 use crate::{impl_merge_values, Result};
 use bincode::deserialize;
+use entities::models::InscriptionInfo;
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
@@ -18,6 +19,22 @@ pub struct Inscription {
     pub size: u32,
     pub validation_hash: Option<String>,
     pub write_version: u64,
+}
+
+impl From<&InscriptionInfo> for Inscription {
+    fn from(value: &InscriptionInfo) -> Self {
+        Self {
+            authority: value.inscription.authority,
+            root: value.inscription.root,
+            content_type: value.inscription.media_type.convert_to_string(),
+            encoding: value.inscription.encoding_type.convert_to_string(),
+            inscription_data_account: value.inscription.inscription_data,
+            order: value.inscription.order,
+            size: value.inscription.size,
+            validation_hash: value.inscription.validation_hash.clone(),
+            write_version: value.write_version,
+        }
+    }
 }
 
 impl TypedColumn for Inscription {

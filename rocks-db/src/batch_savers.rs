@@ -1,144 +1,257 @@
 use crate::asset::{AssetCollection, MetadataMintMap};
+use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::Result;
 use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
-use entities::models::PubkeyWithSlot;
+use entities::enums::TokenMetadataEdition;
+use entities::models::{
+    InscriptionDataInfo, InscriptionInfo, TokenAccount, TokenAccountMintOwnerIdxKey,
+    TokenAccountOwnerIdxKey,
+};
 use metrics_utils::IngesterMetricsConfig;
-use std::collections::HashMap;
+use num_traits::Zero;
+use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
+use tokio::time::Instant;
 use tracing::error;
 use usecase::save_metrics::result_to_metrics;
 
+pub struct BatchSaveStorage {
+    storage: Arc<Storage>,
+    batch: rocksdb::WriteBatchWithTransaction<false>,
+    batch_size: usize,
+    metrics: Arc<IngesterMetricsConfig>,
+}
+
 #[derive(Default, Debug)]
 pub struct MetadataModels {
-    pub asset_static: Vec<AssetStaticDetails>,
-    pub asset_dynamic: Vec<AssetDynamicDetails>,
-    pub asset_authority: Vec<AssetAuthority>,
-    pub asset_owner: Vec<AssetOwner>,
-    pub asset_collection: Vec<AssetCollection>,
-    pub metadata_mint: Vec<MetadataMintMap>,
+    pub asset_static: Option<AssetStaticDetails>,
+    pub asset_dynamic: Option<AssetDynamicDetails>,
+    pub asset_authority: Option<AssetAuthority>,
+    pub asset_owner: Option<AssetOwner>,
+    pub asset_collection: Option<AssetCollection>,
+    pub metadata_mint: Option<MetadataMintMap>,
 }
 
 #[macro_export]
 macro_rules! store_assets {
-    ($self:expr, $assets:expr, $metrics:expr, $db_field:ident, $metric_name:expr) => {{
-        let save_values =
-            $assets
-                .into_iter()
-                .fold(HashMap::new(), |mut acc: HashMap<_, _>, asset| {
-                    acc.insert(asset.pubkey, asset);
-                    acc
-                });
+    ($self:expr, $asset:expr, $db_field:ident, $metric_name:expr) => {{
+        let res = $self
+            .storage
+            .$db_field
+            .merge_with_batch(&mut $self.batch, $asset.pubkey, $asset);
 
-        let res = $self.$db_field.merge_batch(save_values).await;
-        result_to_metrics($metrics, &res, $metric_name);
+        result_to_metrics($self.metrics.clone(), &res, $metric_name);
         res
     }};
 }
 
-impl Storage {
-    async fn store_static(
-        &self,
-        asset_static: Vec<AssetStaticDetails>,
+impl BatchSaveStorage {
+    pub fn new(
+        storage: Arc<Storage>,
+        batch_size: usize,
         metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    ) -> Self {
+        Self {
+            storage,
+            batch_size,
+            batch: Default::default(),
+            metrics,
+        }
+    }
+
+    pub fn flush(&mut self) -> Result<()> {
+        self.metrics
+            .set_buffer("accounts_batch_size", self.batch.len() as i64);
+        let begin_processing = Instant::now();
+        let res = self
+            .storage
+            .db
+            .write(std::mem::take(&mut self.batch))
+            .map_err(Into::into);
+
+        result_to_metrics(self.metrics.clone(), &res, "accounts_batch_flush");
+        self.metrics.set_latency(
+            "accounts_batch_flush",
+            begin_processing.elapsed().as_millis() as f64,
+        );
+        res
+    }
+    pub fn batch_filled(&self) -> bool {
+        self.batch.len() >= self.batch_size
+    }
+
+    fn store_static(&mut self, asset_static: &AssetStaticDetails) -> Result<()> {
         store_assets!(
             self,
             asset_static,
-            metrics,
             asset_static_data,
-            "accounts_saving_static"
+            "accounts_static_merge_with_batch"
         )
     }
-    async fn store_owner(
-        &self,
-        asset_owner: Vec<AssetOwner>,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    pub fn store_owner(&mut self, asset_owner: &AssetOwner) -> Result<()> {
         store_assets!(
             self,
             asset_owner,
-            metrics,
             asset_owner_data,
-            "accounts_saving_owner"
+            "accounts_owner_merge_with_batch"
         )
     }
-    async fn store_dynamic(
-        &self,
-        asset_dynamic: Vec<AssetDynamicDetails>,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    pub fn store_dynamic(&mut self, asset_dynamic: &AssetDynamicDetails) -> Result<()> {
         store_assets!(
             self,
             asset_dynamic,
-            metrics,
             asset_dynamic_data,
-            "accounts_saving_dynamic"
+            "accounts_dynamic_merge_with_batch"
         )
     }
-    async fn store_authority(
-        &self,
-        asset_authority: Vec<AssetAuthority>,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    fn store_authority(&mut self, asset_authority: &AssetAuthority) -> Result<()> {
         store_assets!(
             self,
             asset_authority,
-            metrics,
             asset_authority_data,
-            "accounts_saving_authority"
+            "accounts_authority_merge_with_batch"
         )
     }
-    async fn store_collection(
-        &self,
-        asset_collection: Vec<AssetCollection>,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    fn store_collection(&mut self, asset_collection: &AssetCollection) -> Result<()> {
         store_assets!(
             self,
             asset_collection,
-            metrics,
             asset_collection_data,
-            "accounts_saving_collection"
+            "accounts_collection_merge_with_batch"
         )
     }
-    async fn store_metadata_mint(
-        &self,
-        metadata_mint_map: Vec<MetadataMintMap>,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<()> {
+    fn store_metadata_mint(&mut self, metadata_mint_map: &MetadataMintMap) -> Result<()> {
         store_assets!(
             self,
             metadata_mint_map,
-            metrics,
             metadata_mint_map,
-            "metadata_mint_map"
+            "metadata_mint_map_merge_with_batch"
         )
     }
-    pub async fn store_metadata_models(
-        &self,
-        metadata_models: &MetadataModels,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) {
-        let _ = tokio::join!(
-            self.store_static(metadata_models.asset_static.clone(), metrics.clone()),
-            self.store_dynamic(metadata_models.asset_dynamic.clone(), metrics.clone()),
-            self.store_authority(metadata_models.asset_authority.clone(), metrics.clone()),
-            self.store_collection(metadata_models.asset_collection.clone(), metrics.clone()),
-            self.store_metadata_mint(metadata_models.metadata_mint.clone(), metrics.clone()),
-            self.store_owner(metadata_models.asset_owner.clone(), metrics.clone())
-        );
+    pub fn store_edition(&mut self, key: Pubkey, edition: &TokenMetadataEdition) -> Result<()> {
+        self.storage
+            .token_metadata_edition_cbor
+            .merge_with_batch_cbor(&mut self.batch, key, edition)?;
+        Ok(())
+    }
+    pub fn store_inscription(&mut self, inscription: &InscriptionInfo) -> Result<()> {
+        self.storage.inscriptions.merge_with_batch(
+            &mut self.batch,
+            inscription.inscription.root,
+            &inscription.into(),
+        )?;
+        Ok(())
+    }
+    pub fn store_inscription_data(
+        &mut self,
+        key: Pubkey,
+        inscription_data: &InscriptionDataInfo,
+    ) -> Result<()> {
+        self.storage.inscription_data.merge_with_batch(
+            &mut self.batch,
+            key,
+            &crate::inscriptions::InscriptionData {
+                pubkey: key,
+                data: inscription_data.inscription_data.clone(),
+                write_version: inscription_data.write_version,
+            },
+        )?;
+        Ok(())
+    }
+    pub fn asset_updated_with_batch(&mut self, slot: u64, pubkey: Pubkey) -> Result<()> {
+        self.storage
+            .asset_updated_with_batch(&mut self.batch, slot, pubkey)?;
+        Ok(())
+    }
+    pub fn save_token_account_with_idxs(
+        &mut self,
+        key: Pubkey,
+        token_account: &TokenAccount,
+    ) -> Result<()> {
+        self.storage
+            .token_accounts
+            .merge_with_batch(&mut self.batch, key, token_account)?;
+        self.storage.token_account_owner_idx.merge_with_batch(
+            &mut self.batch,
+            TokenAccountOwnerIdxKey {
+                owner: token_account.owner,
+                token_account: token_account.pubkey,
+            },
+            &TokenAccountOwnerIdx {
+                is_zero_balance: token_account.amount.is_zero(),
+                write_version: token_account.write_version,
+            },
+        )?;
+        self.storage.token_account_mint_owner_idx.merge_with_batch(
+            &mut self.batch,
+            TokenAccountMintOwnerIdxKey {
+                mint: token_account.mint,
+                owner: token_account.owner,
+                token_account: token_account.pubkey,
+            },
+            &TokenAccountMintOwnerIdx {
+                is_zero_balance: token_account.amount.is_zero(),
+                write_version: token_account.write_version,
+            },
+        )
+    }
 
-        if let Err(e) = self.asset_updated_batch(
-            metadata_models
-                .asset_dynamic
-                .iter()
-                .map(|asset| PubkeyWithSlot {
-                    slot: asset.get_slot_updated(),
-                    pubkey: asset.pubkey,
-                })
-                .collect(),
-        ) {
-            error!("Error while updating assets update idx: {}", e);
+    pub fn get_authority(&self, address: Pubkey) -> Pubkey {
+        self.storage
+            .asset_authority_data
+            .get(address)
+            .unwrap_or(None)
+            .map(|authority| authority.authority)
+            .unwrap_or_default()
+    }
+    pub fn get_mint_map(&self, key: Pubkey) -> Result<Option<MetadataMintMap>> {
+        self.storage.metadata_mint_map.get(key)
+    }
+
+    pub fn store_metadata_models(&mut self, metadata_models: &MetadataModels) -> Result<()> {
+        let mut slot_updated = 0;
+        let mut key = None;
+        if let Some(asset_static) = &metadata_models.asset_static {
+            self.store_static(asset_static)?;
+            key = Some(asset_static.pubkey);
         }
+        if let Some(asset_dynamic) = &metadata_models.asset_dynamic {
+            self.store_dynamic(asset_dynamic)?;
+            key = Some(asset_dynamic.pubkey);
+            if asset_dynamic.get_slot_updated() > slot_updated {
+                slot_updated = asset_dynamic.get_slot_updated()
+            }
+        }
+        if let Some(asset_authority) = &metadata_models.asset_authority {
+            self.store_authority(asset_authority)?;
+            key = Some(asset_authority.pubkey);
+        }
+        if let Some(asset_collection) = &metadata_models.asset_collection {
+            self.store_collection(asset_collection)?;
+            key = Some(asset_collection.pubkey);
+            if asset_collection.get_slot_updated() > slot_updated {
+                slot_updated = asset_collection.get_slot_updated()
+            }
+        }
+        if let Some(metadata_mint) = &metadata_models.metadata_mint {
+            self.store_metadata_mint(metadata_mint)?;
+        }
+        if let Some(asset_owner) = &metadata_models.asset_owner {
+            self.store_owner(asset_owner)?;
+            key = Some(asset_owner.pubkey);
+            if asset_owner.get_slot_updated() > slot_updated {
+                slot_updated = asset_owner.get_slot_updated()
+            }
+        }
+
+        if let Some(key) = key {
+            if slot_updated == 0 {
+                return Ok(());
+            }
+            if let Err(e) = self.asset_updated_with_batch(slot_updated, key) {
+                error!("Error while updating assets update idx: {}", e);
+            }
+        }
+        Ok(())
     }
 }

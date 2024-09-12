@@ -12,16 +12,14 @@ use asset::{
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
-use crate::columns::{TokenAccount, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
-use crate::editions::TokenMetadataEdition;
 use crate::migrator::{MigrationState, MigrationVersions, RocksMigration};
 pub use asset::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
 };
-pub use column::columns;
 use column::{Column, TypedColumn};
+use entities::enums::TokenMetadataEdition;
 use entities::models::{
-    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock,
+    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock, TokenAccount,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
@@ -35,6 +33,7 @@ use crate::migrations::collection_authority::{
 };
 use crate::migrations::external_plugins::{AssetDynamicDetailsV0, ExternalPluginsMigration};
 use crate::parameters::ParameterColumn;
+use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::token_prices::TokenPrice;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
@@ -536,7 +535,7 @@ impl Storage {
             TokenMetadataEdition::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_metadata_edition_keep_existing",
-                    TokenMetadataEdition::merge_token_metadata_edition,
+                    crate::editions::merge_token_metadata_edition,
                 );
             }
             AssetStaticDetailsDeprecated::NAME => {
@@ -554,7 +553,7 @@ impl Storage {
             TokenAccount::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_accounts",
-                    TokenAccount::merge_values,
+                    crate::token_accounts::merge_token_accounts,
                 );
             }
             TokenAccountOwnerIdx::NAME => {

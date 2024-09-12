@@ -41,7 +41,9 @@ use std::collections::{HashSet, VecDeque};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time::Instant;
 use tracing::{debug, error};
+use usecase::save_metrics::result_to_metrics;
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
 const BATCH_MINT_BATCH_FLUSH_SIZE: usize = 10_000;
@@ -96,6 +98,7 @@ impl BubblegumTxProcessor {
         if data == BufferedTransaction::default() {
             return Ok(());
         }
+        let begin_processing = Instant::now();
         let result = Self::get_process_transaction_results(
             data,
             self.instruction_parser.clone(),
@@ -103,12 +106,19 @@ impl BubblegumTxProcessor {
             self.metrics.clone(),
         )?;
 
-        self.rocks_client
+        let res = self
+            .rocks_client
             .store_transaction_result(&result, true)
             .await
-            .map_err(|e| IngesterError::DatabaseError(e.to_string()))?;
+            .map_err(|e| IngesterError::DatabaseError(e.to_string()));
 
-        Ok(())
+        result_to_metrics(self.metrics.clone(), &res, "process_transaction");
+        self.metrics.set_latency(
+            "process_transaction",
+            begin_processing.elapsed().as_millis() as f64,
+        );
+
+        res
     }
 
     pub fn get_process_transaction_results(
