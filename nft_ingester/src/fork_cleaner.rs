@@ -3,7 +3,6 @@ use interface::fork_cleaner::{CompressedTreeChangesManager, ForkChecker};
 use metrics_utils::ForkCleanerMetricsConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
 use tracing::info;
@@ -45,7 +44,7 @@ where
             .saturating_sub(SLOT_CHECK_OFFSET);
         let all_non_forked_slots = self.fork_checker.get_all_non_forked_slots(rx.resubscribe());
 
-        let mut forked_slots = HashSet::new();
+        let mut forked_slots = 0;
         let mut delete_items = Vec::new();
 
         let mut signatures_to_drop = Vec::new();
@@ -54,15 +53,15 @@ where
         // so even if transaction was in fork this column family has it
         for signature in self.cl_items_manager.tree_seq_idx_iter() {
             if let Some(max_slot) = signature.slot_sequences.keys().max() {
-                // if the max slot for selected transaction(tx) is greater then last_slot_for_check
-                // it means that the tx is fresh and we should not check it as there is a high possibility
-                // that its updates will be overwritten
+                // if max slot for selected transaction(tx) is greater then last_slot_for_check
+                // it means that tx is fresh and we should not check it such as there is high possibility
+                // that it's updates will be overwritten
                 if max_slot > &last_slot_for_check {
                     continue;
                 }
 
-                // here we have a vector because forked transaction can appear in different slots with the same sequence
-                // in such a case we have to check if one of those blocks is in a fork
+                // here we have a vector because forked transaction can appear in different slots with same sequence
+                // in such case we have to check if one of those blocks is in fork
                 let mut slots_with_highest_sequence = vec![];
                 // looking for a block with highest sequence because CLItems merge function checks that value
                 // meaning CLItems will contain updates from the transaction with highest sequence, even if it has the lowest slot number
@@ -86,14 +85,17 @@ where
                     }
                 }
 
+                let mut clean_up = false;
                 // check if either of slots appeared in fork
                 for slot in slots_with_highest_sequence {
                     if !all_non_forked_slots.contains(&slot) {
-                        forked_slots.insert(slot);
+                        clean_up = true;
+
+                        forked_slots += 1;
                     }
                 }
 
-                if !forked_slots.is_empty() {
+                if clean_up {
                     // if at least one of the blocks appeared in a fork we need to drop all the tree sequences which are related to transaction
                     // which fork cleaner is processing at the moment.
                     //
@@ -157,7 +159,7 @@ where
             self.delete_leaf_signatures(signatures_to_drop).await;
         }
 
-        self.metrics.set_forks_detected(forked_slots.len() as i64);
+        self.metrics.set_forks_detected(forked_slots as i64);
     }
 
     async fn delete_tree_seq_idx(&self, delete_items: &mut Vec<ForkedItem>) {
