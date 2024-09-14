@@ -1,6 +1,7 @@
 use asset_previews::{AssetPreviews, UrlToDownload};
 use entities::schedule::ScheduledJob;
 use inflector::Inflector;
+use leaf_signatures::LeafSignature;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
@@ -54,6 +55,7 @@ pub mod errors;
 pub mod fork_cleaner;
 pub mod inscriptions;
 pub mod key_encoders;
+pub mod leaf_signatures;
 pub mod migrations;
 pub mod migrator;
 pub mod offchain_data;
@@ -122,6 +124,7 @@ pub struct Storage {
     pub schedules: Column<ScheduledJob>,
     pub inscriptions: Column<Inscription>,
     pub inscription_data: Column<InscriptionData>,
+    pub leaf_signature: Column<LeafSignature>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -173,6 +176,7 @@ impl Storage {
         let schedules = Self::column(db.clone(), red_metrics.clone());
         let inscriptions = Self::column(db.clone(), red_metrics.clone());
         let inscription_data = Self::column(db.clone(), red_metrics.clone());
+        let leaf_signature = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -217,6 +221,7 @@ impl Storage {
             schedules,
             inscriptions,
             inscription_data,
+            leaf_signature,
         }
     }
 
@@ -294,6 +299,7 @@ impl Storage {
             Self::new_cf_descriptor::<ScheduledJob>(migration_state),
             Self::new_cf_descriptor::<Inscription>(migration_state),
             Self::new_cf_descriptor::<InscriptionData>(migration_state),
+            Self::new_cf_descriptor::<LeafSignature>(migration_state),
         ]
     }
 
@@ -602,6 +608,12 @@ impl Storage {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_inscription_data",
                     InscriptionData::merge_values,
+                );
+            }
+            LeafSignature::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_leaf_signature",
+                    LeafSignature::merge_leaf_signatures,
                 );
             }
             _ => {}
