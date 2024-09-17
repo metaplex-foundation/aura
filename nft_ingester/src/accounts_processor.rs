@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::Mutex;
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinSet};
 use tokio::time::Instant;
 use tracing::error;
 
@@ -26,6 +26,40 @@ use tracing::error;
 const WORKER_IDLE_TIMEOUT: Duration = Duration::from_millis(100);
 // interval after which buffer is flushed
 const FLUSH_INTERVAL: Duration = Duration::from_millis(500);
+
+#[allow(clippy::too_many_arguments)]
+pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send + 'static>(
+    rx: Receiver<()>,
+    mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    unprocessed_transactions_getter: Arc<AG>,
+    rocks_storage: Arc<Storage>,
+    account_buffer_size: usize,
+    fees_buffer_size: usize,
+    metrics: Arc<IngesterMetricsConfig>,
+    postgre_client: Arc<PgClient>,
+    rpc_client: Arc<RpcClient>,
+    join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+) {
+    mutexed_tasks.lock().await.spawn(async move {
+        let account_processor = AccountsProcessor::build(
+            rx.resubscribe(),
+            fees_buffer_size,
+            unprocessed_transactions_getter,
+            metrics,
+            postgre_client,
+            rpc_client,
+            join_set,
+        )
+        .await
+        .expect("Failed to build 'AccountsProcessor'!");
+
+        account_processor
+            .process_accounts(rx, rocks_storage, account_buffer_size)
+            .await;
+
+        Ok(())
+    });
+}
 
 pub struct AccountsProcessor<T: UnprocessedAccountsGetter> {
     fees_batch_size: usize,

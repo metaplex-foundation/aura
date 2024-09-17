@@ -1,20 +1,37 @@
-use solana_program::pubkey::Pubkey;
-use std::collections::HashMap;
-use std::collections::VecDeque;
-use std::sync::Arc;
-
 use entities::enums::UnprocessedAccount;
 use entities::models::{BufferedTransaction, BufferedTxWithID, Task, UnprocessedAccountMessage};
 use interface::error::UsecaseError;
 use interface::signature_persistence::UnprocessedTransactionsGetter;
 use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
+use solana_program::pubkey::Pubkey;
+use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::broadcast::Receiver;
 use tokio::sync::Mutex;
+use tokio::task::JoinError;
+use tokio::time::sleep as tokio_sleep;
 use tonic::async_trait;
 use tracing::log::info;
 
 use metrics_utils::IngesterMetricsConfig;
 
 const TXS_BATCH_SIZE: usize = 100;
+
+pub async fn debug_buffer(
+    cloned_rx: Receiver<()>,
+    cloned_buffer: Arc<Buffer>,
+    cloned_metrics: Arc<IngesterMetricsConfig>,
+) -> Result<(), JoinError> {
+    while cloned_rx.is_empty() {
+        cloned_buffer.debug().await;
+        cloned_buffer.capture_metrics(&cloned_metrics).await;
+        tokio_sleep(Duration::from_secs(5)).await;
+    }
+
+    Ok(())
+}
 
 #[derive(Default)]
 pub struct Buffer {

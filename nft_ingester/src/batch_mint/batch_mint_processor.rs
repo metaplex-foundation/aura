@@ -18,6 +18,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
+use tokio::task::JoinError;
 use tokio::time::Instant;
 use tracing::{error, info};
 
@@ -29,6 +30,17 @@ const FAIL_BUILD_JSON_FROM_FILE_METRICS_LABEL: &str = "fail_build_json_from_file
 const TRANSACTION_FAIL_METRICS_LABEL: &str = "transaction_fail";
 const ARWEAVE_UPLOAD_FAIL_METRICS_LABEL: &str = "arweave_upload_fail";
 const FILE_PROCESSING_METRICS_LABEL: &str = "batch_mint_file_processing";
+
+pub async fn process_batch_mints<R: BatchMintTxSender, P: PermanentStorageClient>(
+    processor_clone: Arc<BatchMintProcessor<R, P>>,
+    rx: Receiver<()>,
+) -> Result<(), JoinError> {
+    info!("Start processing batch_mints...");
+    processor_clone.process_batch_mints(rx).await;
+    info!("Finish processing batch_mints...");
+
+    Ok(())
+}
 
 pub struct BatchMintDownloaderImpl {
     pg_client: Arc<PgClient>,

@@ -1,21 +1,23 @@
-use crate::config::BackfillerConfig;
+use crate::config::{BackfillerConfig, BackfillerSourceMode, IngesterConfig};
 use crate::error::IngesterError;
 use async_trait::async_trait;
+use backfill_rpc::rpc::BackfillRPC;
 use entities::models::{BufferedTransaction, RawBlock};
 use flatbuffers::FlatBufferBuilder;
 use futures::future::join_all;
-use interface::error::BlockConsumeError;
+use interface::error::{BlockConsumeError, StorageError, UsecaseError};
 use interface::signature_persistence::{BlockConsumer, BlockProducer};
 use interface::slot_getter::FinalizedSlotGetter;
 use interface::slots_dumper::{SlotGetter, SlotsDumper};
-use metrics_utils::BackfillerMetricsConfig;
+use metrics_utils::{BackfillerMetricsConfig};
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, ForceReingestableSlots};
 use rocks_db::column::TypedColumn;
 use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
 use rocks_db::Storage;
+use solana_program::pubkey::Pubkey;
 use solana_transaction_status::{
-    EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta,
+    EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta, UiConfirmedBlock,
 };
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -33,6 +35,144 @@ pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 10;
 pub const GET_DATA_FROM_BG_RETRIES: u32 = 5;
 pub const SECONDS_TO_RETRY_ROCKSDB_OPERATION: u64 = 5;
 pub const DELETE_SLOT_RETRIES: u32 = 5;
+
+pub async fn run_slot_force_persister<C, P, S>(
+    force_reingestable_transactions_parser: Arc<TransactionsParser<C, P, S>>,
+    rx: Receiver<()>,
+) -> Result<(), JoinError>
+where
+    C: BlockConsumer,
+    P: BlockProducer,
+    S: SlotGetter,
+{
+    info!("Running slot force persister...");
+
+    force_reingestable_transactions_parser
+        .parse_transactions(rx)
+        .await;
+
+    info!("Force slot persister finished working.");
+
+    Ok(())
+}
+
+pub enum BackfillSource {
+    Bigtable(Arc<BigTableClient>),
+    Rpc(Arc<BackfillRPC>),
+}
+
+impl BackfillSource {
+    pub async fn new(
+        ingester_config: &IngesterConfig,
+        backfiller_config: &BackfillerConfig,
+    ) -> Self {
+        match ingester_config.backfiller_source_mode {
+            BackfillerSourceMode::Bigtable => Self::Bigtable(Arc::new(
+                connect_new_bigtable_from_config(backfiller_config.clone())
+                    .await
+                    .unwrap(),
+            )),
+            BackfillerSourceMode::RPC => Self::Rpc(Arc::new(BackfillRPC::connect(
+                ingester_config.backfill_rpc_address.clone(),
+            ))),
+        }
+    }
+}
+
+#[async_trait]
+impl SlotsGetter for BackfillSource {
+    async fn get_slots(
+        &self,
+        collected_key: &Pubkey,
+        start_at: u64,
+        rows_limit: i64,
+    ) -> Result<Vec<u64>, UsecaseError> {
+        match self {
+            BackfillSource::Bigtable(bigtable) => {
+                bigtable
+                    .big_table_inner_client
+                    .get_slots(collected_key, start_at, rows_limit)
+                    .await
+            }
+            BackfillSource::Rpc(rpc) => rpc.get_slots(collected_key, start_at, rows_limit).await,
+        }
+    }
+}
+
+#[async_trait]
+impl BlockProducer for BackfillSource {
+    async fn get_block(
+        &self,
+        slot: u64,
+        backup_provider: Option<Arc<impl BlockProducer>>,
+    ) -> Result<UiConfirmedBlock, StorageError> {
+        match self {
+            BackfillSource::Bigtable(bigtable) => bigtable.get_block(slot, backup_provider).await,
+            BackfillSource::Rpc(rpc) => rpc.get_block(slot, backup_provider).await,
+        }
+    }
+}
+
+pub async fn run_perpetual_slot_collection(
+    backfiller_clone: Arc<Backfiller<BackfillSource>>,
+    rpc_backfiller_clone: Arc<BackfillRPC>,
+    metrics: Arc<BackfillerMetricsConfig>,
+    backfiller_wait_period_sec: u64,
+    rx: Receiver<()>,
+) -> Result<(), JoinError> {
+    info!("Running slot fetcher...");
+
+    if let Err(e) = backfiller_clone
+        .run_perpetual_slot_collection(
+            metrics,
+            Duration::from_secs(backfiller_wait_period_sec),
+            rpc_backfiller_clone,
+            rx,
+        )
+        .await
+    {
+        error!("Error while running perpetual slot fetcher: {}", e);
+    }
+
+    info!("Slot fetcher finished working");
+
+    Ok(())
+}
+
+pub async fn run_perpetual_slot_processing<SG, BC, BP>(
+    backfiller_clone: Arc<Backfiller<BackfillSource>>,
+    metrics: Arc<BackfillerMetricsConfig>,
+    slot_getter: Arc<SG>,
+    consumer: Arc<BC>,
+    producer: Arc<BP>,
+    backfiller_wait_period_sec: u64,
+    rx: Receiver<()>,
+    beckup: Option<Arc<BackfillSource>>,
+) -> Result<(), JoinError>
+where
+    BC: BlockConsumer,
+    SG: SlotGetter,
+    BP: BlockProducer,
+{
+    info!("Running slot persister...");
+    if let Err(e) = backfiller_clone
+        .run_perpetual_slot_processing(
+            metrics,
+            slot_getter,
+            consumer,
+            producer,
+            Duration::from_secs(backfiller_wait_period_sec),
+            rx,
+            beckup,
+        )
+        .await
+    {
+        error!("Error while running perpetual slot persister: {}", e);
+    }
+    info!("Slot persister finished working");
+
+    Ok(())
+}
 
 pub struct Backfiller<T: SlotsGetter + Send + Sync + 'static> {
     rocks_client: Arc<rocks_db::Storage>,

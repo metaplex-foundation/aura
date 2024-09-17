@@ -1,10 +1,16 @@
+use crate::config::IngesterConfig;
 use crate::error::IngesterError;
+use metrics_utils::MetricState;
+use postgre_client::PgClient;
 use pprof::protos::Message;
 use pprof::ProfilerGuard;
+use rocks_db::migrator::MigrationState;
+use rocks_db::Storage;
 use std::fs::File;
 use std::io::Write;
 use std::ops::DerefMut;
 use std::sync::Arc;
+use tempfile::TempDir;
 use tokio::process::Command;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
@@ -12,6 +18,84 @@ use tokio::task::{JoinError, JoinSet};
 use tracing::error;
 
 const MALLOC_CONF_ENV: &str = "MALLOC_CONF";
+
+pub async fn init_index_storage_with_migration(
+    config: &IngesterConfig,
+    metrics_state: &MetricState,
+    max_pg_connection_default_value: u32,
+    min_pg_connection_default_value: u32,
+    pg_migrations_path: &str,
+) -> Result<PgClient, IngesterError> {
+    let max_pg_connections = config
+        .database_config
+        .get_max_postgres_connections()
+        .unwrap_or(max_pg_connection_default_value);
+
+    let pg_client = PgClient::new(
+        &config.database_config.get_database_url().unwrap(),
+        min_pg_connection_default_value,
+        max_pg_connections,
+        metrics_state.red_metrics.clone(),
+    )
+    .await
+    .map_err(|e| e.to_string())
+    .map_err(IngesterError::SqlxError)?;
+
+    pg_client
+        .run_migration(pg_migrations_path)
+        .await
+        .map_err(IngesterError::SqlxError)?;
+
+    Ok(pg_client)
+}
+
+pub async fn init_primary_storage(
+    config: &IngesterConfig,
+    metrics_state: &MetricState,
+    mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    default_rocksdb_path: &str,
+) -> Result<Storage, IngesterError> {
+    let db_path = config
+        .rocks_db_path_container
+        .as_deref()
+        .unwrap_or(default_rocksdb_path);
+
+    {
+        // storage in secondary mod cannot create new column families, that
+        // could be required for migration_version_manager, so firstly open
+        // storage with MigrationState::CreateColumnFamilies in order to create
+        // all column families
+        Storage::open(
+            db_path,
+            mutexed_tasks.clone(),
+            metrics_state.red_metrics.clone(),
+            MigrationState::CreateColumnFamilies,
+        )?;
+    }
+
+    let migration_version_manager_dir = TempDir::new()?;
+    let migration_version_manager = Storage::open_secondary(
+        db_path,
+        migration_version_manager_dir.path().to_str().unwrap(),
+        mutexed_tasks.clone(),
+        metrics_state.red_metrics.clone(),
+        MigrationState::Last,
+    )?;
+
+    Storage::apply_all_migrations(
+        db_path,
+        &config.migration_storage_path,
+        Arc::new(migration_version_manager),
+    )
+    .await?;
+
+    Ok(Storage::open(
+        db_path,
+        mutexed_tasks.clone(),
+        metrics_state.red_metrics.clone(),
+        MigrationState::Last,
+    )?)
+}
 
 pub async fn graceful_stop(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,

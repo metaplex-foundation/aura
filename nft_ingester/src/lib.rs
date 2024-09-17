@@ -28,3 +28,5 @@ pub mod sequence_consistent;
 pub mod tcp_receiver;
 pub mod token_updates_processor;
 pub mod transaction_ingester;
+pub mod transaction_processor;
+pub mod rocks_db;
