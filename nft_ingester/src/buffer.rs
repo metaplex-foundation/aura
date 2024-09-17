@@ -14,8 +14,8 @@ use tracing::log::info;
 
 use metrics_utils::IngesterMetricsConfig;
 
-const ACCOUNT_BATCH_SIZE: usize = 50;
-const TXS_BATCH_SIZE: usize = 10;
+const ACCOUNT_BATCH_SIZE: usize = 5000;
+const TXS_BATCH_SIZE: usize = 100;
 
 #[derive(Default)]
 pub struct Buffer {
