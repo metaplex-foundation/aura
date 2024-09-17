@@ -148,7 +148,7 @@ pub async fn run_perpetual_slot_processing<SG, BC, BP>(
     producer: Arc<BP>,
     backfiller_wait_period_sec: u64,
     rx: Receiver<()>,
-    beckup: Option<Arc<BackfillSource>>,
+    backup: Option<Arc<BackfillSource>>,
 ) -> Result<(), JoinError>
 where
     BC: BlockConsumer,
@@ -164,7 +164,7 @@ where
             producer,
             Duration::from_secs(backfiller_wait_period_sec),
             rx,
-            beckup,
+            backup,
         )
         .await
     {
