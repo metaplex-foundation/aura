@@ -59,11 +59,11 @@ const fn default_price_monitoring_interval_sec() -> u64 {
 }
 
 const fn default_snapshot_parsing_workers() -> u32 {
-    10
+    1
 }
 
 const fn default_snapshot_parsing_batch_size() -> usize {
-    100_000
+    500
 }
 
 fn default_rocks_backup_url() -> String {
