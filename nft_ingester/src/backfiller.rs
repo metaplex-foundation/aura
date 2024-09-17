@@ -139,6 +139,7 @@ pub async fn run_perpetual_slot_collection(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_perpetual_slot_processing<SG, BC, BP>(
     backfiller_clone: Arc<Backfiller<BackfillSource>>,
     metrics: Arc<BackfillerMetricsConfig>,

@@ -19,9 +19,10 @@ pub async fn perform_backup(
     cloned_metrics: Arc<IngesterMetricsConfig>,
 ) -> Result<(), JoinError> {
     let mut backup_service = backup_service;
-    Ok(backup_service
+    backup_service
         .perform_backup(cloned_metrics, cloned_rx)
-        .await)
+        .await;
+    Ok(())
 }
 
 pub async fn receive_last_saved_slot(

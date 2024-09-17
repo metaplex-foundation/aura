@@ -39,7 +39,7 @@ pub async fn run_transaction_processor<TG>(
                     .await
                 {
                     Ok(_) => unprocessed_transactions_getter.ack(tx.id),
-                    Err(err) if err == IngesterError::NotImplemented => {}
+                    Err(IngesterError::NotImplemented) => {}
                     Err(err) => {
                         error!("Background saver could not process received data: {}", err);
                     }
