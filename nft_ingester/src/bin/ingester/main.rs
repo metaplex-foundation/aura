@@ -32,13 +32,15 @@ use nft_ingester::accounts_processor::run_accounts_processor;
 use nft_ingester::ack::create_ack_channel;
 use nft_ingester::api::account_balance::AccountBalanceGetterImpl;
 use nft_ingester::api::service::start_api;
-use nft_ingester::backfiller::{run_perpetual_slot_collection, run_perpetual_slot_processing, run_slot_force_persister, BackfillSource, Backfiller, DirectBlockParser, ForceReingestableSlotGetter, TransactionsParser};
+use nft_ingester::backfiller::{
+    run_perpetual_slot_collection, run_perpetual_slot_processing, run_slot_force_persister, BackfillSource, Backfiller,
+    DirectBlockParser, ForceReingestableSlotGetter, TransactionsParser,
+};
 use nft_ingester::batch_mint::batch_mint_processor::{process_batch_mints, BatchMintProcessor, NoopBatchMintTxSender};
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::{debug_buffer, Buffer};
 use nft_ingester::config::{
-    setup_config, ApiConfig, BackfillerConfig, BackfillerMode, IngesterConfig, MessageSource,
-    INGESTER_CONFIG_PREFIX,
+    setup_config, ApiConfig, BackfillerConfig, BackfillerMode, IngesterConfig, MessageSource, INGESTER_CONFIG_PREFIX,
 };
 use nft_ingester::fork_cleaner::{run_fork_cleaner, ForkCleaner};
 use nft_ingester::gapfiller::{
@@ -55,9 +57,9 @@ use nft_ingester::tcp_receiver::{connect_to_geyser, connect_to_snapshot_receiver
 use nft_ingester::transaction_ingester::BackfillTransactionIngester;
 use nft_ingester::transaction_processor::run_transaction_processor;
 use nft_ingester::{config::init_logger, error::IngesterError};
+use rocks_db::backup_service;
 use rocks_db::backup_service::BackupService;
 use rocks_db::storage_traits::AssetSlotStorage;
-use rocks_db::{backup_service};
 use tonic::transport::Server;
 use usecase::asset_streamer::AssetStreamer;
 use usecase::proofs::MaybeProofChecker;

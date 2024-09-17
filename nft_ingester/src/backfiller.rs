@@ -9,7 +9,7 @@ use interface::error::{BlockConsumeError, StorageError, UsecaseError};
 use interface::signature_persistence::{BlockConsumer, BlockProducer};
 use interface::slot_getter::FinalizedSlotGetter;
 use interface::slots_dumper::{SlotGetter, SlotsDumper};
-use metrics_utils::{BackfillerMetricsConfig};
+use metrics_utils::BackfillerMetricsConfig;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, ForceReingestableSlots};
 use rocks_db::column::TypedColumn;

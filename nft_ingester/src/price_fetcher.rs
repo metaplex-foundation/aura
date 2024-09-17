@@ -16,7 +16,7 @@ const USD_CURRENCY: &str = "usd";
 
 pub async fn start_price_monitoring<T: PriceFetcher>(
     solana_price_updater: SolanaPriceUpdater<T>,
-    rx: Receiver<()>
+    rx: Receiver<()>,
 ) -> Result<(), JoinError> {
     info!("Start monitoring Solana price...");
     solana_price_updater.start_price_monitoring(rx).await;

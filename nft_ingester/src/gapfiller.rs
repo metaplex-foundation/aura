@@ -96,13 +96,16 @@ pub async fn run_sequence_consistent_gapfiller<T, R>(
                     info!("Received stop signal, stopping collecting sequences gaps");
                     break;
                 }
-            };
+            }
         }
 
         Ok(())
     };
 
-    mutexed_tasks.lock().await.spawn(run_sequence_consistent_gapfiller);
+    mutexed_tasks
+        .lock()
+        .await
+        .spawn(run_sequence_consistent_gapfiller);
 }
 
 /// Method returns the number of successfully processed assets
