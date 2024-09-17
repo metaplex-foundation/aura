@@ -68,7 +68,10 @@ impl UnprocessedTransactionsGetter for RedisReceiver {
 
 #[async_trait]
 impl UnprocessedAccountsGetter for RedisReceiver {
-    async fn next_accounts(&self) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError> {
+    async fn next_accounts(
+        &self,
+        _batch_size: usize,
+    ) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError> {
         let recv_data = self
             .messanger
             .lock()

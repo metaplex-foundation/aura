@@ -363,35 +363,56 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rpc_client = Arc::new(RpcClient::new(config.rpc_host.clone()));
     for _ in 0..config.parsing_workers {
-        let redis_receiver = Arc::new(
-            RedisReceiver::new(
-                config.redis_messenger_config.clone(),
-                ConsumptionType::All,
-                ack_channel.clone(),
-            )
-            .await
-            .unwrap(),
-        );
-        run_accounts_processor(
-            shutdown_rx.resubscribe(),
-            mutexed_tasks.clone(),
-            redis_receiver,
-            rocks_storage.clone(),
-            config.accounts_buffer_size,
-            config.mpl_core_fees_buffer_size,
-            metrics_state.ingester_metrics.clone(),
-            index_storage.clone(),
-            rpc_client.clone(),
-            mutexed_tasks.clone(),
-        )
-        .await;
-        // Workers for snapshot parsing
+        match config.message_source {
+            MessageSource::Redis => {
+                let redis_receiver = Arc::new(
+                    RedisReceiver::new(
+                        config.redis_messenger_config.clone(),
+                        ConsumptionType::All,
+                        ack_channel.clone(),
+                    )
+                    .await
+                    .unwrap(),
+                );
+                run_accounts_processor(
+                    shutdown_rx.resubscribe(),
+                    mutexed_tasks.clone(),
+                    redis_receiver,
+                    rocks_storage.clone(),
+                    config.accounts_buffer_size,
+                    config.mpl_core_fees_buffer_size,
+                    metrics_state.ingester_metrics.clone(),
+                    index_storage.clone(),
+                    rpc_client.clone(),
+                    mutexed_tasks.clone(),
+                )
+                .await;
+            }
+            MessageSource::TCP => {
+                run_accounts_processor(
+                    shutdown_rx.resubscribe(),
+                    mutexed_tasks.clone(),
+                    buffer.clone(),
+                    rocks_storage.clone(),
+                    config.accounts_buffer_size,
+                    config.mpl_core_fees_buffer_size,
+                    metrics_state.ingester_metrics.clone(),
+                    index_storage.clone(),
+                    rpc_client.clone(),
+                    mutexed_tasks.clone(),
+                )
+                .await;
+            }
+        }
+    }
+    // Workers for snapshot parsing
+    for _ in 0..config.snapshot_parsing_workers {
         run_accounts_processor(
             shutdown_rx.resubscribe(),
             mutexed_tasks.clone(),
             buffer.clone(),
             rocks_storage.clone(),
-            config.accounts_buffer_size,
+            config.snapshot_parsing_batch_size,
             config.mpl_core_fees_buffer_size,
             metrics_state.ingester_metrics.clone(),
             index_storage.clone(),
