@@ -14,8 +14,7 @@ use tracing::log::info;
 
 use metrics_utils::IngesterMetricsConfig;
 
-const ACCOUNT_BATCH_SIZE: usize = 50;
-const TXS_BATCH_SIZE: usize = 10;
+const TXS_BATCH_SIZE: usize = 100;
 
 #[derive(Default)]
 pub struct Buffer {
@@ -78,13 +77,16 @@ impl UnprocessedTransactionsGetter for Buffer {
 
 #[async_trait]
 impl UnprocessedAccountsGetter for Buffer {
-    async fn next_accounts(&self) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError> {
+    async fn next_accounts(
+        &self,
+        batch_size: usize,
+    ) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError> {
         let mut buffer = self.accounts.lock().await;
-        let mut result = Vec::with_capacity(ACCOUNT_BATCH_SIZE);
-        let mut keys_to_remove = Vec::with_capacity(ACCOUNT_BATCH_SIZE);
+        let mut result = Vec::with_capacity(batch_size);
+        let mut keys_to_remove = Vec::with_capacity(batch_size);
         for key in buffer.keys().cloned() {
             keys_to_remove.push(key);
-            if result.len() >= ACCOUNT_BATCH_SIZE {
+            if result.len() >= batch_size {
                 break;
             }
         }

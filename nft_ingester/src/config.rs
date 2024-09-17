@@ -58,6 +58,14 @@ const fn default_price_monitoring_interval_sec() -> u64 {
     30
 }
 
+const fn default_snapshot_parsing_workers() -> u32 {
+    1
+}
+
+const fn default_snapshot_parsing_batch_size() -> usize {
+    500
+}
+
 fn default_rocks_backup_url() -> String {
     String::from("127.0.0.1:3051/snapshot")
 }
@@ -124,6 +132,10 @@ pub struct IngesterConfig {
     pub redis_messenger_config: MessengerConfig,
     pub message_source: MessageSource,
     pub accounts_buffer_size: usize,
+    #[serde(default = "default_snapshot_parsing_workers")]
+    pub snapshot_parsing_workers: u32,
+    #[serde(default = "default_snapshot_parsing_batch_size")]
+    pub snapshot_parsing_batch_size: usize,
     pub parsing_workers: u32,
     #[serde(default = "default_mpl_core_fees_buffer_size")]
     pub mpl_core_fees_buffer_size: usize,

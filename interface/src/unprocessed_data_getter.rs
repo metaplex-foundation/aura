@@ -4,6 +4,9 @@ use entities::models::UnprocessedAccountMessage;
 
 #[async_trait]
 pub trait UnprocessedAccountsGetter {
-    async fn next_accounts(&self) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError>;
+    async fn next_accounts(
+        &self,
+        batch_size: usize,
+    ) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError>;
     fn ack(&self, ids: Vec<String>);
 }

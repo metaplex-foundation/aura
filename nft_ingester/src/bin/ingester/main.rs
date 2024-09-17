@@ -336,17 +336,15 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_buffer = buffer.clone();
     let cloned_rx = shutdown_rx.resubscribe();
     let cloned_metrics = metrics_state.ingester_metrics.clone();
-    if matches!(config.message_source, MessageSource::TCP) {
-        mutexed_tasks.lock().await.spawn(async move {
-            while cloned_rx.is_empty() {
-                cloned_buffer.debug().await;
-                cloned_buffer.capture_metrics(&cloned_metrics).await;
-                tokio::time::sleep(Duration::from_secs(5)).await;
-            }
+    mutexed_tasks.lock().await.spawn(async move {
+        while cloned_rx.is_empty() {
+            cloned_buffer.debug().await;
+            cloned_buffer.capture_metrics(&cloned_metrics).await;
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
 
-            Ok(())
-        });
-    }
+        Ok(())
+    });
 
     // start backup service
     let backup_cfg = backup_service::load_config()?;
@@ -406,6 +404,22 @@ pub async fn main() -> Result<(), IngesterError> {
                 .await;
             }
         }
+    }
+    // Workers for snapshot parsing
+    for _ in 0..config.snapshot_parsing_workers {
+        run_accounts_processor(
+            shutdown_rx.resubscribe(),
+            mutexed_tasks.clone(),
+            buffer.clone(),
+            rocks_storage.clone(),
+            config.snapshot_parsing_batch_size,
+            config.mpl_core_fees_buffer_size,
+            metrics_state.ingester_metrics.clone(),
+            index_storage.clone(),
+            rpc_client.clone(),
+            mutexed_tasks.clone(),
+        )
+        .await;
     }
 
     let first_processed_slot = Arc::new(AtomicU64::new(0));

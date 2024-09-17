@@ -13,10 +13,11 @@ pub enum ParsedInscription {
 pub fn handle_inscription_account(
     mut account_data: &[u8],
 ) -> Result<ParsedInscription, IngesterError> {
+    // If data len less than DISCRIMINATOR len it means
+    // that account data was rewrote by raw data of InscriptionData
+    // account type
     if account_data.len() < 8 {
-        return Err(IngesterError::AccountParsingError(
-            "Inscription data is too short".to_string(),
-        ));
+        return Ok(ParsedInscription::InscriptionData(account_data.to_vec()));
     }
     let mut discriminator = [0u8; 8];
     discriminator.copy_from_slice(&account_data[..8]);

@@ -68,7 +68,10 @@ impl UnprocessedTransactionsGetter for RedisReceiver {
 
 #[async_trait]
 impl UnprocessedAccountsGetter for RedisReceiver {
-    async fn next_accounts(&self) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError> {
+    async fn next_accounts(
+        &self,
+        _batch_size: usize,
+    ) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError> {
         let recv_data = self
             .messanger
             .lock()
@@ -77,9 +80,17 @@ impl UnprocessedAccountsGetter for RedisReceiver {
             .await
             .map_err(|e| UsecaseError::Messenger(e.to_string()))?;
         let mut result = Vec::new();
+        let mut unknown_account_types_ids = Vec::new();
         for item in recv_data {
             match self.message_parser.parse_account(item.data, false) {
                 Ok(accounts) => {
+                    // We can receive empty UnprocessedAccountWithMetadata array if there no
+                    // known account data types in item
+                    // If so we need to ack item as received one but do not process it
+                    if accounts.is_empty() {
+                        unknown_account_types_ids.push(item.id);
+                        continue;
+                    }
                     for (i, account) in accounts.into_iter().enumerate() {
                         // no need to ack same element twice
                         let id = if i.is_zero() {
@@ -101,6 +112,7 @@ impl UnprocessedAccountsGetter for RedisReceiver {
             }
         }
 
+        UnprocessedAccountsGetter::ack(self, unknown_account_types_ids);
         Ok(result)
     }
 
