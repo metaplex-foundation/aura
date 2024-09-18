@@ -60,8 +60,8 @@ pub async fn start_api(
     json_middleware_config: Option<JsonMiddlewareConfig>,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     archives_dir: &str,
-    consistence_synchronization_api_threshold: u64,
-    consistence_backfilling_slots_threshold: u64,
+    consistence_synchronization_api_threshold: Option<u64>,
+    consistence_backfilling_slots_threshold: Option<u64>,
     batch_mint_service_port: Option<u16>,
     file_storage_path: &str,
     account_balance_getter: Arc<AccountBalanceGetterImpl>,
@@ -69,27 +69,39 @@ pub async fn start_api(
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
-    let synchronization_state_consistency_checker =
-        Arc::new(SynchronizationStateConsistencyChecker::new());
-    synchronization_state_consistency_checker
-        .run(
-            tasks.clone(),
-            rx.resubscribe(),
-            pg_client.clone(),
-            rocks_db.clone(),
-            consistence_synchronization_api_threshold,
-        )
-        .await;
 
-    let backfilling_state_consistency_checker = Arc::new(BackfillingStateConsistencyChecker::new());
-    backfilling_state_consistency_checker
-        .run(
-            tasks.clone(),
-            rx.resubscribe(),
-            rocks_db.clone(),
-            consistence_backfilling_slots_threshold,
-        )
-        .await;
+    let mut consistency_checkers: Vec<Arc<dyn ConsistencyChecker>> = vec![];
+
+    if let Some(consistence_synchronization_api_threshold) =
+        consistence_synchronization_api_threshold
+    {
+        let synchronization_state_consistency_checker =
+            Arc::new(SynchronizationStateConsistencyChecker::new());
+        synchronization_state_consistency_checker
+            .run(
+                tasks.clone(),
+                rx.resubscribe(),
+                pg_client.clone(),
+                rocks_db.clone(),
+                consistence_synchronization_api_threshold,
+            )
+            .await;
+        consistency_checkers.push(synchronization_state_consistency_checker);
+    }
+
+    if let Some(consistence_backfilling_slots_threshold) = consistence_backfilling_slots_threshold {
+        let backfilling_state_consistency_checker =
+            Arc::new(BackfillingStateConsistencyChecker::new());
+        backfilling_state_consistency_checker
+            .run(
+                tasks.clone(),
+                rx.resubscribe(),
+                rocks_db.clone(),
+                consistence_backfilling_slots_threshold,
+            )
+            .await;
+        consistency_checkers.push(backfilling_state_consistency_checker);
+    }
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let api = DasApi::new(
@@ -110,10 +122,7 @@ pub async fn start_api(
         Some(MiddlewaresData {
             response_middleware,
             request_middleware,
-            consistency_checkers: vec![
-                synchronization_state_consistency_checker,
-                backfilling_state_consistency_checker,
-            ],
+            consistency_checkers,
         }),
         addr,
         tasks,
