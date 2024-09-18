@@ -9,8 +9,8 @@ actor "Staker" as Staker
 control "MPLX staking\ncontract" as StakingContract
 control "MPLX reward\ncontract" as RewardContract
 database "Reward\npool" as RewardPool
-database "Rollup\nfees" as RollupFees
-control "Rollup fees\ncontract" as RollupFeesContract
+database "Batch mint\nfees" as BatchMintFees
+control "Batch mint fees\ncontract" as BatchMintFeesContract
 control "Bubblegum\ncontract"  as Bubblegum
 actor  "NFT tree creator" as TreeCreator
 actor "Metaplex DAO" as Metaplex
@@ -29,10 +29,10 @@ note right
   Reward share multiplier depends on the stake period: 5 days - 1X, 3 months - 2X, 6 months - 4X, 1 year - 6X
 end note
 
-== Reward fund from Rollups ==
+== Reward fund from batch mints ==
 
 TreeCreator -> Bubblegum : Create tree,\npay fee in SOL
-Bubblegum -> RollupFees : Collect fees from Rollups
+Bubblegum -> BatchMintFees : Collect fees from batch mints
 
 == Reward fund from Metaplex foundation ==
 
@@ -44,16 +44,16 @@ end note
 
 == Forming rewarding ==
 
-Metaplex -> RollupFeesContract : initiate rewards funding from rollup fees
+Metaplex -> BatchMintFeesContract : initiate rewards funding from batch mint fees
 note left
-  Fill up the rewards pool funded from the collected rollup fees.
+  Fill up the rewards pool funded from the collected batch mint fees.
   The pool will be filled up for some time, ie for a month.
   And it will be refilled periodically (e.g. monthly)
 end note
-activate RollupFeesContract
-    RollupFeesContract <-> RollupFees : Conver SOL into MPLX
-    RollupFeesContract -> RewardPool : Fund rewards with MPLX
-deactivate RollupFeesContract
+activate BatchMintFeesContract
+    BatchMintFeesContract <-> BatchMintFees : Conver SOL into MPLX
+    BatchMintFeesContract -> RewardPool : Fund rewards with MPLX
+deactivate BatchMintFeesContract
 
 == Perfrom rewarding ==
 
