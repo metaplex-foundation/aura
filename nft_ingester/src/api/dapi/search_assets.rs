@@ -6,13 +6,16 @@ use crate::price_fetcher::SOLANA_CURRENCY;
 use entities::api_req_params::{AssetSorting, SearchAssetsOptions};
 use interface::account_balance::AccountBalanceGetter;
 use interface::json::{JsonDownloader, JsonPersister};
+use metrics_utils::ApiMetricsConfig;
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
+use tokio::time::Instant;
 use tracing::error;
+use tracing::log::info;
 
 use super::asset_preview::populate_previews;
 
@@ -34,7 +37,9 @@ pub async fn search_assets(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     account_balance_getter: Arc<impl AccountBalanceGetter>,
     storage_service_base_path: Option<String>,
+    metrics: Arc<ApiMetricsConfig>,
 ) -> Result<AssetList, StorageError> {
+    let begin_processing = Instant::now();
     let show_native_balance = options.show_native_balance;
     let (asset_list, native_balance) = tokio::join!(
         fetch_assets(
@@ -52,6 +57,7 @@ pub async fn search_assets(
             json_persister,
             max_json_to_download,
             tasks,
+            metrics.clone(),
         ),
         fetch_native_balance(
             show_native_balance,
@@ -60,6 +66,15 @@ pub async fn search_assets(
             rocks_db.clone(),
         )
     );
+    info!(
+        "total_request_processing: {}",
+        begin_processing.elapsed().as_millis()
+    );
+    metrics.set_request_processing_latency(
+        "total_request_processing",
+        begin_processing.elapsed().as_millis() as f64,
+    );
+
     let native_balance = native_balance.unwrap_or_else(|e| {
         error!("fetch_native_balance: {e}");
         None
@@ -90,7 +105,9 @@ async fn fetch_assets(
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    metrics: Arc<ApiMetricsConfig>,
 ) -> Result<AssetList, StorageError> {
+    let begin_processing = Instant::now();
     let filter_result: &Result<postgre_client::model::SearchAssetsFilter, ConversionError> =
         &filter.try_into();
     if let Err(ConversionError::IncompatibleGroupingKey(_)) = filter_result {
@@ -132,6 +149,16 @@ async fn fetch_assets(
         .iter()
         .filter_map(|k| Pubkey::try_from(k.pubkey.clone()).ok())
         .collect::<Vec<Pubkey>>();
+    info!(
+        "get_asset_pubkeys_filtered: {}",
+        begin_processing.elapsed().as_millis()
+    );
+    metrics.set_request_processing_latency(
+        "get_asset_pubkeys_filtered",
+        begin_processing.elapsed().as_millis() as f64,
+    );
+    let begin_processing = Instant::now();
+
     //todo: there is an additional round trip to the db here, this should be optimized
     let assets = asset::get_by_ids(
         rocks_db,
@@ -143,6 +170,12 @@ async fn fetch_assets(
         tasks,
     )
     .await?;
+    info!("get_by_ids: {}", begin_processing.elapsed().as_millis());
+    metrics.set_request_processing_latency(
+        "get_by_ids",
+        begin_processing.elapsed().as_millis() as f64,
+    );
+
     let assets = assets.into_iter().flatten().collect::<Vec<_>>();
     let (items, errors) = asset_list_to_rpc(assets);
     let total = items.len() as u32;

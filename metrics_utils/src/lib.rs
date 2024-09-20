@@ -308,6 +308,7 @@ pub struct ApiMetricsConfig {
     search_asset_requests: Family<MethodLabel, Counter>,
     start_time: Gauge,
     latency: Family<MethodLabel, Histogram>,
+    request_processing_latency: Family<MethodLabel, Histogram>,
     proof_checks: Family<MetricLabelWithStatus, Counter>,
     search_asset_latency: Family<MethodLabel, Histogram>,
 }
@@ -321,6 +322,9 @@ impl ApiMetricsConfig {
             latency: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(20.0, 1.8, 10))
             }),
+            request_processing_latency: Family::<MethodLabel, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets(20.0, 1.2, 25)),
+            ),
             proof_checks: Family::<MetricLabelWithStatus, Counter>::default(),
             search_asset_latency: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(20.0, 1.8, 10))
@@ -350,6 +354,14 @@ impl ApiMetricsConfig {
 
     pub fn set_latency(&self, label: &str, duration: f64) {
         self.latency
+            .get_or_create(&MethodLabel {
+                method_name: label.to_owned(),
+            })
+            .observe(duration);
+    }
+
+    pub fn set_request_processing_latency(&self, label: &str, duration: f64) {
+        self.request_processing_latency
             .get_or_create(&MethodLabel {
                 method_name: label.to_owned(),
             })
@@ -388,6 +400,11 @@ impl ApiMetricsConfig {
             "api_call_latency",
             "A histogram of the request duration",
             self.latency.clone(),
+        );
+        registry.register(
+            "api_call_request_processing_latency",
+            "A histogram of the request processing components duration",
+            self.request_processing_latency.clone(),
         );
         registry.register(
             "search_asset_latency",

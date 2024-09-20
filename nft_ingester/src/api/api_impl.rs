@@ -635,6 +635,7 @@ where
             tasks,
             self.account_balance_getter.clone(),
             self.storage_service_base_path.clone(),
+            self.metrics.clone(),
         )
         .await?;
 
