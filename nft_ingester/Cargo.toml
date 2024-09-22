@@ -78,6 +78,7 @@ mime_guess = { workspace = true }
 url = { workspace = true }
 coingecko = { workspace = true }
 libreplex_inscriptions = { workspace = true }
+spl-token-2022 = { workspace = true }
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

@@ -9,6 +9,9 @@ use blockbuster::programs::mpl_core_program::{
     MplCoreAccountData, MplCoreAccountState, MplCoreParser,
 };
 use blockbuster::programs::token_account::{TokenAccountParser, TokenProgramAccount};
+use blockbuster::programs::token_extensions::{
+    Token2022AccountParser, TokenExtensionsProgramAccount,
+};
 use blockbuster::programs::token_metadata::{TokenMetadataAccountData, TokenMetadataParser};
 use blockbuster::programs::ProgramParseResult;
 use chrono::Utc;
@@ -28,6 +31,7 @@ pub struct MessageParser {
     token_acc_parser: Arc<TokenAccountParser>,
     mplx_acc_parser: Arc<TokenMetadataParser>,
     mpl_core_parser: Arc<MplCoreParser>,
+    token_2022_parser: Arc<Token2022AccountParser>,
 }
 
 pub struct UnprocessedAccountWithMetadata {
@@ -47,11 +51,13 @@ impl MessageParser {
         let token_acc_parser = Arc::new(TokenAccountParser {});
         let mplx_acc_parser = Arc::new(TokenMetadataParser {});
         let mpl_core_parser = Arc::new(MplCoreParser {});
+        let token_2022_parser = Arc::new(Token2022AccountParser {});
 
         Self {
             token_acc_parser,
             mplx_acc_parser,
             mpl_core_parser,
+            token_2022_parser,
         }
     }
 
@@ -116,6 +122,10 @@ impl MessageParser {
             self.handle_inscription_account(&account_info)
                 .into_iter()
                 .collect_vec()
+        } else if account_owner == spl_token_2022::id() {
+            self.parse_spl_2022_accounts(&account_info)
+                .into_iter()
+                .collect_vec()
         } else {
             Vec::new()
         };
@@ -177,6 +187,7 @@ impl MessageParser {
                     mint: ta.mint,
                     delegate: ta.delegate.into(),
                     owner: ta.owner,
+                    extensions: None,
                     frozen,
                     delegated_amount: ta.delegated_amount as i64,
                     slot_updated: account_update.slot as i64,
@@ -184,16 +195,78 @@ impl MessageParser {
                     write_version: account_update.write_version,
                 })
             }
-            TokenProgramAccount::Mint(m) => UnprocessedAccount::Mint(entities::models::Mint {
-                pubkey: key,
-                slot_updated: account_update.slot as i64,
-                supply: m.supply as i64,
-                decimals: m.decimals as i32,
-                mint_authority: m.mint_authority.into(),
-                freeze_authority: m.freeze_authority.into(),
-                write_version: account_update.write_version,
-            }),
+            TokenProgramAccount::Mint(m) => {
+                UnprocessedAccount::Mint(Box::new(entities::models::Mint {
+                    pubkey: key,
+                    slot_updated: account_update.slot as i64,
+                    supply: m.supply as i64,
+                    decimals: m.decimals as i32,
+                    mint_authority: m.mint_authority.into(),
+                    freeze_authority: m.freeze_authority.into(),
+                    extensions: None,
+                    write_version: account_update.write_version,
+                }))
+            }
         }
+    }
+
+    fn parse_spl_2022_accounts(
+        &self,
+        account_update: &plerkle::AccountInfo,
+    ) -> Option<UnprocessedAccount> {
+        let acc_parse_result = self
+            .token_2022_parser
+            .handle_account(account_update.data.as_slice());
+
+        let key = account_update.pubkey;
+        match acc_parse_result {
+            Ok(acc_parsed) => {
+                let concrete = acc_parsed.result_type();
+                match concrete {
+                    ProgramParseResult::TokenExtensionsProgramAccount(parsing_result) => {
+                        return match &parsing_result {
+                            TokenExtensionsProgramAccount::TokenAccount(ta) => {
+                                let frozen = matches!(
+                                    ta.account.state,
+                                    spl_token_2022::state::AccountState::Frozen
+                                );
+                                Some(UnprocessedAccount::Token(entities::models::TokenAccount {
+                                    pubkey: key,
+                                    mint: ta.account.mint,
+                                    delegate: ta.account.delegate.into(),
+                                    owner: ta.account.owner,
+                                    extensions: Some(ta.extensions.clone()),
+                                    frozen,
+                                    delegated_amount: ta.account.delegated_amount as i64,
+                                    slot_updated: account_update.slot as i64,
+                                    amount: ta.account.amount as i64,
+                                    write_version: account_update.write_version,
+                                }))
+                            }
+                            TokenExtensionsProgramAccount::MintAccount(m) => {
+                                Some(UnprocessedAccount::Mint(Box::new(entities::models::Mint {
+                                    pubkey: key,
+                                    slot_updated: account_update.slot as i64,
+                                    supply: m.account.supply as i64,
+                                    decimals: m.account.decimals as i32,
+                                    mint_authority: m.account.mint_authority.into(),
+                                    freeze_authority: m.account.freeze_authority.into(),
+                                    extensions: Some(m.extensions.clone()),
+                                    write_version: account_update.write_version,
+                                })))
+                            }
+                            _ => None,
+                        }
+                    }
+                    _ => debug!("\nUnexpected message\n"),
+                };
+            }
+            Err(e) => {
+                account_parsing_error(e, account_update);
+            }
+        }
+
+        None
     }
 
     fn handle_token_metadata_account(

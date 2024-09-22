@@ -28,10 +28,14 @@ use tokio::task::JoinSet;
 use crate::batch_mint::BatchMintWithStaker;
 use crate::errors::StorageError;
 use crate::inscriptions::{Inscription, InscriptionData};
+use crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration;
 use crate::migrations::collection_authority::{
     AssetCollectionVersion0, CollectionAuthorityMigration,
 };
 use crate::migrations::external_plugins::{AssetDynamicDetailsV0, ExternalPluginsMigration};
+use crate::migrations::spl2022::{
+    AssetDynamicDetailsWithoutExtentions, DynamicDataToken2022MintExtentionsMigration,
+};
 use crate::parameters::ParameterColumn;
 use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::token_prices::TokenPrice;
@@ -387,13 +391,17 @@ impl Storage {
             }
             asset::AssetDynamicDetails::NAME => {
                 let mf = match migration_state {
-                    MigrationState::Version(version) => {
-                        if *version <= ExternalPluginsMigration::VERSION {
+                    MigrationState::Version(version) => match *version {
+                        CollectionAuthorityMigration::VERSION
+                            ..=ExternalPluginsMigration::VERSION => {
                             AssetDynamicDetailsV0::merge_dynamic_details
-                        } else {
-                            asset::AssetDynamicDetails::merge_dynamic_details
                         }
-                    }
+                        CleanCollectionAuthoritiesMigration::VERSION
+                            ..=DynamicDataToken2022MintExtentionsMigration::VERSION => {
+                            AssetDynamicDetailsWithoutExtentions::merge_dynamic_details
+                        }
+                        _ => asset::AssetDynamicDetails::merge_dynamic_details,
+                    },
                     MigrationState::Last => asset::AssetDynamicDetails::merge_dynamic_details,
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing

@@ -324,6 +324,7 @@ impl Storage {
                 plugins_json_version: data.plugins_json_version,
                 mpl_core_external_plugins: data.mpl_core_external_plugins,
                 mpl_core_unknown_external_plugins: data.mpl_core_unknown_external_plugins,
+                mint_extensions: data.mint_extensions,
             },
         )?;
 

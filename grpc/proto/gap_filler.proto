@@ -158,6 +158,7 @@ message AssetDetails {
 
     DynamicStringField mpl_core_external_plugins = 40;
     DynamicStringField mpl_core_unknown_external_plugins = 41;
+    DynamicStringField mint_extensions = 42;
 }
 
 // This field is a cbor encoded object of RawBlock type depending on

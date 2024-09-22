@@ -4585,6 +4585,7 @@ dependencies = [
  "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
  "spl-concurrent-merkle-tree 0.3.0",
  "spl-token 4.0.0",
+ "spl-token-2022 1.0.0",
  "sqlx",
  "stretto",
  "tempfile",

@@ -218,6 +218,7 @@ async fn get_complete_asset_details(
         mpl_core_unknown_plugins: dynamic_data.mpl_core_unknown_plugins,
         mpl_core_external_plugins: dynamic_data.mpl_core_external_plugins,
         mpl_core_unknown_external_plugins: dynamic_data.mpl_core_unknown_external_plugins,
+        mint_extensions: dynamic_data.mint_extensions,
         rent_epoch: dynamic_data.rent_epoch,
         num_minted: dynamic_data.num_minted,
         current_size: dynamic_data.current_size,

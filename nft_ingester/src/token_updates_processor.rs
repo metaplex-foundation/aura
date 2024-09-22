@@ -92,12 +92,19 @@ impl TokenAccountsProcessor {
         storage: &mut BatchSaveStorage,
         mint: &Mint,
     ) -> Result<(), StorageError> {
+        let mint_extensions = serde_json::to_value(&mint.extensions)
+            .map_err(|e| StorageError::Common(e.to_string()))?;
         let asset_dynamic_details = AssetDynamicDetails {
             pubkey: mint.pubkey,
             supply: Some(Updated::new(
                 mint.slot_updated as u64,
                 Some(UpdateVersion::WriteVersion(mint.write_version)),
                 mint.supply as u64,
+            )),
+            mint_extensions: Some(Updated::new(
+                mint.slot_updated as u64,
+                Some(UpdateVersion::WriteVersion(mint.write_version)),
+                mint_extensions.to_string(),
             )),
             ..Default::default()
         };

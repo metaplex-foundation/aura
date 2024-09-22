@@ -404,6 +404,7 @@ impl MplCoreProcessor {
                     )
                 },
             ),
+            mint_extensions: None,
         });
 
         Ok(Some(models))

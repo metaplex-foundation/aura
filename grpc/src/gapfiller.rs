@@ -167,6 +167,8 @@ pub struct AssetDetails {
     pub mpl_core_external_plugins: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "41")]
     pub mpl_core_unknown_external_plugins: ::core::option::Option<DynamicStringField>,
+    #[prost(message, optional, tag = "42")]
+    pub mint_extensions: ::core::option::Option<DynamicStringField>,
 }
 /// This field is a cbor encoded object of RawBlock type depending on
 /// a "~1.17" version of the solana-transaction-status package

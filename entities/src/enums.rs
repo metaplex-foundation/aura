@@ -362,7 +362,7 @@ pub enum TokenMetadataEdition {
 pub enum UnprocessedAccount {
     MetadataInfo(MetadataInfo),
     Token(TokenAccount),
-    Mint(Mint),
+    Mint(Box<Mint>),
     Edition(EditionMetadata),
     BurnMetadata(BurntMetadataSlot),
     BurnMplCore(BurntMetadataSlot),

@@ -67,6 +67,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
             mpl_core_unknown_external_plugins: value
                 .mpl_core_unknown_external_plugins
                 .map(Into::into),
+            mint_extensions: value.mint_extensions.map(Into::into),
             rent_epoch: value.rent_epoch.map(Into::into),
             num_minted: value.num_minted.map(Into::into),
             current_size: value.current_size.map(Into::into),
@@ -162,6 +163,7 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
             mpl_core_unknown_external_plugins: value
                 .mpl_core_unknown_external_plugins
                 .map(Into::into),
+            mint_extensions: value.mint_extensions.map(Into::into),
             rent_epoch: value.rent_epoch.map(Into::into),
             num_minted: value.num_minted.map(Into::into),
             current_size: value.current_size.map(Into::into),

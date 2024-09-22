@@ -6,6 +6,7 @@ use crate::enums::{
 use base64::engine::general_purpose;
 use base64::Engine;
 use blockbuster::programs::mpl_core_program::MplCoreAccountData;
+use blockbuster::programs::token_extensions::{MintAccountExtensions, TokenAccountExtensions};
 use libreplex_inscriptions::Inscription;
 use mpl_token_metadata::accounts::Metadata;
 use schemars::JsonSchema;
@@ -118,6 +119,7 @@ pub struct CompleteAssetDetails {
     pub plugins_json_version: Option<Updated<u32>>,
     pub mpl_core_external_plugins: Option<Updated<String>>,
     pub mpl_core_unknown_external_plugins: Option<Updated<String>>,
+    pub mint_extensions: Option<Updated<String>>,
 
     // From AssetAuthority as Tuple
     pub authority: Updated<Pubkey>,
@@ -527,6 +529,7 @@ pub struct TokenAccount {
     pub mint: Pubkey,
     pub delegate: Option<Pubkey>,
     pub owner: Pubkey,
+    pub extensions: Option<TokenAccountExtensions>,
     pub frozen: bool,
     pub delegated_amount: i64,
     pub slot_updated: i64,
@@ -542,6 +545,7 @@ pub struct Mint {
     pub decimals: i32,
     pub mint_authority: Option<Pubkey>,
     pub freeze_authority: Option<Pubkey>,
+    pub extensions: Option<MintAccountExtensions>,
     pub write_version: u64,
 }
 
