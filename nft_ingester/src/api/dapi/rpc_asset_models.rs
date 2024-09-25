@@ -250,6 +250,38 @@ pub struct Asset {
     pub spl20: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mint_extensions: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_info: Option<TokenInfo>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct TokenInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub balance: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supply: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decimals: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_program: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub associated_token_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mint_authority: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub freeze_authority: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct PriceInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_per_token: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_price: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
 }
 
 #[derive(Clone, Debug)]

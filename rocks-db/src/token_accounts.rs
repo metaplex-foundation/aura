@@ -302,7 +302,7 @@ impl TokenAccountsGetter for Storage {
                         frozen: ta.frozen,
                         token_extensions: filter_non_null_fields(
                             ta.extensions
-                                .and_then(|extensions| serde_json::to_value(&extensions).ok())
+                                .and_then(|extensions| serde_json::to_value(extensions).ok())
                                 .as_ref(),
                         ),
                     },
@@ -314,6 +314,7 @@ impl TokenAccountsGetter for Storage {
 }
 
 impl Storage {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn get_raw_token_accounts(
         &self,
         owner: Option<Pubkey>,

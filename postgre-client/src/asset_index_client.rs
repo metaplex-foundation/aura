@@ -215,8 +215,7 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     AssetComponenents {
         fungible_tokens: asset_indexes
             .iter()
-            .map(|i| i.fungible_tokens.clone())
-            .flatten()
+            .flat_map(|i| i.fungible_tokens.clone())
             .collect(),
         metadata_urls,
         asset_indexes,

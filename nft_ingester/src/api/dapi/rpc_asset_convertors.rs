@@ -512,6 +512,7 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
                 .and_then(|mint_extensions| serde_json::from_str(&mint_extensions.value).ok())
                 .as_ref(),
         ),
+        token_info: None,
     }))
 }
 

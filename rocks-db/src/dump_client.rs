@@ -84,6 +84,7 @@ struct AssetRecord {
 }
 
 impl Storage {
+    #[allow(clippy::too_many_arguments)]
     pub async fn dump_csv(
         &self,
         metadata_file_and_path: (File, String),
