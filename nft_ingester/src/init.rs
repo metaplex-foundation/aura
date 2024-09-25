@@ -32,9 +32,7 @@ pub async fn init_index_storage_with_migration(
         .unwrap_or(max_pg_connection_default_value);
 
     let pg_client = PgClient::new(
-        &config
-            .database_config
-            .get_database_url()?,
+        &config.database_config.get_database_url()?,
         min_pg_connection_default_value,
         max_pg_connections,
         metrics_state.red_metrics.clone(),
