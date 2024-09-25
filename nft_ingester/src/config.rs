@@ -136,7 +136,8 @@ pub struct IngesterConfig {
     pub snapshot_parsing_workers: u32,
     #[serde(default = "default_snapshot_parsing_batch_size")]
     pub snapshot_parsing_batch_size: usize,
-    pub parsing_workers: u32,
+    pub accounts_parsing_workers: u32,
+    pub transactions_parsing_workers: u32,
     #[serde(default = "default_mpl_core_fees_buffer_size")]
     pub mpl_core_fees_buffer_size: usize,
     pub metrics_port: Option<u16>,
