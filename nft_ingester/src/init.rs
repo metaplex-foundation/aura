@@ -32,7 +32,10 @@ pub async fn init_index_storage_with_migration(
         .unwrap_or(max_pg_connection_default_value);
 
     let pg_client = PgClient::new(
-        &config.database_config.get_database_url().unwrap(),
+        &config
+            .database_config
+            .get_database_url()
+            .expect("No 'database_url' specified."),
         min_pg_connection_default_value,
         max_pg_connections,
         metrics_state.red_metrics.clone(),
@@ -60,18 +63,12 @@ pub async fn init_primary_storage(
         .as_deref()
         .unwrap_or(default_rocksdb_path);
 
-    {
-        // storage in secondary mod cannot create new column families, that
-        // could be required for migration_version_manager, so firstly open
-        // storage with MigrationState::CreateColumnFamilies in order to create
-        // all column families
-        Storage::open(
-            db_path,
-            mutexed_tasks.clone(),
-            metrics_state.red_metrics.clone(),
-            MigrationState::CreateColumnFamilies,
-        )?;
-    }
+    Storage::open(
+        db_path,
+        mutexed_tasks.clone(),
+        metrics_state.red_metrics.clone(),
+        MigrationState::CreateColumnFamilies,
+    )?;
 
     let migration_version_manager_dir = TempDir::new()?;
     let migration_version_manager = Storage::open_secondary(

@@ -43,9 +43,7 @@ use nft_ingester::config::{
     setup_config, ApiConfig, BackfillerConfig, BackfillerMode, IngesterConfig, MessageSource, INGESTER_CONFIG_PREFIX,
 };
 use nft_ingester::fork_cleaner::{run_fork_cleaner, ForkCleaner};
-use nft_ingester::gapfiller::{
-    process_asset_details_stream_wrapper, process_raw_blocks_stream_wrapper, run_sequence_consistent_gapfiller,
-};
+use nft_ingester::gapfiller::{process_asset_details_stream_wrapper, run_sequence_consistent_gapfiller};
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration, init_primary_storage};
 use nft_ingester::json_worker::JsonWorker;
@@ -294,16 +292,18 @@ pub async fn main() -> Result<(), IngesterError> {
                 last_saved_slot,
                 first_processed_slot_value,
                 gaped_data_client_clone.clone(),
+                false,
             ));
 
             let cloned_rocks_storage = primary_rocks_storage.clone();
             let cloned_rx = shutdown_rx.resubscribe();
-            mutexed_tasks.lock().await.spawn(process_raw_blocks_stream_wrapper(
+            mutexed_tasks.lock().await.spawn(process_asset_details_stream_wrapper(
                 cloned_rx,
                 cloned_rocks_storage,
                 last_saved_slot,
                 first_processed_slot_value,
                 gaped_data_client_clone,
+                true,
             ));
         }
     };

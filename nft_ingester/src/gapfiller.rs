@@ -23,38 +23,34 @@ pub async fn process_asset_details_stream_wrapper(
     last_saved_slot: u64,
     first_processed_slot_value: u64,
     gaped_data_client_clone: Client,
+    raw_blocks: bool,
 ) -> Result<(), JoinError> {
-    let processed_assets = process_asset_details_stream(
-        cloned_rx,
-        cloned_rocks_storage.clone(),
-        last_saved_slot,
-        first_processed_slot_value,
-        gaped_data_client_clone,
-    )
-    .await;
+    match raw_blocks {
+        true => {
+            let processed_raw_blocks = process_raw_blocks_stream(
+                cloned_rx,
+                cloned_rocks_storage,
+                last_saved_slot,
+                first_processed_slot_value,
+                gaped_data_client_clone,
+            )
+            .await;
 
-    info!("Processed gaped assets: {}", processed_assets);
+            info!("Processed raw blocks: {}", processed_raw_blocks);
+        }
+        false => {
+            let processed_assets = process_asset_details_stream(
+                cloned_rx,
+                cloned_rocks_storage.clone(),
+                last_saved_slot,
+                first_processed_slot_value,
+                gaped_data_client_clone,
+            )
+            .await;
 
-    Ok(())
-}
-
-pub async fn process_raw_blocks_stream_wrapper(
-    cloned_rx: Receiver<()>,
-    cloned_rocks_storage: Arc<Storage>,
-    last_saved_slot: u64,
-    first_processed_slot_value: u64,
-    gaped_data_client_clone: Client,
-) -> Result<(), JoinError> {
-    let processed_raw_blocks = process_raw_blocks_stream(
-        cloned_rx,
-        cloned_rocks_storage,
-        last_saved_slot,
-        first_processed_slot_value,
-        gaped_data_client_clone,
-    )
-    .await;
-
-    info!("Processed raw blocks: {}", processed_raw_blocks);
+            info!("Processed gaped assets: {}", processed_assets);
+        }
+    }
 
     Ok(())
 }

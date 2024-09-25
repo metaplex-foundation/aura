@@ -14,11 +14,10 @@ use tokio::time::sleep as tokio_sleep;
 use tracing::{error, info};
 
 pub async fn perform_backup(
-    backup_service: BackupService,
+    mut backup_service: BackupService,
     cloned_rx: Receiver<()>,
     cloned_metrics: Arc<IngesterMetricsConfig>,
 ) -> Result<(), JoinError> {
-    let mut backup_service = backup_service;
     backup_service
         .perform_backup(cloned_metrics, cloned_rx)
         .await;
