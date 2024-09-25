@@ -25,31 +25,28 @@ pub async fn process_asset_details_stream_wrapper(
     gaped_data_client_clone: Client,
     raw_blocks: bool,
 ) -> Result<(), JoinError> {
-    match raw_blocks {
-        true => {
-            let processed_raw_blocks = process_raw_blocks_stream(
-                cloned_rx,
-                cloned_rocks_storage,
-                last_saved_slot,
-                first_processed_slot_value,
-                gaped_data_client_clone,
-            )
-            .await;
+    if raw_blocks {
+        let processed_raw_blocks = process_raw_blocks_stream(
+            cloned_rx,
+            cloned_rocks_storage,
+            last_saved_slot,
+            first_processed_slot_value,
+            gaped_data_client_clone,
+        )
+        .await;
 
-            info!("Processed raw blocks: {}", processed_raw_blocks);
-        }
-        false => {
-            let processed_assets = process_asset_details_stream(
-                cloned_rx,
-                cloned_rocks_storage.clone(),
-                last_saved_slot,
-                first_processed_slot_value,
-                gaped_data_client_clone,
-            )
-            .await;
+        info!("Processed raw blocks: {}", processed_raw_blocks);
+    } else {
+        let processed_assets = process_asset_details_stream(
+            cloned_rx,
+            cloned_rocks_storage.clone(),
+            last_saved_slot,
+            first_processed_slot_value,
+            gaped_data_client_clone,
+        )
+        .await;
 
-            info!("Processed gaped assets: {}", processed_assets);
-        }
+        info!("Processed gaped assets: {}", processed_assets);
     }
 
     Ok(())
