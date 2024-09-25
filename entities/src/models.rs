@@ -69,6 +69,13 @@ pub struct AssetIndex {
     pub metadata_url: Option<UrlWithStatus>,
     pub update_authority: Option<Pubkey>,
     pub slot_updated: i64,
+    pub fungible_tokens: Vec<FungibleToken>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+pub struct FungibleToken {
+    pub owner: Pubkey,
+    pub asset: Pubkey,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -372,6 +379,8 @@ pub struct ResponseTokenAccount {
     pub amount: u64,
     pub delegated_amount: u64,
     pub frozen: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_extensions: Option<serde_json::Value>,
 }
 
 pub struct TokenAccResponse {

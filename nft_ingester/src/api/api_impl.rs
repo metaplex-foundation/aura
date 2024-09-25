@@ -24,6 +24,7 @@ use entities::api_req_params::{
     GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetCoreFees,
     GetGrouping, GetTokenAccounts, Pagination, SearchAssets, SearchAssetsOptions,
 };
+use entities::enums::TokenType;
 use interface::account_balance::AccountBalanceGetter;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
@@ -115,8 +116,80 @@ where
         if options.show_native_balance && query.owner_address.is_none() {
             return Err(DasApiError::MissingOwnerAddress);
         }
+        if query.owner_address.is_none() && query.token_type.is_some() {
+            return Err(DasApiError::Validation(
+                "Must provide `owner_address` when using `token_type` field".to_string(),
+            ));
+        }
+        if let Some(ref token_type) = query.token_type {
+            if token_type == &TokenType::All || token_type == &TokenType::Fungible {
+                if let Some(banned_param) = Self::banned_params_with_fungible_token_type(query) {
+                    return Err(DasApiError::Validation(format!(
+                        "'{banned_param}' is not supported for this `token_type`"
+                    )));
+                }
+            }
+        }
 
         Ok(())
+    }
+
+    fn banned_params_with_fungible_token_type(query: &SearchAssetsQuery) -> Option<String> {
+        if query.creator_address.is_some() {
+            return Some(String::from("creator_address"));
+        }
+        if query.creator_verified.is_some() {
+            return Some(String::from("creator_verified"));
+        }
+        if query.grouping.is_some() {
+            return Some(String::from("grouping"));
+        }
+        if query.owner_type.is_some() {
+            return Some(String::from("owner_type"));
+        }
+        if query.specification_asset_class.is_some() {
+            return Some(String::from("specification_asset_class"));
+        }
+        if query.compressed.is_some() {
+            return Some(String::from("compressed"));
+        }
+        if query.compressible.is_some() {
+            return Some(String::from("compressible"));
+        }
+        if query.specification_version.is_some() {
+            return Some(String::from("specification_version"));
+        }
+        if query.authority_address.is_some() {
+            return Some(String::from("authority_address"));
+        }
+        if query.delegate.is_some() {
+            return Some(String::from("delegate"));
+        }
+        if query.frozen.is_some() {
+            return Some(String::from("frozen"));
+        }
+        if query.supply.is_some() {
+            return Some(String::from("supply"));
+        }
+        if query.supply_mint.is_some() {
+            return Some(String::from("supply_mint"));
+        }
+        if query.royalty_target_type.is_some() {
+            return Some(String::from("royalty_target_type"));
+        }
+        if query.royalty_target.is_some() {
+            return Some(String::from("royalty_target"));
+        }
+        if query.royalty_amount.is_some() {
+            return Some(String::from("royalty_amount"));
+        }
+        if query.burnt.is_some() {
+            return Some(String::from("burnt"));
+        }
+        if query.json_uri.is_some() {
+            return Some(String::from("json_uri"));
+        }
+        None
     }
 
     pub fn validate_basic_pagination(

@@ -1,3 +1,4 @@
+use entities::enums::TokenType;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use std::fmt;
@@ -89,6 +90,7 @@ pub struct SearchAssetsFilter {
     pub royalty_amount: Option<u32>,
     pub burnt: Option<bool>,
     pub json_uri: Option<String>,
+    pub token_type: Option<TokenType>,
 }
 
 pub enum AssetSupply {

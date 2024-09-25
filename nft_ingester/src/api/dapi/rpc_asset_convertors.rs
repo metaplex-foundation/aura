@@ -28,6 +28,7 @@ use entities::api_req_params::Pagination;
 use entities::enums::{Interface, SpecificationVersions};
 use rocks_db::asset::AssetCollection;
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetStaticDetails};
+use usecase::response_prettier::filter_non_null_fields;
 
 pub fn to_uri(uri: String) -> Option<Url> {
     Url::parse(uri.as_str()).ok()
@@ -504,6 +505,13 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
             .transpose()
             .ok()
             .flatten(),
+        mint_extensions: filter_non_null_fields(
+            full_asset
+                .asset_dynamic
+                .mint_extensions
+                .and_then(|mint_extensions| serde_json::from_str(&mint_extensions.value).ok())
+                .as_ref(),
+        ),
     }))
 }
 

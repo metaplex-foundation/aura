@@ -1,4 +1,4 @@
-use crate::enums::{Interface, OwnershipModel, RoyaltyModel};
+use crate::enums::{Interface, OwnershipModel, RoyaltyModel, TokenType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -240,6 +240,7 @@ pub struct SearchAssets {
     pub royalty_target_type: Option<RoyaltyModel>,
     pub royalty_target: Option<String>,
     pub royalty_amount: Option<u32>,
+    pub token_type: Option<TokenType>,
     pub burnt: Option<bool>,
     pub sort_by: Option<AssetSorting>,
     pub limit: Option<u32>,
@@ -309,6 +310,7 @@ impl SearchAssets {
         check_and_append(&mut result, &self.json_uri, "json_uri");
         check_and_append(&mut result, &self.cursor, "cursor");
         check_and_append(&mut result, &self.name, "name");
+        check_and_append(&mut result, &self.token_type, "token_type");
 
         if result.is_empty() {
             return "no_filters".to_string();
@@ -370,6 +372,7 @@ impl From<SearchAssetsV0> for SearchAssets {
             royalty_target_type: value.royalty_target_type,
             royalty_target: value.royalty_target,
             royalty_amount: value.royalty_amount,
+            token_type: None,
             burnt: value.burnt,
             sort_by: value.sort_by,
             limit: value.limit,

@@ -13,7 +13,7 @@ pub trait TokenAccountsGetter {
         starting_token_account: Option<Pubkey>,
         reverse_iter: bool,
         page: Option<u64>,
-        limit: u64,
+        limit: Option<u64>,
         show_zero_balance: bool,
     ) -> Result<impl Iterator<Item = TokenAccountIterableIdx>, UsecaseError>;
     #[allow(clippy::too_many_arguments)]

@@ -34,6 +34,7 @@ mod tests {
             royalty_amount: Some(10),
             burnt: Some(false),
             json_uri: Some("https://www.google.com".to_string()),
+            token_type: None,
         };
         let order = AssetSorting {
             sort_by: AssetSortBy::SlotCreated,
@@ -106,6 +107,7 @@ mod tests {
                 .metadata_url
                 .clone()
                 .map(|url_with_status| url_with_status.metadata_url),
+            token_type: None,
         };
         let order: AssetSorting = AssetSorting {
             sort_by: AssetSortBy::SlotUpdated,

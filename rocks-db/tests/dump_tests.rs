@@ -16,10 +16,12 @@ async fn test_scv_export_from_rocks() {
     let assets_path = format!("{}/assets.csv", temp_dir.path().to_str().unwrap());
     let creators_path = format!("{}/creators.csv", temp_dir.path().to_str().unwrap());
     let authority_path = format!("{}/authority.csv", temp_dir.path().to_str().unwrap());
+    let fungible_tokens_path = format!("{}/fungible_tokens.csv", temp_dir.path().to_str().unwrap());
     let tasks_file = File::create(tasks_path.to_string()).unwrap();
     let assets_file: File = File::create(assets_path.to_string()).unwrap();
     let creators_file = File::create(creators_path.to_string()).unwrap();
     let authority_file = File::create(authority_path.to_string()).unwrap();
+    let fungible_tokens_file = File::create(fungible_tokens_path.to_string()).unwrap();
 
     storage
         .dump_csv(
@@ -27,6 +29,7 @@ async fn test_scv_export_from_rocks() {
             (assets_file, assets_path.clone()),
             (creators_file, creators_path.clone()),
             (authority_file, authority_path.clone()),
+            (fungible_tokens_file, fungible_tokens_path.clone()),
             155,
             &rx,
         )

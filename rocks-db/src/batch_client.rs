@@ -17,7 +17,9 @@ use crate::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
     BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
-use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, UrlWithStatus};
+use entities::models::{
+    AssetIndex, CompleteAssetDetails, FungibleToken, UpdateVersion, Updated, UrlWithStatus,
+};
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
@@ -158,6 +160,7 @@ impl AssetIndexReader for Storage {
 
         for dynamic_info in asset_dynamic_details.iter().flatten() {
             if let Some(existed_index) = asset_indexes.get_mut(&dynamic_info.pubkey) {
+                existed_index.pubkey = dynamic_info.pubkey;
                 existed_index.is_compressible = dynamic_info.is_compressible.value;
                 existed_index.is_compressed = dynamic_info.is_compressed.value;
                 existed_index.is_frozen = dynamic_info.is_frozen.value;
@@ -188,6 +191,7 @@ impl AssetIndexReader for Storage {
 
         for data in asset_authority_details.iter().flatten() {
             if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
+                existed_index.pubkey = data.pubkey;
                 existed_index.authority = Some(data.authority);
                 if data.slot_updated as i64 > existed_index.slot_updated {
                     existed_index.slot_updated = data.slot_updated as i64;
@@ -206,6 +210,7 @@ impl AssetIndexReader for Storage {
 
         for data in asset_owner_details.iter().flatten() {
             if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
+                existed_index.pubkey = data.pubkey;
                 existed_index.owner = data.owner.value;
                 existed_index.delegate = data.delegate.value;
                 existed_index.owner_type = Some(data.owner_type.value);
@@ -228,6 +233,7 @@ impl AssetIndexReader for Storage {
 
         for data in asset_collection_details.iter().flatten() {
             if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
+                existed_index.pubkey = data.pubkey;
                 existed_index.collection = Some(data.collection.value);
                 existed_index.is_collection_verified = Some(data.is_collection_verified.value);
                 existed_index.update_authority = mpl_core_collections
@@ -251,6 +257,34 @@ impl AssetIndexReader for Storage {
                 asset_indexes.insert(asset_index.pubkey, asset_index);
             }
         }
+
+        for key in keys {
+            let fungible_tokens = self
+                .get_raw_token_accounts(None, Some(*key), None, None, None, None, true)
+                .await
+                .map_err(|e| StorageError::Common(e.to_string()))?
+                .into_iter()
+                .flatten()
+                .map(|ta| FungibleToken {
+                    owner: ta.owner,
+                    asset: ta.mint,
+                })
+                .collect::<Vec<_>>();
+
+            if let Some(existed_index) = asset_indexes.get_mut(key) {
+                existed_index.pubkey = *key;
+                existed_index.fungible_tokens = fungible_tokens;
+            } else {
+                let asset_index = AssetIndex {
+                    pubkey: *key,
+                    fungible_tokens,
+                    ..Default::default()
+                };
+
+                asset_indexes.insert(asset_index.pubkey, asset_index);
+            }
+        }
+
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
             BATCH_ITERATION_ACTION,

@@ -248,6 +248,8 @@ pub struct Asset {
     pub inscription: Option<InscriptionResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spl20: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mint_extensions: Option<Value>,
 }
 
 #[derive(Clone, Debug)]

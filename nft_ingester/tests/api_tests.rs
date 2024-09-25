@@ -790,6 +790,7 @@ mod tests {
             mint: mint_key,
             delegate: None,
             owner: owner_key,
+            extensions: None,
             frozen: false,
             delegated_amount: 0,
             slot_updated: 1,
@@ -804,6 +805,7 @@ mod tests {
             decimals: 0,
             mint_authority: Some(mint_auth_key),
             freeze_authority: None,
+            extensions: None,
             write_version: 1,
         };
 
@@ -881,6 +883,7 @@ mod tests {
             decimals: 0,
             mint_authority: Some(mint_auth_key),
             freeze_authority: None,
+            extensions: None,
             write_version: 2,
         };
 
@@ -967,6 +970,7 @@ mod tests {
                 slot_updated: 1,
                 amount: 1,
                 write_version: 1,
+                extensions: None,
             };
 
             let mint_acc = Mint {
@@ -977,6 +981,7 @@ mod tests {
                 mint_authority: Some(mint_auth_key),
                 freeze_authority: None,
                 write_version: 1,
+                extensions: None,
             };
 
             let metadata = MetadataInfo {
@@ -1122,6 +1127,7 @@ mod tests {
             slot_updated: 1,
             amount: 1,
             write_version: 1,
+            extensions: None,
         };
 
         let mint_acc = Mint {
@@ -1132,6 +1138,7 @@ mod tests {
             mint_authority: Some(mint_auth_key),
             freeze_authority: None,
             write_version: 1,
+            extensions: None,
         };
 
         let metadata = MetadataInfo {
@@ -1487,6 +1494,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 1050,
                     write_version: 10,
+                    extensions: None,
                 },
             );
             let pk = Pubkey::new_unique();
@@ -1502,6 +1510,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 1050,
                     write_version: 10,
+                    extensions: None,
                 },
             );
         }
@@ -1520,6 +1529,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 0,
                     write_version: 10,
+                    extensions: None,
                 },
             );
             let pk = Pubkey::new_unique();
@@ -1535,6 +1545,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 0,
                     write_version: 10,
+                    extensions: None,
                 },
             );
         }
@@ -1553,6 +1564,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 140,
                     write_version: 10,
+                    extensions: None,
                 },
             );
         }
@@ -1702,6 +1714,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 1050,
                     write_version: 10,
+                    extensions: None,
                 },
             );
             let pk = Pubkey::new_unique();
@@ -1717,6 +1730,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 1050,
                     write_version: 10,
+                    extensions: None,
                 },
             );
             let pk = Pubkey::new_unique();
@@ -1732,6 +1746,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 1050,
                     write_version: 10,
+                    extensions: None,
                 },
             );
         }
