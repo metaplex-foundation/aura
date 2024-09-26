@@ -162,7 +162,7 @@ impl RpcApiBuilder {
         });
         module.add_alias("getAssetBatch", "get_asset_batch");
         module.add_alias("getAssets", "get_asset_batch");
-        module.add_alias("get_assets", "get_asset_batch");        
+        module.add_alias("get_assets", "get_asset_batch");
 
         let cloned_api = api.clone();
         module.add_method("get_asset_proof_batch", move |rpc_params: Params| {
