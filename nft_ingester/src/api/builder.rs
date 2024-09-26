@@ -161,6 +161,8 @@ impl RpcApiBuilder {
             }
         });
         module.add_alias("getAssetBatch", "get_asset_batch");
+        module.add_alias("getAssets", "get_asset_batch");
+        module.add_alias("get_assets", "get_asset_batch");        
 
         let cloned_api = api.clone();
         module.add_method("get_asset_proof_batch", move |rpc_params: Params| {
@@ -172,6 +174,8 @@ impl RpcApiBuilder {
             }
         });
         module.add_alias("getAssetProofBatch", "get_asset_proof_batch");
+        module.add_alias("getAssetProofs", "get_asset_proof_batch");
+        module.add_alias("get_asset_proofs", "get_asset_proof_batch");
 
         let cloned_api = api.clone();
         module.add_method("get_grouping", move |rpc_params: Params| {
@@ -213,6 +217,8 @@ impl RpcApiBuilder {
             }
         });
         module.add_alias("getSignaturesForAsset", "get_signatures_for_asset");
+        module.add_alias("getAssetSignatures", "get_signatures_for_asset");
+        module.add_alias("get_asset_signatures", "get_signatures_for_asset");
 
         let cloned_api = api.clone();
         module.add_method("get_signatures_for_asset_v2", move |rpc_params: Params| {
@@ -224,6 +230,8 @@ impl RpcApiBuilder {
             }
         });
         module.add_alias("getSignaturesForAssetV2", "get_signatures_for_asset_v2");
+        module.add_alias("getAssetSignaturesV2", "get_signatures_for_asset_v2");
+        module.add_alias("get_asset_signatures_v2", "get_signatures_for_asset_v2");
 
         let cloned_api = api.clone();
         module.add_method("get_token_accounts", move |rpc_params: Params| {
