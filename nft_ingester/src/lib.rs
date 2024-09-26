@@ -22,6 +22,7 @@ pub mod mpl_core_processor;
 pub mod mplx_updates_processor;
 pub mod plerkle;
 pub mod price_fetcher;
+pub mod raydium_price_fetcher;
 pub mod redis_receiver;
 pub mod scheduler;
 pub mod sequence_consistent;
