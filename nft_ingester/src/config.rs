@@ -302,21 +302,13 @@ pub struct ApiConfig {
     pub max_page_limit: usize,
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
     pub archives_dir: String,
-    #[serde(default = "default_synchronization_api_threshold")]
-    pub consistence_synchronization_api_threshold: u64,
+    pub consistence_synchronization_api_threshold: Option<u64>,
     #[serde(default = "default_heap_path")]
     pub heap_path: String,
-    #[serde(default = "default_consistence_backfilling_slots_threshold")]
-    pub consistence_backfilling_slots_threshold: u64,
+    pub consistence_backfilling_slots_threshold: Option<u64>,
     pub storage_service_base_url: Option<String>,
 }
 
-const fn default_synchronization_api_threshold() -> u64 {
-    1_000_000
-}
-const fn default_consistence_backfilling_slots_threshold() -> u64 {
-    500
-}
 fn default_heap_path() -> String {
     "/usr/src/app/heaps".to_string()
 }
