@@ -8,10 +8,21 @@ use rocks_db::Storage;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
-use tracing::log::error;
+use tokio::task::JoinError;
+use tracing::log::{error, info};
 
 pub const SOLANA_CURRENCY: &str = "solana";
 const USD_CURRENCY: &str = "usd";
+
+pub async fn start_price_monitoring<T: PriceFetcher>(
+    solana_price_updater: SolanaPriceUpdater<T>,
+    rx: Receiver<()>,
+) -> Result<(), JoinError> {
+    info!("Start monitoring Solana price...");
+    solana_price_updater.start_price_monitoring(rx).await;
+    info!("Stop monitoring Solana price...");
+    Ok(())
+}
 
 pub struct CoinGeckoPriceFetcher {
     client: CoinGeckoClient,

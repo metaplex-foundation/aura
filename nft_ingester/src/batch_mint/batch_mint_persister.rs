@@ -21,7 +21,7 @@ pub struct BatchMintPersister<D: BatchMintDownloader> {
     metrics: Arc<BatchMintPersisterMetricsConfig>,
 }
 
-pub struct BatchMintDownloaderForPersister {}
+pub struct BatchMintDownloaderForPersister;
 
 #[async_trait]
 impl BatchMintDownloader for BatchMintDownloaderForPersister {
