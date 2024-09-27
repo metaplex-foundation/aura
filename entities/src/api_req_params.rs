@@ -59,6 +59,10 @@ pub struct Options {
     pub show_collection_metadata: bool,
     #[serde(default)]
     pub show_inscription: bool,
+    // this option is present in displayOptions but in fact do not cause
+    // any effect in reference API
+    #[serde(default)]
+    pub show_fungible: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
@@ -82,6 +86,7 @@ impl From<&SearchAssetsOptions> for Options {
             show_unverified_collections: value.show_unverified_collections,
             show_collection_metadata: value.show_collection_metadata,
             show_inscription: value.show_inscription,
+            show_fungible: false,
         }
     }
 }
@@ -404,6 +409,7 @@ impl From<GetAssetV0> for GetAsset {
                 show_unverified_collections: true,
                 show_collection_metadata: false,
                 show_inscription: false,
+                show_fungible: false,
             }),
         }
     }
@@ -423,6 +429,7 @@ impl From<GetAssetBatchV0> for GetAssetBatch {
                 show_unverified_collections: true,
                 show_collection_metadata: false,
                 show_inscription: false,
+                show_fungible: false,
             }),
         }
     }

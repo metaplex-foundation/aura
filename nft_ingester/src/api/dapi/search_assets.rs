@@ -2,7 +2,6 @@ use crate::api::dapi::asset;
 use crate::api::dapi::converters::{ConversionError, SearchAssetsQuery};
 use crate::api::dapi::response::{AssetList, NativeBalance};
 use crate::api::dapi::rpc_asset_convertors::asset_list_to_rpc;
-use crate::price_fetcher::SOLANA_CURRENCY;
 use entities::api_req_params::{AssetSorting, SearchAssetsOptions};
 use entities::enums::TokenType;
 use interface::account_balance::AccountBalanceGetter;
@@ -57,14 +56,14 @@ pub async fn search_assets<TPF: TokenPriceFetcher>(
             json_persister,
             max_json_to_download,
             tasks,
-            token_price_fetcher,
+            token_price_fetcher.clone(),
             metrics,
         ),
         fetch_native_balance(
             show_native_balance,
             filter.owner_address,
             account_balance_getter,
-            rocks_db.clone(),
+            token_price_fetcher.clone(),
         )
     );
     let native_balance = native_balance.unwrap_or_else(|e| {
@@ -209,11 +208,11 @@ async fn fetch_assets<TPF: TokenPriceFetcher>(
     Ok(resp)
 }
 
-async fn fetch_native_balance(
+async fn fetch_native_balance<TPF: TokenPriceFetcher>(
     show_native_balance: bool,
     owner_address: Option<Vec<u8>>,
     account_balance_getter: Arc<impl AccountBalanceGetter>,
-    rocks_db: Arc<Storage>,
+    token_price_fetcher: Arc<TPF>,
 ) -> Result<Option<NativeBalance>, StorageError> {
     if !show_native_balance {
         return Ok(None);
@@ -228,15 +227,17 @@ async fn fetch_native_balance(
             })?)
             .await
             .map_err(|e| StorageError::Common(format!("Account balance getter: {}", e)))?;
-    let token_price = rocks_db
-        .token_prices
-        .get(SOLANA_CURRENCY.to_string())?
+    let token_price = *token_price_fetcher
+        .fetch_token_prices(&[spl_token::native_mint::id()])
+        .await
+        .map_err(|e| StorageError::Common(e.to_string()))?
+        .get(&spl_token::native_mint::id().to_string())
         .ok_or(StorageError::Common("Not token price".to_string()))?;
 
     Ok(Some(NativeBalance {
         lamports,
-        price_per_sol: token_price.price,
-        total_price: calculate_total_price_usd_by_lamports(lamports, token_price.price),
+        price_per_sol: token_price,
+        total_price: calculate_total_price_usd_by_lamports(lamports, token_price),
     }))
 }
 

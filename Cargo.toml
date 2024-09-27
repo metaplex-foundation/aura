@@ -109,7 +109,7 @@ mime_guess = "2.0.4"
 num_cpus = "1.16.0"
 itertools = "0.12.1"
 jsonpath_lib = "0.3.0"
-
+moka = { version = "0.12.8", features = ["future"] }
 
 # Low level tools: FFI, hashing, encoding, random, etc...
 libc = "0.2.144"
