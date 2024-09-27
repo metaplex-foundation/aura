@@ -2,7 +2,7 @@ use crate::asset::{update_field, update_optional_field};
 use crate::column::TypedColumn;
 use crate::key_encoders::{decode_pubkey, encode_pubkey};
 use crate::migrator::{RocksMigration, SerializationType};
-use crate::AssetDynamicDetails;
+use crate::{impl_merge_values, AssetDynamicDetails};
 use bincode::{deserialize, serialize};
 use entities::enums::ChainMutability;
 use entities::models::{TokenAccount, Updated};
@@ -23,6 +23,8 @@ pub struct TokenAccountWithoutExtentions {
     pub amount: i64,
     pub write_version: u64,
 }
+
+impl_merge_values!(TokenAccountWithoutExtentions);
 
 impl From<TokenAccountWithoutExtentions> for TokenAccount {
     fn from(value: TokenAccountWithoutExtentions) -> Self {

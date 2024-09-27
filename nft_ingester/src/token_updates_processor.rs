@@ -92,8 +92,13 @@ impl TokenAccountsProcessor {
         storage: &mut BatchSaveStorage,
         mint: &Mint,
     ) -> Result<(), StorageError> {
-        let mint_extensions = serde_json::to_value(&mint.extensions)
-            .map_err(|e| StorageError::Common(e.to_string()))?;
+        let mint_extensions = mint
+            .extensions
+            .as_ref()
+            .map(|extensions| {
+                serde_json::to_value(extensions).map_err(|e| StorageError::Common(e.to_string()))
+            })
+            .transpose()?;
         let asset_dynamic_details = AssetDynamicDetails {
             pubkey: mint.pubkey,
             supply: Some(Updated::new(
@@ -101,11 +106,26 @@ impl TokenAccountsProcessor {
                 Some(UpdateVersion::WriteVersion(mint.write_version)),
                 mint.supply as u64,
             )),
-            mint_extensions: Some(Updated::new(
-                mint.slot_updated as u64,
-                Some(UpdateVersion::WriteVersion(mint.write_version)),
-                mint_extensions.to_string(),
-            )),
+            mint_extensions: mint_extensions.map(|mint_extensions| {
+                Updated::new(
+                    mint.slot_updated as u64,
+                    Some(UpdateVersion::WriteVersion(mint.write_version)),
+                    mint_extensions.to_string(),
+                )
+            }),
+            url: mint
+                .extensions
+                .as_ref()
+                .and_then(|extensions| {
+                    extensions.metadata.as_ref().map(|metadata| {
+                        Updated::new(
+                            mint.slot_updated as u64,
+                            Some(UpdateVersion::WriteVersion(mint.write_version)),
+                            metadata.uri.clone(),
+                        )
+                    })
+                })
+                .unwrap_or_default(),
             ..Default::default()
         };
         let owner_type_value = if mint.supply > 1 {

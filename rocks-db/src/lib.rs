@@ -35,6 +35,7 @@ use crate::migrations::collection_authority::{
 use crate::migrations::external_plugins::{AssetDynamicDetailsV0, ExternalPluginsMigration};
 use crate::migrations::spl2022::{
     AssetDynamicDetailsWithoutExtentions, DynamicDataToken2022MintExtentionsMigration,
+    TokenAccounts2022ExtentionsMigration,
 };
 use crate::parameters::ParameterColumn;
 use crate::token_accounts::{SplMint, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
@@ -563,10 +564,20 @@ impl Storage {
                 );
             }
             TokenAccount::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_token_accounts",
-                    crate::token_accounts::merge_token_accounts,
-                );
+                let mf = match migration_state {
+                    MigrationState::Version(version) => match *version {
+                        CollectionAuthorityMigration::VERSION
+                            ..=TokenAccounts2022ExtentionsMigration::VERSION => {
+                            AssetDynamicDetailsV0::merge_dynamic_details
+                        }
+                        _ => token_accounts::merge_token_accounts,
+                    },
+                    MigrationState::Last => crate::token_accounts::merge_token_accounts,
+                    MigrationState::CreateColumnFamilies => {
+                        asset::AssetStaticDetails::merge_keep_existing
+                    }
+                };
+                cf_options.set_merge_operator_associative("merge_fn_token_accounts", mf);
             }
             TokenAccountOwnerIdx::NAME => {
                 cf_options.set_merge_operator_associative(
