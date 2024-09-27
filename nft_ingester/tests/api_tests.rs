@@ -2775,7 +2775,7 @@ mod tests {
             options: Some(Options {
                 show_unverified_collections: true,
                 show_collection_metadata: true,
-                show_inscription: false,
+                ..Default::default()
             }),
         };
         let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -2861,8 +2861,7 @@ mod tests {
                 .to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
-                show_collection_metadata: false,
-                show_inscription: false,
+                ..Default::default()
             }),
         };
         let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
