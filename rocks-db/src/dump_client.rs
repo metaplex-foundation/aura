@@ -5,7 +5,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use csv::WriterBuilder;
-use entities::models::FungibleToken;
 use entities::{
     enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
     models::AssetIndex,
@@ -171,6 +170,7 @@ impl Storage {
 
         let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
         let authorities_key_set = Arc::new(Mutex::new(HashSet::new()));
+        let fungible_tokens_key_set = Arc::new(Mutex::new(HashSet::new()));
 
         // Launch N workers which iterates over index data - asset's data selected from RocksDB.
         // During that iteration it splits asset's data and push it to appropriate
@@ -186,6 +186,7 @@ impl Storage {
             let tx_authority_cloned = tx_authority.clone();
             let metadata_key_set_cloned = metadata_key_set.clone();
             let authorities_key_set_cloned = authorities_key_set.clone();
+            let fungible_tokens_key_set_cloned = fungible_tokens_key_set.clone();
             iterator_tasks.spawn(async move {
                 Self::iterate_over_indexes(
                     rx_cloned,
@@ -198,6 +199,7 @@ impl Storage {
                     tx_fungible_tokens_cloned,
                     metadata_key_set_cloned,
                     authorities_key_set_cloned,
+                    fungible_tokens_key_set_cloned,
                 )
                 .await
             });
@@ -269,9 +271,10 @@ impl Storage {
         tx_creators_cloned: tokio::sync::mpsc::Sender<(String, String, bool, i64)>,
         tx_assets_cloned: tokio::sync::mpsc::Sender<AssetRecord>,
         tx_authority_cloned: tokio::sync::mpsc::Sender<(String, String, i64)>,
-        tx_fungible_tokens_cloned: tokio::sync::mpsc::Sender<FungibleToken>,
+        tx_fungible_tokens_cloned: tokio::sync::mpsc::Sender<(String, String)>,
         metadata_key_set: Arc<Mutex<HashSet<Vec<u8>>>>,
         authorities_key_set: Arc<Mutex<HashSet<Pubkey>>>,
+        fungible_tokens_key_set: Arc<Mutex<HashSet<(Pubkey, Pubkey)>>>,
     ) -> Result<(), JoinError> {
         loop {
             // whole application is stopped
@@ -382,8 +385,21 @@ impl Storage {
                         }
                     }
                     for fungible_token in index.fungible_tokens {
-                        if let Err(e) = tx_fungible_tokens_cloned.send(fungible_token).await {
-                            error!("Error sending message: {:?}", e);
+                        let mut fungible_tokens_keys = fungible_tokens_key_set.lock().await;
+                        if !fungible_tokens_keys
+                            .contains(&(fungible_token.asset, fungible_token.owner))
+                        {
+                            fungible_tokens_keys
+                                .insert((fungible_token.asset, fungible_token.owner));
+                            if let Err(e) = tx_fungible_tokens_cloned
+                                .send((
+                                    Self::encode(fungible_token.asset),
+                                    Self::encode(fungible_token.owner),
+                                ))
+                                .await
+                            {
+                                error!("Error sending message: {:?}", e);
+                            }
                         }
                     }
                 }
