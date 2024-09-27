@@ -163,13 +163,13 @@ async fn fetch_assets<TPF: TokenPriceFetcher>(
         json_persister,
         max_json_to_download,
         tasks,
-        owner_address,
+        &owner_address,
         token_price_fetcher,
         metrics,
     )
     .await?;
     let assets = assets.into_iter().flatten().collect::<Vec<_>>();
-    let (items, errors) = asset_list_to_rpc(assets);
+    let (items, errors) = asset_list_to_rpc(assets, &owner_address);
     let total = items.len() as u32;
 
     let (before, after, cursor, page_res) = if cursor_enabled {

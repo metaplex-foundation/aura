@@ -324,7 +324,10 @@ pub fn get_interface(asset_static: &AssetStaticDetails) -> Result<Interface, Sto
     )))
 }
 
-pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageError> {
+pub fn asset_to_rpc(
+    full_asset: FullAsset,
+    owner_address: &Option<Pubkey>,
+) -> Result<Option<RpcAsset>, StorageError> {
     let rpc_authorities = to_authority(
         &full_asset.assets_authority,
         &full_asset.mpl_core_collections,
@@ -352,6 +355,9 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
             frozen = false;
         }
         _ => {}
+    }
+    if let Some(owner_address) = owner_address {
+        owner = owner_address.to_string()
     }
     let content = get_content(&full_asset.asset_dynamic, &full_asset.offchain_data)?;
     let ch_data = serde_json::from_str(
@@ -558,11 +564,14 @@ pub fn build_transaction_signatures_response(
     }
 }
 
-pub fn asset_list_to_rpc(asset_list: Vec<FullAsset>) -> (Vec<RpcAsset>, Vec<AssetError>) {
+pub fn asset_list_to_rpc(
+    asset_list: Vec<FullAsset>,
+    owner_address: &Option<Pubkey>,
+) -> (Vec<RpcAsset>, Vec<AssetError>) {
     asset_list
         .into_iter()
         .fold((vec![], vec![]), |(mut assets, errors), asset| {
-            match asset_to_rpc(asset.clone()) {
+            match asset_to_rpc(asset.clone(), owner_address) {
                 Ok(rpc_asset) => assets.push(rpc_asset.unwrap()),
                 Err(e) => {
                     error!(

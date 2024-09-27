@@ -184,7 +184,7 @@ pub async fn get_by_ids<TPF: TokenPriceFetcher>(
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     // We need owner_address if we want to query fungible token accounts
-    owner_address: Option<Pubkey>,
+    owner_address: &Option<Pubkey>,
     token_price_fetcher: Arc<TPF>,
     metrics: Arc<ApiMetricsConfig>,
 ) -> Result<Vec<Option<FullAsset>>, StorageError> {
@@ -208,7 +208,7 @@ pub async fn get_by_ids<TPF: TokenPriceFetcher>(
     let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids.as_slice());
     let token_symbols_fut = token_price_fetcher.fetch_token_symbols(asset_ids.as_slice());
     let asset_selected_maps_fut =
-        rocks_db.get_asset_selected_maps_async(unique_asset_ids.clone(), &owner_address, &options);
+        rocks_db.get_asset_selected_maps_async(unique_asset_ids.clone(), owner_address, &options);
 
     let (token_prices, token_symbols, asset_selected_maps) =
         tokio::join!(token_prices_fut, token_symbols_fut, asset_selected_maps_fut);

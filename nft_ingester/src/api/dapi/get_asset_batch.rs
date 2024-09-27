@@ -37,7 +37,7 @@ pub async fn get_asset_batch<TPF: TokenPriceFetcher>(
         json_persister,
         max_json_to_download,
         tasks,
-        None,
+        &None,
         token_price_fetcher,
         metrics,
     )
@@ -46,7 +46,7 @@ pub async fn get_asset_batch<TPF: TokenPriceFetcher>(
     let mut result = assets
         .into_iter()
         .map(|asset| match asset {
-            Some(asset) => Ok(Some(asset_to_rpc(asset)?.unwrap())),
+            Some(asset) => Ok(Some(asset_to_rpc(asset, &None)?.unwrap())),
             None => Ok(None),
         })
         .collect::<Result<Vec<Option<Asset>>, StorageError>>()?;

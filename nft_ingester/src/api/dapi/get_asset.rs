@@ -38,14 +38,14 @@ pub async fn get_asset<TPF: TokenPriceFetcher>(
         json_persister,
         max_json_to_download,
         tasks,
-        None,
+        &None,
         token_price_fetcher,
         metrics,
     )
     .await?;
 
     let mut result = match &assets[0] {
-        Some(asset) => asset_to_rpc(asset.clone()),
+        Some(asset) => asset_to_rpc(asset.clone(), &None),
         None => Ok(None),
     };
 
