@@ -12,6 +12,7 @@ use tracing::error;
 
 use crate::api::dapi::rpc_asset_models::FullAsset;
 use futures::{stream, StreamExt};
+use interface::price_fetcher::TokenPriceFetcher;
 use interface::processing_possibility::ProcessingPossibilityChecker;
 use rocks_db::asset::{AssetLeaf, AssetSelectedMaps};
 use rocks_db::{AssetAuthority, Storage};
@@ -23,6 +24,8 @@ pub const COLLECTION_GROUP_KEY: &str = "collection";
 fn convert_rocks_asset_model(
     asset_pubkey: &Pubkey,
     asset_selected_maps: &AssetSelectedMaps,
+    token_prices: &HashMap<String, f64>,
+    token_symbols: &HashMap<String, String>,
     offchain_data: OffChainData,
 ) -> Result<FullAsset, StorageError> {
     let static_data =
@@ -112,7 +115,14 @@ fn convert_rocks_asset_model(
                     .get(&inscription.inscription_data_account)
             })
             .cloned(),
+        token_account: asset_selected_maps
+            .token_accounts
+            .get(asset_pubkey)
+            .cloned(),
         inscription,
+        spl_mint: asset_selected_maps.spl_mints.get(asset_pubkey).cloned(),
+        token_symbol: token_symbols.get(&asset_pubkey.to_string()).cloned(),
+        token_price: token_prices.get(&asset_pubkey.to_string()).cloned(),
     })
 }
 
@@ -132,6 +142,8 @@ macro_rules! fetch_asset_data {
 fn asset_selected_maps_into_full_asset(
     id: &Pubkey,
     asset_selected_maps: &AssetSelectedMaps,
+    token_prices: &HashMap<String, f64>,
+    token_symbols: &HashMap<String, String>,
     options: &Options,
 ) -> Option<FullAsset> {
     if !options.show_unverified_collections {
@@ -151,10 +163,18 @@ fn asset_selected_maps_into_full_asset(
         .and_then(|url| asset_selected_maps.offchain_data.get(url).cloned())
         .unwrap_or_default();
 
-    convert_rocks_asset_model(id, asset_selected_maps, offchain_data).ok()
+    convert_rocks_asset_model(
+        id,
+        asset_selected_maps,
+        token_prices,
+        token_symbols,
+        offchain_data,
+    )
+    .ok()
 }
 
-pub async fn get_by_ids(
+#[allow(clippy::too_many_arguments)]
+pub async fn get_by_ids<TPF: TokenPriceFetcher>(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
     options: Options,
@@ -162,6 +182,9 @@ pub async fn get_by_ids(
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    // We need owner_address if we want to query fungible token accounts
+    owner_address: Option<Pubkey>,
+    token_price_fetcher: Arc<TPF>,
 ) -> Result<Vec<Option<FullAsset>>, StorageError> {
     if asset_ids.is_empty() {
         return Ok(vec![]);
@@ -180,9 +203,22 @@ pub async fn get_by_ids(
     }
 
     let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
-    let mut asset_selected_maps = rocks_db
-        .get_asset_selected_maps_async(unique_asset_ids.clone(), &options)
-        .await?;
+    let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids.as_slice());
+    let token_symbols_fut = token_price_fetcher.fetch_token_symbols(asset_ids.as_slice());
+    let asset_selected_maps_fut =
+        rocks_db.get_asset_selected_maps_async(unique_asset_ids.clone(), &owner_address, &options);
+
+    let (token_prices, token_symbols, asset_selected_maps) =
+        tokio::join!(token_prices_fut, token_symbols_fut, asset_selected_maps_fut);
+    let mut asset_selected_maps = asset_selected_maps?;
+    let token_prices = token_prices.unwrap_or_else(|e| {
+        error!("Fetch token prices: {}", e);
+        HashMap::new()
+    });
+    let token_symbols = token_symbols.unwrap_or_else(|e| {
+        error!("Fetch token symbols: {}", e);
+        HashMap::new()
+    });
 
     if let Some(json_downloader) = json_downloader {
         let mut urls_to_download = Vec::new();
@@ -240,7 +276,13 @@ pub async fn get_by_ids(
 
     let mut results = vec![None; asset_ids.len()];
     for id in unique_asset_ids {
-        let res = asset_selected_maps_into_full_asset(&id, &asset_selected_maps, &options);
+        let res = asset_selected_maps_into_full_asset(
+            &id,
+            &asset_selected_maps,
+            &token_prices,
+            &token_symbols,
+            &options,
+        );
 
         if let Some(indexes) = unique_asset_ids_map.get(&id) {
             for &index in indexes {

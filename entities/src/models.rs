@@ -554,6 +554,7 @@ pub struct Mint {
     pub decimals: i32,
     pub mint_authority: Option<Pubkey>,
     pub freeze_authority: Option<Pubkey>,
+    pub token_program: Pubkey,
     pub extensions: Option<MintAccountExtensions>,
     pub write_version: u64,
 }

@@ -127,7 +127,8 @@ impl TokenAccountsProcessor {
             storage,
             |storage: &mut BatchSaveStorage| {
                 storage.store_owner(&asset_owner_details)?;
-                storage.store_dynamic(&asset_dynamic_details)
+                storage.store_dynamic(&asset_dynamic_details)?;
+                storage.store_spl_mint(mint)
             },
             PubkeyWithSlot {
                 pubkey: mint.pubkey,

@@ -6,6 +6,7 @@ use entities::models::{AssetSignatureWithPagination, OffChainData};
 use entities::models::{CoreFeesAccountWithSortingID, TokenAccResponse};
 use jsonpath_lib::JsonPathError;
 use mime_guess::Mime;
+use num_traits::Pow;
 use rocks_db::errors::StorageError;
 use serde_json::Value;
 use solana_program::pubkey::Pubkey;
@@ -24,6 +25,7 @@ use super::rpc_asset_models::{
 use crate::api::dapi::asset::COLLECTION_GROUP_KEY;
 use crate::api::dapi::model::ChainMutability;
 use crate::api::dapi::response::InscriptionResponse;
+use crate::api::dapi::rpc_asset_models::{PriceInfo, TokenInfo};
 use entities::api_req_params::Pagination;
 use entities::enums::{Interface, SpecificationVersions};
 use rocks_db::asset::AssetCollection;
@@ -512,7 +514,27 @@ pub fn asset_to_rpc(full_asset: FullAsset) -> Result<Option<RpcAsset>, StorageEr
                 .and_then(|mint_extensions| serde_json::from_str(&mint_extensions.value).ok())
                 .as_ref(),
         ),
-        token_info: None,
+        token_info: full_asset.spl_mint.map(|spl_mint| TokenInfo {
+            symbol: full_asset.token_symbol,
+            balance: full_asset.token_account.as_ref().map(|ta| ta.amount),
+            supply: Some(spl_mint.supply),
+            decimals: Some(spl_mint.decimals),
+            token_program: Some(spl_mint.token_program.to_string()),
+            associated_token_address: full_asset
+                .token_account
+                .as_ref()
+                .map(|ta| ta.pubkey.to_string()),
+            mint_authority: spl_mint.mint_authority.map(|a| a.to_string()),
+            freeze_authority: spl_mint.freeze_authority.map(|a| a.to_string()),
+            price_info: full_asset.token_price.map(|price| PriceInfo {
+                price_per_token: Some(price),
+                total_price: full_asset
+                    .token_account
+                    .as_ref()
+                    .map(|ta| ta.amount as f64 * price / 10f64.pow(spl_mint.decimals as f64)),
+                currency: Some("USDC".to_string()),
+            }),
+        }),
     }))
 }
 

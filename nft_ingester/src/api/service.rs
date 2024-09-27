@@ -32,6 +32,7 @@ use crate::api::middleware::{RpcRequestMiddleware, RpcResponseMiddleware};
 use crate::api::synchronization_state_consistency::SynchronizationStateConsistencyChecker;
 use crate::config::JsonMiddlewareConfig;
 use crate::json_worker::JsonWorker;
+use crate::raydium_price_fetcher::RaydiumTokenPriceFetcher;
 
 pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10);
 // 50kB
@@ -115,6 +116,7 @@ pub async fn start_api(
         json_middleware_config.unwrap_or_default(),
         account_balance_getter,
         storage_service_base_url,
+        Arc::new(RaydiumTokenPriceFetcher::default()),
     );
 
     run_api(
@@ -136,7 +138,13 @@ pub async fn start_api(
 
 #[allow(clippy::too_many_arguments)]
 async fn run_api(
-    api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker, AccountBalanceGetterImpl>,
+    api: DasApi<
+        MaybeProofChecker,
+        JsonWorker,
+        JsonWorker,
+        AccountBalanceGetterImpl,
+        RaydiumTokenPriceFetcher,
+    >,
     middlewares_data: Option<MiddlewaresData>,
     addr: SocketAddr,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,

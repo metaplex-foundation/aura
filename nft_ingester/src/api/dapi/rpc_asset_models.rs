@@ -9,9 +9,10 @@ use {
 
 use crate::api::dapi::response::InscriptionResponse;
 use entities::enums::{Interface, OwnershipModel, RoyaltyModel, UseMethod};
-use entities::models::{EditionData, OffChainData};
+use entities::models::{EditionData, OffChainData, TokenAccount};
 use rocks_db::asset::{AssetCollection, AssetLeaf};
 use rocks_db::inscriptions::{Inscription, InscriptionData};
+use rocks_db::token_accounts::SplMint;
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -259,11 +260,11 @@ pub struct TokenInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub balance: Option<u64>,
+    pub balance: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub supply: Option<u64>,
+    pub supply: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub decimals: Option<u8>,
+    pub decimals: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token_program: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -272,6 +273,8 @@ pub struct TokenInfo {
     pub mint_authority: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub freeze_authority: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_info: Option<PriceInfo>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -299,6 +302,10 @@ pub struct FullAsset {
     pub collection_offchain_data: Option<OffChainData>,
     pub inscription: Option<Inscription>,
     pub inscription_data: Option<InscriptionData>,
+    pub token_account: Option<TokenAccount>,
+    pub spl_mint: Option<SplMint>,
+    pub token_symbol: Option<String>,
+    pub token_price: Option<f64>,
 }
 
 pub struct FullAssetList {

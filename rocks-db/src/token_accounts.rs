@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use bincode::deserialize;
 use entities::models::{
-    ResponseTokenAccount, TokenAccResponse, TokenAccount, TokenAccountIterableIdx,
+    Mint, ResponseTokenAccount, TokenAccResponse, TokenAccount, TokenAccountIterableIdx,
     TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey,
 };
 use interface::error::UsecaseError;
@@ -312,6 +312,51 @@ impl TokenAccountsGetter for Storage {
             .collect::<Vec<_>>())
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SplMint {
+    pub pubkey: Pubkey,
+    pub supply: i64,
+    pub decimals: i32,
+    pub mint_authority: Option<Pubkey>,
+    pub freeze_authority: Option<Pubkey>,
+    pub token_program: Pubkey,
+    pub slot_updated: i64,
+    pub write_version: u64,
+}
+
+impl From<&Mint> for SplMint {
+    fn from(value: &Mint) -> Self {
+        Self {
+            pubkey: value.pubkey,
+            supply: value.supply,
+            decimals: value.decimals,
+            mint_authority: value.mint_authority,
+            freeze_authority: value.freeze_authority,
+            token_program: value.token_program,
+            slot_updated: value.slot_updated,
+            write_version: value.write_version,
+        }
+    }
+}
+
+impl TypedColumn for SplMint {
+    type KeyType = Pubkey;
+
+    type ValueType = Self;
+    const NAME: &'static str = "SPL_MINTS";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        pubkey.to_bytes().to_vec()
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        let key = Pubkey::try_from(&bytes[0..32])?;
+        Ok(key)
+    }
+}
+
+impl_merge_values!(SplMint);
 
 impl Storage {
     #[allow(clippy::too_many_arguments)]

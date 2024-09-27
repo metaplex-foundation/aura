@@ -10,6 +10,7 @@ use crate::{Result, Storage};
 use entities::api_req_params::Options;
 use entities::enums::TokenMetadataEdition;
 use entities::models::{EditionData, PubkeyWithSlot};
+use futures_util::FutureExt;
 use std::collections::HashMap;
 
 impl Storage {
@@ -87,6 +88,7 @@ impl Storage {
     pub async fn get_asset_selected_maps_async(
         &self,
         asset_ids: Vec<Pubkey>,
+        owner_address: &Option<Pubkey>,
         options: &Options,
     ) -> Result<AssetSelectedMaps> {
         let assets_dynamic_fut = self.asset_dynamic_data.batch_get(asset_ids.clone());
@@ -95,6 +97,13 @@ impl Storage {
         let assets_collection_fut = self.asset_collection_data.batch_get(asset_ids.clone());
         let assets_owner_fut = self.asset_owner_data.batch_get(asset_ids.clone());
         let assets_leaf_fut = self.asset_leaf_data.batch_get(asset_ids.clone());
+        let token_accounts_fut = if let Some(owner_address) = owner_address {
+            self.get_raw_token_accounts(Some(*owner_address), None, None, None, None, None, true)
+                .boxed()
+        } else {
+            async { Ok(Vec::new()) }.boxed()
+        };
+        let spl_mints_fut = self.spl_mints.batch_get(asset_ids.clone());
 
         let mut assets_dynamic = to_map!(assets_dynamic_fut.await);
         let mut urls: HashMap<_, _> = assets_dynamic
@@ -112,13 +121,17 @@ impl Storage {
             assets_owner,
             assets_leaf,
             offchain_data,
+            token_accounts,
+            spl_mints,
         ) = tokio::join!(
             assets_static_fut,
             assets_authority_fut,
             assets_collection_fut,
             assets_owner_fut,
             assets_leaf_fut,
-            offchain_data_fut
+            offchain_data_fut,
+            token_accounts_fut,
+            spl_mints_fut
         );
         let mut offchain_data = offchain_data
             .map_err(|e| StorageError::Common(e.to_string()))?
@@ -185,6 +198,7 @@ impl Storage {
         } else {
             (HashMap::new(), HashMap::new())
         };
+        let token_accounts = token_accounts.map_err(|e| StorageError::Common(e.to_string()))?;
 
         Ok(AssetSelectedMaps {
             editions: self
@@ -205,6 +219,11 @@ impl Storage {
             urls,
             inscriptions,
             inscriptions_data,
+            spl_mints: to_map!(spl_mints),
+            token_accounts: token_accounts
+                .into_iter()
+                .flat_map(|ta| ta.map(|ta| (ta.mint, ta)))
+                .collect(),
         })
     }
 

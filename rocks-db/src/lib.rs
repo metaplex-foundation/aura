@@ -37,7 +37,7 @@ use crate::migrations::spl2022::{
     AssetDynamicDetailsWithoutExtentions, DynamicDataToken2022MintExtentionsMigration,
 };
 use crate::parameters::ParameterColumn;
-use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
+use crate::token_accounts::{SplMint, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::token_prices::TokenPrice;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
@@ -129,6 +129,7 @@ pub struct Storage {
     pub inscriptions: Column<Inscription>,
     pub inscription_data: Column<InscriptionData>,
     pub leaf_signature: Column<LeafSignature>,
+    pub spl_mints: Column<SplMint>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -181,6 +182,7 @@ impl Storage {
         let inscriptions = Self::column(db.clone(), red_metrics.clone());
         let inscription_data = Self::column(db.clone(), red_metrics.clone());
         let leaf_signature = Self::column(db.clone(), red_metrics.clone());
+        let spl_mints = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -226,6 +228,7 @@ impl Storage {
             inscriptions,
             inscription_data,
             leaf_signature,
+            spl_mints,
         }
     }
 
@@ -304,6 +307,7 @@ impl Storage {
             Self::new_cf_descriptor::<Inscription>(migration_state),
             Self::new_cf_descriptor::<InscriptionData>(migration_state),
             Self::new_cf_descriptor::<LeafSignature>(migration_state),
+            Self::new_cf_descriptor::<SplMint>(migration_state),
         ]
     }
 
@@ -623,6 +627,10 @@ impl Storage {
                     "merge_fn_leaf_signature",
                     LeafSignature::merge_leaf_signatures,
                 );
+            }
+            SplMint::NAME => {
+                cf_options
+                    .set_merge_operator_associative("merge_fn_spl_mint", SplMint::merge_values);
             }
             _ => {}
         }

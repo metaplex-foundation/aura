@@ -26,6 +26,7 @@ use entities::api_req_params::{
 };
 use entities::enums::TokenType;
 use interface::account_balance::AccountBalanceGetter;
+use interface::price_fetcher::TokenPriceFetcher;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
@@ -35,12 +36,13 @@ use usecase::validation::{validate_opt_pubkey, validate_pubkey};
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
 
-pub struct DasApi<PC, JD, JP, ABG>
+pub struct DasApi<PC, JD, JP, ABG, TPF>
 where
     PC: ProofChecker + Sync + Send + 'static,
     JD: JsonDownloader + Sync + Send + 'static,
     JP: JsonPersister + Sync + Send + 'static,
     ABG: AccountBalanceGetter + Sync + Send + 'static,
+    TPF: TokenPriceFetcher + Sync + Send + 'static,
 {
     pub(crate) pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
@@ -53,18 +55,20 @@ where
     account_balance_getter: Arc<ABG>,
     /// E.g. https://storage-service.xyz/
     storage_service_base_path: Option<String>,
+    token_price_fetcher: Arc<TPF>,
 }
 
 pub fn not_found() -> DasApiError {
     DasApiError::NoDataFoundError
 }
 
-impl<PC, JD, JP, ABG> DasApi<PC, JD, JP, ABG>
+impl<PC, JD, JP, ABG, TPF> DasApi<PC, JD, JP, ABG, TPF>
 where
     PC: ProofChecker + Sync + Send + 'static,
     JD: JsonDownloader + Sync + Send + 'static,
     JP: JsonPersister + Sync + Send + 'static,
     ABG: AccountBalanceGetter + Sync + Send + 'static,
+    TPF: TokenPriceFetcher + Sync + Send + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -78,6 +82,7 @@ where
         json_middleware_config: JsonMiddlewareConfig,
         account_balance_getter: Arc<ABG>,
         storage_service_base_path: Option<String>,
+        token_price_fetcher: Arc<TPF>,
     ) -> Self {
         DasApi {
             pg_client,
@@ -90,6 +95,7 @@ where
             json_middleware_config,
             account_balance_getter,
             storage_service_base_path,
+            token_price_fetcher,
         }
     }
 
@@ -305,6 +311,7 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
             self.storage_service_base_path.clone(),
+            self.token_price_fetcher.clone(),
         )
         .await?;
 
@@ -350,6 +357,7 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
             self.storage_service_base_path.clone(),
+            self.token_price_fetcher.clone(),
         )
         .await?;
 
@@ -708,6 +716,7 @@ where
             tasks,
             self.account_balance_getter.clone(),
             self.storage_service_base_path.clone(),
+            self.token_price_fetcher.clone(),
         )
         .await?;
 

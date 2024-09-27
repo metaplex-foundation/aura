@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::inscriptions::{Inscription, InscriptionData};
 use bincode::{deserialize, serialize};
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::{EditionData, OffChainData, UpdateVersion, Updated};
+use entities::models::{EditionData, OffChainData, TokenAccount, UpdateVersion, Updated};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
@@ -11,6 +11,7 @@ use std::cmp::Ordering;
 use tracing::{error, warn};
 
 use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
+use crate::token_accounts::SplMint;
 use crate::Result;
 use crate::TypedColumn;
 
@@ -27,6 +28,8 @@ pub struct AssetSelectedMaps {
     pub editions: HashMap<Pubkey, EditionData>,
     pub inscriptions: HashMap<Pubkey, Inscription>,
     pub inscriptions_data: HashMap<Pubkey, InscriptionData>,
+    pub token_accounts: HashMap<Pubkey, TokenAccount>,
+    pub spl_mints: HashMap<Pubkey, SplMint>,
 }
 
 // The following structures are used to store the asset data in the rocksdb database. The data is spread across multiple columns based on the update pattern.

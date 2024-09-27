@@ -203,6 +203,7 @@ impl MessageParser {
                     decimals: m.decimals as i32,
                     mint_authority: m.mint_authority.into(),
                     freeze_authority: m.freeze_authority.into(),
+                    token_program: account_update.owner,
                     extensions: None,
                     write_version: account_update.write_version,
                 }))
@@ -251,6 +252,7 @@ impl MessageParser {
                                     decimals: m.account.decimals as i32,
                                     mint_authority: m.account.mint_authority.into(),
                                     freeze_authority: m.account.freeze_authority.into(),
+                                    token_program: account_update.owner,
                                     extensions: Some(m.extensions.clone()),
                                     write_version: account_update.write_version,
                                 })))
