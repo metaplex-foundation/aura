@@ -1,14 +1,43 @@
 use entities::models::ForkedItem;
 use interface::fork_cleaner::{CompressedTreeChangesManager, ForkChecker};
 use metrics_utils::ForkCleanerMetricsConfig;
+use rocks_db::Storage;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
+use tokio::task::JoinError;
+use tokio::time::sleep as tokio_sleep;
+use tokio::time::Instant;
 use tracing::info;
 
 const CI_ITEMS_DELETE_BATCH_SIZE: usize = 100;
 const SLOT_CHECK_OFFSET: u64 = 1500;
+
+pub async fn run_fork_cleaner(
+    fork_cleaner: ForkCleaner<Storage, Storage>,
+    metrics: Arc<ForkCleanerMetricsConfig>,
+    mut rx: Receiver<()>,
+    sequence_consistent_checker_wait_period_sec: u64,
+) -> Result<(), JoinError> {
+    info!("Start cleaning forks...");
+    loop {
+        let start = Instant::now();
+        fork_cleaner.clean_forks(rx.resubscribe()).await;
+        metrics.set_scans_latency(start.elapsed().as_secs_f64());
+        metrics.inc_total_scans();
+        tokio::select! {
+            _ = tokio_sleep(Duration::from_secs(sequence_consistent_checker_wait_period_sec)) => {},
+            _ = rx.recv() => {
+                info!("Received stop signal, stopping cleaning forks!");
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
 
 pub struct ForkCleaner<CM, FC>
 where

@@ -1,3 +1,4 @@
+use crate::message_handler::MessageHandlerIngester;
 use interface::message_handler::MessageHandler;
 use std::convert::TryInto;
 use std::io;
@@ -7,10 +8,59 @@ use std::time::{Duration, Instant};
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::sync::broadcast::Receiver;
+use tokio::task::JoinError;
 use tokio::time::sleep;
 use tracing::{debug, error, info};
 
 const HEADER_BYTE_SIZE: usize = 4;
+
+pub async fn connect_to_snapshot_receiver(
+    snapshot_tcp_receiver: TcpReceiver<MessageHandlerIngester>,
+    snapshot_addr: SocketAddr,
+    cloned_rx: Receiver<()>,
+) -> Result<(), JoinError> {
+    let snapshot_tcp_receiver = Arc::new(snapshot_tcp_receiver);
+    while cloned_rx.is_empty() {
+        let snapshot_tcp_receiver_clone = snapshot_tcp_receiver.clone();
+        let cl_rx = cloned_rx.resubscribe();
+        let connect_to_tcp_receiver = async move {
+            snapshot_tcp_receiver_clone
+                .connect(snapshot_addr, cl_rx)
+                .await
+                .expect("Failed connect to 'SnapshotTcpReceiver'.")
+        };
+
+        if let Err(e) = tokio::spawn(connect_to_tcp_receiver).await {
+            error!("SnapshotTcpReceiver panic: {:?}", e);
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn connect_to_geyser(
+    geyser_tcp_receiver: TcpReceiver<MessageHandlerIngester>,
+    geyser_addr: SocketAddr,
+    cloned_rx: Receiver<()>,
+) -> Result<(), JoinError> {
+    let geyser_tcp_receiver = Arc::new(geyser_tcp_receiver);
+    while cloned_rx.is_empty() {
+        let geyser_tcp_receiver_clone = geyser_tcp_receiver.clone();
+        let cl_rx = cloned_rx.resubscribe();
+        let connect_to_geyser = async move {
+            geyser_tcp_receiver_clone
+                .connect(geyser_addr, cl_rx)
+                .await
+                .expect("Failed connect to 'GeyserTcpReceiver'.")
+        };
+
+        if let Err(e) = tokio::spawn(connect_to_geyser).await {
+            error!("GeyserTcpReceiver panic: {:?}", e);
+        }
+    }
+
+    Ok(())
+}
 
 pub struct TcpReceiver<M: MessageHandler> {
     callback: Arc<M>,
