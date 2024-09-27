@@ -119,6 +119,7 @@ message SplMint {
     uint64 write_version = 8;
 }
 
+// TODO: need also gapfill tokenAccounts and related indexes
 message AssetDetails {
     // From AssetStaticDetails
     bytes pubkey = 1;

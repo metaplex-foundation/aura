@@ -8,6 +8,7 @@ mod tests {
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::config::JsonMiddlewareConfig;
     use nft_ingester::json_worker::JsonWorker;
+    use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
@@ -67,6 +68,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -78,6 +80,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -191,6 +194,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -202,6 +206,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let buffer = Arc::new(Buffer::new());

@@ -80,6 +80,7 @@ mod tests {
             decimals: 0,
             mint_authority: None,
             freeze_authority: None,
+            token_program: Default::default(),
             extensions: None,
             write_version: 1,
         };
@@ -90,6 +91,7 @@ mod tests {
             decimals: 0,
             mint_authority: None,
             freeze_authority: None,
+            token_program: Default::default(),
             extensions: None,
             write_version: 1,
         };

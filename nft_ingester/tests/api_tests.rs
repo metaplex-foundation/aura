@@ -39,6 +39,7 @@ mod tests {
     use nft_ingester::api::error::DasApiError;
     use nft_ingester::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater};
+    use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
     use nft_ingester::{
         config::JsonMiddlewareConfig, json_worker::JsonWorker,
         token_updates_processor::TokenAccountsProcessor,
@@ -68,6 +69,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -79,6 +81,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -491,6 +494,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -502,6 +506,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -636,6 +641,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -647,6 +653,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -759,6 +766,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -770,6 +778,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -805,6 +814,7 @@ mod tests {
             decimals: 0,
             mint_authority: Some(mint_auth_key),
             freeze_authority: None,
+            token_program: Default::default(),
             extensions: None,
             write_version: 1,
         };
@@ -883,6 +893,7 @@ mod tests {
             decimals: 0,
             mint_authority: Some(mint_auth_key),
             freeze_authority: None,
+            token_program: Default::default(),
             extensions: None,
             write_version: 2,
         };
@@ -924,6 +935,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -935,6 +947,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -982,6 +995,7 @@ mod tests {
                 freeze_authority: None,
                 write_version: 1,
                 extensions: None,
+                token_program: Default::default(),
             };
 
             let metadata = MetadataInfo {
@@ -1091,6 +1105,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -1102,6 +1117,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1139,6 +1155,7 @@ mod tests {
             freeze_authority: None,
             write_version: 1,
             extensions: None,
+            token_program: Default::default(),
         };
 
         let metadata = MetadataInfo {
@@ -1243,6 +1260,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -1254,6 +1272,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let first_tree = Pubkey::new_unique();
@@ -1459,6 +1478,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -1470,6 +1490,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let token_updates_processor =
@@ -1678,6 +1699,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -1689,6 +1711,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let token_updates_processor =
@@ -1776,6 +1799,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >,
         owner: Option<String>,
         mint: Option<String>,
@@ -1936,6 +1960,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -1947,6 +1972,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1995,6 +2021,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2006,6 +2033,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2051,6 +2079,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2062,6 +2091,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2107,6 +2137,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2118,6 +2149,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2208,6 +2240,7 @@ mod tests {
             MockJsonDownloader,
             MockJsonPersister,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2222,6 +2255,7 @@ mod tests {
             },
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let pb = Pubkey::new_unique();
@@ -2363,6 +2397,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2374,6 +2409,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let asset_id = Pubkey::new_unique();
         let tree_id = Pubkey::new_unique();
@@ -2418,6 +2454,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2429,6 +2466,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let asset_fees_count = 1000;
         let mut asset_ids = Vec::with_capacity(asset_fees_count);
@@ -2504,6 +2542,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2515,6 +2554,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2589,6 +2629,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2600,6 +2641,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(mock_account_balance_getter),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2706,6 +2748,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2717,6 +2760,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2873,6 +2917,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2884,6 +2929,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));

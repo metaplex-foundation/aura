@@ -99,6 +99,7 @@ pub struct SplMint {
     #[prost(uint64, tag = "8")]
     pub write_version: u64,
 }
+/// TODO: need also gapfill tokenAccounts and related indexes
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AssetDetails {
