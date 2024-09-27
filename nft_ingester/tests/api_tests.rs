@@ -3,6 +3,10 @@
 mod tests {
     use base64::engine::general_purpose;
     use base64::Engine;
+    use blockbuster::programs::token_extensions::extension::{
+        ShadowInterestBearingConfig, ShadowTransferFee, ShadowTransferFeeConfig, UnixTimestamp,
+    };
+    use blockbuster::programs::token_extensions::MintAccountExtensions;
     use std::str::FromStr;
     use std::{collections::HashMap, sync::Arc};
 
@@ -53,6 +57,9 @@ mod tests {
     use serde_json::{json, Value};
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
+    use spl_pod::optional_keys::OptionalNonZeroPubkey;
+    use spl_pod::primitives::{PodU16, PodU64};
+    use spl_token_2022::extension::interest_bearing_mint::BasisPoints;
     use sqlx::QueryBuilder;
     use testcontainers::clients::Cli;
     use tokio::{sync::Mutex, task::JoinSet};
@@ -3284,5 +3291,142 @@ mod tests {
 
         // Totally we have 3 assets with required owner
         assert_eq!(res.items.len(), 3);
+        assert!(res.items[0].mint_extensions.is_none());
+        assert!(res.items[1].mint_extensions.is_none());
+        assert!(res.items[2].mint_extensions.is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_mint_extentions() {
+        let cnt = 100;
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+
+        let fungible_token_mint1 = generated_assets.pubkeys[0]; // non-existed token
+        let mint1 = Mint {
+            pubkey: fungible_token_mint1,
+            supply: 100000,
+            decimals: 2,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 10,
+            write_version: 10,
+            extensions: Some(MintAccountExtensions {
+                default_account_state: None,
+                confidential_transfer_mint: None,
+                confidential_transfer_account: None,
+                confidential_transfer_fee_config: None,
+                interest_bearing_config: Some(ShadowInterestBearingConfig {
+                    rate_authority: OptionalNonZeroPubkey::try_from(Some(
+                        Pubkey::from_str("4TM4eaLauigrqjDytC49K2iWKB4kAHsNRCJz48mdriHY").unwrap(),
+                    ))
+                    .unwrap(),
+                    initialization_timestamp: UnixTimestamp::from(1699797096),
+                    pre_update_average_rate: BasisPoints::from(2),
+                    last_update_timestamp: UnixTimestamp::from(1699797096),
+                    current_rate: BasisPoints::from(2),
+                }),
+                transfer_fee_config: Some(ShadowTransferFeeConfig {
+                    transfer_fee_config_authority: OptionalNonZeroPubkey::try_from(Some(
+                        Pubkey::from_str("4TM4eaLauigrqjDytC49K2iWKB4kAHsNRCJz48mdriHY").unwrap(),
+                    ))
+                    .unwrap(),
+                    withdraw_withheld_authority: OptionalNonZeroPubkey::try_from(Some(
+                        Pubkey::from_str("4TM4eaLauigrqjDytC49K2iWKB4kAHsNRCJz48mdriHY").unwrap(),
+                    ))
+                    .unwrap(),
+                    withheld_amount: PodU64::from(0),
+                    older_transfer_fee: ShadowTransferFee {
+                        epoch: PodU64::from(531),
+                        maximum_fee: PodU64::from(1000000000000),
+                        transfer_fee_basis_points: PodU16::from(300),
+                    },
+                    newer_transfer_fee: ShadowTransferFee {
+                        epoch: PodU64::from(531),
+                        maximum_fee: PodU64::from(1000000000000),
+                        transfer_fee_basis_points: PodU16::from(300),
+                    },
+                }),
+                mint_close_authority: None,
+                permanent_delegate: None,
+                metadata_pointer: None,
+                metadata: None,
+                transfer_hook: None,
+                group_pointer: None,
+                token_group: None,
+                group_member_pointer: None,
+                token_group_member: None,
+            }),
+        };
+
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        let token_accounts_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .unwrap();
+        batch_storage.flush().unwrap();
+
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+            None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
+        );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+        let payload = GetAsset {
+            id: fungible_token_mint1.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
+        };
+        let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: Asset = serde_json::from_value(res).unwrap();
+
+        let reference = json!({
+            "transfer_fee_config": {
+                "withheld_amount": 0,
+                "newer_transfer_fee": {
+                    "epoch": 531,
+                    "maximum_fee": 1000000000000i64,
+                    "transfer_fee_basis_points": 300
+                },
+                "older_transfer_fee": {
+                    "epoch": 531,
+                    "maximum_fee": 1000000000000i64,
+                    "transfer_fee_basis_points": 300
+                },
+                "withdraw_withheld_authority": "4TM4eaLauigrqjDytC49K2iWKB4kAHsNRCJz48mdriHY",
+                "transfer_fee_config_authority": "4TM4eaLauigrqjDytC49K2iWKB4kAHsNRCJz48mdriHY"
+            },
+            "interest_bearing_config": {
+                "current_rate": 2,
+                "rate_authority": "4TM4eaLauigrqjDytC49K2iWKB4kAHsNRCJz48mdriHY",
+                "last_update_timestamp": 1699797096,
+                "pre_update_average_rate": 2,
+                "initialization_timestamp": 1699797096
+            }
+        });
+        assert_eq!(res.mint_extensions.unwrap(), reference)
     }
 }

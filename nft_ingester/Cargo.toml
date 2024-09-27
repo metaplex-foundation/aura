@@ -91,6 +91,7 @@ csv = { workspace = true }
 rand = { workspace = true }
 assertables = "7"
 base64 = { workspace = true }
+spl-pod = { workspace = true }
 
 [[bench]]
 name = "integrated_benchmark"
