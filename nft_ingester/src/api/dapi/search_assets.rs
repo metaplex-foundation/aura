@@ -8,6 +8,7 @@ use entities::enums::TokenType;
 use interface::account_balance::AccountBalanceGetter;
 use interface::json::{JsonDownloader, JsonPersister};
 use interface::price_fetcher::TokenPriceFetcher;
+use metrics_utils::ApiMetricsConfig;
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
 use solana_sdk::pubkey::Pubkey;
@@ -37,6 +38,7 @@ pub async fn search_assets<TPF: TokenPriceFetcher>(
     account_balance_getter: Arc<impl AccountBalanceGetter>,
     storage_service_base_path: Option<String>,
     token_price_fetcher: Arc<TPF>,
+    metrics: Arc<ApiMetricsConfig>,
 ) -> Result<AssetList, StorageError> {
     let show_native_balance = options.show_native_balance;
     let (asset_list, native_balance) = tokio::join!(
@@ -56,6 +58,7 @@ pub async fn search_assets<TPF: TokenPriceFetcher>(
             max_json_to_download,
             tasks,
             token_price_fetcher,
+            metrics,
         ),
         fetch_native_balance(
             show_native_balance,
@@ -95,6 +98,7 @@ async fn fetch_assets<TPF: TokenPriceFetcher>(
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     token_price_fetcher: Arc<TPF>,
+    metrics: Arc<ApiMetricsConfig>,
 ) -> Result<AssetList, StorageError> {
     let filter_result: &Result<postgre_client::model::SearchAssetsFilter, ConversionError> =
         &filter.try_into();
@@ -161,6 +165,7 @@ async fn fetch_assets<TPF: TokenPriceFetcher>(
         tasks,
         owner_address,
         token_price_fetcher,
+        metrics,
     )
     .await?;
     let assets = assets.into_iter().flatten().collect::<Vec<_>>();

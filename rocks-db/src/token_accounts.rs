@@ -5,8 +5,9 @@ use crate::Storage;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use bincode::deserialize;
+use entities::models::SplMint;
 use entities::models::{
-    Mint, ResponseTokenAccount, TokenAccResponse, TokenAccount, TokenAccountIterableIdx,
+    ResponseTokenAccount, TokenAccResponse, TokenAccount, TokenAccountIterableIdx,
     TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey,
 };
 use interface::error::UsecaseError;
@@ -302,7 +303,7 @@ impl TokenAccountsGetter for Storage {
                         frozen: ta.frozen,
                         token_extensions: filter_non_null_fields(
                             ta.extensions
-                                .and_then(|extensions| serde_json::to_value(extensions).ok())
+                                .and_then(|extensions| serde_json::from_str(&extensions).ok())
                                 .as_ref(),
                         ),
                     },
@@ -310,33 +311,6 @@ impl TokenAccountsGetter for Storage {
                 })
             })
             .collect::<Vec<_>>())
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SplMint {
-    pub pubkey: Pubkey,
-    pub supply: i64,
-    pub decimals: i32,
-    pub mint_authority: Option<Pubkey>,
-    pub freeze_authority: Option<Pubkey>,
-    pub token_program: Pubkey,
-    pub slot_updated: i64,
-    pub write_version: u64,
-}
-
-impl From<&Mint> for SplMint {
-    fn from(value: &Mint) -> Self {
-        Self {
-            pubkey: value.pubkey,
-            supply: value.supply,
-            decimals: value.decimals,
-            mint_authority: value.mint_authority,
-            freeze_authority: value.freeze_authority,
-            token_program: value.token_program,
-            slot_updated: value.slot_updated,
-            write_version: value.write_version,
-        }
     }
 }
 
@@ -356,7 +330,41 @@ impl TypedColumn for SplMint {
     }
 }
 
-impl_merge_values!(SplMint);
+pub fn merge_mints(
+    _new_key: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: &MergeOperands,
+) -> Option<Vec<u8>> {
+    let mut result = vec![];
+    let mut write_version = 0;
+    if let Some(existing_val) = existing_val {
+        match deserialize::<SplMint>(existing_val) {
+            Ok(value) => {
+                write_version = value.write_version;
+                result = existing_val.to_vec();
+            }
+            Err(e) => {
+                error!("RocksDB: SplMint deserialize existing_val: {}", e)
+            }
+        }
+    }
+
+    for op in operands {
+        match deserialize::<SplMint>(op) {
+            Ok(new_val) => {
+                if new_val.write_version > write_version {
+                    write_version = new_val.write_version;
+                    result = op.to_vec();
+                }
+            }
+            Err(e) => {
+                error!("RocksDB: SplMint deserialize new_val: {}", e)
+            }
+        }
+    }
+
+    Some(result)
+}
 
 impl Storage {
     #[allow(clippy::too_many_arguments)]

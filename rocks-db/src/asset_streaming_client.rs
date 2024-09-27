@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use entities::enums::TokenMetadataEdition;
-use entities::models::{CompleteAssetDetails, OffChainData, Updated};
+use entities::models::{CompleteAssetDetails, OffChainData, SplMint, Updated};
 use interface::asset_streaming_and_discovery::{
     AssetDetailsStream, AssetDetailsStreamer, AsyncError,
 };
@@ -192,6 +192,7 @@ async fn get_complete_asset_details(
         }
     };
     let url = dynamic_data.url.clone();
+    let spl_mint = Storage::column::<SplMint>(backend.clone(), metrics.clone()).get(pubkey)?;
     Ok(CompleteAssetDetails {
         pubkey: static_data.pubkey,
         specification_asset_class: static_data.specification_asset_class,
@@ -268,6 +269,7 @@ async fn get_complete_asset_details(
         master_edition,
         offchain_data: Storage::column::<OffChainData>(backend.clone(), metrics.clone())
             .get(url.value)?,
+        spl_mint,
     })
 }
 

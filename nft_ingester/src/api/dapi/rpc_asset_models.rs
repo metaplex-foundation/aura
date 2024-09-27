@@ -9,10 +9,9 @@ use {
 
 use crate::api::dapi::response::InscriptionResponse;
 use entities::enums::{Interface, OwnershipModel, RoyaltyModel, UseMethod};
-use entities::models::{EditionData, OffChainData, TokenAccount};
+use entities::models::{EditionData, OffChainData, SplMint, TokenAccount};
 use rocks_db::asset::{AssetCollection, AssetLeaf};
 use rocks_db::inscriptions::{Inscription, InscriptionData};
-use rocks_db::token_accounts::SplMint;
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

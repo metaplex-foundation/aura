@@ -14,6 +14,7 @@ use crate::api::dapi::rpc_asset_models::FullAsset;
 use futures::{stream, StreamExt};
 use interface::price_fetcher::TokenPriceFetcher;
 use interface::processing_possibility::ProcessingPossibilityChecker;
+use metrics_utils::ApiMetricsConfig;
 use rocks_db::asset::{AssetLeaf, AssetSelectedMaps};
 use rocks_db::{AssetAuthority, Storage};
 use tokio::sync::Mutex;
@@ -185,6 +186,7 @@ pub async fn get_by_ids<TPF: TokenPriceFetcher>(
     // We need owner_address if we want to query fungible token accounts
     owner_address: Option<Pubkey>,
     token_price_fetcher: Arc<TPF>,
+    metrics: Arc<ApiMetricsConfig>,
 ) -> Result<Vec<Option<FullAsset>>, StorageError> {
     if asset_ids.is_empty() {
         return Ok(vec![]);
@@ -213,10 +215,12 @@ pub async fn get_by_ids<TPF: TokenPriceFetcher>(
     let mut asset_selected_maps = asset_selected_maps?;
     let token_prices = token_prices.unwrap_or_else(|e| {
         error!("Fetch token prices: {}", e);
+        metrics.inc_token_info_fetch_errors("prices");
         HashMap::new()
     });
     let token_symbols = token_symbols.unwrap_or_else(|e| {
         error!("Fetch token symbols: {}", e);
+        metrics.inc_token_info_fetch_errors("symbols");
         HashMap::new()
     });
 

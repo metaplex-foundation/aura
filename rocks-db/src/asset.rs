@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::inscriptions::{Inscription, InscriptionData};
 use bincode::{deserialize, serialize};
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::{EditionData, OffChainData, TokenAccount, UpdateVersion, Updated};
+use entities::models::{EditionData, OffChainData, SplMint, TokenAccount, UpdateVersion, Updated};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
@@ -11,7 +11,6 @@ use std::cmp::Ordering;
 use tracing::{error, warn};
 
 use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
-use crate::token_accounts::SplMint;
 use crate::Result;
 use crate::TypedColumn;
 

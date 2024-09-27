@@ -81,6 +81,26 @@ pub struct Creator {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SplMint {
+    #[prost(bytes = "vec", tag = "1")]
+    pub pubkey: ::prost::alloc::vec::Vec<u8>,
+    #[prost(int64, tag = "2")]
+    pub supply: i64,
+    #[prost(int32, tag = "3")]
+    pub decimals: i32,
+    #[prost(message, optional, tag = "4")]
+    pub mint_authority: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+    #[prost(message, optional, tag = "5")]
+    pub freeze_authority: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+    #[prost(bytes = "vec", tag = "6")]
+    pub token_program: ::prost::alloc::vec::Vec<u8>,
+    #[prost(int64, tag = "7")]
+    pub slot_updated: i64,
+    #[prost(uint64, tag = "8")]
+    pub write_version: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AssetDetails {
     /// From AssetStaticDetails
     #[prost(bytes = "vec", tag = "1")]
@@ -169,6 +189,8 @@ pub struct AssetDetails {
     pub mpl_core_unknown_external_plugins: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "42")]
     pub mint_extensions: ::core::option::Option<DynamicStringField>,
+    #[prost(message, optional, tag = "43")]
+    pub spl_mint: ::core::option::Option<SplMint>,
 }
 /// This field is a cbor encoded object of RawBlock type depending on
 /// a "~1.17" version of the solana-transaction-status package

@@ -310,6 +310,7 @@ pub struct ApiMetricsConfig {
     latency: Family<MethodLabel, Histogram>,
     proof_checks: Family<MetricLabelWithStatus, Counter>,
     search_asset_latency: Family<MethodLabel, Histogram>,
+    token_info_fetch_errors: Family<MethodLabel, Counter>,
 }
 
 impl ApiMetricsConfig {
@@ -325,6 +326,7 @@ impl ApiMetricsConfig {
             search_asset_latency: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(20.0, 1.8, 10))
             }),
+            token_info_fetch_errors: Family::<MethodLabel, Counter>::default(),
         }
     }
 
@@ -338,6 +340,14 @@ impl ApiMetricsConfig {
 
     pub fn inc_search_asset_requests(&self, label: &str) -> u64 {
         self.search_asset_requests
+            .get_or_create(&MethodLabel {
+                method_name: label.to_owned(),
+            })
+            .inc()
+    }
+
+    pub fn inc_token_info_fetch_errors(&self, label: &str) -> u64 {
+        self.token_info_fetch_errors
             .get_or_create(&MethodLabel {
                 method_name: label.to_owned(),
             })
@@ -403,6 +413,11 @@ impl ApiMetricsConfig {
             "api_proof_checks",
             "The number of proof checks made",
             self.proof_checks.clone(),
+        );
+        registry.register(
+            "api_token_info_fetch_errors",
+            "The number of errors while fetching token info",
+            self.token_info_fetch_errors.clone(),
         );
     }
 }

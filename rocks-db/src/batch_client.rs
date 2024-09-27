@@ -471,6 +471,10 @@ impl Storage {
                 &offchain_data,
             )?;
         }
+        if let Some(spl_mint) = data.spl_mint {
+            self.spl_mints
+                .merge_with_batch(&mut batch, spl_mint.pubkey, &spl_mint)?;
+        }
         self.write_batch(batch).await?;
         Ok(())
     }

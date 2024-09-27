@@ -19,7 +19,8 @@ pub use asset::{
 use column::{Column, TypedColumn};
 use entities::enums::TokenMetadataEdition;
 use entities::models::{
-    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock, TokenAccount,
+    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock, SplMint,
+    TokenAccount,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
@@ -38,7 +39,7 @@ use crate::migrations::spl2022::{
     TokenAccounts2022ExtentionsMigration,
 };
 use crate::parameters::ParameterColumn;
-use crate::token_accounts::{SplMint, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
+use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::token_prices::TokenPrice;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
@@ -640,8 +641,10 @@ impl Storage {
                 );
             }
             SplMint::NAME => {
-                cf_options
-                    .set_merge_operator_associative("merge_fn_spl_mint", SplMint::merge_values);
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_spl_mint",
+                    token_accounts::merge_mints,
+                );
             }
             _ => {}
         }

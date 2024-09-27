@@ -312,6 +312,7 @@ where
             tasks,
             self.storage_service_base_path.clone(),
             self.token_price_fetcher.clone(),
+            self.metrics.clone(),
         )
         .await?;
 
@@ -358,6 +359,7 @@ where
             tasks,
             self.storage_service_base_path.clone(),
             self.token_price_fetcher.clone(),
+            self.metrics.clone(),
         )
         .await?;
 
@@ -717,6 +719,7 @@ where
             self.account_balance_getter.clone(),
             self.storage_service_base_path.clone(),
             self.token_price_fetcher.clone(),
+            self.metrics.clone(),
         )
         .await?;
 

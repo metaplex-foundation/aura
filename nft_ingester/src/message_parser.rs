@@ -236,7 +236,9 @@ impl MessageParser {
                                     mint: ta.account.mint,
                                     delegate: ta.account.delegate.into(),
                                     owner: ta.account.owner,
-                                    extensions: Some(ta.extensions.clone()),
+                                    extensions: serde_json::to_value(&ta.extensions)
+                                        .ok()
+                                        .map(|e| e.to_string()),
                                     frozen,
                                     delegated_amount: ta.account.delegated_amount as i64,
                                     slot_updated: account_update.slot as i64,

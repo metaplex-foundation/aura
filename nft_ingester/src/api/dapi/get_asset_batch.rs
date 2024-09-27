@@ -1,6 +1,7 @@
 use entities::api_req_params::Options;
 use interface::json::{JsonDownloader, JsonPersister};
 use interface::price_fetcher::TokenPriceFetcher;
+use metrics_utils::ApiMetricsConfig;
 use rocks_db::{errors::StorageError, Storage};
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
@@ -26,6 +27,7 @@ pub async fn get_asset_batch<TPF: TokenPriceFetcher>(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     storage_service_base_path: Option<String>,
     token_price_fetcher: Arc<TPF>,
+    metrics: Arc<ApiMetricsConfig>,
 ) -> Result<Vec<Option<Asset>>, StorageError> {
     let assets = asset::get_by_ids(
         rocks_db.clone(),
@@ -37,6 +39,7 @@ pub async fn get_asset_batch<TPF: TokenPriceFetcher>(
         tasks,
         None,
         token_price_fetcher,
+        metrics,
     )
     .await?;
 

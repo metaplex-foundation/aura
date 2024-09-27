@@ -6,7 +6,7 @@ use crate::enums::{
 use base64::engine::general_purpose;
 use base64::Engine;
 use blockbuster::programs::mpl_core_program::MplCoreAccountData;
-use blockbuster::programs::token_extensions::{MintAccountExtensions, TokenAccountExtensions};
+use blockbuster::programs::token_extensions::MintAccountExtensions;
 use libreplex_inscriptions::Inscription;
 use mpl_token_metadata::accounts::Metadata;
 use schemars::JsonSchema;
@@ -151,6 +151,9 @@ pub struct CompleteAssetDetails {
 
     // OffChainData
     pub offchain_data: Option<OffChainData>,
+
+    // SplMint
+    pub spl_mint: Option<SplMint>,
 }
 
 /// Leaf information about compressed asset
@@ -538,7 +541,7 @@ pub struct TokenAccount {
     pub mint: Pubkey,
     pub delegate: Option<Pubkey>,
     pub owner: Pubkey,
-    pub extensions: Option<TokenAccountExtensions>,
+    pub extensions: Option<String>,
     pub frozen: bool,
     pub delegated_amount: i64,
     pub slot_updated: i64,
@@ -591,6 +594,33 @@ pub struct UnprocessedAccountMessage {
 pub struct BufferedTxWithID {
     pub tx: BufferedTransaction,
     pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SplMint {
+    pub pubkey: Pubkey,
+    pub supply: i64,
+    pub decimals: i32,
+    pub mint_authority: Option<Pubkey>,
+    pub freeze_authority: Option<Pubkey>,
+    pub token_program: Pubkey,
+    pub slot_updated: i64,
+    pub write_version: u64,
+}
+
+impl From<&Mint> for SplMint {
+    fn from(value: &Mint) -> Self {
+        Self {
+            pubkey: value.pubkey,
+            supply: value.supply,
+            decimals: value.decimals,
+            mint_authority: value.mint_authority,
+            freeze_authority: value.freeze_authority,
+            token_program: value.token_program,
+            slot_updated: value.slot_updated,
+            write_version: value.write_version,
+        }
+    }
 }
 
 #[cfg(test)]

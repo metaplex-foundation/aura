@@ -108,6 +108,17 @@ message Creator {
     uint32 creator_share = 3; // Percentage
 }
 
+message SplMint {
+    bytes pubkey = 1;
+    int64 supply = 2;
+    int32 decimals = 3;
+    google.protobuf.BytesValue mint_authority = 4;
+    google.protobuf.BytesValue freeze_authority = 5;
+    bytes token_program = 6;
+    int64 slot_updated = 7;
+    uint64 write_version = 8;
+}
+
 message AssetDetails {
     // From AssetStaticDetails
     bytes pubkey = 1;
@@ -159,6 +170,7 @@ message AssetDetails {
     DynamicStringField mpl_core_external_plugins = 40;
     DynamicStringField mpl_core_unknown_external_plugins = 41;
     DynamicStringField mint_extensions = 42;
+    SplMint spl_mint = 43;
 }
 
 // This field is a cbor encoded object of RawBlock type depending on
