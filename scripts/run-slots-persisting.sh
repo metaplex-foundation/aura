@@ -5,6 +5,10 @@ cargo b --release --package nft_ingester --bin raw_backfiller
 # This group of parameters has to be changed depending on the server where we are running it
 # or range of slots we are going to persist.
 export INGESTER_ROCKS_DB_PATH_CONTAINER="/rocksdb-data"
+# If source mode was set to RPC INGESTER_RPC_HOST will be used
+# if Bigtable INGESTER_BIG_TABLE_CONFIG
+export INGESTER_BACKFILLER_SOURCE_MODE=RPC # or Bigtable
+export INGESTER_RPC_HOST="http://sol-rpc.com"
 export INGESTER_BIG_TABLE_CONFIG='{creds="/aura/creds.json", timeout=1000}'
 export INGESTER_SLOT_UNTIL=275642000
 export INGESTER_SLOT_START_FROM=276960411

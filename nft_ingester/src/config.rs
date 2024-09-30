@@ -18,7 +18,10 @@ pub const JSON_MIGRATOR_CONFIG_PREFIX: &str = "JSON_MIGRATOR_";
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct BackfillerConfig {
+    #[serde(default)]
+    pub backfiller_source_mode: BackfillerSourceMode,
     pub big_table_config: BigTableConfig,
+    pub rpc_host: String,
     pub slot_until: Option<u64>,
     pub slot_start_from: u64,
     #[serde(default)]
@@ -494,7 +497,9 @@ mod tests {
         assert_eq!(
             config,
             BackfillerConfig {
+                backfiller_source_mode: BackfillerSourceMode::RPC,
                 big_table_config: BigTableConfig(figment::value::Dict::new()),
+                rpc_host: "".to_string(),
                 slot_until: None,
                 slot_start_from: 0,
                 backfiller_mode: BackfillerMode::IngestDirectly,
@@ -523,7 +528,9 @@ mod tests {
         assert_eq!(
             config,
             BackfillerConfig {
+                backfiller_source_mode: BackfillerSourceMode::RPC,
                 big_table_config: BigTableConfig(figment::value::Dict::new()),
+                rpc_host: "".to_string(),
                 slot_until: None,
                 slot_start_from: 0,
                 backfiller_mode: BackfillerMode::Persist,

@@ -411,7 +411,14 @@ pub async fn main() -> Result<(), IngesterError> {
     ));
     let tx_ingester = Arc::new(BackfillTransactionIngester::new(backfill_bubblegum_updates_processor.clone()));
     let backfiller_config = setup_config::<BackfillerConfig>(INGESTER_CONFIG_PREFIX);
-    let backfiller_source = Arc::new(BackfillSource::new(&config, &backfiller_config).await);
+    let backfiller_source = Arc::new(
+        BackfillSource::new(
+            &config.backfiller_source_mode,
+            config.rpc_host.clone(),
+            &backfiller_config.big_table_config,
+        )
+        .await,
+    );
     let backfiller =
         Arc::new(Backfiller::new(primary_rocks_storage.clone(), backfiller_source.clone(), backfiller_config.clone()));
 
