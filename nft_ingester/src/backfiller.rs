@@ -1,4 +1,4 @@
-use crate::config::{BackfillerConfig, BackfillerSourceMode, IngesterConfig};
+use crate::config::{BackfillerConfig, BackfillerSourceMode, BigTableConfig};
 use crate::error::IngesterError;
 use async_trait::async_trait;
 use backfill_rpc::rpc::BackfillRPC;
@@ -63,18 +63,19 @@ pub enum BackfillSource {
 
 impl BackfillSource {
     pub async fn new(
-        ingester_config: &IngesterConfig,
-        backfiller_config: &BackfillerConfig,
+        source_mode: &BackfillerSourceMode,
+        solana_rpc_address: String,
+        big_table_config: &BigTableConfig,
     ) -> Self {
-        match ingester_config.backfiller_source_mode {
+        match source_mode {
             BackfillerSourceMode::Bigtable => Self::Bigtable(Arc::new(
-                connect_new_bigtable_from_config(backfiller_config.clone())
+                connect_new_bigtable_from_config(big_table_config)
                     .await
                     .unwrap(),
             )),
-            BackfillerSourceMode::RPC => Self::Rpc(Arc::new(BackfillRPC::connect(
-                ingester_config.backfill_rpc_address.clone(),
-            ))),
+            BackfillerSourceMode::RPC => {
+                Self::Rpc(Arc::new(BackfillRPC::connect(solana_rpc_address)))
+            }
         }
     }
 }
@@ -855,10 +856,10 @@ where
 }
 
 pub async fn connect_new_bigtable_from_config(
-    config: BackfillerConfig,
+    config: &BigTableConfig,
 ) -> Result<BigTableClient, IngesterError> {
-    let big_table_creds = config.big_table_config.get_big_table_creds_key()?;
-    let big_table_timeout = config.big_table_config.get_big_table_timeout_key()?;
+    let big_table_creds = config.get_big_table_creds_key()?;
+    let big_table_timeout = config.get_big_table_timeout_key()?;
     BigTableClient::connect_new_with(big_table_creds, big_table_timeout)
         .await
         .map_err(Into::into)
