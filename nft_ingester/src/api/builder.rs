@@ -36,6 +36,7 @@ impl RpcApiBuilder {
             let api = cloned_api.clone();
             async move { api.check_health().await.map_err(Into::into) }
         });
+        module.add_alias("getAuraHealth", "health");
 
         let cloned_api = api.clone();
         module.add_method("get_asset_proof", move |rpc_params: Params| {
