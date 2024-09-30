@@ -262,7 +262,7 @@ impl Storage {
             batch,
             AssetSignatureKey {
                 tree: tree.tree,
-                leaf_idx: tree.event.index as u64,
+                leaf_idx: tree.event.leaf_id as u64,
                 seq: tree.seq,
             },
             &AssetSignature {
