@@ -72,6 +72,10 @@ pub struct AssetIndex {
     pub fungible_tokens: Vec<FungibleToken>,
 }
 
+/// FungibleToken is associated token account
+/// owner by some user
+/// owner - user owned this account
+/// asset - mint this account associated with
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 pub struct FungibleToken {
     pub owner: Pubkey,

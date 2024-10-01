@@ -162,13 +162,12 @@ impl Storage {
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(
-            Self::write_to_file(
-                fungible_tokens_file_and_path,
-                rx_cloned,
-                shutdown_cloned,
-                rx_fungible_tokens,
-            ));
+        writer_tasks.spawn(Self::write_to_file(
+            fungible_tokens_file_and_path,
+            rx_cloned,
+            shutdown_cloned,
+            rx_fungible_tokens,
+        ));
 
         let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
         let authorities_key_set = Arc::new(Mutex::new(HashSet::new()));
