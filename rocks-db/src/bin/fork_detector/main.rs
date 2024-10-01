@@ -51,7 +51,7 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
 
-    println!("Opened for {:?}", start.elapsed());
+    println!("Opened in {:?}", start.elapsed());
 
     println!("Iterating over column family...");
 
@@ -78,105 +78,13 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
                 if asset_identifier != current_asset {
                     // more than 2 actions with asset
                     if signatures.len() >= 2 {
-                        // check only last two because if there was some forked tx
-                        // somewhere in the middle is doesn't matter such as latest tx brings correct asset's state
-                        let last_sig = signatures.pop().unwrap();
-                        let before_last_sig = signatures.pop().unwrap();
-
-                        // if fork happened - two same signatures in different blocks
-                        if last_sig.0 == before_last_sig.0 {
-                            // take slot with highest seq because we merge data in CL_Items column family by sequence
-                            // meaning even if there was a fork but we got an update with higher sequence from NOT forked slot
-                            // everything is fine
-                            let higher_seq_slot = if last_sig.1 > before_last_sig.1 {
-                                last_sig.2
-                            } else {
-                                before_last_sig.2
-                            };
-
-                            match source_db.raw_blocks_cbor.has_key(higher_seq_slot).await {
-                                Ok(has_block) => {
-                                    if !has_block {
-                                        // only block check is not enough because was found out that during forks
-                                        // in CLItems may be saved data from not forked block even if sequence was higher in forked block
-                                        // still not figured out how could it happen
-                                        match source_db.cl_leafs.get(ClLeafKey::new(
-                                            current_asset.1,
-                                            Pubkey::from_str(&current_asset.0).unwrap(),
-                                        )) {
-                                            Ok(leaf_data) => {
-                                                if let Some(leaf) = leaf_data {
-                                                    match source_db.cl_items.get(ClItemKey::new(
-                                                        leaf.cli_node_idx,
-                                                        leaf.cli_tree_key,
-                                                    )) {
-                                                        Ok(cl_item) => {
-                                                            if cl_item.is_none() {
-                                                                let tree_pubkey = Pubkey::from_str(
-                                                                    &current_asset.0,
-                                                                )
-                                                                .unwrap();
-
-                                                                delete_sequence(
-                                                                    &source_db,
-                                                                    &mut sequences_to_delete,
-                                                                    tree_pubkey,
-                                                                    last_sig.1,
-                                                                )
-                                                                .await;
-
-                                                                delete_sequence(
-                                                                    &source_db,
-                                                                    &mut sequences_to_delete,
-                                                                    tree_pubkey,
-                                                                    before_last_sig.1,
-                                                                )
-                                                                .await;
-                                                            }
-                                                        }
-                                                        Err(e) => {
-                                                            println!("Error during cl_items selecting: {:?}", e.to_string());
-                                                        }
-                                                    }
-                                                } else {
-                                                    let tree_pubkey =
-                                                        Pubkey::from_str(&current_asset.0).unwrap();
-
-                                                    delete_sequence(
-                                                        &source_db,
-                                                        &mut sequences_to_delete,
-                                                        tree_pubkey,
-                                                        last_sig.1,
-                                                    )
-                                                    .await;
-
-                                                    delete_sequence(
-                                                        &source_db,
-                                                        &mut sequences_to_delete,
-                                                        tree_pubkey,
-                                                        before_last_sig.1,
-                                                    )
-                                                    .await;
-                                                }
-                                            }
-                                            Err(e) => {
-                                                println!(
-                                                    "Error during leaf selecting: {:?}",
-                                                    e.to_string()
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    println!(
-                                        "Error during block({:?}) selecting: {:?}",
-                                        higher_seq_slot,
-                                        e.to_string()
-                                    );
-                                }
-                            }
-                        }
+                        check_assets_signatures(
+                            &source_db,
+                            &mut signatures,
+                            &mut sequences_to_delete,
+                            &current_asset,
+                        )
+                        .await;
                     }
 
                     current_asset = asset_identifier;
@@ -191,6 +99,17 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
                 println!("Error: {:?}", e.to_string());
             }
         }
+    }
+
+    // check last asset signatures
+    if signatures.len() >= 2 {
+        check_assets_signatures(
+            &source_db,
+            &mut signatures,
+            &mut sequences_to_delete,
+            &current_asset,
+        )
+        .await;
     }
 
     if !sequences_to_delete.is_empty() {
@@ -209,6 +128,110 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
     );
 
     Ok(())
+}
+
+async fn check_assets_signatures(
+    source_db: &Storage,
+    signatures: &mut Vec<(String, u64, u64)>,
+    sequences_to_delete: &mut Vec<(Pubkey, u64)>,
+    current_asset: &(String, u64),
+) {
+    // check only last two because if there was some forked tx
+    // somewhere in the middle is doesn't matter such as latest tx brings correct asset's state
+    let last_sig = signatures.pop().unwrap();
+    let before_last_sig = signatures.pop().unwrap();
+
+    // if fork happened - two same signatures in different blocks
+    if last_sig.0 == before_last_sig.0 {
+        // take slot with highest seq because we merge data in CL_Items column family by sequence
+        // meaning even if there was a fork but we got an update with higher sequence from NOT forked slot
+        // everything is fine
+        let higher_seq_slot = if last_sig.1 > before_last_sig.1 {
+            last_sig.2
+        } else {
+            before_last_sig.2
+        };
+
+        match source_db.raw_blocks_cbor.has_key(higher_seq_slot).await {
+            Ok(has_block) => {
+                if !has_block {
+                    // only block check is not enough because was found out that during forks
+                    // in CLItems may be saved data from not forked block even if sequence was higher in forked block
+                    // still not figured out how could it happen
+                    match source_db.cl_leafs.get(ClLeafKey::new(
+                        current_asset.1,
+                        Pubkey::from_str(&current_asset.0).unwrap(),
+                    )) {
+                        Ok(leaf_data) => {
+                            if let Some(leaf) = leaf_data {
+                                match source_db
+                                    .cl_items
+                                    .get(ClItemKey::new(leaf.cli_node_idx, leaf.cli_tree_key))
+                                {
+                                    Ok(cl_item) => {
+                                        if cl_item.is_none() {
+                                            let tree_pubkey =
+                                                Pubkey::from_str(&current_asset.0).unwrap();
+
+                                            delete_sequence(
+                                                source_db,
+                                                sequences_to_delete,
+                                                tree_pubkey,
+                                                last_sig.1,
+                                            )
+                                            .await;
+
+                                            delete_sequence(
+                                                source_db,
+                                                sequences_to_delete,
+                                                tree_pubkey,
+                                                before_last_sig.1,
+                                            )
+                                            .await;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        println!(
+                                            "Error during cl_items selecting: {:?}",
+                                            e.to_string()
+                                        );
+                                    }
+                                }
+                            } else {
+                                let tree_pubkey = Pubkey::from_str(&current_asset.0).unwrap();
+
+                                delete_sequence(
+                                    source_db,
+                                    sequences_to_delete,
+                                    tree_pubkey,
+                                    last_sig.1,
+                                )
+                                .await;
+
+                                delete_sequence(
+                                    source_db,
+                                    sequences_to_delete,
+                                    tree_pubkey,
+                                    before_last_sig.1,
+                                )
+                                .await;
+                            }
+                        }
+                        Err(e) => {
+                            println!("Error during leaf selecting: {:?}", e.to_string());
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!(
+                    "Error during block({:?}) selecting: {:?}",
+                    higher_seq_slot,
+                    e.to_string()
+                );
+            }
+        }
+    }
 }
 
 async fn delete_sequence(
