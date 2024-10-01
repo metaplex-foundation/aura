@@ -83,14 +83,14 @@ struct AssetRecord {
 }
 
 impl Storage {
-    /// It concurrently creates a `CSV file` for each provided file.
-    /// This separation into files makes sense because that each file corresponds to a separate table in `Postgres`.
+    /// Concurrently dumps data into several `CSV files`,
+    ///     where each file corresponds to a separate table in the index database (`Postgres`).
     ///
     /// # Args:
-    /// `metadata_file_and_path` - The file and path corresponding to the metadata data.
-    /// `assets_file_and_path` - The file and path corresponding to the asset data.
-    /// `creators_file_and_path` - The file and path corresponding to the creators' data.
-    /// `authority_file_and_path` - The file and path corresponding to the authority data.
+    /// `metadata_file_and_path` - The file and path whose data will be written to the corresponding `tasks` table.
+    /// `assets_file_and_path` - The file and path whose data will be written to the corresponding `assets_v3` table.
+    /// `creators_file_and_path` - The file and path whose data will be written to the corresponding `asset_creators_v3` table.
+    /// `authority_file_and_path` - The file and path whose data will be written to the corresponding `assets_authorities` table.
     /// `batch_size` - Batch size.
     /// `rx` - Channel for graceful shutdown.
     pub async fn dump_csv(
