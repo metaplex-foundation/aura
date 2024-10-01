@@ -83,6 +83,16 @@ struct AssetRecord {
 }
 
 impl Storage {
+    /// Concurrently dumps data into several `CSV files`,
+    ///     where each file corresponds to a separate table in the index database (`Postgres`).
+    ///
+    /// # Args:
+    /// `metadata_file_and_path` - The file and path whose data will be written to the corresponding `tasks` table.
+    /// `assets_file_and_path` - The file and path whose data will be written to the corresponding `assets_v3` table.
+    /// `creators_file_and_path` - The file and path whose data will be written to the corresponding `asset_creators_v3` table.
+    /// `authority_file_and_path` - The file and path whose data will be written to the corresponding `assets_authorities` table.
+    /// `batch_size` - Batch size.
+    /// `rx` - Channel for graceful shutdown.
     pub async fn dump_csv(
         &self,
         metadata_file_and_path: (File, String),
@@ -106,58 +116,51 @@ impl Storage {
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(async move {
-            Self::write_to_file(
-                metadata_file_and_path,
-                rx_cloned,
-                shutdown_cloned,
-                rx_metadata,
-            )
-            .await
-        });
+        writer_tasks.spawn(Self::write_to_file(
+            metadata_file_and_path,
+            rx_cloned,
+            shutdown_cloned,
+            rx_metadata,
+        ));
 
         let (tx_assets, rx_assets) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(async move {
-            Self::write_to_file(assets_file_and_path, rx_cloned, shutdown_cloned, rx_assets).await
-        });
+        writer_tasks.spawn(Self::write_to_file(
+            assets_file_and_path,
+            rx_cloned,
+            shutdown_cloned,
+            rx_assets,
+        ));
 
         let (tx_creators, rx_creators) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(async move {
-            Self::write_to_file(
-                creators_file_and_path,
-                rx_cloned,
-                shutdown_cloned,
-                rx_creators,
-            )
-            .await
-        });
+        writer_tasks.spawn(Self::write_to_file(
+            creators_file_and_path,
+            rx_cloned,
+            shutdown_cloned,
+            rx_creators,
+        ));
 
         let (tx_authority, rx_authority) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(async move {
-            Self::write_to_file(
-                authority_file_and_path,
-                rx_cloned,
-                shutdown_cloned,
-                rx_authority,
-            )
-            .await
-        });
+        writer_tasks.spawn(Self::write_to_file(
+            authority_file_and_path,
+            rx_cloned,
+            shutdown_cloned,
+            rx_authority,
+        ));
 
         let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
         let authorities_key_set = Arc::new(Mutex::new(HashSet::new()));
 
-        // Launch N workers which iterates over index data - asset's data selected from RocksDB.
-        // During that iteration it splits asset's data and push it to appropriate
-        // channel so "file writers" could process it
+        // Launch N workers which iterates over index data - asset's data selected from `RocksDB`.
+        // During that iteration it splits asset's data and push it to appropriate channel so "file writers" could process it.
         for _ in 0..ITERATION_WORKERS {
             let rx_cloned = rx.resubscribe();
             let shutdown_cloned = iterator_shutdown_rx.resubscribe();
@@ -168,30 +171,30 @@ impl Storage {
             let tx_authority_cloned = tx_authority.clone();
             let metadata_key_set_cloned = metadata_key_set.clone();
             let authorities_key_set_cloned = authorities_key_set.clone();
-            iterator_tasks.spawn(async move {
-                Self::iterate_over_indexes(
-                    rx_cloned,
-                    shutdown_cloned,
-                    rx_indexes_cloned,
-                    tx_metadata_cloned,
-                    tx_creators_cloned,
-                    tx_assets_cloned,
-                    tx_authority_cloned,
-                    metadata_key_set_cloned,
-                    authorities_key_set_cloned,
-                )
-                .await
-            });
+            iterator_tasks.spawn(Self::iterate_over_indexes(
+                rx_cloned,
+                shutdown_cloned,
+                rx_indexes_cloned,
+                tx_metadata_cloned,
+                tx_creators_cloned,
+                tx_assets_cloned,
+                tx_authority_cloned,
+                metadata_key_set_cloned,
+                authorities_key_set_cloned,
+            ));
         }
 
+        // Iteration over `asset_static_data` column via CUSTOM iterator.
         let iter = self.asset_static_data.iter_start();
-        // collect batch of keys
         let mut batch = Vec::with_capacity(batch_size);
+        // Collect batch of keys.
         for k in iter
             .filter_map(|k| k.ok())
             .filter_map(|(key, _)| decode_pubkey(key.to_vec()).ok())
         {
             batch.push(k);
+
+            // When batch is filled, find `AssetIndex` and send it to `tx_indexes` channel.
             if batch.len() == batch_size {
                 let indexes = self
                     .get_asset_indexes(batch.as_ref())
@@ -202,6 +205,7 @@ impl Storage {
                     .await
                     .map_err(|e| format!("Error sending asset indexes to channel: {}", e))?;
 
+                // Clearing batch vector to continue iterating and collecting new batch.
                 batch.clear();
             }
             if !rx.is_empty() {
@@ -209,6 +213,7 @@ impl Storage {
             }
         }
 
+        // If there are any records left, we find the `AssetIndex` and send them to the `tx_indexes` channel.
         if !batch.is_empty() {
             let indexes = self
                 .get_asset_indexes(batch.as_ref())
@@ -221,8 +226,8 @@ impl Storage {
         }
 
         // Once we iterate through all the assets in RocksDB we have to send stop signal
-        // to iterators and wait until they finish it's job. Because that workers populate channel
-        // for writers.
+        //     to iterators and wait until they finish its job.
+        // Because that workers populate channel for writers.
         iterator_shutdown_tx
             .send(())
             .map_err(|e| format!("Error sending stop signal for indexes iterator: {}", e))?;
@@ -230,7 +235,7 @@ impl Storage {
         graceful_stop(&mut iterator_tasks).await;
         info!("All iterators are stopped.");
 
-        // Once iterators are stopped it's safe to shutdown writers.
+        // Once iterators are stopped it's safe to shut down writers.
         writer_shutdown_tx
             .send(())
             .map_err(|e| format!("Error sending stop signal for file writers: {}", e))?;
@@ -241,6 +246,9 @@ impl Storage {
         Ok(())
     }
 
+    /// The `iterate_over_indexes` function is an asynchronous method responsible for iterating over a stream of asset indexes and processing them.
+    /// It extracts `metadata`, `creators`, `assets`, and `authority` information from each index and sends this data to channels for further processing.
+    /// The function listens to shut down signals to gracefully stop its operations.
     #[allow(clippy::too_many_arguments)]
     async fn iterate_over_indexes(
         rx_cloned: tokio::sync::broadcast::Receiver<()>,
@@ -368,6 +376,24 @@ impl Storage {
         Ok(())
     }
 
+    /// The `write_to_file` function is an asynchronous method responsible for writing
+    ///     serialized data to a file using a buffered writer.
+    /// It listens for data from a `tokio::sync::mpsc::Receiver` channel,
+    ///     and the writing process is controlled by two shutdown signals: one for the application and one for the worker.
+    ///
+    /// # Args:
+    /// `file_and_path` - A tuple containing:
+    ///     A File object used for writing the serialized data.
+    ///     A String representing the file path (for logging and debugging purposes).
+    ///
+    /// `application_shutdown` - A `broadcast::Receiver` channel that listens for an application-wide shutdown signal.
+    ///     If this signal is received, the loop will terminate, and writing will stop.
+    ///
+    /// `worker_shutdown` - A `broadcast::Receiver` channel that listens for a worker-specific shutdown signal.
+    ///     Writing will stop if both the worker shutdown signal is received and there is no more data to process in the `data_channel`.
+    ///
+    /// `data_channel` - An `mpsc::Receiver` channel that provides the serialized data (`T: Serialize`) to be written to the file.
+    ///     Data is processed in the loop until one of the shutdown signals is triggered.
     async fn write_to_file<T: Serialize>(
         file_and_path: (File, String),
         application_shutdown: tokio::sync::broadcast::Receiver<()>,
@@ -416,6 +442,15 @@ impl Storage {
 
 #[async_trait]
 impl Dumper for Storage {
+    /// The `dump_db` function is an asynchronous method responsible for dumping database content into multiple `CSV files`.
+    /// It writes metadata, asset information, creator details, and asset authorities to separate `CSV files` in the provided directory.
+    /// The function supports batch processing and listens to a signal using a `tokio::sync::broadcast::Receiver` to handle cancellation
+    ///     or control flow.
+    /// # Args:
+    /// * `base_path` - A reference to a Path that specifies the base directory where the `CSV files` will be created.
+    ///     The function will append filenames (`metadata.csv, creators.csv, assets.csv, assets_authorities.csv`) to this path.
+    /// * `batch_size` - The size of the data batches to be processed and written to the files.
+    /// * `rx` - A receiver that listens for cancellation signals.
     async fn dump_db(
         &self,
         base_path: &std::path::Path,
