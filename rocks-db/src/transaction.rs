@@ -59,8 +59,7 @@ pub struct CopyableChangeLogEventV1 {
     pub seq: u64,
 
     /// Bitmap of node parity (used when hashing)
-    /// Leaf id
-    pub index: u32,
+    pub leaf_id: u32,
 }
 
 impl From<&ChangeLogEventV1> for CopyableChangeLogEventV1 {
@@ -69,7 +68,7 @@ impl From<&ChangeLogEventV1> for CopyableChangeLogEventV1 {
             id: event.id,
             path: event.path.clone(),
             seq: event.seq,
-            index: event.index,
+            leaf_id: event.index,
         }
     }
 }

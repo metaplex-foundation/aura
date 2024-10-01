@@ -64,3 +64,6 @@ name = "column_remover"
 
 [[bin]]
 name = "column_copier"
+
+[[bin]]
+name = "fork_detector"

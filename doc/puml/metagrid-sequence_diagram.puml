@@ -1,5 +1,5 @@
 @startuml
-title Metagrid 0.1 - Merkel tree rollup
+title Aura 0.1 - Merkel tree batch mint
 scale 1.5
 ' ##################
 ' ### components ###
@@ -26,7 +26,7 @@ participant "DAS Node\nOperator" as DASNode #yellow
 
 Staker -> StakingContract : Make a stake
 note right
-  Rollup operation requires a stake in MPLX
+  Batch mint operation requires a stake in MPLX
 end note
 
 
@@ -34,7 +34,7 @@ TreeCreator -> SplAccountCompression : Prepare uninitialized tree\n(spl::prepare
 Bubblegum -> Solana : Create_account\n(spl_acount_compression)
 
 TreeCreator -> TreeCreator : Generate tree\n(Rolled Mint Instruction)
-TreeCreator -> Arweave : Upload rollup tree in form of JSON
+TreeCreator -> Arweave : Upload batch minted tree in form of JSON
 
 loop
   TreeCreator -> Bubblegum: append_canopy_nodes
@@ -49,7 +49,7 @@ Bubblegum -> StakingContract : Check stake
 Bubblegum -> SplAccountCompression : init_merkle_tree_with_root
 Bubblegum -> RewardPool : Adding fee to the reward pool
 
-Bubblegum -> DASNode : Event create_rollup_tree
+Bubblegum -> DASNode : Event create_batch_mint_tree
 DASNode -> Arweave : Raw JSON request
 
 note over Bubblegum

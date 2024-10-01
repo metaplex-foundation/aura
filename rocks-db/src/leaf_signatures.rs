@@ -126,7 +126,7 @@ impl Storage {
 
         if let Err(e) = self.leaf_signature.merge_with_batch(
             batch,
-            (signature, tree.tree, tree.event.index as u64),
+            (signature, tree.tree, tree.event.leaf_id as u64),
             &LeafSignature {
                 data: slot_sequence_map,
             },

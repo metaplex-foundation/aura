@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use nft_ingester::backfiller::{
-    connect_new_bigtable_from_config, Backfiller, DirectBlockParser, TransactionsParser,
-};
+use nft_ingester::backfiller::{BackfillSource, Backfiller, DirectBlockParser, TransactionsParser};
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
@@ -125,14 +123,18 @@ pub async fn main() -> Result<(), IngesterError> {
     let consumer = rocks_storage.clone();
     let backfiller_config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
 
-    let big_table_client = Arc::new(
-        connect_new_bigtable_from_config(backfiller_config.clone())
-            .await
-            .unwrap(),
+    let backfiller_source = Arc::new(
+        BackfillSource::new(
+            &backfiller_config.backfiller_source_mode,
+            backfiller_config.rpc_host.clone(),
+            &backfiller_config.big_table_config,
+        )
+        .await,
     );
+
     let backfiller = Backfiller::new(
         rocks_storage.clone(),
-        big_table_client.big_table_inner_client.clone(),
+        backfiller_source.clone(),
         backfiller_config.clone(),
     );
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
@@ -148,7 +150,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     shutdown_rx.resubscribe(),
                     metrics.clone(),
                     consumer,
-                    big_table_client.clone(),
+                    backfiller_source.clone(),
                 )
                 .await
                 .unwrap();
