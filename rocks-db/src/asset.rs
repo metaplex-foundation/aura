@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::inscriptions::{Inscription, InscriptionData};
 use bincode::{deserialize, serialize};
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::{EditionData, OffChainData, UpdateVersion, Updated};
+use entities::models::{EditionData, OffChainData, SplMint, TokenAccount, UpdateVersion, Updated};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
@@ -27,6 +27,8 @@ pub struct AssetSelectedMaps {
     pub editions: HashMap<Pubkey, EditionData>,
     pub inscriptions: HashMap<Pubkey, Inscription>,
     pub inscriptions_data: HashMap<Pubkey, InscriptionData>,
+    pub token_accounts: HashMap<Pubkey, TokenAccount>,
+    pub spl_mints: HashMap<Pubkey, SplMint>,
 }
 
 // The following structures are used to store the asset data in the rocksdb database. The data is spread across multiple columns based on the update pattern.
@@ -76,6 +78,7 @@ pub struct AssetDynamicDetails {
     pub plugins_json_version: Option<Updated<u32>>,
     pub mpl_core_external_plugins: Option<Updated<String>>,
     pub mpl_core_unknown_external_plugins: Option<Updated<String>>,
+    pub mint_extensions: Option<Updated<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -413,6 +416,10 @@ impl AssetDynamicDetails {
                         update_optional_field(
                             &mut current_val.mpl_core_unknown_external_plugins,
                             &new_val.mpl_core_unknown_external_plugins,
+                        );
+                        update_optional_field(
+                            &mut current_val.mint_extensions,
+                            &new_val.mint_extensions,
                         );
 
                         current_val

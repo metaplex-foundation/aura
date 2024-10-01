@@ -37,6 +37,7 @@ use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::config::JsonMiddlewareConfig;
 use nft_ingester::error::IngesterError;
 use nft_ingester::json_worker::JsonWorker;
+use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
 use rocks_db::batch_mint::FailedBatchMintKey;
@@ -414,6 +415,7 @@ async fn batch_mint_with_verified_creators_test() {
         JsonWorker,
         JsonWorker,
         MockAccountBalanceGetter,
+        RaydiumTokenPriceFetcher,
     >::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
@@ -425,6 +427,7 @@ async fn batch_mint_with_verified_creators_test() {
         JsonMiddlewareConfig::default(),
         Arc::new(MockAccountBalanceGetter::new()),
         None,
+        Arc::new(RaydiumTokenPriceFetcher::default()),
     );
 
     let payload = GetAssetProof {
@@ -565,6 +568,7 @@ async fn batch_mint_with_unverified_creators_test() {
         JsonWorker,
         JsonWorker,
         MockAccountBalanceGetter,
+        RaydiumTokenPriceFetcher,
     >::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
@@ -576,6 +580,7 @@ async fn batch_mint_with_unverified_creators_test() {
         JsonMiddlewareConfig::default(),
         Arc::new(MockAccountBalanceGetter::new()),
         None,
+        Arc::new(RaydiumTokenPriceFetcher::default()),
     );
 
     let payload = GetAssetProof {
@@ -659,6 +664,7 @@ async fn batch_mint_persister_test() {
         JsonWorker,
         JsonWorker,
         MockAccountBalanceGetter,
+        RaydiumTokenPriceFetcher,
     >::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
@@ -670,6 +676,7 @@ async fn batch_mint_persister_test() {
         JsonMiddlewareConfig::default(),
         Arc::new(MockAccountBalanceGetter::new()),
         None,
+        Arc::new(RaydiumTokenPriceFetcher::default()),
     );
 
     let leaf_index = 4u32;

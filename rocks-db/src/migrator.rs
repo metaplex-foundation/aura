@@ -64,6 +64,14 @@ impl Storage {
                 crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration,
             )
             .await?;
+        migration_applier
+            .apply_migration(crate::migrations::spl2022::TokenAccounts2022ExtentionsMigration)
+            .await?;
+        migration_applier
+            .apply_migration(
+                crate::migrations::spl2022::DynamicDataToken2022MintExtentionsMigration,
+            )
+            .await?;
         Ok(())
     }
 }

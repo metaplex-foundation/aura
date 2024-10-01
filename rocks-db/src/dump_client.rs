@@ -93,12 +93,14 @@ impl Storage {
     /// `authority_file_and_path` - The file and path whose data will be written to the corresponding `assets_authorities` table.
     /// `batch_size` - Batch size.
     /// `rx` - Channel for graceful shutdown.
+    #[allow(clippy::too_many_arguments)]
     pub async fn dump_csv(
         &self,
         metadata_file_and_path: (File, String),
         assets_file_and_path: (File, String),
         creators_file_and_path: (File, String),
         authority_file_and_path: (File, String),
+        fungible_tokens_file_and_path: (File, String),
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
     ) -> Result<(), String> {
@@ -156,8 +158,20 @@ impl Storage {
             rx_authority,
         ));
 
+        let (tx_fungible_tokens, rx_fungible_tokens) = mpsc::channel(MPSC_BUFFER_SIZE);
+        let rx_cloned = rx.resubscribe();
+        let shutdown_cloned = writer_shutdown_rx.resubscribe();
+
+        writer_tasks.spawn(Self::write_to_file(
+            fungible_tokens_file_and_path,
+            rx_cloned,
+            shutdown_cloned,
+            rx_fungible_tokens,
+        ));
+
         let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
         let authorities_key_set = Arc::new(Mutex::new(HashSet::new()));
+        let fungible_tokens_key_set = Arc::new(Mutex::new(HashSet::new()));
 
         // Launch N workers which iterates over index data - asset's data selected from `RocksDB`.
         // During that iteration it splits asset's data and push it to appropriate channel so "file writers" could process it.
@@ -168,9 +182,11 @@ impl Storage {
             let tx_metadata_cloned = tx_metadata.clone();
             let tx_creators_cloned = tx_creators.clone();
             let tx_assets_cloned = tx_assets.clone();
+            let tx_fungible_tokens_cloned = tx_fungible_tokens.clone();
             let tx_authority_cloned = tx_authority.clone();
             let metadata_key_set_cloned = metadata_key_set.clone();
             let authorities_key_set_cloned = authorities_key_set.clone();
+            let fungible_tokens_key_set_cloned = fungible_tokens_key_set.clone();
             iterator_tasks.spawn(Self::iterate_over_indexes(
                 rx_cloned,
                 shutdown_cloned,
@@ -179,8 +195,10 @@ impl Storage {
                 tx_creators_cloned,
                 tx_assets_cloned,
                 tx_authority_cloned,
+                tx_fungible_tokens_cloned,
                 metadata_key_set_cloned,
                 authorities_key_set_cloned,
+                fungible_tokens_key_set_cloned,
             ));
         }
 
@@ -258,8 +276,10 @@ impl Storage {
         tx_creators_cloned: tokio::sync::mpsc::Sender<(String, String, bool, i64)>,
         tx_assets_cloned: tokio::sync::mpsc::Sender<AssetRecord>,
         tx_authority_cloned: tokio::sync::mpsc::Sender<(String, String, i64)>,
+        tx_fungible_tokens_cloned: tokio::sync::mpsc::Sender<(String, String)>,
         metadata_key_set: Arc<Mutex<HashSet<Vec<u8>>>>,
         authorities_key_set: Arc<Mutex<HashSet<Pubkey>>>,
+        fungible_tokens_key_set: Arc<Mutex<HashSet<(Pubkey, Pubkey)>>>,
     ) -> Result<(), JoinError> {
         loop {
             // whole application is stopped
@@ -366,6 +386,24 @@ impl Storage {
                                 {
                                     error!("Error sending message: {:?}", e);
                                 }
+                            }
+                        }
+                    }
+                    for fungible_token in index.fungible_tokens {
+                        let mut fungible_tokens_keys = fungible_tokens_key_set.lock().await;
+                        if !fungible_tokens_keys
+                            .contains(&(fungible_token.asset, fungible_token.owner))
+                        {
+                            fungible_tokens_keys
+                                .insert((fungible_token.asset, fungible_token.owner));
+                            if let Err(e) = tx_fungible_tokens_cloned
+                                .send((
+                                    Self::encode(fungible_token.asset),
+                                    Self::encode(fungible_token.owner),
+                                ))
+                                .await
+                            {
+                                error!("Error sending message: {:?}", e);
                             }
                         }
                     }
@@ -476,12 +514,20 @@ impl Dumper for Storage {
         if authorities_path.is_none() {
             return Err("invalid path".to_string());
         }
+        let fungible_tokens_path = base_path
+            .join("fungible_tokens.csv")
+            .to_str()
+            .map(str::to_owned);
+        if authorities_path.is_none() {
+            return Err("invalid path".to_string());
+        }
         tracing::info!(
-            "Dumping to metadata: {:?}, creators: {:?}, assets: {:?}, authorities: {:?}",
+            "Dumping to metadata: {:?}, creators: {:?}, assets: {:?}, authorities: {:?}, fungible_tokens: {:?}",
             metadata_path,
             creators_path,
             assets_path,
-            authorities_path
+            authorities_path,
+            fungible_tokens_path
         );
 
         let metadata_file = File::create(metadata_path.clone().unwrap())
@@ -492,12 +538,15 @@ impl Dumper for Storage {
             .map_err(|e| format!("Could not create file for creators dump: {}", e))?;
         let authority_file = File::create(authorities_path.clone().unwrap())
             .map_err(|e| format!("Could not create file for authority dump: {}", e))?;
+        let fungible_tokens_file = File::create(fungible_tokens_path.clone().unwrap())
+            .map_err(|e| format!("Could not create file for fungible tokens dump: {}", e))?;
 
         self.dump_csv(
             (metadata_file, metadata_path.unwrap()),
             (assets_file, assets_path.unwrap()),
             (creators_file, creators_path.unwrap()),
             (authority_file, authorities_path.unwrap()),
+            (fungible_tokens_file, fungible_tokens_path.unwrap()),
             batch_size,
             rx,
         )

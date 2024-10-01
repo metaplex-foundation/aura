@@ -134,6 +134,14 @@ impl<'a> TestEnvironment<'a> {
 
         Ok(count)
     }
+
+    pub async fn count_rows_in_fungible_tokens(&self) -> Result<i64, sqlx::Error> {
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM fungible_tokens")
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(count)
+    }
 }
 
 pub async fn setup_database<T: Image>(node: &Container<'_, T>) -> (Pool<Postgres>, String) {
@@ -240,6 +248,7 @@ pub fn generate_asset_index_records(n: usize) -> Vec<AssetIndex> {
                 creator_share: 100,
             }],
             owner_type: Some(OwnerType::Single),
+            fungible_tokens: vec![],
         };
         asset_indexes.push(asset_index);
     }

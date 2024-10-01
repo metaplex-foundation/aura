@@ -4,7 +4,7 @@ use entities::api_req_params::{
     GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, SearchAssets,
 };
 use entities::enums::{
-    OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
+    OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TokenType,
 };
 use interface::error::UsecaseError;
 use thiserror::Error;
@@ -45,6 +45,7 @@ pub struct SearchAssetsQuery {
     pub royalty_amount: Option<u32>,
     pub burnt: Option<bool>,
     pub json_uri: Option<String>,
+    pub token_type: Option<TokenType>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -90,6 +91,7 @@ impl TryFrom<SearchAssets> for SearchAssetsQuery {
                 .interface
                 .map(|s| s.into())
                 .filter(|v| v != &SpecificationAssetClass::Unknown),
+            token_type: search_assets.token_type,
         })
     }
 }
@@ -198,6 +200,7 @@ impl TryFrom<SearchAssetsQuery> for postgre_client::model::SearchAssetsFilter {
             royalty_amount: query.royalty_amount,
             burnt: query.burnt,
             json_uri: query.json_uri,
+            token_type: query.token_type,
         })
     }
 }

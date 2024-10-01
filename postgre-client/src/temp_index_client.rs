@@ -41,6 +41,7 @@ impl TempClient {
             "asset_creators_v3",
             "assets_authorities",
             "assets_v3",
+            "fungible_tokens",
             "last_synced_key",
         ] {
             self.pg_client
@@ -98,6 +99,20 @@ impl TempClient {
                 &mut query_builder,
                 BATCH_UPSERT_ACTION,
                 "assets_authorities",
+            )
+            .await?;
+
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("INSERT INTO fungible_tokens SELECT * FROM ");
+        query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
+        query_builder.push("fungible_tokens ON CONFLICT (fbt_owner, fbt_asset) DO NOTHING;");
+
+        self.pg_client
+            .execute_query_with_metrics(
+                &mut tx,
+                &mut query_builder,
+                BATCH_UPSERT_ACTION,
+                "fungible_tokens",
             )
             .await?;
 
@@ -230,6 +245,7 @@ impl AssetIndexStorage for TempClient {
             assets_table: format!("{}assets_v3", TEMP_INDEXING_TABLE_PREFIX),
             creators_table: format!("{}asset_creators_v3", TEMP_INDEXING_TABLE_PREFIX),
             authorities_table: format!("{}assets_authorities", TEMP_INDEXING_TABLE_PREFIX),
+            fungible_tokens_table: format!("{}fungible_tokens", TEMP_INDEXING_TABLE_PREFIX),
         };
         self.pg_client
             .upsert_batched(&mut transaction, table_names, updated_components)

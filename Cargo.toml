@@ -109,7 +109,7 @@ mime_guess = "2.0.4"
 num_cpus = "1.16.0"
 itertools = "0.12.1"
 jsonpath_lib = "0.3.0"
-
+moka = { version = "0.12.8", features = ["future"] }
 
 # Low level tools: FFI, hashing, encoding, random, etc...
 libc = "0.2.144"
@@ -143,7 +143,8 @@ spl-account-compression = { git = "https://github.com/StanChe/solana-program-lib
 solana-storage-bigtable = "~1.18.11"
 solana-bigtable-connection = "1.10.31"
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
-
+spl-token-2022 = { version = "1.0", features = ["no-entrypoint"] }
+spl-pod = "0.1.0"
 
 # Anchor ecosystem
 anchor-lang = "=0.30.1"

@@ -19,7 +19,8 @@ pub use asset::{
 use column::{Column, TypedColumn};
 use entities::enums::TokenMetadataEdition;
 use entities::models::{
-    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock, TokenAccount,
+    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock, SplMint,
+    TokenAccount,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
@@ -28,10 +29,15 @@ use tokio::task::JoinSet;
 use crate::batch_mint::BatchMintWithStaker;
 use crate::errors::StorageError;
 use crate::inscriptions::{Inscription, InscriptionData};
+use crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration;
 use crate::migrations::collection_authority::{
     AssetCollectionVersion0, CollectionAuthorityMigration,
 };
 use crate::migrations::external_plugins::{AssetDynamicDetailsV0, ExternalPluginsMigration};
+use crate::migrations::spl2022::{
+    AssetDynamicDetailsWithoutExtentions, DynamicDataToken2022MintExtentionsMigration,
+    TokenAccounts2022ExtentionsMigration,
+};
 use crate::parameters::ParameterColumn;
 use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::token_prices::TokenPrice;
@@ -125,6 +131,7 @@ pub struct Storage {
     pub inscriptions: Column<Inscription>,
     pub inscription_data: Column<InscriptionData>,
     pub leaf_signature: Column<LeafSignature>,
+    pub spl_mints: Column<SplMint>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -177,6 +184,7 @@ impl Storage {
         let inscriptions = Self::column(db.clone(), red_metrics.clone());
         let inscription_data = Self::column(db.clone(), red_metrics.clone());
         let leaf_signature = Self::column(db.clone(), red_metrics.clone());
+        let spl_mints = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -222,6 +230,7 @@ impl Storage {
             inscriptions,
             inscription_data,
             leaf_signature,
+            spl_mints,
         }
     }
 
@@ -300,6 +309,7 @@ impl Storage {
             Self::new_cf_descriptor::<Inscription>(migration_state),
             Self::new_cf_descriptor::<InscriptionData>(migration_state),
             Self::new_cf_descriptor::<LeafSignature>(migration_state),
+            Self::new_cf_descriptor::<SplMint>(migration_state),
         ]
     }
 
@@ -387,13 +397,17 @@ impl Storage {
             }
             asset::AssetDynamicDetails::NAME => {
                 let mf = match migration_state {
-                    MigrationState::Version(version) => {
-                        if *version <= ExternalPluginsMigration::VERSION {
+                    MigrationState::Version(version) => match *version {
+                        CollectionAuthorityMigration::VERSION
+                            ..=ExternalPluginsMigration::VERSION => {
                             AssetDynamicDetailsV0::merge_dynamic_details
-                        } else {
-                            asset::AssetDynamicDetails::merge_dynamic_details
                         }
-                    }
+                        CleanCollectionAuthoritiesMigration::VERSION
+                            ..=DynamicDataToken2022MintExtentionsMigration::VERSION => {
+                            AssetDynamicDetailsWithoutExtentions::merge_dynamic_details
+                        }
+                        _ => asset::AssetDynamicDetails::merge_dynamic_details,
+                    },
                     MigrationState::Last => asset::AssetDynamicDetails::merge_dynamic_details,
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing
@@ -551,10 +565,20 @@ impl Storage {
                 );
             }
             TokenAccount::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_token_accounts",
-                    crate::token_accounts::merge_token_accounts,
-                );
+                let mf = match migration_state {
+                    MigrationState::Version(version) => match *version {
+                        CollectionAuthorityMigration::VERSION
+                            ..=TokenAccounts2022ExtentionsMigration::VERSION => {
+                            AssetDynamicDetailsV0::merge_dynamic_details
+                        }
+                        _ => token_accounts::merge_token_accounts,
+                    },
+                    MigrationState::Last => crate::token_accounts::merge_token_accounts,
+                    MigrationState::CreateColumnFamilies => {
+                        asset::AssetStaticDetails::merge_keep_existing
+                    }
+                };
+                cf_options.set_merge_operator_associative("merge_fn_token_accounts", mf);
             }
             TokenAccountOwnerIdx::NAME => {
                 cf_options.set_merge_operator_associative(
@@ -614,6 +638,12 @@ impl Storage {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_leaf_signature",
                     LeafSignature::merge_leaf_signatures,
+                );
+            }
+            SplMint::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_spl_mint",
+                    token_accounts::merge_mints,
                 );
             }
             _ => {}

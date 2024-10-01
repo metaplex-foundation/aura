@@ -117,6 +117,7 @@ impl PgClient {
             "assets_v3_is_frozen",
             "assets_v3_supply",
             "assets_v3_slot_updated",
+            "fungible_tokens_fbt_asset_idx",
         ] {
             self.drop_index(transaction, index).await?;
         }
@@ -163,25 +164,26 @@ impl PgClient {
             .await?;
 
         for (index, on_query_string) in [
-            ("assets_authority", "assets_authorities(auth_authority) WHERE auth_authority IS NOT NULL"),
-("asset_creators_v3_creator", "asset_creators_v3(asc_creator, asc_verified)"),
-("assets_v3_specification_version", "assets_v3 (ast_specification_version) WHERE ast_specification_version <> 'v1'::specification_versions"),
-("assets_v3_specification_asset_class", "assets_v3 (ast_specification_asset_class) WHERE ast_specification_asset_class IS NOT NULL AND ast_specification_asset_class <> 'unknown'::specification_asset_class"),
-("assets_v3_royalty_target_type", "assets_v3 (ast_royalty_target_type) WHERE ast_royalty_target_type <> 'creators'::royalty_target_type"),
-("assets_v3_royalty_amount", "assets_v3 (ast_royalty_amount)"),
-("assets_v3_slot_created", "assets_v3 (ast_slot_created)"),
-("assets_v3_owner_type", "assets_v3 (ast_owner_type) WHERE ast_owner_type IS NOT NULL AND ast_owner_type <> 'unknown'::owner_type"),
-("assets_v3_metadata_url", "assets_v3 (ast_metadata_url_id) WHERE ast_metadata_url_id IS NOT NULL"),
-("assets_v3_owner", "assets_v3(ast_owner) WHERE ast_owner IS NOT NULL"),
-("assets_v3_delegate", "assets_v3(ast_delegate) WHERE ast_delegate IS NOT NULL"),
-("assets_v3_authority_fk", "assets_v3(ast_authority_fk) WHERE ast_authority_fk IS NOT NULL"),
-("assets_v3_collection_is_collection_verified", "assets_v3(ast_collection, ast_is_collection_verified) WHERE ast_collection IS NOT NULL"),
-("assets_v3_is_burnt", "assets_v3(ast_is_burnt) WHERE ast_is_burnt IS TRUE"),
-("assets_v3_is_compressible", "assets_v3(ast_is_compressible) WHERE ast_is_compressible IS TRUE"),
-("assets_v3_is_compressed", "assets_v3(ast_is_compressed)"),
-("assets_v3_is_frozen", "assets_v3(ast_is_frozen) WHERE ast_is_frozen IS TRUE"),
-("assets_v3_supply", "assets_v3(ast_supply) WHERE ast_supply IS NOT NULL"),
-("assets_v3_slot_updated", "assets_v3(ast_slot_updated)"),
+                ("assets_authority", "assets_authorities(auth_authority) WHERE auth_authority IS NOT NULL"),
+                ("asset_creators_v3_creator", "asset_creators_v3(asc_creator, asc_verified)"),
+                ("assets_v3_specification_version", "assets_v3 (ast_specification_version) WHERE ast_specification_version <> 'v1'::specification_versions"),
+                ("assets_v3_specification_asset_class", "assets_v3 (ast_specification_asset_class) WHERE ast_specification_asset_class IS NOT NULL AND ast_specification_asset_class <> 'unknown'::specification_asset_class"),
+                ("assets_v3_royalty_target_type", "assets_v3 (ast_royalty_target_type) WHERE ast_royalty_target_type <> 'creators'::royalty_target_type"),
+                ("assets_v3_royalty_amount", "assets_v3 (ast_royalty_amount)"),
+                ("assets_v3_slot_created", "assets_v3 (ast_slot_created)"),
+                ("assets_v3_owner_type", "assets_v3 (ast_owner_type) WHERE ast_owner_type IS NOT NULL AND ast_owner_type <> 'unknown'::owner_type"),
+                ("assets_v3_metadata_url", "assets_v3 (ast_metadata_url_id) WHERE ast_metadata_url_id IS NOT NULL"),
+                ("assets_v3_owner", "assets_v3(ast_owner) WHERE ast_owner IS NOT NULL"),
+                ("assets_v3_delegate", "assets_v3(ast_delegate) WHERE ast_delegate IS NOT NULL"),
+                ("assets_v3_authority_fk", "assets_v3(ast_authority_fk) WHERE ast_authority_fk IS NOT NULL"),
+                ("assets_v3_collection_is_collection_verified", "assets_v3(ast_collection, ast_is_collection_verified) WHERE ast_collection IS NOT NULL"),
+                ("assets_v3_is_burnt", "assets_v3(ast_is_burnt) WHERE ast_is_burnt IS TRUE"),
+                ("assets_v3_is_compressible", "assets_v3(ast_is_compressible) WHERE ast_is_compressible IS TRUE"),
+                ("assets_v3_is_compressed", "assets_v3(ast_is_compressed)"),
+                ("assets_v3_is_frozen", "assets_v3(ast_is_frozen) WHERE ast_is_frozen IS TRUE"),
+                ("assets_v3_supply", "assets_v3(ast_supply) WHERE ast_supply IS NOT NULL"),
+                ("assets_v3_slot_updated", "assets_v3(ast_slot_updated)"),
+                ("fungible_tokens_fbt_asset_idx", "fungible_tokens(fbt_asset)"),
             ]{
                 self.create_index(transaction, index, on_query_string).await?;
             }
@@ -227,11 +229,17 @@ impl PgClient {
         asset_creators_copy_path: String,
         assets_copy_path: String,
         assets_authorities_copy_path: String,
+        fungible_tokens_copy_path: String,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
         self.drop_indexes(transaction).await?;
         self.drop_constraints(transaction).await?;
-        for table in ["assets_v3", "asset_creators_v3", "assets_authorities"] {
+        for table in [
+            "assets_v3",
+            "asset_creators_v3",
+            "assets_authorities",
+            "fungible_tokens",
+        ] {
             self.truncate_table(transaction, table).await?;
         }
 
@@ -262,6 +270,11 @@ impl PgClient {
                 "assets_v3",
                 assets_copy_path,
                 "ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_authority_fk, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated",
+            ),
+            (
+                "fungible_tokens",
+                fungible_tokens_copy_path,
+                "fbt_owner, fbt_asset",
             ),
         ] {
             self.copy_table_from(transaction, path, table, columns).await?;

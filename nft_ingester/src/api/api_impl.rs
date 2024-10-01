@@ -24,7 +24,9 @@ use entities::api_req_params::{
     GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetCoreFees,
     GetGrouping, GetTokenAccounts, Pagination, SearchAssets, SearchAssetsOptions,
 };
+use entities::enums::TokenType;
 use interface::account_balance::AccountBalanceGetter;
+use interface::price_fetcher::TokenPriceFetcher;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
@@ -34,12 +36,13 @@ use usecase::validation::{validate_opt_pubkey, validate_pubkey};
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
 
-pub struct DasApi<PC, JD, JP, ABG>
+pub struct DasApi<PC, JD, JP, ABG, TPF>
 where
     PC: ProofChecker + Sync + Send + 'static,
     JD: JsonDownloader + Sync + Send + 'static,
     JP: JsonPersister + Sync + Send + 'static,
     ABG: AccountBalanceGetter + Sync + Send + 'static,
+    TPF: TokenPriceFetcher + Sync + Send + 'static,
 {
     pub(crate) pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
@@ -52,18 +55,20 @@ where
     account_balance_getter: Arc<ABG>,
     /// E.g. https://storage-service.xyz/
     storage_service_base_path: Option<String>,
+    token_price_fetcher: Arc<TPF>,
 }
 
 pub fn not_found() -> DasApiError {
     DasApiError::NoDataFoundError
 }
 
-impl<PC, JD, JP, ABG> DasApi<PC, JD, JP, ABG>
+impl<PC, JD, JP, ABG, TPF> DasApi<PC, JD, JP, ABG, TPF>
 where
     PC: ProofChecker + Sync + Send + 'static,
     JD: JsonDownloader + Sync + Send + 'static,
     JP: JsonPersister + Sync + Send + 'static,
     ABG: AccountBalanceGetter + Sync + Send + 'static,
+    TPF: TokenPriceFetcher + Sync + Send + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -77,6 +82,7 @@ where
         json_middleware_config: JsonMiddlewareConfig,
         account_balance_getter: Arc<ABG>,
         storage_service_base_path: Option<String>,
+        token_price_fetcher: Arc<TPF>,
     ) -> Self {
         DasApi {
             pg_client,
@@ -89,6 +95,7 @@ where
             json_middleware_config,
             account_balance_getter,
             storage_service_base_path,
+            token_price_fetcher,
         }
     }
 
@@ -115,8 +122,80 @@ where
         if options.show_native_balance && query.owner_address.is_none() {
             return Err(DasApiError::MissingOwnerAddress);
         }
+        if query.owner_address.is_none() && query.token_type.is_some() {
+            return Err(DasApiError::Validation(
+                "Must provide `owner_address` when using `token_type` field".to_string(),
+            ));
+        }
+        if let Some(ref token_type) = query.token_type {
+            if token_type == &TokenType::All || token_type == &TokenType::Fungible {
+                if let Some(banned_param) = Self::banned_params_with_fungible_token_type(query) {
+                    return Err(DasApiError::Validation(format!(
+                        "'{banned_param}' is not supported for this `token_type`"
+                    )));
+                }
+            }
+        }
 
         Ok(())
+    }
+
+    fn banned_params_with_fungible_token_type(query: &SearchAssetsQuery) -> Option<String> {
+        if query.creator_address.is_some() {
+            return Some(String::from("creator_address"));
+        }
+        if query.creator_verified.is_some() {
+            return Some(String::from("creator_verified"));
+        }
+        if query.grouping.is_some() {
+            return Some(String::from("grouping"));
+        }
+        if query.owner_type.is_some() {
+            return Some(String::from("owner_type"));
+        }
+        if query.specification_asset_class.is_some() {
+            return Some(String::from("specification_asset_class"));
+        }
+        if query.compressed.is_some() {
+            return Some(String::from("compressed"));
+        }
+        if query.compressible.is_some() {
+            return Some(String::from("compressible"));
+        }
+        if query.specification_version.is_some() {
+            return Some(String::from("specification_version"));
+        }
+        if query.authority_address.is_some() {
+            return Some(String::from("authority_address"));
+        }
+        if query.delegate.is_some() {
+            return Some(String::from("delegate"));
+        }
+        if query.frozen.is_some() {
+            return Some(String::from("frozen"));
+        }
+        if query.supply.is_some() {
+            return Some(String::from("supply"));
+        }
+        if query.supply_mint.is_some() {
+            return Some(String::from("supply_mint"));
+        }
+        if query.royalty_target_type.is_some() {
+            return Some(String::from("royalty_target_type"));
+        }
+        if query.royalty_target.is_some() {
+            return Some(String::from("royalty_target"));
+        }
+        if query.royalty_amount.is_some() {
+            return Some(String::from("royalty_amount"));
+        }
+        if query.burnt.is_some() {
+            return Some(String::from("burnt"));
+        }
+        if query.json_uri.is_some() {
+            return Some(String::from("json_uri"));
+        }
+        None
     }
 
     pub fn validate_basic_pagination(
@@ -232,6 +311,8 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
             self.storage_service_base_path.clone(),
+            self.token_price_fetcher.clone(),
+            self.metrics.clone(),
         )
         .await?;
 
@@ -277,6 +358,8 @@ where
             self.json_middleware_config.max_urls_to_parse,
             tasks,
             self.storage_service_base_path.clone(),
+            self.token_price_fetcher.clone(),
+            self.metrics.clone(),
         )
         .await?;
 
@@ -635,6 +718,8 @@ where
             tasks,
             self.account_balance_getter.clone(),
             self.storage_service_base_path.clone(),
+            self.token_price_fetcher.clone(),
+            self.metrics.clone(),
         )
         .await?;
 

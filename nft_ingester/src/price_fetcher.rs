@@ -14,7 +14,8 @@ use tracing::log::{error, info};
 pub const SOLANA_CURRENCY: &str = "solana";
 const USD_CURRENCY: &str = "usd";
 
-pub async fn start_price_monitoring<T: PriceFetcher>(
+// Not used now but can be useful in future
+pub async fn _start_price_monitoring<T: PriceFetcher>(
     solana_price_updater: SolanaPriceUpdater<T>,
     rx: Receiver<()>,
 ) -> Result<(), JoinError> {

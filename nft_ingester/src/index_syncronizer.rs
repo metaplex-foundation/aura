@@ -407,6 +407,7 @@ mod tests {
             }),
             update_authority: None,
             slot_updated: 123456,
+            fungible_tokens: vec![],
         }
     }
 

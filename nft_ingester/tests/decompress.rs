@@ -11,6 +11,7 @@ mod tests {
     use nft_ingester::config::JsonMiddlewareConfig;
     use nft_ingester::json_worker::JsonWorker;
     use nft_ingester::mplx_updates_processor::MplxAccountsProcessor;
+    use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
@@ -121,6 +122,7 @@ mod tests {
             mint: *mint,
             delegate: None,
             owner,
+            extensions: None,
             frozen: false,
             delegated_amount: 0,
             slot_updated: nft_created_slot,
@@ -137,6 +139,8 @@ mod tests {
                 Pubkey::from_str("ywx1vh2bG1brfX8SqWMxGiivNTZjMHf9vuKrXKt4pNT").unwrap(),
             ),
             freeze_authority: None,
+            token_program: Default::default(),
+            extensions: None,
             write_version: 1,
         };
 
@@ -224,6 +228,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -235,6 +240,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -310,6 +316,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -321,6 +328,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -396,6 +404,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -407,6 +416,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -482,6 +492,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -493,6 +504,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let buffer = Arc::new(Buffer::new());

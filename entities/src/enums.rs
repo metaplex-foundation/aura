@@ -362,7 +362,7 @@ pub enum TokenMetadataEdition {
 pub enum UnprocessedAccount {
     MetadataInfo(MetadataInfo),
     Token(TokenAccount),
-    Mint(Mint),
+    Mint(Box<Mint>),
     Edition(EditionMetadata),
     BurnMetadata(BurntMetadataSlot),
     BurnMplCore(BurntMetadataSlot),
@@ -387,4 +387,16 @@ impl From<UnprocessedAccount> for &str {
             UnprocessedAccount::MplCoreFee(_) => "MplCoreFee",
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum TokenType {
+    Fungible,
+    NonFungible,
+    #[serde(rename = "regularNFT")]
+    RegularNFT,
+    #[serde(rename = "compressedNFT")]
+    CompressedNFT,
+    All,
 }

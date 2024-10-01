@@ -16,12 +16,19 @@ use crate::api::account_balance::AccountBalanceGetterImpl;
 use crate::api::meta_middleware::RpcMetaMiddleware;
 use crate::api::*;
 use crate::json_worker::JsonWorker;
+use crate::raydium_price_fetcher::RaydiumTokenPriceFetcher;
 
 pub struct RpcApiBuilder;
 
 impl RpcApiBuilder {
     pub(crate) fn build(
-        api: DasApi<MaybeProofChecker, JsonWorker, JsonWorker, AccountBalanceGetterImpl>,
+        api: DasApi<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            AccountBalanceGetterImpl,
+            RaydiumTokenPriceFetcher,
+        >,
         consistency_checkers: Vec<Arc<dyn ConsistencyChecker>>,
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     ) -> Result<MetaIoHandler<RpcMetaMiddleware, RpcMetaMiddleware>, DasApiError> {

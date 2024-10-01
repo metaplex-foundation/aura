@@ -5,6 +5,7 @@ use crate::Storage;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use bincode::deserialize;
+use entities::models::SplMint;
 use entities::models::{
     ResponseTokenAccount, TokenAccResponse, TokenAccount, TokenAccountIterableIdx,
     TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey,
@@ -15,6 +16,7 @@ use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use tracing::log::error;
+use usecase::response_prettier::filter_non_null_fields;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenAccountOwnerIdx {
@@ -178,7 +180,7 @@ impl TokenAccountsGetter for Storage {
         starting_token_account: Option<Pubkey>,
         reverse_iter: bool,
         page: Option<u64>,
-        limit: u64,
+        limit: Option<u64>,
         show_zero_balance: bool,
     ) -> std::result::Result<impl Iterator<Item = TokenAccountIterableIdx>, UsecaseError> {
         if (mint, owner) == (None, None) {
@@ -260,7 +262,8 @@ impl TokenAccountsGetter for Storage {
                 Some(iterable_token_account)
             })
             .skip(
-                page.and_then(|page| page.saturating_sub(1).checked_mul(limit))
+                page.zip(limit)
+                    .and_then(|(page, limit)| page.saturating_sub(1).checked_mul(limit))
                     .unwrap_or_default() as usize,
             ))
     }
@@ -275,6 +278,106 @@ impl TokenAccountsGetter for Storage {
         limit: u64,
         show_zero_balance: bool,
     ) -> std::result::Result<Vec<TokenAccResponse>, UsecaseError> {
+        let raw_token_accounts = self
+            .get_raw_token_accounts(
+                owner,
+                mint,
+                before,
+                after,
+                page,
+                Some(limit),
+                show_zero_balance,
+            )
+            .await?;
+
+        Ok(raw_token_accounts
+            .into_iter()
+            .flat_map(|ta| {
+                ta.map(|ta| TokenAccResponse {
+                    token_acc: ResponseTokenAccount {
+                        address: ta.pubkey.to_string(),
+                        mint: ta.mint.to_string(),
+                        owner: ta.owner.to_string(),
+                        amount: ta.amount as u64,
+                        delegated_amount: ta.delegated_amount as u64,
+                        frozen: ta.frozen,
+                        token_extensions: filter_non_null_fields(
+                            ta.extensions
+                                .and_then(|extensions| serde_json::from_str(&extensions).ok())
+                                .as_ref(),
+                        ),
+                    },
+                    sorting_id: encode_sorting_key(&ta.owner, &ta.pubkey),
+                })
+            })
+            .collect::<Vec<_>>())
+    }
+}
+
+impl TypedColumn for SplMint {
+    type KeyType = Pubkey;
+
+    type ValueType = Self;
+    const NAME: &'static str = "SPL_MINTS";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        pubkey.to_bytes().to_vec()
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        let key = Pubkey::try_from(&bytes[0..32])?;
+        Ok(key)
+    }
+}
+
+pub fn merge_mints(
+    _new_key: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: &MergeOperands,
+) -> Option<Vec<u8>> {
+    let mut result = vec![];
+    let mut write_version = 0;
+    if let Some(existing_val) = existing_val {
+        match deserialize::<SplMint>(existing_val) {
+            Ok(value) => {
+                write_version = value.write_version;
+                result = existing_val.to_vec();
+            }
+            Err(e) => {
+                error!("RocksDB: SplMint deserialize existing_val: {}", e)
+            }
+        }
+    }
+
+    for op in operands {
+        match deserialize::<SplMint>(op) {
+            Ok(new_val) => {
+                if new_val.write_version > write_version {
+                    write_version = new_val.write_version;
+                    result = op.to_vec();
+                }
+            }
+            Err(e) => {
+                error!("RocksDB: SplMint deserialize new_val: {}", e)
+            }
+        }
+    }
+
+    Some(result)
+}
+
+impl Storage {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn get_raw_token_accounts(
+        &self,
+        owner: Option<Pubkey>,
+        mint: Option<Pubkey>,
+        before: Option<String>,
+        after: Option<String>,
+        page: Option<u64>,
+        limit: Option<u64>,
+        show_zero_balance: bool,
+    ) -> std::result::Result<Vec<Option<TokenAccount>>, UsecaseError> {
         let mut reverse = false;
 
         let start_from = if let Some(after) = &after {
@@ -315,7 +418,9 @@ impl TokenAccountsGetter for Storage {
             limit,
             show_zero_balance,
         )? {
-            if (pubkeys.len() >= limit as usize)
+            if limit
+                .map(|limit| pubkeys.len() >= limit as usize)
+                .unwrap_or_default()
                 || owner.map(|owner| owner != key.owner).unwrap_or_default()
                 || mint != key.mint
                 || until_token_acc
@@ -338,26 +443,10 @@ impl TokenAccountsGetter for Storage {
             pubkeys.reverse();
         }
 
-        Ok(self
-            .token_accounts
+        self.token_accounts
             .batch_get(pubkeys)
             .await
-            .map_err(|e| UsecaseError::Storage(e.to_string()))?
-            .into_iter()
-            .flat_map(|ta| {
-                ta.map(|ta| TokenAccResponse {
-                    token_acc: ResponseTokenAccount {
-                        address: ta.pubkey.to_string(),
-                        mint: ta.mint.to_string(),
-                        owner: ta.owner.to_string(),
-                        amount: ta.amount as u64,
-                        delegated_amount: ta.delegated_amount as u64,
-                        frozen: ta.frozen,
-                    },
-                    sorting_id: encode_sorting_key(&ta.owner, &ta.pubkey),
-                })
-            })
-            .collect::<Vec<_>>())
+            .map_err(|e| UsecaseError::Storage(e.to_string()))
     }
 }
 

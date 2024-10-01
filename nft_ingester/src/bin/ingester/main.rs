@@ -48,7 +48,6 @@ use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration, init_primary_storage};
 use nft_ingester::json_worker::JsonWorker;
 use nft_ingester::message_handler::MessageHandlerIngester;
-use nft_ingester::price_fetcher::{start_price_monitoring, CoinGeckoPriceFetcher, SolanaPriceUpdater};
 use nft_ingester::redis_receiver::RedisReceiver;
 use nft_ingester::rocks_db::{perform_backup, receive_last_saved_slot, restore_rocksdb};
 use nft_ingester::tcp_receiver::{connect_to_geyser, connect_to_snapshot_receiver, TcpReceiver};
@@ -731,17 +730,6 @@ pub async fn main() -> Result<(), IngesterError> {
         info!("Start batch_mint persister...");
         batch_mint_persister.persist_batch_mints(rx).await
     });
-
-    let solana_price_updater = SolanaPriceUpdater::new(
-        primary_rocks_storage.clone(),
-        CoinGeckoPriceFetcher::new(),
-        config.price_monitoring_interval_sec,
-    );
-    let rx = shutdown_rx.resubscribe();
-    mutexed_tasks
-        .lock()
-        .await
-        .spawn(start_price_monitoring(solana_price_updater, rx));
 
     start_metrics(metrics_state.registry, config.metrics_port).await;
 

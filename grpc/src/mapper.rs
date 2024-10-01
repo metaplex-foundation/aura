@@ -4,7 +4,7 @@ use crate::gapfiller::{
     Creator, DynamicBoolField, DynamicBytesField, DynamicChainMutability, DynamicCreatorsField,
     DynamicEnumField, DynamicStringField, DynamicUint32Field, DynamicUint64Field, EditionV1,
     MasterEdition, OffchainData, OwnerType, RawBlock, RoyaltyTargetType, SpecificationAssetClass,
-    SpecificationVersions, TokenStandard, UpdateVersionValue, UseMethod, Uses,
+    SpecificationVersions, SplMint, TokenStandard, UpdateVersionValue, UseMethod, Uses,
 };
 use entities::models::{CompleteAssetDetails, OffChainData, UpdateVersion, Updated};
 use solana_sdk::hash::Hash;
@@ -67,6 +67,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
             mpl_core_unknown_external_plugins: value
                 .mpl_core_unknown_external_plugins
                 .map(Into::into),
+            mint_extensions: value.mint_extensions.map(Into::into),
             rent_epoch: value.rent_epoch.map(Into::into),
             num_minted: value.num_minted.map(Into::into),
             current_size: value.current_size.map(Into::into),
@@ -79,6 +80,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
             edition: value.edition.map(|e| e.into()),
             master_edition: value.master_edition.map(|e| e.into()),
             offchain_data: value.offchain_data.map(|e| e.into()),
+            spl_mint: value.spl_mint.map(|e| e.into()),
         }
     }
 }
@@ -162,6 +164,7 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
             mpl_core_unknown_external_plugins: value
                 .mpl_core_unknown_external_plugins
                 .map(Into::into),
+            mint_extensions: value.mint_extensions.map(Into::into),
             rent_epoch: value.rent_epoch.map(Into::into),
             num_minted: value.num_minted.map(Into::into),
             current_size: value.current_size.map(Into::into),
@@ -203,7 +206,54 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 url: e.url,
                 metadata: e.metadata,
             }),
+            spl_mint: value.spl_mint.map(TryInto::try_into).transpose()?,
         })
+    }
+}
+
+impl TryFrom<SplMint> for entities::models::SplMint {
+    type Error = GrpcError;
+
+    fn try_from(value: SplMint) -> Result<Self, Self::Error> {
+        Ok(Self {
+            pubkey: Pubkey::try_from(value.pubkey).map_err(GrpcError::PubkeyFrom)?,
+            supply: value.supply,
+            decimals: value.decimals,
+            mint_authority: value
+                .mint_authority
+                .map(|mint_authority| {
+                    Pubkey::try_from(mint_authority).map_err(GrpcError::PubkeyFrom)
+                })
+                .transpose()?,
+            freeze_authority: value
+                .freeze_authority
+                .map(|freeze_authority| {
+                    Pubkey::try_from(freeze_authority).map_err(GrpcError::PubkeyFrom)
+                })
+                .transpose()?,
+            token_program: Pubkey::try_from(value.token_program).map_err(GrpcError::PubkeyFrom)?,
+            slot_updated: value.slot_updated,
+            write_version: value.write_version,
+        })
+    }
+}
+
+impl From<entities::models::SplMint> for SplMint {
+    fn from(value: entities::models::SplMint) -> Self {
+        Self {
+            pubkey: value.pubkey.to_bytes().to_vec(),
+            supply: value.supply,
+            decimals: value.decimals,
+            mint_authority: value
+                .mint_authority
+                .map(|mint_authority| mint_authority.to_bytes().to_vec()),
+            freeze_authority: value
+                .freeze_authority
+                .map(|freeze_authority| freeze_authority.to_bytes().to_vec()),
+            token_program: value.token_program.to_bytes().to_vec(),
+            slot_updated: value.slot_updated,
+            write_version: value.write_version,
+        }
     }
 }
 

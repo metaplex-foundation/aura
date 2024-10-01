@@ -2,10 +2,12 @@ use crate::api::dapi::asset;
 use crate::api::dapi::converters::{ConversionError, SearchAssetsQuery};
 use crate::api::dapi::response::{AssetList, NativeBalance};
 use crate::api::dapi::rpc_asset_convertors::asset_list_to_rpc;
-use crate::price_fetcher::SOLANA_CURRENCY;
 use entities::api_req_params::{AssetSorting, SearchAssetsOptions};
+use entities::enums::TokenType;
 use interface::account_balance::AccountBalanceGetter;
 use interface::json::{JsonDownloader, JsonPersister};
+use interface::price_fetcher::TokenPriceFetcher;
+use metrics_utils::ApiMetricsConfig;
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
 use solana_sdk::pubkey::Pubkey;
@@ -17,7 +19,7 @@ use tracing::error;
 use super::asset_preview::populate_previews;
 
 #[allow(clippy::too_many_arguments)]
-pub async fn search_assets(
+pub async fn search_assets<TPF: TokenPriceFetcher>(
     index_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
     rocks_db: Arc<Storage>,
     filter: SearchAssetsQuery,
@@ -34,6 +36,8 @@ pub async fn search_assets(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     account_balance_getter: Arc<impl AccountBalanceGetter>,
     storage_service_base_path: Option<String>,
+    token_price_fetcher: Arc<TPF>,
+    metrics: Arc<ApiMetricsConfig>,
 ) -> Result<AssetList, StorageError> {
     let show_native_balance = options.show_native_balance;
     let (asset_list, native_balance) = tokio::join!(
@@ -52,12 +56,14 @@ pub async fn search_assets(
             json_persister,
             max_json_to_download,
             tasks,
+            token_price_fetcher.clone(),
+            metrics,
         ),
         fetch_native_balance(
             show_native_balance,
             filter.owner_address,
             account_balance_getter,
-            rocks_db.clone(),
+            token_price_fetcher.clone(),
         )
     );
     let native_balance = native_balance.unwrap_or_else(|e| {
@@ -75,7 +81,7 @@ pub async fn search_assets(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn fetch_assets(
+async fn fetch_assets<TPF: TokenPriceFetcher>(
     index_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
     rocks_db: Arc<Storage>,
     filter: SearchAssetsQuery,
@@ -90,6 +96,8 @@ async fn fetch_assets(
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    token_price_fetcher: Arc<TPF>,
+    metrics: Arc<ApiMetricsConfig>,
 ) -> Result<AssetList, StorageError> {
     let filter_result: &Result<postgre_client::model::SearchAssetsFilter, ConversionError> =
         &filter.try_into();
@@ -132,6 +140,19 @@ async fn fetch_assets(
         .iter()
         .filter_map(|k| Pubkey::try_from(k.pubkey.clone()).ok())
         .collect::<Vec<Pubkey>>();
+
+    let owner_address = filter
+        .token_type
+        .clone()
+        .zip(filter.owner_address.clone())
+        .and_then(|(token_type, owner_address)| {
+            if token_type == TokenType::All || token_type == TokenType::Fungible {
+                return Some(Pubkey::try_from(owner_address).ok());
+            }
+            None
+        })
+        .flatten();
+
     //todo: there is an additional round trip to the db here, this should be optimized
     let assets = asset::get_by_ids(
         rocks_db,
@@ -141,10 +162,13 @@ async fn fetch_assets(
         json_persister,
         max_json_to_download,
         tasks,
+        &owner_address,
+        token_price_fetcher,
+        metrics,
     )
     .await?;
     let assets = assets.into_iter().flatten().collect::<Vec<_>>();
-    let (items, errors) = asset_list_to_rpc(assets);
+    let (items, errors) = asset_list_to_rpc(assets, &owner_address);
     let total = items.len() as u32;
 
     let (before, after, cursor, page_res) = if cursor_enabled {
@@ -184,11 +208,11 @@ async fn fetch_assets(
     Ok(resp)
 }
 
-async fn fetch_native_balance(
+async fn fetch_native_balance<TPF: TokenPriceFetcher>(
     show_native_balance: bool,
     owner_address: Option<Vec<u8>>,
     account_balance_getter: Arc<impl AccountBalanceGetter>,
-    rocks_db: Arc<Storage>,
+    token_price_fetcher: Arc<TPF>,
 ) -> Result<Option<NativeBalance>, StorageError> {
     if !show_native_balance {
         return Ok(None);
@@ -203,15 +227,17 @@ async fn fetch_native_balance(
             })?)
             .await
             .map_err(|e| StorageError::Common(format!("Account balance getter: {}", e)))?;
-    let token_price = rocks_db
-        .token_prices
-        .get(SOLANA_CURRENCY.to_string())?
+    let token_price = *token_price_fetcher
+        .fetch_token_prices(&[spl_token::native_mint::id()])
+        .await
+        .map_err(|e| StorageError::Common(e.to_string()))?
+        .get(&spl_token::native_mint::id().to_string())
         .ok_or(StorageError::Common("Not token price".to_string()))?;
 
     Ok(Some(NativeBalance {
         lamports,
-        price_per_sol: token_price.price,
-        total_price: calculate_total_price_usd_by_lamports(lamports, token_price.price),
+        price_per_sol: token_price,
+        total_price: calculate_total_price_usd_by_lamports(lamports, token_price),
     }))
 }
 

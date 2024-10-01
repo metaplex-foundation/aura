@@ -153,6 +153,8 @@ mod tests {
             unknown_external_plugins: None,
             inscription: None,
             spl20: None,
+            mint_extensions: None,
+            token_info: None,
         }
     }
 

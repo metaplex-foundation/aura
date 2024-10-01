@@ -3,6 +3,10 @@
 mod tests {
     use base64::engine::general_purpose;
     use base64::Engine;
+    use blockbuster::programs::token_extensions::extension::{
+        ShadowInterestBearingConfig, ShadowTransferFee, ShadowTransferFeeConfig, UnixTimestamp,
+    };
+    use blockbuster::programs::token_extensions::MintAccountExtensions;
     use std::str::FromStr;
     use std::{collections::HashMap, sync::Arc};
 
@@ -11,6 +15,7 @@ mod tests {
         DisplayOptions, GetAssetProof, GetAssetSignatures, GetCoreFees, GetTokenAccounts, Options,
         SearchAssetsOptions,
     };
+    use entities::enums::TokenType;
     use entities::models::{
         AssetSignature, AssetSignatureKey, BurntMetadataSlot, MetadataInfo, Mint, OffChainData,
         TokenAccount,
@@ -28,7 +33,7 @@ mod tests {
     };
     use interface::account_balance::MockAccountBalanceGetter;
     use interface::json::{MockJsonDownloader, MockJsonPersister};
-    use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig};
+    use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig, SynchronizerMetricsConfig};
     use mockall::predicate;
     use mpl_token_metadata::accounts::MasterEdition;
     use mpl_token_metadata::types::Key;
@@ -39,6 +44,7 @@ mod tests {
     use nft_ingester::api::error::DasApiError;
     use nft_ingester::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater};
+    use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
     use nft_ingester::{
         config::JsonMiddlewareConfig, json_worker::JsonWorker,
         token_updates_processor::TokenAccountsProcessor,
@@ -51,6 +57,9 @@ mod tests {
     use serde_json::{json, Value};
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
+    use spl_pod::optional_keys::OptionalNonZeroPubkey;
+    use spl_pod::primitives::{PodU16, PodU64};
+    use spl_token_2022::extension::interest_bearing_mint::BasisPoints;
     use sqlx::QueryBuilder;
     use testcontainers::clients::Cli;
     use tokio::{sync::Mutex, task::JoinSet};
@@ -68,6 +77,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -79,6 +89,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -491,6 +502,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -502,6 +514,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -636,6 +649,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -647,6 +661,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -759,6 +774,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -770,6 +786,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -790,6 +807,7 @@ mod tests {
             mint: mint_key,
             delegate: None,
             owner: owner_key,
+            extensions: None,
             frozen: false,
             delegated_amount: 0,
             slot_updated: 1,
@@ -804,6 +822,8 @@ mod tests {
             decimals: 0,
             mint_authority: Some(mint_auth_key),
             freeze_authority: None,
+            token_program: Default::default(),
+            extensions: None,
             write_version: 1,
         };
 
@@ -881,6 +901,8 @@ mod tests {
             decimals: 0,
             mint_authority: Some(mint_auth_key),
             freeze_authority: None,
+            token_program: Default::default(),
+            extensions: None,
             write_version: 2,
         };
 
@@ -921,6 +943,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -932,6 +955,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -967,6 +991,7 @@ mod tests {
                 slot_updated: 1,
                 amount: 1,
                 write_version: 1,
+                extensions: None,
             };
 
             let mint_acc = Mint {
@@ -977,6 +1002,8 @@ mod tests {
                 mint_authority: Some(mint_auth_key),
                 freeze_authority: None,
                 write_version: 1,
+                extensions: None,
+                token_program: Default::default(),
             };
 
             let metadata = MetadataInfo {
@@ -1086,6 +1113,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -1097,6 +1125,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1122,6 +1151,7 @@ mod tests {
             slot_updated: 1,
             amount: 1,
             write_version: 1,
+            extensions: None,
         };
 
         let mint_acc = Mint {
@@ -1132,6 +1162,8 @@ mod tests {
             mint_authority: Some(mint_auth_key),
             freeze_authority: None,
             write_version: 1,
+            extensions: None,
+            token_program: Default::default(),
         };
 
         let metadata = MetadataInfo {
@@ -1236,6 +1268,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -1247,6 +1280,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let first_tree = Pubkey::new_unique();
@@ -1452,6 +1486,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -1463,6 +1498,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let token_updates_processor =
@@ -1487,6 +1523,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 1050,
                     write_version: 10,
+                    extensions: None,
                 },
             );
             let pk = Pubkey::new_unique();
@@ -1502,6 +1539,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 1050,
                     write_version: 10,
+                    extensions: None,
                 },
             );
         }
@@ -1520,6 +1558,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 0,
                     write_version: 10,
+                    extensions: None,
                 },
             );
             let pk = Pubkey::new_unique();
@@ -1535,6 +1574,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 0,
                     write_version: 10,
+                    extensions: None,
                 },
             );
         }
@@ -1553,6 +1593,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 140,
                     write_version: 10,
+                    extensions: None,
                 },
             );
         }
@@ -1666,6 +1707,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -1677,6 +1719,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let token_updates_processor =
@@ -1702,6 +1745,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 1050,
                     write_version: 10,
+                    extensions: None,
                 },
             );
             let pk = Pubkey::new_unique();
@@ -1717,6 +1761,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 1050,
                     write_version: 10,
+                    extensions: None,
                 },
             );
             let pk = Pubkey::new_unique();
@@ -1732,6 +1777,7 @@ mod tests {
                     slot_updated: 10,
                     amount: 1050,
                     write_version: 10,
+                    extensions: None,
                 },
             );
         }
@@ -1761,6 +1807,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >,
         owner: Option<String>,
         mint: Option<String>,
@@ -1921,6 +1968,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -1932,6 +1980,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1980,6 +2029,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -1991,6 +2041,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2036,6 +2087,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2047,6 +2099,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2092,6 +2145,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2103,6 +2157,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2193,6 +2248,7 @@ mod tests {
             MockJsonDownloader,
             MockJsonPersister,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2207,6 +2263,7 @@ mod tests {
             },
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
 
         let pb = Pubkey::new_unique();
@@ -2348,6 +2405,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2359,6 +2417,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let asset_id = Pubkey::new_unique();
         let tree_id = Pubkey::new_unique();
@@ -2403,6 +2462,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2414,6 +2474,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let asset_fees_count = 1000;
         let mut asset_ids = Vec::with_capacity(asset_fees_count);
@@ -2489,6 +2550,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2500,6 +2562,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2574,6 +2637,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2585,6 +2649,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(mock_account_balance_getter),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2691,6 +2756,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2702,6 +2768,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2715,7 +2782,7 @@ mod tests {
             options: Some(Options {
                 show_unverified_collections: true,
                 show_collection_metadata: true,
-                show_inscription: false,
+                ..Default::default()
             }),
         };
         let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -2801,8 +2868,7 @@ mod tests {
                 .to_string(),
             options: Some(Options {
                 show_unverified_collections: true,
-                show_collection_metadata: false,
-                show_inscription: false,
+                ..Default::default()
             }),
         };
         let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -2858,6 +2924,7 @@ mod tests {
             JsonWorker,
             JsonWorker,
             MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
@@ -2869,6 +2936,7 @@ mod tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2903,5 +2971,462 @@ mod tests {
         let res: Asset = serde_json::from_value(res).unwrap();
         assert_eq!(res.inscription, None);
         assert_eq!(res.spl20, None);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_token_type() {
+        let cnt = 100;
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
+            env.pg_env.client.clone(),
+            200_000,
+            "".to_string(),
+            Arc::new(SynchronizerMetricsConfig::new()),
+            1,
+            false,
+        );
+        let fungible_token_mint1 = generated_assets.pubkeys[0]; // non-existed token
+        let fungible_token_mint2 =
+            Pubkey::from_str("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m").unwrap(); // MPLX token
+        let mint1 = Mint {
+            pubkey: fungible_token_mint1,
+            supply: 100000,
+            decimals: 2,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 10,
+            write_version: 10,
+            extensions: None,
+        };
+        let mint2 = Mint {
+            pubkey: fungible_token_mint2,
+            supply: 100000,
+            decimals: 2,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 7,
+            write_version: 10,
+            extensions: None,
+        };
+
+        let owner = generated_assets.owners[50].owner.value.unwrap();
+        let fungible_token_account1 = Pubkey::new_unique();
+        let fungible_token_account2 = Pubkey::new_unique();
+        let token_account1 = TokenAccount {
+            pubkey: fungible_token_account1,
+            mint: fungible_token_mint1,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 30000,
+            write_version: 10,
+        };
+        let token_account2 = TokenAccount {
+            pubkey: fungible_token_account2,
+            mint: fungible_token_mint2,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 30000,
+            write_version: 10,
+        };
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        let token_accounts_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        token_accounts_processor
+            .transform_and_save_token_account(
+                &mut batch_storage,
+                fungible_token_account1,
+                &token_account1,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_token_account(
+                &mut batch_storage,
+                fungible_token_account2,
+                &token_account2,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint2)
+            .unwrap();
+        batch_storage.flush().unwrap();
+        env.rocks_env
+            .storage
+            .asset_static_data
+            .put(
+                fungible_token_mint2,
+                AssetStaticDetails {
+                    pubkey: fungible_token_mint2,
+                    specification_asset_class: SpecificationAssetClass::FungibleAsset,
+                    royalty_target_type: RoyaltyTargetType::Single,
+                    created_at: 10,
+                    edition_address: None,
+                },
+            )
+            .unwrap();
+        env.rocks_env
+            .storage
+            .asset_owner_data
+            .put(
+                fungible_token_mint2,
+                AssetOwner {
+                    pubkey: fungible_token_mint2,
+                    owner: Updated::new(10, Some(UpdateVersion::WriteVersion(10)), None),
+                    delegate: Default::default(),
+                    owner_type: Default::default(),
+                    owner_delegate_seq: Default::default(),
+                },
+            )
+            .unwrap();
+
+        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
+        synchronizer
+            .synchronize_asset_indexes(&rx, 0)
+            .await
+            .unwrap();
+
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+            None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
+        );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: Some(SearchAssetsOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
+            token_type: Some(TokenType::Fungible),
+            ..Default::default()
+        };
+        let res = api
+            .search_assets(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // We created 2 fungible tokens^ 1 with real pubkey (MPLX)
+        // so this token contain info about symbol and price
+        // and 1 non-existed token, so response for it do not include such info
+        assert_eq!(res.items.len(), 2);
+        assert_eq!(
+            res.items[0].clone().token_info.unwrap().symbol.unwrap(),
+            "MPLX".to_string()
+        );
+        assert_eq!(
+            res.items[0]
+                .clone()
+                .token_info
+                .unwrap()
+                .associated_token_address
+                .unwrap(),
+            fungible_token_account2.to_string()
+        );
+        assert_eq!(
+            res.items[0]
+                .clone()
+                .token_info
+                .unwrap()
+                .price_info
+                .unwrap()
+                .currency
+                .unwrap(),
+            "USDC".to_string()
+        );
+        assert!(
+            res.items[0]
+                .clone()
+                .token_info
+                .unwrap()
+                .price_info
+                .unwrap()
+                .total_price
+                .unwrap()
+                > 0.0
+        );
+        assert!(
+            res.items[0]
+                .clone()
+                .token_info
+                .unwrap()
+                .price_info
+                .unwrap()
+                .price_per_token
+                .unwrap()
+                > 0.0
+        );
+
+        assert!(res.items[1].clone().token_info.unwrap().symbol.is_none());
+        assert_eq!(
+            res.items[1]
+                .clone()
+                .token_info
+                .unwrap()
+                .associated_token_address
+                .unwrap(),
+            fungible_token_account1.to_string()
+        );
+        assert!(res.items[1]
+            .clone()
+            .token_info
+            .unwrap()
+            .price_info
+            .is_none());
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: Some(SearchAssetsOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
+            token_type: Some(TokenType::NonFungible),
+            ..Default::default()
+        };
+        let res = api
+            .search_assets(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // We have 1 NonFungible token, created in setup::TestEnvironment::create fn
+        assert_eq!(res.items.len(), 1);
+        assert!(res.items[0].token_info.is_none());
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: Some(SearchAssetsOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
+            token_type: Some(TokenType::CompressedNFT),
+            ..Default::default()
+        };
+        let res = api
+            .search_assets(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // Our NonFungible token is not compressed
+        assert!(res.items.is_empty());
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: Some(SearchAssetsOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
+            token_type: Some(TokenType::RegularNFT),
+            ..Default::default()
+        };
+        let res = api
+            .search_assets(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // Our NonFungible token is not compressed
+        assert_eq!(res.items.len(), 1);
+        assert!(res.items[0].token_info.is_none());
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: Some(SearchAssetsOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
+            token_type: Some(TokenType::All),
+            ..Default::default()
+        };
+        let res = api
+            .search_assets(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // Totally we have 3 assets with required owner
+        assert_eq!(res.items.len(), 3);
+        assert!(res.items[0].mint_extensions.is_none());
+        assert!(res.items[1].mint_extensions.is_none());
+        assert!(res.items[2].mint_extensions.is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_mint_extentions() {
+        let cnt = 100;
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+
+        let fungible_token_mint1 = generated_assets.pubkeys[0]; // non-existed token
+        let mint1 = Mint {
+            pubkey: fungible_token_mint1,
+            supply: 100000,
+            decimals: 2,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 10,
+            write_version: 10,
+            extensions: Some(MintAccountExtensions {
+                default_account_state: None,
+                confidential_transfer_mint: None,
+                confidential_transfer_account: None,
+                confidential_transfer_fee_config: None,
+                interest_bearing_config: Some(ShadowInterestBearingConfig {
+                    rate_authority: OptionalNonZeroPubkey::try_from(Some(
+                        Pubkey::from_str("4TM4eaLauigrqjDytC49K2iWKB4kAHsNRCJz48mdriHY").unwrap(),
+                    ))
+                    .unwrap(),
+                    initialization_timestamp: UnixTimestamp::from(1699797096),
+                    pre_update_average_rate: BasisPoints::from(2),
+                    last_update_timestamp: UnixTimestamp::from(1699797096),
+                    current_rate: BasisPoints::from(2),
+                }),
+                transfer_fee_config: Some(ShadowTransferFeeConfig {
+                    transfer_fee_config_authority: OptionalNonZeroPubkey::try_from(Some(
+                        Pubkey::from_str("4TM4eaLauigrqjDytC49K2iWKB4kAHsNRCJz48mdriHY").unwrap(),
+                    ))
+                    .unwrap(),
+                    withdraw_withheld_authority: OptionalNonZeroPubkey::try_from(Some(
+                        Pubkey::from_str("4TM4eaLauigrqjDytC49K2iWKB4kAHsNRCJz48mdriHY").unwrap(),
+                    ))
+                    .unwrap(),
+                    withheld_amount: PodU64::from(0),
+                    older_transfer_fee: ShadowTransferFee {
+                        epoch: PodU64::from(531),
+                        maximum_fee: PodU64::from(1000000000000),
+                        transfer_fee_basis_points: PodU16::from(300),
+                    },
+                    newer_transfer_fee: ShadowTransferFee {
+                        epoch: PodU64::from(531),
+                        maximum_fee: PodU64::from(1000000000000),
+                        transfer_fee_basis_points: PodU16::from(300),
+                    },
+                }),
+                mint_close_authority: None,
+                permanent_delegate: None,
+                metadata_pointer: None,
+                metadata: None,
+                transfer_hook: None,
+                group_pointer: None,
+                token_group: None,
+                group_member_pointer: None,
+                token_group_member: None,
+            }),
+        };
+
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        let token_accounts_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .unwrap();
+        batch_storage.flush().unwrap();
+
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+            None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
+        );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+        let payload = GetAsset {
+            id: fungible_token_mint1.to_string(),
+            options: Some(Options {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
+        };
+        let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: Asset = serde_json::from_value(res).unwrap();
+
+        let reference = json!({
+            "transfer_fee_config": {
+                "withheld_amount": 0,
+                "newer_transfer_fee": {
+                    "epoch": 531,
+                    "maximum_fee": 1000000000000i64,
+                    "transfer_fee_basis_points": 300
+                },
+                "older_transfer_fee": {
+                    "epoch": 531,
+                    "maximum_fee": 1000000000000i64,
+                    "transfer_fee_basis_points": 300
+                },
+                "withdraw_withheld_authority": "4TM4eaLauigrqjDytC49K2iWKB4kAHsNRCJz48mdriHY",
+                "transfer_fee_config_authority": "4TM4eaLauigrqjDytC49K2iWKB4kAHsNRCJz48mdriHY"
+            },
+            "interest_bearing_config": {
+                "current_rate": 2,
+                "rate_authority": "4TM4eaLauigrqjDytC49K2iWKB4kAHsNRCJz48mdriHY",
+                "last_update_timestamp": 1699797096,
+                "pre_update_average_rate": 2,
+                "initialization_timestamp": 1699797096
+            }
+        });
+        assert_eq!(res.mint_extensions.unwrap(), reference)
     }
 }

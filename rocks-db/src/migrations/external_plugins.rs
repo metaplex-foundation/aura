@@ -1,6 +1,6 @@
 use crate::asset::{update_field, update_optional_field};
+use crate::migrations::spl2022::AssetDynamicDetailsWithoutExtentions;
 use crate::migrator::{RocksMigration, SerializationType};
-use crate::AssetDynamicDetails;
 use bincode::{deserialize, serialize};
 use entities::enums::ChainMutability;
 use entities::models::Updated;
@@ -36,7 +36,7 @@ pub struct AssetDynamicDetailsV0 {
     pub plugins_json_version: Option<Updated<u32>>,
 }
 
-impl From<AssetDynamicDetailsV0> for AssetDynamicDetails {
+impl From<AssetDynamicDetailsV0> for AssetDynamicDetailsWithoutExtentions {
     fn from(value: AssetDynamicDetailsV0) -> Self {
         Self {
             pubkey: value.pubkey,
@@ -147,6 +147,6 @@ pub(crate) struct ExternalPluginsMigration;
 impl RocksMigration for ExternalPluginsMigration {
     const VERSION: u64 = 1;
     const SERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
-    type NewDataType = AssetDynamicDetails;
+    type NewDataType = AssetDynamicDetailsWithoutExtentions;
     type OldDataType = AssetDynamicDetailsV0;
 }

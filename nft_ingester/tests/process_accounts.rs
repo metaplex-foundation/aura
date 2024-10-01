@@ -80,6 +80,8 @@ mod tests {
             decimals: 0,
             mint_authority: None,
             freeze_authority: None,
+            token_program: Default::default(),
+            extensions: None,
             write_version: 1,
         };
         let second_mint_to_save = Mint {
@@ -89,6 +91,8 @@ mod tests {
             decimals: 0,
             mint_authority: None,
             freeze_authority: None,
+            token_program: Default::default(),
+            extensions: None,
             write_version: 1,
         };
         let first_token_account_to_save = TokenAccount {
@@ -96,6 +100,7 @@ mod tests {
             mint: first_mint,
             delegate: None,
             owner: first_owner,
+            extensions: None,
             frozen: false,
             delegated_amount: 0,
             slot_updated: 1,
@@ -107,6 +112,7 @@ mod tests {
             mint: second_mint,
             delegate: None,
             owner: second_owner,
+            extensions: None,
             frozen: false,
             delegated_amount: 0,
             slot_updated: 1,

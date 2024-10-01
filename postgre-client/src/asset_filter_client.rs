@@ -3,6 +3,7 @@ use std::str::FromStr;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use entities::api_req_params::Options;
+use entities::enums::TokenType;
 use solana_sdk::{bs58, pubkey::Pubkey};
 use sqlx::{Postgres, QueryBuilder, Row};
 
@@ -169,6 +170,20 @@ fn add_filter_clause<'a>(
         query_builder.push(" INNER JOIN assets_authorities ON assets_v3.ast_authority_fk = assets_authorities.auth_pubkey ");
         group_clause_required = true;
     }
+    if let Some(ref token_type) = filter.token_type {
+        if token_type == &TokenType::All {
+            query_builder.push(
+                " LEFT JOIN fungible_tokens ON assets_v3.ast_pubkey = fungible_tokens.fbt_asset ",
+            );
+            group_clause_required = true;
+        }
+        if token_type == &TokenType::Fungible {
+            query_builder.push(
+                " INNER JOIN fungible_tokens ON assets_v3.ast_pubkey = fungible_tokens.fbt_asset ",
+            );
+            group_clause_required = true;
+        }
+    }
 
     // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
     query_builder.push(" WHERE TRUE ");
@@ -183,8 +198,40 @@ fn add_filter_clause<'a>(
     }
 
     if let Some(owner_address) = &filter.owner_address {
-        query_builder.push(" AND assets_v3.ast_owner = ");
-        query_builder.push_bind(owner_address);
+        if let Some(ref token_type) = filter.token_type {
+            match *token_type {
+                TokenType::Fungible => {
+                    query_builder.push(" AND fungible_tokens.fbt_owner = ");
+                    query_builder.push_bind(owner_address);
+                }
+                TokenType::NonFungible => {
+                    query_builder.push(" AND assets_v3.ast_owner = ");
+                    query_builder.push_bind(owner_address);
+                }
+                TokenType::RegularNFT => {
+                    query_builder.push(" AND assets_v3.ast_owner = ");
+                    query_builder.push_bind(owner_address);
+                    query_builder.push(" AND assets_v3.ast_is_compressed = ");
+                    query_builder.push_bind(false);
+                }
+                TokenType::CompressedNFT => {
+                    query_builder.push(" AND assets_v3.ast_owner = ");
+                    query_builder.push_bind(owner_address);
+                    query_builder.push(" AND assets_v3.ast_is_compressed = ");
+                    query_builder.push_bind(true);
+                }
+                TokenType::All => {
+                    query_builder.push(" AND (assets_v3.ast_owner = ");
+                    query_builder.push_bind(owner_address);
+                    query_builder.push(" OR fungible_tokens.fbt_owner = ");
+                    query_builder.push_bind(owner_address);
+                    query_builder.push(" ) ");
+                }
+            }
+        } else {
+            query_builder.push(" AND assets_v3.ast_owner = ");
+            query_builder.push_bind(owner_address);
+        }
     }
 
     if let Some(owner_type) = &filter.owner_type {

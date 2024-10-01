@@ -4,7 +4,7 @@ use crate::Result;
 use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
 use entities::enums::TokenMetadataEdition;
 use entities::models::{
-    InscriptionDataInfo, InscriptionInfo, TokenAccount, TokenAccountMintOwnerIdxKey,
+    InscriptionDataInfo, InscriptionInfo, Mint, TokenAccount, TokenAccountMintOwnerIdxKey,
     TokenAccountOwnerIdxKey,
 };
 use metrics_utils::IngesterMetricsConfig;
@@ -128,6 +128,16 @@ impl BatchSaveStorage {
             "metadata_mint_map_merge_with_batch"
         )
     }
+    pub fn store_spl_mint(&mut self, mint: &Mint) -> Result<()> {
+        let res =
+            self.storage
+                .spl_mints
+                .merge_with_batch(&mut self.batch, mint.pubkey, &mint.into());
+
+        result_to_metrics(self.metrics.clone(), &res, "spl_mints_merge_with_batch");
+        res
+    }
+
     pub fn store_edition(&mut self, key: Pubkey, edition: &TokenMetadataEdition) -> Result<()> {
         self.storage
             .token_metadata_edition_cbor

@@ -3,13 +3,16 @@
 mod tests {
     use std::sync::Arc;
 
+    use entities::models::TokenAccount;
     use entities::{api_req_params::Options, models::UrlWithStatus};
-    use metrics_utils::SynchronizerMetricsConfig;
+    use metrics_utils::{IngesterMetricsConfig, SynchronizerMetricsConfig};
     use nft_ingester::index_syncronizer::Synchronizer;
+    use nft_ingester::token_updates_processor::TokenAccountsProcessor;
     use postgre_client::{
         model::{AssetSortBy, AssetSortDirection, AssetSorting, SearchAssetsFilter},
         storage_traits::AssetPubkeyFilteredFetcher,
     };
+    use rocks_db::batch_savers::BatchSaveStorage;
     use setup::rocks::*;
     use solana_program::pubkey::Pubkey;
     use tempfile::TempDir;
@@ -22,6 +25,31 @@ mod tests {
         let number_of_assets = 1000;
         let generated_assets = env.generate_assets(number_of_assets, 25).await;
         let storage = env.storage;
+
+        let mut batch_storage =
+            BatchSaveStorage::new(storage.clone(), 10, Arc::new(IngesterMetricsConfig::new()));
+        let token_accounts_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        for i in 0..number_of_assets {
+            let key = Pubkey::new_unique();
+            let token_account = TokenAccount {
+                pubkey: key,
+                mint: generated_assets.pubkeys[i],
+                delegate: None,
+                owner: generated_assets.owners[i].owner.value.unwrap(),
+                extensions: None,
+                frozen: false,
+                delegated_amount: 0,
+                slot_updated: 10,
+                amount: 1000,
+                write_version: 10,
+            };
+            token_accounts_processor
+                .transform_and_save_token_account(&mut batch_storage, key, &token_account)
+                .unwrap();
+        }
+        batch_storage.flush().unwrap();
+
         let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
         let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
         let temp_dir_path = temp_dir.path();
@@ -52,6 +80,10 @@ mod tests {
         );
         assert_eq!(
             pg_env.count_rows_in_authorities().await.unwrap(),
+            number_of_assets as i64
+        );
+        assert_eq!(
+            pg_env.count_rows_in_fungible_tokens().await.unwrap(),
             number_of_assets as i64
         );
         let metadata_key_set = client.get_existing_metadata_keys().await.unwrap();
@@ -98,6 +130,7 @@ mod mtg_441_tests {
     use nft_ingester::api::DasApi;
     use nft_ingester::config::JsonMiddlewareConfig;
     use nft_ingester::json_worker::JsonWorker;
+    use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
     use serde_json::Value;
     use setup::rocks::RocksTestEnvironmentSetup;
     use setup::TestEnvironment;
@@ -111,8 +144,20 @@ mod mtg_441_tests {
 
     fn get_das_api(
         env: &TestEnvironment,
-    ) -> DasApi<MaybeProofChecker, JsonWorker, JsonWorker, MockAccountBalanceGetter> {
-        DasApi::<MaybeProofChecker, JsonWorker, JsonWorker, MockAccountBalanceGetter>::new(
+    ) -> DasApi<
+        MaybeProofChecker,
+        JsonWorker,
+        JsonWorker,
+        MockAccountBalanceGetter,
+        RaydiumTokenPriceFetcher,
+    > {
+        DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
+        >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
@@ -123,6 +168,7 @@ mod mtg_441_tests {
             JsonMiddlewareConfig::default(),
             Arc::new(MockAccountBalanceGetter::new()),
             None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
         )
     }
 

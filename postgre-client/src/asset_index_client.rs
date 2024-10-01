@@ -15,12 +15,13 @@ use crate::{
     DROP_ACTION, INSERT_TASK_PARAMETERS_COUNT, POSTGRES_PARAMETERS_COUNT_LIMIT, SELECT_ACTION,
     SQL_COMPONENT, UPDATE_ACTION,
 };
-use entities::models::{AssetIndex, Creator, UrlWithStatus};
+use entities::models::{AssetIndex, Creator, FungibleToken, UrlWithStatus};
 
 pub const INSERT_ASSET_PARAMETERS_COUNT: usize = 19;
 pub const DELETE_ASSET_CREATOR_PARAMETERS_COUNT: usize = 2;
 pub const INSERT_ASSET_CREATOR_PARAMETERS_COUNT: usize = 4;
 pub const INSERT_AUTHORITY_PARAMETERS_COUNT: usize = 3;
+pub const INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT: usize = 2;
 
 impl PgClient {
     pub(crate) async fn fetch_last_synced_id_impl(
@@ -69,6 +70,17 @@ impl PgClient {
         {
             self.insert_assets(transaction, chunk, table_names.assets_table.as_str())
                 .await?;
+        }
+        for chunk in updated_components
+            .fungible_tokens
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT)
+        {
+            self.insert_fungible_tokens(
+                transaction,
+                chunk,
+                table_names.fungible_tokens_table.as_str(),
+            )
+            .await?;
         }
         let mut existing_creators: Vec<(Pubkey, Creator)> = vec![];
         for chunk in updated_components
@@ -126,12 +138,14 @@ pub(crate) struct AssetComponenents {
     pub all_creators: Vec<(Pubkey, Creator, i64)>,
     pub updated_keys: Vec<Vec<u8>>,
     pub authorities: Vec<Authority>,
+    pub fungible_tokens: Vec<FungibleToken>,
 }
 pub(crate) struct TableNames {
     pub metadata_table: String,
     pub assets_table: String,
     pub creators_table: String,
     pub authorities_table: String,
+    pub fungible_tokens_table: String,
 }
 
 pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> AssetComponenents {
@@ -199,6 +213,10 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     let mut authorities = authorities.into_values().collect::<Vec<_>>();
     authorities.sort_by(|a, b| a.key.cmp(&b.key));
     AssetComponenents {
+        fungible_tokens: asset_indexes
+            .iter()
+            .flat_map(|i| i.fungible_tokens.clone())
+            .collect(),
         metadata_urls,
         asset_indexes,
         all_creators,
@@ -225,6 +243,7 @@ impl AssetIndexStorage for PgClient {
             assets_table: "assets_v3".to_string(),
             creators_table: "asset_creators_v3".to_string(),
             authorities_table: "assets_authorities".to_string(),
+            fungible_tokens_table: "fungible_tokens".to_string(),
         };
         self.upsert_batched(&mut transaction, table_names, updated_components)
             .await?;
@@ -264,6 +283,16 @@ impl AssetIndexStorage for PgClient {
                 base_path
             )));
         };
+        let Some(fungible_tokens_path) = base_path
+            .join("fungible_tokens.csv")
+            .to_str()
+            .map(str::to_owned)
+        else {
+            return Err(IndexDbError::BadArgument(format!(
+                "invalid path '{:?}'",
+                base_path
+            )));
+        };
         let mut transaction = self.start_transaction().await?;
 
         self.copy_all(
@@ -271,6 +300,7 @@ impl AssetIndexStorage for PgClient {
             creators_path,
             assets_path,
             assets_authorities_path,
+            fungible_tokens_path,
             &mut transaction,
         )
         .await?;
@@ -544,6 +574,39 @@ impl PgClient {
         query_builder.push(".auth_slot_updated <= EXCLUDED.auth_slot_updated OR ");
         query_builder.push(table);
         query_builder.push(".auth_slot_updated IS NULL;");
+
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            BATCH_UPSERT_ACTION,
+            table,
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn insert_fungible_tokens(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        fungible_tokens: &[FungibleToken],
+        table: &str,
+    ) -> Result<(), IndexDbError> {
+        if fungible_tokens.is_empty() {
+            return Ok(());
+        }
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
+        query_builder.push(table);
+        query_builder.push(
+            " (
+            fbt_owner,
+            fbt_asset) ",
+        );
+        query_builder.push_values(fungible_tokens, |mut builder, fungible_token| {
+            builder
+                .push_bind(fungible_token.owner.to_bytes().to_vec())
+                .push_bind(fungible_token.asset.to_bytes().to_vec());
+        });
+        query_builder.push(" ON CONFLICT (fbt_owner, fbt_asset) DO NOTHING;");
 
         self.execute_query_with_metrics(
             transaction,
