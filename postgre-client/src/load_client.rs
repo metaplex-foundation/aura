@@ -274,7 +274,7 @@ impl PgClient {
             (
                 "fungible_tokens",
                 fungible_tokens_copy_path,
-                "fbt_owner, fbt_asset",
+                "fbt_owner, fbt_asset, fbt_balance, fbt_slot_updated",
             ),
         ] {
             self.copy_table_from(transaction, path, table, columns).await?;

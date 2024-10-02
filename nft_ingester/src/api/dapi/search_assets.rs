@@ -132,7 +132,7 @@ async fn fetch_assets<TPF: TokenPriceFetcher>(
             page,
             before,
             after,
-            &(&options).into(),
+            &options,
         )
         .await
         .map_err(|e| StorageError::Common(e.to_string()))?;
@@ -187,7 +187,7 @@ async fn fetch_assets<TPF: TokenPriceFetcher>(
     if options.show_grand_total {
         grand_total = Some(
             index_client
-                .get_grand_total(filter, &(&options).into())
+                .get_grand_total(filter, &options)
                 .await
                 .map_err(|e| StorageError::Common(e.to_string()))?,
         )

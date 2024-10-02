@@ -3026,7 +3026,7 @@ mod tests {
             frozen: false,
             delegated_amount: 0,
             slot_updated: 10,
-            amount: 30000,
+            amount: 0,
             write_version: 10,
         };
         let token_account2 = TokenAccount {
@@ -3130,6 +3130,7 @@ mod tests {
             page: Some(1),
             owner_address: Some(owner.to_string()),
             options: Some(SearchAssetsOptions {
+                show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
             }),
@@ -3278,6 +3279,7 @@ mod tests {
             owner_address: Some(owner.to_string()),
             options: Some(SearchAssetsOptions {
                 show_unverified_collections: true,
+                show_zero_balance: true,
                 ..Default::default()
             }),
             token_type: Some(TokenType::All),
@@ -3294,6 +3296,27 @@ mod tests {
         assert!(res.items[0].mint_extensions.is_none());
         assert!(res.items[1].mint_extensions.is_none());
         assert!(res.items[2].mint_extensions.is_none());
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: Some(SearchAssetsOptions {
+                show_zero_balance: false,
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
+            token_type: Some(TokenType::Fungible),
+            ..Default::default()
+        };
+        let res = api
+            .search_assets(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // We have only 1 token account with non-zero balance
+        assert_eq!(res.items.len(), 1);
     }
 
     #[tokio::test(flavor = "multi_thread")]

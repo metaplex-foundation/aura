@@ -2,7 +2,7 @@ use crate::error::IndexDbError;
 use crate::model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter};
 use crate::temp_index_client::TempClient;
 use async_trait::async_trait;
-use entities::api_req_params::Options;
+use entities::api_req_params::SearchAssetsOptions;
 use entities::models::AssetIndex;
 use mockall::{automock, mock};
 
@@ -55,12 +55,12 @@ pub trait AssetPubkeyFilteredFetcher {
         page: Option<u64>,
         before: Option<String>,
         after: Option<String>,
-        options: &Options,
+        options: &SearchAssetsOptions,
     ) -> Result<Vec<AssetSortedIndex>, IndexDbError>;
     async fn get_grand_total(
         &self,
         filter: &SearchAssetsFilter,
-        options: &Options,
+        options: &SearchAssetsOptions,
     ) -> Result<u32, IndexDbError>;
 }
 

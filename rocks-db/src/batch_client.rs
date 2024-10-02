@@ -268,6 +268,8 @@ impl AssetIndexReader for Storage {
                 .map(|ta| FungibleToken {
                     owner: ta.owner,
                     asset: ta.mint,
+                    balance: ta.amount,
+                    slot_updated: ta.slot_updated,
                 })
                 .collect::<Vec<_>>();
 
