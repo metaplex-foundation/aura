@@ -50,10 +50,14 @@ pub enum AssetSortDirection {
     Desc,
 }
 
+const fn default_show_unverified_collections() -> bool {
+    true
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Options {
-    #[serde(default)]
+    #[serde(default = "default_show_unverified_collections")]
     pub show_unverified_collections: bool,
     #[serde(default)]
     pub show_collection_metadata: bool,
