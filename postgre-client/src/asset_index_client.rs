@@ -599,14 +599,27 @@ impl PgClient {
         query_builder.push(
             " (
             fbt_owner,
-            fbt_asset) ",
+            fbt_asset,
+            fbt_balance,
+            fbt_slot_updated
+            ) ",
         );
         query_builder.push_values(fungible_tokens, |mut builder, fungible_token| {
             builder
                 .push_bind(fungible_token.owner.to_bytes().to_vec())
-                .push_bind(fungible_token.asset.to_bytes().to_vec());
+                .push_bind(fungible_token.asset.to_bytes().to_vec())
+                .push_bind(fungible_token.balance)
+                .push_bind(fungible_token.slot_updated);
         });
-        query_builder.push(" ON CONFLICT (fbt_owner, fbt_asset) DO NOTHING;");
+        query_builder.push(
+            " ON CONFLICT (fbt_owner, fbt_asset) DO UPDATE SET
+            fbt_balance = EXCLUDED.fbt_balance, fbt_slot_updated = EXCLUDED.fbt_slot_updated
+            WHERE ",
+        );
+        query_builder.push(table);
+        query_builder.push(".fbt_slot_updated <= EXCLUDED.fbt_slot_updated OR ");
+        query_builder.push(table);
+        query_builder.push(".fbt_slot_updated IS NULL;");
 
         self.execute_query_with_metrics(
             transaction,

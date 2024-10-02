@@ -276,7 +276,7 @@ impl Storage {
         tx_creators_cloned: tokio::sync::mpsc::Sender<(String, String, bool, i64)>,
         tx_assets_cloned: tokio::sync::mpsc::Sender<AssetRecord>,
         tx_authority_cloned: tokio::sync::mpsc::Sender<(String, String, i64)>,
-        tx_fungible_tokens_cloned: tokio::sync::mpsc::Sender<(String, String)>,
+        tx_fungible_tokens_cloned: tokio::sync::mpsc::Sender<(String, String, i64, i64)>,
         metadata_key_set: Arc<Mutex<HashSet<Vec<u8>>>>,
         authorities_key_set: Arc<Mutex<HashSet<Pubkey>>>,
         fungible_tokens_key_set: Arc<Mutex<HashSet<(Pubkey, Pubkey)>>>,
@@ -400,6 +400,8 @@ impl Storage {
                                 .send((
                                     Self::encode(fungible_token.asset),
                                     Self::encode(fungible_token.owner),
+                                    fungible_token.balance,
+                                    fungible_token.slot_updated,
                                 ))
                                 .await
                             {

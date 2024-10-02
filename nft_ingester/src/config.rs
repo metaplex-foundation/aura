@@ -493,13 +493,14 @@ mod tests {
         std::env::set_var("INGESTER_TCP_CONFIG", "{}");
         std::env::set_var("INGESTER_BIG_TABLE_CONFIG", "{}");
         std::env::set_var("INGESTER_SLOT_START_FROM", "0");
+        std::env::set_var("INGESTER_RPC_HOST", "f");
         let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
         assert_eq!(
             config,
             BackfillerConfig {
                 backfiller_source_mode: BackfillerSourceMode::RPC,
                 big_table_config: BigTableConfig(figment::value::Dict::new()),
-                rpc_host: "".to_string(),
+                rpc_host: "f".to_string(),
                 slot_until: None,
                 slot_start_from: 0,
                 backfiller_mode: BackfillerMode::IngestDirectly,
@@ -514,6 +515,7 @@ mod tests {
         std::env::remove_var("INGESTER_TCP_CONFIG");
         std::env::remove_var("INGESTER_BIG_TABLE_CONFIG");
         std::env::remove_var("INGESTER_SLOT_START_FROM");
+        std::env::remove_var("INGESTER_RPC_HOST");
     }
 
     #[test]
@@ -524,13 +526,14 @@ mod tests {
         std::env::set_var("INGESTER_BIG_TABLE_CONFIG", "{}");
         std::env::set_var("INGESTER_SLOT_START_FROM", "0");
         std::env::set_var("INGESTER_BACKFILLER_MODE", "Persist");
+        std::env::set_var("INGESTER_RPC_HOST", "f");
         let config: BackfillerConfig = setup_config(INGESTER_CONFIG_PREFIX);
         assert_eq!(
             config,
             BackfillerConfig {
                 backfiller_source_mode: BackfillerSourceMode::RPC,
                 big_table_config: BigTableConfig(figment::value::Dict::new()),
-                rpc_host: "".to_string(),
+                rpc_host: "f".to_string(),
                 slot_until: None,
                 slot_start_from: 0,
                 backfiller_mode: BackfillerMode::Persist,
@@ -546,5 +549,6 @@ mod tests {
         std::env::remove_var("INGESTER_BIG_TABLE_CONFIG");
         std::env::remove_var("INGESTER_SLOT_START_FROM");
         std::env::remove_var("INGESTER_BACKFILLER_MODE");
+        std::env::remove_var("INGESTER_RPC_HOST");
     }
 }

@@ -72,7 +72,7 @@ pub struct Options {
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SearchAssetsOptions {
-    #[serde(default)]
+    #[serde(default = "default_show_unverified_collections")]
     pub show_unverified_collections: bool,
     #[serde(default)]
     pub show_grand_total: bool,
@@ -82,6 +82,8 @@ pub struct SearchAssetsOptions {
     pub show_collection_metadata: bool,
     #[serde(default)]
     pub show_inscription: bool,
+    #[serde(default)]
+    pub show_zero_balance: bool,
 }
 
 impl From<&SearchAssetsOptions> for Options {

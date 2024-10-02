@@ -80,6 +80,8 @@ pub struct AssetIndex {
 pub struct FungibleToken {
     pub owner: Pubkey,
     pub asset: Pubkey,
+    pub balance: i64,
+    pub slot_updated: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

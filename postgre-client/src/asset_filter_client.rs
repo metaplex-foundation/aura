@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
-use entities::api_req_params::Options;
+use entities::api_req_params::SearchAssetsOptions;
 use entities::enums::TokenType;
 use solana_sdk::{bs58, pubkey::Pubkey};
 use sqlx::{Execute, Postgres, QueryBuilder, Row};
@@ -33,7 +33,7 @@ impl PgClient {
         page: Option<u64>,
         before: Option<String>,
         after: Option<String>,
-        options: &'a Options,
+        options: &'a SearchAssetsOptions,
     ) -> Result<(QueryBuilder<'a, Postgres>, bool), IndexDbError> {
         let mut query_builder = QueryBuilder::new(
             "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 ",
@@ -134,7 +134,7 @@ impl PgClient {
     // Querying total count of records for such request
     pub fn build_grand_total_query<'a>(
         filter: &'a SearchAssetsFilter,
-        options: &'a Options,
+        options: &'a SearchAssetsOptions,
     ) -> Result<QueryBuilder<'a, Postgres>, IndexDbError> {
         let mut query_builder = QueryBuilder::new("SELECT count(*) FROM assets_v3 ");
         let group_clause_required = add_filter_clause(&mut query_builder, filter, options);
@@ -151,7 +151,7 @@ impl PgClient {
 fn add_filter_clause<'a>(
     query_builder: &mut QueryBuilder<'a, Postgres>,
     filter: &'a SearchAssetsFilter,
-    options: &'a Options,
+    options: &'a SearchAssetsOptions,
 ) -> bool {
     // todo: remove the inner join with tasks and only perform it if the metadata_url_id is present in the filter
     let mut group_clause_required = false;
@@ -204,6 +204,10 @@ fn add_filter_clause<'a>(
                 TokenType::Fungible => {
                     query_builder.push(" AND fungible_tokens.fbt_owner = ");
                     query_builder.push_bind(owner_address);
+                    if !options.show_zero_balance {
+                        query_builder.push(" AND fungible_tokens.fbt_balance > ");
+                        query_builder.push_bind(0i64);
+                    }
                 }
                 TokenType::NonFungible => {
                     query_builder.push(" AND assets_v3.ast_owner = ");
@@ -224,8 +228,13 @@ fn add_filter_clause<'a>(
                 TokenType::All => {
                     query_builder.push(" AND (assets_v3.ast_owner = ");
                     query_builder.push_bind(owner_address);
-                    query_builder.push(" OR fungible_tokens.fbt_owner = ");
+                    query_builder.push(" OR (fungible_tokens.fbt_owner = ");
                     query_builder.push_bind(owner_address);
+                    if !options.show_zero_balance {
+                        query_builder.push(" AND fungible_tokens.fbt_balance > ");
+                        query_builder.push_bind(0i64);
+                    }
+                    query_builder.push(" ) ");
                     query_builder.push(" ) ");
                 }
             }
@@ -379,7 +388,7 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         page: Option<u64>,
         before: Option<String>,
         after: Option<String>,
-        options: &Options,
+        options: &SearchAssetsOptions,
     ) -> Result<Vec<AssetSortedIndex>, IndexDbError> {
         let (mut query_builder, order_reversed) =
             Self::build_search_query(filter, order, limit, page, before, after, options)?;
@@ -409,7 +418,7 @@ impl AssetPubkeyFilteredFetcher for PgClient {
     async fn get_grand_total(
         &self,
         filter: &SearchAssetsFilter,
-        options: &Options,
+        options: &SearchAssetsOptions,
     ) -> Result<u32, IndexDbError> {
         let mut query_builder = Self::build_grand_total_query(filter, options)?;
         let query = query_builder.build();
