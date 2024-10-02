@@ -118,6 +118,8 @@ impl PgClient {
             "assets_v3_supply",
             "assets_v3_slot_updated",
             "fungible_tokens_fbt_asset_idx",
+            "fungible_tokens_fbt_balance_idx",
+            "fungible_tokens_fbt_slot_updated_idx",
         ] {
             self.drop_index(transaction, index).await?;
         }
@@ -184,6 +186,8 @@ impl PgClient {
                 ("assets_v3_supply", "assets_v3(ast_supply) WHERE ast_supply IS NOT NULL"),
                 ("assets_v3_slot_updated", "assets_v3(ast_slot_updated)"),
                 ("fungible_tokens_fbt_asset_idx", "fungible_tokens(fbt_asset)"),
+                ("fungible_tokens_fbt_balance_idx", "fungible_tokens(fbt_balance) WHERE fbt_balance > 0"),
+                ("fungible_tokens_fbt_slot_updated_idx", "fungible_tokens(fbt_slot_updated)"),
             ]{
                 self.create_index(transaction, index, on_query_string).await?;
             }

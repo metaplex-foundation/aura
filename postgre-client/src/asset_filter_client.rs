@@ -228,13 +228,14 @@ fn add_filter_clause<'a>(
                 TokenType::All => {
                     query_builder.push(" AND (assets_v3.ast_owner = ");
                     query_builder.push_bind(owner_address);
-                    query_builder.push(" OR fungible_tokens.fbt_owner = ");
+                    query_builder.push(" OR (fungible_tokens.fbt_owner = ");
                     query_builder.push_bind(owner_address);
-                    query_builder.push(" ) ");
                     if !options.show_zero_balance {
                         query_builder.push(" AND fungible_tokens.fbt_balance > ");
                         query_builder.push_bind(0i64);
                     }
+                    query_builder.push(" ) ");
+                    query_builder.push(" ) ");
                 }
             }
         } else {
