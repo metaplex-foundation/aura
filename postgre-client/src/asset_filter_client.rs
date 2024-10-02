@@ -5,7 +5,8 @@ use base64::{engine::general_purpose, Engine as _};
 use entities::api_req_params::Options;
 use entities::enums::TokenType;
 use solana_sdk::{bs58, pubkey::Pubkey};
-use sqlx::{Postgres, QueryBuilder, Row};
+use sqlx::{Execute, Postgres, QueryBuilder, Row};
+use tracing::log::debug;
 
 use crate::{
     error::IndexDbError,
@@ -383,6 +384,7 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         let (mut query_builder, order_reversed) =
             Self::build_search_query(filter, order, limit, page, before, after, options)?;
         let query = query_builder.build_query_as::<AssetRawResponse>();
+        debug!("SEARCH QUERY: {}", &query.sql());
         let start_time = chrono::Utc::now();
         let result = query
             .fetch_all(&self.pool)
