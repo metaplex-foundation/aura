@@ -21,8 +21,8 @@ use dapi::get_core_fees::get_core_fees;
 use dapi::get_token_accounts::get_token_accounts;
 use entities::api_req_params::{
     GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
-    GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetCoreFees,
-    GetGrouping, GetTokenAccounts, Pagination, SearchAssets, SearchAssetsOptions,
+    GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner,
+    GetByMethodsOptions, GetCoreFees, GetGrouping, GetTokenAccounts, Pagination, SearchAssets,
 };
 use entities::enums::TokenType;
 use interface::account_balance::AccountBalanceGetter;
@@ -116,7 +116,7 @@ where
     }
 
     fn validate_options(
-        options: &SearchAssetsOptions,
+        options: &GetByMethodsOptions,
         query: &SearchAssetsQuery,
     ) -> Result<(), DasApiError> {
         if options.show_native_balance && query.owner_address.is_none() {

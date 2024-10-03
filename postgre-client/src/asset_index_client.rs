@@ -212,11 +212,21 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     }
     let mut authorities = authorities.into_values().collect::<Vec<_>>();
     authorities.sort_by(|a, b| a.key.cmp(&b.key));
+
+    // collect HashMap in order to remove duplicates
+    let fungible_tokens = asset_indexes
+        .iter()
+        .flat_map(|i| {
+            i.fungible_tokens.iter().map(|fungible_token| {
+                (
+                    (fungible_token.owner, fungible_token.asset),
+                    *fungible_token,
+                )
+            })
+        })
+        .collect::<HashMap<_, _>>();
     AssetComponenents {
-        fungible_tokens: asset_indexes
-            .iter()
-            .flat_map(|i| i.fungible_tokens.clone())
-            .collect(),
+        fungible_tokens: fungible_tokens.into_values().collect(),
         metadata_urls,
         asset_indexes,
         all_creators,

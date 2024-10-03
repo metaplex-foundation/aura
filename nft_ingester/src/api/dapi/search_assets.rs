@@ -2,7 +2,7 @@ use crate::api::dapi::asset;
 use crate::api::dapi::converters::{ConversionError, SearchAssetsQuery};
 use crate::api::dapi::response::{AssetList, NativeBalance};
 use crate::api::dapi::rpc_asset_convertors::asset_list_to_rpc;
-use entities::api_req_params::{AssetSorting, SearchAssetsOptions};
+use entities::api_req_params::{AssetSorting, GetByMethodsOptions};
 use entities::enums::TokenType;
 use interface::account_balance::AccountBalanceGetter;
 use interface::json::{JsonDownloader, JsonPersister};
@@ -22,14 +22,14 @@ use super::asset_preview::populate_previews;
 pub async fn search_assets<TPF: TokenPriceFetcher>(
     index_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
     rocks_db: Arc<Storage>,
-    filter: SearchAssetsQuery,
+    mut filter: SearchAssetsQuery,
     sort_by: AssetSorting,
     limit: u64,
     page: Option<u64>,
     before: Option<String>,
     after: Option<String>,
     cursor: Option<String>,
-    options: SearchAssetsOptions,
+    options: GetByMethodsOptions,
     json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
@@ -39,6 +39,9 @@ pub async fn search_assets<TPF: TokenPriceFetcher>(
     token_price_fetcher: Arc<TPF>,
     metrics: Arc<ApiMetricsConfig>,
 ) -> Result<AssetList, StorageError> {
+    if options.show_fungible {
+        filter.token_type = Some(TokenType::All)
+    }
     let show_native_balance = options.show_native_balance;
     let (asset_list, native_balance) = tokio::join!(
         fetch_assets(
@@ -91,7 +94,7 @@ async fn fetch_assets<TPF: TokenPriceFetcher>(
     before: Option<String>,
     after: Option<String>,
     cursor: Option<String>,
-    options: SearchAssetsOptions,
+    options: GetByMethodsOptions,
     json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
     json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
     max_json_to_download: usize,
@@ -157,7 +160,7 @@ async fn fetch_assets<TPF: TokenPriceFetcher>(
     let assets = asset::get_by_ids(
         rocks_db,
         asset_ids,
-        (&options).into(),
+        options.clone().into(),
         json_downloader,
         json_persister,
         max_json_to_download,

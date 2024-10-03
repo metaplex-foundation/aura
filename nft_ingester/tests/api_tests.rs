@@ -12,8 +12,8 @@ mod tests {
 
     use blockbuster::token_metadata::accounts::Metadata;
     use entities::api_req_params::{
-        DisplayOptions, GetAssetProof, GetAssetSignatures, GetCoreFees, GetTokenAccounts, Options,
-        SearchAssetsOptions,
+        DisplayOptions, GetAssetProof, GetAssetSignatures, GetByMethodsOptions, GetCoreFees,
+        GetTokenAccounts, Options, SearchAssetsOptions,
     };
     use entities::enums::TokenType;
     use entities::models::{
@@ -1998,7 +1998,7 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
-            options: Some(SearchAssetsOptions {
+            options: Some(GetByMethodsOptions {
                 show_unverified_collections: true,
                 ..Default::default()
             }),
@@ -2056,7 +2056,7 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
-            options: Some(SearchAssetsOptions {
+            options: Some(GetByMethodsOptions {
                 show_unverified_collections: true,
                 ..Default::default()
             }),
@@ -2114,7 +2114,7 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
-            options: Some(SearchAssetsOptions {
+            options: Some(GetByMethodsOptions {
                 show_unverified_collections: true,
                 ..Default::default()
             }),
@@ -2171,7 +2171,7 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
-            options: Some(SearchAssetsOptions {
+            options: Some(GetByMethodsOptions {
                 show_unverified_collections: true,
                 ..Default::default()
             }),
