@@ -21,7 +21,7 @@ pub const INSERT_ASSET_PARAMETERS_COUNT: usize = 19;
 pub const DELETE_ASSET_CREATOR_PARAMETERS_COUNT: usize = 2;
 pub const INSERT_ASSET_CREATOR_PARAMETERS_COUNT: usize = 4;
 pub const INSERT_AUTHORITY_PARAMETERS_COUNT: usize = 3;
-pub const INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT: usize = 2;
+pub const INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT: usize = 4;
 
 impl PgClient {
     pub(crate) async fn fetch_last_synced_id_impl(
