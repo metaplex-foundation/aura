@@ -86,6 +86,25 @@ pub struct SearchAssetsOptions {
     pub show_zero_balance: bool,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetByMethodsOptions {
+    #[serde(default = "default_show_unverified_collections")]
+    pub show_unverified_collections: bool,
+    #[serde(default)]
+    pub show_grand_total: bool,
+    #[serde(default)]
+    pub show_native_balance: bool,
+    #[serde(default)]
+    pub show_collection_metadata: bool,
+    #[serde(default)]
+    pub show_inscription: bool,
+    #[serde(default)]
+    pub show_zero_balance: bool,
+    #[serde(default)]
+    pub show_fungible: bool,
+}
+
 impl From<&SearchAssetsOptions> for Options {
     fn from(value: &SearchAssetsOptions) -> Self {
         Self {
@@ -116,7 +135,7 @@ pub struct GetAssetsByGroup {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub options: Option<SearchAssetsOptions>,
+    pub options: Option<GetByMethodsOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -129,7 +148,7 @@ pub struct GetAssetsByOwner {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub options: Option<SearchAssetsOptions>,
+    pub options: Option<GetByMethodsOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -169,7 +188,7 @@ pub struct GetAssetsByCreator {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub options: Option<SearchAssetsOptions>,
+    pub options: Option<GetByMethodsOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -182,7 +201,7 @@ pub struct GetAssetsByAuthority {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub options: Option<SearchAssetsOptions>,
+    pub options: Option<GetByMethodsOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -462,7 +481,7 @@ impl From<GetAssetsByAuthorityV0> for GetAssetsByAuthority {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: Some(SearchAssetsOptions {
+            options: Some(GetByMethodsOptions {
                 show_unverified_collections: true,
                 ..Default::default()
             }),
@@ -493,7 +512,7 @@ impl From<GetAssetsByCreatorV0> for GetAssetsByCreator {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: Some(SearchAssetsOptions {
+            options: Some(GetByMethodsOptions {
                 show_unverified_collections: true,
                 ..Default::default()
             }),
@@ -522,7 +541,7 @@ impl From<GetAssetsByOwnerV0> for GetAssetsByOwner {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: Some(SearchAssetsOptions {
+            options: Some(GetByMethodsOptions {
                 show_unverified_collections: true,
                 ..Default::default()
             }),
@@ -554,6 +573,31 @@ impl From<GetAssetsByGroupV0> for GetAssetsByGroup {
             after: value.after,
             cursor: None,
             options: None,
+        }
+    }
+}
+
+impl From<SearchAssetsOptions> for GetByMethodsOptions {
+    fn from(value: SearchAssetsOptions) -> Self {
+        Self {
+            show_unverified_collections: value.show_unverified_collections,
+            show_grand_total: value.show_grand_total,
+            show_native_balance: value.show_native_balance,
+            show_collection_metadata: value.show_collection_metadata,
+            show_inscription: value.show_inscription,
+            show_zero_balance: value.show_zero_balance,
+            show_fungible: false,
+        }
+    }
+}
+
+impl From<GetByMethodsOptions> for Options {
+    fn from(value: GetByMethodsOptions) -> Self {
+        Self {
+            show_unverified_collections: value.show_unverified_collections,
+            show_collection_metadata: value.show_collection_metadata,
+            show_inscription: value.show_inscription,
+            show_fungible: value.show_fungible,
         }
     }
 }

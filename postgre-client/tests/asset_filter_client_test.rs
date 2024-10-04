@@ -1,7 +1,7 @@
 #[cfg(feature = "integration_tests")]
 #[cfg(test)]
 mod tests {
-    use entities::api_req_params::SearchAssetsOptions;
+    use entities::api_req_params::GetByMethodsOptions;
     use postgre_client::model::*;
     use postgre_client::storage_traits::{AssetIndexStorage, AssetPubkeyFilteredFetcher};
     use setup::pg::*;
@@ -52,7 +52,7 @@ mod tests {
                 page,
                 before,
                 after,
-                &SearchAssetsOptions {
+                &GetByMethodsOptions {
                     show_unverified_collections: true,
                     ..Default::default()
                 },
@@ -124,7 +124,7 @@ mod tests {
                 page,
                 None,
                 None,
-                &SearchAssetsOptions {
+                &GetByMethodsOptions {
                     show_unverified_collections: true,
                     ..Default::default()
                 },
@@ -149,7 +149,7 @@ mod tests {
                     page,
                     None,
                     None,
-                    &SearchAssetsOptions {
+                    &GetByMethodsOptions {
                         show_unverified_collections: true,
                         ..Default::default()
                     },
@@ -179,7 +179,7 @@ mod tests {
                     page,
                     None,
                     after,
-                    &SearchAssetsOptions {
+                    &GetByMethodsOptions {
                         show_unverified_collections: true,
                         ..Default::default()
                     },
@@ -204,7 +204,7 @@ mod tests {
                     page,
                     before,
                     None,
-                    &SearchAssetsOptions {
+                    &GetByMethodsOptions {
                         show_unverified_collections: true,
                         ..Default::default()
                     },
@@ -232,7 +232,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &SearchAssetsOptions {
+                &GetByMethodsOptions {
                     show_unverified_collections: true,
                     ..Default::default()
                 },
@@ -255,7 +255,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &SearchAssetsOptions {
+                &GetByMethodsOptions {
                     show_unverified_collections: true,
                     ..Default::default()
                 },
@@ -318,7 +318,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &SearchAssetsOptions {
+                &GetByMethodsOptions {
                     show_unverified_collections: true,
                     ..Default::default()
                 },

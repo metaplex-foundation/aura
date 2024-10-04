@@ -4,7 +4,7 @@ mod tests {
     use std::sync::Arc;
 
     use entities::models::TokenAccount;
-    use entities::{api_req_params::SearchAssetsOptions, models::UrlWithStatus};
+    use entities::{api_req_params::GetByMethodsOptions, models::UrlWithStatus};
     use metrics_utils::{IngesterMetricsConfig, SynchronizerMetricsConfig};
     use nft_ingester::index_syncronizer::Synchronizer;
     use nft_ingester::token_updates_processor::TokenAccountsProcessor;
@@ -104,7 +104,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &SearchAssetsOptions {
+                &GetByMethodsOptions {
                     show_unverified_collections: true,
                     ..Default::default()
                 },
