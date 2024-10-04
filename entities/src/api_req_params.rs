@@ -597,7 +597,7 @@ impl From<GetByMethodsOptions> for Options {
             show_unverified_collections: value.show_unverified_collections,
             show_collection_metadata: value.show_collection_metadata,
             show_inscription: value.show_inscription,
-            show_fungible: false,
+            show_fungible: value.show_fungible,
         }
     }
 }
