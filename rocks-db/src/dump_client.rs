@@ -17,18 +17,13 @@ use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::BufWriter,
-    sync::Arc,
 };
+use tokio::{sync::broadcast, task::JoinSet};
 use tokio::{sync::mpsc, task::JoinError};
-use tokio::{
-    sync::{broadcast, Mutex},
-    task::JoinSet,
-};
 use tracing::{error, info};
 use usecase::graceful_stop::graceful_stop;
 
 const MPSC_BUFFER_SIZE: usize = 1_000_000;
-const ITERATION_WORKERS: usize = 3;
 
 const ONE_G: usize = 1024 * 1024 * 1024;
 fn serialize_as_snake_case<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
@@ -173,43 +168,20 @@ impl Storage {
                 rx_fungible_tokens,
             )
         });
+
+        let rx_cloned = rx.resubscribe();
+        let shutdown_cloned = iterator_shutdown_rx.resubscribe();
+        iterator_tasks.spawn(Self::iterate_over_indexes(
             rx_cloned,
             shutdown_cloned,
-            rx_fungible_tokens,
+            rx_indexes,
+            tx_metadata,
+            tx_creators,
+            tx_assets,
+            tx_authority,
+            tx_fungible_tokens,
         ));
-
-        let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
-        let authorities_key_set = Arc::new(Mutex::new(HashSet::new()));
-        let fungible_tokens_key_set = Arc::new(Mutex::new(HashSet::new()));
-
-        // Launch N workers which iterates over index data - asset's data selected from `RocksDB`.
-        // During that iteration it splits asset's data and push it to appropriate channel so "file writers" could process it.
-        for _ in 0..ITERATION_WORKERS {
-            let rx_cloned = rx.resubscribe();
-            let shutdown_cloned = iterator_shutdown_rx.resubscribe();
-            let rx_indexes_cloned = rx_indexes.clone();
-            let tx_metadata_cloned = tx_metadata.clone();
-            let tx_creators_cloned = tx_creators.clone();
-            let tx_assets_cloned = tx_assets.clone();
-            let tx_fungible_tokens_cloned = tx_fungible_tokens.clone();
-            let tx_authority_cloned = tx_authority.clone();
-            let metadata_key_set_cloned = metadata_key_set.clone();
-            let authorities_key_set_cloned = authorities_key_set.clone();
-            let fungible_tokens_key_set_cloned = fungible_tokens_key_set.clone();
-            iterator_tasks.spawn(Self::iterate_over_indexes(
-                rx_cloned,
-                shutdown_cloned,
-                rx_indexes_cloned,
-                tx_metadata_cloned,
-                tx_creators_cloned,
-                tx_assets_cloned,
-                tx_authority_cloned,
-                tx_fungible_tokens_cloned,
-                metadata_key_set_cloned,
-                authorities_key_set_cloned,
-                fungible_tokens_key_set_cloned,
-            ));
-        }
+        // }
 
         // Iteration over `asset_static_data` column via CUSTOM iterator.
         let iter = self.asset_static_data.iter_start();
@@ -220,9 +192,8 @@ impl Storage {
             .filter_map(|(key, _)| decode_pubkey(key.to_vec()).ok())
         {
             batch.push(k);
-
             // When batch is filled, find `AssetIndex` and send it to `tx_indexes` channel.
-            if batch.len() == batch_size {
+            if batch.len() >= batch_size {
                 let indexes = self
                     .get_asset_indexes(batch.as_ref())
                     .await
@@ -286,10 +257,11 @@ impl Storage {
         tx_assets_cloned: tokio::sync::mpsc::Sender<AssetRecord>,
         tx_authority_cloned: tokio::sync::mpsc::Sender<(String, String, i64)>,
         tx_fungible_tokens_cloned: tokio::sync::mpsc::Sender<(String, String, i64, i64)>,
-        metadata_key_set: Arc<Mutex<HashSet<Vec<u8>>>>,
-        authorities_key_set: Arc<Mutex<HashSet<Pubkey>>>,
-        fungible_tokens_key_set: Arc<Mutex<HashSet<(Pubkey, Pubkey)>>>,
     ) -> Result<(), JoinError> {
+        let mut metadata_key_set = HashSet::new();
+        let mut authorities_key_set = HashSet::new();
+        let mut fungible_tokens_key_set = HashSet::new();
+
         loop {
             // whole application is stopped
             if !rx_cloned.is_empty() {
@@ -309,10 +281,8 @@ impl Storage {
                         .map(|url| (url.get_metadata_id(), url.metadata_url.trim().to_owned()));
                     if let Some((ref metadata_key, ref url)) = metadata_url {
                         {
-                            let mut metadata_keys = metadata_key_set.lock().await;
-                            if !metadata_keys.contains(metadata_key) {
-                                metadata_keys.insert(metadata_key.clone());
-                                drop(metadata_keys);
+                            if !metadata_key_set.contains(metadata_key) {
+                                metadata_key_set.insert(metadata_key.clone());
                                 if let Err(e) = tx_metadata_cloned
                                     .send((
                                         Self::encode(metadata_key),
@@ -383,10 +353,8 @@ impl Storage {
                     };
                     if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
                         {
-                            let mut authorities_keys = authorities_key_set.lock().await;
-                            if !authorities_keys.contains(&authority_key) {
-                                authorities_keys.insert(authority_key);
-                                drop(authorities_keys);
+                            if !authorities_key_set.contains(&authority_key) {
+                                authorities_key_set.insert(authority_key);
                                 if let Err(e) = tx_authority_cloned
                                     .send((
                                         Self::encode(authority_key.to_bytes()),
@@ -401,13 +369,11 @@ impl Storage {
                         }
                     }
                     for fungible_token in index.fungible_tokens {
-                        let mut fungible_tokens_keys = fungible_tokens_key_set.lock().await;
-                        if !fungible_tokens_keys
+                        if !fungible_tokens_key_set
                             .contains(&(fungible_token.asset, fungible_token.owner))
                         {
-                            fungible_tokens_keys
+                            fungible_tokens_key_set
                                 .insert((fungible_token.asset, fungible_token.owner));
-                            drop(fungible_tokens_keys);
                             if let Err(e) = tx_fungible_tokens_cloned
                                 .send((
                                     Self::encode(fungible_token.asset),
