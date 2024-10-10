@@ -11,14 +11,15 @@ use entities::{
 };
 use hex;
 use inflector::Inflector;
+use metrics_utils::SynchronizerMetricsConfig;
 use serde::{Serialize, Serializer};
 use solana_sdk::pubkey::Pubkey;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
-    io::BufWriter,
+    io::BufWriter, sync::Arc,
 };
-use tokio::{sync::broadcast, task::JoinSet};
+use tokio::{sync::broadcast, task::JoinSet, time::Instant};
 use tokio::{sync::mpsc, task::JoinError};
 use tracing::{error, info};
 use usecase::graceful_stop::graceful_stop;
@@ -98,6 +99,7 @@ impl Storage {
         fungible_tokens_file_and_path: (File, String),
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
+        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), String> {
         let mut iterator_tasks = JoinSet::new();
         let mut writer_tasks = JoinSet::new();
@@ -113,12 +115,14 @@ impl Storage {
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
+        let cloned_metrics = synchronizer_metrics.clone();
         writer_tasks.spawn_blocking(move || {
             Self::write_to_file(
                 metadata_file_and_path,
                 rx_cloned,
                 shutdown_cloned,
                 rx_metadata,
+                cloned_metrics,
             )
         });
 
@@ -126,20 +130,24 @@ impl Storage {
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
+        let cloned_metrics = synchronizer_metrics.clone();
         writer_tasks.spawn_blocking(move || {
-            Self::write_to_file(assets_file_and_path, rx_cloned, shutdown_cloned, rx_assets)
+            Self::write_to_file(assets_file_and_path, rx_cloned, shutdown_cloned, rx_assets,
+                cloned_metrics,)
         });
 
         let (tx_creators, rx_creators) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
+        let cloned_metrics = synchronizer_metrics.clone();
         writer_tasks.spawn_blocking(move || {
             Self::write_to_file(
                 creators_file_and_path,
                 rx_cloned,
                 shutdown_cloned,
                 rx_creators,
+                cloned_metrics,
             )
         });
 
@@ -147,12 +155,14 @@ impl Storage {
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
+        let cloned_metrics = synchronizer_metrics.clone();
         writer_tasks.spawn_blocking(move || {
             Self::write_to_file(
                 authority_file_and_path,
                 rx_cloned,
                 shutdown_cloned,
                 rx_authority,
+                cloned_metrics,
             )
         });
 
@@ -160,12 +170,14 @@ impl Storage {
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
+        let cloned_metrics = synchronizer_metrics.clone();
         writer_tasks.spawn_blocking(move || {
             Self::write_to_file(
                 fungible_tokens_file_and_path,
                 rx_cloned,
                 shutdown_cloned,
                 rx_fungible_tokens,
+                cloned_metrics,
             )
         });
 
@@ -180,6 +192,7 @@ impl Storage {
             tx_assets,
             tx_authority,
             tx_fungible_tokens,
+            synchronizer_metrics.clone(),
         ));
         // }
 
@@ -191,13 +204,17 @@ impl Storage {
             .filter_map(|k| k.ok())
             .filter_map(|(key, _)| decode_pubkey(key.to_vec()).ok())
         {
+            synchronizer_metrics.inc_num_of_assets_iter(1);
             batch.push(k);
             // When batch is filled, find `AssetIndex` and send it to `tx_indexes` channel.
             if batch.len() >= batch_size {
+                let start = chrono::Utc::now();
                 let indexes = self
                     .get_asset_indexes(batch.as_ref())
                     .await
                     .map_err(|e| e.to_string())?;
+                self.red_metrics.observe_request("Synchronizer", "get_batch_of_assets", "get_asset_indexes", start);
+
                 tx_indexes
                     .send(indexes)
                     .await
@@ -213,10 +230,13 @@ impl Storage {
 
         // If there are any records left, we find the `AssetIndex` and send them to the `tx_indexes` channel.
         if !batch.is_empty() {
+            let start = chrono::Utc::now();
             let indexes = self
                 .get_asset_indexes(batch.as_ref())
                 .await
                 .map_err(|e| e.to_string())?;
+            self.red_metrics.observe_request("Synchronizer", "get_batch_of_assets", "get_asset_indexes", start);
+
             tx_indexes
                 .send(indexes)
                 .await
@@ -257,6 +277,7 @@ impl Storage {
         tx_assets_cloned: tokio::sync::mpsc::Sender<AssetRecord>,
         tx_authority_cloned: tokio::sync::mpsc::Sender<(String, String, i64)>,
         tx_fungible_tokens_cloned: tokio::sync::mpsc::Sender<(String, String, i64, i64)>,
+        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), JoinError> {
         let mut metadata_key_set = HashSet::new();
         let mut authorities_key_set = HashSet::new();
@@ -275,6 +296,7 @@ impl Storage {
             if rx_indexes_cloned.is_empty() {
                 continue;
             } else if let Ok(indexes) = rx_indexes_cloned.try_recv() {
+                let start = Instant::now();
                 for (key, index) in indexes {
                     let metadata_url = index
                         .metadata_url
@@ -388,6 +410,8 @@ impl Storage {
                         }
                     }
                 }
+
+                synchronizer_metrics.set_iter_over_assets_indexes(start.elapsed().as_millis() as f64);
             }
         }
 
@@ -417,6 +441,7 @@ impl Storage {
         application_shutdown: tokio::sync::broadcast::Receiver<()>,
         worker_shutdown: tokio::sync::broadcast::Receiver<()>,
         mut data_channel: tokio::sync::mpsc::Receiver<T>,
+        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), JoinError> {
         let buf_writer = BufWriter::with_capacity(ONE_G, file_and_path.0);
         let mut writer = WriterBuilder::new()
@@ -435,20 +460,27 @@ impl Storage {
             if data_channel.is_empty() {
                 continue;
             } else if let Ok(k) = data_channel.try_recv() {
+                let start = Instant::now();
+
                 if let Err(e) = writer.serialize(k).map_err(|e| e.to_string()) {
                     error!(
                         "Error while writing data into {:?}. Err: {:?}",
                         file_and_path.1, e
                     );
                 }
+
+                synchronizer_metrics.set_file_write_time(start.elapsed().as_millis() as f64);
             }
         }
+
+        let start = Instant::now();
         if let Err(e) = writer.flush().map_err(|e| e.to_string()) {
             error!(
                 "Error happened during flushing data to {:?}. Err: {:?}",
                 file_and_path.1, e
             );
         }
+        synchronizer_metrics.set_file_write_time(start.elapsed().as_millis() as f64);
 
         Ok(())
     }
@@ -474,6 +506,7 @@ impl Dumper for Storage {
         base_path: &std::path::Path,
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
+        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), String> {
         let metadata_path = base_path.join("metadata.csv").to_str().map(str::to_owned);
         if metadata_path.is_none() {
@@ -529,6 +562,7 @@ impl Dumper for Storage {
             (fungible_tokens_file, fungible_tokens_path.unwrap()),
             batch_size,
             rx,
+            synchronizer_metrics,
         )
         .await?;
         Ok(())
