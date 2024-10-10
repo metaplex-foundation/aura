@@ -303,6 +303,7 @@ impl Storage {
                             let mut metadata_keys = metadata_key_set.lock().await;
                             if !metadata_keys.contains(metadata_key) {
                                 metadata_keys.insert(metadata_key.clone());
+                                drop(metadata_keys);
                                 if let Err(e) = tx_metadata_cloned
                                     .send((
                                         Self::encode(metadata_key),
@@ -376,6 +377,7 @@ impl Storage {
                             let mut authorities_keys = authorities_key_set.lock().await;
                             if !authorities_keys.contains(&authority_key) {
                                 authorities_keys.insert(authority_key);
+                                drop(authorities_keys);
                                 if let Err(e) = tx_authority_cloned
                                     .send((
                                         Self::encode(authority_key.to_bytes()),
@@ -396,6 +398,7 @@ impl Storage {
                         {
                             fungible_tokens_keys
                                 .insert((fungible_token.asset, fungible_token.owner));
+                            drop(fungible_tokens_keys);
                             if let Err(e) = tx_fungible_tokens_cloned
                                 .send((
                                     Self::encode(fungible_token.asset),
