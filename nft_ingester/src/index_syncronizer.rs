@@ -234,7 +234,12 @@ where
         let path = std::path::Path::new(self.dump_path.as_str());
         tracing::info!("Dumping the primary storage to {}", self.dump_path);
         self.primary_storage
-            .dump_db(path, self.dump_synchronizer_batch_size, rx)
+            .dump_db(
+                path,
+                self.dump_synchronizer_batch_size,
+                rx,
+                self.metrics.clone(),
+            )
             .await?;
         tracing::info!("Dump is complete. Loading the dump into the index storage");
 

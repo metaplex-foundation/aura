@@ -11,24 +11,20 @@ use entities::{
 };
 use hex;
 use inflector::Inflector;
+use metrics_utils::SynchronizerMetricsConfig;
 use serde::{Serialize, Serializer};
 use solana_sdk::pubkey::Pubkey;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
-    io::BufWriter,
-    sync::Arc,
+    io::BufWriter, sync::Arc,
 };
+use tokio::{sync::broadcast, task::JoinSet, time::Instant};
 use tokio::{sync::mpsc, task::JoinError};
-use tokio::{
-    sync::{broadcast, Mutex},
-    task::JoinSet,
-};
 use tracing::{error, info};
 use usecase::graceful_stop::graceful_stop;
 
 const MPSC_BUFFER_SIZE: usize = 1_000_000;
-const ITERATION_WORKERS: usize = 3;
 
 const ONE_G: usize = 1024 * 1024 * 1024;
 fn serialize_as_snake_case<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
@@ -103,6 +99,7 @@ impl Storage {
         fungible_tokens_file_and_path: (File, String),
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
+        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), String> {
         let mut iterator_tasks = JoinSet::new();
         let mut writer_tasks = JoinSet::new();
@@ -118,89 +115,86 @@ impl Storage {
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(Self::write_to_file(
-            metadata_file_and_path,
-            rx_cloned,
-            shutdown_cloned,
-            rx_metadata,
-        ));
+        let cloned_metrics = synchronizer_metrics.clone();
+        writer_tasks.spawn_blocking(move || {
+            Self::write_to_file(
+                metadata_file_and_path,
+                rx_cloned,
+                shutdown_cloned,
+                rx_metadata,
+                cloned_metrics,
+            )
+        });
 
         let (tx_assets, rx_assets) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(Self::write_to_file(
-            assets_file_and_path,
-            rx_cloned,
-            shutdown_cloned,
-            rx_assets,
-        ));
+        let cloned_metrics = synchronizer_metrics.clone();
+        writer_tasks.spawn_blocking(move || {
+            Self::write_to_file(assets_file_and_path, rx_cloned, shutdown_cloned, rx_assets,
+                cloned_metrics,)
+        });
 
         let (tx_creators, rx_creators) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(Self::write_to_file(
-            creators_file_and_path,
-            rx_cloned,
-            shutdown_cloned,
-            rx_creators,
-        ));
+        let cloned_metrics = synchronizer_metrics.clone();
+        writer_tasks.spawn_blocking(move || {
+            Self::write_to_file(
+                creators_file_and_path,
+                rx_cloned,
+                shutdown_cloned,
+                rx_creators,
+                cloned_metrics,
+            )
+        });
 
         let (tx_authority, rx_authority) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(Self::write_to_file(
-            authority_file_and_path,
-            rx_cloned,
-            shutdown_cloned,
-            rx_authority,
-        ));
+        let cloned_metrics = synchronizer_metrics.clone();
+        writer_tasks.spawn_blocking(move || {
+            Self::write_to_file(
+                authority_file_and_path,
+                rx_cloned,
+                shutdown_cloned,
+                rx_authority,
+                cloned_metrics,
+            )
+        });
 
         let (tx_fungible_tokens, rx_fungible_tokens) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(Self::write_to_file(
-            fungible_tokens_file_and_path,
-            rx_cloned,
-            shutdown_cloned,
-            rx_fungible_tokens,
-        ));
-
-        let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
-        let authorities_key_set = Arc::new(Mutex::new(HashSet::new()));
-        let fungible_tokens_key_set = Arc::new(Mutex::new(HashSet::new()));
-
-        // Launch N workers which iterates over index data - asset's data selected from `RocksDB`.
-        // During that iteration it splits asset's data and push it to appropriate channel so "file writers" could process it.
-        for _ in 0..ITERATION_WORKERS {
-            let rx_cloned = rx.resubscribe();
-            let shutdown_cloned = iterator_shutdown_rx.resubscribe();
-            let rx_indexes_cloned = rx_indexes.clone();
-            let tx_metadata_cloned = tx_metadata.clone();
-            let tx_creators_cloned = tx_creators.clone();
-            let tx_assets_cloned = tx_assets.clone();
-            let tx_fungible_tokens_cloned = tx_fungible_tokens.clone();
-            let tx_authority_cloned = tx_authority.clone();
-            let metadata_key_set_cloned = metadata_key_set.clone();
-            let authorities_key_set_cloned = authorities_key_set.clone();
-            let fungible_tokens_key_set_cloned = fungible_tokens_key_set.clone();
-            iterator_tasks.spawn(Self::iterate_over_indexes(
+        let cloned_metrics = synchronizer_metrics.clone();
+        writer_tasks.spawn_blocking(move || {
+            Self::write_to_file(
+                fungible_tokens_file_and_path,
                 rx_cloned,
                 shutdown_cloned,
-                rx_indexes_cloned,
-                tx_metadata_cloned,
-                tx_creators_cloned,
-                tx_assets_cloned,
-                tx_authority_cloned,
-                tx_fungible_tokens_cloned,
-                metadata_key_set_cloned,
-                authorities_key_set_cloned,
-                fungible_tokens_key_set_cloned,
-            ));
-        }
+                rx_fungible_tokens,
+                cloned_metrics,
+            )
+        });
+
+        let rx_cloned = rx.resubscribe();
+        let shutdown_cloned = iterator_shutdown_rx.resubscribe();
+        iterator_tasks.spawn(Self::iterate_over_indexes(
+            rx_cloned,
+            shutdown_cloned,
+            rx_indexes,
+            tx_metadata,
+            tx_creators,
+            tx_assets,
+            tx_authority,
+            tx_fungible_tokens,
+            synchronizer_metrics.clone(),
+        ));
+        // }
 
         // Iteration over `asset_static_data` column via CUSTOM iterator.
         let iter = self.asset_static_data.iter_start();
@@ -210,14 +204,17 @@ impl Storage {
             .filter_map(|k| k.ok())
             .filter_map(|(key, _)| decode_pubkey(key.to_vec()).ok())
         {
+            synchronizer_metrics.inc_num_of_assets_iter(1);
             batch.push(k);
-
             // When batch is filled, find `AssetIndex` and send it to `tx_indexes` channel.
-            if batch.len() == batch_size {
+            if batch.len() >= batch_size {
+                let start = chrono::Utc::now();
                 let indexes = self
                     .get_asset_indexes(batch.as_ref())
                     .await
                     .map_err(|e| e.to_string())?;
+                self.red_metrics.observe_request("Synchronizer", "get_batch_of_assets", "get_asset_indexes", start);
+
                 tx_indexes
                     .send(indexes)
                     .await
@@ -233,10 +230,13 @@ impl Storage {
 
         // If there are any records left, we find the `AssetIndex` and send them to the `tx_indexes` channel.
         if !batch.is_empty() {
+            let start = chrono::Utc::now();
             let indexes = self
                 .get_asset_indexes(batch.as_ref())
                 .await
                 .map_err(|e| e.to_string())?;
+            self.red_metrics.observe_request("Synchronizer", "get_batch_of_assets", "get_asset_indexes", start);
+
             tx_indexes
                 .send(indexes)
                 .await
@@ -277,10 +277,12 @@ impl Storage {
         tx_assets_cloned: tokio::sync::mpsc::Sender<AssetRecord>,
         tx_authority_cloned: tokio::sync::mpsc::Sender<(String, String, i64)>,
         tx_fungible_tokens_cloned: tokio::sync::mpsc::Sender<(String, String, i64, i64)>,
-        metadata_key_set: Arc<Mutex<HashSet<Vec<u8>>>>,
-        authorities_key_set: Arc<Mutex<HashSet<Pubkey>>>,
-        fungible_tokens_key_set: Arc<Mutex<HashSet<(Pubkey, Pubkey)>>>,
+        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), JoinError> {
+        let mut metadata_key_set = HashSet::new();
+        let mut authorities_key_set = HashSet::new();
+        let mut fungible_tokens_key_set = HashSet::new();
+
         loop {
             // whole application is stopped
             if !rx_cloned.is_empty() {
@@ -294,15 +296,15 @@ impl Storage {
             if rx_indexes_cloned.is_empty() {
                 continue;
             } else if let Ok(indexes) = rx_indexes_cloned.try_recv() {
+                let start = Instant::now();
                 for (key, index) in indexes {
                     let metadata_url = index
                         .metadata_url
                         .map(|url| (url.get_metadata_id(), url.metadata_url.trim().to_owned()));
                     if let Some((ref metadata_key, ref url)) = metadata_url {
                         {
-                            let mut metadata_keys = metadata_key_set.lock().await;
-                            if !metadata_keys.contains(metadata_key) {
-                                metadata_keys.insert(metadata_key.clone());
+                            if !metadata_key_set.contains(metadata_key) {
+                                metadata_key_set.insert(metadata_key.clone());
                                 if let Err(e) = tx_metadata_cloned
                                     .send((
                                         Self::encode(metadata_key),
@@ -313,6 +315,7 @@ impl Storage {
                                 {
                                     error!("Error sending message: {:?}", e);
                                 }
+                                synchronizer_metrics.inc_num_of_records_sent_to_channel("metadata", 1);
                             }
                         }
                     }
@@ -328,6 +331,7 @@ impl Storage {
                         {
                             error!("Error sending message: {:?}", e);
                         }
+                        synchronizer_metrics.inc_num_of_records_sent_to_channel("creators", 1);
                     }
                     let record = AssetRecord {
                         ast_pubkey: Self::encode(key.to_bytes()),
@@ -373,9 +377,8 @@ impl Storage {
                     };
                     if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
                         {
-                            let mut authorities_keys = authorities_key_set.lock().await;
-                            if !authorities_keys.contains(&authority_key) {
-                                authorities_keys.insert(authority_key);
+                            if !authorities_key_set.contains(&authority_key) {
+                                authorities_key_set.insert(authority_key);
                                 if let Err(e) = tx_authority_cloned
                                     .send((
                                         Self::encode(authority_key.to_bytes()),
@@ -386,15 +389,15 @@ impl Storage {
                                 {
                                     error!("Error sending message: {:?}", e);
                                 }
+                                synchronizer_metrics.inc_num_of_records_sent_to_channel("authority", 1);
                             }
                         }
                     }
                     for fungible_token in index.fungible_tokens {
-                        let mut fungible_tokens_keys = fungible_tokens_key_set.lock().await;
-                        if !fungible_tokens_keys
+                        if !fungible_tokens_key_set
                             .contains(&(fungible_token.asset, fungible_token.owner))
                         {
-                            fungible_tokens_keys
+                            fungible_tokens_key_set
                                 .insert((fungible_token.asset, fungible_token.owner));
                             if let Err(e) = tx_fungible_tokens_cloned
                                 .send((
@@ -407,9 +410,12 @@ impl Storage {
                             {
                                 error!("Error sending message: {:?}", e);
                             }
+                            synchronizer_metrics.inc_num_of_records_sent_to_channel("fungible_tokens", 1);
                         }
                     }
                 }
+
+                synchronizer_metrics.set_iter_over_assets_indexes(start.elapsed().as_millis() as f64);
             }
         }
 
@@ -434,11 +440,12 @@ impl Storage {
     ///
     /// `data_channel` - An `mpsc::Receiver` channel that provides the serialized data (`T: Serialize`) to be written to the file.
     ///     Data is processed in the loop until one of the shutdown signals is triggered.
-    async fn write_to_file<T: Serialize>(
+    fn write_to_file<T: Serialize>(
         file_and_path: (File, String),
         application_shutdown: tokio::sync::broadcast::Receiver<()>,
         worker_shutdown: tokio::sync::broadcast::Receiver<()>,
         mut data_channel: tokio::sync::mpsc::Receiver<T>,
+        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), JoinError> {
         let buf_writer = BufWriter::with_capacity(ONE_G, file_and_path.0);
         let mut writer = WriterBuilder::new()
@@ -457,20 +464,29 @@ impl Storage {
             if data_channel.is_empty() {
                 continue;
             } else if let Ok(k) = data_channel.try_recv() {
+                let start = Instant::now();
+
                 if let Err(e) = writer.serialize(k).map_err(|e| e.to_string()) {
                     error!(
                         "Error while writing data into {:?}. Err: {:?}",
                         file_and_path.1, e
                     );
                 }
+
+                synchronizer_metrics.set_file_write_time(start.elapsed().as_millis() as f64);
+                synchronizer_metrics.inc_num_of_records_written(&file_and_path.1, 1);
             }
         }
+
+        let start = Instant::now();
         if let Err(e) = writer.flush().map_err(|e| e.to_string()) {
             error!(
                 "Error happened during flushing data to {:?}. Err: {:?}",
                 file_and_path.1, e
             );
         }
+        synchronizer_metrics.set_file_write_time(start.elapsed().as_millis() as f64);
+        synchronizer_metrics.inc_num_of_records_written(&file_and_path.1, 1);
 
         Ok(())
     }
@@ -496,6 +512,7 @@ impl Dumper for Storage {
         base_path: &std::path::Path,
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
+        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), String> {
         let metadata_path = base_path.join("metadata.csv").to_str().map(str::to_owned);
         if metadata_path.is_none() {
@@ -551,6 +568,7 @@ impl Dumper for Storage {
             (fungible_tokens_file, fungible_tokens_path.unwrap()),
             batch_size,
             rx,
+            synchronizer_metrics,
         )
         .await?;
         Ok(())
