@@ -118,52 +118,61 @@ impl Storage {
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(Self::write_to_file(
-            metadata_file_and_path,
-            rx_cloned,
-            shutdown_cloned,
-            rx_metadata,
-        ));
+        writer_tasks.spawn_blocking(move || {
+            Self::write_to_file(
+                metadata_file_and_path,
+                rx_cloned,
+                shutdown_cloned,
+                rx_metadata,
+            )
+        });
 
         let (tx_assets, rx_assets) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(Self::write_to_file(
-            assets_file_and_path,
-            rx_cloned,
-            shutdown_cloned,
-            rx_assets,
-        ));
+        writer_tasks.spawn_blocking(move || {
+            Self::write_to_file(assets_file_and_path, rx_cloned, shutdown_cloned, rx_assets)
+        });
 
         let (tx_creators, rx_creators) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(Self::write_to_file(
-            creators_file_and_path,
-            rx_cloned,
-            shutdown_cloned,
-            rx_creators,
-        ));
+        writer_tasks.spawn_blocking(move || {
+            Self::write_to_file(
+                creators_file_and_path,
+                rx_cloned,
+                shutdown_cloned,
+                rx_creators,
+            )
+        });
 
         let (tx_authority, rx_authority) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(Self::write_to_file(
-            authority_file_and_path,
-            rx_cloned,
-            shutdown_cloned,
-            rx_authority,
-        ));
+        writer_tasks.spawn_blocking(move || {
+            Self::write_to_file(
+                authority_file_and_path,
+                rx_cloned,
+                shutdown_cloned,
+                rx_authority,
+            )
+        });
 
         let (tx_fungible_tokens, rx_fungible_tokens) = mpsc::channel(MPSC_BUFFER_SIZE);
         let rx_cloned = rx.resubscribe();
         let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        writer_tasks.spawn(Self::write_to_file(
-            fungible_tokens_file_and_path,
+        writer_tasks.spawn_blocking(move || {
+            Self::write_to_file(
+                fungible_tokens_file_and_path,
+                rx_cloned,
+                shutdown_cloned,
+                rx_fungible_tokens,
+            )
+        });
             rx_cloned,
             shutdown_cloned,
             rx_fungible_tokens,
@@ -437,7 +446,7 @@ impl Storage {
     ///
     /// `data_channel` - An `mpsc::Receiver` channel that provides the serialized data (`T: Serialize`) to be written to the file.
     ///     Data is processed in the loop until one of the shutdown signals is triggered.
-    async fn write_to_file<T: Serialize>(
+    fn write_to_file<T: Serialize>(
         file_and_path: (File, String),
         application_shutdown: tokio::sync::broadcast::Receiver<()>,
         worker_shutdown: tokio::sync::broadcast::Receiver<()>,
