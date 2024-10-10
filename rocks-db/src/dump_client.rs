@@ -315,6 +315,7 @@ impl Storage {
                                 {
                                     error!("Error sending message: {:?}", e);
                                 }
+                                synchronizer_metrics.inc_num_of_records_sent_to_channel("metadata", 1);
                             }
                         }
                     }
@@ -330,6 +331,7 @@ impl Storage {
                         {
                             error!("Error sending message: {:?}", e);
                         }
+                        synchronizer_metrics.inc_num_of_records_sent_to_channel("creators", 1);
                     }
                     let record = AssetRecord {
                         ast_pubkey: Self::encode(key.to_bytes()),
@@ -387,6 +389,7 @@ impl Storage {
                                 {
                                     error!("Error sending message: {:?}", e);
                                 }
+                                synchronizer_metrics.inc_num_of_records_sent_to_channel("authority", 1);
                             }
                         }
                     }
@@ -407,6 +410,7 @@ impl Storage {
                             {
                                 error!("Error sending message: {:?}", e);
                             }
+                            synchronizer_metrics.inc_num_of_records_sent_to_channel("fungible_tokens", 1);
                         }
                     }
                 }
@@ -470,6 +474,7 @@ impl Storage {
                 }
 
                 synchronizer_metrics.set_file_write_time(start.elapsed().as_millis() as f64);
+                synchronizer_metrics.inc_num_of_records_written(&file_and_path.1, 1);
             }
         }
 
@@ -481,6 +486,7 @@ impl Storage {
             );
         }
         synchronizer_metrics.set_file_write_time(start.elapsed().as_millis() as f64);
+        synchronizer_metrics.inc_num_of_records_written(&file_and_path.1, 1);
 
         Ok(())
     }

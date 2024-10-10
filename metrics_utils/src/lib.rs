@@ -259,7 +259,9 @@ pub struct SynchronizerMetricsConfig {
 
     full_sync_num_of_assets_iter: Family<MetricLabel, Counter>,
     full_sync_iter_over_assets_indexes: Family<MethodLabel, Histogram>,
+    full_sync_num_of_records_written: Family<MetricLabel, Counter>,
     full_sync_file_write_time: Family<MethodLabel, Histogram>,
+    full_sync_num_of_records_sent_to_channel: Family<MetricLabel, Counter>,
 }
 
 impl Default for SynchronizerMetricsConfig {
@@ -278,9 +280,11 @@ impl SynchronizerMetricsConfig {
             full_sync_iter_over_assets_indexes: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(1.0, 1.8, 10))
             }),
+            full_sync_num_of_records_written: Family::<MetricLabel, Counter>::default(),
             full_sync_file_write_time: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(5.0, 1.8, 10))
             }),
+            full_sync_num_of_records_sent_to_channel: Family::<MetricLabel, Counter>::default(),
         }
     }
 
@@ -316,12 +320,28 @@ impl SynchronizerMetricsConfig {
             .observe(duration);
     }
 
+    pub fn inc_num_of_records_written(&self, label: &str, num: u64) -> u64 {
+        self.full_sync_num_of_records_written
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc_by(num)
+    }
+
     pub fn set_file_write_time(&self, duration: f64) {
         self.full_sync_file_write_time
             .get_or_create(&MethodLabel {
                 method_name: "write_batch_of_data_to_file".to_string(),
             })
             .observe(duration);
+    }
+
+    pub fn inc_num_of_records_sent_to_channel(&self, label: &str, num: u64) -> u64 {
+        self.full_sync_num_of_records_sent_to_channel
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc_by(num)
     }
 
     pub fn register(&self, registry: &mut Registry) {
@@ -350,9 +370,21 @@ impl SynchronizerMetricsConfig {
         );
 
         registry.register(
+            "full_synchronization_num_of_records_written",
+            "Number of records which were written to the file during full synchronization",
+            self.full_sync_num_of_records_written.clone(),
+        );
+
+        registry.register(
             "full_sync_time_to_write_data_to_file",
             "Time synchronizer spend to write batch of data to the file",
             self.full_sync_file_write_time.clone(),
+        );
+
+        registry.register(
+            "full_sync_num_of_records_sent_to_channel",
+            "Number of records which were sent to the channel during full synchronization",
+            self.full_sync_num_of_records_sent_to_channel.clone(),
         );
     }
 }
