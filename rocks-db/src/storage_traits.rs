@@ -48,6 +48,7 @@ pub trait Dumper {
         base_path: &std::path::Path,
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
+        synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
     ) -> core::result::Result<(), String>;
 }
 
@@ -102,8 +103,9 @@ impl Dumper for MockAssetIndexStorage {
         base_path: &std::path::Path,
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
+        synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
     ) -> core::result::Result<(), String> {
-        self.mock_dumper.dump_db(base_path, batch_size, rx).await
+        self.mock_dumper.dump_db(base_path, batch_size, rx, synchronizer_metrics).await
     }
 }
 
