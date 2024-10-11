@@ -17,7 +17,9 @@ use crate::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
     BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
-use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, UrlWithStatus};
+use entities::models::{
+    AssetIndex, CompleteAssetDetails, FungibleToken, UpdateVersion, Updated, UrlWithStatus,
+};
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
@@ -111,6 +113,9 @@ impl AssetIndexReader for Storage {
         let assets_authority_fut = self.asset_authority_data.batch_get(keys.to_vec());
         let assets_owner_fut = self.asset_owner_data.batch_get(keys.to_vec());
         let assets_collection_fut = self.asset_collection_data.batch_get(keys.to_vec());
+        // these data will be used only during live synchronization
+        // during full sync will be passed mint keys meaning response will be always empty
+        let token_accounts_fut = self.token_accounts.batch_get(keys.to_vec());
 
         let (
             asset_static_details,
@@ -118,12 +123,14 @@ impl AssetIndexReader for Storage {
             asset_authority_details,
             asset_owner_details,
             asset_collection_details,
+            token_accounts_details,
         ) = tokio::join!(
             assets_static_fut,
             assets_dynamic_fut,
             assets_authority_fut,
             assets_owner_fut,
             assets_collection_fut,
+            token_accounts_fut
         );
 
         let asset_static_details = asset_static_details?;
@@ -131,6 +138,8 @@ impl AssetIndexReader for Storage {
         let asset_authority_details = asset_authority_details?;
         let asset_owner_details = asset_owner_details?;
         let asset_collection_details = asset_collection_details?;
+        let token_accounts_details = token_accounts_details?;
+
         let assets_collection_pks = asset_collection_details
             .iter()
             .flat_map(|c| c.as_ref().map(|c| c.collection.value))
@@ -253,6 +262,33 @@ impl AssetIndexReader for Storage {
                 };
 
                 asset_indexes.insert(asset_index.pubkey, asset_index);
+            }
+        }
+
+        // compare to other data this data is saved in HashMap by token account keys, not mints
+        for token_acc in token_accounts_details.iter().flatten() {
+            if let Some(existed_index) = asset_indexes.get_mut(&token_acc.pubkey) {
+                existed_index.fungible_tokens.push(FungibleToken {
+                    key: token_acc.pubkey,
+                    owner: token_acc.owner,
+                    asset: token_acc.mint,
+                    balance: token_acc.amount,
+                    slot_updated: token_acc.slot_updated,
+                });
+            } else {
+                let asset_index = AssetIndex {
+                    pubkey: token_acc.mint,
+                    fungible_tokens: vec![FungibleToken {
+                        key: token_acc.pubkey,
+                        owner: token_acc.owner,
+                        asset: token_acc.mint,
+                        balance: token_acc.amount,
+                        slot_updated: token_acc.slot_updated,
+                    }],
+                    ..Default::default()
+                };
+
+                asset_indexes.insert(token_acc.pubkey, asset_index);
             }
         }
 
