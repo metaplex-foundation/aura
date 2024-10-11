@@ -277,13 +277,14 @@ impl SynchronizerMetricsConfig {
             last_synchronized_slot: Family::<MetricLabel, Gauge>::default(),
 
             full_sync_num_of_assets_iter: Family::<MetricLabel, Counter>::default(),
-            full_sync_iter_over_assets_indexes: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 1.8, 10))
-            }),
+            full_sync_iter_over_assets_indexes:
+                Family::<MethodLabel, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets(1.0, 1.8, 10))
+                }),
             full_sync_num_of_records_written: Family::<MetricLabel, Counter>::default(),
-            full_sync_file_write_time: Family::<MethodLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(5.0, 1.8, 10))
-            }),
+            full_sync_file_write_time: Family::<MethodLabel, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets(5.0, 1.8, 10)),
+            ),
             full_sync_num_of_records_sent_to_channel: Family::<MetricLabel, Counter>::default(),
         }
     }

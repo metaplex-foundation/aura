@@ -17,9 +17,7 @@ use crate::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
     BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
-use entities::models::{
-    AssetIndex, CompleteAssetDetails, FungibleToken, UpdateVersion, Updated, UrlWithStatus,
-};
+use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, UrlWithStatus};
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
@@ -251,35 +249,6 @@ impl AssetIndexReader for Storage {
                         .get(&data.collection.value)
                         .and_then(|c| c.authority.value),
                     slot_updated: data.get_slot_updated() as i64,
-                    ..Default::default()
-                };
-
-                asset_indexes.insert(asset_index.pubkey, asset_index);
-            }
-        }
-
-        for key in keys {
-            let fungible_tokens = self
-                .get_raw_token_accounts(None, Some(*key), None, None, None, None, true)
-                .await
-                .map_err(|e| StorageError::Common(e.to_string()))?
-                .into_iter()
-                .flatten()
-                .map(|ta| FungibleToken {
-                    owner: ta.owner,
-                    asset: ta.mint,
-                    balance: ta.amount,
-                    slot_updated: ta.slot_updated,
-                })
-                .collect::<Vec<_>>();
-
-            if let Some(existed_index) = asset_indexes.get_mut(key) {
-                existed_index.pubkey = *key;
-                existed_index.fungible_tokens = fungible_tokens;
-            } else {
-                let asset_index = AssetIndex {
-                    pubkey: *key,
-                    fungible_tokens,
                     ..Default::default()
                 };
 
