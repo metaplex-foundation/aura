@@ -176,8 +176,14 @@ impl Storage {
 
         // dump fungible assets in separate blocking thread
         let column: Column<TokenAccount> = Self::column(self.db.clone(), self.red_metrics.clone());
+        let cloned_metrics = synchronizer_metrics.clone();
         let fungible_assets_join = tokio::task::spawn_blocking(move || {
-            Self::dump_fungible_assets(column, fungible_tokens_file_and_path, batch_size)
+            Self::dump_fungible_assets(
+                column,
+                fungible_tokens_file_and_path,
+                batch_size,
+                cloned_metrics,
+            )
         });
 
         let rx_cloned = rx.resubscribe();
@@ -201,7 +207,7 @@ impl Storage {
             .filter_map(|k| k.ok())
             .filter_map(|(key, _)| decode_pubkey(key.to_vec()).ok())
         {
-            synchronizer_metrics.inc_num_of_assets_iter(1);
+            synchronizer_metrics.inc_num_of_assets_iter("asset_static_data", 1);
             batch.push(k);
             // When batch is filled, find `AssetIndex` and send it to `tx_indexes` channel.
             if batch.len() >= batch_size {
@@ -256,6 +262,7 @@ impl Storage {
                 e.to_string()
             );
         }
+        info!("Finish dumping fungible assets.");
 
         // Once we iterate through all the assets in RocksDB we have to send stop signal
         //     to iterators and wait until they finish its job.
@@ -282,6 +289,7 @@ impl Storage {
         storage: Column<TokenAccount>,
         file_and_path: (File, String),
         batch_size: usize,
+        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) {
         let buf_writer = BufWriter::with_capacity(ONE_G, file_and_path.0);
         let mut writer = WriterBuilder::new()
@@ -302,8 +310,10 @@ impl Storage {
                 token.amount,
                 token.slot_updated,
             ));
+            synchronizer_metrics.inc_num_of_assets_iter("token_account", 1);
 
             if batch.len() >= batch_size {
+                let start = Instant::now();
                 for rec in &batch {
                     if let Err(e) = writer.serialize(rec).map_err(|e| e.to_string()) {
                         error!(
@@ -313,6 +323,10 @@ impl Storage {
                     }
                 }
                 batch.clear();
+                synchronizer_metrics.set_file_write_time(
+                    file_and_path.1.as_ref(),
+                    start.elapsed().as_millis() as f64,
+                );
             }
         }
 
@@ -526,7 +540,10 @@ impl Storage {
                     );
                 }
 
-                synchronizer_metrics.set_file_write_time(start.elapsed().as_millis() as f64);
+                synchronizer_metrics.set_file_write_time(
+                    file_and_path.1.as_ref(),
+                    start.elapsed().as_millis() as f64,
+                );
                 synchronizer_metrics.inc_num_of_records_written(&file_and_path.1, 1);
             }
         }
@@ -538,7 +555,8 @@ impl Storage {
                 file_and_path.1, e
             );
         }
-        synchronizer_metrics.set_file_write_time(start.elapsed().as_millis() as f64);
+        synchronizer_metrics
+            .set_file_write_time(file_and_path.1.as_ref(), start.elapsed().as_millis() as f64);
         synchronizer_metrics.inc_num_of_records_written(&file_and_path.1, 1);
 
         Ok(())

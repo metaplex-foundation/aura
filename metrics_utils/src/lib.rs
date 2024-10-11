@@ -305,10 +305,10 @@ impl SynchronizerMetricsConfig {
             .set(slot)
     }
 
-    pub fn inc_num_of_assets_iter(&self, num_of_records: u64) -> u64 {
+    pub fn inc_num_of_assets_iter(&self, label: &str, num_of_records: u64) -> u64 {
         self.full_sync_num_of_assets_iter
             .get_or_create(&MetricLabel {
-                name: "assets_iterated_over".to_string(),
+                name: label.to_string(),
             })
             .inc_by(num_of_records)
     }
@@ -329,10 +329,10 @@ impl SynchronizerMetricsConfig {
             .inc_by(num)
     }
 
-    pub fn set_file_write_time(&self, duration: f64) {
+    pub fn set_file_write_time(&self, label: &str, duration: f64) {
         self.full_sync_file_write_time
             .get_or_create(&MethodLabel {
-                method_name: "write_batch_of_data_to_file".to_string(),
+                method_name: label.to_string(),
             })
             .observe(duration);
     }
@@ -360,7 +360,7 @@ impl SynchronizerMetricsConfig {
 
         registry.register(
             "full_synchronization_num_of_assets_iter",
-            "Number of assets synchronizer already iterated over in asset_static_data CF",
+            "Number of assets synchronizer already iterated over in asset_static_data and token_accounts CFs",
             self.full_sync_num_of_assets_iter.clone(),
         );
 
