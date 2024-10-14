@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
-use entities::enums::{SpecificationVersions, TokenMetadataEdition};
+use entities::enums::{SpecificationAssetClass, SpecificationVersions, TokenMetadataEdition};
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 
@@ -111,6 +111,9 @@ impl AssetIndexReader for Storage {
         let assets_authority_fut = self.asset_authority_data.batch_get(keys.to_vec());
         let assets_owner_fut = self.asset_owner_data.batch_get(keys.to_vec());
         let assets_collection_fut = self.asset_collection_data.batch_get(keys.to_vec());
+        // these data will be used only during live synchronization
+        // during full sync will be passed mint keys meaning response will be always empty
+        let token_accounts_fut = self.token_accounts.batch_get(keys.to_vec());
 
         let (
             asset_static_details,
@@ -118,12 +121,14 @@ impl AssetIndexReader for Storage {
             asset_authority_details,
             asset_owner_details,
             asset_collection_details,
+            token_accounts_details,
         ) = tokio::join!(
             assets_static_fut,
             assets_dynamic_fut,
             assets_authority_fut,
             assets_owner_fut,
             assets_collection_fut,
+            token_accounts_fut
         );
 
         let asset_static_details = asset_static_details?;
@@ -131,6 +136,8 @@ impl AssetIndexReader for Storage {
         let asset_authority_details = asset_authority_details?;
         let asset_owner_details = asset_owner_details?;
         let asset_collection_details = asset_collection_details?;
+        let token_accounts_details = token_accounts_details?;
+
         let assets_collection_pks = asset_collection_details
             .iter()
             .flat_map(|c| c.as_ref().map(|c| c.collection.value))
@@ -254,6 +261,21 @@ impl AssetIndexReader for Storage {
 
                 asset_indexes.insert(asset_index.pubkey, asset_index);
             }
+        }
+
+        // compare to other data this data is saved in HashMap by token account keys, not mints
+        for token_acc in token_accounts_details.iter().flatten() {
+            let asset_index = AssetIndex {
+                pubkey: token_acc.pubkey,
+                specification_asset_class: SpecificationAssetClass::FungibleToken,
+                owner: Some(token_acc.owner),
+                fungible_asset_mint: Some(token_acc.mint),
+                fungible_asset_balance: Some(token_acc.amount as u64),
+                slot_updated: token_acc.slot_updated,
+                ..Default::default()
+            };
+
+            asset_indexes.insert(token_acc.pubkey, asset_index);
         }
 
         self.red_metrics.observe_request(
