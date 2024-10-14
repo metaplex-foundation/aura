@@ -103,7 +103,11 @@ impl AssetUpdateIndexStorage for Storage {
 
 #[async_trait]
 impl AssetIndexReader for Storage {
-    async fn get_asset_indexes(&self, keys: &[Pubkey]) -> Result<HashMap<Pubkey, AssetIndex>> {
+    async fn get_asset_indexes<'a>(
+        &self,
+        keys: &[Pubkey],
+        collection_authorities: Option<&'a HashMap<Pubkey, Pubkey>>,
+    ) -> Result<HashMap<Pubkey, AssetIndex>> {
         let mut asset_indexes = HashMap::new();
         let start_time = chrono::Utc::now();
         let assets_static_fut = self.asset_static_data.batch_get(keys.to_vec());
@@ -142,13 +146,29 @@ impl AssetIndexReader for Storage {
             .iter()
             .flat_map(|c| c.as_ref().map(|c| c.collection.value))
             .collect::<Vec<_>>();
-        let mpl_core_collections = self
-            .asset_collection_data
-            .batch_get(assets_collection_pks)
-            .await?
-            .into_iter()
-            .filter_map(|asset| asset.map(|a| (a.pubkey, a)))
-            .collect::<HashMap<_, _>>();
+
+        let mpl_core_map = {
+            // during dump creation hashmap with collection authorities will be passed
+            // and during regular synchronization we should make additional select from DB
+            if collection_authorities.is_some() {
+                HashMap::new()
+            } else {
+                self.asset_collection_data
+                    .batch_get(assets_collection_pks)
+                    .await?
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|asset| asset.authority.value.map(|v| (asset.pubkey, v)))
+                    .collect::<HashMap<_, _>>()
+            }
+        };
+
+        // mpl_core_map.is_empty() && collection_authorities.is_some() check covers case when DB is empty
+        let mpl_core_collections = if mpl_core_map.is_empty() && collection_authorities.is_some() {
+            collection_authorities.unwrap()
+        } else {
+            &mpl_core_map
+        };
 
         for static_info in asset_static_details.iter().flatten() {
             let asset_index = AssetIndex {
@@ -241,9 +261,8 @@ impl AssetIndexReader for Storage {
                 existed_index.pubkey = data.pubkey;
                 existed_index.collection = Some(data.collection.value);
                 existed_index.is_collection_verified = Some(data.is_collection_verified.value);
-                existed_index.update_authority = mpl_core_collections
-                    .get(&data.collection.value)
-                    .and_then(|c| c.authority.value);
+                existed_index.update_authority =
+                    mpl_core_collections.get(&data.collection.value).copied();
                 if data.get_slot_updated() as i64 > existed_index.slot_updated {
                     existed_index.slot_updated = data.get_slot_updated() as i64;
                 }
@@ -252,9 +271,7 @@ impl AssetIndexReader for Storage {
                     pubkey: data.pubkey,
                     collection: Some(data.collection.value),
                     is_collection_verified: Some(data.is_collection_verified.value),
-                    update_authority: mpl_core_collections
-                        .get(&data.collection.value)
-                        .and_then(|c| c.authority.value),
+                    update_authority: mpl_core_collections.get(&data.collection.value).copied(),
                     slot_updated: data.get_slot_updated() as i64,
                     ..Default::default()
                 };

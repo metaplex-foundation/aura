@@ -1,4 +1,5 @@
 use crate::{
+    asset::AssetCollection,
     column::Column,
     key_encoders::decode_pubkey,
     storage_traits::{AssetIndexReader, Dumper},
@@ -199,6 +200,25 @@ impl Storage {
             synchronizer_metrics.clone(),
         ));
 
+        let mut collections = HashMap::new();
+        for coll in self.asset_collection_data.iter_start() {
+            match coll {
+                Ok((_, value)) => match deserialize::<AssetCollection>(value.to_vec().as_ref()) {
+                    Ok(collection_data) => {
+                        if let Some(auth) = collection_data.authority.value {
+                            collections.insert(collection_data.pubkey, auth);
+                        }
+                    }
+                    Err(e) => {
+                        error!("Could not deserialize asset collection struct during preparation for dump creation: {}", e.to_string());
+                    }
+                },
+                Err(e) => {
+                    error!("Could not select data from asset_collection_data CF during preparation fro dump creation: {}", e.to_string());
+                }
+            }
+        }
+
         // Iteration over `asset_static_data` column via CUSTOM iterator.
         let iter = self.asset_static_data.iter_start();
         let mut batch = Vec::with_capacity(batch_size);
@@ -213,7 +233,7 @@ impl Storage {
             if batch.len() >= batch_size {
                 let start = chrono::Utc::now();
                 let indexes = self
-                    .get_asset_indexes(batch.as_ref())
+                    .get_asset_indexes(batch.as_ref(), Some(&collections))
                     .await
                     .map_err(|e| e.to_string())?;
                 self.red_metrics.observe_request(
@@ -240,7 +260,7 @@ impl Storage {
         if !batch.is_empty() {
             let start = chrono::Utc::now();
             let indexes = self
-                .get_asset_indexes(batch.as_ref())
+                .get_asset_indexes(batch.as_ref(), Some(&collections))
                 .await
                 .map_err(|e| e.to_string())?;
             self.red_metrics.observe_request(
