@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
-use entities::enums::{SpecificationVersions, TokenMetadataEdition};
+use entities::enums::{SpecificationAssetClass, SpecificationVersions, TokenMetadataEdition};
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 
@@ -17,9 +17,7 @@ use crate::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
     BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
-use entities::models::{
-    AssetIndex, CompleteAssetDetails, FungibleToken, UpdateVersion, Updated, UrlWithStatus,
-};
+use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, UrlWithStatus};
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
@@ -267,29 +265,17 @@ impl AssetIndexReader for Storage {
 
         // compare to other data this data is saved in HashMap by token account keys, not mints
         for token_acc in token_accounts_details.iter().flatten() {
-            if let Some(existed_index) = asset_indexes.get_mut(&token_acc.pubkey) {
-                existed_index.fungible_tokens.push(FungibleToken {
-                    key: token_acc.pubkey,
-                    owner: token_acc.owner,
-                    asset: token_acc.mint,
-                    balance: token_acc.amount,
-                    slot_updated: token_acc.slot_updated,
-                });
-            } else {
-                let asset_index = AssetIndex {
-                    pubkey: token_acc.mint,
-                    fungible_tokens: vec![FungibleToken {
-                        key: token_acc.pubkey,
-                        owner: token_acc.owner,
-                        asset: token_acc.mint,
-                        balance: token_acc.amount,
-                        slot_updated: token_acc.slot_updated,
-                    }],
-                    ..Default::default()
-                };
+            let asset_index = AssetIndex {
+                pubkey: token_acc.pubkey,
+                specification_asset_class: SpecificationAssetClass::FungibleToken,
+                owner: Some(token_acc.owner),
+                fungible_asset_mint: Some(token_acc.mint),
+                fungible_asset_balance: Some(token_acc.amount as u64),
+                slot_updated: token_acc.slot_updated,
+                ..Default::default()
+            };
 
-                asset_indexes.insert(token_acc.pubkey, asset_index);
-            }
+            asset_indexes.insert(token_acc.pubkey, asset_index);
         }
 
         self.red_metrics.observe_request(

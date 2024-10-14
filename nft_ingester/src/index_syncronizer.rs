@@ -412,7 +412,8 @@ mod tests {
             }),
             update_authority: None,
             slot_updated: 123456,
-            fungible_tokens: vec![],
+            fungible_asset_mint: None,
+            fungible_asset_balance: None,
         }
     }
 

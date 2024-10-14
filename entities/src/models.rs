@@ -69,7 +69,8 @@ pub struct AssetIndex {
     pub metadata_url: Option<UrlWithStatus>,
     pub update_authority: Option<Pubkey>,
     pub slot_updated: i64,
-    pub fungible_tokens: Vec<FungibleToken>,
+    pub fungible_asset_mint: Option<Pubkey>,
+    pub fungible_asset_balance: Option<u64>,
 }
 
 /// FungibleToken is associated token account

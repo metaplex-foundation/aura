@@ -15,7 +15,10 @@ use crate::{
     DROP_ACTION, INSERT_TASK_PARAMETERS_COUNT, POSTGRES_PARAMETERS_COUNT_LIMIT, SELECT_ACTION,
     SQL_COMPONENT, UPDATE_ACTION,
 };
-use entities::models::{AssetIndex, Creator, FungibleToken, UrlWithStatus};
+use entities::{
+    enums::SpecificationAssetClass as AssetSpecClass,
+    models::{AssetIndex, Creator, FungibleToken, UrlWithStatus},
+};
 
 pub const INSERT_ASSET_PARAMETERS_COUNT: usize = 19;
 pub const DELETE_ASSET_CREATOR_PARAMETERS_COUNT: usize = 2;
@@ -213,20 +216,23 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     let mut authorities = authorities.into_values().collect::<Vec<_>>();
     authorities.sort_by(|a, b| a.key.cmp(&b.key));
 
-    // collect HashMap in order to remove duplicates
-    let fungible_tokens = asset_indexes
-        .iter()
-        .flat_map(|i| {
-            i.fungible_tokens.iter().map(|fungible_token| {
-                (
-                    (fungible_token.owner, fungible_token.asset),
-                    *fungible_token,
-                )
-            })
-        })
-        .collect::<HashMap<_, _>>();
+    let mut fungible_tokens = vec![];
+    for asset in asset_indexes.iter() {
+        if asset.specification_asset_class == AssetSpecClass::FungibleToken {
+            fungible_tokens.push(FungibleToken {
+                key: asset.pubkey,
+                slot_updated: asset.slot_updated,
+                // it's unlikely that rows below will not be filled for fungible token
+                // but even if that happens we will save asset with default values
+                owner: asset.owner.unwrap_or_default(),
+                asset: asset.fungible_asset_mint.unwrap_or_default(),
+                balance: asset.fungible_asset_balance.unwrap_or_default() as i64,
+            });
+        }
+    }
+
     AssetComponenents {
-        fungible_tokens: fungible_tokens.into_values().collect(),
+        fungible_tokens,
         metadata_urls,
         asset_indexes,
         all_creators,
