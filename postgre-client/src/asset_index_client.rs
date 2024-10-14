@@ -216,10 +216,11 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     let mut authorities = authorities.into_values().collect::<Vec<_>>();
     authorities.sort_by(|a, b| a.key.cmp(&b.key));
 
-    let mut fungible_tokens = vec![];
-    for asset in asset_indexes.iter() {
-        if asset.specification_asset_class == AssetSpecClass::FungibleToken {
-            fungible_tokens.push(FungibleToken {
+    let fungible_tokens = asset_indexes
+        .iter()
+        .filter(|asset| asset.specification_asset_class == AssetSpecClass::FungibleToken)
+        .map(|asset| {
+            FungibleToken {
                 key: asset.pubkey,
                 slot_updated: asset.slot_updated,
                 // it's unlikely that rows below will not be filled for fungible token
@@ -227,9 +228,9 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
                 owner: asset.owner.unwrap_or_default(),
                 asset: asset.fungible_asset_mint.unwrap_or_default(),
                 balance: asset.fungible_asset_balance.unwrap_or_default() as i64,
-            });
-        }
-    }
+            }
+        })
+        .collect::<Vec<FungibleToken>>();
 
     AssetComponenents {
         fungible_tokens,
