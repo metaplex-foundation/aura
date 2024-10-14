@@ -1,12 +1,16 @@
-ALTER TABLE fungible_tokens ADD COLUMN fbt_pubkey bytea NOT NULL;
+DROP TABLE fungible_tokens;
 
-ALTER TABLE fungible_tokens DROP CONSTRAINT fungible_tokens_pkey;
+-- recreate table and add fbt_pubkey
 
-ALTER TABLE fungible_tokens ADD PRIMARY KEY (fbt_pubkey);
-
-DROP INDEX IF EXISTS fungible_tokens_fbt_balance_idx;
-
-DROP INDEX IF EXISTS fungible_tokens_fbt_slot_updated_idx;
+CREATE TABLE fungible_tokens (
+    fbt_pubkey bytea NOT NULL,
+    fbt_owner bytea NOT NULL,
+    -- mint key
+    fbt_asset bytea NOT NULL,
+    fbt_balance bigint NOT NULL DEFAULT 0,
+    fbt_slot_updated bigint NOT NULL DEFAULT 0,
+    PRIMARY KEY (fbt_pubkey)
+);
 
 CREATE INDEX fungible_tokens_fbt_owner_balance_idx ON fungible_tokens(fbt_owner, fbt_balance);
 
