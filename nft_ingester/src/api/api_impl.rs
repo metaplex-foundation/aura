@@ -247,6 +247,7 @@ where
             self.rocks_db.clone(),
             vec![id],
             self.proof_checker.clone(),
+            &self.tree_gaps_checker,
             self.metrics.clone(),
         )
         .await?;
@@ -286,6 +287,7 @@ where
             self.rocks_db.clone(),
             ids,
             self.proof_checker.clone(),
+            &self.tree_gaps_checker,
             self.metrics.clone(),
         )
         .await;
