@@ -7,6 +7,7 @@ use entities::enums::TokenType;
 use interface::account_balance::AccountBalanceGetter;
 use interface::json::{JsonDownloader, JsonPersister};
 use interface::price_fetcher::TokenPriceFetcher;
+use interface::processing_possibility::ProcessingPossibilityChecker;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::errors::StorageError;
 use rocks_db::Storage;
@@ -19,7 +20,12 @@ use tracing::error;
 use super::asset_preview::populate_previews;
 
 #[allow(clippy::too_many_arguments)]
-pub async fn search_assets<TPF: TokenPriceFetcher>(
+pub async fn search_assets<
+    TPF: TokenPriceFetcher,
+    JD: JsonDownloader + Sync + Send + 'static,
+    JP: JsonPersister + Sync + Send + 'static,
+    PPC: ProcessingPossibilityChecker + Sync + Send + 'static,
+>(
     index_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
     rocks_db: Arc<Storage>,
     mut filter: SearchAssetsQuery,
@@ -30,14 +36,15 @@ pub async fn search_assets<TPF: TokenPriceFetcher>(
     after: Option<String>,
     cursor: Option<String>,
     options: GetByMethodsOptions,
-    json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
-    json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
+    json_downloader: Option<Arc<JD>>,
+    json_persister: Option<Arc<JP>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     account_balance_getter: Arc<impl AccountBalanceGetter>,
     storage_service_base_path: Option<String>,
     token_price_fetcher: Arc<TPF>,
     metrics: Arc<ApiMetricsConfig>,
+    tree_gaps_checker: &Option<Arc<PPC>>,
 ) -> Result<AssetList, StorageError> {
     if options.show_fungible {
         filter.token_type = Some(TokenType::All)
@@ -61,6 +68,7 @@ pub async fn search_assets<TPF: TokenPriceFetcher>(
             tasks,
             token_price_fetcher.clone(),
             metrics,
+            tree_gaps_checker,
         ),
         fetch_native_balance(
             show_native_balance,
@@ -84,7 +92,12 @@ pub async fn search_assets<TPF: TokenPriceFetcher>(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn fetch_assets<TPF: TokenPriceFetcher>(
+async fn fetch_assets<
+    TPF: TokenPriceFetcher,
+    JD: JsonDownloader + Sync + Send + 'static,
+    JP: JsonPersister + Sync + Send + 'static,
+    PPC: ProcessingPossibilityChecker + Sync + Send + 'static,
+>(
     index_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
     rocks_db: Arc<Storage>,
     filter: SearchAssetsQuery,
@@ -95,12 +108,13 @@ async fn fetch_assets<TPF: TokenPriceFetcher>(
     after: Option<String>,
     cursor: Option<String>,
     options: GetByMethodsOptions,
-    json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
-    json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
+    json_downloader: Option<Arc<JD>>,
+    json_persister: Option<Arc<JP>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     token_price_fetcher: Arc<TPF>,
     metrics: Arc<ApiMetricsConfig>,
+    tree_gaps_checker: &Option<Arc<PPC>>,
 ) -> Result<AssetList, StorageError> {
     let filter_result: &Result<postgre_client::model::SearchAssetsFilter, ConversionError> =
         &filter.try_into();
@@ -168,6 +182,7 @@ async fn fetch_assets<TPF: TokenPriceFetcher>(
         &owner_address,
         token_price_fetcher,
         metrics,
+        tree_gaps_checker,
     )
     .await?;
     let assets = assets.into_iter().flatten().collect::<Vec<_>>();

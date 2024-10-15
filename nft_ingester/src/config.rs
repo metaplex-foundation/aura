@@ -310,6 +310,8 @@ pub struct ApiConfig {
     pub heap_path: String,
     pub consistence_backfilling_slots_threshold: Option<u64>,
     pub storage_service_base_url: Option<String>,
+    #[serde(default)]
+    pub check_tree_gaps: bool,
 }
 
 fn default_heap_path() -> String {
