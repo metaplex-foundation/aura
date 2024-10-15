@@ -131,6 +131,7 @@ mod mtg_441_tests {
     use nft_ingester::config::JsonMiddlewareConfig;
     use nft_ingester::json_worker::JsonWorker;
     use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
+    use rocks_db::Storage;
     use serde_json::Value;
     use setup::rocks::RocksTestEnvironmentSetup;
     use setup::TestEnvironment;
@@ -150,6 +151,7 @@ mod mtg_441_tests {
         JsonWorker,
         MockAccountBalanceGetter,
         RaydiumTokenPriceFetcher,
+        Storage,
     > {
         DasApi::<
             MaybeProofChecker,
@@ -157,10 +159,12 @@ mod mtg_441_tests {
             JsonWorker,
             MockAccountBalanceGetter,
             RaydiumTokenPriceFetcher,
+            Storage,
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(ApiMetricsConfig::new()),
+            None,
             None,
             50,
             None,

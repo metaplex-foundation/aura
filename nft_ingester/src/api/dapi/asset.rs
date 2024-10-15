@@ -175,24 +175,36 @@ fn asset_selected_maps_into_full_asset(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn get_by_ids<TPF: TokenPriceFetcher>(
+pub async fn get_by_ids<
+    TPF: TokenPriceFetcher,
+    JD: JsonDownloader + Sync + Send + 'static,
+    JP: JsonPersister + Sync + Send + 'static,
+    PPC: ProcessingPossibilityChecker + Sync + Send + 'static,
+>(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
     options: Options,
-    json_downloader: Option<Arc<impl JsonDownloader + Sync + Send + 'static>>,
-    json_persister: Option<Arc<impl JsonPersister + Sync + Send + 'static>>,
+    json_downloader: Option<Arc<JD>>,
+    json_persister: Option<Arc<JP>>,
     max_json_to_download: usize,
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     // We need owner_address if we want to query fungible token accounts
     owner_address: &Option<Pubkey>,
     token_price_fetcher: Arc<TPF>,
     metrics: Arc<ApiMetricsConfig>,
+    tree_gaps_checker: &Option<Arc<PPC>>,
 ) -> Result<Vec<Option<FullAsset>>, StorageError> {
     if asset_ids.is_empty() {
         return Ok(vec![]);
     }
-    if !rocks_db.can_process_assets(asset_ids.as_slice()).await {
-        return Err(StorageError::CannotServiceRequest);
+    // if at least one asset is from inconsistent tree request will not be processed
+    if let Some(tree_gaps_checker) = tree_gaps_checker {
+        if !tree_gaps_checker
+            .can_process_assets(asset_ids.as_slice())
+            .await
+        {
+            return Err(StorageError::CannotServiceRequest);
+        }
     }
     // need to pass only unique asset_ids to select query
     // index need to save order of IDs in response

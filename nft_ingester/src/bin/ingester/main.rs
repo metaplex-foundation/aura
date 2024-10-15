@@ -326,6 +326,16 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let api_config = setup_config::<ApiConfig>(INGESTER_CONFIG_PREFIX);
 
+    // it will check if asset which was requested is from the tree which has gaps in sequences
+    // gap in sequences means missed transactions and  as a result incorrect asset data
+    let tree_gaps_checker = {
+        if api_config.skip_check_tree_gaps {
+            None
+        } else {
+            Some(cloned_rocks_storage.clone())
+        }
+    };
+
     let cloned_index_storage = index_pg_storage.clone();
     let file_storage_path = api_config.file_storage_path_container.clone();
     mutexed_tasks.lock().await.spawn(async move {
@@ -336,6 +346,7 @@ pub async fn main() -> Result<(), IngesterError> {
             cloned_api_metrics,
             api_config.server_port,
             proof_checker,
+            tree_gaps_checker,
             api_config.max_page_limit,
             middleware_json_downloader.clone(),
             middleware_json_downloader,

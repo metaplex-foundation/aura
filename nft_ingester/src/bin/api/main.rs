@@ -130,6 +130,16 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     };
 
+    // it will check if asset which was requested is from the tree which has gaps in sequences
+    // gap in sequences means missed transactions and  as a result incorrect asset data
+    let tree_gaps_checker = {
+        if config.skip_check_tree_gaps {
+            None
+        } else {
+            Some(cloned_rocks_storage.clone())
+        }
+    };
+
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     let cloned_tasks = mutexed_tasks.clone();
     let cloned_rx = shutdown_rx.resubscribe();
@@ -141,6 +151,7 @@ pub async fn main() -> Result<(), IngesterError> {
             metrics.clone(),
             config.server_port,
             proof_checker,
+            tree_gaps_checker,
             config.max_page_limit,
             json_worker,
             None,

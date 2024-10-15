@@ -1,6 +1,7 @@
 use dapi::{get_asset, get_asset_batch, get_proof_for_assets, search_assets};
 use interface::error::UsecaseError;
 use interface::json::{JsonDownloader, JsonPersister};
+use interface::processing_possibility::ProcessingPossibilityChecker;
 use interface::proofs::ProofChecker;
 use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
@@ -36,18 +37,20 @@ use usecase::validation::{validate_opt_pubkey, validate_pubkey};
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
 
-pub struct DasApi<PC, JD, JP, ABG, TPF>
+pub struct DasApi<PC, JD, JP, ABG, TPF, PPC>
 where
     PC: ProofChecker + Sync + Send + 'static,
     JD: JsonDownloader + Sync + Send + 'static,
     JP: JsonPersister + Sync + Send + 'static,
     ABG: AccountBalanceGetter + Sync + Send + 'static,
     TPF: TokenPriceFetcher + Sync + Send + 'static,
+    PPC: ProcessingPossibilityChecker + Sync + Send + 'static,
 {
     pub(crate) pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
     metrics: Arc<ApiMetricsConfig>,
     proof_checker: Option<Arc<PC>>,
+    tree_gaps_checker: Option<Arc<PPC>>,
     max_page_limit: u32,
     json_downloader: Option<Arc<JD>>,
     json_persister: Option<Arc<JP>>,
@@ -62,13 +65,14 @@ pub fn not_found() -> DasApiError {
     DasApiError::NoDataFoundError
 }
 
-impl<PC, JD, JP, ABG, TPF> DasApi<PC, JD, JP, ABG, TPF>
+impl<PC, JD, JP, ABG, TPF, PPC> DasApi<PC, JD, JP, ABG, TPF, PPC>
 where
     PC: ProofChecker + Sync + Send + 'static,
     JD: JsonDownloader + Sync + Send + 'static,
     JP: JsonPersister + Sync + Send + 'static,
     ABG: AccountBalanceGetter + Sync + Send + 'static,
     TPF: TokenPriceFetcher + Sync + Send + 'static,
+    PPC: ProcessingPossibilityChecker + Sync + Send + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -76,6 +80,7 @@ where
         rocks_db: Arc<Storage>,
         metrics: Arc<ApiMetricsConfig>,
         proof_checker: Option<Arc<PC>>,
+        tree_gaps_checker: Option<Arc<PPC>>,
         max_page_limit: usize,
         json_downloader: Option<Arc<JD>>,
         json_persister: Option<Arc<JP>>,
@@ -89,6 +94,7 @@ where
             rocks_db,
             metrics,
             proof_checker,
+            tree_gaps_checker,
             max_page_limit: max_page_limit as u32,
             json_downloader,
             json_persister,
@@ -241,6 +247,7 @@ where
             self.rocks_db.clone(),
             vec![id],
             self.proof_checker.clone(),
+            &self.tree_gaps_checker,
             self.metrics.clone(),
         )
         .await?;
@@ -280,6 +287,7 @@ where
             self.rocks_db.clone(),
             ids,
             self.proof_checker.clone(),
+            &self.tree_gaps_checker,
             self.metrics.clone(),
         )
         .await;
@@ -313,6 +321,7 @@ where
             self.storage_service_base_path.clone(),
             self.token_price_fetcher.clone(),
             self.metrics.clone(),
+            &self.tree_gaps_checker,
         )
         .await?;
 
@@ -360,6 +369,7 @@ where
             self.storage_service_base_path.clone(),
             self.token_price_fetcher.clone(),
             self.metrics.clone(),
+            &self.tree_gaps_checker,
         )
         .await?;
 
@@ -720,6 +730,7 @@ where
             self.storage_service_base_path.clone(),
             self.token_price_fetcher.clone(),
             self.metrics.clone(),
+            &self.tree_gaps_checker,
         )
         .await?;
 
