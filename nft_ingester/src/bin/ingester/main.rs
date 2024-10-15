@@ -329,10 +329,10 @@ pub async fn main() -> Result<(), IngesterError> {
     // it will check if asset which was requested is from the tree which has gaps in sequences
     // gap in sequences means missed transactions and  as a result incorrect asset data
     let tree_gaps_checker = {
-        if api_config.check_tree_gaps {
-            Some(cloned_rocks_storage.clone())
-        } else {
+        if api_config.skip_check_tree_gaps {
             None
+        } else {
+            Some(cloned_rocks_storage.clone())
         }
     };
 
