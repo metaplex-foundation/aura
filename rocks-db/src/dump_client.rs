@@ -1,9 +1,8 @@
 use crate::{
-    asset::AssetCollection,
     column::Column,
     key_encoders::decode_pubkey,
     storage_traits::{AssetIndexReader, Dumper},
-    Storage,
+    AssetStaticDetails, Storage,
 };
 use async_trait::async_trait;
 use bincode::deserialize;
@@ -200,24 +199,24 @@ impl Storage {
             synchronizer_metrics.clone(),
         ));
 
-        let mut collections = HashMap::new();
-        for coll in self.asset_collection_data.iter_start() {
-            match coll {
-                Ok((_, value)) => match deserialize::<AssetCollection>(value.to_vec().as_ref()) {
-                    Ok(collection_data) => {
-                        if let Some(auth) = collection_data.authority.value {
-                            collections.insert(collection_data.pubkey, auth);
-                        }
-                    }
-                    Err(e) => {
-                        error!("Could not deserialize asset collection struct during preparation for dump creation: {}", e.to_string());
-                    }
-                },
-                Err(e) => {
-                    error!("Could not select data from asset_collection_data CF during preparation fro dump creation: {}", e.to_string());
-                }
-            }
-        }
+        let core_collection_keys: Vec<Pubkey> = self
+            .asset_static_data
+            .iter_start()
+            .filter_map(|a| a.ok())
+            .filter_map(|(_, v)| deserialize::<AssetStaticDetails>(v.to_vec().as_ref()).ok())
+            .filter(|a| a.specification_asset_class == SpecificationAssetClass::MplCoreCollection)
+            .map(|a| a.pubkey)
+            .collect();
+
+        let collections: HashMap<Pubkey, Pubkey> = self
+            .asset_collection_data
+            .batch_get(core_collection_keys)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .flatten()
+            .filter_map(|asset| asset.authority.value.map(|v| (asset.pubkey, v)))
+            .collect();
 
         // Iteration over `asset_static_data` column via CUSTOM iterator.
         let iter = self.asset_static_data.iter_start();

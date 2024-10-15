@@ -142,17 +142,17 @@ impl AssetIndexReader for Storage {
         let asset_collection_details = asset_collection_details?;
         let token_accounts_details = token_accounts_details?;
 
-        let assets_collection_pks = asset_collection_details
-            .iter()
-            .flat_map(|c| c.as_ref().map(|c| c.collection.value))
-            .collect::<Vec<_>>();
-
         let mpl_core_map = {
             // during dump creation hashmap with collection authorities will be passed
             // and during regular synchronization we should make additional select from DB
             if collection_authorities.is_some() {
                 HashMap::new()
             } else {
+                let assets_collection_pks = asset_collection_details
+                    .iter()
+                    .flat_map(|c| c.as_ref().map(|c| c.collection.value))
+                    .collect::<Vec<_>>();
+
                 self.asset_collection_data
                     .batch_get(assets_collection_pks)
                     .await?
