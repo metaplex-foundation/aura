@@ -42,6 +42,8 @@ pub const POSTGRES_PARAMETERS_COUNT_LIMIT: usize = 65535;
 pub const INSERT_TASK_PARAMETERS_COUNT: usize = 3;
 pub const TEMP_TABLE_PREFIX: &str = "temp_";
 
+pub const PG_MIGRATIONS_PATH: &str = "./migrations";
+
 #[derive(Clone)]
 pub struct PgClient {
     pub pool: PgPool,

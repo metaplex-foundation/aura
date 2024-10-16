@@ -1,5 +1,5 @@
 use entities::enums::OwnerType;
-use entities::models::{Mint, PubkeyWithSlot, TokenAccount, UpdateVersion, Updated};
+use entities::models::{Mint, TokenAccount, UpdateVersion, Updated};
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
 use rocks_db::batch_savers::BatchSaveStorage;
@@ -18,19 +18,18 @@ impl TokenAccountsProcessor {
         Self { metrics }
     }
 
-    fn finalize_processing<T, F>(
+    fn finalize_processing<F>(
         &self,
         storage: &mut BatchSaveStorage,
         operation: F,
-        asset_update: PubkeyWithSlot,
         metric_name: &str,
     ) -> Result<(), StorageError>
     where
-        F: Fn(&mut BatchSaveStorage) -> Result<T, StorageError>,
+        F: Fn(&mut BatchSaveStorage) -> Result<(), StorageError>,
     {
         let begin_processing = Instant::now();
-        operation(storage)?;
-        let res = storage.asset_updated_with_batch(asset_update.slot, asset_update.pubkey);
+        let res: Result<(), StorageError> = operation(storage);
+
         self.metrics
             .set_latency(metric_name, begin_processing.elapsed().as_millis() as f64);
         result_to_metrics(self.metrics.clone(), &res, metric_name);
@@ -79,12 +78,12 @@ impl TokenAccountsProcessor {
                 storage.store_owner(&asset_owner_details)?;
                 storage.store_dynamic(&asset_dynamic_details)
             },
-            PubkeyWithSlot {
-                pubkey: token_account.mint,
-                slot: token_account.slot_updated as u64,
-            },
             "token_accounts_asset_components_merge_with_batch",
-        )
+        )?;
+
+        storage
+            .asset_updated_with_batch(token_account.slot_updated as u64, token_account.pubkey)?;
+        storage.asset_updated_with_batch(token_account.slot_updated as u64, token_account.mint)
     }
 
     pub fn transform_and_save_mint_account(
@@ -150,12 +149,10 @@ impl TokenAccountsProcessor {
                 storage.store_dynamic(&asset_dynamic_details)?;
                 storage.store_spl_mint(mint)
             },
-            PubkeyWithSlot {
-                pubkey: mint.pubkey,
-                slot: mint.slot_updated as u64,
-            },
             "mint_accounts_merge_with_batch",
-        )
+        )?;
+
+        storage.asset_updated_with_batch(mint.slot_updated as u64, mint.pubkey)
     }
 
     pub fn save_token_account_with_idxs(
@@ -168,10 +165,6 @@ impl TokenAccountsProcessor {
             storage,
             |storage: &mut BatchSaveStorage| {
                 storage.save_token_account_with_idxs(key, token_account)
-            },
-            PubkeyWithSlot {
-                pubkey: token_account.mint,
-                slot: token_account.slot_updated as u64,
             },
             "token_accounts_with_idx_merge_with_batch",
         )

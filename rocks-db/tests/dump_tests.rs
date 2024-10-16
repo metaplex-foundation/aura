@@ -1,5 +1,6 @@
-use std::fs::File;
+use std::{fs::File, sync::Arc};
 
+use metrics_utils::SynchronizerMetricsConfig;
 use setup::rocks::*;
 use tempfile::TempDir;
 
@@ -32,6 +33,7 @@ async fn test_scv_export_from_rocks() {
             (fungible_tokens_file, fungible_tokens_path.clone()),
             155,
             &rx,
+            Arc::new(SynchronizerMetricsConfig::new()),
         )
         .await
         .unwrap();
