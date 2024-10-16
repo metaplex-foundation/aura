@@ -2,7 +2,7 @@ use crate::{
     column::Column,
     key_encoders::decode_pubkey,
     storage_traits::{AssetIndexReader, Dumper},
-    Storage,
+    AssetStaticDetails, Storage,
 };
 use async_trait::async_trait;
 use bincode::deserialize;
@@ -199,6 +199,25 @@ impl Storage {
             synchronizer_metrics.clone(),
         ));
 
+        let core_collection_keys: Vec<Pubkey> = self
+            .asset_static_data
+            .iter_start()
+            .filter_map(|a| a.ok())
+            .filter_map(|(_, v)| deserialize::<AssetStaticDetails>(v.to_vec().as_ref()).ok())
+            .filter(|a| a.specification_asset_class == SpecificationAssetClass::MplCoreCollection)
+            .map(|a| a.pubkey)
+            .collect();
+
+        let collections: HashMap<Pubkey, Pubkey> = self
+            .asset_collection_data
+            .batch_get(core_collection_keys)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .flatten()
+            .filter_map(|asset| asset.authority.value.map(|v| (asset.pubkey, v)))
+            .collect();
+
         // Iteration over `asset_static_data` column via CUSTOM iterator.
         let iter = self.asset_static_data.iter_start();
         let mut batch = Vec::with_capacity(batch_size);
@@ -213,7 +232,7 @@ impl Storage {
             if batch.len() >= batch_size {
                 let start = chrono::Utc::now();
                 let indexes = self
-                    .get_asset_indexes(batch.as_ref())
+                    .get_asset_indexes(batch.as_ref(), Some(&collections))
                     .await
                     .map_err(|e| e.to_string())?;
                 self.red_metrics.observe_request(
@@ -240,7 +259,7 @@ impl Storage {
         if !batch.is_empty() {
             let start = chrono::Utc::now();
             let indexes = self
-                .get_asset_indexes(batch.as_ref())
+                .get_asset_indexes(batch.as_ref(), Some(&collections))
                 .await
                 .map_err(|e| e.to_string())?;
             self.red_metrics.observe_request(
