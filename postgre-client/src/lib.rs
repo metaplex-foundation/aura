@@ -141,7 +141,7 @@ impl PgClient {
                 false => TaskStatus::Pending,
             });
         });
-        query_builder.push(" ON CONFLICT (tsk_id) DO NOTHING;");
+        query_builder.push(" ON CONFLICT DO NOTHING;");
 
         self.execute_query_with_metrics(transaction, &mut query_builder, BATCH_UPSERT_ACTION, table)
             .await
