@@ -2,6 +2,7 @@ use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
 use nft_ingester::batch_mint::batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister};
 use nft_ingester::scheduler::Scheduler;
+use postgre_client::PG_MIGRATIONS_PATH;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -69,7 +70,6 @@ use usecase::slots_collector::SlotsCollector;
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
-pub const PG_MIGRATIONS_PATH: &str = "./migrations";
 pub const ARWEAVE_WALLET_PATH: &str = "./arweave_wallet.json";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
@@ -109,9 +109,12 @@ pub async fn main() -> Result<(), IngesterError> {
         Arc::new(init_primary_storage(&config, &metrics_state, mutexed_tasks.clone(), DEFAULT_ROCKSDB_PATH).await?);
     let index_pg_storage = Arc::new(
         init_index_storage_with_migration(
-            &config,
-            &metrics_state,
-            DEFAULT_MAX_POSTGRES_CONNECTIONS,
+            &config.database_config.get_database_url()?,
+            config
+                .database_config
+                .get_max_postgres_connections()
+                .unwrap_or(DEFAULT_MAX_POSTGRES_CONNECTIONS),
+            metrics_state.red_metrics.clone(),
             DEFAULT_MIN_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,
         )

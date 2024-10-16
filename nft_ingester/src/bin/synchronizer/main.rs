@@ -5,8 +5,8 @@ use nft_ingester::config::{
 };
 use nft_ingester::error::IngesterError;
 use nft_ingester::index_syncronizer::Synchronizer;
-use nft_ingester::init::graceful_stop;
-use postgre_client::PgClient;
+use nft_ingester::init::{graceful_stop, init_index_storage_with_migration};
+use postgre_client::PG_MIGRATIONS_PATH;
 use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
@@ -64,11 +64,12 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     let index_storage = Arc::new(
-        PgClient::new(
+        init_index_storage_with_migration(
             &config.database_config.get_database_url().unwrap(),
-            DEFAULT_MIN_POSTGRES_CONNECTIONS,
             max_postgre_connections,
             red_metrics.clone(),
+            DEFAULT_MAX_POSTGRES_CONNECTIONS,
+            PG_MIGRATIONS_PATH,
         )
         .await?,
     );
