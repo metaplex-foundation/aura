@@ -6,12 +6,12 @@ use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
 use asset::{
-    AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetOwnerDeprecated, MetadataMintMap,
-    SlotAssetIdx,
+    AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetCompleteDetails,
+    AssetDynamicDetailsDeprecated, AssetOwnerDeprecated, AssetStaticDetailsDeprecated,
+    MetadataMintMap, SlotAssetIdx,
 };
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
-use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
 use crate::migrator::{MigrationState, MigrationVersions, RocksMigration};
 pub use asset::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
@@ -91,6 +91,7 @@ const BATCH_GET_ACTION: &str = "batch_get";
 const ITERATOR_TOP_ACTION: &str = "iterator_top";
 
 pub struct Storage {
+    pub asset_data: Column<AssetCompleteDetails>,
     pub asset_static_data: Column<AssetStaticDetails>,
     pub asset_static_data_deprecated: Column<AssetStaticDetailsDeprecated>,
     pub asset_dynamic_data: Column<AssetDynamicDetails>,
@@ -146,6 +147,7 @@ impl Storage {
         let asset_static_data = Self::column(db.clone(), red_metrics.clone());
         let asset_dynamic_data = Self::column(db.clone(), red_metrics.clone());
         let asset_dynamic_data_deprecated = Self::column(db.clone(), red_metrics.clone());
+        let asset_data = Self::column(db.clone(), red_metrics.clone());
         let metadata_mint_map = Self::column(db.clone(), red_metrics.clone());
         let asset_authority_data = Self::column(db.clone(), red_metrics.clone());
         let asset_authority_deprecated = Self::column(db.clone(), red_metrics.clone());
@@ -190,6 +192,7 @@ impl Storage {
             asset_static_data,
             asset_dynamic_data,
             asset_dynamic_data_deprecated,
+            asset_data,
             metadata_mint_map,
             asset_authority_data,
             asset_authority_deprecated,
@@ -272,6 +275,7 @@ impl Storage {
             Self::new_cf_descriptor::<AssetStaticDetails>(migration_state),
             Self::new_cf_descriptor::<AssetDynamicDetails>(migration_state),
             Self::new_cf_descriptor::<AssetDynamicDetailsDeprecated>(migration_state),
+            Self::new_cf_descriptor::<AssetCompleteDetails>(migration_state),
             Self::new_cf_descriptor::<MetadataMintMap>(migration_state),
             Self::new_cf_descriptor::<AssetAuthority>(migration_state),
             Self::new_cf_descriptor::<AssetAuthorityDeprecated>(migration_state),
@@ -389,6 +393,13 @@ impl Storage {
         }
         // Optional merges
         match C::NAME {
+            // todo: add migration version
+            asset::AssetCompleteDetails::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_complete_details",
+                    AssetCompleteDetails::merge_complete_details,
+                );
+            }
             AssetStaticDetails::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_static_details",

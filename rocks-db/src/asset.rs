@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use crate::inscriptions::{Inscription, InscriptionData};
 use bincode::{deserialize, serialize};
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::{EditionData, OffChainData, SplMint, TokenAccount, UpdateVersion, Updated};
+use entities::models::{
+    AssetIndex, EditionData, OffChainData, SplMint, TokenAccount, UpdateVersion, Updated,
+    UrlWithStatus,
+};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
@@ -16,11 +19,7 @@ use crate::TypedColumn;
 
 #[derive(Debug)]
 pub struct AssetSelectedMaps {
-    pub assets_static: HashMap<Pubkey, AssetStaticDetails>,
-    pub assets_dynamic: HashMap<Pubkey, AssetDynamicDetails>,
-    pub assets_authority: HashMap<Pubkey, AssetAuthority>,
-    pub assets_collection: HashMap<Pubkey, AssetCollection>,
-    pub assets_owner: HashMap<Pubkey, AssetOwner>,
+    pub asset_complete_details: HashMap<Pubkey, AssetCompleteDetails>,
     pub assets_leaf: HashMap<Pubkey, AssetLeaf>,
     pub offchain_data: HashMap<String, OffChainData>,
     pub urls: HashMap<String, String>,
@@ -31,6 +30,184 @@ pub struct AssetSelectedMaps {
     pub spl_mints: HashMap<Pubkey, SplMint>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AssetCompleteDetails {
+    pub pubkey: Pubkey,
+    pub static_details: Option<AssetStaticDetails>,
+    pub dynamic_details: Option<AssetDynamicDetails>,
+    pub authority: Option<AssetAuthority>,
+    pub owner: Option<AssetOwner>,
+    pub collection: Option<AssetCollection>,
+}
+
+impl From<AssetStaticDetails> for AssetCompleteDetails {
+    fn from(value: AssetStaticDetails) -> Self {
+        Self {
+            pubkey: value.pubkey,
+            static_details: Some(value.clone()),
+            dynamic_details: None,
+            authority: None,
+            owner: None,
+            collection: None,
+        }
+    }
+}
+
+impl From<AssetDynamicDetails> for AssetCompleteDetails {
+    fn from(value: AssetDynamicDetails) -> Self {
+        Self {
+            pubkey: value.pubkey,
+            static_details: None,
+            dynamic_details: Some(value.clone()),
+            authority: None,
+            owner: None,
+            collection: None,
+        }
+    }
+}
+
+impl From<AssetAuthority> for AssetCompleteDetails {
+    fn from(value: AssetAuthority) -> Self {
+        Self {
+            pubkey: value.pubkey,
+            static_details: None,
+            dynamic_details: None,
+            authority: Some(value.clone()),
+            owner: None,
+            collection: None,
+        }
+    }
+}
+
+impl From<AssetOwner> for AssetCompleteDetails {
+    fn from(value: AssetOwner) -> Self {
+        Self {
+            pubkey: value.pubkey,
+            static_details: None,
+            dynamic_details: None,
+            authority: None,
+            owner: Some(value.clone()),
+            collection: None,
+        }
+    }
+}
+
+impl From<AssetCollection> for AssetCompleteDetails {
+    fn from(value: AssetCollection) -> Self {
+        Self {
+            pubkey: value.pubkey,
+            static_details: None,
+            dynamic_details: None,
+            authority: None,
+            owner: None,
+            collection: Some(value.clone()),
+        }
+    }
+}
+
+impl AssetCompleteDetails {
+    pub fn get_slot_updated(&self) -> u64 {
+        // Collect the slot_updated values from all available fields
+        let slots = [
+            self.dynamic_details.as_ref().map(|d| d.get_slot_updated()),
+            self.authority.as_ref().map(|a| a.slot_updated),
+            self.owner.as_ref().map(|o| o.get_slot_updated()),
+            self.collection.as_ref().map(|c| c.get_slot_updated()),
+        ];
+        // Filter out None values and find the maximum slot_updated
+        slots.iter().filter_map(|&slot| slot).max().unwrap_or(0)
+    }
+
+    pub fn any_field_is_set(&self) -> bool {
+        self.static_details.is_some()
+            || self.dynamic_details.is_some()
+            || self.authority.is_some()
+            || self.owner.is_some()
+            || self.collection.is_some()
+    }
+
+    pub fn to_index_without_url_checks(
+        &self,
+        mpl_core_collections: &HashMap<Pubkey, Pubkey>,
+    ) -> AssetIndex {
+        AssetIndex {
+            pubkey: self.pubkey,
+            specification_version: entities::enums::SpecificationVersions::V1,
+            specification_asset_class: self
+                .static_details
+                .as_ref()
+                .map(|a| a.specification_asset_class)
+                .unwrap_or_default(),
+            royalty_target_type: self
+                .static_details
+                .as_ref()
+                .map(|a| a.royalty_target_type)
+                .unwrap_or_default(),
+            slot_created: self
+                .static_details
+                .as_ref()
+                .map(|a| a.created_at)
+                .unwrap_or_default(),
+            is_compressible: self
+                .dynamic_details
+                .as_ref()
+                .map(|d| d.is_compressible.value)
+                .unwrap_or_default(),
+            is_compressed: self
+                .dynamic_details
+                .as_ref()
+                .map(|d| d.is_compressed.value)
+                .unwrap_or_default(),
+            is_frozen: self
+                .dynamic_details
+                .as_ref()
+                .map(|d| d.is_frozen.value)
+                .unwrap_or_default(),
+            supply: self
+                .dynamic_details
+                .as_ref()
+                .map(|d| d.supply.clone().map(|s| s.value as i64))
+                .unwrap_or_default(),
+            is_burnt: self
+                .dynamic_details
+                .as_ref()
+                .map(|d| d.is_burnt.value)
+                .unwrap_or_default(),
+            creators: self
+                .dynamic_details
+                .as_ref()
+                .map(|d| d.creators.clone().value)
+                .unwrap_or_default(),
+            royalty_amount: self
+                .dynamic_details
+                .as_ref()
+                .map(|d| d.royalty_amount.value as i64)
+                .unwrap_or_default(),
+            slot_updated: self.get_slot_updated() as i64,
+            metadata_url: self
+                .dynamic_details
+                .as_ref()
+                .map(|d| UrlWithStatus::new(&d.url.value, false)),
+            authority: self.authority.as_ref().map(|a| a.authority),
+            owner: self.owner.as_ref().map(|o| o.owner.value).flatten(),
+            delegate: self.owner.as_ref().map(|o| o.delegate.value).flatten(),
+            owner_type: self.owner.as_ref().map(|o| o.owner_type.value),
+            collection: self.collection.as_ref().map(|c| c.collection.value),
+            is_collection_verified: self
+                .collection
+                .as_ref()
+                .map(|c| c.is_collection_verified.value),
+            update_authority: self
+                .collection
+                .as_ref()
+                .map(|c| mpl_core_collections.get(&c.collection.value))
+                .flatten()
+                .copied(),
+            fungible_asset_mint: None,
+            fungible_asset_balance: None,
+        }
+    }
+}
 // The following structures are used to store the asset data in the rocksdb database. The data is spread across multiple columns based on the update pattern.
 // The final representation of the asset should be reconstructed by querying the database for the asset and its associated columns.
 // Some values, like slot_updated should be calculated based on the latest update to the asset.
@@ -266,6 +443,20 @@ impl TypedColumn for AssetDynamicDetailsDeprecated {
     }
 }
 
+impl TypedColumn for AssetCompleteDetails {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_COMPLETE_DETAILS";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
 impl TypedColumn for AssetDynamicDetails {
     type KeyType = Pubkey;
     type ValueType = Self;
@@ -347,8 +538,8 @@ impl AssetStaticDetails {
     }
 }
 
-impl AssetDynamicDetails {
-    pub fn merge_dynamic_details(
+impl AssetCompleteDetails {
+    pub fn merge_complete_details(
         _new_key: &[u8],
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
@@ -361,7 +552,7 @@ impl AssetDynamicDetails {
                 }
                 Err(e) => {
                     error!(
-                        "RocksDB: AssetDynamicDetails deserialize existing_val: {}",
+                        "RocksDB: AssetCompleteDetails deserialize existing_val: {}",
                         e
                     )
                 }
@@ -371,68 +562,137 @@ impl AssetDynamicDetails {
         for op in operands {
             match deserialize::<Self>(op) {
                 Ok(new_val) => {
-                    result = Some(if let Some(mut current_val) = result {
-                        update_field(&mut current_val.is_compressible, &new_val.is_compressible);
-                        update_field(&mut current_val.is_compressed, &new_val.is_compressed);
-                        update_field(&mut current_val.is_frozen, &new_val.is_frozen);
-                        update_optional_field(&mut current_val.supply, &new_val.supply);
-                        update_optional_field(&mut current_val.seq, &new_val.seq);
-                        update_field(&mut current_val.is_burnt, &new_val.is_burnt);
-                        update_field(&mut current_val.creators, &new_val.creators);
-                        update_field(&mut current_val.royalty_amount, &new_val.royalty_amount);
-                        update_field(&mut current_val.was_decompressed, &new_val.was_decompressed);
-                        update_optional_field(&mut current_val.onchain_data, &new_val.onchain_data);
-                        update_field(&mut current_val.url, &new_val.url);
-                        update_optional_field(
-                            &mut current_val.chain_mutability,
-                            &new_val.chain_mutability,
-                        );
-                        update_optional_field(&mut current_val.lamports, &new_val.lamports);
-                        update_optional_field(&mut current_val.executable, &new_val.executable);
-                        update_optional_field(
-                            &mut current_val.metadata_owner,
-                            &new_val.metadata_owner,
-                        );
-                        update_optional_field(&mut current_val.raw_name, &new_val.raw_name);
-                        update_optional_field(
-                            &mut current_val.mpl_core_plugins,
-                            &new_val.mpl_core_plugins,
-                        );
-                        update_optional_field(
-                            &mut current_val.mpl_core_unknown_plugins,
-                            &new_val.mpl_core_unknown_plugins,
-                        );
-                        update_optional_field(&mut current_val.num_minted, &new_val.num_minted);
-                        update_optional_field(&mut current_val.current_size, &new_val.current_size);
-                        update_optional_field(&mut current_val.rent_epoch, &new_val.rent_epoch);
-                        update_optional_field(
-                            &mut current_val.plugins_json_version,
-                            &new_val.plugins_json_version,
-                        );
-                        update_optional_field(
-                            &mut current_val.mpl_core_external_plugins,
-                            &new_val.mpl_core_external_plugins,
-                        );
-                        update_optional_field(
-                            &mut current_val.mpl_core_unknown_external_plugins,
-                            &new_val.mpl_core_unknown_external_plugins,
-                        );
-                        update_optional_field(
-                            &mut current_val.mint_extensions,
-                            &new_val.mint_extensions,
-                        );
+                    if let Some(ref mut current_val) = result {
+                        // Merge dynamic_details
+                        if let Some(new_dynamic_details) = new_val.dynamic_details {
+                            if let Some(ref mut current_dynamic_details) =
+                                current_val.dynamic_details
+                            {
+                                current_dynamic_details.merge(new_dynamic_details);
+                            } else {
+                                current_val.dynamic_details = Some(new_dynamic_details);
+                            }
+                        }
 
-                        current_val
+                        // Keep existing static_details if present
+                        if current_val.static_details.is_none() {
+                            current_val.static_details = new_val.static_details;
+                        }
+
+                        // Merge authority
+                        if let Some(new_authority) = new_val.authority {
+                            if let Some(ref mut current_authority) = current_val.authority {
+                                current_authority.merge(new_authority);
+                            } else {
+                                current_val.authority = Some(new_authority);
+                            }
+                        }
+
+                        // Merge owner
+                        if let Some(new_owner) = new_val.owner {
+                            if let Some(ref mut current_owner) = current_val.owner {
+                                current_owner.merge(new_owner);
+                            } else {
+                                current_val.owner = Some(new_owner);
+                            }
+                        }
+
+                        // Merge collection
+                        if let Some(new_collection) = new_val.collection {
+                            if let Some(ref mut current_collection) = current_val.collection {
+                                current_collection.merge(new_collection);
+                            } else {
+                                current_val.collection = Some(new_collection);
+                            }
+                        }
                     } else {
-                        new_val
-                    });
+                        result = Some(new_val);
+                    }
                 }
                 Err(e) => {
-                    error!("RocksDB: AssetDynamicDetails deserialize new_val: {}", e)
+                    error!("RocksDB: AssetCompleteDetails deserialize new_val: {}", e)
                 }
             }
         }
 
+        result.and_then(|result| serialize(&result).ok())
+    }
+}
+
+impl AssetDynamicDetails {
+    pub fn merge(&mut self, new_val: Self) {
+        update_field(&mut self.is_compressible, &new_val.is_compressible);
+        update_field(&mut self.is_compressed, &new_val.is_compressed);
+        update_field(&mut self.is_frozen, &new_val.is_frozen);
+        update_optional_field(&mut self.supply, &new_val.supply);
+        update_optional_field(&mut self.seq, &new_val.seq);
+        update_field(&mut self.is_burnt, &new_val.is_burnt);
+        update_field(&mut self.creators, &new_val.creators);
+        update_field(&mut self.royalty_amount, &new_val.royalty_amount);
+        update_field(&mut self.was_decompressed, &new_val.was_decompressed);
+        update_optional_field(&mut self.onchain_data, &new_val.onchain_data);
+        update_field(&mut self.url, &new_val.url);
+        update_optional_field(&mut self.chain_mutability, &new_val.chain_mutability);
+        update_optional_field(&mut self.lamports, &new_val.lamports);
+        update_optional_field(&mut self.executable, &new_val.executable);
+        update_optional_field(&mut self.metadata_owner, &new_val.metadata_owner);
+        update_optional_field(&mut self.raw_name, &new_val.raw_name);
+        update_optional_field(&mut self.mpl_core_plugins, &new_val.mpl_core_plugins);
+        update_optional_field(
+            &mut self.mpl_core_unknown_plugins,
+            &new_val.mpl_core_unknown_plugins,
+        );
+        update_optional_field(&mut self.num_minted, &new_val.num_minted);
+        update_optional_field(&mut self.current_size, &new_val.current_size);
+        update_optional_field(&mut self.rent_epoch, &new_val.rent_epoch);
+        update_optional_field(
+            &mut self.plugins_json_version,
+            &new_val.plugins_json_version,
+        );
+        update_optional_field(
+            &mut self.mpl_core_external_plugins,
+            &new_val.mpl_core_external_plugins,
+        );
+        update_optional_field(
+            &mut self.mpl_core_unknown_external_plugins,
+            &new_val.mpl_core_unknown_external_plugins,
+        );
+        update_optional_field(&mut self.mint_extensions, &new_val.mint_extensions);
+    }
+
+    pub fn merge_dynamic_details(
+        _new_key: &[u8],
+        existing_val: Option<&[u8]>,
+        operands: &MergeOperands,
+    ) -> Option<Vec<u8>> {
+        let mut result: Option<Self> = None;
+
+        // Deserialize existing value if present
+        if let Some(existing_val) = existing_val {
+            match deserialize::<Self>(existing_val) {
+                Ok(value) => result = Some(value),
+                Err(e) => error!(
+                    "RocksDB: AssetDynamicDetails deserialize existing_val: {}",
+                    e
+                ),
+            }
+        }
+
+        // Iterate over operands and merge
+        for op in operands {
+            match deserialize::<Self>(op) {
+                Ok(new_val) => {
+                    if let Some(ref mut current_val) = result {
+                        current_val.merge(new_val);
+                    } else {
+                        result = Some(new_val);
+                    }
+                }
+                Err(e) => error!("RocksDB: AssetDynamicDetails deserialize new_val: {}", e),
+            }
+        }
+
+        // Serialize the result back into bytes
         result.and_then(|result| serialize(&result).ok())
     }
 
@@ -470,6 +730,19 @@ impl AssetDynamicDetails {
 }
 
 impl AssetAuthority {
+    pub fn merge(&mut self, new_val: Self) {
+        if let (Some(self_write_version), Some(new_write_version)) =
+            (self.write_version, new_val.write_version)
+        {
+            if new_write_version > self_write_version {
+                *self = new_val;
+            }
+        } else if new_val.slot_updated > self.slot_updated {
+            *self = new_val;
+        }
+        // If neither condition is met, retain existing `self`
+    }
+
     pub fn merge_asset_authorities(
         _new_key: &[u8],
         existing_val: Option<&[u8]>,
@@ -543,8 +816,14 @@ impl TypedColumn for AssetOwner {
         decode_pubkey(bytes)
     }
 }
-
 impl AssetOwner {
+    pub fn merge(&mut self, new_val: Self) {
+        update_field(&mut self.owner_type, &new_val.owner_type);
+        update_field(&mut self.owner, &new_val.owner);
+        update_field(&mut self.owner_delegate_seq, &new_val.owner_delegate_seq);
+        update_field(&mut self.delegate, &new_val.delegate);
+    }
+
     pub fn merge_asset_owner(
         _new_key: &[u8],
         existing_val: Option<&[u8]>,
@@ -693,6 +972,15 @@ impl TypedColumn for AssetCollection {
 }
 
 impl AssetCollection {
+    pub fn merge(&mut self, new_val: Self) {
+        update_field(&mut self.collection, &new_val.collection);
+        update_field(
+            &mut self.is_collection_verified,
+            &new_val.is_collection_verified,
+        );
+        update_field(&mut self.authority, &new_val.authority);
+    }
+
     pub fn merge_asset_collection(
         _new_key: &[u8],
         existing_val: Option<&[u8]>,
@@ -714,13 +1002,7 @@ impl AssetCollection {
             match deserialize::<Self>(op) {
                 Ok(new_val) => {
                     result = Some(if let Some(mut current_val) = result {
-                        update_field(&mut current_val.collection, &new_val.collection);
-                        update_field(
-                            &mut current_val.is_collection_verified,
-                            &new_val.is_collection_verified,
-                        );
-                        update_field(&mut current_val.authority, &new_val.authority);
-
+                        current_val.merge(new_val);
                         current_val
                     } else {
                         new_val

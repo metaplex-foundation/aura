@@ -13,7 +13,8 @@ use entities::models::{BurntMetadataSlot, MetadataInfo, Updated};
 use entities::models::{ChainDataV1, Creator, UpdateVersion, Uses};
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails, MetadataMintMap,
+    AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails, AssetStaticDetails,
+    MetadataMintMap,
 };
 use rocks_db::batch_savers::{BatchSaveStorage, MetadataModels};
 use rocks_db::errors::StorageError;
@@ -54,7 +55,8 @@ impl MplxAccountsProcessor {
         let metadata_models = self.create_rocks_metadata_models(key, metadata_info);
 
         let begin_processing = Instant::now();
-        let res = storage.store_metadata_models(&metadata_models);
+        let asset = AssetCompleteDetails::from(&metadata_models);
+        let res = storage.store_metadata_models(&asset, metadata_models.metadata_mint);
         result_to_metrics(
             self.metrics.clone(),
             &res,

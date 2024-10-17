@@ -29,26 +29,21 @@ fn convert_rocks_asset_model(
     token_symbols: &HashMap<String, String>,
     offchain_data: OffChainData,
 ) -> Result<FullAsset, StorageError> {
-    let static_data =
-        asset_selected_maps
-            .assets_static
-            .get(asset_pubkey)
-            .ok_or(StorageError::Common(
-                "No relevant assets_static_data".to_string(),
-            ))?;
-    let dynamic_data =
-        asset_selected_maps
-            .assets_dynamic
-            .get(asset_pubkey)
-            .ok_or(StorageError::Common(
-                "No relevant asset_dynamic_data".to_string(),
-            ))?;
-    let owner = asset_selected_maps
-        .assets_owner
+    let data = asset_selected_maps
+        .asset_complete_details
         .get(asset_pubkey)
         .ok_or(StorageError::Common(
-            "No relevant assets_owners".to_string(),
+            "No relevant asset_complete_details".to_string(),
         ))?;
+    let static_data = data.static_details.as_ref().ok_or(StorageError::Common(
+        "No relevant assets_static_data".to_string(),
+    ))?;
+    let dynamic_data = data.dynamic_details.as_ref().ok_or(StorageError::Common(
+        "No relevant asset_dynamic_data".to_string(),
+    ))?;
+    let owner = data.owner.as_ref().ok_or(StorageError::Common(
+        "No relevant assets_owners".to_string(),
+    ))?;
 
     let leaf = asset_selected_maps
         .assets_leaf
@@ -56,15 +51,19 @@ fn convert_rocks_asset_model(
         .cloned()
         .unwrap_or(AssetLeaf::default()); // Asset may not have a leaf but we still can make the conversion
 
-    let collection_dynamic_data = asset_selected_maps
-        .assets_collection
-        .get(asset_pubkey)
+    let collection_data = data
+        .collection
+        .as_ref()
         .and_then(|collection| {
             asset_selected_maps
-                .assets_dynamic
+                .asset_complete_details
                 .get(&collection.collection.value)
         })
         .cloned();
+    let collection_dynamic_data = collection_data
+        .as_ref()
+        .map(|c| c.dynamic_details.clone())
+        .flatten();
 
     let inscription = asset_selected_maps.inscriptions.get(asset_pubkey).cloned();
     Ok(FullAsset {
@@ -73,32 +72,12 @@ fn convert_rocks_asset_model(
         asset_dynamic: dynamic_data.clone(),
         asset_leaf: leaf,
         offchain_data,
-        asset_collections: asset_selected_maps
-            .assets_collection
-            .get(asset_pubkey)
-            .cloned(),
-        assets_authority: asset_selected_maps
-            .assets_authority
-            .get(asset_pubkey)
-            .cloned()
-            .unwrap_or(AssetAuthority::default()),
-        edition_data: asset_selected_maps
-            .assets_static
-            .get(asset_pubkey)
-            .and_then(|static_details| {
-                static_details
-                    .edition_address
-                    .and_then(|e| asset_selected_maps.editions.get(&e).cloned())
-            }),
-        mpl_core_collections: asset_selected_maps
-            .assets_collection
-            .get(asset_pubkey)
-            .and_then(|collection| {
-                asset_selected_maps
-                    .assets_collection
-                    .get(&collection.collection.value)
-            })
-            .cloned(),
+        asset_collections: data.collection.clone(),
+        assets_authority: data.authority.clone().unwrap_or(AssetAuthority::default()),
+        edition_data: static_data
+            .edition_address
+            .and_then(|e| asset_selected_maps.editions.get(&e).cloned()),
+        mpl_core_collections: collection_data.map(|c| c.collection).flatten().clone(),
         collection_offchain_data: collection_dynamic_data
             .as_ref()
             .and_then(|dynamic_data| {
@@ -148,7 +127,12 @@ fn asset_selected_maps_into_full_asset(
     options: &Options,
 ) -> Option<FullAsset> {
     if !options.show_unverified_collections {
-        if let Some(collection_data) = asset_selected_maps.assets_collection.get(id) {
+        if let Some(collection_data) = asset_selected_maps
+            .asset_complete_details
+            .get(id)
+            .map(|a| a.collection.clone())
+            .flatten()
+        {
             if !collection_data.is_collection_verified.value {
                 return None;
             }

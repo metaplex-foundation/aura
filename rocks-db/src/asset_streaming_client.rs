@@ -11,13 +11,13 @@ use rocksdb::DB;
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::asset::SlotAssetIdxKey;
+use crate::asset::{AssetCompleteDetails, SlotAssetIdxKey};
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
 use crate::{
-    asset::{AssetCollection, AssetLeaf, SlotAssetIdx},
+    asset::{AssetLeaf, SlotAssetIdx},
     column::TypedColumn,
     errors::StorageError,
-    AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage,
+    Storage,
 };
 
 #[async_trait]
@@ -89,9 +89,15 @@ async fn get_complete_asset_details(
     pubkey: Pubkey,
     metrics: Arc<RequestErrorDurationMetrics>,
 ) -> crate::Result<CompleteAssetDetails> {
-    let static_data =
-        Storage::column::<AssetStaticDetails>(backend.clone(), metrics.clone()).get(pubkey)?;
-    let static_data = match static_data {
+    let data =
+        Storage::column::<AssetCompleteDetails>(backend.clone(), metrics.clone()).get(pubkey)?;
+    let data = match data {
+        None => {
+            return Err(StorageError::Common("Asset data not found".to_string()));
+        }
+        Some(data) => data,
+    };
+    let static_data = match data.static_details {
         None => {
             return Err(StorageError::Common(
                 "Asset static data not found".to_string(),
@@ -100,9 +106,7 @@ async fn get_complete_asset_details(
         Some(static_data) => static_data,
     };
 
-    let dynamic_data =
-        Storage::column::<AssetDynamicDetails>(backend.clone(), metrics.clone()).get(pubkey)?;
-    let dynamic_data = match dynamic_data {
+    let dynamic_data = match data.dynamic_details {
         None => {
             return Err(StorageError::Common(
                 "Asset dynamic data not found".to_string(),
@@ -110,9 +114,7 @@ async fn get_complete_asset_details(
         }
         Some(dynamic_data) => dynamic_data,
     };
-    let authority =
-        Storage::column::<AssetAuthority>(backend.clone(), metrics.clone()).get(pubkey)?;
-    let authority = match authority {
+    let authority = match data.authority {
         None => {
             return Err(StorageError::Common(
                 "Asset authority not found".to_string(),
@@ -120,8 +122,7 @@ async fn get_complete_asset_details(
         }
         Some(authority) => authority,
     };
-    let owner = Storage::column::<AssetOwner>(backend.clone(), metrics.clone()).get(pubkey)?;
-    let owner = match owner {
+    let owner = match data.owner {
         None => {
             return Err(StorageError::Common("Asset owner not found".to_string()));
         }
@@ -129,8 +130,7 @@ async fn get_complete_asset_details(
     };
 
     let asset_leaf = Storage::column::<AssetLeaf>(backend.clone(), metrics.clone()).get(pubkey)?;
-    let collection =
-        Storage::column::<AssetCollection>(backend.clone(), metrics.clone()).get(pubkey)?;
+    let collection = data.collection;
 
     let onchain_data = match dynamic_data.onchain_data {
         None => None,

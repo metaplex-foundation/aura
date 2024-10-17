@@ -377,6 +377,18 @@ where
             .collect::<Vec<_>>()
     }
 
+    pub fn pairs_iterator<'a>(
+        &self,
+        it: impl Iterator<Item = std::result::Result<(Box<[u8]>, Box<[u8]>), rocksdb::Error>> + 'a,
+    ) -> impl Iterator<Item = (C::KeyType, C::ValueType)> + 'a {
+        it.filter_map(|r| r.ok())
+            .filter_map(|(key_bytes, val_bytes)| {
+                let k_op = C::decode_key(key_bytes.to_vec()).ok();
+                let v_op = deserialize::<C::ValueType>(&val_bytes).ok();
+                k_op.zip(v_op)
+            })
+    }
+
     /// Fetches maximum given amount of records from the beginning of the column family.
     /// ## Args:
     /// * `num` - desired amount of records to fetch

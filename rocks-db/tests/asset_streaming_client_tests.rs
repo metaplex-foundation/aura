@@ -82,9 +82,9 @@ mod tests {
     async fn test_get_asset_details_stream_in_range_data() {
         let cnt = 1000;
         let env = RocksTestEnvironment::new(&[]);
-        let storage = &env.storage;
         let slot = 100;
         let pks = env.generate_assets(cnt, slot).await;
+        let storage = &env.storage;
         // Call get_asset_details_stream_in_range on a database
         let response = storage.get_asset_details_stream_in_range(100, 200).await;
 

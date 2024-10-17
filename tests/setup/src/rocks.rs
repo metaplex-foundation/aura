@@ -14,6 +14,7 @@ use rocks_db::{
     Storage,
 };
 use tokio::{sync::Mutex, task::JoinSet};
+use tracing::error;
 
 const DEFAULT_TEST_URL: &str = "http://example.com";
 
@@ -183,7 +184,16 @@ impl RocksTestEnvironment {
             owners_batch,
             dynamic_details_batch,
             collections_batch
-        )?;
+        )
+        .map_err(|e| {
+            error!("join failed {}", e);
+            e
+        })?;
+
+        self.storage.apply_migration1().await.map_err(|e| {
+            error!("appliying migration failed {}", e);
+            e
+        })?;
 
         Ok(())
     }

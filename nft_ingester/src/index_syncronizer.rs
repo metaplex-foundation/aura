@@ -347,9 +347,7 @@ where
         updated_keys_refs: &[Pubkey],
         metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), IngesterError> {
-        let asset_indexes = primary_storage
-            .get_asset_indexes(updated_keys_refs, None)
-            .await?;
+        let asset_indexes = primary_storage.get_asset_indexes(updated_keys_refs).await?;
 
         if asset_indexes.is_empty() {
             warn!("No asset indexes found for keys: {:?}", updated_keys_refs);
@@ -494,7 +492,7 @@ mod tests {
             .mock_asset_index_reader
             .expect_get_asset_indexes()
             .once()
-            .return_once(move |_, _| Ok(map_of_asset_indexes));
+            .return_once(move |_| Ok(map_of_asset_indexes));
 
         index_storage
             .expect_update_asset_indexes_batch()
@@ -573,7 +571,7 @@ mod tests {
             .mock_asset_index_reader
             .expect_get_asset_indexes()
             .once()
-            .return_once(move |_, _| Ok(map_of_asset_indexes));
+            .return_once(move |_| Ok(map_of_asset_indexes));
 
         index_storage
             .expect_update_asset_indexes_batch()
@@ -676,7 +674,7 @@ mod tests {
             .mock_asset_index_reader
             .expect_get_asset_indexes()
             .times(2)
-            .returning(move |_, _| {
+            .returning(move |_| {
                 call_count2 += 1;
                 if call_count2 == 1 {
                     Ok(map_of_asset_indexes.clone())

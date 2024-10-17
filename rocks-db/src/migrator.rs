@@ -1,8 +1,9 @@
+use crate::asset::{AssetCollection, AssetCompleteDetails};
 use crate::column::{Column, TypedColumn};
 use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64, encode_u64};
-use crate::Result;
 use crate::Storage;
+use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result};
 use bincode::deserialize;
 use interface::migration_version_manager::PrimaryStorageMigrationVersionManager;
 use metrics_utils::red::RequestErrorDurationMetrics;
@@ -72,6 +73,96 @@ impl Storage {
                 crate::migrations::spl2022::DynamicDataToken2022MintExtentionsMigration,
             )
             .await?;
+        Ok(())
+    }
+
+    pub async fn apply_migration1(&self) -> Result<()> {
+        let mut batch: HashMap<solana_sdk::pubkey::Pubkey, AssetCompleteDetails> = HashMap::new();
+        let iter = self
+            .asset_static_data
+            .pairs_iterator(self.asset_static_data.iter_start());
+        for (k, v) in iter {
+            let asset_data = AssetCompleteDetails::from(v);
+            batch.insert(k, asset_data);
+            if batch.len() >= BATCH_SIZE {
+                self.asset_data
+                    .merge_batch(std::mem::take(&mut batch))
+                    .await?;
+            }
+        }
+        self.asset_data
+            .merge_batch(std::mem::take(&mut batch))
+            .await?;
+        self.db.drop_cf(AssetStaticDetails::NAME)?;
+
+        let iter = self
+            .asset_dynamic_data
+            .pairs_iterator(self.asset_dynamic_data.iter_start());
+        for (k, v) in iter {
+            let asset_data = AssetCompleteDetails::from(v);
+            batch.insert(k, asset_data);
+            if batch.len() >= BATCH_SIZE {
+                self.asset_data
+                    .merge_batch(std::mem::take(&mut batch))
+                    .await?;
+            }
+        }
+        self.asset_data
+            .merge_batch(std::mem::take(&mut batch))
+            .await?;
+        self.db.drop_cf(AssetDynamicDetails::NAME)?;
+
+        let iter = self
+            .asset_authority_data
+            .pairs_iterator(self.asset_authority_data.iter_start());
+        for (k, v) in iter {
+            let asset_data = AssetCompleteDetails::from(v);
+            batch.insert(k, asset_data);
+            if batch.len() >= BATCH_SIZE {
+                self.asset_data
+                    .merge_batch(std::mem::take(&mut batch))
+                    .await?;
+            }
+        }
+        self.asset_data
+            .merge_batch(std::mem::take(&mut batch))
+            .await?;
+        self.db.drop_cf(AssetAuthority::NAME)?;
+
+        let iter = self
+            .asset_owner_data
+            .pairs_iterator(self.asset_owner_data.iter_start());
+        for (k, v) in iter {
+            let asset_data = AssetCompleteDetails::from(v);
+            batch.insert(k, asset_data);
+            if batch.len() >= BATCH_SIZE {
+                self.asset_data
+                    .merge_batch(std::mem::take(&mut batch))
+                    .await?;
+            }
+        }
+        self.asset_data
+            .merge_batch(std::mem::take(&mut batch))
+            .await?;
+        self.db.drop_cf(AssetOwner::NAME)?;
+
+        let iter = self
+            .asset_collection_data
+            .pairs_iterator(self.asset_collection_data.iter_start());
+        for (k, v) in iter {
+            let asset_data = AssetCompleteDetails::from(v);
+            batch.insert(k, asset_data);
+            if batch.len() >= BATCH_SIZE {
+                self.asset_data
+                    .merge_batch(std::mem::take(&mut batch))
+                    .await?;
+            }
+        }
+        self.asset_data
+            .merge_batch(std::mem::take(&mut batch))
+            .await?;
+        self.db.drop_cf(AssetCollection::NAME)?;
+
         Ok(())
     }
 }

@@ -91,11 +91,7 @@ impl Storage {
         owner_address: &Option<Pubkey>,
         options: &Options,
     ) -> Result<AssetSelectedMaps> {
-        let assets_dynamic_fut = self.asset_dynamic_data.batch_get(asset_ids.clone());
-        let assets_static_fut = self.asset_static_data.batch_get(asset_ids.clone());
-        let assets_authority_fut = self.asset_authority_data.batch_get(asset_ids.clone());
-        let assets_collection_fut = self.asset_collection_data.batch_get(asset_ids.clone());
-        let assets_owner_fut = self.asset_owner_data.batch_get(asset_ids.clone());
+        let assets_data_fut = self.asset_data.batch_get(asset_ids.clone());
         let assets_leaf_fut = self.asset_leaf_data.batch_get(asset_ids.clone());
         let token_accounts_fut = if let Some(owner_address) = owner_address {
             self.get_raw_token_accounts(Some(*owner_address), None, None, None, None, None, true)
@@ -105,80 +101,68 @@ impl Storage {
         };
         let spl_mints_fut = self.spl_mints.batch_get(asset_ids.clone());
 
-        let mut assets_dynamic = to_map!(assets_dynamic_fut.await);
-        let mut urls: HashMap<_, _> = assets_dynamic
+        let inscriptions_fut = if options.show_inscription {
+            self.inscriptions.batch_get(asset_ids.clone()).boxed()
+        } else {
+            async { Ok(Vec::new()) }.boxed()
+        };
+
+        let mut assets_data = to_map!(assets_data_fut.await);
+        let assets_collection_pks = assets_data
             .iter()
-            .map(|(key, asset)| (key.to_string(), asset.url.value.clone()))
+            .filter_map(|(_, asset)| asset.collection.as_ref())
+            .map(|c| c.collection.value)
+            .collect::<Vec<_>>();
+
+        let mut urls: HashMap<_, _> = assets_data
+            .iter()
+            .filter_map(|(key, asset)| {
+                asset
+                    .dynamic_details
+                    .as_ref()
+                    .map(|d| (key.to_string(), d.url.value.clone()))
+            })
             .collect();
+
+        let collection_data = to_map!(
+            self.asset_data
+                .batch_get(assets_collection_pks.clone())
+                .await
+        );
+        assets_data.extend(collection_data.clone());
+
+        if options.show_collection_metadata {
+            let collection_urls: HashMap<_, _> = collection_data
+                .iter()
+                .filter_map(|(key, asset)| {
+                    asset
+                        .dynamic_details
+                        .as_ref()
+                        .map(|d| (key.to_string(), d.url.value.clone()))
+                })
+                .collect();
+
+            urls.extend(collection_urls.clone());
+        };
+
         let offchain_data_fut = self
             .asset_offchain_data
             .batch_get(urls.clone().into_values().collect::<Vec<_>>());
 
-        let (
-            assets_static,
-            assets_authority,
-            assets_collection,
-            assets_owner,
-            assets_leaf,
-            offchain_data,
-            token_accounts,
-            spl_mints,
-        ) = tokio::join!(
-            assets_static_fut,
-            assets_authority_fut,
-            assets_collection_fut,
-            assets_owner_fut,
+        let (assets_leaf, offchain_data, token_accounts, spl_mints) = tokio::join!(
             assets_leaf_fut,
             offchain_data_fut,
             token_accounts_fut,
             spl_mints_fut
         );
-        let mut offchain_data = offchain_data
+        let offchain_data = offchain_data
             .map_err(|e| StorageError::Common(e.to_string()))?
             .into_iter()
             .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
             .collect::<HashMap<_, _>>();
-        let assets_static = to_map!(assets_static);
-        let assets_collection_pks = assets_collection
-            .as_ref()
-            .map_err(|e| StorageError::Common(e.to_string()))?
-            .iter()
-            .flat_map(|c| c.as_ref().map(|c| c.collection.value))
-            .collect::<Vec<_>>();
-        if options.show_collection_metadata {
-            let collection_dynamic_data = to_map!(
-                self.asset_dynamic_data
-                    .batch_get(assets_collection_pks.clone())
-                    .await
-            );
-            assets_dynamic.extend(collection_dynamic_data.clone());
-            let collection_urls: HashMap<_, _> = collection_dynamic_data
-                .iter()
-                .map(|(key, asset)| (key.to_string(), asset.url.value.clone()))
-                .collect();
-            urls.extend(collection_urls.clone());
-            let collection_offchain_data = self
-                .asset_offchain_data
-                .batch_get(collection_urls.clone().into_values().collect::<Vec<_>>())
-                .await
-                .map_err(|e| StorageError::Common(e.to_string()))?
-                .into_iter()
-                .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
-                .collect::<HashMap<_, _>>();
-            offchain_data.extend(collection_offchain_data)
-        };
-        let mpl_core_collections = to_map!(
-            self.asset_collection_data
-                .batch_get(assets_collection_pks)
-                .await
-        );
-        let mut assets_collection = to_map!(assets_collection);
-        assets_collection.extend(mpl_core_collections);
 
         let (inscriptions, inscriptions_data) = if options.show_inscription {
-            let inscriptions = self
-                .inscriptions
-                .batch_get(asset_ids.clone())
+            let inscriptions = inscriptions_fut
                 .await
                 .map_err(|e| StorageError::Common(e.to_string()))?
                 .into_iter()
@@ -203,17 +187,14 @@ impl Storage {
         Ok(AssetSelectedMaps {
             editions: self
                 .get_editions(
-                    assets_static
+                    assets_data
                         .values()
-                        .filter_map(|s| s.edition_address)
+                        .filter_map(|a| a.static_details.as_ref().map(|s| s.edition_address))
+                        .flatten()
                         .collect::<Vec<_>>(),
                 )
                 .await?,
-            assets_static,
-            assets_dynamic,
-            assets_authority: to_map!(assets_authority),
-            assets_collection,
-            assets_owner: to_map!(assets_owner),
+            asset_complete_details: assets_data,
             assets_leaf: to_map!(assets_leaf),
             offchain_data,
             urls,
@@ -227,6 +208,7 @@ impl Storage {
         })
     }
 
+    // todo: review this method as it has 2 more awaits
     async fn get_editions(
         &self,
         edition_keys: Vec<Pubkey>,

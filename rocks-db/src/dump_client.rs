@@ -1,9 +1,4 @@
-use crate::{
-    column::Column,
-    key_encoders::decode_pubkey,
-    storage_traits::{AssetIndexReader, Dumper},
-    AssetStaticDetails, Storage,
-};
+use crate::{asset::AssetCompleteDetails, column::Column, storage_traits::Dumper, Storage};
 use async_trait::async_trait;
 use bincode::deserialize;
 use csv::WriterBuilder;
@@ -199,80 +194,34 @@ impl Storage {
             synchronizer_metrics.clone(),
         ));
 
-        let core_collection_keys: Vec<Pubkey> = self
-            .asset_static_data
+        let core_collections: HashMap<Pubkey, Pubkey> = self
+            .asset_data
             .iter_start()
             .filter_map(|a| a.ok())
-            .filter_map(|(_, v)| deserialize::<AssetStaticDetails>(v.to_vec().as_ref()).ok())
-            .filter(|a| a.specification_asset_class == SpecificationAssetClass::MplCoreCollection)
-            .map(|a| a.pubkey)
+            .filter_map(|(_, v)| deserialize::<AssetCompleteDetails>(v.to_vec().as_ref()).ok())
+            .filter_map(|a| {
+                a.static_details
+                    .filter(|sd| {
+                        sd.specification_asset_class == SpecificationAssetClass::MplCoreCollection
+                    })
+                    .map(|_| a.collection)
+                    .flatten()
+            })
+            .filter_map(|a| a.authority.value.map(|v| (a.pubkey, v)))
             .collect();
 
-        let collections: HashMap<Pubkey, Pubkey> = self
-            .asset_collection_data
-            .batch_get(core_collection_keys)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .flatten()
-            .filter_map(|asset| asset.authority.value.map(|v| (asset.pubkey, v)))
-            .collect();
-
-        // Iteration over `asset_static_data` column via CUSTOM iterator.
-        let iter = self.asset_static_data.iter_start();
-        let mut batch = Vec::with_capacity(batch_size);
-        // Collect batch of keys.
-        for k in iter
-            .filter_map(|k| k.ok())
-            .filter_map(|(key, _)| decode_pubkey(key.to_vec()).ok())
-        {
-            synchronizer_metrics.inc_num_of_assets_iter("asset_static_data", 1);
-            batch.push(k);
-            // When batch is filled, find `AssetIndex` and send it to `tx_indexes` channel.
-            if batch.len() >= batch_size {
-                let start = chrono::Utc::now();
-                let indexes = self
-                    .get_asset_indexes(batch.as_ref(), Some(&collections))
-                    .await
-                    .map_err(|e| e.to_string())?;
-                self.red_metrics.observe_request(
-                    "Synchronizer",
-                    "get_batch_of_assets",
-                    "get_asset_indexes",
-                    start,
-                );
-
-                tx_indexes
-                    .send(indexes)
-                    .await
-                    .map_err(|e| format!("Error sending asset indexes to channel: {}", e))?;
-
-                // Clearing batch vector to continue iterating and collecting new batch.
-                batch.clear();
-            }
+        // Iteration over `asset_data` column via CUSTOM iterator.
+        let iter = self.asset_data.pairs_iterator(self.asset_data.iter_start());
+        for (_, v) in iter {
+            synchronizer_metrics.inc_num_of_assets_iter("asset_data", 1);
+            let ai = v.to_index_without_url_checks(&core_collections);
+            tx_indexes
+                .send(ai)
+                .await
+                .map_err(|e| format!("Error sending asset indexes to channel: {}", e))?;
             if !rx.is_empty() {
                 return Err("dump cancelled".to_string());
             }
-        }
-
-        // If there are any records left, we find the `AssetIndex` and send them to the `tx_indexes` channel.
-        if !batch.is_empty() {
-            let start = chrono::Utc::now();
-            let indexes = self
-                .get_asset_indexes(batch.as_ref(), Some(&collections))
-                .await
-                .map_err(|e| e.to_string())?;
-            self.red_metrics.observe_request(
-                "Synchronizer",
-                "get_batch_of_assets",
-                "get_asset_indexes",
-                start,
-            );
-
-            tx_indexes
-                .send(indexes)
-                .await
-                .map_err(|e| format!("Error sending asset indexes to channel: {}", e))?;
         }
 
         if let Err(e) = fungible_assets_join.await {
@@ -318,11 +267,7 @@ impl Storage {
         // asset, owner, balance, slot updated
         let mut batch: Vec<(String, String, i64, i64)> = Vec::new();
 
-        for token in storage
-            .iter_start()
-            .filter_map(|k| k.ok())
-            .filter_map(|(_, value)| deserialize::<TokenAccount>(value.to_vec().as_ref()).ok())
-        {
+        for (_, token) in storage.pairs_iterator(storage.iter_start()) {
             batch.push((
                 token.pubkey.to_string(),
                 token.owner.to_string(),
@@ -376,7 +321,7 @@ impl Storage {
     async fn iterate_over_indexes(
         rx_cloned: tokio::sync::broadcast::Receiver<()>,
         shutdown_cloned: tokio::sync::broadcast::Receiver<()>,
-        rx_indexes_cloned: async_channel::Receiver<HashMap<Pubkey, AssetIndex>>,
+        rx_indexes_cloned: async_channel::Receiver<AssetIndex>,
         tx_metadata_cloned: tokio::sync::mpsc::Sender<(String, String, String)>,
         tx_creators_cloned: tokio::sync::mpsc::Sender<(String, String, bool, i64)>,
         tx_assets_cloned: tokio::sync::mpsc::Sender<AssetRecord>,
@@ -398,110 +343,102 @@ impl Storage {
 
             if rx_indexes_cloned.is_empty() {
                 continue;
-            } else if let Ok(indexes) = rx_indexes_cloned.try_recv() {
-                let start = Instant::now();
-                for (key, index) in indexes {
-                    let metadata_url = index
-                        .metadata_url
-                        .map(|url| (url.get_metadata_id(), url.metadata_url.trim().to_owned()));
-                    if let Some((ref metadata_key, ref url)) = metadata_url {
-                        {
-                            if !metadata_key_set.contains(metadata_key) {
-                                metadata_key_set.insert(metadata_key.clone());
-                                if let Err(e) = tx_metadata_cloned
-                                    .send((
-                                        Self::encode(metadata_key),
-                                        url.to_string(),
-                                        "pending".to_string(),
-                                    ))
-                                    .await
-                                {
-                                    error!("Error sending message: {:?}", e);
-                                }
-                                synchronizer_metrics
-                                    .inc_num_of_records_sent_to_channel("metadata", 1);
+            } else if let Ok(index) = rx_indexes_cloned.try_recv() {
+                let metadata_url = index
+                    .metadata_url
+                    .map(|url| (url.get_metadata_id(), url.metadata_url.trim().to_owned()));
+                if let Some((ref metadata_key, ref url)) = metadata_url {
+                    {
+                        if !metadata_key_set.contains(metadata_key) {
+                            metadata_key_set.insert(metadata_key.clone());
+                            if let Err(e) = tx_metadata_cloned
+                                .send((
+                                    Self::encode(metadata_key),
+                                    url.to_string(),
+                                    "pending".to_string(),
+                                ))
+                                .await
+                            {
+                                error!("Error sending message: {:?}", e);
                             }
+                            synchronizer_metrics.inc_num_of_records_sent_to_channel("metadata", 1);
                         }
                     }
-                    for creator in index.creators {
-                        if let Err(e) = tx_creators_cloned
-                            .send((
-                                Self::encode(key.to_bytes()),
-                                Self::encode(creator.creator),
-                                creator.creator_verified,
-                                index.slot_updated,
-                            ))
-                            .await
-                        {
-                            error!("Error sending message: {:?}", e);
-                        }
-                        synchronizer_metrics.inc_num_of_records_sent_to_channel("creators", 1);
+                }
+                for creator in index.creators {
+                    if let Err(e) = tx_creators_cloned
+                        .send((
+                            Self::encode(index.pubkey.to_bytes()),
+                            Self::encode(creator.creator),
+                            creator.creator_verified,
+                            index.slot_updated,
+                        ))
+                        .await
+                    {
+                        error!("Error sending message: {:?}", e);
                     }
-                    let record = AssetRecord {
-                        ast_pubkey: Self::encode(key.to_bytes()),
-                        ast_specification_version: index.specification_version,
-                        ast_specification_asset_class: index.specification_asset_class,
-                        ast_royalty_target_type: index.royalty_target_type,
-                        ast_royalty_amount: index.royalty_amount,
-                        ast_slot_created: index.slot_created,
-                        ast_owner_type: index.owner_type,
-                        ast_owner: index.owner.map(Self::encode),
-                        ast_delegate: index.delegate.map(Self::encode),
-                        ast_authority_fk: if let Some(collection) = index.collection {
-                            if index.update_authority.is_some() {
-                                Some(Self::encode(collection))
-                            } else if index.authority.is_some() {
-                                Some(Self::encode(index.pubkey))
-                            } else {
-                                None
-                            }
+                    synchronizer_metrics.inc_num_of_records_sent_to_channel("creators", 1);
+                }
+                let record = AssetRecord {
+                    ast_pubkey: Self::encode(index.pubkey.to_bytes()),
+                    ast_specification_version: index.specification_version,
+                    ast_specification_asset_class: index.specification_asset_class,
+                    ast_royalty_target_type: index.royalty_target_type,
+                    ast_royalty_amount: index.royalty_amount,
+                    ast_slot_created: index.slot_created,
+                    ast_owner_type: index.owner_type,
+                    ast_owner: index.owner.map(Self::encode),
+                    ast_delegate: index.delegate.map(Self::encode),
+                    ast_authority_fk: if let Some(collection) = index.collection {
+                        if index.update_authority.is_some() {
+                            Some(Self::encode(collection))
                         } else if index.authority.is_some() {
                             Some(Self::encode(index.pubkey))
                         } else {
                             None
-                        },
-                        ast_collection: index.collection.map(Self::encode),
-                        ast_is_collection_verified: index.is_collection_verified,
-                        ast_is_burnt: index.is_burnt,
-                        ast_is_compressible: index.is_compressible,
-                        ast_is_compressed: index.is_compressed,
-                        ast_is_frozen: index.is_frozen,
-                        ast_supply: index.supply,
-                        ast_metadata_url_id: metadata_url.map(|(k, _)| k).map(Self::encode),
-                        ast_slot_updated: index.slot_updated,
-                    };
-                    if let Err(e) = tx_assets_cloned.send(record).await {
-                        error!("Error sending message: {:?}", e);
-                    }
-                    let authority = index.update_authority.or(index.authority);
-                    let authority_key = if index.update_authority.is_some() {
-                        index.collection
+                        }
+                    } else if index.authority.is_some() {
+                        Some(Self::encode(index.pubkey))
                     } else {
-                        Some(key)
-                    };
-                    if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
-                        {
-                            if !authorities_key_set.contains(&authority_key) {
-                                authorities_key_set.insert(authority_key);
-                                if let Err(e) = tx_authority_cloned
-                                    .send((
-                                        Self::encode(authority_key.to_bytes()),
-                                        Self::encode(authority.to_bytes()),
-                                        index.slot_updated,
-                                    ))
-                                    .await
-                                {
-                                    error!("Error sending message: {:?}", e);
-                                }
-                                synchronizer_metrics
-                                    .inc_num_of_records_sent_to_channel("authority", 1);
+                        None
+                    },
+                    ast_collection: index.collection.map(Self::encode),
+                    ast_is_collection_verified: index.is_collection_verified,
+                    ast_is_burnt: index.is_burnt,
+                    ast_is_compressible: index.is_compressible,
+                    ast_is_compressed: index.is_compressed,
+                    ast_is_frozen: index.is_frozen,
+                    ast_supply: index.supply,
+                    ast_metadata_url_id: metadata_url.map(|(k, _)| k).map(Self::encode),
+                    ast_slot_updated: index.slot_updated,
+                };
+                if let Err(e) = tx_assets_cloned.send(record).await {
+                    error!("Error sending message: {:?}", e);
+                }
+                let authority = index.update_authority.or(index.authority);
+                let authority_key = if index.update_authority.is_some() {
+                    index.collection
+                } else {
+                    Some(index.pubkey)
+                };
+                if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
+                    {
+                        if !authorities_key_set.contains(&authority_key) {
+                            authorities_key_set.insert(authority_key);
+                            if let Err(e) = tx_authority_cloned
+                                .send((
+                                    Self::encode(authority_key.to_bytes()),
+                                    Self::encode(authority.to_bytes()),
+                                    index.slot_updated,
+                                ))
+                                .await
+                            {
+                                error!("Error sending message: {:?}", e);
                             }
+                            synchronizer_metrics.inc_num_of_records_sent_to_channel("authority", 1);
                         }
                     }
                 }
-
-                synchronizer_metrics
-                    .set_iter_over_assets_indexes(start.elapsed().as_millis() as f64);
             }
         }
 
