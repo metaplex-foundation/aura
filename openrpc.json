@@ -1,0 +1,1454 @@
+{
+  "openrpc": "1.0.0-rc1",
+  "info": {
+    "version": "0.0.1",
+    "title": "Digital Asset API"
+  },
+  "servers": [
+    {
+      "url": "https://rpc.metaplex.com/this_is_fake"
+    }
+  ],
+  "methods": [
+    {
+      "name": "getAssetProof",
+      "summary": "Get merkle proof for asset",
+      "tags": [
+        {
+          "name": "proof"
+        },
+        {
+          "name": "single"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/contentDescriptors/GetAssetProof"
+        }
+      ],
+      "examples": [
+
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/assetProof"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Proof Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        }
+      ]
+    },
+    {
+      "name": "getAssetProofBatch",
+      "summary": "Get merkle proofs for each asset",
+      "tags": [
+        {
+          "name": "proof"
+        },
+        {
+          "name": "batch"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/contentDescriptors/GetAssetProofBatch"
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/assetProofBatch"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Proof Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        }
+      ]
+    },
+    {
+      "name": "getAsset",
+      "summary": "Get asset by public key with search options",
+      "tags": [
+        {
+          "name": "asset"
+        },
+        {
+          "name": "single"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/contentDescriptors/AssetId"
+        },
+        {
+          "$ref": "#/components/schemas/options"
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/Asset"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Pubkey Validation Error"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getAssetBatch",
+      "summary": "Get assets by public keys with search options",
+      "tags": [
+        {
+          "name": "asset"
+        },
+        {
+          "name": "batch"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/contentDescriptors/AssetIds"
+        },
+        {
+          "$ref": "#/components/schemas/options"
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Pubkey Validation Error"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getAssetsByOwner",
+      "summary": "List all assets by owner pubkey",
+      "tags": [
+        {
+          "name": "single"
+        },
+        {
+          "name": "owner"
+        }
+      ],
+      "params": [
+        {
+          "name": "owner_address",
+          "description": "Public key of owner in base58 encoding",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/asset_sort_by"
+        },
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        },
+        {
+          "$ref": "#/components/schemas/options"
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Pubkey Validation Error"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getAssetsByGroup",
+      "summary": "Gets a List of assets based on a group filter expression, see grouping module",
+      "tags": [
+        {
+          "name": "group"
+        },
+        {
+          "name": "asset"
+        },
+        {
+          "name": "batch"
+        }
+      ],
+      "params": [
+        {
+          "name": "group_key",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "group_value",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/asset_sort_by"
+        },
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        },
+        {
+          "$ref": "#/components/schemas/options"
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getAssetsByCreator",
+      "summary": "Gets a List of assets based on a creator filter expression",
+      "tags": [
+        {
+          "name": "batch"
+        },
+        {
+          "name": "creator"
+        },
+        {
+          "name": "asset"
+        }
+      ],
+      "params": [
+        {
+          "name": "creator_address",
+          "description": "Public key of creator",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/asset_sort_by"
+        },
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        },
+        {
+          "$ref": "#/components/schemas/options"
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Pubkey Validation Error"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "searchAssets",
+      "summary": "Search Api for Assets",
+      "tags": [
+        {
+          "name": "search"
+        },
+        {
+          "name": "asset"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/schemas/asset_sort_by"
+        },
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getAssetsByAuthority",
+      "summary": "Gets a List of assets based on a authority filter expression",
+      "tags": [
+        {
+          "name": "asset"
+        },
+        {
+          "name": "authority"
+        }
+      ],
+      "params": [
+        {
+          "name": "creator_address",
+          "description": "Public key of creator",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/asset_sort_by"
+        },
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        },
+        {
+          "$ref": "#/components/schemas/options"
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getTokenAccounts",
+      "summary": "Get token accounts",
+      "tags": [
+        {
+          "name": "single"
+        },
+        {
+          "name": "token"
+        },
+        {
+          "name": "accounts"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "name": "owner",
+          "description": "Public key of asset",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "mint",
+          "description": "Public key of mint",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "options",
+          "description": "Searching options",
+          "schema": {
+            "$ref": "#/components/schemas/DisplayOptions"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        }
+      ],
+      "result": {
+        "name": "tokenAccountsList",
+        "description": "Список аккаунтов токенов и информация о пагинации",
+        "schema": {
+          "$ref": "#/components/schemas/TokenAccountsList"
+        }
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Pubkey Validation Error"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getCoreFees",
+      "summary": "Get core fees",
+      "tags": [
+        {
+          "name": "fee"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        }
+      ],
+      "result": {
+        "name": "CoreFeesAccountsList",
+        "schema": {
+          "$ref": "#/components/schemas/CoreFeesAccountsList"
+        }
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Pubkey Validation Error"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getAssetSignaturesV2",
+      "summary": "Return asset signature from chain",
+      "tags": [
+        {
+          "name": "signature"
+        },
+        {
+          "name": "single"
+        }
+      ],
+      "params": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "string",
+            "description": "Optional asset pubkey to filter the signatures.",
+            "nullable": true,
+            "example": "asset123"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "name": "tree",
+          "schema": {
+            "type": "string",
+            "description": "Optional tree name for signature filtering.",
+            "nullable": true,
+            "example": "merkleTree1"
+          }
+        },
+        {
+          "name": "tree",
+          "schema": {
+            "type": "string",
+            "description": "Optional tree name for signature filtering.",
+            "nullable": true,
+            "example": "merkleTree1"
+          }
+        },
+        {
+          "name": "sortDirection",
+          "schema": {
+            "type": "string",
+            "description": "Optional sorting direction for signatures.",
+            "nullable": true,
+            "enum": ["asc", "desc"],
+            "example": "asc"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        }
+      ],
+      "result": {
+        "name": "TransactionSignatureList",
+        "schema": {
+          "$ref": "#/components/schemas/TransactionSignatureList"
+        }
+      }
+    }
+  ],
+  "components": {
+    "contentDescriptors": {
+      "Asset": {
+        "name": "Asset",
+        "description": "DAS API Asset",
+        "schema": {
+          "$ref": "#/components/schemas/Asset"
+        }
+      },
+      "AssetList": {
+        "name": "AssetList",
+        "description": "A paged an array of assets",
+        "schema": {
+          "$ref": "#/components/schemas/AssetList"
+        }
+      },
+      "assetProof": {
+        "name": "AssetProof",
+        "description": "Array of hashes corresponding to a `node_index`",
+        "schema": {
+          "$ref": "#/components/schemas/AssetProof"
+        }
+      },
+      "assetProofBatch": {
+        "name": "AssetProofBatch",
+        "description": "Array of hashes corresponding to a `node_index`",
+        "schema": {
+          "$ref": "#/components/schemas/AssetProofBatch"
+        }
+      },
+      "GetAssetProof": {
+        "name": "GetAssetProof",
+        "description": "Payload with public key of asset",
+        "required": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Public key of asset in base58 encoding."
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      "AssetId": {
+        "name": "AssetId",
+        "description": "Public key of asset in base58 encoding",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "AssetIds": {
+        "name": "AssetIds",
+        "description": "Asset ids in base58",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Asset public key in base58 encoding"
+          }
+        }
+      },
+      "GetAssetProofBatch": {
+        "name": "GetAssetProofBatch",
+        "description": "Payload with public keys of assets",
+        "required": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "type": "array",
+              "description": "Public keys of asset in base58 encoding."
+            }
+          },
+          "required": [
+            "ids"
+          ]
+        }
+      }
+    },
+    "schemas": {
+      "after": {
+        "name": "after",
+        "description": "Cursor based pagination: After Asset ID",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "before": {
+        "name": "before",
+        "description": "Cursor based pagination: Before Asset ID",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "page": {
+        "name": "page",
+        "description": "Page based pagination (max 50)",
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        }
+      },
+      "limit": {
+        "name": "limit",
+        "description": "How many items to return at one time (max 1000)",
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      },
+      "cursor": {
+        "name": "cursor",
+        "description": "Cursor data in base58 encoding",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "options": {
+        "name": "options",
+        "description": "Showing options for assets",
+        "schema": {
+          "$ref": "#/components/schemas/GetByMethodsOptions"
+        }
+      },
+      "asset_sort_by": {
+        "name": "sort_by",
+        "description": "How many items to return at one time (max 1000)",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "created",
+            "updated",
+            "recent_action"
+          ]
+        }
+      },
+      "CoreFeesAccountsList": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Total number of core fees accounts.",
+            "example": 100
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Limit on the number of accounts returned in this response.",
+            "example": 10
+          },
+          "page": {
+            "type": "integer",
+            "description": "Current page number.",
+            "nullable": true,
+            "example": 1
+          },
+          "before": {
+            "type": "string",
+            "description": "Pagination token to fetch accounts before this token.",
+            "nullable": true,
+            "example": "abc123"
+          },
+          "after": {
+            "type": "string",
+            "description": "Pagination token to fetch accounts after this token.",
+            "nullable": true,
+            "example": "xyz456"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Cursor for pagination.",
+            "nullable": true,
+            "example": "cursor789"
+          },
+          "core_fees_account": {
+            "type": "array",
+            "description": "List of core fees accounts.",
+            "items": {
+              "$ref": "#/components/schemas/CoreFeesAccount"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "limit",
+          "core_fees_account"
+        ]
+      },
+      "CoreFeesAccount": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Address of the core fees account.",
+            "example": "address123"
+          },
+          "current_balance": {
+            "type": "integer",
+            "description": "Current balance of the core fees account.",
+            "example": 50000
+          },
+          "minimum_rent": {
+            "type": "integer",
+            "description": "Minimum rent required for the core fees account.",
+            "example": 1000
+          }
+        },
+        "required": [
+          "address",
+          "current_balance",
+          "minimum_rent"
+        ]
+      },
+      "AssetProof": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string"
+          },
+          "proof": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "node_index": {
+            "type": "number"
+          },
+          "leaf": {
+            "type": "string"
+          },
+          "tree_id": {
+            "type": "string"
+          }
+        }
+      },
+      "AssetProofBatch": {
+        "name": "assetProofBatch",
+        "type": "object",
+        "description": "Map of assets proofs where key is public key of asset and value is `AssetProof` struct",
+        "properties": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AssetProof"
+              },
+              {
+                "type": "null",
+                "description": "No value provided"
+              }
+            ]
+          }
+        }
+      },
+      "Asset": {
+        "type": "object",
+        "required": [
+          "version",
+          "id"
+        ],
+        "properties": {
+          "interface": {
+            "type": "string",
+            "enum": [
+              "V1_NFT",
+              "V1_PRINT",
+              "LEGACY_NFT",
+              "V2_NFT",
+              "FungibleAsset",
+              "Custom",
+              "Identity",
+              "Executable"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "content": {
+            "type": "object",
+            "required": [
+              "$schema"
+            ],
+            "properties": {
+              "$schema": {
+                "type": "string",
+                "required": [
+                  "$$schema"
+                ],
+                "properties": {
+                  "$$schema": {
+                    "type": "string"
+                  }
+                }
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "uri": {
+                      "type": "string"
+                    },
+                    "mime": {
+                      "type": "string"
+                    },
+                    "quality": {
+                      "type": "object",
+                      "properties": {
+                        "$$schema": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "context": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "wallet-default",
+                          "web-desktop",
+                          "web-mobile",
+                          "app-mobile",
+                          "app-desktop",
+                          "app",
+                          "vr"
+                        ]
+                      }
+                    }
+                  },
+                  "oneOf": [
+                    {
+                      "propertyNames": {
+                        "enum": [
+                          "context",
+                          "uri",
+                          "mime"
+                        ]
+                      }
+                    },
+                    {
+                      "propertyNames": {
+                        "enum": [
+                          "context",
+                          "quality"
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              "metadata": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "authorities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "address": {
+                "type": "string"
+              },
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "compression": {
+            "type": "object",
+            "properties": {
+              "eligible": {
+                "type": "boolean"
+              },
+              "compressed": {
+                "type": "boolean"
+              }
+            }
+          },
+          "grouping": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "$$schema"
+              ],
+              "properties": {
+                "$$schema": {
+                  "type": "string"
+                },
+                "group_key": {
+                  "type": "string"
+                },
+                "group_value": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "royalty": {
+            "type": "object",
+            "properties": {
+              "royalty_model": {
+                "type": "string",
+                "enum": [
+                  "creators",
+                  "fanout",
+                  "single"
+                ]
+              },
+              "target": {
+                "type": "string"
+              },
+              "percent": {
+                "type": "number"
+              },
+              "locked": {
+                "type": "boolean"
+              }
+            }
+          },
+          "creators": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "share": {
+                  "type": "string"
+                },
+                "verified": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "ownership": {
+            "type": "object",
+            "properties": {
+              "frozen": {
+                "type": "boolean"
+              },
+              "delegated": {
+                "type": "boolean"
+              },
+              "delegate": {
+                "type": "string"
+              },
+              "ownership_model": {
+                "type": "string",
+                "enum": [
+                  "Single",
+                  "Token"
+                ]
+              },
+              "address": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "AssetList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Asset"
+        }
+      },
+      "DisplayOptions": {
+        "type": "object",
+        "properties": {
+          "showZeroBalance": {
+            "type": "boolean",
+            "description": "Show accounts with zero balance",
+            "default": false
+          }
+        },
+        "required": [
+          "showZeroBalance"
+        ]
+      },
+      "GetByMethodsOptions": {
+        "type": "object",
+        "properties": {
+          "showUnverifiedCollections": {
+            "type": "boolean",
+            "description": "Show unverified collections"
+          },
+          "showGrandTotal": {
+            "type": "boolean",
+            "description": "Show grand total"
+          },
+          "showNativeBalance": {
+            "type": "boolean",
+            "description": "Show native balance"
+          },
+          "showCollectionMetadata": {
+            "type": "boolean",
+            "description": "Show collection metadata"
+          },
+          "showInscription": {
+            "type": "boolean",
+            "description": "Show inscription"
+          },
+          "showZeroBalance": {
+            "type": "boolean",
+            "description": "Show zero balance"
+          },
+          "showFungible": {
+            "type": "boolean",
+            "description": "Show fungible"
+          }
+        }
+      },
+      "TokenAccountsList": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Total number of token accounts"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Limit on the number of accounts returned"
+          },
+          "page": {
+            "type": "integer",
+            "description": "Page number"
+          },
+          "before": {
+            "type": "string",
+            "description": "Cursor based pagination"
+          },
+          "after": {
+            "type": "string",
+            "description": "Cursor based pagination"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Cursor for page navigation"
+          },
+          "tokenAccounts": {
+            "type": "array",
+            "description": "List of token accounts",
+            "items": {
+              "$ref": "#/components/schemas/ResponseTokenAccount"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "limit",
+          "tokenAccounts"
+        ]
+      },
+      "TransactionSignatureList": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Total number of transaction signatures.",
+            "example": 1000
+          },
+          "limit": {
+            "type": "integer",
+            "description": "The limit on the number of signatures returned.",
+            "example": 100
+          },
+          "page": {
+            "type": "integer",
+            "description": "The current page number for paginated results.",
+            "nullable": true,
+            "example": 1
+          },
+          "before": {
+            "type": "string",
+            "description": "Get signatures before this sequence number.",
+            "nullable": true,
+            "example": "seq123"
+          },
+          "after": {
+            "type": "string",
+            "description": "Get signatures after this sequence number.",
+            "nullable": true,
+            "example": "seq456"
+          },
+          "items": {
+            "type": "array",
+            "description": "The list of signature items.",
+            "items": {
+              "$ref": "#/components/schemas/SignatureItem"
+            }
+          }
+        },
+        "required": ["total", "limit", "items"]
+      },
+      "SignatureItem": {
+        "type": "object",
+        "properties": {
+          "signature": {
+            "type": "string",
+            "description": "The transaction signature.",
+            "example": "signature123"
+          },
+          "instruction": {
+            "type": "string",
+            "description": "The instruction associated with the signature.",
+            "example": "instructionX"
+          },
+          "slot": {
+            "type": "integer",
+            "description": "The slot number of the signature.",
+            "example": 987654
+          }
+        },
+        "required": ["signature", "instruction", "slot"]
+      },
+      "ResponseTokenAccount": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Token account address"
+          },
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          },
+          "owner": {
+            "type": "string",
+            "description": "Token owner address"
+          },
+          "amount": {
+            "type": "integer",
+            "description": "Number of tokens on the account"
+          },
+          "delegatedAmount": {
+            "type": "integer",
+            "description": "Number of delegated tokens"
+          },
+          "frozen": {
+            "type": "boolean",
+            "description": "Account frozen status"
+          },
+          "tokenExtensions": {
+            "type": "object",
+            "description": "Additional information about the token",
+            "nullable": true
+          }
+        },
+        "required": [
+          "address",
+          "mint",
+          "owner",
+          "amount",
+          "delegatedAmount",
+          "frozen"
+        ]
+      }
+    }
+  }
+}
