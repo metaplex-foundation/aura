@@ -100,6 +100,8 @@ impl MplCoreFeeProcessor {
             });
         }
 
+        fees.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
+
         let begin_processing = Instant::now();
         if let Err(err) = self.storage.save_core_fees(fees).await {
             error!("save_core_fees: {}", err);
