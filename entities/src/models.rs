@@ -69,15 +69,18 @@ pub struct AssetIndex {
     pub metadata_url: Option<UrlWithStatus>,
     pub update_authority: Option<Pubkey>,
     pub slot_updated: i64,
-    pub fungible_tokens: Vec<FungibleToken>,
+    pub fungible_asset_mint: Option<Pubkey>,
+    pub fungible_asset_balance: Option<u64>,
 }
 
 /// FungibleToken is associated token account
-/// owner by some user
+/// owned by some user
+/// key - token account's pubkey
 /// owner - user owned this account
 /// asset - mint this account associated with
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
 pub struct FungibleToken {
+    pub key: Pubkey,
     pub owner: Pubkey,
     pub asset: Pubkey,
     pub balance: i64,

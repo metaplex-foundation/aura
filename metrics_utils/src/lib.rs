@@ -256,6 +256,12 @@ impl RpcBackfillerMetricsConfig {
 pub struct SynchronizerMetricsConfig {
     number_of_records_synchronized: Family<MetricLabel, Counter>,
     last_synchronized_slot: Family<MetricLabel, Gauge>,
+
+    full_sync_num_of_assets_iter: Family<MetricLabel, Counter>,
+    full_sync_iter_over_assets_indexes: Family<MethodLabel, Histogram>,
+    full_sync_num_of_records_written: Family<MetricLabel, Counter>,
+    full_sync_file_write_time: Family<MethodLabel, Histogram>,
+    full_sync_num_of_records_sent_to_channel: Family<MetricLabel, Counter>,
 }
 
 impl Default for SynchronizerMetricsConfig {
@@ -269,6 +275,17 @@ impl SynchronizerMetricsConfig {
         Self {
             number_of_records_synchronized: Family::<MetricLabel, Counter>::default(),
             last_synchronized_slot: Family::<MetricLabel, Gauge>::default(),
+
+            full_sync_num_of_assets_iter: Family::<MetricLabel, Counter>::default(),
+            full_sync_iter_over_assets_indexes:
+                Family::<MethodLabel, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets(1.0, 1.8, 10))
+                }),
+            full_sync_num_of_records_written: Family::<MetricLabel, Counter>::default(),
+            full_sync_file_write_time: Family::<MethodLabel, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets(5.0, 1.8, 10)),
+            ),
+            full_sync_num_of_records_sent_to_channel: Family::<MetricLabel, Counter>::default(),
         }
     }
 
@@ -287,6 +304,47 @@ impl SynchronizerMetricsConfig {
             })
             .set(slot)
     }
+
+    pub fn inc_num_of_assets_iter(&self, label: &str, num_of_records: u64) -> u64 {
+        self.full_sync_num_of_assets_iter
+            .get_or_create(&MetricLabel {
+                name: label.to_string(),
+            })
+            .inc_by(num_of_records)
+    }
+
+    pub fn set_iter_over_assets_indexes(&self, duration: f64) {
+        self.full_sync_iter_over_assets_indexes
+            .get_or_create(&MethodLabel {
+                method_name: "iter_over_asset_indexes".to_string(),
+            })
+            .observe(duration);
+    }
+
+    pub fn inc_num_of_records_written(&self, label: &str, num: u64) -> u64 {
+        self.full_sync_num_of_records_written
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc_by(num)
+    }
+
+    pub fn set_file_write_time(&self, label: &str, duration: f64) {
+        self.full_sync_file_write_time
+            .get_or_create(&MethodLabel {
+                method_name: label.to_string(),
+            })
+            .observe(duration);
+    }
+
+    pub fn inc_num_of_records_sent_to_channel(&self, label: &str, num: u64) -> u64 {
+        self.full_sync_num_of_records_sent_to_channel
+            .get_or_create(&MetricLabel {
+                name: label.to_owned(),
+            })
+            .inc_by(num)
+    }
+
     pub fn register(&self, registry: &mut Registry) {
         registry.register(
             "synchronizer_number_of_records_synchronized",
@@ -298,6 +356,36 @@ impl SynchronizerMetricsConfig {
             "synchronizer_last_synchronized_slot",
             "The last synchronized slot by synchronizer",
             self.last_synchronized_slot.clone(),
+        );
+
+        registry.register(
+            "full_synchronization_num_of_assets_iter",
+            "Number of assets synchronizer already iterated over in asset_static_data and token_accounts CFs",
+            self.full_sync_num_of_assets_iter.clone(),
+        );
+
+        registry.register(
+            "full_sync_time_to_iter_over_assets_indexes",
+            "Time synchronizer spend to iterate over assets data, process it and push to appropriate channel",
+            self.full_sync_iter_over_assets_indexes.clone(),
+        );
+
+        registry.register(
+            "full_synchronization_num_of_records_written",
+            "Number of records which were written to the file during full synchronization",
+            self.full_sync_num_of_records_written.clone(),
+        );
+
+        registry.register(
+            "full_sync_time_to_write_data_to_file",
+            "Time synchronizer spend to write batch of data to the file",
+            self.full_sync_file_write_time.clone(),
+        );
+
+        registry.register(
+            "full_sync_num_of_records_sent_to_channel",
+            "Number of records which were sent to the channel during full synchronization",
+            self.full_sync_num_of_records_sent_to_channel.clone(),
         );
     }
 }

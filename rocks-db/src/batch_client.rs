@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
-use entities::enums::{SpecificationVersions, TokenMetadataEdition};
+use entities::enums::{SpecificationAssetClass, SpecificationVersions, TokenMetadataEdition};
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 
@@ -17,9 +17,7 @@ use crate::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
     BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
-use entities::models::{
-    AssetIndex, CompleteAssetDetails, FungibleToken, UpdateVersion, Updated, UrlWithStatus,
-};
+use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, UrlWithStatus};
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
@@ -105,7 +103,11 @@ impl AssetUpdateIndexStorage for Storage {
 
 #[async_trait]
 impl AssetIndexReader for Storage {
-    async fn get_asset_indexes(&self, keys: &[Pubkey]) -> Result<HashMap<Pubkey, AssetIndex>> {
+    async fn get_asset_indexes<'a>(
+        &self,
+        keys: &[Pubkey],
+        collection_authorities: Option<&'a HashMap<Pubkey, Pubkey>>,
+    ) -> Result<HashMap<Pubkey, AssetIndex>> {
         let mut asset_indexes = HashMap::new();
         let start_time = chrono::Utc::now();
         let assets_static_fut = self.asset_static_data.batch_get(keys.to_vec());
@@ -113,6 +115,9 @@ impl AssetIndexReader for Storage {
         let assets_authority_fut = self.asset_authority_data.batch_get(keys.to_vec());
         let assets_owner_fut = self.asset_owner_data.batch_get(keys.to_vec());
         let assets_collection_fut = self.asset_collection_data.batch_get(keys.to_vec());
+        // these data will be used only during live synchronization
+        // during full sync will be passed mint keys meaning response will be always empty
+        let token_accounts_fut = self.token_accounts.batch_get(keys.to_vec());
 
         let (
             asset_static_details,
@@ -120,12 +125,14 @@ impl AssetIndexReader for Storage {
             asset_authority_details,
             asset_owner_details,
             asset_collection_details,
+            token_accounts_details,
         ) = tokio::join!(
             assets_static_fut,
             assets_dynamic_fut,
             assets_authority_fut,
             assets_owner_fut,
             assets_collection_fut,
+            token_accounts_fut
         );
 
         let asset_static_details = asset_static_details?;
@@ -133,17 +140,35 @@ impl AssetIndexReader for Storage {
         let asset_authority_details = asset_authority_details?;
         let asset_owner_details = asset_owner_details?;
         let asset_collection_details = asset_collection_details?;
-        let assets_collection_pks = asset_collection_details
-            .iter()
-            .flat_map(|c| c.as_ref().map(|c| c.collection.value))
-            .collect::<Vec<_>>();
-        let mpl_core_collections = self
-            .asset_collection_data
-            .batch_get(assets_collection_pks)
-            .await?
-            .into_iter()
-            .filter_map(|asset| asset.map(|a| (a.pubkey, a)))
-            .collect::<HashMap<_, _>>();
+        let token_accounts_details = token_accounts_details?;
+
+        let mpl_core_map = {
+            // during dump creation hashmap with collection authorities will be passed
+            // and during regular synchronization we should make additional select from DB
+            if collection_authorities.is_some() {
+                HashMap::new()
+            } else {
+                let assets_collection_pks = asset_collection_details
+                    .iter()
+                    .flat_map(|c| c.as_ref().map(|c| c.collection.value))
+                    .collect::<Vec<_>>();
+
+                self.asset_collection_data
+                    .batch_get(assets_collection_pks)
+                    .await?
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|asset| asset.authority.value.map(|v| (asset.pubkey, v)))
+                    .collect::<HashMap<_, _>>()
+            }
+        };
+
+        // mpl_core_map.is_empty() && collection_authorities.is_some() check covers case when DB is empty
+        let mpl_core_collections = if mpl_core_map.is_empty() && collection_authorities.is_some() {
+            collection_authorities.unwrap()
+        } else {
+            &mpl_core_map
+        };
 
         for static_info in asset_static_details.iter().flatten() {
             let asset_index = AssetIndex {
@@ -236,9 +261,8 @@ impl AssetIndexReader for Storage {
                 existed_index.pubkey = data.pubkey;
                 existed_index.collection = Some(data.collection.value);
                 existed_index.is_collection_verified = Some(data.is_collection_verified.value);
-                existed_index.update_authority = mpl_core_collections
-                    .get(&data.collection.value)
-                    .and_then(|c| c.authority.value);
+                existed_index.update_authority =
+                    mpl_core_collections.get(&data.collection.value).copied();
                 if data.get_slot_updated() as i64 > existed_index.slot_updated {
                     existed_index.slot_updated = data.get_slot_updated() as i64;
                 }
@@ -247,9 +271,7 @@ impl AssetIndexReader for Storage {
                     pubkey: data.pubkey,
                     collection: Some(data.collection.value),
                     is_collection_verified: Some(data.is_collection_verified.value),
-                    update_authority: mpl_core_collections
-                        .get(&data.collection.value)
-                        .and_then(|c| c.authority.value),
+                    update_authority: mpl_core_collections.get(&data.collection.value).copied(),
                     slot_updated: data.get_slot_updated() as i64,
                     ..Default::default()
                 };
@@ -258,33 +280,19 @@ impl AssetIndexReader for Storage {
             }
         }
 
-        for key in keys {
-            let fungible_tokens = self
-                .get_raw_token_accounts(None, Some(*key), None, None, None, None, true)
-                .await
-                .map_err(|e| StorageError::Common(e.to_string()))?
-                .into_iter()
-                .flatten()
-                .map(|ta| FungibleToken {
-                    owner: ta.owner,
-                    asset: ta.mint,
-                    balance: ta.amount,
-                    slot_updated: ta.slot_updated,
-                })
-                .collect::<Vec<_>>();
+        // compare to other data this data is saved in HashMap by token account keys, not mints
+        for token_acc in token_accounts_details.iter().flatten() {
+            let asset_index = AssetIndex {
+                pubkey: token_acc.pubkey,
+                specification_asset_class: SpecificationAssetClass::FungibleToken,
+                owner: Some(token_acc.owner),
+                fungible_asset_mint: Some(token_acc.mint),
+                fungible_asset_balance: Some(token_acc.amount as u64),
+                slot_updated: token_acc.slot_updated,
+                ..Default::default()
+            };
 
-            if let Some(existed_index) = asset_indexes.get_mut(key) {
-                existed_index.pubkey = *key;
-                existed_index.fungible_tokens = fungible_tokens;
-            } else {
-                let asset_index = AssetIndex {
-                    pubkey: *key,
-                    fungible_tokens,
-                    ..Default::default()
-                };
-
-                asset_indexes.insert(asset_index.pubkey, asset_index);
-            }
+            asset_indexes.insert(token_acc.pubkey, asset_index);
         }
 
         self.red_metrics.observe_request(
@@ -504,10 +512,7 @@ impl Storage {
                 .map(|a| !a.metadata.is_empty())
                 .unwrap_or(false);
 
-            Some(UrlWithStatus {
-                metadata_url: dynamic_info.url.value.clone(),
-                is_downloaded,
-            })
+            Some(UrlWithStatus::new(&dynamic_info.url.value, is_downloaded))
         }
     }
 }
