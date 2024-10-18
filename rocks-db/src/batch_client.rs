@@ -512,10 +512,7 @@ impl Storage {
                 .map(|a| !a.metadata.is_empty())
                 .unwrap_or(false);
 
-            Some(UrlWithStatus {
-                metadata_url: dynamic_info.url.value.clone(),
-                is_downloaded,
-            })
+            Some(UrlWithStatus::new(&dynamic_info.url.value, is_downloaded))
         }
     }
 }
