@@ -2,6 +2,7 @@ use asset_previews::{AssetPreviews, UrlToDownload};
 use entities::schedule::ScheduledJob;
 use inflector::Inflector;
 use leaf_signatures::LeafSignature;
+use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
@@ -20,7 +21,7 @@ use column::{Column, TypedColumn};
 use entities::enums::TokenMetadataEdition;
 use entities::models::{
     AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock, SplMint,
-    TokenAccount,
+    TokenAccount, Updated,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
@@ -103,6 +104,9 @@ pub struct Storage {
     pub asset_owner_data: Column<AssetOwner>,
     pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_collection_data: Column<asset::AssetCollection>,
+    pub asset_collection_collection: Column<asset::AssetCollectionCollection>,
+    pub asset_collection_authority: Column<asset::AssetCollectionAuthority>,
+    pub asset_collection_verified: Column<asset::AssetCollectionVerified>,
     pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
     pub asset_offchain_data: Column<OffChainData>,
     pub cl_items: Column<cl_items::ClItem>,
@@ -155,6 +159,9 @@ impl Storage {
         let asset_owner_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_leaf_data = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data = Self::column(db.clone(), red_metrics.clone());
+        let asset_collection_collection = Self::column(db.clone(), red_metrics.clone());
+        let asset_collection_authority = Self::column(db.clone(), red_metrics.clone());
+        let asset_collection_verified = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_offchain_data = Self::column(db.clone(), red_metrics.clone());
 
@@ -200,6 +207,9 @@ impl Storage {
             asset_owner_data_deprecated,
             asset_leaf_data,
             asset_collection_data,
+            asset_collection_collection,
+            asset_collection_authority,
+            asset_collection_verified,  
             asset_collection_data_deprecated,
             asset_offchain_data,
             cl_items,

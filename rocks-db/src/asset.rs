@@ -399,6 +399,63 @@ pub(crate) fn update_optional_field<T: Clone + Default>(
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct AssetCollectionAuthority {
+    pub value: Updated<Option<Pubkey>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct AssetCollectionCollection{
+    pub value: Updated<Pubkey>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct AssetCollectionVerified{
+    pub value: Updated<bool>,
+}
+
+impl TypedColumn for AssetCollectionCollection {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_COLLECTION_COLLECTION";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetCollectionAuthority {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_COLLECTION_AUTHORITY";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetCollectionVerified {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_COLLECTION_VERIFIED";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
 impl TypedColumn for AssetStaticDetails {
     type KeyType = Pubkey;
     type ValueType = Self;
