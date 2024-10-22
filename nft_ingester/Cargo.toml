@@ -80,7 +80,7 @@ coingecko = { workspace = true }
 libreplex_inscriptions = { workspace = true }
 spl-token-2022 = { workspace = true }
 moka = { workspace = true }
-actix-web = { workspace = true }
+axum = { workspace = true }
 rocksdb = { workspace = true }
 
 [dev-dependencies]
