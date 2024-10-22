@@ -76,7 +76,7 @@ impl Storage {
         Ok(())
     }
 
-    pub async fn apply_migration1(&self) -> Result<()> {
+    pub async fn apply_migration_merge(&self) -> Result<()> {
         let mut batch: HashMap<solana_sdk::pubkey::Pubkey, AssetCompleteDetails> = HashMap::new();
         let iter = self
             .asset_static_data
