@@ -80,6 +80,8 @@ coingecko = { workspace = true }
 libreplex_inscriptions = { workspace = true }
 spl-token-2022 = { workspace = true }
 moka = { workspace = true }
+actix-web = { workspace = true }
+rocksdb = { workspace = true }
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }
@@ -129,3 +131,6 @@ name = "synchronizer"
 
 [[bin]]
 name = "raw_backup"
+
+[[bin]]
+name = "explorer"
