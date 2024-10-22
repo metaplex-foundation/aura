@@ -1,5 +1,4 @@
 use actix_web::{get, web, App, HttpServer, Responder};
-use bs58;
 use clap::Parser;
 use metrics_utils::ApiMetricsConfig;
 use prometheus_client::registry::Registry;
