@@ -112,6 +112,9 @@ impl BubblegumTxProcessor {
             .await
             .map_err(|e| IngesterError::DatabaseError(e.to_string()));
 
+        self.calc_checksums_if_needed(&result.instruction_results)
+            .await;
+
         result_to_metrics(self.metrics.clone(), &res, "process_transaction");
         self.metrics.set_latency(
             "process_transaction",
@@ -1168,6 +1171,10 @@ impl BubblegumTxProcessor {
             .await?;
 
         Ok(())
+    }
+
+    async fn calc_checksums_if_needed(&self, instructions: &[InstructionResult]) {
+        // TODO: if there was a change with a slot from the previous epoch, **emit** checksum recalc
     }
 }
 
