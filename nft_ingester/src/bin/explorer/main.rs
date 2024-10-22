@@ -1,10 +1,16 @@
-use actix_web::{get, web, App, HttpServer, Responder};
+use axum::{
+    extract::{Extension, Query},
+    http::StatusCode,
+    routing::get,
+    Json, Router,
+};
 use clap::Parser;
 use metrics_utils::ApiMetricsConfig;
 use prometheus_client::registry::Registry;
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
 use serde::Deserialize;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::sync::Mutex;
@@ -42,8 +48,8 @@ struct GetValueParams {
     key: String,
 }
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
+#[tokio::main]
+async fn main() {
     // Parse command-line arguments
     let config = Config::parse();
 
@@ -64,6 +70,12 @@ async fn main() -> std::io::Result<()> {
     red_metrics.register(&mut registry);
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
+    let _s = Storage::open(
+        &config.primary_db_path,
+        mutexed_tasks.clone(),
+        red_metrics.clone(),
+        MigrationState::Last,
+    );
     let storage = Storage::open_secondary(
         &config.primary_db_path,
         &secondary_db_path,
@@ -75,36 +87,43 @@ async fn main() -> std::io::Result<()> {
     // Open the primary RocksDB database
     let db = Arc::new(storage);
 
-    let state = web::Data::new(AppState { db });
+    let app_state = AppState { db };
 
-    // Start the HTTP server
-    HttpServer::new(move || {
-        App::new()
-            .app_data(state.clone())
-            .service(iterate_keys)
-            .service(get_value)
-    })
-    .bind(("0.0.0.0", config.port))?
-    .run()
-    .await
+    // Build our application with the routes
+    let app = Router::new()
+        .route("/iterate_keys", get(iterate_keys))
+        .route("/get_value", get(get_value))
+        .layer(Extension(Arc::new(app_state)));
+
+    // Run our app with hyper
+    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+    println!("Listening on {}", addr);
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 }
 
-#[get("/iterate_keys")]
 async fn iterate_keys(
-    data: web::Data<AppState>,
-    query: web::Query<IterateKeysParams>,
-) -> impl Responder {
-    let db = &data.db;
+    Extension(state): Extension<Arc<AppState>>,
+    Query(params): Query<IterateKeysParams>,
+) -> Result<Json<Vec<String>>, (StatusCode, String)> {
+    let db = &state.db;
 
     // Extract parameters
-    let cf_name = &query.cf_name;
-    let limit = query.limit.unwrap_or(10); // Default limit if not provided
+    let cf_name = &params.cf_name;
+    let limit = params.limit.unwrap_or(10); // Default limit if not provided
 
     // Decode start_key if provided
-    let start_key = if let Some(ref s) = query.start_key {
+    let start_key = if let Some(ref s) = params.start_key {
         match bs58::decode(s).into_vec() {
             Ok(bytes) => Some(bytes),
-            Err(_) => return web::Json(vec!["Invalid Base58 start_key".to_string()]),
+            Err(_) => {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "Invalid Base58 start_key".to_string(),
+                ))
+            }
         }
     } else {
         None
@@ -112,29 +131,31 @@ async fn iterate_keys(
 
     // Call the iterate_keys function
     match iterate_keys_function(db, cf_name, start_key.as_deref(), limit) {
-        Ok(keys) => web::Json(keys),
-        Err(err_msg) => web::Json(vec![err_msg]),
+        Ok(keys) => Ok(Json(keys)),
+        Err(err_msg) => Err((StatusCode::INTERNAL_SERVER_ERROR, err_msg)),
     }
 }
 
-#[get("/get_value")]
-async fn get_value(data: web::Data<AppState>, query: web::Query<GetValueParams>) -> impl Responder {
-    let db = &data.db;
+async fn get_value(
+    Extension(state): Extension<Arc<AppState>>,
+    Query(params): Query<GetValueParams>,
+) -> Result<Json<String>, (StatusCode, String)> {
+    let db = &state.db;
 
     // Extract parameters
-    let cf_name = &query.cf_name;
+    let cf_name = &params.cf_name;
 
     // Decode the key from Base58
-    let key_bytes = match bs58::decode(&query.key).into_vec() {
+    let key_bytes = match bs58::decode(&params.key).into_vec() {
         Ok(bytes) => bytes,
-        Err(_) => return web::Json("Invalid Base58 key".to_string()),
+        Err(_) => return Err((StatusCode::BAD_REQUEST, "Invalid Base58 key".to_string())),
     };
 
     // Call the get_value function
     match get_value_function(db, cf_name, &key_bytes) {
-        Ok(Some(value)) => web::Json(value),
-        Ok(None) => web::Json("Key not found".to_string()),
-        Err(err_msg) => web::Json(err_msg),
+        Ok(Some(value)) => Ok(Json(value)),
+        Ok(None) => Err((StatusCode::NOT_FOUND, "Key not found".to_string())),
+        Err(err_msg) => Err((StatusCode::INTERNAL_SERVER_ERROR, err_msg)),
     }
 }
 

@@ -58,7 +58,7 @@ cargo build --release --bin explorer
 Run the compiled binary with the required arguments:
 
 ```bash
-./target/release/explorer --primary-db-path /path/to/your/primary/db 
+../target/release/explorer --primary-db-path /path/to/your/primary/db 
 ```
 ### Optional Arguments
 
@@ -115,6 +115,6 @@ curl "http://localhost:8086/get_value?cf_name=default&key=3vQB7B6MrGQZaxCuFg4oh"
 ## Acknowledgements
 
 •	[RocksDB](https://rocksdb.org) for the high-performance key-value database.
-•	[Actix Web](https://actix.rs) for the powerful and pragmatic web framework.
+•	[Axum](https://github.com/tokio-rs/axum) for the ergonomic and modular web framework.
 •	[bs58](https://docs.rs/bs58/) crate for Base58 encoding and decoding.
 •	[Clap](https://clap.rs/) for command-line argument parsing.
