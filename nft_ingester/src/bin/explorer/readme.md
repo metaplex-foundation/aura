@@ -62,8 +62,8 @@ Run the compiled binary with the required arguments:
 ```
 ### Optional Arguments
 
-	•	--secondary-db-path: Path to the secondary RocksDB database. If not provided, a temporary directory is used.
-	•	--port: Port number for the REST service (defaults to 8086).
+•	--secondary-db-path: Path to the secondary RocksDB database. If not provided, a temporary directory is used.
+•	--port: Port number for the REST service (defaults to 8086).
 
 
 ### Example with all arguments:
@@ -79,20 +79,20 @@ Run the compiled binary with the required arguments:
 
 The service accepts the following command-line arguments:
 
-	•	--primary-db-path (**required**): Path to the primary RocksDB database.
-	•	--secondary-db-path (optional): Path to the secondary RocksDB database.
-	•	--port (optional): Port number for the REST service (default is 8086).
+•	--primary-db-path (**required**): Path to the primary RocksDB database.
+•	--secondary-db-path (optional): Path to the secondary RocksDB database.
+•	--port (optional): Port number for the REST service (default is 8086).
 
 ## API Endpoints
 
 ### Iterate Keys
 
-	•	URL: /iterate_keys
-	•	Method: GET
-	•	Query Parameters:
-	•	cf_name (required): Name of the column family.
-	•	limit (optional): Maximum number of keys to return (default is 10).
-	•	start_key (optional): Base58-encoded key to start iteration from.
+•	URL: /iterate_keys
+•	Method: GET
+•	Query Parameters:
+•	cf_name (required): Name of the column family.
+•	limit (optional): Maximum number of keys to return (default is 10).
+•	start_key (optional): Base58-encoded key to start iteration from.
 
 #### Example Request:
 ```bash
@@ -101,11 +101,11 @@ curl "http://localhost:8086/iterate_keys?cf_name=default&limit=5"
 
 ### Get Value
 
-	•	URL: /get_value
-	•	Method: GET
-	•	Query Parameters:
-	•	cf_name (required): Name of the column family.
-	•	key (required): Base58-encoded key whose value is to be retrieved.
+•	URL: /get_value
+•	Method: GET
+•	Query Parameters:
+•	cf_name (required): Name of the column family.
+•	key (required): Base58-encoded key whose value is to be retrieved.
 
 #### Example Request:
 ```bash
@@ -114,7 +114,7 @@ curl "http://localhost:8086/get_value?cf_name=default&key=3vQB7B6MrGQZaxCuFg4oh"
 
 ## Acknowledgements
 
-	•	[RocksDB](https://rocksdb.org) for the high-performance key-value database.
-	•	[Actix Web](https://actix.rs) for the powerful and pragmatic web framework.
-	•	[bs58](https://docs.rs/bs58/) crate for Base58 encoding and decoding.
-	•	[Clap](https://clap.rs/) for command-line argument parsing.
+•	[RocksDB](https://rocksdb.org) for the high-performance key-value database.
+•	[Actix Web](https://actix.rs) for the powerful and pragmatic web framework.
+•	[bs58](https://docs.rs/bs58/) crate for Base58 encoding and decoding.
+•	[Clap](https://clap.rs/) for command-line argument parsing.
