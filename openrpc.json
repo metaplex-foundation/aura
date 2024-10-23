@@ -434,6 +434,122 @@
       ],
       "params": [
         {
+          "name": "negate",
+          "description": "Optional flag to negate the search criteria.",
+          "schema": { "type": "boolean" }
+        },
+        {
+          "name": "conditionType",
+          "description": "The type of search condition to apply.",
+          "schema": { "$ref": "#/components/schemas/SearchConditionType" }
+        },
+        {
+          "name": "interface",
+          "description": "The interface type to filter the assets.",
+          "schema": { "$ref": "#/components/schemas/Interface" }
+        },
+        {
+          "name": "ownerAddress",
+          "description": "The owner's public key address.",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "ownerType",
+          "description": "The ownership model used for the asset.",
+          "schema": { "$ref": "#/components/schemas/OwnershipModel" }
+        },
+        {
+          "name": "creatorAddress",
+          "description": "The public key of the asset's creator.",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "creatorVerified",
+          "description": "Flag indicating if the creator is verified.",
+          "schema": { "type": "boolean" }
+        },
+        {
+          "name": "authorityAddress",
+          "description": "The authority's public key address.",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "grouping",
+          "description": "Group key-value pair to filter assets by a specific collection or group.",
+          "schema": {
+            "type": "array",
+            "items": [
+              { "type": "string" },
+              { "type": "string" }
+            ]
+          }
+        },
+        {
+          "name": "delegate",
+          "description": "The public key of the delegate for the asset.",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "frozen",
+          "description": "Flag indicating if the asset is frozen.",
+          "schema": { "type": "boolean" }
+        },
+        {
+          "name": "supply",
+          "description": "The supply of the asset.",
+          "schema": { "type": "integer", "format": "uint64" }
+        },
+        {
+          "name": "supplyMint",
+          "description": "The public key of the mint for the asset supply.",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "compressed",
+          "description": "Flag indicating if the asset is compressed.",
+          "schema": { "type": "boolean" }
+        },
+        {
+          "name": "compressible",
+          "description": "Flag indicating if the asset can be compressed.",
+          "schema": { "type": "boolean" }
+        },
+        {
+          "name": "royaltyTargetType",
+          "description": "The royalty model associated with the asset.",
+          "schema": { "$ref": "#/components/schemas/RoyaltyModel" }
+        },
+        {
+          "name": "royaltyTarget",
+          "description": "The target address for royalty payments.",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "royaltyAmount",
+          "description": "The amount of royalties associated with the asset.",
+          "schema": { "type": "integer", "format": "uint32" }
+        },
+        {
+          "name": "tokenType",
+          "description": "The type of token.",
+          "schema": { "$ref": "#/components/schemas/TokenType" }
+        },
+        {
+          "name": "burnt",
+          "description": "Flag indicating if the asset has been burnt.",
+          "schema": { "type": "boolean" }
+        },
+        {
+          "name": "jsonUri",
+          "description": "The URI for additional JSON metadata.",
+          "schema": { "type": "string" }
+        },
+        {
+          "name": "name",
+          "description": "The name of the asset.",
+          "schema": { "type": "string" }
+        },
+        {
           "$ref": "#/components/schemas/asset_sort_by"
         },
         {
@@ -1063,6 +1179,55 @@
           }
         }
       },
+      "TokenType": {
+        "type": "string",
+        "enum": [
+          "fungible",
+          "nonFungible",
+          "regularNFT",
+          "compressedNFT",
+          "all"
+        ]
+      },
+      "RoyaltyModel": {
+        "type": "string",
+        "enum": [
+          "creators",
+          "fanout",
+          "single"
+        ]
+      },
+      "OwnershipModel": {
+        "type": "string",
+        "enum": [
+          "single",
+          "token"
+        ]
+      },
+      "SearchConditionType": {
+        "type": "string",
+        "enum": [
+          "all",
+          "any"
+        ]
+      },
+      "Interface": {
+        "type": "string",
+        "enum": [
+          "V1_NFT",
+          "V1_PRINT",
+          "LEGACY_NFT",
+          "V2_NFT",
+          "FungibleAsset",
+          "FungibleToken",
+          "Custom",
+          "Identity",
+          "Executable",
+          "ProgrammableNFT",
+          "MplCoreAsset",
+          "MplCoreCollection"
+        ]
+      },
       "Asset": {
         "type": "object",
         "required": [
@@ -1071,17 +1236,7 @@
         ],
         "properties": {
           "interface": {
-            "type": "string",
-            "enum": [
-              "V1_NFT",
-              "V1_PRINT",
-              "LEGACY_NFT",
-              "V2_NFT",
-              "FungibleAsset",
-              "Custom",
-              "Identity",
-              "Executable"
-            ]
+            "$ref": "#/components/schemas/Interface"
           },
           "id": {
             "type": "string"
