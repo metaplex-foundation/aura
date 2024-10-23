@@ -6,13 +6,14 @@
   },
   "servers": [
     {
-      "url": "https://rpc.metaplex.com/this_is_fake"
+      "url": "https://aura-mainnet.metaplex.com"
     }
   ],
   "methods": [
     {
       "name": "getAssetProof",
-      "summary": "Get merkle proof for asset",
+      "summary": "Get a merkle proof for a compressed asset by its public key.",
+      "description": "This method is crucial for transactions with compressed assets. For example, to successfully transfer a compressed assets, you must provide the proof and tree.",
       "tags": [
         {
           "name": "proof"
@@ -26,9 +27,7 @@
           "$ref": "#/components/contentDescriptors/GetAssetProof"
         }
       ],
-      "examples": [
-
-      ],
+      "examples": [],
       "result": {
         "$ref": "#/components/contentDescriptors/assetProof"
       },
@@ -45,7 +44,8 @@
     },
     {
       "name": "getAssetProofBatch",
-      "summary": "Get merkle proofs for each asset",
+      "summary": "Get merkle proofs for compressed assets by its public keys",
+      "description": "This method is crucial for transactions with compressed assets. For example, to successfully transfer a compressed assets, you must provide the proof and tree.",
       "tags": [
         {
           "name": "proof"
@@ -75,7 +75,8 @@
     },
     {
       "name": "getAsset",
-      "summary": "Get asset by public key with search options",
+      "summary": "Get an asset by its public key.",
+      "description": "This method will retrieve all necessary details for a specified standard or compressed asset.",
       "tags": [
         {
           "name": "asset"
@@ -128,7 +129,8 @@
     },
     {
       "name": "getAssetBatch",
-      "summary": "Get assets by public keys with search options",
+      "summary": "Get multiple assets by their public keys.",
+      "description": "This method will retrieve all necessary details for a specified standard or compressed assets.",
       "tags": [
         {
           "name": "asset"
@@ -181,10 +183,11 @@
     },
     {
       "name": "getAssetsByOwner",
-      "summary": "List all assets by owner pubkey",
+      "summary": "Retrieve a list of all assets owned by the specified public key.",
+      "description": "This will return a list of assets for the specified owner.",
       "tags": [
         {
-          "name": "single"
+          "name": "batch"
         },
         {
           "name": "owner"
@@ -193,7 +196,7 @@
       "params": [
         {
           "name": "owner_address",
-          "description": "Public key of owner in base58 encoding",
+          "description": "The owner address key.",
           "required": true,
           "schema": {
             "type": "string"
@@ -218,7 +221,7 @@
           "$ref": "#/components/schemas/cursor"
         },
         {
-          "$ref": "#/components/schemas/options"
+          "$ref": "#/components/schemas/get_by_methods_options"
         }
       ],
       "result": {
@@ -257,7 +260,8 @@
     },
     {
       "name": "getAssetsByGroup",
-      "summary": "Gets a List of assets based on a group filter expression, see grouping module",
+      "summary": "Get a list of assets by a group key and value.",
+      "description": "This will return asset details for a specified group (e.g., a collection) and can include both compressed and standard assets.",
       "tags": [
         {
           "name": "group"
@@ -303,7 +307,7 @@
           "$ref": "#/components/schemas/cursor"
         },
         {
-          "$ref": "#/components/schemas/options"
+          "$ref": "#/components/schemas/get_by_methods_options"
         }
       ],
       "result": {
@@ -338,7 +342,8 @@
     },
     {
       "name": "getAssetsByCreator",
-      "summary": "Gets a List of assets based on a creator filter expression",
+      "summary": "Get a list of assets created by an address.",
+      "description": "This will return a list of assets associated with the specified creator, including both compressed and standard assets.",
       "tags": [
         {
           "name": "batch"
@@ -378,7 +383,7 @@
           "$ref": "#/components/schemas/cursor"
         },
         {
-          "$ref": "#/components/schemas/options"
+          "$ref": "#/components/schemas/get_by_methods_options"
         }
       ],
       "result": {
@@ -417,7 +422,8 @@
     },
     {
       "name": "searchAssets",
-      "summary": "Search Api for Assets",
+      "summary": "Search for assets using a variety of parameters.",
+      "description": "This method will return assets based on the specified custom search criteria.",
       "tags": [
         {
           "name": "search"
@@ -441,6 +447,9 @@
         },
         {
           "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/search_assets_options"
         }
       ],
       "result": {
@@ -475,10 +484,14 @@
     },
     {
       "name": "getAssetsByAuthority",
-      "summary": "Gets a List of assets based on a authority filter expression",
+      "summary": "Get a list of assets with a specific authority.",
+      "description": "This will return a list of assets for the given authority provided.",
       "tags": [
         {
           "name": "asset"
+        },
+        {
+          "name": "batch"
         },
         {
           "name": "authority"
@@ -512,7 +525,7 @@
           "$ref": "#/components/schemas/cursor"
         },
         {
-          "$ref": "#/components/schemas/options"
+          "$ref": "#/components/schemas/get_by_methods_options"
         }
       ],
       "result": {
@@ -547,7 +560,8 @@
     },
     {
       "name": "getTokenAccounts",
-      "summary": "Get token accounts",
+      "summary": "Retrieve information about all token accounts for a given mint or a specific owner.",
+      "description": "Retrieve all token accounts linked to a specific mint or owner account. This provides an efficient way to gather all owners of an SPL token or all tokens held by a particular address.",
       "tags": [
         {
           "name": "single"
@@ -581,11 +595,7 @@
           }
         },
         {
-          "name": "options",
-          "description": "Searching options",
-          "schema": {
-            "$ref": "#/components/schemas/DisplayOptions"
-          }
+          "$ref": "#/components/schemas/display_options"
         },
         {
           "$ref": "#/components/schemas/before"
@@ -699,7 +709,8 @@
     },
     {
       "name": "getAssetSignaturesV2",
-      "summary": "Return asset signature from chain",
+      "summary": "Get a list of transaction signatures related to a compressed asset.",
+      "description": "This method will return the transaction signatures for a given asset.",
       "tags": [
         {
           "name": "signature"
@@ -713,9 +724,8 @@
           "name": "id",
           "schema": {
             "type": "string",
-            "description": "Optional asset pubkey to filter the signatures.",
-            "nullable": true,
-            "example": "asset123"
+            "description": "The public key of the asset to retrieve the signatures for",
+            "nullable": true
           }
         },
         {
@@ -735,17 +745,14 @@
           "schema": {
             "type": "string",
             "description": "Optional tree name for signature filtering.",
-            "nullable": true,
-            "example": "merkleTree1"
+            "nullable": true
           }
         },
         {
-          "name": "tree",
+          "name": "leaf_index",
           "schema": {
-            "type": "string",
-            "description": "Optional tree name for signature filtering.",
-            "nullable": true,
-            "example": "merkleTree1"
+            "type": "integer",
+            "nullable": true
           }
         },
         {
@@ -754,7 +761,10 @@
             "type": "string",
             "description": "Optional sorting direction for signatures.",
             "nullable": true,
-            "enum": ["asc", "desc"],
+            "enum": [
+              "asc",
+              "desc"
+            ],
             "example": "asc"
           }
         },
@@ -781,21 +791,20 @@
       },
       "AssetList": {
         "name": "AssetList",
-        "description": "A paged an array of assets",
+        "description": "An array of assets",
         "schema": {
           "$ref": "#/components/schemas/AssetList"
         }
       },
       "assetProof": {
         "name": "AssetProof",
-        "description": "Array of hashes corresponding to a `node_index`",
         "schema": {
           "$ref": "#/components/schemas/AssetProof"
         }
       },
       "assetProofBatch": {
         "name": "AssetProofBatch",
-        "description": "Array of hashes corresponding to a `node_index`",
+        "description": "A map of asset proofs, where the key is the asset's public key and the value is the AssetProof struct.",
         "schema": {
           "$ref": "#/components/schemas/AssetProofBatch"
         }
@@ -827,7 +836,7 @@
       },
       "AssetIds": {
         "name": "AssetIds",
-        "description": "Asset ids in base58",
+        "description": "Public keys of assets.",
         "required": true,
         "schema": {
           "type": "array",
@@ -897,9 +906,30 @@
       },
       "options": {
         "name": "options",
-        "description": "Showing options for assets",
+        "description": "The display options for the response.",
+        "schema": {
+          "$ref": "#/components/schemas/Options"
+        }
+      },
+      "display_options": {
+        "name": "options",
+        "description": "The display options for the response.",
+        "schema": {
+          "$ref": "#/components/schemas/DisplayOptions"
+        }
+      },
+      "get_by_methods_options": {
+        "name": "get_by_methods_options",
+        "description": "The display options for the response.",
         "schema": {
           "$ref": "#/components/schemas/GetByMethodsOptions"
+        }
+      },
+      "search_assets_options": {
+        "name": "search_assets_options",
+        "description": "The display options for the response.",
+        "schema": {
+          "$ref": "#/components/schemas/SearchAssetsOptions"
         }
       },
       "asset_sort_by": {
@@ -994,10 +1024,12 @@
         "type": "object",
         "properties": {
           "root": {
-            "type": "string"
+            "type": "string",
+            "description": "The root of the merkle tree."
           },
           "proof": {
             "type": "array",
+            "description": "The proof of the asset.",
             "items": {
               "type": "string"
             }
@@ -1006,17 +1038,18 @@
             "type": "number"
           },
           "leaf": {
-            "type": "string"
+            "type": "string",
+            "description": "The leaf of the merkle tree."
           },
           "tree_id": {
-            "type": "string"
+            "type": "string",
+            "description": "The ID of the merkle tree."
           }
         }
       },
       "AssetProofBatch": {
         "name": "assetProofBatch",
         "type": "object",
-        "description": "Map of assets proofs where key is public key of asset and value is `AssetProof` struct",
         "properties": {
           "additionalProperties": {
             "oneOf": [
@@ -1024,8 +1057,7 @@
                 "$ref": "#/components/schemas/AssetProof"
               },
               {
-                "type": "null",
-                "description": "No value provided"
+                "type": "null"
               }
             ]
           }
@@ -1263,11 +1295,75 @@
         "properties": {
           "showZeroBalance": {
             "type": "boolean",
-            "description": "Show accounts with zero balance",
+            "description": "Displays assets with zero balance.",
             "default": false
           }
         },
         "required": [
+          "showZeroBalance"
+        ]
+      },
+      "Options": {
+        "type": "object",
+        "properties": {
+          "showUnverifiedCollections": {
+            "type": "boolean",
+            "description": "Displays grouping information for unverified collections instead of skipping them."
+          },
+          "showCollectionMetadata": {
+            "type": "boolean",
+            "description": "Displays metadata for the collection."
+          },
+          "showInscription": {
+            "type": "boolean",
+            "description": "Displays inscription details of assets inscribed on-chain."
+          },
+          "showFungible": {
+            "type": "boolean",
+            "description": "Displays fungible tokens held by the owner."
+          }
+        },
+        "required": [
+          "showUnverifiedCollections",
+          "showCollectionMetadata",
+          "showInscription",
+          "showFungible"
+        ]
+      },
+      "SearchAssetsOptions": {
+        "type": "object",
+        "properties": {
+          "showUnverifiedCollections": {
+            "type": "boolean",
+            "description": "Displays grouping information for unverified collections instead of skipping them."
+          },
+          "showGrandTotal": {
+            "type": "boolean",
+            "description": "Shows the total number of assets that matched the query. This will make the request slower."
+          },
+          "showNativeBalance": {
+            "type": "boolean",
+            "description": "Shows the native balance (SOL) held by the owner."
+          },
+          "showCollectionMetadata": {
+            "type": "boolean",
+            "description": "Displays metadata for the collection."
+          },
+          "showInscription": {
+            "type": "boolean",
+            "description": "Displays inscription details of assets inscribed on-chain."
+          },
+          "showZeroBalance": {
+            "type": "boolean",
+            "description": "Displays assets with zero balance."
+          }
+        },
+        "required": [
+          "showUnverifiedCollections",
+          "showGrandTotal",
+          "showNativeBalance",
+          "showCollectionMetadata",
+          "showInscription",
           "showZeroBalance"
         ]
       },
@@ -1276,33 +1372,42 @@
         "properties": {
           "showUnverifiedCollections": {
             "type": "boolean",
-            "description": "Show unverified collections"
+            "description": "Displays grouping information for unverified collections instead of skipping them."
           },
           "showGrandTotal": {
             "type": "boolean",
-            "description": "Show grand total"
+            "description": "Shows the total number of assets that matched the query. This will make the request slower."
           },
           "showNativeBalance": {
             "type": "boolean",
-            "description": "Show native balance"
+            "description": "Shows the native balance (SOL) held by the owner."
           },
           "showCollectionMetadata": {
             "type": "boolean",
-            "description": "Show collection metadata"
+            "description": "Displays metadata for the collection."
           },
           "showInscription": {
             "type": "boolean",
-            "description": "Show inscription"
+            "description": "Displays inscription details of assets inscribed on-chain."
           },
           "showZeroBalance": {
             "type": "boolean",
-            "description": "Show zero balance"
+            "description": "Displays assets with zero balance."
           },
           "showFungible": {
             "type": "boolean",
-            "description": "Show fungible"
+            "description": "Displays fungible tokens held by the owner."
           }
-        }
+        },
+        "required": [
+          "showUnverifiedCollections",
+          "showGrandTotal",
+          "showNativeBalance",
+          "showCollectionMetadata",
+          "showInscription",
+          "showZeroBalance",
+          "showFungible"
+        ]
       },
       "TokenAccountsList": {
         "type": "object",
@@ -1384,7 +1489,11 @@
             }
           }
         },
-        "required": ["total", "limit", "items"]
+        "required": [
+          "total",
+          "limit",
+          "items"
+        ]
       },
       "SignatureItem": {
         "type": "object",
@@ -1405,7 +1514,11 @@
             "example": 987654
           }
         },
-        "required": ["signature", "instruction", "slot"]
+        "required": [
+          "signature",
+          "instruction",
+          "slot"
+        ]
       },
       "ResponseTokenAccount": {
         "type": "object",
