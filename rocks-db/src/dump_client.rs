@@ -315,8 +315,8 @@ impl Storage {
             .has_headers(false)
             .from_writer(buf_writer);
 
-        // asset, owner, balance, slot updated
-        let mut batch: Vec<(String, String, i64, i64)> = Vec::new();
+        // token_acc_key, owner, mint, balance, slot updated
+        let mut batch: Vec<(String, String, String, i64, i64)> = Vec::new();
 
         for token in storage
             .iter_start()
@@ -326,6 +326,7 @@ impl Storage {
             batch.push((
                 token.pubkey.to_string(),
                 token.owner.to_string(),
+                token.mint.to_string(),
                 token.amount,
                 token.slot_updated,
             ));
