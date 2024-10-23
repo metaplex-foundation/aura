@@ -8,6 +8,7 @@ use entities::api_req_params::{
 use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::types::params::Params;
 use jsonrpc_core::MetaIoHandler;
+use rocks_db::Storage;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use usecase::proofs::MaybeProofChecker;
@@ -28,6 +29,7 @@ impl RpcApiBuilder {
             JsonWorker,
             AccountBalanceGetterImpl,
             RaydiumTokenPriceFetcher,
+            Storage,
         >,
         consistency_checkers: Vec<Arc<dyn ConsistencyChecker>>,
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
