@@ -121,8 +121,9 @@ impl PgClient {
 
         query_builder.push_bind(tasks_count);
 
+        // skip locked not to intersect with synchronizer work
         query_builder.push(
-            " FOR UPDATE
+            " FOR UPDATE SKIP LOCKED
             )
             UPDATE tasks t
             SET tsk_status = 'running',
