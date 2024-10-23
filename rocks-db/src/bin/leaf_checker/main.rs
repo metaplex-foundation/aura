@@ -120,6 +120,7 @@ pub async fn main() {
 async fn get_asset_id(tree_id: &Pubkey, nonce: &u64) -> Pubkey {
     Pubkey::find_program_address(
         &["asset".as_ref(), tree_id.as_ref(), &nonce.to_le_bytes()],
+        // TODO: use imported constant instead
         &Pubkey::from_str("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY").unwrap(),
     )
     .0
