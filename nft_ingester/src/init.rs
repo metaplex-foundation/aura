@@ -1,5 +1,6 @@
 use crate::config::IngesterConfig;
 use crate::error::IngesterError;
+use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::MetricState;
 use postgre_client::PgClient;
 use pprof::protos::Message;
@@ -20,26 +21,16 @@ use tracing::error;
 const MALLOC_CONF_ENV: &str = "MALLOC_CONF";
 
 pub async fn init_index_storage_with_migration(
-    config: &IngesterConfig,
-    metrics_state: &MetricState,
-    max_pg_connection_default_value: u32,
-    min_pg_connection_default_value: u32,
+    url: &str,
+    max_pg_connections: u32,
+    red_metrics: Arc<RequestErrorDurationMetrics>,
+    min_pg_connections: u32,
     pg_migrations_path: &str,
 ) -> Result<PgClient, IngesterError> {
-    let max_pg_connections = config
-        .database_config
-        .get_max_postgres_connections()
-        .unwrap_or(max_pg_connection_default_value);
-
-    let pg_client = PgClient::new(
-        &config.database_config.get_database_url()?,
-        min_pg_connection_default_value,
-        max_pg_connections,
-        metrics_state.red_metrics.clone(),
-    )
-    .await
-    .map_err(|e| e.to_string())
-    .map_err(IngesterError::SqlxError)?;
+    let pg_client = PgClient::new(url, min_pg_connections, max_pg_connections, red_metrics)
+        .await
+        .map_err(|e| e.to_string())
+        .map_err(IngesterError::SqlxError)?;
 
     pg_client
         .run_migration(pg_migrations_path)

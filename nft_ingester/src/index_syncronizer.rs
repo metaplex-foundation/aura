@@ -234,7 +234,12 @@ where
         let path = std::path::Path::new(self.dump_path.as_str());
         tracing::info!("Dumping the primary storage to {}", self.dump_path);
         self.primary_storage
-            .dump_db(path, self.dump_synchronizer_batch_size, rx)
+            .dump_db(
+                path,
+                self.dump_synchronizer_batch_size,
+                rx,
+                self.metrics.clone(),
+            )
             .await?;
         tracing::info!("Dump is complete. Loading the dump into the index storage");
 
@@ -342,7 +347,9 @@ where
         updated_keys_refs: &[Pubkey],
         metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), IngesterError> {
-        let asset_indexes = primary_storage.get_asset_indexes(updated_keys_refs).await?;
+        let asset_indexes = primary_storage
+            .get_asset_indexes(updated_keys_refs, None)
+            .await?;
 
         if asset_indexes.is_empty() {
             warn!("No asset indexes found for keys: {:?}", updated_keys_refs);
@@ -407,7 +414,8 @@ mod tests {
             }),
             update_authority: None,
             slot_updated: 123456,
-            fungible_tokens: vec![],
+            fungible_asset_mint: None,
+            fungible_asset_balance: None,
         }
     }
 
@@ -486,7 +494,7 @@ mod tests {
             .mock_asset_index_reader
             .expect_get_asset_indexes()
             .once()
-            .return_once(move |_| Ok(map_of_asset_indexes));
+            .return_once(move |_, _| Ok(map_of_asset_indexes));
 
         index_storage
             .expect_update_asset_indexes_batch()
@@ -565,7 +573,7 @@ mod tests {
             .mock_asset_index_reader
             .expect_get_asset_indexes()
             .once()
-            .return_once(move |_| Ok(map_of_asset_indexes));
+            .return_once(move |_, _| Ok(map_of_asset_indexes));
 
         index_storage
             .expect_update_asset_indexes_batch()
@@ -668,7 +676,7 @@ mod tests {
             .mock_asset_index_reader
             .expect_get_asset_indexes()
             .times(2)
-            .returning(move |_| {
+            .returning(move |_, _| {
                 call_count2 += 1;
                 if call_count2 == 1 {
                     Ok(map_of_asset_indexes.clone())

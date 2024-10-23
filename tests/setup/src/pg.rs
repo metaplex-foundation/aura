@@ -248,7 +248,8 @@ pub fn generate_asset_index_records(n: usize) -> Vec<AssetIndex> {
                 creator_share: 100,
             }],
             owner_type: Some(OwnerType::Single),
-            fungible_tokens: vec![],
+            fungible_asset_mint: None,
+            fungible_asset_balance: None,
         };
         asset_indexes.push(asset_index);
     }
