@@ -70,12 +70,6 @@ async fn main() {
     red_metrics.register(&mut registry);
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
-    let _s = Storage::open(
-        &config.primary_db_path,
-        mutexed_tasks.clone(),
-        red_metrics.clone(),
-        MigrationState::Last,
-    );
     let storage = Storage::open_secondary(
         &config.primary_db_path,
         &secondary_db_path,
