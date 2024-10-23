@@ -79,6 +79,12 @@ pub async fn main() {
 
                     let max_asset_sequence = std::cmp::max(asset_dynamic_data, asset_leaf_data);
 
+                    // if seq is 0 means asset does not exist at all
+                    // found a few such assets during testing, not sure how it happened yet
+                    if max_asset_sequence == 0 {
+                        continue;
+                    }
+
                     batch.push((cl_leaf_data.cli_tree_key, max_asset_sequence));
 
                     if batch.len() >= BATCH_SIZE {
