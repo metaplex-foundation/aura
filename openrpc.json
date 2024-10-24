@@ -1,0 +1,3441 @@
+{
+  "openrpc": "1.0.0-rc1",
+  "info": {
+    "version": "0.0.1",
+    "title": "Digital Asset API"
+  },
+  "servers": [
+    {
+      "url": "https://aura-mainnet.metaplex.com"
+    }
+  ],
+  "methods": [
+    {
+      "name": "getAssetProof",
+      "summary": "Get a merkle proof for a compressed asset by its public key.",
+      "description": "This method is crucial for transactions with compressed assets. For example, to successfully transfer a compressed assets, you must provide the proof and tree.",
+      "tags": [
+        {
+          "name": "proof"
+        },
+        {
+          "name": "single"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/contentDescriptors/GetAssetProof"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get asset proof request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Asset public key",
+              "value": "Ez6ezCMkRaUkWS5v6WVcP7uuCWiKadr3W2dHFkoZmteW"
+            }
+          ],
+          "result": {
+            "name": "Get asset proof result",
+            "value": {
+              "root": "EFCPJ6uVgvwrCgAK3zxYv5xfFNmvSFNfGguQBLjRdDf",
+              "proof": [
+                "11111111111111111111111111111111",
+                "Cf5tmmFZ4D31tviuJezHdFLf5WF7yFvzfxNyftKsqTwr",
+                "DAbAU9srHpEUogXWuhy5VZ7g8UX9STymELtndcx1xgP1",
+                "6DVZtacK87UT6bTCLc9MLNJCHqAaySsFSjeGEXymMUh",
+                "GSz87YKd3YoZWcEKhnjSsYJwv8o5aWGdBdGGYUphRfTh"
+              ],
+              "node_index": 40,
+              "leaf": "ADh1Pe7CPB6JUTiPzHwoL1nJTDJA8zxeDMGPC5gYqSHE",
+              "tree_id": "5wu82msJUAs4WWx3XtNMD5u7nuJSnfJMratppsZ6kL27"
+            }
+          }
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/assetProof"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Proof Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        }
+      ]
+    },
+    {
+      "name": "getAssetProofBatch",
+      "summary": "Get merkle proofs for compressed assets by its public keys",
+      "description": "This method is crucial for transactions with compressed assets. For example, to successfully transfer a compressed assets, you must provide the proof and tree.",
+      "tags": [
+        {
+          "name": "proof"
+        },
+        {
+          "name": "batch"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/contentDescriptors/GetAssetProofBatch"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get assets proofs request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Array of public keys of assets",
+              "value": {
+                "ids": [
+                  "81bxPqYCE8j34nQm7Rooqi8Vt3iMHLzgZJ71rUVbQQuz",
+                  "CWHuz6GPjWYdwt7rTfRHKaorMwZP58Spyd7aqGK7xFbn"
+                ]
+              }
+            }
+          ],
+          "result": {
+            "name": "Get proofs for assets result",
+            "value": {
+              "81bxPqYCE8j34nQm7Rooqi8Vt3iMHLzgZJ71rUVbQQuz": {
+                "root": "EfKEcyLqY9uT1wjCpRjV1HhF2scNx8yAEmRMKpGdq4qe",
+                "proof": [
+                  "7cRPwaMrgxqdKcjKyqHtbZhmgKawoKBCTTX5NyitD2qw",
+                  "28VRrXKJsBQ4oK9bA9Nhgo5EQMq2oaz2v9i9DDNDff4d",
+                  "2iEcHif92WZfqC8NJzVRfynQmxgG7S1vJ2qkhqwKDP77",
+                  "2bmS1B4ezK5kKNEMmzrxzwcAegattpVuAREa6cRCZaET",
+                  "7K7VYbquBc1Tfpfdx83RYu67GT5TYHdfHSBeMj2L6bEq",
+                  "9rwmiD7UD849B9PcbkH2w74izpFsCWp6jG8zkTTTUZ9y",
+                  "GT7FELAsWSbQtJMJdzd1LTUL24r9WLN5si3FkRi5BxMP",
+                  "6HJLawG1t5JH1LhsT4i6CYYa8Ud7aUKtFy6vHVkDYGsx",
+                  "76JfUHCzAkXFbXq1V3op93GmEZW3FjKdM35xT1DZE1V3",
+                  "5EyQzBbeQqxdReQUNJwQsM7r3sEGaGiWaQBjSh9esksY",
+                  "RzoqCECmV6bmfBm57RzKRwHLvwkn8VC2nqonMq3PpuH",
+                  "CsNSUc61fQHJEVPRWNov99z9KTf84pcPdH5R98MB1LG",
+                  "2Qq5ytditxVKHGDceunpRK1zqxuSRCCiEYXmN693VYX4",
+                  "FCoW5sVVmyieVezLdS1czyUo9sQJ2ytmbsDQ2y6U7cZH",
+                  "GkD3BcX8tK4mCVBpURNc3u8SCBe5TF5EuL2a6WVnw91j",
+                  "2zCoKGy7QREYqUHQ4Npsk81sLW9KPxxDBrraSd5KZ7S1",
+                  "3e2oBSLfSDVdUdS7jRGFKa8nreJUA9sFPEELrHaQyd4J",
+                  "GCXyEHiFMtRFTNFT5LNHwxiXZfooBpUMGSkjyz7pfcS5"
+                ],
+                "node_index": 291728,
+                "leaf": "DE2bb82qfupE4Wcv28brKXCKztnEKC2XnwxAmN8LzqPe",
+                "tree_id": "E7JbdYSZLvVmqvw6XfEwNQCEAybTF6E1mnrHUXw8hXDV"
+              },
+              "CWHuz6GPjWYdwt7rTfRHKaorMwZP58Spyd7aqGK7xFbn": {
+                "root": "GLxhERsNZaJ9sf5FvcqK5udkSNJQbdJLEotwEDgzPQB4",
+                "proof": [
+                  "3PApgYrn4GNJ7wuKqrKu7ZBEhw9n1Wx4zFDTZ5ar1YGN",
+                  "4zomVWFvQzCfU2pMXrx4Dyg9qZsd98jtfFsN22qyjUXk",
+                  "7pa2vfYxbDUSEvjPRftAie63g41cJMqQ9iRnyZcTgb1T",
+                  "7ddKXrgDjFFaoixmWuwLQLGeiq1YiZBSCfCraQynJsYb",
+                  "EutvGtrGH5vHNqxUtFpuBJj28pda5w2eNMtyj71eoszT",
+                  "AD9RFQaSv4e8Zo2Yaf9Xfdfbes7RVoGFBroyEMWFX1JU",
+                  "BUNF6Hq15DEdig5N7pM4hWos6oU7phMyCJ2UyRWYTjFG",
+                  "7U3kEAGhYWsX3yc2LYJhyEjr3Kk8KHULaoET8Rbd5Mg1",
+                  "558FusVYDck4TUoKDLqUfvW4kvPeAtgtMSJx52Fi9Stt",
+                  "ESDb3AdTJbTR1diT67TB9fADHR8FzMxo2ENFbqrou5xQ",
+                  "2D4fWxSFSpkA6TnQv6cgFwsNPVHQCEs1ZLBqeYeTBQHr",
+                  "25KLZ4MLqpdmprmquF6kttZ83UySPu4FWgEoEDgKcHSy",
+                  "J8BKbWK1ZuzCeGUPcXaiVgki7KgE7dHtL7jYE6geXma5",
+                  "3CuETjEvcqvv2ZDsjZodDhNrRHJ58agKPAtfH3zmVnVY",
+                  "3kkoih23BptaP7stAH3BzL4zxykGiEECkDc9EGHoJps5",
+                  "FhsNgK6GGU1cRPFbmPhrEZ95Zj8vorjK6GmhFuwmZsUm",
+                  "CUv8tiuLLugtG12Hh6dBs9CrNCoZ2yWcdjtujpaAPKGG",
+                  "HdRfjeorKmkithWqX3FBQcPc6hW25sc4q97jXkyYTVgD",
+                  "EFCaoGpSYKXymUSKvPYHXZ6ZErCsGnuvnD6AuYhpeGFW",
+                  "4s4CebZLxCfYnzFdBwwysdddydB92qtFsMexJn6E9hPM"
+                ],
+                "node_index": 1048584,
+                "leaf": "HjF2mFb4fWFKQwuSUNxivq1BUvuLo824MxCygW58S9uk",
+                "tree_id": "DRSdumv6r6KpxbGtnJaRSJL99WnBEi7rphY5euu6NGEu"
+              }
+            }
+          }
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/assetProofBatch"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Proof Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        }
+      ]
+    },
+    {
+      "name": "getAsset",
+      "summary": "Get an asset by its public key.",
+      "description": "This method will retrieve all necessary details for a specified standard or compressed asset.",
+      "tags": [
+        {
+          "name": "asset"
+        },
+        {
+          "name": "single"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/contentDescriptors/AssetId"
+        },
+        {
+          "$ref": "#/components/schemas/options"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get asset request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Asset public key",
+              "value": "Ez6ezCMkRaUkWS5v6WVcP7uuCWiKadr3W2dHFkoZmteW"
+            }
+          ],
+          "result": {
+            "name": "Get asset result",
+            "value": {
+              "interface": "V1_NFT",
+              "id": "Ez6ezCMkRaUkWS5v6WVcP7uuCWiKadr3W2dHFkoZmteW",
+              "content": {
+                "$schema": "https://schema.metaplex.com/nft1.0.json",
+                "json_uri": "https://example.com/my-nft.json",
+                "files": [],
+                "metadata": {
+                  "name": "My cNFT #9",
+                  "symbol": "",
+                  "token_standard": "NonFungible"
+                },
+                "links": {}
+              },
+              "authorities": [
+                {
+                  "address": "DMuPbfmh4Z4Y9owh5sNduzotKysPs3KVLBDv4o29fdtR",
+                  "scopes": [
+                    "full"
+                  ]
+                }
+              ],
+              "compression": {
+                "eligible": false,
+                "compressed": true,
+                "data_hash": "2PGj2MXocC5TZi37DtpDKB2L6tT5K9eYxNemNh6eDJAc",
+                "creator_hash": "CSjTMwkWgpaD4NkkjMRx6Qnf5j9W76PHNwJBgQogGtw1",
+                "asset_hash": "ADh1Pe7CPB6JUTiPzHwoL1nJTDJA8zxeDMGPC5gYqSHE",
+                "tree": "5wu82msJUAs4WWx3XtNMD5u7nuJSnfJMratppsZ6kL27",
+                "seq": 9,
+                "leaf_id": 8
+              },
+              "grouping": [],
+              "royalty": {
+                "royalty_model": "creators",
+                "target": null,
+                "percent": 0.05,
+                "basis_points": 500,
+                "primary_sale_happened": false,
+                "locked": false
+              },
+              "creators": [
+                {
+                  "address": "FKkofgY4WkoZuBV42kmsrr9Ka4HfBzDZTtT3uyDDM3kQ",
+                  "share": 100,
+                  "verified": true
+                }
+              ],
+              "ownership": {
+                "frozen": false,
+                "delegated": false,
+                "delegate": null,
+                "ownership_model": "single",
+                "owner": "EfC88UxcKJ22FLLV7oAQoCKCdFWe68548G9HwTnNKkCo"
+              },
+              "supply": null,
+              "mutable": true,
+              "burnt": false
+            }
+          }
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/Asset"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Pubkey Validation Error"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getAssetBatch",
+      "summary": "Get multiple assets by their public keys.",
+      "description": "This method will retrieve all necessary details for a specified standard or compressed assets.",
+      "tags": [
+        {
+          "name": "asset"
+        },
+        {
+          "name": "batch"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/contentDescriptors/AssetIds"
+        },
+        {
+          "$ref": "#/components/schemas/options"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get assets request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Asset public key",
+              "value": {
+                "ids": [
+                  "81bxPqYCE8j34nQm7Rooqi8Vt3iMHLzgZJ71rUVbQQuz",
+                  "CWHuz6GPjWYdwt7rTfRHKaorMwZP58Spyd7aqGK7xFbn"
+                ]
+              }
+            }
+          ],
+          "result": {
+            "name": "Get assets result",
+            "value": [
+              {
+                "interface": "V1_NFT",
+                "id": "81bxPqYCE8j34nQm7Rooqi8Vt3iMHLzgZJ71rUVbQQuz",
+                "content": {
+                  "$schema": "https://schema.metaplex.com/nft1.0.json",
+                  "json_uri": "https://entities.nft.helium.io/112vepK9Upx7juv4pCdwqzm7reBo6VYEQHKRNmU6PEaKX1ese5NE",
+                  "files": [
+                    {
+                      "uri": "https://shdw-drive.genesysgo.net/6tcnBSybPG7piEDShBcrVtYJDPSvGrDbVvXmXKpzBvWP/hotspot.png",
+                      "mime": "image/png"
+                    }
+                  ],
+                  "metadata": {
+                    "attributes": [
+                      {
+                        "trait_type": "ecc_compact",
+                        "value": "112vepK9Upx7juv4pCdwqzm7reBo6VYEQHKRNmU6PEaKX1ese5NE"
+                      },
+                      {
+                        "trait_type": "entity_key_string",
+                        "value": "112vepK9Upx7juv4pCdwqzm7reBo6VYEQHKRNmU6PEaKX1ese5NE"
+                      },
+                      {
+                        "trait_type": "entity_key",
+                        "value": "AAD9hP7nM5Pot132zszVRfGpa/ktGc68HPV6HwCoAvmofVoVaWc="
+                      },
+                      {
+                        "trait_type": "rewardable",
+                        "value": true
+                      },
+                      {
+                        "trait_type": "networks",
+                        "value": [
+                          "iot"
+                        ]
+                      },
+                      {
+                        "trait_type": "iot_city",
+                        "value": "珠海市"
+                      },
+                      {
+                        "trait_type": "iot_state",
+                        "value": "广东省"
+                      },
+                      {
+                        "trait_type": "iot_country",
+                        "value": "中国"
+                      },
+                      {
+                        "trait_type": "iot_lat",
+                        "value": 22.110584
+                      },
+                      {
+                        "trait_type": "iot_long",
+                        "value": 113.15523
+                      }
+                    ],
+                    "description": "A Rewardable NFT on Helium",
+                    "name": "gentle-mandarin-ferret",
+                    "symbol": "HOTSPOT",
+                    "token_standard": "NonFungible"
+                  },
+                  "links": {
+                    "image": "https://shdw-drive.genesysgo.net/6tcnBSybPG7piEDShBcrVtYJDPSvGrDbVvXmXKpzBvWP/hotspot.png"
+                  }
+                },
+                "authorities": [
+                  {
+                    "address": "AngjrikiSwNAqed9GEZrXW9eyyptqiwkWtXgw5hkJ1jM",
+                    "scopes": [
+                      "full"
+                    ]
+                  }
+                ],
+                "compression": {
+                  "eligible": false,
+                  "compressed": true,
+                  "data_hash": "D4yd9ePcnVX2uKujrC4NSCFNVsNTUB1gKUq2bnouR8Ba",
+                  "creator_hash": "GuBHQ5zhrHdkADX8ttpGvSYPQB2M6K5Zcj2qq5HogPgQ",
+                  "asset_hash": "DE2bb82qfupE4Wcv28brKXCKztnEKC2XnwxAmN8LzqPe",
+                  "tree": "E7JbdYSZLvVmqvw6XfEwNQCEAybTF6E1mnrHUXw8hXDV",
+                  "seq": 29627,
+                  "leaf_id": 29584
+                },
+                "grouping": [
+                  {
+                    "group_key": "collection",
+                    "group_value": "FC2daoG1bnBPHGBypxPLb8hU8dtQdx7cYYsU9RR4eYmf",
+                    "verified": true
+                  }
+                ],
+                "royalty": {
+                  "royalty_model": "creators",
+                  "target": null,
+                  "percent": 0,
+                  "basis_points": 0,
+                  "primary_sale_happened": true,
+                  "locked": false
+                },
+                "creators": [
+                  {
+                    "address": "Fv5hf1Fg58htfC7YEXKNEfkpuogUUQDDTLgjGWxxv48H",
+                    "share": 100,
+                    "verified": true
+                  }
+                ],
+                "ownership": {
+                  "frozen": false,
+                  "delegated": false,
+                  "delegate": null,
+                  "ownership_model": "single",
+                  "owner": "9gGP3HLonuAiE5Xqb87sEua6SY3uHmTPuobbxPsLUV4u"
+                },
+                "supply": null,
+                "mutable": true,
+                "burnt": false
+              },
+              {
+                "interface": "V1_NFT",
+                "id": "CWHuz6GPjWYdwt7rTfRHKaorMwZP58Spyd7aqGK7xFbn",
+                "content": {
+                  "$schema": "https://schema.metaplex.com/nft1.0.json",
+                  "json_uri": "https://arweave.net/n_sgSwRGFxnrJTbKDonkUeppFMXIaUrijrh-Q81xKG4",
+                  "files": [
+                    {
+                      "uri": "https://arweave.net/SCv3eCEk1aXZ0vK8M2GBAL7_BMcRoBh9Gqvoep-5hGE?ext=jpg",
+                      "mime": "image/jpeg"
+                    },
+                    {
+                      "uri": "",
+                      "mime": "image/png"
+                    }
+                  ],
+                  "metadata": {
+                    "attributes": [
+                      {
+                        "trait_type": "Season",
+                        "value": "1"
+                      },
+                      {
+                        "trait_type": "Drop",
+                        "value": "6"
+                      },
+                      {
+                        "trait_type": "Rarity",
+                        "value": "Legendary"
+                      }
+                    ],
+                    "description": "Aerial photograph of a parking structure in LA depicting the photographer, Andrew Mason, \"sliding\" through the image.",
+                    "name": "Slide",
+                    "symbol": "",
+                    "token_standard": "NonFungible"
+                  },
+                  "links": {
+                    "external_url": "",
+                    "animation_url": "",
+                    "image": "https://arweave.net/SCv3eCEk1aXZ0vK8M2GBAL7_BMcRoBh9Gqvoep-5hGE?ext=jpg"
+                  }
+                },
+                "authorities": [
+                  {
+                    "address": "FUtErNuVuWwsgN5fMY5v9pT33KbL4qqRvY5mwAxt3kSc",
+                    "scopes": [
+                      "full"
+                    ]
+                  }
+                ],
+                "compression": {
+                  "eligible": false,
+                  "compressed": true,
+                  "data_hash": "7a4RoSG6tTeMuyKhVAZF9Qc9kAxaL4ux3HkB7KMvjbfZ",
+                  "creator_hash": "HCuVLuwsjo7FRNZhX8gBRrMaPHo9JPoirvTB8ZJwL8XQ",
+                  "asset_hash": "HjF2mFb4fWFKQwuSUNxivq1BUvuLo824MxCygW58S9uk",
+                  "tree": "DRSdumv6r6KpxbGtnJaRSJL99WnBEi7rphY5euu6NGEu",
+                  "seq": 604021,
+                  "leaf_id": 8
+                },
+                "grouping": [
+                  {
+                    "group_key": "collection",
+                    "group_value": "AMSNskm2RZqPXCZ6P2z6JLyHWMQF6pQ8RA8Q6x42Xufq",
+                    "verified": true
+                  }
+                ],
+                "royalty": {
+                  "royalty_model": "creators",
+                  "target": null,
+                  "percent": 0.065,
+                  "basis_points": 650,
+                  "primary_sale_happened": false,
+                  "locked": false
+                },
+                "creators": [
+                  {
+                    "address": "AMSNnsE3jVjDbKg15pG13RgJYf6JCFmCVXdj4j22h4Pn",
+                    "share": 0,
+                    "verified": true
+                  },
+                  {
+                    "address": "WoMbXFtdfH8crq2Zi7bQhfGx2Gv8EN4saP13gcdUGog",
+                    "share": 23,
+                    "verified": false
+                  },
+                  {
+                    "address": "ERpxtwaZd6Ee2WD2vRxzhVXj1kaYdPA4xmwEvavX5iMy",
+                    "share": 77,
+                    "verified": false
+                  }
+                ],
+                "ownership": {
+                  "frozen": false,
+                  "delegated": false,
+                  "delegate": null,
+                  "ownership_model": "single",
+                  "owner": "EwjZNHVVcKdu2Dkvp2fpYdfFLmE9E9TierKefdGBxyS"
+                },
+                "supply": null,
+                "mutable": true,
+                "burnt": false
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Pubkey Validation Error"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getAssetsByOwner",
+      "summary": "Retrieve a list of all assets owned by the specified public key.",
+      "description": "This will return a list of assets for the specified owner.",
+      "tags": [
+        {
+          "name": "batch"
+        },
+        {
+          "name": "owner"
+        }
+      ],
+      "params": [
+        {
+          "name": "owner_address",
+          "description": "The owner address key.",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/asset_sort_by"
+        },
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        },
+        {
+          "$ref": "#/components/schemas/get_by_methods_options"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get asset by owner request",
+          "params": [
+            {
+              "id": 0,
+              "name": "getAssetsByOwner payload",
+              "value": {
+                "ownerAddress": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw",
+                "limit": 10
+              }
+            }
+          ],
+          "result": {
+            "name": "Get assets by owner result",
+            "value": {
+              "total": 2,
+              "limit": 2,
+              "items": [
+                {
+                  "interface": "V1_NFT",
+                  "id": "JBw2JDQ7tqPGi5DMnuLn4LtKJaag3rui74MwgC8HafeT",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://arweave.net/5EiWpeZzpxy9ZqWY73AvfAhSkNpVSNdxjfbRMPm8d_4",
+                    "files": [
+                      {
+                        "uri": "https://arweave.net/mczGXyAll6h9goLaYUdZmdXwhy1e499l8wMoOxnuaOk?ext=png",
+                        "mime": "image/png"
+                      },
+                      {
+                        "uri": "",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Drop ",
+                          "value": "16"
+                        },
+                        {
+                          "trait_type": "Season ",
+                          "value": "1"
+                        },
+                        {
+                          "trait_type": "Rarity",
+                          "value": "Common"
+                        }
+                      ],
+                      "description": "AI Generated Art using GNT on MOOAR.com (http://mooar.com/) from Find Satoshi Lab, the creators of STEPN, MOOAR and Gas Hero. GNT Prompt by DrAksenov: Space A multi-colored holiday textured box with an orange letter M on it. dark background. holiday mood, beautiful, bokeh background, funny cat, magic light, HDR, 3D, 8k, bright warm colors blue, pink, yellow, Negative Prompt: table  Prompt by Quyen: A cute cat wearing crown in the treasure chest, in the style of digital painting, dark magenta and light gold, hyper-realistic water, stone, angular geometry, aurora punk Prompt by Momohiki: A diamond in a gift box. christmas gift, very detailed, extreme detail, high detail, full color spectrum, 32k, ultra high resolution, UHD, global lighting, frontal lighting, breathtaking, beautiful, amazing, awe-inspiring, intense mood, colors gorgeous, stunning graphics, intense, intricate details, finely detailed, octane render.",
+                      "name": "DRiP MOOAR Out of The Box!",
+                      "symbol": "",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "animation_url": "",
+                      "external_url": "https://mooar.com",
+                      "image": "https://arweave.net/mczGXyAll6h9goLaYUdZmdXwhy1e499l8wMoOxnuaOk?ext=png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "GMtMwhvCQqnc1aPfvVnVeMx93hHTLQoigJrb26CJPzgX",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "3sq4YVApM3Qjh8VuTAKs9R8DnC4X7bVt5Cd7T8GegmRy",
+                    "creator_hash": "5d7FduDpBjZwZB35dzG5vhoeHYzJW9mcnQYbGmevTqGR",
+                    "asset_hash": "4sg6sWPyd8HsXvvkmuRYNoAw8LrMSyHh8DdcXovAREqc",
+                    "tree": "CrSQoxbxUeZTTALDdREe9vXCiTQcTEst7afzen5kzAuS",
+                    "seq": 444043,
+                    "leaf_id": 437319
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "FSdotujgzdodpYMtWmzT6G62NAgtTdruKT9MekbqCaB8",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.015000000000000001,
+                    "basis_points": 150,
+                    "primary_sale_happened": false,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "FSHFGLzPDVA39jjwCtsP3oJAgnpHXKJxxBqtnkpURhdS",
+                      "share": 0,
+                      "verified": true
+                    },
+                    {
+                      "address": "WoMbXFtdfH8crq2Zi7bQhfGx2Gv8EN4saP13gcdUGog",
+                      "share": 100,
+                      "verified": false
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": false,
+                    "delegate": null,
+                    "ownership_model": "single",
+                    "owner": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw"
+                  },
+                  "supply": null,
+                  "mutable": true,
+                  "burnt": false
+                },
+                {
+                  "interface": "V1_NFT",
+                  "id": "J6PL6DfaYdyxVnfrqJGm4dNAQBAkkk5uwUJ8j3ahprna",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://arweave.net/EgAUOOak2LRkzY2t8SRXz0qvzyCqqjh932uN5CKLeis",
+                    "files": [
+                      {
+                        "uri": "https://arweave.net/hv4JwuHOgN8uOmc4x35HBZr_edd6bYR3okDG5AgllLU?ext=jpg",
+                        "mime": "image/jpeg"
+                      },
+                      {
+                        "uri": "",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "drop",
+                          "value": "12"
+                        },
+                        {
+                          "trait_type": "created",
+                          "value": "2023-07-03"
+                        },
+                        {
+                          "trait_type": "filetype",
+                          "value": "jpeg"
+                        },
+                        {
+                          "trait_type": "dimensions",
+                          "value": "3000 x 4000"
+                        },
+                        {
+                          "trait_type": "orientation",
+                          "value": "portrait"
+                        },
+                        {
+                          "trait_type": "rarity",
+                          "value": "common"
+                        }
+                      ],
+                      "description": "A group of Typewriter versions of Phantom’s new logo. The centerpiece depicts San Francisco, CA, where Phantom’s home office is located. Created with watercolor pencils and a Royal Classic Typewriter.",
+                      "name": "Type Phantom",
+                      "symbol": "",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "animation_url": "",
+                      "external_url": "",
+                      "image": "https://arweave.net/hv4JwuHOgN8uOmc4x35HBZr_edd6bYR3okDG5AgllLU?ext=jpg"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "CHxD1X7WapMUJpSfZ2VbuxxL7JVL6ByctzjMr9JkuLBE",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "a7HUxET3WgyYQtKA1mDTDm6tg6rFQpJgFHLr77r2se4",
+                    "creator_hash": "G6VqxtUKZhzwtwkrECuyaxnfcr8NFxKTabjFM47zhgLP",
+                    "asset_hash": "At3fYtEb7KPm2XX3NZsKqQZQSdG7QpjMPXBkAXqWCbHW",
+                    "tree": "4dVaNGqsEZet56kEFnGPYbWoYv5HKGp5FpSdZZNfcm4c",
+                    "seq": 1175223,
+                    "leaf_id": 948296
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "DGPTxgKaBPJv3Ng7dc9AFDpX6E7kgUMZEgyTm3VGWPW6",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0,
+                    "basis_points": 0,
+                    "primary_sale_happened": false,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "DGPTx9RcP5GkxRNscrSaSETcwuiK6xcbX93G1DSxrLoY",
+                      "share": 100,
+                      "verified": true
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": false,
+                    "delegate": null,
+                    "ownership_model": "single",
+                    "owner": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw"
+                  },
+                  "supply": null,
+                  "mutable": true,
+                  "burnt": false
+                }
+              ],
+              "cursor": "J6PL6DfaYdyxVnfrqJGm4dNAQBAkkk5uwUJ8j3ahprna"
+            }
+          }
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Pubkey Validation Error"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getAssetsByGroup",
+      "summary": "Get a list of assets by a group key and value.",
+      "description": "This will return asset details for a specified group (e.g., a collection) and can include both compressed and standard assets.",
+      "tags": [
+        {
+          "name": "group"
+        },
+        {
+          "name": "asset"
+        },
+        {
+          "name": "batch"
+        }
+      ],
+      "params": [
+        {
+          "name": "groupKey",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "groupValue",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/asset_sort_by"
+        },
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        },
+        {
+          "$ref": "#/components/schemas/get_by_methods_options"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get assets by group request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Asset public key",
+              "value": {
+                "groupKey": "collection",
+                "groupValue": "J2ZfLdQsaZ3GCmbucJef3cPnPwGcgjDW1SSYtMdq3L9p"
+              }
+            }
+          ],
+          "result": {
+            "name": "Get assets by group result",
+            "value": {
+              "total": 2,
+              "limit": 2,
+              "items": [
+                {
+                  "interface": "V1_NFT",
+                  "id": "JEAAuQNfGk1NsnCLAQo8GYDFJibJVn8NVxwbujzcUk1K",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-1178.json",
+                    "files": [
+                      {
+                        "uri": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-1178.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Style",
+                          "value": "Greg Rutkowski-inspired"
+                        },
+                        {
+                          "trait_type": "Subject",
+                          "value": "Bubblegum"
+                        },
+                        {
+                          "trait_type": "Model",
+                          "value": "Stable Diffusion 2.1"
+                        },
+                        {
+                          "trait_type": "Created with 💙 by:",
+                          "value": "TipLink"
+                        }
+                      ],
+                      "description": "NFTs created on Solana using account compression. There are limitless NFTs in this collection, so don't speculate!",
+                      "name": "TipLink Compressed #195",
+                      "symbol": "cTIPLINK",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "image": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-1178.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "CcatrbGsA7uEDdbcWPvQSKBGesUvrkYX9bNuoQoMP9Pv",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "7h5ks8jGrFgp4HxXXshkUkToaWUNkGvJ2KGQoGF8afyb",
+                    "creator_hash": "Ftxh1pV7fDX7PucWUxtgwWh8iWt2JA5ycccpowj498Un",
+                    "asset_hash": "GvQgMyeD2mFVEkpnXcghcixoAeqYRa82DWWZkV4488XD",
+                    "tree": "2kuTFCcjbV22wvUmtmgsFR7cas7eZUzAu96jzJUvUcb7",
+                    "seq": 375,
+                    "leaf_id": 374
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "J2ZfLdQsaZ3GCmbucJef3cPnPwGcgjDW1SSYtMdq3L9p",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0,
+                    "basis_points": 0,
+                    "primary_sale_happened": true,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "GRXPtJLepm9LetFB58N6bxTSnqWPEgs6E2VYgjgmB9tc",
+                      "share": 100,
+                      "verified": false
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": true,
+                    "delegate": "GRXPtJLepm9LetFB58N6bxTSnqWPEgs6E2VYgjgmB9tc",
+                    "ownership_model": "single",
+                    "owner": "FUyWNUjqXQaPxDKLD7dNiLbwLuaGgBYYsXqPCBD2nRQt"
+                  },
+                  "supply": null,
+                  "mutable": false,
+                  "burnt": false
+                },
+                {
+                  "interface": "V1_NFT",
+                  "id": "JDzjGxHU72WAwtTXAKPrrwDWswHbpQxGDQAvGcZKcsq8",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-740.json",
+                    "files": [
+                      {
+                        "uri": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-740.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Style",
+                          "value": "Greg Rutkowski-inspired"
+                        },
+                        {
+                          "trait_type": "Subject",
+                          "value": "Bubblegum"
+                        },
+                        {
+                          "trait_type": "Model",
+                          "value": "Stable Diffusion 2.1"
+                        },
+                        {
+                          "trait_type": "Created with 💙 by:",
+                          "value": "TipLink"
+                        }
+                      ],
+                      "description": "NFTs created on Solana using account compression. There are limitless NFTs in this collection, so don't speculate!",
+                      "name": "TipLink Compressed #830",
+                      "symbol": "cTIPLINK",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "image": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-740.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "CcatrbGsA7uEDdbcWPvQSKBGesUvrkYX9bNuoQoMP9Pv",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "8AMacfcXR4MBQGeBF6NKvHXcUrrqWUexoTrBVP8n3zoW",
+                    "creator_hash": "Ftxh1pV7fDX7PucWUxtgwWh8iWt2JA5ycccpowj498Un",
+                    "asset_hash": "8hMzvGkxnWdRuUt9xybfKLpWoHKPSyqZM25io7srTsvT",
+                    "tree": "2kuTFCcjbV22wvUmtmgsFR7cas7eZUzAu96jzJUvUcb7",
+                    "seq": 1260,
+                    "leaf_id": 1204
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "J2ZfLdQsaZ3GCmbucJef3cPnPwGcgjDW1SSYtMdq3L9p",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0,
+                    "basis_points": 0,
+                    "primary_sale_happened": true,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "GRXPtJLepm9LetFB58N6bxTSnqWPEgs6E2VYgjgmB9tc",
+                      "share": 100,
+                      "verified": false
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": true,
+                    "delegate": "GRXPtJLepm9LetFB58N6bxTSnqWPEgs6E2VYgjgmB9tc",
+                    "ownership_model": "single",
+                    "owner": "28YS9zRkSyiph4t4tvPAMPsEAq3C3BE5xYYN3NqvTw5i"
+                  },
+                  "supply": null,
+                  "mutable": false,
+                  "burnt": false
+                }
+              ],
+              "cursor": "JDzjGxHU72WAwtTXAKPrrwDWswHbpQxGDQAvGcZKcsq8"
+            }
+          }
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getAssetsByCreator",
+      "summary": "Get a list of assets created by an address.",
+      "description": "This will return a list of assets associated with the specified creator, including both compressed and standard assets.",
+      "tags": [
+        {
+          "name": "batch"
+        },
+        {
+          "name": "creator"
+        },
+        {
+          "name": "asset"
+        }
+      ],
+      "params": [
+        {
+          "name": "creator_address",
+          "description": "Public key of creator",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/asset_sort_by"
+        },
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        },
+        {
+          "$ref": "#/components/schemas/get_by_methods_options"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get assets by creator request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Get assets by creator payload",
+              "value": {
+                "creatorAddress": "D3XrkNZz6wx6cofot7Zohsf2KSsu2ArngNk8VqU9cTY3",
+                "onlyVerified": false,
+                "limit": 2
+              }
+            }
+          ],
+          "result": {
+            "name": "Get assets by creator result",
+            "value": {
+              "total": 2,
+              "limit": 2,
+              "items": [
+                {
+                  "interface": "Custom",
+                  "id": "JEH7cJxAKdprFG5AvdsY2c4ZqojxLBjFmw19zADV6oK5",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://famousfoxes.com/metadata/7045.json",
+                    "files": [
+                      {
+                        "uri": "https://famousfoxes.com/hd/7045.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Background",
+                          "value": "Amaranth"
+                        },
+                        {
+                          "trait_type": "Outfit",
+                          "value": "Hoodie Green"
+                        },
+                        {
+                          "trait_type": "Skin",
+                          "value": "Natural"
+                        },
+                        {
+                          "trait_type": "Mouth",
+                          "value": "Smile"
+                        },
+                        {
+                          "trait_type": "Head",
+                          "value": "None"
+                        },
+                        {
+                          "trait_type": "Eyes",
+                          "value": "Blank"
+                        }
+                      ],
+                      "description": "The Famous Fox Federation, an independent organization of the most fabulously famous foxes on the Blockchain.",
+                      "name": "Fox #7045",
+                      "symbol": "FFF"
+                    },
+                    "links": {
+                      "external_url": "https://famousfoxes.com",
+                      "image": "https://famousfoxes.com/hd/7045.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "3pMvTLUA9NzZQd4gi725p89mvND1wRNQM3C8XEv1hTdA",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": false,
+                    "data_hash": "",
+                    "creator_hash": "",
+                    "asset_hash": "",
+                    "tree": "",
+                    "seq": 0,
+                    "leaf_id": 0
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "BUjZjAS2vbbb65g7Z1Ca9ZRVYoJscURG5L3AkVvHP9ac",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.042,
+                    "basis_points": 420,
+                    "primary_sale_happened": true,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "D3XrkNZz6wx6cofot7Zohsf2KSsu2ArngNk8VqU9cTY3",
+                      "share": 0,
+                      "verified": true
+                    },
+                    {
+                      "address": "3pMvTLUA9NzZQd4gi725p89mvND1wRNQM3C8XEv1hTdA",
+                      "share": 100,
+                      "verified": true
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": false,
+                    "delegate": null,
+                    "ownership_model": "single",
+                    "owner": "1BWutmTvYPwDtmw9abTkS4Ssr8no61spGAvW1X6NDix"
+                  },
+                  "supply": null,
+                  "mutable": true,
+                  "burnt": false,
+                  "lamports": 5616720,
+                  "executable": false,
+                  "metadata_owner": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+                  "rent_epoch": 18446744073709552000
+                },
+                {
+                  "interface": "Custom",
+                  "id": "JEEqUNmR1EDmDrwZUL3L49cciBQUP264BrNAkyGS3Zoc",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://famousfoxes.com/metadata/5978.json",
+                    "files": [
+                      {
+                        "uri": "https://famousfoxes.com/hd/5978.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Background",
+                          "value": "Orange"
+                        },
+                        {
+                          "trait_type": "Outfit",
+                          "value": "Sweater Light"
+                        },
+                        {
+                          "trait_type": "Skin",
+                          "value": "Natural"
+                        },
+                        {
+                          "trait_type": "Mouth",
+                          "value": "Smirk"
+                        },
+                        {
+                          "trait_type": "Head",
+                          "value": "Sportsband"
+                        },
+                        {
+                          "trait_type": "Eyes",
+                          "value": "Mutated"
+                        }
+                      ],
+                      "description": "The Famous Fox Federation, an independent organization of the most fabulously famous foxes on the Blockchain.",
+                      "name": "Fox #5978",
+                      "symbol": "FFF"
+                    },
+                    "links": {
+                      "external_url": "https://famousfoxes.com",
+                      "image": "https://famousfoxes.com/hd/5978.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "3pMvTLUA9NzZQd4gi725p89mvND1wRNQM3C8XEv1hTdA",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": false,
+                    "data_hash": "",
+                    "creator_hash": "",
+                    "asset_hash": "",
+                    "tree": "",
+                    "seq": 0,
+                    "leaf_id": 0
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "BUjZjAS2vbbb65g7Z1Ca9ZRVYoJscURG5L3AkVvHP9ac",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.042,
+                    "basis_points": 420,
+                    "primary_sale_happened": true,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "D3XrkNZz6wx6cofot7Zohsf2KSsu2ArngNk8VqU9cTY3",
+                      "share": 0,
+                      "verified": true
+                    },
+                    {
+                      "address": "3pMvTLUA9NzZQd4gi725p89mvND1wRNQM3C8XEv1hTdA",
+                      "share": 100,
+                      "verified": true
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": true,
+                    "delegated": true,
+                    "delegate": "tkq3BCfH8zJEXZWwU5Abp3sL8oz7sT2cw4vXyMV8wsR",
+                    "ownership_model": "single",
+                    "owner": "GbmFH5bg2oGBV6n6xKVAkj3d6xC4W8Kfm7TK876GFVHY"
+                  },
+                  "supply": null,
+                  "mutable": true,
+                  "burnt": false,
+                  "lamports": 5616720,
+                  "executable": false,
+                  "metadata_owner": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+                  "rent_epoch": 18446744073709552000
+                }
+              ],
+              "cursor": "JEEqUNmR1EDmDrwZUL3L49cciBQUP264BrNAkyGS3Zoc"
+            }
+          }
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Pubkey Validation Error"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "searchAssets",
+      "summary": "Search for assets using a variety of parameters.",
+      "description": "This method will return assets based on the specified custom search criteria.",
+      "tags": [
+        {
+          "name": "search"
+        },
+        {
+          "name": "asset"
+        }
+      ],
+      "params": [
+        {
+          "name": "negate",
+          "description": "Optional flag to negate the search criteria.",
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "conditionType",
+          "description": "The type of search condition to apply.",
+          "schema": {
+            "$ref": "#/components/schemas/SearchConditionType"
+          }
+        },
+        {
+          "name": "interface",
+          "description": "The interface type to filter the assets.",
+          "schema": {
+            "$ref": "#/components/schemas/Interface"
+          }
+        },
+        {
+          "name": "ownerAddress",
+          "description": "The owner's public key address.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "ownerType",
+          "description": "The ownership model used for the asset.",
+          "schema": {
+            "$ref": "#/components/schemas/OwnershipModel"
+          }
+        },
+        {
+          "name": "creatorAddress",
+          "description": "The public key of the asset's creator.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "creatorVerified",
+          "description": "Flag indicating if the creator is verified.",
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "authorityAddress",
+          "description": "The authority's public key address.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "grouping",
+          "description": "Group key-value pair to filter assets by a specific collection or group.",
+          "schema": {
+            "type": "array",
+            "items": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        {
+          "name": "delegate",
+          "description": "The public key of the delegate for the asset.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "frozen",
+          "description": "Flag indicating if the asset is frozen.",
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "supply",
+          "description": "The supply of the asset.",
+          "schema": {
+            "type": "integer",
+            "format": "uint64"
+          }
+        },
+        {
+          "name": "supplyMint",
+          "description": "The public key of the mint for the asset supply.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "compressed",
+          "description": "Flag indicating if the asset is compressed.",
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "compressible",
+          "description": "Flag indicating if the asset can be compressed.",
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "royaltyTargetType",
+          "description": "The royalty model associated with the asset.",
+          "schema": {
+            "$ref": "#/components/schemas/RoyaltyModel"
+          }
+        },
+        {
+          "name": "royaltyTarget",
+          "description": "The target address for royalty payments.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "royaltyAmount",
+          "description": "The amount of royalties associated with the asset.",
+          "schema": {
+            "type": "integer",
+            "format": "uint32"
+          }
+        },
+        {
+          "name": "tokenType",
+          "description": "The type of token.",
+          "schema": {
+            "$ref": "#/components/schemas/TokenType"
+          }
+        },
+        {
+          "name": "burnt",
+          "description": "Flag indicating if the asset has been burnt.",
+          "schema": {
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "jsonUri",
+          "description": "The URI for additional JSON metadata.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "name",
+          "description": "The name of the asset.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/asset_sort_by"
+        },
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/search_assets_options"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Search asset request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Search asset payload",
+              "value": {
+                "ownerAddress": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw",
+                "jsonUri": "https://arweave.net/c9aGs5fOk7gD4wWnSvmzeqgtfxAGRgtI1jYzvl8-IVs/chiaki-violet-azure-common.json"
+              }
+            }
+          ],
+          "result": {
+            "name": "Search asset result",
+            "value": {
+              "total": 1,
+              "limit": 1000,
+              "items": [
+                {
+                  "interface": "V1_NFT",
+                  "id": "8TrvJBRa6Pzb9BDadqroHhWTHxaxK8Ws8r91oZ2jxaVV",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://arweave.net/c9aGs5fOk7gD4wWnSvmzeqgtfxAGRgtI1jYzvl8-IVs/chiaki-violet-azure-common.json",
+                    "files": [
+                      {
+                        "uri": "https://arweave.net/fFcYDkRHF-936IbAZ3pLTmFAmxF1WlW3KwWndYPgI8Q/chiaki-violet-azure-common.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Body",
+                          "value": "Violet"
+                        },
+                        {
+                          "trait_type": "Background",
+                          "value": "Azure"
+                        },
+                        {
+                          "trait_type": "Rarity",
+                          "value": "Common"
+                        },
+                        {
+                          "trait_type": "Rating",
+                          "value": 55
+                        },
+                        {
+                          "trait_type": "Smile",
+                          "value": 44
+                        },
+                        {
+                          "trait_type": "Hug",
+                          "value": 49
+                        },
+                        {
+                          "trait_type": "Laugh",
+                          "value": 38
+                        },
+                        {
+                          "trait_type": "Heart",
+                          "value": 60
+                        },
+                        {
+                          "trait_type": "Warm",
+                          "value": 35
+                        },
+                        {
+                          "trait_type": "Good",
+                          "value": 66
+                        },
+                        {
+                          "trait_type": "Thanks",
+                          "value": 62
+                        },
+                        {
+                          "trait_type": "Share",
+                          "value": 48
+                        },
+                        {
+                          "trait_type": "Brave",
+                          "value": 75
+                        },
+                        {
+                          "trait_type": "Grow",
+                          "value": 73
+                        }
+                      ],
+                      "description": "MONMONMON is a collection from the creativity of Peelander Yellow. Each MONMONMON has unique and kind abilities that can be used to help others and play with your friends. There are secrets in each MONMONMON. We love you.",
+                      "name": "Chiaki Azure 55",
+                      "symbol": "",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "image": "https://arweave.net/fFcYDkRHF-936IbAZ3pLTmFAmxF1WlW3KwWndYPgI8Q/chiaki-violet-azure-common.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "mRdta4rc2RtsxEUDYuvKLamMZAdW6qHcwuq866Skxxv",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "3daLaunnCdbLtYR4Gas4xFnKLVezdMNqgjZEXtzhWqFA",
+                    "creator_hash": "DJ7kGgdfHEMPJLUTW1YdnGX2JBc3DdD6ybJmkfE4wgSq",
+                    "asset_hash": "BtbdpcxueKdAwpwRtyXMpUMV2Zbjd6YYtWvyiAK2FNQ6",
+                    "tree": "9PHhh7dJqdWnmjwiZEe6bMCFKnRSL436msEhN587adu5",
+                    "seq": 540278,
+                    "leaf_id": 539880
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "PEEiTQbMc87HQ9TbXfHWWyW3bKiMExbGmAiMDR6NUiD",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.030000000000000002,
+                    "basis_points": 300,
+                    "primary_sale_happened": false,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "PEEYx7v42bSRRXAJtaaWJ5NVCM83hKpAf7Kv73vZ9L3",
+                      "share": 0,
+                      "verified": true
+                    },
+                    {
+                      "address": "WoMbXFtdfH8crq2Zi7bQhfGx2Gv8EN4saP13gcdUGog",
+                      "share": 50,
+                      "verified": false
+                    },
+                    {
+                      "address": "6LVnHwYhwiCjtdKYyJgtDUdfMgFwqZG917Ct1WuaTZgC",
+                      "share": 50,
+                      "verified": false
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": false,
+                    "delegate": null,
+                    "ownership_model": "single",
+                    "owner": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw"
+                  },
+                  "supply": null,
+                  "mutable": true,
+                  "burnt": false
+                }
+              ],
+              "cursor": "8TrvJBRa6Pzb9BDadqroHhWTHxaxK8Ws8r91oZ2jxaVV"
+            }
+          }
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getAssetsByAuthority",
+      "summary": "Get a list of assets with a specific authority.",
+      "description": "This will return a list of assets for the given authority provided.",
+      "tags": [
+        {
+          "name": "asset"
+        },
+        {
+          "name": "batch"
+        },
+        {
+          "name": "authority"
+        }
+      ],
+      "params": [
+        {
+          "name": "creator_address",
+          "description": "Public key of creator",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/asset_sort_by"
+        },
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        },
+        {
+          "$ref": "#/components/schemas/get_by_methods_options"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get assets by authority request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Get assets by authority payload",
+              "value": {
+                "authorityAddress": "mRdta4rc2RtsxEUDYuvKLamMZAdW6qHcwuq866Skxxv",
+                "limit": 1
+              }
+            }
+          ],
+          "result": {
+            "name": "Get assets by authority result",
+            "value": {
+              "total": 1,
+              "limit": 1,
+              "items": [
+                {
+                  "interface": "V1_NFT",
+                  "id": "JEKFMVX4cY874gJbzrjewQk2dhQEaN7VFSEAdc8k9r8L",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://arweave.net/m4Kmsvn3V6GUdmFWMS2RtlKyOpOfLDy6wS3p_3BG6mI/amaso-stone-slate-common.json",
+                    "files": [
+                      {
+                        "uri": "https://arweave.net/TA4wBu6l-WDanLwLyGDnykzKeVjPstZMnLhFSC_ODVg/amaso-stone-slate-common.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Body",
+                          "value": "Stone"
+                        },
+                        {
+                          "trait_type": "Background",
+                          "value": "Slate"
+                        },
+                        {
+                          "trait_type": "Rarity",
+                          "value": "Common"
+                        },
+                        {
+                          "trait_type": "Rating",
+                          "value": 79
+                        },
+                        {
+                          "trait_type": "Smile",
+                          "value": 81
+                        },
+                        {
+                          "trait_type": "Hug",
+                          "value": 76
+                        },
+                        {
+                          "trait_type": "Laugh",
+                          "value": 71
+                        },
+                        {
+                          "trait_type": "Heart",
+                          "value": 84
+                        },
+                        {
+                          "trait_type": "Warm",
+                          "value": 83
+                        },
+                        {
+                          "trait_type": "Good",
+                          "value": 77
+                        },
+                        {
+                          "trait_type": "Thanks",
+                          "value": 85
+                        },
+                        {
+                          "trait_type": "Share",
+                          "value": 70
+                        },
+                        {
+                          "trait_type": "Brave",
+                          "value": 87
+                        },
+                        {
+                          "trait_type": "Grow",
+                          "value": 76
+                        }
+                      ],
+                      "description": "MONMONMON is a collection from the creativity of Peelander Yellow. Each MONMONMON has unique and kind abilities that can be used to help others and play with your friends. There are secrets in each MONMONMON. We love you.",
+                      "name": "Amaso Slate 79",
+                      "symbol": "",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "image": "https://arweave.net/TA4wBu6l-WDanLwLyGDnykzKeVjPstZMnLhFSC_ODVg/amaso-stone-slate-common.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "mRdta4rc2RtsxEUDYuvKLamMZAdW6qHcwuq866Skxxv",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "5116maKN1d3Ng29WHZ9qKUc4NYspBqkHNeXkzNiVbn7k",
+                    "creator_hash": "DJ7kGgdfHEMPJLUTW1YdnGX2JBc3DdD6ybJmkfE4wgSq",
+                    "asset_hash": "GYxqeRqc8NKXkohVXtW7oXvVAEad345PYXFuGF2RdzJq",
+                    "tree": "9PHhh7dJqdWnmjwiZEe6bMCFKnRSL436msEhN587adu5",
+                    "seq": 586109,
+                    "leaf_id": 585627
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "PEEiTQbMc87HQ9TbXfHWWyW3bKiMExbGmAiMDR6NUiD",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.030000000000000002,
+                    "basis_points": 300,
+                    "primary_sale_happened": false,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "PEEYx7v42bSRRXAJtaaWJ5NVCM83hKpAf7Kv73vZ9L3",
+                      "share": 0,
+                      "verified": true
+                    },
+                    {
+                      "address": "WoMbXFtdfH8crq2Zi7bQhfGx2Gv8EN4saP13gcdUGog",
+                      "share": 50,
+                      "verified": false
+                    },
+                    {
+                      "address": "6LVnHwYhwiCjtdKYyJgtDUdfMgFwqZG917Ct1WuaTZgC",
+                      "share": 50,
+                      "verified": false
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": false,
+                    "delegate": null,
+                    "ownership_model": "single",
+                    "owner": "7XA7taVsjNM6n4Mmiabfpss279tXwHteDMiW8oxb6JVP"
+                  },
+                  "supply": null,
+                  "mutable": true,
+                  "burnt": false
+                }
+              ],
+              "cursor": "JEKFMVX4cY874gJbzrjewQk2dhQEaN7VFSEAdc8k9r8L"
+            }
+          }
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getTokenAccounts",
+      "summary": "Retrieve information about all token accounts for a given mint or a specific owner.",
+      "description": "Retrieve all token accounts linked to a specific mint or owner account. This provides an efficient way to gather all owners of an SPL token or all tokens held by a particular address.",
+      "tags": [
+        {
+          "name": "single"
+        },
+        {
+          "name": "token"
+        },
+        {
+          "name": "accounts"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "name": "owner",
+          "description": "Public key of asset",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "mint",
+          "description": "Public key of mint",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/display_options"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get token accounts request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Get token accounts payload",
+              "value": {
+                "owner": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw",
+                "limit": 1,
+                "displayOptions": {
+                  "showZeroBalance": true
+                }
+              }
+            }
+          ],
+          "result": {
+            "name": "Get token accounts result",
+            "value": {
+              "total": 1,
+              "limit": 1,
+              "before": null,
+              "after": null,
+              "cursor": "BWVU+Nck/GfobYL1CHsI0MI3iweb5vC2e/P4LR65BEAD6wkaHP+nAoz1Jiy2V8YbFnFsjgkNNQ2BL0+hBT3NXw",
+              "token_accounts": [
+                {
+                  "address": "GJ6CrGqtBbP7Ypo35spNXMe7H9CVUq4jJDnhLVrM8Nr",
+                  "mint": "8NNPnNYgwZSY5ZS4RSVCP35iSLmxC3kPdxWuohbTrjdH",
+                  "owner": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw",
+                  "amount": 1,
+                  "delegated_amount": 0,
+                  "frozen": true
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "name": "tokenAccountsList",
+        "description": "Список аккаунтов токенов и информация о пагинации",
+        "schema": {
+          "$ref": "#/components/schemas/TokenAccountsList"
+        }
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Pubkey Validation Error"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getCoreFees",
+      "summary": "Get core fees",
+      "tags": [
+        {
+          "name": "fee"
+        }
+      ],
+      "params": [
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        }
+      ],
+      "result": {
+        "name": "CoreFeesAccountsList",
+        "schema": {
+          "$ref": "#/components/schemas/CoreFeesAccountsList"
+        }
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Pubkey Validation Error"
+        },
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    },
+    {
+      "name": "getAssetSignaturesV2",
+      "summary": "Get a list of transaction signatures related to a compressed asset.",
+      "description": "This method will return the transaction signatures for a given asset.",
+      "tags": [
+        {
+          "name": "signature"
+        },
+        {
+          "name": "single"
+        }
+      ],
+      "params": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "string",
+            "description": "The public key of the asset to retrieve the signatures for",
+            "nullable": true
+          }
+        },
+        {
+          "$ref": "#/components/schemas/limit"
+        },
+        {
+          "$ref": "#/components/schemas/page"
+        },
+        {
+          "$ref": "#/components/schemas/before"
+        },
+        {
+          "$ref": "#/components/schemas/after"
+        },
+        {
+          "name": "tree",
+          "schema": {
+            "type": "string",
+            "description": "Optional tree name for signature filtering.",
+            "nullable": true
+          }
+        },
+        {
+          "name": "leaf_index",
+          "schema": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        {
+          "name": "sortDirection",
+          "schema": {
+            "type": "string",
+            "description": "Optional sorting direction for signatures.",
+            "nullable": true,
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "example": "asc"
+          }
+        },
+        {
+          "$ref": "#/components/schemas/cursor"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get asset signature request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Get asset signature payload",
+              "value": {
+                "id": "Ez6ezCMkRaUkWS5v6WVcP7uuCWiKadr3W2dHFkoZmteW",
+                "limit": 1
+              }
+            }
+          ],
+          "result": {
+            "name": "Get asset signature result",
+            "value": {
+              "total": 1,
+              "limit": 1,
+              "before": "9",
+              "after": "9",
+              "items": [
+                {
+                  "signature": "3KgTY6hhdbmb3XJ33JYXUim8mir9yYbhMrCraVJs4xDAiivUR9RaMjSUASFesStDupRWu5nC3C4US5DMtuFDtVcw",
+                  "instruction": "MintV1",
+                  "slot": 221814558
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionSignatureList",
+        "schema": {
+          "$ref": "#/components/schemas/TransactionSignatureList"
+        }
+      }
+    },
+    {
+      "name": "getGrouping",
+      "summary": "Get the size of the asset group.",
+      "tags": [
+        {
+          "name": "group"
+        },
+        {
+          "name": "asset"
+        }
+      ],
+      "params": [
+        {
+          "name": "groupKey",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "groupValue",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get assets by group request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Asset public key",
+              "value": {
+                "groupKey": "collection",
+                "groupValue": "J2ZfLdQsaZ3GCmbucJef3cPnPwGcgjDW1SSYtMdq3L9p",
+                "limit": 1
+              }
+            }
+          ],
+          "result": {
+            "name": "Get assets by group result",
+            "value": {
+              "total": 1,
+              "limit": 1,
+              "items": [
+                {
+                  "interface": "V1_NFT",
+                  "id": "JEAAuQNfGk1NsnCLAQo8GYDFJibJVn8NVxwbujzcUk1K",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-1178.json",
+                    "files": [
+                      {
+                        "uri": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-1178.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Style",
+                          "value": "Greg Rutkowski-inspired"
+                        },
+                        {
+                          "trait_type": "Subject",
+                          "value": "Bubblegum"
+                        },
+                        {
+                          "trait_type": "Model",
+                          "value": "Stable Diffusion 2.1"
+                        },
+                        {
+                          "trait_type": "Created with 💙 by:",
+                          "value": "TipLink"
+                        }
+                      ],
+                      "description": "NFTs created on Solana using account compression. There are limitless NFTs in this collection, so don't speculate!",
+                      "name": "TipLink Compressed #195",
+                      "symbol": "cTIPLINK",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "image": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-1178.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "CcatrbGsA7uEDdbcWPvQSKBGesUvrkYX9bNuoQoMP9Pv",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "7h5ks8jGrFgp4HxXXshkUkToaWUNkGvJ2KGQoGF8afyb",
+                    "creator_hash": "Ftxh1pV7fDX7PucWUxtgwWh8iWt2JA5ycccpowj498Un",
+                    "asset_hash": "GvQgMyeD2mFVEkpnXcghcixoAeqYRa82DWWZkV4488XD",
+                    "tree": "2kuTFCcjbV22wvUmtmgsFR7cas7eZUzAu96jzJUvUcb7",
+                    "seq": 375,
+                    "leaf_id": 374
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "J2ZfLdQsaZ3GCmbucJef3cPnPwGcgjDW1SSYtMdq3L9p",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.0,
+                    "basis_points": 0,
+                    "primary_sale_happened": true,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "GRXPtJLepm9LetFB58N6bxTSnqWPEgs6E2VYgjgmB9tc",
+                      "share": 100,
+                      "verified": false
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": true,
+                    "delegate": "GRXPtJLepm9LetFB58N6bxTSnqWPEgs6E2VYgjgmB9tc",
+                    "ownership_model": "single",
+                    "owner": "FUyWNUjqXQaPxDKLD7dNiLbwLuaGgBYYsXqPCBD2nRQt"
+                  },
+                  "supply": null,
+                  "mutable": false,
+                  "burnt": false
+                }
+              ],
+              "cursor": "JEAAuQNfGk1NsnCLAQo8GYDFJibJVn8NVxwbujzcUk1K"
+            }
+          }
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
+    }
+  ],
+  "components": {
+    "contentDescriptors": {
+      "Asset": {
+        "name": "Asset",
+        "description": "DAS API Asset",
+        "schema": {
+          "$ref": "#/components/schemas/Asset"
+        }
+      },
+      "AssetList": {
+        "name": "AssetList",
+        "description": "An array of assets",
+        "schema": {
+          "$ref": "#/components/schemas/AssetList"
+        }
+      },
+      "assetProof": {
+        "name": "AssetProof",
+        "schema": {
+          "$ref": "#/components/schemas/AssetProof"
+        }
+      },
+      "assetProofBatch": {
+        "name": "AssetProofBatch",
+        "description": "A map of asset proofs, where the key is the asset's public key and the value is the AssetProof struct.",
+        "schema": {
+          "$ref": "#/components/schemas/AssetProofBatch"
+        }
+      },
+      "GetAssetProof": {
+        "name": "GetAssetProof",
+        "description": "Payload with public key of asset",
+        "required": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Public key of asset in base58 encoding."
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      "AssetId": {
+        "name": "AssetId",
+        "description": "Public key of asset in base58 encoding",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "AssetIds": {
+        "name": "AssetIds",
+        "description": "Public keys of assets.",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Asset public key in base58 encoding"
+          }
+        }
+      },
+      "GetAssetProofBatch": {
+        "name": "GetAssetProofBatch",
+        "description": "Payload with public keys of assets",
+        "required": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "type": "array",
+              "description": "Public keys of asset in base58 encoding."
+            }
+          },
+          "required": [
+            "ids"
+          ]
+        }
+      }
+    },
+    "schemas": {
+      "after": {
+        "name": "after",
+        "description": "Cursor based pagination: After Asset ID",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "before": {
+        "name": "before",
+        "description": "Cursor based pagination: Before Asset ID",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "page": {
+        "name": "page",
+        "description": "(This feature is deprecated) Page based pagination (max 50)",
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        }
+      },
+      "limit": {
+        "name": "limit",
+        "description": "How many items to return at one time (max 1000)",
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      },
+      "cursor": {
+        "name": "cursor",
+        "description": "Cursor data in base58 encoding",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "options": {
+        "name": "options",
+        "description": "The display options for the response.",
+        "schema": {
+          "$ref": "#/components/schemas/Options"
+        }
+      },
+      "display_options": {
+        "name": "options",
+        "description": "The display options for the response.",
+        "schema": {
+          "$ref": "#/components/schemas/DisplayOptions"
+        }
+      },
+      "get_by_methods_options": {
+        "name": "get_by_methods_options",
+        "description": "The display options for the response.",
+        "schema": {
+          "$ref": "#/components/schemas/GetByMethodsOptions"
+        }
+      },
+      "search_assets_options": {
+        "name": "search_assets_options",
+        "description": "The display options for the response.",
+        "schema": {
+          "$ref": "#/components/schemas/SearchAssetsOptions"
+        }
+      },
+      "asset_sort_by": {
+        "name": "sort_by",
+        "description": "How many items to return at one time (max 1000)",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "created",
+            "updated",
+            "recent_action"
+          ]
+        }
+      },
+      "CoreFeesAccountsList": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Total number of core fees accounts.",
+            "example": 100
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Limit on the number of accounts returned in this response.",
+            "example": 10
+          },
+          "page": {
+            "type": "integer",
+            "description": "Current page number.",
+            "nullable": true,
+            "example": 1
+          },
+          "before": {
+            "type": "string",
+            "description": "Pagination token to fetch accounts before this token.",
+            "nullable": true,
+            "example": "abc123"
+          },
+          "after": {
+            "type": "string",
+            "description": "Pagination token to fetch accounts after this token.",
+            "nullable": true,
+            "example": "xyz456"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Cursor for pagination.",
+            "nullable": true,
+            "example": "cursor789"
+          },
+          "core_fees_account": {
+            "type": "array",
+            "description": "List of core fees accounts.",
+            "items": {
+              "$ref": "#/components/schemas/CoreFeesAccount"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "limit",
+          "core_fees_account"
+        ]
+      },
+      "CoreFeesAccount": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Address of the core fees account.",
+            "example": "address123"
+          },
+          "current_balance": {
+            "type": "integer",
+            "description": "Current balance of the core fees account.",
+            "example": 50000
+          },
+          "minimum_rent": {
+            "type": "integer",
+            "description": "Minimum rent required for the core fees account.",
+            "example": 1000
+          }
+        },
+        "required": [
+          "address",
+          "current_balance",
+          "minimum_rent"
+        ]
+      },
+      "AssetProof": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string",
+            "description": "The root of the merkle tree."
+          },
+          "proof": {
+            "type": "array",
+            "description": "The proof of the asset.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "node_index": {
+            "type": "number"
+          },
+          "leaf": {
+            "type": "string",
+            "description": "The leaf of the merkle tree."
+          },
+          "tree_id": {
+            "type": "string",
+            "description": "The ID of the merkle tree."
+          }
+        }
+      },
+      "AssetProofBatch": {
+        "name": "assetProofBatch",
+        "type": "object",
+        "properties": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AssetProof"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "TokenType": {
+        "type": "string",
+        "enum": [
+          "fungible",
+          "nonFungible",
+          "regularNFT",
+          "compressedNFT",
+          "all"
+        ]
+      },
+      "RoyaltyModel": {
+        "type": "string",
+        "enum": [
+          "creators",
+          "fanout",
+          "single"
+        ]
+      },
+      "OwnershipModel": {
+        "type": "string",
+        "enum": [
+          "single",
+          "token"
+        ]
+      },
+      "SearchConditionType": {
+        "type": "string",
+        "enum": [
+          "all",
+          "any"
+        ]
+      },
+      "Interface": {
+        "type": "string",
+        "enum": [
+          "V1_NFT",
+          "V1_PRINT",
+          "LEGACY_NFT",
+          "V2_NFT",
+          "FungibleAsset",
+          "FungibleToken",
+          "Custom",
+          "Identity",
+          "Executable",
+          "ProgrammableNFT",
+          "MplCoreAsset",
+          "MplCoreCollection"
+        ]
+      },
+      "Asset": {
+        "type": "object",
+        "required": [
+          "version",
+          "id"
+        ],
+        "properties": {
+          "interface": {
+            "$ref": "#/components/schemas/Interface"
+          },
+          "id": {
+            "type": "string"
+          },
+          "content": {
+            "type": "object",
+            "required": [
+              "$schema"
+            ],
+            "properties": {
+              "$schema": {
+                "type": "string",
+                "required": [
+                  "$$schema"
+                ],
+                "properties": {
+                  "$$schema": {
+                    "type": "string"
+                  }
+                }
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "uri": {
+                      "type": "string"
+                    },
+                    "mime": {
+                      "type": "string"
+                    },
+                    "quality": {
+                      "type": "object",
+                      "properties": {
+                        "$$schema": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "context": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "wallet-default",
+                          "web-desktop",
+                          "web-mobile",
+                          "app-mobile",
+                          "app-desktop",
+                          "app",
+                          "vr"
+                        ]
+                      }
+                    }
+                  },
+                  "oneOf": [
+                    {
+                      "propertyNames": {
+                        "enum": [
+                          "context",
+                          "uri",
+                          "mime"
+                        ]
+                      }
+                    },
+                    {
+                      "propertyNames": {
+                        "enum": [
+                          "context",
+                          "quality"
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              "metadata": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "authorities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "address": {
+                "type": "string"
+              },
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "compression": {
+            "type": "object",
+            "properties": {
+              "eligible": {
+                "type": "boolean"
+              },
+              "compressed": {
+                "type": "boolean"
+              }
+            }
+          },
+          "grouping": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "$$schema"
+              ],
+              "properties": {
+                "$$schema": {
+                  "type": "string"
+                },
+                "group_key": {
+                  "type": "string"
+                },
+                "group_value": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "royalty": {
+            "type": "object",
+            "properties": {
+              "royalty_model": {
+                "type": "string",
+                "enum": [
+                  "creators",
+                  "fanout",
+                  "single"
+                ]
+              },
+              "target": {
+                "type": "string"
+              },
+              "percent": {
+                "type": "number"
+              },
+              "locked": {
+                "type": "boolean"
+              }
+            }
+          },
+          "creators": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "share": {
+                  "type": "string"
+                },
+                "verified": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "ownership": {
+            "type": "object",
+            "properties": {
+              "frozen": {
+                "type": "boolean"
+              },
+              "delegated": {
+                "type": "boolean"
+              },
+              "delegate": {
+                "type": "string"
+              },
+              "ownership_model": {
+                "type": "string",
+                "enum": [
+                  "Single",
+                  "Token"
+                ]
+              },
+              "address": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "AssetList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Asset"
+        }
+      },
+      "DisplayOptions": {
+        "type": "object",
+        "properties": {
+          "showZeroBalance": {
+            "type": "boolean",
+            "description": "Displays assets with zero balance.",
+            "default": false
+          }
+        },
+        "required": [
+          "showZeroBalance"
+        ]
+      },
+      "Options": {
+        "type": "object",
+        "properties": {
+          "showUnverifiedCollections": {
+            "type": "boolean",
+            "description": "Displays grouping information for unverified collections instead of skipping them."
+          },
+          "showCollectionMetadata": {
+            "type": "boolean",
+            "description": "Displays metadata for the collection."
+          },
+          "showInscription": {
+            "type": "boolean",
+            "description": "Displays inscription details of assets inscribed on-chain."
+          },
+          "showFungible": {
+            "type": "boolean",
+            "description": "Displays fungible tokens held by the owner."
+          }
+        },
+        "required": [
+          "showUnverifiedCollections",
+          "showCollectionMetadata",
+          "showInscription",
+          "showFungible"
+        ]
+      },
+      "SearchAssetsOptions": {
+        "type": "object",
+        "properties": {
+          "showUnverifiedCollections": {
+            "type": "boolean",
+            "description": "Displays grouping information for unverified collections instead of skipping them."
+          },
+          "showGrandTotal": {
+            "type": "boolean",
+            "description": "Shows the total number of assets that matched the query. This will make the request slower."
+          },
+          "showNativeBalance": {
+            "type": "boolean",
+            "description": "Shows the native balance (SOL) held by the owner."
+          },
+          "showCollectionMetadata": {
+            "type": "boolean",
+            "description": "Displays metadata for the collection."
+          },
+          "showInscription": {
+            "type": "boolean",
+            "description": "Displays inscription details of assets inscribed on-chain."
+          },
+          "showZeroBalance": {
+            "type": "boolean",
+            "description": "Displays assets with zero balance."
+          }
+        },
+        "required": [
+          "showUnverifiedCollections",
+          "showGrandTotal",
+          "showNativeBalance",
+          "showCollectionMetadata",
+          "showInscription",
+          "showZeroBalance"
+        ]
+      },
+      "GetByMethodsOptions": {
+        "type": "object",
+        "properties": {
+          "showUnverifiedCollections": {
+            "type": "boolean",
+            "description": "Displays grouping information for unverified collections instead of skipping them."
+          },
+          "showGrandTotal": {
+            "type": "boolean",
+            "description": "Shows the total number of assets that matched the query. This will make the request slower."
+          },
+          "showNativeBalance": {
+            "type": "boolean",
+            "description": "Shows the native balance (SOL) held by the owner."
+          },
+          "showCollectionMetadata": {
+            "type": "boolean",
+            "description": "Displays metadata for the collection."
+          },
+          "showInscription": {
+            "type": "boolean",
+            "description": "Displays inscription details of assets inscribed on-chain."
+          },
+          "showZeroBalance": {
+            "type": "boolean",
+            "description": "Displays assets with zero balance."
+          },
+          "showFungible": {
+            "type": "boolean",
+            "description": "Displays fungible tokens held by the owner."
+          }
+        },
+        "required": [
+          "showUnverifiedCollections",
+          "showGrandTotal",
+          "showNativeBalance",
+          "showCollectionMetadata",
+          "showInscription",
+          "showZeroBalance",
+          "showFungible"
+        ]
+      },
+      "TokenAccountsList": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Total number of token accounts"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Limit on the number of accounts returned"
+          },
+          "page": {
+            "type": "integer",
+            "description": "Page number"
+          },
+          "before": {
+            "type": "string",
+            "description": "Cursor based pagination"
+          },
+          "after": {
+            "type": "string",
+            "description": "Cursor based pagination"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Cursor for page navigation"
+          },
+          "tokenAccounts": {
+            "type": "array",
+            "description": "List of token accounts",
+            "items": {
+              "$ref": "#/components/schemas/ResponseTokenAccount"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "limit",
+          "tokenAccounts"
+        ]
+      },
+      "TransactionSignatureList": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Total number of transaction signatures.",
+            "example": 1000
+          },
+          "limit": {
+            "type": "integer",
+            "description": "The limit on the number of signatures returned.",
+            "example": 100
+          },
+          "page": {
+            "type": "integer",
+            "description": "The current page number for paginated results.",
+            "nullable": true,
+            "example": 1
+          },
+          "before": {
+            "type": "string",
+            "description": "Get signatures before this sequence number.",
+            "nullable": true,
+            "example": "seq123"
+          },
+          "after": {
+            "type": "string",
+            "description": "Get signatures after this sequence number.",
+            "nullable": true,
+            "example": "seq456"
+          },
+          "items": {
+            "type": "array",
+            "description": "The list of signature items.",
+            "items": {
+              "$ref": "#/components/schemas/SignatureItem"
+            }
+          }
+        },
+        "required": [
+          "total",
+          "limit",
+          "items"
+        ]
+      },
+      "SignatureItem": {
+        "type": "object",
+        "properties": {
+          "signature": {
+            "type": "string",
+            "description": "The transaction signature.",
+            "example": "signature123"
+          },
+          "instruction": {
+            "type": "string",
+            "description": "The instruction associated with the signature.",
+            "example": "instructionX"
+          },
+          "slot": {
+            "type": "integer",
+            "description": "The slot number of the signature.",
+            "example": 987654
+          }
+        },
+        "required": [
+          "signature",
+          "instruction",
+          "slot"
+        ]
+      },
+      "ResponseTokenAccount": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Token account address"
+          },
+          "mint": {
+            "type": "string",
+            "description": "Token mint address"
+          },
+          "owner": {
+            "type": "string",
+            "description": "Token owner address"
+          },
+          "amount": {
+            "type": "integer",
+            "description": "Number of tokens on the account"
+          },
+          "delegatedAmount": {
+            "type": "integer",
+            "description": "Number of delegated tokens"
+          },
+          "frozen": {
+            "type": "boolean",
+            "description": "Account frozen status"
+          },
+          "tokenExtensions": {
+            "type": "object",
+            "description": "Additional information about the token",
+            "nullable": true
+          }
+        },
+        "required": [
+          "address",
+          "mint",
+          "owner",
+          "amount",
+          "delegatedAmount",
+          "frozen"
+        ]
+      }
+    }
+  }
+}
