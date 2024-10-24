@@ -957,6 +957,214 @@
           "$ref": "#/components/schemas/get_by_methods_options"
         }
       ],
+      "examples": [
+        {
+          "name": "Get assets by group request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Asset public key",
+              "value": {
+                "groupKey": "collection",
+                "groupValue": "J2ZfLdQsaZ3GCmbucJef3cPnPwGcgjDW1SSYtMdq3L9p",
+                "page": 1
+              }
+            }
+          ],
+          "result": {
+            "name": "Get assets by group result",
+            "value": {
+              "total": 2,
+              "limit": 2,
+              "items": [
+                {
+                  "interface": "V1_NFT",
+                  "id": "JEAAuQNfGk1NsnCLAQo8GYDFJibJVn8NVxwbujzcUk1K",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-1178.json",
+                    "files": [
+                      {
+                        "uri": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-1178.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Style",
+                          "value": "Greg Rutkowski-inspired"
+                        },
+                        {
+                          "trait_type": "Subject",
+                          "value": "Bubblegum"
+                        },
+                        {
+                          "trait_type": "Model",
+                          "value": "Stable Diffusion 2.1"
+                        },
+                        {
+                          "trait_type": "Created with 💙 by:",
+                          "value": "TipLink"
+                        }
+                      ],
+                      "description": "NFTs created on Solana using account compression. There are limitless NFTs in this collection, so don't speculate!",
+                      "name": "TipLink Compressed #195",
+                      "symbol": "cTIPLINK",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "image": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-1178.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "CcatrbGsA7uEDdbcWPvQSKBGesUvrkYX9bNuoQoMP9Pv",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "7h5ks8jGrFgp4HxXXshkUkToaWUNkGvJ2KGQoGF8afyb",
+                    "creator_hash": "Ftxh1pV7fDX7PucWUxtgwWh8iWt2JA5ycccpowj498Un",
+                    "asset_hash": "GvQgMyeD2mFVEkpnXcghcixoAeqYRa82DWWZkV4488XD",
+                    "tree": "2kuTFCcjbV22wvUmtmgsFR7cas7eZUzAu96jzJUvUcb7",
+                    "seq": 375,
+                    "leaf_id": 374
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "J2ZfLdQsaZ3GCmbucJef3cPnPwGcgjDW1SSYtMdq3L9p",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.0,
+                    "basis_points": 0,
+                    "primary_sale_happened": true,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "GRXPtJLepm9LetFB58N6bxTSnqWPEgs6E2VYgjgmB9tc",
+                      "share": 100,
+                      "verified": false
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": true,
+                    "delegate": "GRXPtJLepm9LetFB58N6bxTSnqWPEgs6E2VYgjgmB9tc",
+                    "ownership_model": "single",
+                    "owner": "FUyWNUjqXQaPxDKLD7dNiLbwLuaGgBYYsXqPCBD2nRQt"
+                  },
+                  "supply": null,
+                  "mutable": false,
+                  "burnt": false
+                },
+                {
+                  "interface": "V1_NFT",
+                  "id": "JDzjGxHU72WAwtTXAKPrrwDWswHbpQxGDQAvGcZKcsq8",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-740.json",
+                    "files": [
+                      {
+                        "uri": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-740.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Style",
+                          "value": "Greg Rutkowski-inspired"
+                        },
+                        {
+                          "trait_type": "Subject",
+                          "value": "Bubblegum"
+                        },
+                        {
+                          "trait_type": "Model",
+                          "value": "Stable Diffusion 2.1"
+                        },
+                        {
+                          "trait_type": "Created with 💙 by:",
+                          "value": "TipLink"
+                        }
+                      ],
+                      "description": "NFTs created on Solana using account compression. There are limitless NFTs in this collection, so don't speculate!",
+                      "name": "TipLink Compressed #830",
+                      "symbol": "cTIPLINK",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "image": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-740.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "CcatrbGsA7uEDdbcWPvQSKBGesUvrkYX9bNuoQoMP9Pv",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "8AMacfcXR4MBQGeBF6NKvHXcUrrqWUexoTrBVP8n3zoW",
+                    "creator_hash": "Ftxh1pV7fDX7PucWUxtgwWh8iWt2JA5ycccpowj498Un",
+                    "asset_hash": "8hMzvGkxnWdRuUt9xybfKLpWoHKPSyqZM25io7srTsvT",
+                    "tree": "2kuTFCcjbV22wvUmtmgsFR7cas7eZUzAu96jzJUvUcb7",
+                    "seq": 1260,
+                    "leaf_id": 1204
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "J2ZfLdQsaZ3GCmbucJef3cPnPwGcgjDW1SSYtMdq3L9p",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.0,
+                    "basis_points": 0,
+                    "primary_sale_happened": true,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "GRXPtJLepm9LetFB58N6bxTSnqWPEgs6E2VYgjgmB9tc",
+                      "share": 100,
+                      "verified": false
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": true,
+                    "delegate": "GRXPtJLepm9LetFB58N6bxTSnqWPEgs6E2VYgjgmB9tc",
+                    "ownership_model": "single",
+                    "owner": "28YS9zRkSyiph4t4tvPAMPsEAq3C3BE5xYYN3NqvTw5i"
+                  },
+                  "supply": null,
+                  "mutable": false,
+                  "burnt": false
+                }
+              ],
+              "cursor": "JDzjGxHU72WAwtTXAKPrrwDWswHbpQxGDQAvGcZKcsq8"
+            }
+          }
+        }
+      ],
       "result": {
         "$ref": "#/components/contentDescriptors/AssetList"
       },
