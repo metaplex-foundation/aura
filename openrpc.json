@@ -643,6 +643,234 @@
           "$ref": "#/components/schemas/get_by_methods_options"
         }
       ],
+      "examples": [
+        {
+          "name": "Get asset by owner request",
+          "params": [
+            {
+              "id": 0,
+              "name": "getAssetsByOwner payload",
+              "value": {
+                "ownerAddress": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw",
+                "limit": 10
+              }
+            }
+          ],
+          "result": {
+            "name": "Get assets by owner result",
+            "value": {
+              "total": 2,
+              "limit": 2,
+              "items": [
+                {
+                  "interface": "V1_NFT",
+                  "id": "JBw2JDQ7tqPGi5DMnuLn4LtKJaag3rui74MwgC8HafeT",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://arweave.net/5EiWpeZzpxy9ZqWY73AvfAhSkNpVSNdxjfbRMPm8d_4",
+                    "files": [
+                      {
+                        "uri": "https://arweave.net/mczGXyAll6h9goLaYUdZmdXwhy1e499l8wMoOxnuaOk?ext=png",
+                        "mime": "image/png"
+                      },
+                      {
+                        "uri": "",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Drop ",
+                          "value": "16"
+                        },
+                        {
+                          "trait_type": "Season ",
+                          "value": "1"
+                        },
+                        {
+                          "trait_type": "Rarity",
+                          "value": "Common"
+                        }
+                      ],
+                      "description": "AI Generated Art using GNT on MOOAR.com (http://mooar.com/) from Find Satoshi Lab, the creators of STEPN, MOOAR and Gas Hero. GNT Prompt by DrAksenov: Space A multi-colored holiday textured box with an orange letter M on it. dark background. holiday mood, beautiful, bokeh background, funny cat, magic light, HDR, 3D, 8k, bright warm colors blue, pink, yellow, Negative Prompt: table  Prompt by Quyen: A cute cat wearing crown in the treasure chest, in the style of digital painting, dark magenta and light gold, hyper-realistic water, stone, angular geometry, aurora punk Prompt by Momohiki: A diamond in a gift box. christmas gift, very detailed, extreme detail, high detail, full color spectrum, 32k, ultra high resolution, UHD, global lighting, frontal lighting, breathtaking, beautiful, amazing, awe-inspiring, intense mood, colors gorgeous, stunning graphics, intense, intricate details, finely detailed, octane render.",
+                      "name": "DRiP MOOAR Out of The Box!",
+                      "symbol": "",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "animation_url": "",
+                      "external_url": "https://mooar.com",
+                      "image": "https://arweave.net/mczGXyAll6h9goLaYUdZmdXwhy1e499l8wMoOxnuaOk?ext=png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "GMtMwhvCQqnc1aPfvVnVeMx93hHTLQoigJrb26CJPzgX",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "3sq4YVApM3Qjh8VuTAKs9R8DnC4X7bVt5Cd7T8GegmRy",
+                    "creator_hash": "5d7FduDpBjZwZB35dzG5vhoeHYzJW9mcnQYbGmevTqGR",
+                    "asset_hash": "4sg6sWPyd8HsXvvkmuRYNoAw8LrMSyHh8DdcXovAREqc",
+                    "tree": "CrSQoxbxUeZTTALDdREe9vXCiTQcTEst7afzen5kzAuS",
+                    "seq": 444043,
+                    "leaf_id": 437319
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "FSdotujgzdodpYMtWmzT6G62NAgtTdruKT9MekbqCaB8",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.015000000000000001,
+                    "basis_points": 150,
+                    "primary_sale_happened": false,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "FSHFGLzPDVA39jjwCtsP3oJAgnpHXKJxxBqtnkpURhdS",
+                      "share": 0,
+                      "verified": true
+                    },
+                    {
+                      "address": "WoMbXFtdfH8crq2Zi7bQhfGx2Gv8EN4saP13gcdUGog",
+                      "share": 100,
+                      "verified": false
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": false,
+                    "delegate": null,
+                    "ownership_model": "single",
+                    "owner": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw"
+                  },
+                  "supply": null,
+                  "mutable": true,
+                  "burnt": false
+                },
+                {
+                  "interface": "V1_NFT",
+                  "id": "J6PL6DfaYdyxVnfrqJGm4dNAQBAkkk5uwUJ8j3ahprna",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://arweave.net/EgAUOOak2LRkzY2t8SRXz0qvzyCqqjh932uN5CKLeis",
+                    "files": [
+                      {
+                        "uri": "https://arweave.net/hv4JwuHOgN8uOmc4x35HBZr_edd6bYR3okDG5AgllLU?ext=jpg",
+                        "mime": "image/jpeg"
+                      },
+                      {
+                        "uri": "",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "drop",
+                          "value": "12"
+                        },
+                        {
+                          "trait_type": "created",
+                          "value": "2023-07-03"
+                        },
+                        {
+                          "trait_type": "filetype",
+                          "value": "jpeg"
+                        },
+                        {
+                          "trait_type": "dimensions",
+                          "value": "3000 x 4000"
+                        },
+                        {
+                          "trait_type": "orientation",
+                          "value": "portrait"
+                        },
+                        {
+                          "trait_type": "rarity",
+                          "value": "common"
+                        }
+                      ],
+                      "description": "A group of Typewriter versions of Phantom’s new logo. The centerpiece depicts San Francisco, CA, where Phantom’s home office is located. Created with watercolor pencils and a Royal Classic Typewriter.",
+                      "name": "Type Phantom",
+                      "symbol": "",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "animation_url": "",
+                      "external_url": "",
+                      "image": "https://arweave.net/hv4JwuHOgN8uOmc4x35HBZr_edd6bYR3okDG5AgllLU?ext=jpg"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "CHxD1X7WapMUJpSfZ2VbuxxL7JVL6ByctzjMr9JkuLBE",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "a7HUxET3WgyYQtKA1mDTDm6tg6rFQpJgFHLr77r2se4",
+                    "creator_hash": "G6VqxtUKZhzwtwkrECuyaxnfcr8NFxKTabjFM47zhgLP",
+                    "asset_hash": "At3fYtEb7KPm2XX3NZsKqQZQSdG7QpjMPXBkAXqWCbHW",
+                    "tree": "4dVaNGqsEZet56kEFnGPYbWoYv5HKGp5FpSdZZNfcm4c",
+                    "seq": 1175223,
+                    "leaf_id": 948296
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "DGPTxgKaBPJv3Ng7dc9AFDpX6E7kgUMZEgyTm3VGWPW6",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.0,
+                    "basis_points": 0,
+                    "primary_sale_happened": false,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "DGPTx9RcP5GkxRNscrSaSETcwuiK6xcbX93G1DSxrLoY",
+                      "share": 100,
+                      "verified": true
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": false,
+                    "delegate": null,
+                    "ownership_model": "single",
+                    "owner": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw"
+                  },
+                  "supply": null,
+                  "mutable": true,
+                  "burnt": false
+                }
+              ],
+              "cursor": "J6PL6DfaYdyxVnfrqJGm4dNAQBAkkk5uwUJ8j3ahprna"
+            }
+          }
+        }
+      ],
       "result": {
         "$ref": "#/components/contentDescriptors/AssetList"
       },
