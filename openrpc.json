@@ -2402,6 +2402,37 @@
           "$ref": "#/components/schemas/cursor"
         }
       ],
+      "examples": [
+        {
+          "name": "Get asset signature request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Get asset signature payload",
+              "value": {
+                "id": "Ez6ezCMkRaUkWS5v6WVcP7uuCWiKadr3W2dHFkoZmteW",
+                "limit": 1
+              }
+            }
+          ],
+          "result": {
+            "name": "Get asset signature result",
+            "value": {
+              "total": 1,
+              "limit": 1,
+              "before": "9",
+              "after": "9",
+              "items": [
+                {
+                  "signature": "3KgTY6hhdbmb3XJ33JYXUim8mir9yYbhMrCraVJs4xDAiivUR9RaMjSUASFesStDupRWu5nC3C4US5DMtuFDtVcw",
+                  "instruction": "MintV1",
+                  "slot": 221814558
+                }
+              ]
+            }
+          }
+        }
+      ],
       "result": {
         "name": "TransactionSignatureList",
         "schema": {
