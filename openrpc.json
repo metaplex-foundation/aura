@@ -1954,6 +1954,172 @@
           "$ref": "#/components/schemas/get_by_methods_options"
         }
       ],
+      "examples": [
+        {
+          "name": "Get assets by authority request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Get assets by authority payload",
+              "value": {
+                "authorityAddress": "mRdta4rc2RtsxEUDYuvKLamMZAdW6qHcwuq866Skxxv",
+                "limit": 1
+              }
+            }
+          ],
+          "result": {
+            "name": "Get assets by authority result",
+            "value": {
+              "total": 1,
+              "limit": 1,
+              "items": [
+                {
+                  "interface": "V1_NFT",
+                  "id": "JEKFMVX4cY874gJbzrjewQk2dhQEaN7VFSEAdc8k9r8L",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://arweave.net/m4Kmsvn3V6GUdmFWMS2RtlKyOpOfLDy6wS3p_3BG6mI/amaso-stone-slate-common.json",
+                    "files": [
+                      {
+                        "uri": "https://arweave.net/TA4wBu6l-WDanLwLyGDnykzKeVjPstZMnLhFSC_ODVg/amaso-stone-slate-common.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Body",
+                          "value": "Stone"
+                        },
+                        {
+                          "trait_type": "Background",
+                          "value": "Slate"
+                        },
+                        {
+                          "trait_type": "Rarity",
+                          "value": "Common"
+                        },
+                        {
+                          "trait_type": "Rating",
+                          "value": 79
+                        },
+                        {
+                          "trait_type": "Smile",
+                          "value": 81
+                        },
+                        {
+                          "trait_type": "Hug",
+                          "value": 76
+                        },
+                        {
+                          "trait_type": "Laugh",
+                          "value": 71
+                        },
+                        {
+                          "trait_type": "Heart",
+                          "value": 84
+                        },
+                        {
+                          "trait_type": "Warm",
+                          "value": 83
+                        },
+                        {
+                          "trait_type": "Good",
+                          "value": 77
+                        },
+                        {
+                          "trait_type": "Thanks",
+                          "value": 85
+                        },
+                        {
+                          "trait_type": "Share",
+                          "value": 70
+                        },
+                        {
+                          "trait_type": "Brave",
+                          "value": 87
+                        },
+                        {
+                          "trait_type": "Grow",
+                          "value": 76
+                        }
+                      ],
+                      "description": "MONMONMON is a collection from the creativity of Peelander Yellow. Each MONMONMON has unique and kind abilities that can be used to help others and play with your friends. There are secrets in each MONMONMON. We love you.",
+                      "name": "Amaso Slate 79",
+                      "symbol": "",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "image": "https://arweave.net/TA4wBu6l-WDanLwLyGDnykzKeVjPstZMnLhFSC_ODVg/amaso-stone-slate-common.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "mRdta4rc2RtsxEUDYuvKLamMZAdW6qHcwuq866Skxxv",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "5116maKN1d3Ng29WHZ9qKUc4NYspBqkHNeXkzNiVbn7k",
+                    "creator_hash": "DJ7kGgdfHEMPJLUTW1YdnGX2JBc3DdD6ybJmkfE4wgSq",
+                    "asset_hash": "GYxqeRqc8NKXkohVXtW7oXvVAEad345PYXFuGF2RdzJq",
+                    "tree": "9PHhh7dJqdWnmjwiZEe6bMCFKnRSL436msEhN587adu5",
+                    "seq": 586109,
+                    "leaf_id": 585627
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "PEEiTQbMc87HQ9TbXfHWWyW3bKiMExbGmAiMDR6NUiD",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.030000000000000002,
+                    "basis_points": 300,
+                    "primary_sale_happened": false,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "PEEYx7v42bSRRXAJtaaWJ5NVCM83hKpAf7Kv73vZ9L3",
+                      "share": 0,
+                      "verified": true
+                    },
+                    {
+                      "address": "WoMbXFtdfH8crq2Zi7bQhfGx2Gv8EN4saP13gcdUGog",
+                      "share": 50,
+                      "verified": false
+                    },
+                    {
+                      "address": "6LVnHwYhwiCjtdKYyJgtDUdfMgFwqZG917Ct1WuaTZgC",
+                      "share": 50,
+                      "verified": false
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": false,
+                    "delegate": null,
+                    "ownership_model": "single",
+                    "owner": "7XA7taVsjNM6n4Mmiabfpss279tXwHteDMiW8oxb6JVP"
+                  },
+                  "supply": null,
+                  "mutable": true,
+                  "burnt": false
+                }
+              ],
+              "cursor": "JEKFMVX4cY874gJbzrjewQk2dhQEaN7VFSEAdc8k9r8L"
+            }
+          }
+        }
+      ],
       "result": {
         "$ref": "#/components/contentDescriptors/AssetList"
       },
