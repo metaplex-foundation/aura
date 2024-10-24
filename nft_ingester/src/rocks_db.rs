@@ -5,7 +5,7 @@ use rocks_db::errors::BackupServiceError;
 use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::{backup_service, Storage};
 use std::fs::{create_dir_all, remove_dir_all};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::{Receiver, Sender};
@@ -80,4 +80,66 @@ pub async fn restore_rocksdb(config: &IngesterConfig) -> Result<(), BackupServic
 
     info!("restore_rocksdb fin");
     Ok(())
+}
+
+pub enum RocksDbManager {
+    Primary(Arc<Storage>),
+    Secondary(RocksDbSecondaryDuplicateMode),
+}
+
+impl RocksDbManager {
+    pub fn new_primary(primary: Arc<Storage>) -> Self {
+        RocksDbManager::Primary(primary)
+    }
+
+    pub fn new_secondary(primary: Storage, secondary: Storage) -> Self {
+        RocksDbManager::Secondary(RocksDbSecondaryDuplicateMode {
+            rocks_db_instance: [primary.into(), secondary.into()],
+            current_rocks_db: AtomicUsize::new(0),
+        })
+    }
+
+    pub fn acquire(&self) -> Arc<Storage> {
+        match self {
+            RocksDbManager::Primary(storage) => storage.clone(),
+            RocksDbManager::Secondary(duplicate_mode) => duplicate_mode.rocks_db_instance
+                [duplicate_mode.current_rocks_db.load(Ordering::Relaxed)]
+            .clone(),
+        }
+    }
+
+    pub async fn catch_up(&self) {
+        const SLEEP_TIME_MS: u64 = 10;
+        const NUMBER_OF_CYCLES: u64 = 50;
+
+        match self {
+            RocksDbManager::Primary(_) => {}
+            RocksDbManager::Secondary(duplicate_mode) => {
+                let free_node_idx =
+                    (duplicate_mode.current_rocks_db.load(Ordering::Relaxed) + 1) % 2;
+                let free_node = &duplicate_mode.rocks_db_instance[free_node_idx];
+
+                let mut attempts = 0;
+                while Arc::<rocks_db::Storage>::strong_count(&free_node) > 1
+                    && attempts < NUMBER_OF_CYCLES
+                {
+                    attempts += 1;
+                    tokio_sleep(Duration::from_millis(SLEEP_TIME_MS)).await;
+                }
+
+                if let Err(e) = free_node.db.try_catch_up_with_primary() {
+                    error!("Sync rocksdb error: {}", e);
+                }
+
+                duplicate_mode
+                    .current_rocks_db
+                    .store(free_node_idx, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+pub struct RocksDbSecondaryDuplicateMode {
+    rocks_db_instance: [Arc<Storage>; 2],
+    current_rocks_db: AtomicUsize,
 }
