@@ -86,6 +86,82 @@
           "$ref": "#/components/contentDescriptors/GetAssetProofBatch"
         }
       ],
+      "examples": [
+        {
+          "name": "Get assets proofs request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Array of public keys of assets",
+              "value": {
+                "ids": [
+                  "81bxPqYCE8j34nQm7Rooqi8Vt3iMHLzgZJ71rUVbQQuz",
+                  "CWHuz6GPjWYdwt7rTfRHKaorMwZP58Spyd7aqGK7xFbn"
+                ]
+              }
+            }
+          ],
+          "result": {
+            "name": "Get proofs for assets result",
+            "value": {
+              "81bxPqYCE8j34nQm7Rooqi8Vt3iMHLzgZJ71rUVbQQuz": {
+                "root": "EfKEcyLqY9uT1wjCpRjV1HhF2scNx8yAEmRMKpGdq4qe",
+                "proof": [
+                  "7cRPwaMrgxqdKcjKyqHtbZhmgKawoKBCTTX5NyitD2qw",
+                  "28VRrXKJsBQ4oK9bA9Nhgo5EQMq2oaz2v9i9DDNDff4d",
+                  "2iEcHif92WZfqC8NJzVRfynQmxgG7S1vJ2qkhqwKDP77",
+                  "2bmS1B4ezK5kKNEMmzrxzwcAegattpVuAREa6cRCZaET",
+                  "7K7VYbquBc1Tfpfdx83RYu67GT5TYHdfHSBeMj2L6bEq",
+                  "9rwmiD7UD849B9PcbkH2w74izpFsCWp6jG8zkTTTUZ9y",
+                  "GT7FELAsWSbQtJMJdzd1LTUL24r9WLN5si3FkRi5BxMP",
+                  "6HJLawG1t5JH1LhsT4i6CYYa8Ud7aUKtFy6vHVkDYGsx",
+                  "76JfUHCzAkXFbXq1V3op93GmEZW3FjKdM35xT1DZE1V3",
+                  "5EyQzBbeQqxdReQUNJwQsM7r3sEGaGiWaQBjSh9esksY",
+                  "RzoqCECmV6bmfBm57RzKRwHLvwkn8VC2nqonMq3PpuH",
+                  "CsNSUc61fQHJEVPRWNov99z9KTf84pcPdH5R98MB1LG",
+                  "2Qq5ytditxVKHGDceunpRK1zqxuSRCCiEYXmN693VYX4",
+                  "FCoW5sVVmyieVezLdS1czyUo9sQJ2ytmbsDQ2y6U7cZH",
+                  "GkD3BcX8tK4mCVBpURNc3u8SCBe5TF5EuL2a6WVnw91j",
+                  "2zCoKGy7QREYqUHQ4Npsk81sLW9KPxxDBrraSd5KZ7S1",
+                  "3e2oBSLfSDVdUdS7jRGFKa8nreJUA9sFPEELrHaQyd4J",
+                  "GCXyEHiFMtRFTNFT5LNHwxiXZfooBpUMGSkjyz7pfcS5"
+                ],
+                "node_index": 291728,
+                "leaf": "DE2bb82qfupE4Wcv28brKXCKztnEKC2XnwxAmN8LzqPe",
+                "tree_id": "E7JbdYSZLvVmqvw6XfEwNQCEAybTF6E1mnrHUXw8hXDV"
+              },
+              "CWHuz6GPjWYdwt7rTfRHKaorMwZP58Spyd7aqGK7xFbn": {
+                "root": "GLxhERsNZaJ9sf5FvcqK5udkSNJQbdJLEotwEDgzPQB4",
+                "proof": [
+                  "3PApgYrn4GNJ7wuKqrKu7ZBEhw9n1Wx4zFDTZ5ar1YGN",
+                  "4zomVWFvQzCfU2pMXrx4Dyg9qZsd98jtfFsN22qyjUXk",
+                  "7pa2vfYxbDUSEvjPRftAie63g41cJMqQ9iRnyZcTgb1T",
+                  "7ddKXrgDjFFaoixmWuwLQLGeiq1YiZBSCfCraQynJsYb",
+                  "EutvGtrGH5vHNqxUtFpuBJj28pda5w2eNMtyj71eoszT",
+                  "AD9RFQaSv4e8Zo2Yaf9Xfdfbes7RVoGFBroyEMWFX1JU",
+                  "BUNF6Hq15DEdig5N7pM4hWos6oU7phMyCJ2UyRWYTjFG",
+                  "7U3kEAGhYWsX3yc2LYJhyEjr3Kk8KHULaoET8Rbd5Mg1",
+                  "558FusVYDck4TUoKDLqUfvW4kvPeAtgtMSJx52Fi9Stt",
+                  "ESDb3AdTJbTR1diT67TB9fADHR8FzMxo2ENFbqrou5xQ",
+                  "2D4fWxSFSpkA6TnQv6cgFwsNPVHQCEs1ZLBqeYeTBQHr",
+                  "25KLZ4MLqpdmprmquF6kttZ83UySPu4FWgEoEDgKcHSy",
+                  "J8BKbWK1ZuzCeGUPcXaiVgki7KgE7dHtL7jYE6geXma5",
+                  "3CuETjEvcqvv2ZDsjZodDhNrRHJ58agKPAtfH3zmVnVY",
+                  "3kkoih23BptaP7stAH3BzL4zxykGiEECkDc9EGHoJps5",
+                  "FhsNgK6GGU1cRPFbmPhrEZ95Zj8vorjK6GmhFuwmZsUm",
+                  "CUv8tiuLLugtG12Hh6dBs9CrNCoZ2yWcdjtujpaAPKGG",
+                  "HdRfjeorKmkithWqX3FBQcPc6hW25sc4q97jXkyYTVgD",
+                  "EFCaoGpSYKXymUSKvPYHXZ6ZErCsGnuvnD6AuYhpeGFW",
+                  "4s4CebZLxCfYnzFdBwwysdddydB92qtFsMexJn6E9hPM"
+                ],
+                "node_index": 1048584,
+                "leaf": "HjF2mFb4fWFKQwuSUNxivq1BUvuLo824MxCygW58S9uk",
+                "tree_id": "DRSdumv6r6KpxbGtnJaRSJL99WnBEi7rphY5euu6NGEu"
+              }
+            }
+          }
+        }
+      ],
       "result": {
         "$ref": "#/components/contentDescriptors/assetProofBatch"
       },
