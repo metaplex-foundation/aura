@@ -120,7 +120,6 @@ impl RocksDbManager {
     /// One of the DB will be blocked while the other one is processing request
     pub async fn catch_up(&self) {
         const SLEEP_TIME_MS: u64 = 10;
-        const NUMBER_OF_CYCLES: u64 = 50;
 
         match self {
             RocksDbManager::Primary(_) => {}
@@ -129,11 +128,7 @@ impl RocksDbManager {
                     (duplicate_mode.current_rocks_db.load(Ordering::Relaxed) + 1) % 2;
                 let free_node = &duplicate_mode.rocks_db_instance[free_node_idx];
 
-                let mut attempts = 0;
-                while Arc::<rocks_db::Storage>::strong_count(&free_node) > 1
-                    && attempts < NUMBER_OF_CYCLES
-                {
-                    attempts += 1;
+                while Arc::<rocks_db::Storage>::strong_count(&free_node) > 1 {
                     tokio_sleep(Duration::from_millis(SLEEP_TIME_MS)).await;
                 }
 
