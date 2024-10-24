@@ -196,6 +196,80 @@
           "$ref": "#/components/schemas/options"
         }
       ],
+      "examples": [
+        {
+          "name": "Get asset request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Asset public key",
+              "value": "Ez6ezCMkRaUkWS5v6WVcP7uuCWiKadr3W2dHFkoZmteW"
+            }
+          ],
+          "result": {
+            "name": "Get asset result",
+            "value": {
+              "interface": "V1_NFT",
+              "id": "Ez6ezCMkRaUkWS5v6WVcP7uuCWiKadr3W2dHFkoZmteW",
+              "content": {
+                "$schema": "https://schema.metaplex.com/nft1.0.json",
+                "json_uri": "https://example.com/my-nft.json",
+                "files": [],
+                "metadata": {
+                  "name": "My cNFT #9",
+                  "symbol": "",
+                  "token_standard": "NonFungible"
+                },
+                "links": {}
+              },
+              "authorities": [
+                {
+                  "address": "DMuPbfmh4Z4Y9owh5sNduzotKysPs3KVLBDv4o29fdtR",
+                  "scopes": [
+                    "full"
+                  ]
+                }
+              ],
+              "compression": {
+                "eligible": false,
+                "compressed": true,
+                "data_hash": "2PGj2MXocC5TZi37DtpDKB2L6tT5K9eYxNemNh6eDJAc",
+                "creator_hash": "CSjTMwkWgpaD4NkkjMRx6Qnf5j9W76PHNwJBgQogGtw1",
+                "asset_hash": "ADh1Pe7CPB6JUTiPzHwoL1nJTDJA8zxeDMGPC5gYqSHE",
+                "tree": "5wu82msJUAs4WWx3XtNMD5u7nuJSnfJMratppsZ6kL27",
+                "seq": 9,
+                "leaf_id": 8
+              },
+              "grouping": [],
+              "royalty": {
+                "royalty_model": "creators",
+                "target": null,
+                "percent": 0.05,
+                "basis_points": 500,
+                "primary_sale_happened": false,
+                "locked": false
+              },
+              "creators": [
+                {
+                  "address": "FKkofgY4WkoZuBV42kmsrr9Ka4HfBzDZTtT3uyDDM3kQ",
+                  "share": 100,
+                  "verified": true
+                }
+              ],
+              "ownership": {
+                "frozen": false,
+                "delegated": false,
+                "delegate": null,
+                "ownership_model": "single",
+                "owner": "EfC88UxcKJ22FLLV7oAQoCKCdFWe68548G9HwTnNKkCo"
+              },
+              "supply": null,
+              "mutable": true,
+              "burnt": false
+            }
+          }
+        }
+      ],
       "result": {
         "$ref": "#/components/contentDescriptors/Asset"
       },
