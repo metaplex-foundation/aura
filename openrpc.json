@@ -2199,6 +2199,44 @@
           "$ref": "#/components/schemas/cursor"
         }
       ],
+      "examples": [
+        {
+          "name": "Get token accounts request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Get token accounts payload",
+              "value": {
+                "owner": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw",
+                "limit": 1,
+                "displayOptions": {
+                  "showZeroBalance": true
+                }
+              }
+            }
+          ],
+          "result": {
+            "name": "Get token accounts result",
+            "value": {
+              "total": 1,
+              "limit": 1,
+              "before": null,
+              "after": null,
+              "cursor": "BWVU+Nck/GfobYL1CHsI0MI3iweb5vC2e/P4LR65BEAD6wkaHP+nAoz1Jiy2V8YbFnFsjgkNNQ2BL0+hBT3NXw",
+              "token_accounts": [
+                {
+                  "address": "GJ6CrGqtBbP7Ypo35spNXMe7H9CVUq4jJDnhLVrM8Nr",
+                  "mint": "8NNPnNYgwZSY5ZS4RSVCP35iSLmxC3kPdxWuohbTrjdH",
+                  "owner": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw",
+                  "amount": 1,
+                  "delegated_amount": 0,
+                  "frozen": true
+                }
+              ]
+            }
+          }
+        }
+      ],
       "result": {
         "name": "tokenAccountsList",
         "description": "Список аккаунтов токенов и информация о пагинации",
