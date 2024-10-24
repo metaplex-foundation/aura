@@ -966,8 +966,7 @@
               "name": "Asset public key",
               "value": {
                 "groupKey": "collection",
-                "groupValue": "J2ZfLdQsaZ3GCmbucJef3cPnPwGcgjDW1SSYtMdq3L9p",
-                "page": 1
+                "groupValue": "J2ZfLdQsaZ3GCmbucJef3cPnPwGcgjDW1SSYtMdq3L9p"
               }
             }
           ],
@@ -1239,6 +1238,248 @@
         },
         {
           "$ref": "#/components/schemas/get_by_methods_options"
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get assets by creator request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Get assets by creator payload",
+              "value": {
+                "creatorAddress": "D3XrkNZz6wx6cofot7Zohsf2KSsu2ArngNk8VqU9cTY3",
+                "onlyVerified": false,
+                "limit": 2
+              }
+            }
+          ],
+          "result": {
+            "name": "Get assets by creator result",
+            "value": {
+              "total": 2,
+              "limit": 2,
+              "items": [
+                {
+                  "interface": "Custom",
+                  "id": "JEH7cJxAKdprFG5AvdsY2c4ZqojxLBjFmw19zADV6oK5",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://famousfoxes.com/metadata/7045.json",
+                    "files": [
+                      {
+                        "uri": "https://famousfoxes.com/hd/7045.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Background",
+                          "value": "Amaranth"
+                        },
+                        {
+                          "trait_type": "Outfit",
+                          "value": "Hoodie Green"
+                        },
+                        {
+                          "trait_type": "Skin",
+                          "value": "Natural"
+                        },
+                        {
+                          "trait_type": "Mouth",
+                          "value": "Smile"
+                        },
+                        {
+                          "trait_type": "Head",
+                          "value": "None"
+                        },
+                        {
+                          "trait_type": "Eyes",
+                          "value": "Blank"
+                        }
+                      ],
+                      "description": "The Famous Fox Federation, an independent organization of the most fabulously famous foxes on the Blockchain.",
+                      "name": "Fox #7045",
+                      "symbol": "FFF"
+                    },
+                    "links": {
+                      "external_url": "https://famousfoxes.com",
+                      "image": "https://famousfoxes.com/hd/7045.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "3pMvTLUA9NzZQd4gi725p89mvND1wRNQM3C8XEv1hTdA",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": false,
+                    "data_hash": "",
+                    "creator_hash": "",
+                    "asset_hash": "",
+                    "tree": "",
+                    "seq": 0,
+                    "leaf_id": 0
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "BUjZjAS2vbbb65g7Z1Ca9ZRVYoJscURG5L3AkVvHP9ac",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.042,
+                    "basis_points": 420,
+                    "primary_sale_happened": true,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "D3XrkNZz6wx6cofot7Zohsf2KSsu2ArngNk8VqU9cTY3",
+                      "share": 0,
+                      "verified": true
+                    },
+                    {
+                      "address": "3pMvTLUA9NzZQd4gi725p89mvND1wRNQM3C8XEv1hTdA",
+                      "share": 100,
+                      "verified": true
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": false,
+                    "delegate": null,
+                    "ownership_model": "single",
+                    "owner": "1BWutmTvYPwDtmw9abTkS4Ssr8no61spGAvW1X6NDix"
+                  },
+                  "supply": null,
+                  "mutable": true,
+                  "burnt": false,
+                  "lamports": 5616720,
+                  "executable": false,
+                  "metadata_owner": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+                  "rent_epoch": 18446744073709551615
+                },
+                {
+                  "interface": "Custom",
+                  "id": "JEEqUNmR1EDmDrwZUL3L49cciBQUP264BrNAkyGS3Zoc",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://famousfoxes.com/metadata/5978.json",
+                    "files": [
+                      {
+                        "uri": "https://famousfoxes.com/hd/5978.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Background",
+                          "value": "Orange"
+                        },
+                        {
+                          "trait_type": "Outfit",
+                          "value": "Sweater Light"
+                        },
+                        {
+                          "trait_type": "Skin",
+                          "value": "Natural"
+                        },
+                        {
+                          "trait_type": "Mouth",
+                          "value": "Smirk"
+                        },
+                        {
+                          "trait_type": "Head",
+                          "value": "Sportsband"
+                        },
+                        {
+                          "trait_type": "Eyes",
+                          "value": "Mutated"
+                        }
+                      ],
+                      "description": "The Famous Fox Federation, an independent organization of the most fabulously famous foxes on the Blockchain.",
+                      "name": "Fox #5978",
+                      "symbol": "FFF"
+                    },
+                    "links": {
+                      "external_url": "https://famousfoxes.com",
+                      "image": "https://famousfoxes.com/hd/5978.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "3pMvTLUA9NzZQd4gi725p89mvND1wRNQM3C8XEv1hTdA",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": false,
+                    "data_hash": "",
+                    "creator_hash": "",
+                    "asset_hash": "",
+                    "tree": "",
+                    "seq": 0,
+                    "leaf_id": 0
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "BUjZjAS2vbbb65g7Z1Ca9ZRVYoJscURG5L3AkVvHP9ac",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.042,
+                    "basis_points": 420,
+                    "primary_sale_happened": true,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "D3XrkNZz6wx6cofot7Zohsf2KSsu2ArngNk8VqU9cTY3",
+                      "share": 0,
+                      "verified": true
+                    },
+                    {
+                      "address": "3pMvTLUA9NzZQd4gi725p89mvND1wRNQM3C8XEv1hTdA",
+                      "share": 100,
+                      "verified": true
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": true,
+                    "delegated": true,
+                    "delegate": "tkq3BCfH8zJEXZWwU5Abp3sL8oz7sT2cw4vXyMV8wsR",
+                    "ownership_model": "single",
+                    "owner": "GbmFH5bg2oGBV6n6xKVAkj3d6xC4W8Kfm7TK876GFVHY"
+                  },
+                  "supply": null,
+                  "mutable": true,
+                  "burnt": false,
+                  "lamports": 5616720,
+                  "executable": false,
+                  "metadata_owner": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+                  "rent_epoch": 18446744073709551615
+                }
+              ],
+              "cursor": "JEEqUNmR1EDmDrwZUL3L49cciBQUP264BrNAkyGS3Zoc"
+            }
+          }
         }
       ],
       "result": {
