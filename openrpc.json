@@ -324,6 +324,248 @@
           "$ref": "#/components/schemas/options"
         }
       ],
+      "examples": [
+        {
+          "name": "Get assets request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Asset public key",
+              "value": {
+                "ids": [
+                  "81bxPqYCE8j34nQm7Rooqi8Vt3iMHLzgZJ71rUVbQQuz",
+                  "CWHuz6GPjWYdwt7rTfRHKaorMwZP58Spyd7aqGK7xFbn"
+                ]
+              }
+            }
+          ],
+          "result": {
+            "name": "Get assets result",
+            "value": [
+              {
+                "interface": "V1_NFT",
+                "id": "81bxPqYCE8j34nQm7Rooqi8Vt3iMHLzgZJ71rUVbQQuz",
+                "content": {
+                  "$schema": "https://schema.metaplex.com/nft1.0.json",
+                  "json_uri": "https://entities.nft.helium.io/112vepK9Upx7juv4pCdwqzm7reBo6VYEQHKRNmU6PEaKX1ese5NE",
+                  "files": [
+                    {
+                      "uri": "https://shdw-drive.genesysgo.net/6tcnBSybPG7piEDShBcrVtYJDPSvGrDbVvXmXKpzBvWP/hotspot.png",
+                      "mime": "image/png"
+                    }
+                  ],
+                  "metadata": {
+                    "attributes": [
+                      {
+                        "trait_type": "ecc_compact",
+                        "value": "112vepK9Upx7juv4pCdwqzm7reBo6VYEQHKRNmU6PEaKX1ese5NE"
+                      },
+                      {
+                        "trait_type": "entity_key_string",
+                        "value": "112vepK9Upx7juv4pCdwqzm7reBo6VYEQHKRNmU6PEaKX1ese5NE"
+                      },
+                      {
+                        "trait_type": "entity_key",
+                        "value": "AAD9hP7nM5Pot132zszVRfGpa/ktGc68HPV6HwCoAvmofVoVaWc="
+                      },
+                      {
+                        "trait_type": "rewardable",
+                        "value": true
+                      },
+                      {
+                        "trait_type": "networks",
+                        "value": [
+                          "iot"
+                        ]
+                      },
+                      {
+                        "trait_type": "iot_city",
+                        "value": "珠海市"
+                      },
+                      {
+                        "trait_type": "iot_state",
+                        "value": "广东省"
+                      },
+                      {
+                        "trait_type": "iot_country",
+                        "value": "中国"
+                      },
+                      {
+                        "trait_type": "iot_lat",
+                        "value": 22.110584
+                      },
+                      {
+                        "trait_type": "iot_long",
+                        "value": 113.15523
+                      }
+                    ],
+                    "description": "A Rewardable NFT on Helium",
+                    "name": "gentle-mandarin-ferret",
+                    "symbol": "HOTSPOT",
+                    "token_standard": "NonFungible"
+                  },
+                  "links": {
+                    "image": "https://shdw-drive.genesysgo.net/6tcnBSybPG7piEDShBcrVtYJDPSvGrDbVvXmXKpzBvWP/hotspot.png"
+                  }
+                },
+                "authorities": [
+                  {
+                    "address": "AngjrikiSwNAqed9GEZrXW9eyyptqiwkWtXgw5hkJ1jM",
+                    "scopes": [
+                      "full"
+                    ]
+                  }
+                ],
+                "compression": {
+                  "eligible": false,
+                  "compressed": true,
+                  "data_hash": "D4yd9ePcnVX2uKujrC4NSCFNVsNTUB1gKUq2bnouR8Ba",
+                  "creator_hash": "GuBHQ5zhrHdkADX8ttpGvSYPQB2M6K5Zcj2qq5HogPgQ",
+                  "asset_hash": "DE2bb82qfupE4Wcv28brKXCKztnEKC2XnwxAmN8LzqPe",
+                  "tree": "E7JbdYSZLvVmqvw6XfEwNQCEAybTF6E1mnrHUXw8hXDV",
+                  "seq": 29627,
+                  "leaf_id": 29584
+                },
+                "grouping": [
+                  {
+                    "group_key": "collection",
+                    "group_value": "FC2daoG1bnBPHGBypxPLb8hU8dtQdx7cYYsU9RR4eYmf",
+                    "verified": true
+                  }
+                ],
+                "royalty": {
+                  "royalty_model": "creators",
+                  "target": null,
+                  "percent": 0.0,
+                  "basis_points": 0,
+                  "primary_sale_happened": true,
+                  "locked": false
+                },
+                "creators": [
+                  {
+                    "address": "Fv5hf1Fg58htfC7YEXKNEfkpuogUUQDDTLgjGWxxv48H",
+                    "share": 100,
+                    "verified": true
+                  }
+                ],
+                "ownership": {
+                  "frozen": false,
+                  "delegated": false,
+                  "delegate": null,
+                  "ownership_model": "single",
+                  "owner": "9gGP3HLonuAiE5Xqb87sEua6SY3uHmTPuobbxPsLUV4u"
+                },
+                "supply": null,
+                "mutable": true,
+                "burnt": false
+              },
+              {
+                "interface": "V1_NFT",
+                "id": "CWHuz6GPjWYdwt7rTfRHKaorMwZP58Spyd7aqGK7xFbn",
+                "content": {
+                  "$schema": "https://schema.metaplex.com/nft1.0.json",
+                  "json_uri": "https://arweave.net/n_sgSwRGFxnrJTbKDonkUeppFMXIaUrijrh-Q81xKG4",
+                  "files": [
+                    {
+                      "uri": "https://arweave.net/SCv3eCEk1aXZ0vK8M2GBAL7_BMcRoBh9Gqvoep-5hGE?ext=jpg",
+                      "mime": "image/jpeg"
+                    },
+                    {
+                      "uri": "",
+                      "mime": "image/png"
+                    }
+                  ],
+                  "metadata": {
+                    "attributes": [
+                      {
+                        "trait_type": "Season",
+                        "value": "1"
+                      },
+                      {
+                        "trait_type": "Drop",
+                        "value": "6"
+                      },
+                      {
+                        "trait_type": "Rarity",
+                        "value": "Legendary"
+                      }
+                    ],
+                    "description": "Aerial photograph of a parking structure in LA depicting the photographer, Andrew Mason, \"sliding\" through the image.",
+                    "name": "Slide",
+                    "symbol": "",
+                    "token_standard": "NonFungible"
+                  },
+                  "links": {
+                    "external_url": "",
+                    "animation_url": "",
+                    "image": "https://arweave.net/SCv3eCEk1aXZ0vK8M2GBAL7_BMcRoBh9Gqvoep-5hGE?ext=jpg"
+                  }
+                },
+                "authorities": [
+                  {
+                    "address": "FUtErNuVuWwsgN5fMY5v9pT33KbL4qqRvY5mwAxt3kSc",
+                    "scopes": [
+                      "full"
+                    ]
+                  }
+                ],
+                "compression": {
+                  "eligible": false,
+                  "compressed": true,
+                  "data_hash": "7a4RoSG6tTeMuyKhVAZF9Qc9kAxaL4ux3HkB7KMvjbfZ",
+                  "creator_hash": "HCuVLuwsjo7FRNZhX8gBRrMaPHo9JPoirvTB8ZJwL8XQ",
+                  "asset_hash": "HjF2mFb4fWFKQwuSUNxivq1BUvuLo824MxCygW58S9uk",
+                  "tree": "DRSdumv6r6KpxbGtnJaRSJL99WnBEi7rphY5euu6NGEu",
+                  "seq": 604021,
+                  "leaf_id": 8
+                },
+                "grouping": [
+                  {
+                    "group_key": "collection",
+                    "group_value": "AMSNskm2RZqPXCZ6P2z6JLyHWMQF6pQ8RA8Q6x42Xufq",
+                    "verified": true
+                  }
+                ],
+                "royalty": {
+                  "royalty_model": "creators",
+                  "target": null,
+                  "percent": 0.065,
+                  "basis_points": 650,
+                  "primary_sale_happened": false,
+                  "locked": false
+                },
+                "creators": [
+                  {
+                    "address": "AMSNnsE3jVjDbKg15pG13RgJYf6JCFmCVXdj4j22h4Pn",
+                    "share": 0,
+                    "verified": true
+                  },
+                  {
+                    "address": "WoMbXFtdfH8crq2Zi7bQhfGx2Gv8EN4saP13gcdUGog",
+                    "share": 23,
+                    "verified": false
+                  },
+                  {
+                    "address": "ERpxtwaZd6Ee2WD2vRxzhVXj1kaYdPA4xmwEvavX5iMy",
+                    "share": 77,
+                    "verified": false
+                  }
+                ],
+                "ownership": {
+                  "frozen": false,
+                  "delegated": false,
+                  "delegate": null,
+                  "ownership_model": "single",
+                  "owner": "EwjZNHVVcKdu2Dkvp2fpYdfFLmE9E9TierKefdGBxyS"
+                },
+                "supply": null,
+                "mutable": true,
+                "burnt": false
+              }
+            ]
+          }
+        }
+      ],
       "result": {
         "$ref": "#/components/contentDescriptors/AssetList"
       },
