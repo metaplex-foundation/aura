@@ -1712,6 +1712,172 @@
           "$ref": "#/components/schemas/search_assets_options"
         }
       ],
+      "examples": [
+        {
+          "name": "Search asset request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Search asset payload",
+              "value": {
+                "ownerAddress": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw",
+                "jsonUri": "https://arweave.net/c9aGs5fOk7gD4wWnSvmzeqgtfxAGRgtI1jYzvl8-IVs/chiaki-violet-azure-common.json"
+              }
+            }
+          ],
+          "result": {
+            "name": "Search asset result",
+            "value": {
+              "total": 1,
+              "limit": 1000,
+              "items": [
+                {
+                  "interface": "V1_NFT",
+                  "id": "8TrvJBRa6Pzb9BDadqroHhWTHxaxK8Ws8r91oZ2jxaVV",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://arweave.net/c9aGs5fOk7gD4wWnSvmzeqgtfxAGRgtI1jYzvl8-IVs/chiaki-violet-azure-common.json",
+                    "files": [
+                      {
+                        "uri": "https://arweave.net/fFcYDkRHF-936IbAZ3pLTmFAmxF1WlW3KwWndYPgI8Q/chiaki-violet-azure-common.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Body",
+                          "value": "Violet"
+                        },
+                        {
+                          "trait_type": "Background",
+                          "value": "Azure"
+                        },
+                        {
+                          "trait_type": "Rarity",
+                          "value": "Common"
+                        },
+                        {
+                          "trait_type": "Rating",
+                          "value": 55
+                        },
+                        {
+                          "trait_type": "Smile",
+                          "value": 44
+                        },
+                        {
+                          "trait_type": "Hug",
+                          "value": 49
+                        },
+                        {
+                          "trait_type": "Laugh",
+                          "value": 38
+                        },
+                        {
+                          "trait_type": "Heart",
+                          "value": 60
+                        },
+                        {
+                          "trait_type": "Warm",
+                          "value": 35
+                        },
+                        {
+                          "trait_type": "Good",
+                          "value": 66
+                        },
+                        {
+                          "trait_type": "Thanks",
+                          "value": 62
+                        },
+                        {
+                          "trait_type": "Share",
+                          "value": 48
+                        },
+                        {
+                          "trait_type": "Brave",
+                          "value": 75
+                        },
+                        {
+                          "trait_type": "Grow",
+                          "value": 73
+                        }
+                      ],
+                      "description": "MONMONMON is a collection from the creativity of Peelander Yellow. Each MONMONMON has unique and kind abilities that can be used to help others and play with your friends. There are secrets in each MONMONMON. We love you.",
+                      "name": "Chiaki Azure 55",
+                      "symbol": "",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "image": "https://arweave.net/fFcYDkRHF-936IbAZ3pLTmFAmxF1WlW3KwWndYPgI8Q/chiaki-violet-azure-common.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "mRdta4rc2RtsxEUDYuvKLamMZAdW6qHcwuq866Skxxv",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "3daLaunnCdbLtYR4Gas4xFnKLVezdMNqgjZEXtzhWqFA",
+                    "creator_hash": "DJ7kGgdfHEMPJLUTW1YdnGX2JBc3DdD6ybJmkfE4wgSq",
+                    "asset_hash": "BtbdpcxueKdAwpwRtyXMpUMV2Zbjd6YYtWvyiAK2FNQ6",
+                    "tree": "9PHhh7dJqdWnmjwiZEe6bMCFKnRSL436msEhN587adu5",
+                    "seq": 540278,
+                    "leaf_id": 539880
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "PEEiTQbMc87HQ9TbXfHWWyW3bKiMExbGmAiMDR6NUiD",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.030000000000000002,
+                    "basis_points": 300,
+                    "primary_sale_happened": false,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "PEEYx7v42bSRRXAJtaaWJ5NVCM83hKpAf7Kv73vZ9L3",
+                      "share": 0,
+                      "verified": true
+                    },
+                    {
+                      "address": "WoMbXFtdfH8crq2Zi7bQhfGx2Gv8EN4saP13gcdUGog",
+                      "share": 50,
+                      "verified": false
+                    },
+                    {
+                      "address": "6LVnHwYhwiCjtdKYyJgtDUdfMgFwqZG917Ct1WuaTZgC",
+                      "share": 50,
+                      "verified": false
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": false,
+                    "delegate": null,
+                    "ownership_model": "single",
+                    "owner": "N4f6zftYsuu4yT7icsjLwh4i6pB1zvvKbseHj2NmSQw"
+                  },
+                  "supply": null,
+                  "mutable": true,
+                  "burnt": false
+                }
+              ],
+              "cursor": "8TrvJBRa6Pzb9BDadqroHhWTHxaxK8Ws8r91oZ2jxaVV"
+            }
+          }
+        }
+      ],
       "result": {
         "$ref": "#/components/contentDescriptors/AssetList"
       },
