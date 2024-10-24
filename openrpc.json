@@ -922,14 +922,14 @@
       ],
       "params": [
         {
-          "name": "group_key",
+          "name": "groupKey",
           "required": true,
           "schema": {
             "type": "string"
           }
         },
         {
-          "name": "group_value",
+          "name": "groupValue",
           "required": true,
           "schema": {
             "type": "string"
@@ -2439,6 +2439,180 @@
           "$ref": "#/components/schemas/TransactionSignatureList"
         }
       }
+    },
+    {
+      "name": "getGrouping",
+      "summary": "Get the size of the asset group.",
+      "tags": [
+        {
+          "name": "group"
+        },
+        {
+          "name": "asset"
+        }
+      ],
+      "params": [
+        {
+          "name": "groupKey",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "groupValue",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "examples": [
+        {
+          "name": "Get assets by group request",
+          "params": [
+            {
+              "id": 0,
+              "name": "Asset public key",
+              "value": {
+                "groupKey": "collection",
+                "groupValue": "J2ZfLdQsaZ3GCmbucJef3cPnPwGcgjDW1SSYtMdq3L9p",
+                "limit": 1
+              }
+            }
+          ],
+          "result": {
+            "name": "Get assets by group result",
+            "value": {
+              "total": 1,
+              "limit": 1,
+              "items": [
+                {
+                  "interface": "V1_NFT",
+                  "id": "JEAAuQNfGk1NsnCLAQo8GYDFJibJVn8NVxwbujzcUk1K",
+                  "content": {
+                    "$schema": "https://schema.metaplex.com/nft1.0.json",
+                    "json_uri": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-1178.json",
+                    "files": [
+                      {
+                        "uri": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-1178.png",
+                        "mime": "image/png"
+                      }
+                    ],
+                    "metadata": {
+                      "attributes": [
+                        {
+                          "trait_type": "Style",
+                          "value": "Greg Rutkowski-inspired"
+                        },
+                        {
+                          "trait_type": "Subject",
+                          "value": "Bubblegum"
+                        },
+                        {
+                          "trait_type": "Model",
+                          "value": "Stable Diffusion 2.1"
+                        },
+                        {
+                          "trait_type": "Created with 💙 by:",
+                          "value": "TipLink"
+                        }
+                      ],
+                      "description": "NFTs created on Solana using account compression. There are limitless NFTs in this collection, so don't speculate!",
+                      "name": "TipLink Compressed #195",
+                      "symbol": "cTIPLINK",
+                      "token_standard": "NonFungible"
+                    },
+                    "links": {
+                      "image": "https://shdw-drive.genesysgo.net/4mWjD7horGWeG5EvaV9fYWmdjQt2av9984z7JVFteaQ6/0-1178.png"
+                    }
+                  },
+                  "authorities": [
+                    {
+                      "address": "CcatrbGsA7uEDdbcWPvQSKBGesUvrkYX9bNuoQoMP9Pv",
+                      "scopes": [
+                        "full"
+                      ]
+                    }
+                  ],
+                  "compression": {
+                    "eligible": false,
+                    "compressed": true,
+                    "data_hash": "7h5ks8jGrFgp4HxXXshkUkToaWUNkGvJ2KGQoGF8afyb",
+                    "creator_hash": "Ftxh1pV7fDX7PucWUxtgwWh8iWt2JA5ycccpowj498Un",
+                    "asset_hash": "GvQgMyeD2mFVEkpnXcghcixoAeqYRa82DWWZkV4488XD",
+                    "tree": "2kuTFCcjbV22wvUmtmgsFR7cas7eZUzAu96jzJUvUcb7",
+                    "seq": 375,
+                    "leaf_id": 374
+                  },
+                  "grouping": [
+                    {
+                      "group_key": "collection",
+                      "group_value": "J2ZfLdQsaZ3GCmbucJef3cPnPwGcgjDW1SSYtMdq3L9p",
+                      "verified": true
+                    }
+                  ],
+                  "royalty": {
+                    "royalty_model": "creators",
+                    "target": null,
+                    "percent": 0.0,
+                    "basis_points": 0,
+                    "primary_sale_happened": true,
+                    "locked": false
+                  },
+                  "creators": [
+                    {
+                      "address": "GRXPtJLepm9LetFB58N6bxTSnqWPEgs6E2VYgjgmB9tc",
+                      "share": 100,
+                      "verified": false
+                    }
+                  ],
+                  "ownership": {
+                    "frozen": false,
+                    "delegated": true,
+                    "delegate": "GRXPtJLepm9LetFB58N6bxTSnqWPEgs6E2VYgjgmB9tc",
+                    "ownership_model": "single",
+                    "owner": "FUyWNUjqXQaPxDKLD7dNiLbwLuaGgBYYsXqPCBD2nRQt"
+                  },
+                  "supply": null,
+                  "mutable": false,
+                  "burnt": false
+                }
+              ],
+              "cursor": "JEAAuQNfGk1NsnCLAQo8GYDFJibJVn8NVxwbujzcUk1K"
+            }
+          }
+        }
+      ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/AssetList"
+      },
+      "errors": [
+        {
+          "code": -32000,
+          "message": "Database Error: RecordNotFound Error: Asset Not Found"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. Only one pagination parameter supported per query"
+        },
+        {
+          "code": -32000,
+          "message": "Pagination Error. No Pagination Method Selected"
+        },
+        {
+          "code": -32000,
+          "message": "Need to specify `ownerAddress` when using `showNativeBalance`"
+        },
+        {
+          "code": -32000,
+          "message": "Validation Error"
+        },
+        {
+          "code": -32603,
+          "message": "Internal error"
+        }
+      ]
     }
   ],
   "components": {
