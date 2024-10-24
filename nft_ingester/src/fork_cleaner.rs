@@ -1,6 +1,8 @@
 use entities::models::ForkedItem;
 use interface::fork_cleaner::{CompressedTreeChangesManager, ForkChecker};
 use metrics_utils::ForkCleanerMetricsConfig;
+use rocks_db::storage_consistency::BubblegumChangeKey;
+use rocks_db::storage_consistency::DataConsistencyStorage;
 use rocks_db::Storage;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
@@ -46,6 +48,7 @@ where
 {
     cl_items_manager: Arc<CM>,
     fork_checker: Arc<FC>,
+    data_consistency_storage: Arc<dyn DataConsistencyStorage + Send + Sync>,
     metrics: Arc<ForkCleanerMetricsConfig>,
 }
 
@@ -57,11 +60,13 @@ where
     pub fn new(
         cl_items_manager: Arc<CM>,
         fork_checker: Arc<FC>,
+        data_consistency_storage: Arc<dyn DataConsistencyStorage + Send + Sync>,
         metrics: Arc<ForkCleanerMetricsConfig>,
     ) -> Self {
         Self {
             cl_items_manager,
             fork_checker,
+            data_consistency_storage,
             metrics,
         }
     }
@@ -75,6 +80,7 @@ where
 
         let mut forked_slots = 0;
         let mut delete_items = Vec::new();
+        let mut changes_to_delete = Vec::new();
 
         let mut signatures_to_drop = Vec::new();
 
@@ -133,7 +139,7 @@ where
                     // dropping only sequence 5 would result in an incorrect update during backfill.
                     // therefore, we need to drop sequence 4 as well. Sequence 5 must be dropped because
                     // it contains a different tree update in the main branch
-                    for sequences in signature.slot_sequences.values() {
+                    for (slot, sequences) in signature.slot_sequences.iter() {
                         for seq in sequences {
                             delete_items.push(ForkedItem {
                                 tree: signature.tree,
@@ -142,6 +148,12 @@ where
                                 // because deletion will happen by tree and seq values
                                 node_idx: 0,
                             });
+
+                            changes_to_delete.push(BubblegumChangeKey::new(
+                                signature.tree,
+                                *slot,
+                                *seq,
+                            ));
                         }
                     }
                 }
@@ -150,11 +162,17 @@ where
             }
 
             if delete_items.len() >= CI_ITEMS_DELETE_BATCH_SIZE {
+                self.data_consistency_storage
+                    .drop_forked_bubblegum_changes(&changes_to_delete)
+                    .await;
                 self.delete_tree_seq_idx(&mut delete_items).await;
             }
         }
 
         if !delete_items.is_empty() {
+            self.data_consistency_storage
+                .drop_forked_bubblegum_changes(&changes_to_delete)
+                .await;
             self.delete_tree_seq_idx(&mut delete_items).await;
         }
 

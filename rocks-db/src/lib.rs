@@ -4,6 +4,10 @@ use inflector::Inflector;
 use leaf_signatures::LeafSignature;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
+use storage_consistency::{
+    AccountNftBucket, AccountNftChange, AccountNftGrandBucket, BubblegumChange, BubblegumEpoch,
+    BubblegumGrandEpoch,
+};
 
 use asset::{
     AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetOwnerDeprecated, MetadataMintMap,
@@ -73,6 +77,7 @@ pub mod schedule;
 pub mod sequence_consistent;
 pub mod signature_client;
 pub mod slots_dumper;
+pub mod storage_consistency;
 pub mod storage_traits;
 pub mod token_accounts;
 pub mod token_prices;
@@ -132,6 +137,12 @@ pub struct Storage {
     pub inscription_data: Column<InscriptionData>,
     pub leaf_signature: Column<LeafSignature>,
     pub spl_mints: Column<SplMint>,
+    pub bubblegum_changes: Column<BubblegumChange>,
+    pub bubblegum_epochs: Column<BubblegumEpoch>,
+    pub bubblegum_grand_epochs: Column<BubblegumGrandEpoch>,
+    pub acc_nft_changes: Column<AccountNftChange>,
+    pub acc_nft_epochs: Column<AccountNftBucket>,
+    pub acc_nft_grand_epochs: Column<AccountNftGrandBucket>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -185,6 +196,12 @@ impl Storage {
         let inscription_data = Self::column(db.clone(), red_metrics.clone());
         let leaf_signature = Self::column(db.clone(), red_metrics.clone());
         let spl_mints = Self::column(db.clone(), red_metrics.clone());
+        let bubblegum_changes = Self::column(db.clone(), red_metrics.clone());
+        let bubblegum_epochs = Self::column(db.clone(), red_metrics.clone());
+        let bubblegum_grand_epochs = Self::column(db.clone(), red_metrics.clone());
+        let acc_nft_changes = Self::column(db.clone(), red_metrics.clone());
+        let acc_nft_epochs = Self::column(db.clone(), red_metrics.clone());
+        let acc_nft_grand_epochs = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -231,6 +248,12 @@ impl Storage {
             inscription_data,
             leaf_signature,
             spl_mints,
+            bubblegum_changes,
+            bubblegum_epochs,
+            bubblegum_grand_epochs,
+            acc_nft_changes,
+            acc_nft_epochs,
+            acc_nft_grand_epochs,
         }
     }
 
@@ -310,6 +333,12 @@ impl Storage {
             Self::new_cf_descriptor::<InscriptionData>(migration_state),
             Self::new_cf_descriptor::<LeafSignature>(migration_state),
             Self::new_cf_descriptor::<SplMint>(migration_state),
+            Self::new_cf_descriptor::<BubblegumChange>(migration_state),
+            Self::new_cf_descriptor::<BubblegumEpoch>(migration_state),
+            Self::new_cf_descriptor::<BubblegumGrandEpoch>(migration_state),
+            Self::new_cf_descriptor::<AccountNftChange>(migration_state),
+            Self::new_cf_descriptor::<AccountNftBucket>(migration_state),
+            Self::new_cf_descriptor::<AccountNftGrandBucket>(migration_state),
         ]
     }
 
@@ -644,6 +673,18 @@ impl Storage {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_spl_mint",
                     token_accounts::merge_mints,
+                );
+            }
+            BubblegumEpoch::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_bubblegum_epoch",
+                    storage_consistency::merge_bubblgum_epoch_checksum,
+                );
+            }
+            BubblegumGrandEpoch::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_bubblegum_grand_epoch",
+                    storage_consistency::merge_bubblgum_grand_epoch_checksum,
                 );
             }
             _ => {}
