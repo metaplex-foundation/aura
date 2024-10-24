@@ -7,6 +7,7 @@ use nft_ingester::config::{init_logger, setup_config, ApiConfig};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::json_worker::JsonWorker;
+use nft_ingester::rocks_db::RocksDbManager;
 use prometheus_client::registry::Registry;
 use tracing::{error, info};
 
@@ -26,7 +27,8 @@ use usecase::proofs::MaybeProofChecker;
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
-pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
+pub const DEFAULT_SECONDARY_FIRST_ROCKSDB_PATH: &str = "./my_rocksdb_secondary_first";
+pub const DEFAULT_SECONDARY_SECOND_ROCKSDB_PATH_CONTAINER: &str = "./my_rocksdb_secondary_second";
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
@@ -84,24 +86,39 @@ pub async fn main() -> Result<(), IngesterError> {
         .rocks_db_path_container
         .clone()
         .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string());
-    let secondary_storage_path = config
+
+    let secondary_storage_first_path = config
         .rocks_db_secondary_path_container
         .clone()
-        .unwrap_or(DEFAULT_SECONDARY_ROCKSDB_PATH.to_string());
-    let storage = Storage::open_secondary(
+        .unwrap_or(DEFAULT_SECONDARY_FIRST_ROCKSDB_PATH.to_string());
+    let secondary_storage_first = Storage::open_secondary(
         &primary_storage_path,
-        &secondary_storage_path,
+        &secondary_storage_first_path,
         mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
     )
     .unwrap();
 
-    let rocks_storage = Arc::new(storage);
+    let secondary_storage_second_path = config
+        .rocks_db_secondary_path_container
+        .clone()
+        .unwrap_or(DEFAULT_SECONDARY_FIRST_ROCKSDB_PATH.to_string());
+    let secondary_storage_second_path = Storage::open_secondary(
+        &primary_storage_path,
+        &secondary_storage_second_path,
+        mutexed_tasks.clone(),
+        red_metrics.clone(),
+        MigrationState::Last,
+    )
+    .unwrap();
+    let rocks_db_manager = Arc::new(RocksDbManager::new_secondary(
+        secondary_storage_first,
+        secondary_storage_second_path,
+    ));
 
     let rpc_client = Arc::new(RpcClient::new(config.rpc_host));
     let account_balance_getter = Arc::new(AccountBalanceGetterImpl::new(rpc_client.clone()));
-    let cloned_rocks_storage = rocks_storage.clone();
     let mut proof_checker = None;
     if config.check_proofs {
         proof_checker = Some(Arc::new(MaybeProofChecker::new(
@@ -117,7 +134,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 Some(Arc::new(
                     JsonWorker::new(
                         pg_client.clone(),
-                        rocks_storage.clone(),
+                        rocks_db_manager.clone(),
                         json_downloader_metrics.clone(),
                     )
                     .await,
@@ -136,17 +153,18 @@ pub async fn main() -> Result<(), IngesterError> {
         if config.skip_check_tree_gaps {
             None
         } else {
-            Some(cloned_rocks_storage.clone())
+            Some(rocks_db_manager.acquire())
         }
     };
 
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     let cloned_tasks = mutexed_tasks.clone();
     let cloned_rx = shutdown_rx.resubscribe();
+    let rocks_db_manager_clone = rocks_db_manager.clone();
     mutexed_tasks.lock().await.spawn(async move {
         match start_api(
             pg_client.clone(),
-            cloned_rocks_storage.clone(),
+            rocks_db_manager_clone,
             cloned_rx,
             metrics.clone(),
             config.server_port,
@@ -179,16 +197,16 @@ pub async fn main() -> Result<(), IngesterError> {
     // setup dependencies for grpc server
     let uc = usecase::asset_streamer::AssetStreamer::new(
         config.peer_grpc_max_gap_slots,
-        rocks_storage.clone(),
+        rocks_db_manager.acquire(),
     );
     let bs = usecase::raw_blocks_streamer::BlocksStreamer::new(
         config.peer_grpc_max_gap_slots,
-        rocks_storage.clone(),
+        rocks_db_manager.acquire(),
     );
     let serv = grpc::service::PeerGapFillerServiceImpl::new(
         Arc::new(uc),
         Arc::new(bs),
-        rocks_storage.clone(),
+        rocks_db_manager.acquire(),
     );
     let addr = format!("0.0.0.0:{}", config.peer_grpc_port).parse()?;
     let mut cloned_rx = shutdown_rx.resubscribe();
@@ -206,16 +224,10 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    // try synchronizing secondary rocksdb instance every config.rocks_sync_interval_seconds
     let cloned_rx = shutdown_rx.resubscribe();
-    let cloned_rocks_storage = rocks_storage.clone();
-    let dur = tokio::time::Duration::from_secs(config.rocks_sync_interval_seconds);
     mutexed_tasks.lock().await.spawn(async move {
         while cloned_rx.is_empty() {
-            if let Err(e) = cloned_rocks_storage.db.try_catch_up_with_primary() {
-                error!("Sync rocksdb error: {}", e);
-            }
-            tokio::time::sleep(dur).await;
+            rocks_db_manager.catch_up().await;
         }
 
         Ok(())

@@ -17,6 +17,7 @@ use crate::api::dapi::rpc_asset_models::Asset;
 use crate::api::error::DasApiError;
 use crate::api::*;
 use crate::config::JsonMiddlewareConfig;
+use crate::rocks_db::RocksDbManager;
 use dapi::get_asset_signatures::get_asset_signatures;
 use dapi::get_core_fees::get_core_fees;
 use dapi::get_token_accounts::get_token_accounts;
@@ -47,7 +48,7 @@ where
     PPC: ProcessingPossibilityChecker + Sync + Send + 'static,
 {
     pub(crate) pg_client: Arc<PgClient>,
-    rocks_db: Arc<Storage>,
+    rocks_db: Arc<RocksDbManager>,
     metrics: Arc<ApiMetricsConfig>,
     proof_checker: Option<Arc<PC>>,
     tree_gaps_checker: Option<Arc<PPC>>,
@@ -77,7 +78,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         pg_client: Arc<PgClient>,
-        rocks_db: Arc<Storage>,
+        rocks_db: Arc<RocksDbManager>,
         metrics: Arc<ApiMetricsConfig>,
         proof_checker: Option<Arc<PC>>,
         tree_gaps_checker: Option<Arc<PPC>>,
@@ -244,7 +245,7 @@ where
 
         let id = validate_pubkey(payload.id.clone())?;
         let assets = get_proof_for_assets(
-            self.rocks_db.clone(),
+            self.rocks_db.acquire(),
             vec![id],
             self.proof_checker.clone(),
             &self.tree_gaps_checker,
@@ -284,7 +285,7 @@ where
             .collect::<Result<Vec<_>, _>>()?;
 
         let res = get_proof_for_assets(
-            self.rocks_db.clone(),
+            self.rocks_db.acquire(),
             ids,
             self.proof_checker.clone(),
             &self.tree_gaps_checker,
@@ -311,7 +312,7 @@ where
         let options = payload.options.unwrap_or_default();
 
         let res = get_asset(
-            self.rocks_db.clone(),
+            self.rocks_db.acquire(),
             id,
             options,
             self.json_downloader.clone(),
@@ -359,7 +360,7 @@ where
         let options = payload.options.unwrap_or_default();
 
         let res = get_asset_batch(
-            self.rocks_db.clone(),
+            self.rocks_db.acquire(),
             ids,
             options,
             self.json_downloader.clone(),
@@ -391,7 +392,7 @@ where
         let res = self
             .process_request(
                 self.pg_client.clone(),
-                self.rocks_db.clone(),
+                self.rocks_db.acquire(),
                 payload,
                 tasks,
             )
@@ -415,7 +416,7 @@ where
         let res = self
             .process_request(
                 self.pg_client.clone(),
-                self.rocks_db.clone(),
+                self.rocks_db.acquire(),
                 payload,
                 tasks,
             )
@@ -439,7 +440,7 @@ where
         let res = self
             .process_request(
                 self.pg_client.clone(),
-                self.rocks_db.clone(),
+                self.rocks_db.acquire(),
                 payload,
                 tasks,
             )
@@ -463,7 +464,7 @@ where
         let res = self
             .process_request(
                 self.pg_client.clone(),
-                self.rocks_db.clone(),
+                self.rocks_db.acquire(),
                 payload,
                 tasks,
             )
@@ -514,7 +515,7 @@ where
         }
 
         let res = get_token_accounts(
-            self.rocks_db.clone(),
+            self.rocks_db.acquire(),
             owner,
             mint,
             limit.unwrap_or(DEFAULT_LIMIT as u32).into(),
@@ -583,7 +584,7 @@ where
         let res = self
             .process_request(
                 self.pg_client.clone(),
-                self.rocks_db.clone(),
+                self.rocks_db.acquire(),
                 payload,
                 tasks,
             )
@@ -639,7 +640,7 @@ where
         Self::validate_basic_pagination(&pagination, self.max_page_limit)?;
 
         let res = get_asset_signatures(
-            self.rocks_db.clone(),
+            self.rocks_db.acquire(),
             id,
             tree,
             leaf_index,

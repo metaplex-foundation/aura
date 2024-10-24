@@ -88,10 +88,12 @@ pub enum RocksDbManager {
 }
 
 impl RocksDbManager {
+    /// Instantiate a new RocksDbManager with primary storage
     pub fn new_primary(primary: Arc<Storage>) -> Self {
         RocksDbManager::Primary(primary)
     }
 
+    /// Instantiate a new RocksDbManager with secondary storage
     pub fn new_secondary(primary: Storage, secondary: Storage) -> Self {
         RocksDbManager::Secondary(RocksDbSecondaryDuplicateMode {
             rocks_db_instance: [primary.into(), secondary.into()],
@@ -99,6 +101,11 @@ impl RocksDbManager {
         })
     }
 
+    /// Returns the current storage instance
+    ///
+    /// It's always the same storage for primary mode
+    /// For secondary mode, it will return a storage instance
+    /// based on it's sync status with the primary storage
     pub fn acquire(&self) -> Arc<Storage> {
         match self {
             RocksDbManager::Primary(storage) => storage.clone(),
@@ -108,6 +115,9 @@ impl RocksDbManager {
         }
     }
 
+    /// Syncronize secondary rocksdb with primary
+    ///
+    /// One of the DB will be blocked while the other one is processing request
     pub async fn catch_up(&self) {
         const SLEEP_TIME_MS: u64 = 10;
         const NUMBER_OF_CYCLES: u64 = 50;
