@@ -12,6 +12,7 @@ mod tests {
     use nft_ingester::json_worker::JsonWorker;
     use nft_ingester::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
+    use nft_ingester::rocks_db::RocksDbManager;
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
@@ -222,6 +223,7 @@ mod tests {
             .asset_offchain_data
             .put(metadata.url.clone(), metadata)
             .unwrap();
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
 
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
@@ -232,7 +234,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -312,6 +314,7 @@ mod tests {
             .asset_offchain_data
             .put(metadata.url.clone(), metadata)
             .unwrap();
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
 
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
@@ -322,7 +325,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -402,6 +405,7 @@ mod tests {
             .asset_offchain_data
             .put(metadata.url.clone(), metadata)
             .unwrap();
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
 
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
@@ -412,7 +416,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -492,6 +496,7 @@ mod tests {
             .asset_offchain_data
             .put(metadata.url.clone(), metadata)
             .unwrap();
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
 
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
@@ -502,7 +507,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,

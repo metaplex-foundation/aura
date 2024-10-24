@@ -7,6 +7,7 @@ mod tests {
         ShadowInterestBearingConfig, ShadowTransferFee, ShadowTransferFeeConfig, UnixTimestamp,
     };
     use blockbuster::programs::token_extensions::MintAccountExtensions;
+    use nft_ingester::rocks_db::RocksDbManager;
     use std::str::FromStr;
     use std::{collections::HashMap, sync::Arc};
 
@@ -72,6 +73,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -81,7 +83,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db,
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -499,6 +501,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -508,7 +511,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db,
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -648,6 +651,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -657,7 +661,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db,
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -775,6 +779,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -784,7 +789,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -866,14 +871,14 @@ mod tests {
             metadata: "{\"msg\": \"hallo\"}".to_string(),
         };
 
-        env.rocks_env
-            .storage
+        rocks_db
+            .acquire()
             .asset_offchain_data
             .put(offchain_data.url.clone(), offchain_data)
             .unwrap();
 
         let mut batch_storage = BatchSaveStorage::new(
-            env.rocks_env.storage.clone(),
+            rocks_db.acquire(),
             10,
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -915,7 +920,7 @@ mod tests {
         };
 
         let mut batch_storage = BatchSaveStorage::new(
-            env.rocks_env.storage.clone(),
+            rocks_db.acquire(),
             10,
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -946,6 +951,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -955,7 +961,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -1053,14 +1059,14 @@ mod tests {
             metadata: "{\"msg\": \"hallo\"}".to_string(),
         };
 
-        env.rocks_env
-            .storage
+        rocks_db
+            .acquire()
             .asset_offchain_data
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
         let mut batch_storage = BatchSaveStorage::new(
-            env.rocks_env.storage.clone(),
+            rocks_db.acquire(),
             10,
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -1118,6 +1124,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -1127,7 +1134,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -1220,7 +1227,7 @@ mod tests {
         );
 
         let mut batch_storage = BatchSaveStorage::new(
-            env.rocks_env.storage.clone(),
+            rocks_db.acquire(),
             10,
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -1239,8 +1246,8 @@ mod tests {
                 },
             )
             .unwrap();
-        env.rocks_env
-            .storage
+        rocks_db
+            .acquire()
             .asset_offchain_data
             .put(metadata_ofch.url.clone(), metadata_ofch)
             .unwrap();
@@ -1275,6 +1282,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -1284,7 +1292,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db,
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -1495,6 +1503,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -1504,7 +1513,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -1615,7 +1624,7 @@ mod tests {
         }
 
         let mut batch_storage = BatchSaveStorage::new(
-            env.rocks_env.storage.clone(),
+            rocks_db.acquire(),
             10,
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -1718,6 +1727,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -1727,7 +1737,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -1801,7 +1811,7 @@ mod tests {
         }
 
         let mut batch_storage = BatchSaveStorage::new(
-            env.rocks_env.storage.clone(),
+            rocks_db.acquire(),
             10,
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -1982,6 +1992,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -1991,7 +2002,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -2045,6 +2056,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -2054,7 +2066,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -2105,6 +2117,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -2114,7 +2127,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -2165,6 +2178,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -2174,7 +2188,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -2269,6 +2283,7 @@ mod tests {
             .with(predicate::eq(url))
             .times(1)
             .returning(move |_| Ok(offchain_data.to_string()));
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
 
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
@@ -2279,7 +2294,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -2429,6 +2444,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -2438,10 +2454,10 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
-            Some(env.rocks_env.storage.clone()),
+            Some(rocks_db.acquire()),
             50,
             None,
             None,
@@ -2488,6 +2504,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -2497,7 +2514,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -2578,6 +2595,7 @@ mod tests {
         let total_assets = 2000;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, total_assets, SLOT_UPDATED).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -2587,7 +2605,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -2657,11 +2675,9 @@ mod tests {
         let cnt = 0;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let solana_price_updater = SolanaPriceUpdater::new(
-            env.rocks_env.storage.clone(),
-            CoinGeckoPriceFetcher::new(),
-            30,
-        );
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
+        let solana_price_updater =
+            SolanaPriceUpdater::new(rocks_db.acquire(), CoinGeckoPriceFetcher::new(), 30);
         solana_price_updater.update_price().await.unwrap();
         let mut mock_account_balance_getter = MockAccountBalanceGetter::new();
         mock_account_balance_getter
@@ -2676,7 +2692,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db,
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -2738,12 +2754,14 @@ mod tests {
                 },
             );
         });
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
+        let rock_db_instance = rocks_db.acquire();
         let (d, o) = tokio::join!(
             env.rocks_env
                 .storage
                 .asset_dynamic_data
                 .put_batch(collection_dynamic_details),
-            env.rocks_env.storage.asset_offchain_data.put_async(
+            rock_db_instance.asset_offchain_data.put_async(
                 "http://example.com".to_string(),
                 OffChainData {
                     url: "http://example.com".to_string(),
@@ -2788,6 +2806,7 @@ mod tests {
         d.unwrap();
         o.unwrap();
 
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -2797,7 +2816,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -2930,6 +2949,7 @@ mod tests {
         let cnt = 10;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let asset_pk = generated_assets.static_details.first().unwrap().pubkey;
         env.rocks_env
             .storage
@@ -2952,7 +2972,7 @@ mod tests {
                 },
             )
             .unwrap();
-        env.rocks_env.storage.inscription_data.put(inscription_data_pk, InscriptionData {
+        rocks_db.acquire().inscription_data.put(inscription_data_pk, InscriptionData {
             pubkey: inscription_data_pk,
             data: general_purpose::STANDARD.decode("eyJwIjoic3BsLTIwIiwib3AiOiJkZXBsb3kiLCJ0aWNrIjoiaGVsaXVzIiwibWF4IjoiMTAwMCIsImxpbSI6IjEifQ==").unwrap(),
             write_version: 1000,
@@ -2967,7 +2987,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -3019,8 +3039,9 @@ mod tests {
         let cnt = 100;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
-            env.rocks_env.storage.clone(),
+            rocks_db.acquire(),
             env.pg_env.client.clone(),
             env.pg_env.client.clone(),
             200_000,
@@ -3082,8 +3103,9 @@ mod tests {
             amount: 30000,
             write_version: 10,
         };
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let mut batch_storage = BatchSaveStorage::new(
-            env.rocks_env.storage.clone(),
+            rocks_db.acquire(),
             10,
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -3154,7 +3176,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db,
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -3425,9 +3447,9 @@ mod tests {
                 token_group_member: None,
             }),
         };
-
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let mut batch_storage = BatchSaveStorage::new(
-            env.rocks_env.storage.clone(),
+            rocks_db.acquire(),
             10,
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -3447,7 +3469,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db,
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,

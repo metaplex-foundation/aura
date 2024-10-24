@@ -15,6 +15,7 @@ use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 
 use crate::api::backfilling_state_consistency::BackfillingStateConsistencyChecker;
+use crate::rocks_db::RocksDbManager;
 use interface::consistency_check::ConsistencyChecker;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
@@ -50,7 +51,7 @@ pub(crate) struct MiddlewaresData {
 #[allow(clippy::too_many_arguments)]
 pub async fn start_api(
     pg_client: Arc<PgClient>,
-    rocks_db: Arc<Storage>,
+    rocks_db: Arc<RocksDbManager>,
     rx: Receiver<()>,
     metrics: Arc<ApiMetricsConfig>,
     port: u16,
@@ -84,7 +85,7 @@ pub async fn start_api(
                 tasks.clone(),
                 rx.resubscribe(),
                 pg_client.clone(),
-                rocks_db.clone(),
+                rocks_db.acquire(),
                 consistence_synchronization_api_threshold,
             )
             .await;
@@ -98,7 +99,7 @@ pub async fn start_api(
             .run(
                 tasks.clone(),
                 rx.resubscribe(),
-                rocks_db.clone(),
+                rocks_db.acquire(),
                 consistence_backfilling_slots_threshold,
             )
             .await;

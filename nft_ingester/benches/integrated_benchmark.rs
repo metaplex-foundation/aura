@@ -1,6 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use entities::api_req_params::SearchAssets;
-use nft_ingester::{api::middleware::JsonDownloaderMiddleware, index_syncronizer::Synchronizer};
+use nft_ingester::{
+    api::middleware::JsonDownloaderMiddleware, index_syncronizer::Synchronizer,
+    rocks_db::RocksDbManager,
+};
 use rocks_db::storage_traits::AssetIndexReader;
 use setup::TestEnvironment;
 use std::sync::Arc;
@@ -35,9 +38,11 @@ fn search_assets_benchmark(c: &mut Criterion) {
     let limit: u32 = 1000; // Number of records to fetch
     let rt = tokio::runtime::Runtime::new().unwrap();
     let (env, _generated_assets) = rt.block_on(setup_environment(&cli));
+    let rocks_db = RocksDbManager::new_primary(env.rocks_env.storage.clone()).into();
+
     let api = nft_ingester::api::api_impl::DasApi::new(
         env.pg_env.client.clone(),
-        env.rocks_env.storage.clone(),
+        rocks_db,
         Arc::new(ApiMetricsConfig::new()),
         None,
         100,

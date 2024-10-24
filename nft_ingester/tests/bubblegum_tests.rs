@@ -9,6 +9,7 @@ mod tests {
     use nft_ingester::config::JsonMiddlewareConfig;
     use nft_ingester::json_worker::JsonWorker;
     use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
+    use nft_ingester::rocks_db::RocksDbManager;
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
         bubblegum_updates_processor::BubblegumTxProcessor,
@@ -63,6 +64,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -72,7 +74,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -191,6 +193,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let rocks_db = Arc::new(RocksDbManager::new_primary(env.rocks_env.storage.clone()));
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
@@ -200,7 +203,7 @@ mod tests {
             Storage,
         >::new(
             env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
+            rocks_db.clone(),
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,

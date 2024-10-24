@@ -38,6 +38,7 @@ use nft_ingester::config::JsonMiddlewareConfig;
 use nft_ingester::error::IngesterError;
 use nft_ingester::json_worker::JsonWorker;
 use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
+use nft_ingester::rocks_db::RocksDbManager;
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
 use rocks_db::batch_mint::FailedBatchMintKey;
@@ -411,6 +412,7 @@ async fn batch_mint_with_verified_creators_test() {
         .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
         .await;
 
+    let rocks_db = RocksDbManager::new_primary(env.rocks_env.storage.clone()).into();
     let api = nft_ingester::api::api_impl::DasApi::<
         MaybeProofChecker,
         JsonWorker,
@@ -420,7 +422,7 @@ async fn batch_mint_with_verified_creators_test() {
         Storage,
     >::new(
         env.pg_env.client.clone(),
-        env.rocks_env.storage.clone(),
+        rocks_db,
         Arc::new(ApiMetricsConfig::new()),
         None,
         None,
@@ -566,6 +568,7 @@ async fn batch_mint_with_unverified_creators_test() {
         .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
         .await;
 
+    let rocks_db = RocksDbManager::new_primary(env.rocks_env.storage.clone()).into();
     let api = nft_ingester::api::api_impl::DasApi::<
         MaybeProofChecker,
         JsonWorker,
@@ -575,7 +578,7 @@ async fn batch_mint_with_unverified_creators_test() {
         Storage,
     >::new(
         env.pg_env.client.clone(),
-        env.rocks_env.storage.clone(),
+        rocks_db,
         Arc::new(ApiMetricsConfig::new()),
         None,
         None,
@@ -664,6 +667,7 @@ async fn batch_mint_persister_test() {
 
     let merkle_tree = generate_merkle_tree_from_batch_mint(&test_batch_mint);
 
+    let rocks_db = RocksDbManager::new_primary(env.rocks_env.storage.clone()).into();
     let api = nft_ingester::api::api_impl::DasApi::<
         MaybeProofChecker,
         JsonWorker,
@@ -673,7 +677,7 @@ async fn batch_mint_persister_test() {
         Storage,
     >::new(
         env.pg_env.client.clone(),
-        env.rocks_env.storage.clone(),
+        rocks_db,
         Arc::new(ApiMetricsConfig::new()),
         None,
         None,
