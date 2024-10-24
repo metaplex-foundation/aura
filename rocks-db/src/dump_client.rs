@@ -2,9 +2,10 @@ use crate::{asset::AssetCompleteDetails, column::Column, storage_traits::Dumper,
 use async_trait::async_trait;
 use bincode::deserialize;
 use csv::WriterBuilder;
+use entities::asset_generated::asset as fb;
 use entities::{
     enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
-    models::{AssetIndex, TokenAccount},
+    models::{AssetIndex, TokenAccount, UrlWithStatus},
 };
 use hex;
 use inflector::Inflector;
@@ -24,7 +25,7 @@ use usecase::graceful_stop::graceful_stop;
 
 const MPSC_BUFFER_SIZE: usize = 1_000_000;
 
-const ONE_G: usize = 1024 * 1024 * 1024;
+const ONE_G: usize = 1024 * 1024 * 64;
 fn serialize_as_snake_case<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -105,69 +106,69 @@ impl Storage {
         let (iterator_shutdown_tx, iterator_shutdown_rx) = broadcast::channel::<()>(1);
         let (writer_shutdown_tx, writer_shutdown_rx) = broadcast::channel::<()>(1);
 
-        let (tx_indexes, rx_indexes) = async_channel::unbounded();
+        // let (tx_indexes, rx_indexes) = async_channel::unbounded();
 
         // Launch async tokio task for each worker which writes data to csv file.
         // As a result they process every type of data independently.
-        let (tx_metadata, rx_metadata) = mpsc::channel(MPSC_BUFFER_SIZE);
-        let rx_cloned = rx.resubscribe();
-        let shutdown_cloned = writer_shutdown_rx.resubscribe();
+        // let (tx_metadata, rx_metadata) = mpsc::channel(MPSC_BUFFER_SIZE);
+        // let rx_cloned = rx.resubscribe();
+        // let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        let cloned_metrics = synchronizer_metrics.clone();
-        writer_tasks.spawn_blocking(move || {
-            Self::write_to_file(
-                metadata_file_and_path,
-                rx_cloned,
-                shutdown_cloned,
-                rx_metadata,
-                cloned_metrics,
-            )
-        });
+        // let cloned_metrics = synchronizer_metrics.clone();
+        // writer_tasks.spawn_blocking(move || {
+        //     Self::write_to_file(
+        //         metadata_file_and_path,
+        //         rx_cloned,
+        //         shutdown_cloned,
+        //         rx_metadata,
+        //         cloned_metrics,
+        //     )
+        // });
 
-        let (tx_assets, rx_assets) = mpsc::channel(MPSC_BUFFER_SIZE);
-        let rx_cloned = rx.resubscribe();
-        let shutdown_cloned = writer_shutdown_rx.resubscribe();
+        // let (tx_assets, rx_assets) = mpsc::channel(MPSC_BUFFER_SIZE);
+        // let rx_cloned = rx.resubscribe();
+        // let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        let cloned_metrics = synchronizer_metrics.clone();
-        writer_tasks.spawn_blocking(move || {
-            Self::write_to_file(
-                assets_file_and_path,
-                rx_cloned,
-                shutdown_cloned,
-                rx_assets,
-                cloned_metrics,
-            )
-        });
+        // let cloned_metrics = synchronizer_metrics.clone();
+        // writer_tasks.spawn_blocking(move || {
+        //     Self::write_to_file(
+        //         assets_file_and_path,
+        //         rx_cloned,
+        //         shutdown_cloned,
+        //         rx_assets,
+        //         cloned_metrics,
+        //     )
+        // });
 
-        let (tx_creators, rx_creators) = mpsc::channel(MPSC_BUFFER_SIZE);
-        let rx_cloned = rx.resubscribe();
-        let shutdown_cloned = writer_shutdown_rx.resubscribe();
+        // let (tx_creators, rx_creators) = mpsc::channel(MPSC_BUFFER_SIZE);
+        // let rx_cloned = rx.resubscribe();
+        // let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        let cloned_metrics = synchronizer_metrics.clone();
-        writer_tasks.spawn_blocking(move || {
-            Self::write_to_file(
-                creators_file_and_path,
-                rx_cloned,
-                shutdown_cloned,
-                rx_creators,
-                cloned_metrics,
-            )
-        });
+        // let cloned_metrics = synchronizer_metrics.clone();
+        // writer_tasks.spawn_blocking(move || {
+        //     Self::write_to_file(
+        //         creators_file_and_path,
+        //         rx_cloned,
+        //         shutdown_cloned,
+        //         rx_creators,
+        //         cloned_metrics,
+        //     )
+        // });
 
-        let (tx_authority, rx_authority) = mpsc::channel(MPSC_BUFFER_SIZE);
-        let rx_cloned = rx.resubscribe();
-        let shutdown_cloned = writer_shutdown_rx.resubscribe();
+        // let (tx_authority, rx_authority) = mpsc::channel(MPSC_BUFFER_SIZE);
+        // let rx_cloned = rx.resubscribe();
+        // let shutdown_cloned = writer_shutdown_rx.resubscribe();
 
-        let cloned_metrics = synchronizer_metrics.clone();
-        writer_tasks.spawn_blocking(move || {
-            Self::write_to_file(
-                authority_file_and_path,
-                rx_cloned,
-                shutdown_cloned,
-                rx_authority,
-                cloned_metrics,
-            )
-        });
+        // let cloned_metrics = synchronizer_metrics.clone();
+        // writer_tasks.spawn_blocking(move || {
+        //     Self::write_to_file(
+        //         authority_file_and_path,
+        //         rx_cloned,
+        //         shutdown_cloned,
+        //         rx_authority,
+        //         cloned_metrics,
+        //     )
+        // });
 
         // dump fungible assets in separate blocking thread
         let column: Column<TokenAccount> = Self::column(self.db.clone(), self.red_metrics.clone());
@@ -181,48 +182,257 @@ impl Storage {
             )
         });
 
-        let rx_cloned = rx.resubscribe();
-        let shutdown_cloned = iterator_shutdown_rx.resubscribe();
-        iterator_tasks.spawn(Self::iterate_over_indexes(
-            rx_cloned,
-            shutdown_cloned,
-            rx_indexes,
-            tx_metadata,
-            tx_creators,
-            tx_assets,
-            tx_authority,
-            synchronizer_metrics.clone(),
-        ));
+        // let rx_cloned = rx.resubscribe();
+        // let shutdown_cloned = iterator_shutdown_rx.resubscribe();
+        // iterator_tasks.spawn(Self::iterate_over_indexes(
+        //     rx_cloned,
+        //     shutdown_cloned,
+        //     rx_indexes,
+        //     tx_metadata,
+        //     tx_creators,
+        //     tx_assets,
+        //     tx_authority,
+        //     synchronizer_metrics.clone(),
+        // ));
 
-        let core_collections: HashMap<Pubkey, Pubkey> = self
-            .asset_data
-            .iter_start()
-            .filter_map(|a| a.ok())
-            .filter_map(|(_, v)| deserialize::<AssetCompleteDetails>(v.to_vec().as_ref()).ok())
-            .filter_map(|a| {
-                a.static_details
-                    .filter(|sd| {
-                        sd.specification_asset_class == SpecificationAssetClass::MplCoreCollection
-                    })
-                    .map(|_| a.collection)
-                    .flatten()
-            })
-            .filter_map(|a| a.authority.value.map(|v| (a.pubkey, v)))
-            .collect();
+        let mut core_collections: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
+        let mut core_collections_iter = self.db.raw_iterator_cf(&self.asset_data.handle());
+        core_collections_iter.seek_to_first();
+        while core_collections_iter.valid() {
+            let key = core_collections_iter.key().unwrap();
+            let value = core_collections_iter.value().unwrap();
+            let asset = fb::root_as_asset_complete_details(value).map_err(|e| e.to_string())?;
+            if let Some(static_details) = asset.static_details() {
+                if static_details.specification_asset_class()
+                    == fb::SpecificationAssetClass::MplCoreCollection
+                    && asset.collection().is_some()
+                {
+                    let collection = asset.collection().unwrap();
+                    if let Some(authority) = collection.authority() {
+                        if let (Some(auth_value), Some(pk)) =
+                            (authority.value(), collection.pubkey())
+                        {
+                            core_collections
+                                .insert(pk.bytes().to_vec(), auth_value.bytes().to_vec());
+                        }
+                    }
+                }
+            }
+            core_collections_iter.next();
+        }
+
+        let mut metadata_key_set = HashSet::new();
+        let mut authorities_key_set = HashSet::new();
+
+        let buf_writer = BufWriter::with_capacity(ONE_G, assets_file_and_path.0);
+
+        let mut asset_writer = WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(buf_writer);
+
+        let buf_writer = BufWriter::with_capacity(ONE_G, authority_file_and_path.0);
+        let mut authority_writer = WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(buf_writer);
+        let buf_writer = BufWriter::with_capacity(ONE_G, creators_file_and_path.0);
+        let mut creators_writer = WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(buf_writer);
+        
+        let buf_writer = BufWriter::with_capacity(ONE_G, metadata_file_and_path.0);
+        let mut metadata_writer = WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(buf_writer);
 
         // Iteration over `asset_data` column via CUSTOM iterator.
-        let iter = self.asset_data.pairs_iterator(self.asset_data.iter_start());
-        for (_, v) in iter {
-            synchronizer_metrics.inc_num_of_assets_iter("asset_data", 1);
-            let ai = v.to_index_without_url_checks(&core_collections);
-            tx_indexes
-                .send(ai)
-                .await
-                .map_err(|e| format!("Error sending asset indexes to channel: {}", e))?;
+        let mut iter = self.db.raw_iterator_cf(&self.asset_data.handle());
+        iter.seek_to_first();
+        while iter.valid() {
+            let key = iter.key().unwrap();
+            let encoded_key = Self::encode(key);
+            let value = iter.value().unwrap();
+            let asset = fb::root_as_asset_complete_details(value).map_err(|e| e.to_string())?;
+
+            let metadata_url = asset
+                .dynamic_details()
+                .map(|dd| {
+                    dd.url().map(|url| {
+                        url.value()
+                            .map(|v| (UrlWithStatus::get_metadata_id_for(v), v))
+                    })
+                })
+                .flatten()
+                .flatten();
+            if let Some((ref metadata_key, ref url)) = metadata_url {
+                {
+                    if !metadata_key_set.contains(metadata_key) {
+                        metadata_key_set.insert(metadata_key.clone());
+                        if let Err(e) = metadata_writer
+                            .serialize((
+                                Self::encode(metadata_key),
+                                url.to_string(),
+                                "pending".to_string(),
+                            ))
+                        {
+                            error!("Error sending message: {:?}", e);
+                        }
+                        synchronizer_metrics.inc_num_of_records_sent_to_channel("metadata", 1);
+                    }
+                }
+            }
+            let slot_updated = asset.get_slot_updated() as i64;
+            if let Some(cc) = asset
+                .dynamic_details()
+                .and_then(|d| d.creators())
+                .and_then(|u| u.value())
+            {
+                for creator in cc {
+                    let c_key = creator.creator().unwrap().bytes();
+                    if let Err(e) = creators_writer.serialize((
+                        encoded_key.clone(),
+                        Self::encode(c_key),
+                        creator.creator_verified(),
+                        slot_updated,
+                    )) {
+                        error!("Error sending message: {:?}", e);
+                    }
+                    synchronizer_metrics.inc_num_of_records_sent_to_channel("creators", 1);
+                }
+            }
+            let update_authority = asset
+                .collection()
+                .and_then(|c| c.collection())
+                .and_then(|c| c.value())
+                .and_then(|c| core_collections.get(c.bytes()))
+                .map(|b| b.to_owned());
+            let authority = asset
+                .authority()
+                .and_then(|a| a.authority())
+                .map(|a| a.bytes().to_vec());
+            let collection = asset
+                .collection()
+                .and_then(|c| c.collection())
+                .and_then(|uc| uc.value())
+                .map(|c| Self::encode(c.bytes()));
+            let record = AssetRecord {
+                ast_pubkey: encoded_key.clone(),
+                ast_specification_version: SpecificationVersions::V1,
+                ast_specification_asset_class: asset
+                    .static_details()
+                    .unwrap()
+                    .specification_asset_class()
+                    .into(),
+                ast_royalty_target_type: asset
+                    .static_details()
+                    .unwrap()
+                    .royalty_target_type()
+                    .into(),
+                ast_royalty_amount: asset
+                    .dynamic_details()
+                    .map(|d| d.royalty_amount().map(|ra| ra.value()))
+                    .flatten()
+                    .unwrap_or_default() as i64,
+                ast_slot_created: asset.static_details().unwrap().created_at(),
+                ast_owner_type: asset
+                    .owner()
+                    .map(|o| o.owner_type().map(|o| OwnerType::from(o.value())))
+                    .flatten(),
+                ast_owner: asset
+                    .owner()
+                    .map(|o| o.owner().map(|o| o.value().map(|v| v.bytes())))
+                    .flatten()
+                    .flatten()
+                    .map(Self::encode),
+                ast_delegate: asset
+                    .owner()
+                    .map(|o| o.delegate().map(|o| o.value().map(|v| v.bytes())))
+                    .flatten()
+                    .flatten()
+                    .map(Self::encode),
+                ast_authority_fk: if let Some(collection) = collection.as_ref() {
+                    if update_authority.is_some() {
+                        Some(collection.to_owned())
+                    } else if authority.is_some() {
+                        Some(encoded_key.clone())
+                    } else {
+                        None
+                    }
+                } else if authority.is_some() {
+                    Some(encoded_key.clone())
+                } else {
+                    None
+                },
+                ast_collection: collection.clone(),
+                ast_is_collection_verified: asset
+                    .collection()
+                    .and_then(|c| c.is_collection_verified())
+                    .map(|v| v.value()),
+                ast_is_burnt: asset
+                    .dynamic_details()
+                    .and_then(|d| d.is_burnt())
+                    .map(|v| v.value())
+                    .unwrap_or_default(),
+                ast_is_compressible: asset
+                    .dynamic_details()
+                    .and_then(|d| d.is_compressible())
+                    .map(|v| v.value())
+                    .unwrap_or_default(),
+                ast_is_compressed: asset
+                    .dynamic_details()
+                    .and_then(|d| d.is_compressed())
+                    .map(|v| v.value())
+                    .unwrap_or_default(),
+                ast_is_frozen: asset
+                    .dynamic_details()
+                    .and_then(|d| d.is_frozen())
+                    .map(|v| v.value())
+                    .unwrap_or_default(),
+                ast_supply: asset
+                    .dynamic_details()
+                    .and_then(|d| d.supply())
+                    .map(|v| v.value() as i64),
+                ast_metadata_url_id: metadata_url.map(|(k, _)| k).map(Self::encode),
+                ast_slot_updated: slot_updated,
+            };
+
+            if let Err(e) = asset_writer.serialize(record)
+            //tx_assets.send(record).await
+            {
+                error!("Error sending message: {:?}", e);
+            }
+
+            let authority_key = if update_authority.is_some() {
+                collection
+            } else {
+                Some(encoded_key)
+            };
+            let authority = update_authority.or(authority);
+            if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
+                {
+                    if !authorities_key_set.contains(&authority_key) {
+                        authorities_key_set.insert(authority_key.clone());
+                        if let Err(e) = authority_writer.serialize((
+                            authority_key,
+                            Self::encode(authority),
+                            slot_updated,
+                        )) {
+                            error!("Error sending message: {:?}", e);
+                        }
+                        synchronizer_metrics.inc_num_of_records_sent_to_channel("authority", 1);
+                    }
+                }
+            }
             if !rx.is_empty() {
                 return Err("dump cancelled".to_string());
             }
+            iter.next();
         }
+        _ = tokio::try_join!(
+            tokio::task::spawn_blocking(move || asset_writer.flush()),
+            tokio::task::spawn_blocking(move || authority_writer.flush()),
+            tokio::task::spawn_blocking(move || creators_writer.flush()),
+            tokio::task::spawn_blocking(move || metadata_writer.flush())
+        ).map_err(|e|e.to_string())?;
 
         if let Err(e) = fungible_assets_join.await {
             error!(

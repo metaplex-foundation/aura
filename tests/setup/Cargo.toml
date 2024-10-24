@@ -20,3 +20,5 @@ testcontainers = { workspace = true }
 testcontainers-modules = { workspace = true }
 uuid = { workspace = true }
 tracing = { workspace = true }
+rocksdb = { workspace = true }
+flatbuffers = { version="24.3.25", features = ["serialize"]}

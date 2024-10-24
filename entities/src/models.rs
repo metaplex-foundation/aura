@@ -33,11 +33,12 @@ impl UrlWithStatus {
         }
     }
     pub fn get_metadata_id(&self) -> Vec<u8> {
+        Self::get_metadata_id_for(&self.metadata_url)
+    }
+
+    pub fn get_metadata_id_for(url: &str) -> Vec<u8> {
         let mut hasher = Sha256::new();
-        // triming the url to remove any leading or trailing whitespaces,
-        // as some of the legacy versions of the database have contained the urls with whitespaces
-        let url = self.metadata_url.trim();
-        hasher.update(url);
+        hasher.update(url.trim());
         hasher.finalize().to_vec()
     }
 }

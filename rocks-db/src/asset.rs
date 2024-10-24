@@ -7,6 +7,7 @@ use entities::models::{
     AssetIndex, EditionData, OffChainData, SplMint, TokenAccount, UpdateVersion, Updated,
     UrlWithStatus,
 };
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
@@ -16,7 +17,7 @@ use tracing::{error, warn};
 use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
 use crate::Result;
 use crate::TypedColumn;
-
+use entities::asset_generated::asset as fb;
 #[derive(Debug)]
 pub struct AssetSelectedMaps {
     pub asset_complete_details: HashMap<Pubkey, AssetCompleteDetails>,
@@ -51,6 +52,643 @@ impl From<AssetStaticDetails> for AssetCompleteDetails {
             collection: None,
         }
     }
+}
+
+impl AssetCompleteDetails {
+    pub fn convert_to_fb<'a>(
+        &self,
+        builder: &mut FlatBufferBuilder<'a>,
+    ) -> WIPOffset<fb::AssetCompleteDetails<'a>> {
+        let pk = Some(builder.create_vector(&self.pubkey.to_bytes()));
+        let static_details = self
+            .static_details
+            .as_ref()
+            .map(|sd| asset_static_details_to_fb(builder, sd));
+        let dynamic_details = self
+            .dynamic_details
+            .as_ref()
+            .map(|dd| asset_dynamic_details_to_fb(builder, dd));
+        let authority = self
+            .authority
+            .as_ref()
+            .map(|a| asset_authority_to_fb(builder, a));
+        let owner = self.owner.as_ref().map(|o| asset_owner_to_fb(builder, o));
+        let collection = self
+            .collection
+            .as_ref()
+            .map(|c| asset_collection_to_fb(builder, c));
+        fb::AssetCompleteDetails::create(
+            builder,
+            &fb::AssetCompleteDetailsArgs {
+                pubkey: pk,
+                static_details,
+                dynamic_details,
+                authority,
+                owner,
+                collection,
+            },
+        )
+    }
+}
+
+impl AssetStaticDetails {
+    pub fn convert_to_fb<'a>(
+        &self,
+        builder: &mut FlatBufferBuilder<'a>,
+    ) -> WIPOffset<fb::AssetCompleteDetails<'a>> {
+        let pk = Some(builder.create_vector(&self.pubkey.to_bytes()));
+        let static_details = asset_static_details_to_fb(builder, self);
+        fb::AssetCompleteDetails::create(
+            builder,
+            &fb::AssetCompleteDetailsArgs {
+                pubkey: pk,
+                static_details: Some(static_details),
+                dynamic_details: None,
+                authority: None,
+                owner: None,
+                collection: None,
+            },
+        )
+    }
+}
+
+impl AssetDynamicDetails {
+    pub fn convert_to_fb<'a>(
+        &self,
+        builder: &mut FlatBufferBuilder<'a>,
+    ) -> WIPOffset<fb::AssetCompleteDetails<'a>> {
+        let pk = Some(builder.create_vector(&self.pubkey.to_bytes()));
+        let dynamic_details = Some(asset_dynamic_details_to_fb(builder, self));
+        fb::AssetCompleteDetails::create(
+            builder,
+            &fb::AssetCompleteDetailsArgs {
+                pubkey: pk,
+                static_details: None,
+                dynamic_details: dynamic_details,
+                authority: None,
+                owner: None,
+                collection: None,
+            },
+        )
+    }
+}
+
+impl AssetAuthority {
+    pub fn convert_to_fb<'a>(
+        &self,
+        builder: &mut FlatBufferBuilder<'a>,
+    ) -> WIPOffset<fb::AssetCompleteDetails<'a>> {
+        let pubkey = Some(builder.create_vector(&self.pubkey.to_bytes()));
+        let authority = Some(asset_authority_to_fb(builder, self));
+        fb::AssetCompleteDetails::create(
+            builder,
+            &fb::AssetCompleteDetailsArgs {
+                pubkey,
+                static_details: None,
+                dynamic_details: None,
+                authority,
+                owner: None,
+                collection: None,
+            },
+        )
+    }
+}
+
+impl AssetOwner {
+    pub fn convert_to_fb<'a>(
+        &self,
+        builder: &mut FlatBufferBuilder<'a>,
+    ) -> WIPOffset<fb::AssetCompleteDetails<'a>> {
+        let pubkey = Some(builder.create_vector(&self.pubkey.to_bytes()));
+        let owner = Some(asset_owner_to_fb(builder, self));
+        fb::AssetCompleteDetails::create(
+            builder,
+            &fb::AssetCompleteDetailsArgs {
+                pubkey,
+                static_details: None,
+                dynamic_details: None,
+                authority: None,
+                owner,
+                collection: None,
+            },
+        )
+    }
+}
+
+impl AssetCollection {
+    pub fn convert_to_fb<'a>(
+        &self,
+        builder: &mut FlatBufferBuilder<'a>,
+    ) -> WIPOffset<fb::AssetCompleteDetails<'a>> {
+        let pubkey = Some(builder.create_vector(&self.pubkey.to_bytes()));
+        let collection = Some(asset_collection_to_fb(builder, self));
+        fb::AssetCompleteDetails::create(
+            builder,
+            &fb::AssetCompleteDetailsArgs {
+                pubkey,
+                static_details: None,
+                dynamic_details: None,
+                authority: None,
+                owner: None,
+                collection,
+            },
+        )
+    }
+}
+
+fn asset_static_details_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    static_details: &AssetStaticDetails,
+) -> WIPOffset<fb::AssetStaticDetails<'a>> {
+    let pubkey_bytes = pubkey_to_bytes(&static_details.pubkey);
+    let pubkey_fb = builder.create_vector(&pubkey_bytes);
+
+    let edition_address_fb = static_details.edition_address.as_ref().map(|ea| {
+        let ea_bytes = pubkey_to_bytes(ea);
+        builder.create_vector(&ea_bytes)
+    });
+
+    fb::AssetStaticDetails::create(
+        builder,
+        &fb::AssetStaticDetailsArgs {
+            pubkey: Some(pubkey_fb),
+            specification_asset_class: spec_asset_class_to_fb(
+                static_details.specification_asset_class,
+            ),
+            royalty_target_type: royalty_target_type_to_fb(static_details.royalty_target_type),
+            created_at: static_details.created_at,
+            edition_address: edition_address_fb,
+        },
+    )
+}
+
+fn asset_dynamic_details_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    dynamic_details: &AssetDynamicDetails,
+) -> WIPOffset<fb::AssetDynamicDetails<'a>> {
+    let pubkey_bytes = pubkey_to_bytes(&dynamic_details.pubkey);
+    let pubkey_fb = builder.create_vector(&pubkey_bytes);
+
+    let is_compressible_fb = convert_updated_bool_to_fb(builder, &dynamic_details.is_compressible);
+    let is_compressed_fb = convert_updated_bool_to_fb(builder, &dynamic_details.is_compressed);
+    let is_frozen_fb = convert_updated_bool_to_fb(builder, &dynamic_details.is_frozen);
+
+    // Optional fields
+    let supply_fb = dynamic_details
+        .supply
+        .as_ref()
+        .map(|supply| convert_updated_u64_to_fb(builder, supply));
+    let seq_fb = dynamic_details
+        .seq
+        .as_ref()
+        .map(|seq| convert_updated_u64_to_fb(builder, seq));
+    let is_burnt_fb = convert_updated_bool_to_fb(builder, &dynamic_details.is_burnt);
+    let was_decompressed_fb =
+        convert_updated_bool_to_fb(builder, &dynamic_details.was_decompressed);
+    let onchain_data_fb = dynamic_details
+        .onchain_data
+        .as_ref()
+        .map(|onchain_data| convert_updated_string_to_fb(builder, onchain_data));
+    let creators_fb = updated_creators_to_fb(builder, &dynamic_details.creators);
+    let royalty_amount_fb = convert_updated_u16_to_u32_fb(builder, &dynamic_details.royalty_amount);
+    let url_fb = convert_updated_string_to_fb(builder, &dynamic_details.url);
+    let chain_mutability_fb = dynamic_details
+        .chain_mutability
+        .as_ref()
+        .map(|chain_mutability| updated_chain_mutability_to_fb(builder, chain_mutability));
+    let lamports_fb = dynamic_details
+        .lamports
+        .as_ref()
+        .map(|lamports| convert_updated_u64_to_fb(builder, lamports));
+    let executable_fb = dynamic_details
+        .executable
+        .as_ref()
+        .map(|executable| convert_updated_bool_to_fb(builder, executable));
+    let metadata_owner_fb = dynamic_details
+        .metadata_owner
+        .as_ref()
+        .map(|metadata_owner| convert_updated_string_to_fb(builder, metadata_owner));
+    let raw_name_fb = dynamic_details
+        .raw_name
+        .as_ref()
+        .map(|raw_name| convert_updated_string_to_fb(builder, raw_name));
+    let mpl_core_plugins_fb = dynamic_details
+        .mpl_core_plugins
+        .as_ref()
+        .map(|mpl_core_plugins| convert_updated_string_to_fb(builder, mpl_core_plugins));
+    let mpl_core_unknown_plugins_fb =
+        dynamic_details
+            .mpl_core_unknown_plugins
+            .as_ref()
+            .map(|mpl_core_unknown_plugins| {
+                convert_updated_string_to_fb(builder, mpl_core_unknown_plugins)
+            });
+    let rent_epoch_fb = dynamic_details
+        .rent_epoch
+        .as_ref()
+        .map(|rent_epoch| convert_updated_u64_to_fb(builder, rent_epoch));
+    let num_minted_fb = dynamic_details
+        .num_minted
+        .as_ref()
+        .map(|num_minted| convert_updated_u32_to_fb(builder, num_minted));
+    let current_size_fb = dynamic_details
+        .current_size
+        .as_ref()
+        .map(|current_size| convert_updated_u32_to_fb(builder, current_size));
+    let plugins_json_version_fb = dynamic_details
+        .plugins_json_version
+        .as_ref()
+        .map(|plugins_json_version| convert_updated_u32_to_fb(builder, plugins_json_version));
+    let mpl_core_external_plugins_fb =
+        dynamic_details
+            .mpl_core_external_plugins
+            .as_ref()
+            .map(|mpl_core_external_plugins| {
+                convert_updated_string_to_fb(builder, mpl_core_external_plugins)
+            });
+    let mpl_core_unknown_external_plugins_fb = dynamic_details
+        .mpl_core_unknown_external_plugins
+        .as_ref()
+        .map(|mpl_core_unknown_external_plugins| {
+            convert_updated_string_to_fb(builder, mpl_core_unknown_external_plugins)
+        });
+    let mint_extensions_fb = dynamic_details
+        .mint_extensions
+        .as_ref()
+        .map(|mint_extensions| convert_updated_string_to_fb(builder, mint_extensions));
+    // Continue converting other fields similarly
+
+    fb::AssetDynamicDetails::create(
+        builder,
+        &fb::AssetDynamicDetailsArgs {
+            pubkey: Some(pubkey_fb),
+            is_compressible: Some(is_compressible_fb),
+            is_compressed: Some(is_compressed_fb),
+            is_frozen: Some(is_frozen_fb),
+            supply: supply_fb,
+            seq: seq_fb,
+            is_burnt: Some(is_burnt_fb),
+            was_decompressed: Some(was_decompressed_fb),
+            onchain_data: onchain_data_fb,
+            creators: Some(creators_fb),
+            royalty_amount: Some(royalty_amount_fb),
+            url: Some(url_fb),
+            chain_mutability: chain_mutability_fb,
+            lamports: lamports_fb,
+            executable: executable_fb,
+            metadata_owner: metadata_owner_fb,
+            raw_name: raw_name_fb,
+            mpl_core_plugins: mpl_core_plugins_fb,
+            mpl_core_unknown_plugins: mpl_core_unknown_plugins_fb,
+            rent_epoch: rent_epoch_fb,
+            num_minted: num_minted_fb,
+            current_size: current_size_fb,
+            plugins_json_version: plugins_json_version_fb,
+            mpl_core_external_plugins: mpl_core_external_plugins_fb,
+            mpl_core_unknown_external_plugins: mpl_core_unknown_external_plugins_fb,
+            mint_extensions: mint_extensions_fb,
+        },
+    )
+}
+
+fn asset_authority_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    authority: &AssetAuthority,
+) -> WIPOffset<fb::AssetAuthority<'a>> {
+    let pubkey_bytes = pubkey_to_bytes(&authority.pubkey);
+    let pubkey_fb = builder.create_vector(&pubkey_bytes);
+
+    let authority_bytes = pubkey_to_bytes(&authority.authority);
+    let authority_fb = builder.create_vector(&authority_bytes);
+
+    fb::AssetAuthority::create(
+        builder,
+        &fb::AssetAuthorityArgs {
+            pubkey: Some(pubkey_fb),
+            authority: Some(authority_fb),
+            slot_updated: authority.slot_updated,
+            write_version: authority.write_version.unwrap_or(0),
+        },
+    )
+}
+fn asset_owner_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    owner: &AssetOwner,
+) -> WIPOffset<fb::AssetOwner<'a>> {
+    let pubkey_bytes = pubkey_to_bytes(&owner.pubkey);
+    let pubkey_fb = builder.create_vector(&pubkey_bytes);
+
+    let owner_fb = updated_optional_pubkey_to_fb(builder, &owner.owner);
+    let delegate_fb = updated_optional_pubkey_to_fb(builder, &owner.delegate);
+    let owner_type_fb = updated_owner_type_to_fb(builder, &owner.owner_type);
+    let owner_delegate_seq_fb = updated_optional_u64_to_fb(builder, &owner.owner_delegate_seq);
+
+    fb::AssetOwner::create(
+        builder,
+        &fb::AssetOwnerArgs {
+            pubkey: Some(pubkey_fb),
+            owner: Some(owner_fb),
+            delegate: Some(delegate_fb),
+            owner_type: Some(owner_type_fb),
+            owner_delegate_seq: Some(owner_delegate_seq_fb),
+        },
+    )
+}
+fn asset_collection_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    collection: &AssetCollection,
+) -> WIPOffset<fb::AssetCollection<'a>> {
+    let pubkey_bytes = pubkey_to_bytes(&collection.pubkey);
+    let pubkey_fb = builder.create_vector(&pubkey_bytes);
+
+    let collection_fb = updated_pubkey_to_fb(builder, &collection.collection);
+    let is_collection_verified_fb =
+        convert_updated_bool_to_fb(builder, &collection.is_collection_verified);
+    let authority_fb = updated_optional_pubkey_to_fb(builder, &collection.authority);
+
+    fb::AssetCollection::create(
+        builder,
+        &fb::AssetCollectionArgs {
+            pubkey: Some(pubkey_fb),
+            collection: Some(collection_fb),
+            is_collection_verified: Some(is_collection_verified_fb),
+            authority: Some(authority_fb),
+        },
+    )
+}
+
+fn spec_asset_class_to_fb(value: SpecificationAssetClass) -> fb::SpecificationAssetClass {
+    match value {
+        SpecificationAssetClass::Unknown => fb::SpecificationAssetClass::Unknown,
+        SpecificationAssetClass::FungibleToken => fb::SpecificationAssetClass::FungibleToken,
+        SpecificationAssetClass::FungibleAsset => fb::SpecificationAssetClass::FungibleAsset,
+        SpecificationAssetClass::Nft => fb::SpecificationAssetClass::Nft,
+        SpecificationAssetClass::PrintableNft => fb::SpecificationAssetClass::PrintableNft,
+        SpecificationAssetClass::ProgrammableNft => fb::SpecificationAssetClass::ProgrammableNft,
+        SpecificationAssetClass::Print => fb::SpecificationAssetClass::Print,
+        SpecificationAssetClass::TransferRestrictedNft => {
+            fb::SpecificationAssetClass::TransferRestrictedNft
+        }
+        SpecificationAssetClass::NonTransferableNft => {
+            fb::SpecificationAssetClass::NonTransferableNft
+        }
+        SpecificationAssetClass::IdentityNft => fb::SpecificationAssetClass::IdentityNft,
+        SpecificationAssetClass::MplCoreAsset => fb::SpecificationAssetClass::MplCoreAsset,
+        SpecificationAssetClass::MplCoreCollection => {
+            fb::SpecificationAssetClass::MplCoreCollection
+        }
+    }
+}
+
+fn royalty_target_type_to_fb(value: RoyaltyTargetType) -> fb::RoyaltyTargetType {
+    match value {
+        RoyaltyTargetType::Unknown => fb::RoyaltyTargetType::Unknown,
+        RoyaltyTargetType::Creators => fb::RoyaltyTargetType::Creators,
+        RoyaltyTargetType::Fanout => fb::RoyaltyTargetType::Fanout,
+        RoyaltyTargetType::Single => fb::RoyaltyTargetType::Single,
+    }
+}
+
+fn owner_type_to_fb(value: OwnerType) -> fb::OwnerType {
+    match value {
+        OwnerType::Unknown => fb::OwnerType::Unknown,
+        OwnerType::Token => fb::OwnerType::Token,
+        OwnerType::Single => fb::OwnerType::Single,
+    }
+}
+
+fn chain_mutability_to_fb(value: ChainMutability) -> fb::ChainMutability {
+    match value {
+        ChainMutability::Immutable => fb::ChainMutability::Immutable,
+        ChainMutability::Mutable => fb::ChainMutability::Mutable,
+    }
+}
+
+fn convert_updated_bool_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    updated: &Updated<bool>,
+) -> WIPOffset<fb::UpdatedBool<'a>> {
+    let update_version = convert_update_version_to_fb(builder, &updated.update_version);
+
+    fb::UpdatedBool::create(
+        builder,
+        &fb::UpdatedBoolArgs {
+            slot_updated: updated.slot_updated,
+            update_version: Some(update_version),
+            value: updated.value,
+        },
+    )
+}
+
+fn convert_updated_u64_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    updated: &Updated<u64>,
+) -> WIPOffset<fb::UpdatedU64<'a>> {
+    let update_version = convert_update_version_to_fb(builder, &updated.update_version);
+
+    fb::UpdatedU64::create(
+        builder,
+        &fb::UpdatedU64Args {
+            slot_updated: updated.slot_updated,
+            update_version: Some(update_version),
+            value: updated.value,
+        },
+    )
+}
+
+fn convert_updated_u32_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    updated: &Updated<u32>,
+) -> WIPOffset<fb::UpdatedU32<'a>> {
+    let update_version = convert_update_version_to_fb(builder, &updated.update_version);
+
+    fb::UpdatedU32::create(
+        builder,
+        &fb::UpdatedU32Args {
+            slot_updated: updated.slot_updated,
+            update_version: Some(update_version),
+            value: updated.value,
+        },
+    )
+}
+
+fn convert_updated_u16_to_u32_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    updated: &Updated<u16>,
+) -> WIPOffset<fb::UpdatedU32<'a>> {
+    let update_version = convert_update_version_to_fb(builder, &updated.update_version);
+
+    fb::UpdatedU32::create(
+        builder,
+        &fb::UpdatedU32Args {
+            slot_updated: updated.slot_updated,
+            update_version: Some(update_version),
+            value: updated.value as u32,
+        },
+    )
+}
+
+fn convert_updated_string_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    updated: &Updated<String>,
+) -> WIPOffset<fb::UpdatedString<'a>> {
+    let update_version = convert_update_version_to_fb(builder, &updated.update_version);
+
+    let value = builder.create_string(&updated.value);
+
+    fb::UpdatedString::create(
+        builder,
+        &fb::UpdatedStringArgs {
+            slot_updated: updated.slot_updated,
+            update_version: Some(update_version),
+            value: Some(value),
+        },
+    )
+}
+
+fn updated_pubkey_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    updated: &Updated<Pubkey>,
+) -> WIPOffset<fb::UpdatedPubkey<'a>> {
+    let update_version = convert_update_version_to_fb(builder, &updated.update_version);
+
+    let pubkey_bytes = pubkey_to_bytes(&updated.value);
+    let pubkey_fb = builder.create_vector(&pubkey_bytes);
+
+    fb::UpdatedPubkey::create(
+        builder,
+        &fb::UpdatedPubkeyArgs {
+            slot_updated: updated.slot_updated,
+            update_version: Some(update_version),
+            value: Some(pubkey_fb),
+        },
+    )
+}
+
+fn updated_optional_pubkey_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    updated: &Updated<Option<Pubkey>>,
+) -> WIPOffset<fb::UpdatedOptionalPubkey<'a>> {
+    let update_version = convert_update_version_to_fb(builder, &updated.update_version);
+
+    let value = updated.value.as_ref().map(|pubkey| {
+        let pubkey_bytes = pubkey_to_bytes(pubkey);
+        builder.create_vector(&pubkey_bytes)
+    });
+
+    fb::UpdatedOptionalPubkey::create(
+        builder,
+        &fb::UpdatedOptionalPubkeyArgs {
+            slot_updated: updated.slot_updated,
+            update_version: Some(update_version),
+            value,
+        },
+    )
+}
+
+fn updated_optional_u64_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    updated: &Updated<Option<u64>>,
+) -> WIPOffset<fb::UpdatedU64<'a>> {
+    let update_version = convert_update_version_to_fb(builder, &updated.update_version);
+    let mut ub = fb::UpdatedU64Builder::new(builder);
+    ub.add_slot_updated(updated.slot_updated);
+    ub.add_update_version(update_version);
+    if let Some(value) = updated.value {
+        ub.add_value(value);
+    }
+    ub.finish()
+}
+
+fn updated_creators_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    updated: &Updated<Vec<entities::models::Creator>>,
+) -> WIPOffset<fb::UpdatedCreators<'a>> {
+    let update_version = convert_update_version_to_fb(builder, &updated.update_version);
+    let mut creators = Vec::with_capacity(updated.value.len());
+    for creator in &updated.value {
+        let pubkey_bytes = pubkey_to_bytes(&creator.creator);
+        let pubkey_fb = builder.create_vector(&pubkey_bytes);
+
+        let creator_fb = fb::Creator::create(
+            builder,
+            &fb::CreatorArgs {
+                creator: Some(pubkey_fb),
+                creator_verified: creator.creator_verified,
+                creator_share: creator.creator_share as u32,
+            },
+        );
+        creators.push(creator_fb);
+    }
+
+    let creators_fb = builder.create_vector(creators.as_slice());
+
+    fb::UpdatedCreators::create(
+        builder,
+        &fb::UpdatedCreatorsArgs {
+            slot_updated: updated.slot_updated,
+            update_version: Some(update_version),
+            value: Some(creators_fb),
+        },
+    )
+}
+
+fn updated_owner_type_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    updated: &Updated<OwnerType>,
+) -> WIPOffset<fb::UpdatedOwnerType<'a>> {
+    let update_version = convert_update_version_to_fb(builder, &updated.update_version);
+
+    fb::UpdatedOwnerType::create(
+        builder,
+        &fb::UpdatedOwnerTypeArgs {
+            slot_updated: updated.slot_updated,
+            update_version: Some(update_version),
+            value: owner_type_to_fb(updated.value),
+        },
+    )
+}
+
+fn updated_chain_mutability_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    updated: &Updated<ChainMutability>,
+) -> WIPOffset<fb::UpdatedChainMutability<'a>> {
+    let update_version = convert_update_version_to_fb(builder, &updated.update_version);
+
+    fb::UpdatedChainMutability::create(
+        builder,
+        &fb::UpdatedChainMutabilityArgs {
+            slot_updated: updated.slot_updated,
+            update_version: Some(update_version),
+            value: chain_mutability_to_fb(updated.value),
+        },
+    )
+}
+
+fn convert_update_version_to_fb<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    update_version: &Option<UpdateVersion>,
+) -> WIPOffset<fb::UpdateVersion<'a>> {
+    let (version_type, version_value) = match update_version {
+        Some(UpdateVersion::Sequence(seq)) => (fb::UpdateVersionType::Sequence, *seq),
+        Some(UpdateVersion::WriteVersion(wv)) => (fb::UpdateVersionType::WriteVersion, *wv),
+        None => (fb::UpdateVersionType::None, 0),
+    };
+
+    fb::UpdateVersion::create(
+        builder,
+        &fb::UpdateVersionArgs {
+            version_type,
+            version_value,
+        },
+    )
+}
+fn pubkey_to_bytes(pubkey: &Pubkey) -> [u8; 32] {
+    pubkey.to_bytes()
+}
+
+fn bytes_to_pubkey(bytes: &[u8]) -> Pubkey {
+    Pubkey::new(bytes)
 }
 
 impl From<AssetDynamicDetails> for AssetCompleteDetails {

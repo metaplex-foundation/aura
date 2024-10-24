@@ -24,6 +24,7 @@ solana-transaction-status = { workspace = true }
 base64 = { workspace = true }
 mpl-token-metadata = { workspace = true }
 libreplex_inscriptions = { workspace = true }
+flatbuffers = { version="24.3.25", features = ["serialize"]}
 
 [dev-dependencies]
 hex = { workspace = true }
