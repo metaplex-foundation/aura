@@ -227,6 +227,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 error!("Processing account {}: {}", unprocessed_account.key, err);
                 continue;
             }
+            // TODO: write account change
             self.metrics
                 .inc_accounts(unprocessed_account.account.into());
             ack_ids.push(unprocessed_account.id);

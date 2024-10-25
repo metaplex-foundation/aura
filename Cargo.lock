@@ -4546,6 +4546,7 @@ name = "nft_ingester"
 version = "0.7.2"
 dependencies = [
  "anchor-lang 0.30.1",
+ "anyhow",
  "arweave-rs",
  "assertables",
  "async-channel 2.3.1",
@@ -6266,6 +6267,7 @@ dependencies = [
  "futures-util",
  "hex",
  "interface",
+ "lazy_static",
  "lz4",
  "metrics-utils",
  "mockall",

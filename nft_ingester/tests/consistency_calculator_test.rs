@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use nft_ingester::consistency_calculator::calc_bubblegum_checksums;
+    use nft_ingester::consistency_calculator::{calc_acc_nft_checksums, calc_bubblegum_checksums};
     use rocks_db::{
         column::TypedColumn,
         storage_consistency::{
-            BubblegumChange, BubblegumChangeKey, BubblegumEpoch, BubblegumEpochKey,
-            BubblegumGrandEpochKey, Checksum,
+            AccountNft, AccountNftBucket, AccountNftBucketKey, AccountNftChange,
+            AccountNftChangeKey, AccountNftKey, BubblegumChange, BubblegumChangeKey,
+            BubblegumEpoch, BubblegumEpochKey, BubblegumGrandEpochKey, Checksum,
         },
     };
     use setup::rocks::RocksTestEnvironment;
@@ -100,5 +101,126 @@ mod tests {
             Checksum::Value(expected_grand_epoch_checksum),
             grand_epoch_val.checksum
         );
+    }
+
+    #[tokio::test]
+    async fn test_calc_acc_nft_checksums() {
+        let storage = RocksTestEnvironment::new(&[]).storage;
+
+        let acc_change_val = AccountNftChange {};
+
+        let acc1_pubkey = make_pubkey_in_bucket(0);
+        let acc1_change_key1 = AccountNftChangeKey {
+            epoch: 0,
+            account_pubkey: acc1_pubkey,
+            slot: 11,
+            write_version: 1,
+        };
+        let acc1_change_key2 = AccountNftChangeKey {
+            epoch: 0,
+            account_pubkey: acc1_pubkey,
+            slot: 12,
+            write_version: 2,
+        };
+        // won't take part in calculation
+        let acc1_change_key3 = AccountNftChangeKey {
+            epoch: 1,
+            account_pubkey: acc1_pubkey,
+            slot: 10_0001,
+            write_version: 10,
+        };
+        storage
+            .acc_nft_changes
+            .put(acc1_change_key1.clone(), acc_change_val.clone())
+            .unwrap();
+        storage
+            .acc_nft_changes
+            .put(acc1_change_key2.clone(), acc_change_val.clone())
+            .unwrap();
+        storage
+            .acc_nft_changes
+            .put(acc1_change_key3.clone(), acc_change_val.clone())
+            .unwrap();
+
+        let acc2_pubkey = make_pubkey_in_bucket(1);
+        let acc2_change_key1 = AccountNftChangeKey {
+            epoch: 0,
+            account_pubkey: acc2_pubkey,
+            slot: 21,
+            write_version: 21,
+        };
+        storage
+            .acc_nft_changes
+            .put(acc2_change_key1.clone(), acc_change_val.clone())
+            .unwrap();
+
+        // SUT
+        calc_acc_nft_checksums(&storage, 0).await;
+
+        // Verify account last state updated
+        let latest_acc1_key = AccountNftKey::new(acc1_pubkey);
+        let latest_acc1_val = storage
+            .acc_nft_last
+            .get(latest_acc1_key.clone())
+            .unwrap()
+            .unwrap();
+        assert_eq!(latest_acc1_val.last_slot, acc1_change_key2.slot);
+        assert_eq!(
+            latest_acc1_val.last_write_version,
+            acc1_change_key2.write_version
+        );
+
+        let latest_acc2_key = AccountNftKey::new(acc2_pubkey);
+        let latest_acc2_val = storage
+            .acc_nft_last
+            .get(latest_acc2_key.clone())
+            .unwrap()
+            .unwrap();
+        assert_eq!(latest_acc2_val.last_slot, acc2_change_key1.slot);
+        assert_eq!(
+            latest_acc2_val.last_write_version,
+            acc2_change_key1.write_version
+        );
+
+        // Verify buckets are updated
+        let bucket0_val = storage
+            .acc_nft_buckets
+            .get(AccountNftBucketKey::new(0))
+            .unwrap()
+            .unwrap();
+        let bucket1_val = storage
+            .acc_nft_buckets
+            .get(AccountNftBucketKey::new(1))
+            .unwrap()
+            .unwrap();
+
+        let expected_bucket0_checksum = {
+            let mut hasher = Hasher::default();
+            hasher.hash(&AccountNft::encode_key(latest_acc1_key.clone()));
+            hasher.hash(&bincode::serialize(&latest_acc1_val).unwrap());
+            hasher.result().to_bytes()
+        };
+        let expected_bucket1_checksum = {
+            let mut hasher = Hasher::default();
+            hasher.hash(&AccountNft::encode_key(latest_acc2_key.clone()));
+            hasher.hash(&bincode::serialize(&latest_acc2_val).unwrap());
+            hasher.result().to_bytes()
+        };
+        assert_eq!(
+            bucket0_val.checksum,
+            Checksum::Value(expected_bucket0_checksum)
+        );
+        assert_eq!(
+            bucket1_val.checksum,
+            Checksum::Value(expected_bucket1_checksum)
+        );
+    }
+
+    fn make_pubkey_in_bucket(bucket: u16) -> Pubkey {
+        let mut arr = Pubkey::new_unique().to_bytes();
+        let bucket_arr = bucket.to_be_bytes();
+        arr[0] = bucket_arr[0];
+        arr[1] = bucket_arr[1];
+        Pubkey::new_from_array(arr)
     }
 }

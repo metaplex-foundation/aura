@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 serde_derive = { workspace = true }
 env_logger = { workspace = true }
+anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

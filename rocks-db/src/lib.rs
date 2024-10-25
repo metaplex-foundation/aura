@@ -5,8 +5,8 @@ use leaf_signatures::LeafSignature;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 use storage_consistency::{
-    AccountNftBucket, AccountNftChange, AccountNftGrandBucket, BubblegumChange, BubblegumEpoch,
-    BubblegumGrandEpoch,
+    AccountNft, AccountNftBucket, AccountNftChange, AccountNftGrandBucket, BubblegumChange,
+    BubblegumEpoch, BubblegumGrandEpoch,
 };
 
 use asset::{
@@ -141,8 +141,9 @@ pub struct Storage {
     pub bubblegum_epochs: Column<BubblegumEpoch>,
     pub bubblegum_grand_epochs: Column<BubblegumGrandEpoch>,
     pub acc_nft_changes: Column<AccountNftChange>,
-    pub acc_nft_epochs: Column<AccountNftBucket>,
-    pub acc_nft_grand_epochs: Column<AccountNftGrandBucket>,
+    pub acc_nft_last: Column<AccountNft>,
+    pub acc_nft_buckets: Column<AccountNftBucket>,
+    pub acc_nft_grand_buckets: Column<AccountNftGrandBucket>,
     assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
@@ -200,8 +201,9 @@ impl Storage {
         let bubblegum_epochs = Self::column(db.clone(), red_metrics.clone());
         let bubblegum_grand_epochs = Self::column(db.clone(), red_metrics.clone());
         let acc_nft_changes = Self::column(db.clone(), red_metrics.clone());
-        let acc_nft_epochs = Self::column(db.clone(), red_metrics.clone());
-        let acc_nft_grand_epochs = Self::column(db.clone(), red_metrics.clone());
+        let acc_nft_last = Self::column(db.clone(), red_metrics.clone());
+        let acc_nft_buckets = Self::column(db.clone(), red_metrics.clone());
+        let acc_nft_grand_buckets = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -252,8 +254,9 @@ impl Storage {
             bubblegum_epochs,
             bubblegum_grand_epochs,
             acc_nft_changes,
-            acc_nft_epochs,
-            acc_nft_grand_epochs,
+            acc_nft_last,
+            acc_nft_buckets,
+            acc_nft_grand_buckets,
         }
     }
 
@@ -337,6 +340,7 @@ impl Storage {
             Self::new_cf_descriptor::<BubblegumEpoch>(migration_state),
             Self::new_cf_descriptor::<BubblegumGrandEpoch>(migration_state),
             Self::new_cf_descriptor::<AccountNftChange>(migration_state),
+            Self::new_cf_descriptor::<AccountNft>(migration_state),
             Self::new_cf_descriptor::<AccountNftBucket>(migration_state),
             Self::new_cf_descriptor::<AccountNftGrandBucket>(migration_state),
         ]
