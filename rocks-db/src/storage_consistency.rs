@@ -60,6 +60,28 @@ pub fn slots_to_next_epoch(slot: u64) -> u64 {
     slot % 100_000
 }
 
+/// We use 2 leading bytes of an account pubkey as a bucket number,
+/// which means we have 65536 buckets.
+/// This allows to have records in "account NFT changes" collumn family
+/// "grouped" by the bucket number.
+pub fn bucket_for_acc(accout_pubkey: Pubkey) -> u16 {
+    let bytes = accout_pubkey.to_bytes();
+    let mut b = <[u8; 2]>::default();
+    b.clone_from_slice(&bytes[0..2]);
+
+    u16::from_be_bytes(b)
+}
+
+/// We use first 10 bits of an account pubkey as a grand bucket number,
+/// i.e. we have 1024 grand buckets.
+pub fn grand_bucket_for_bucket(bucket: u16) -> u16 {
+    bucket >> 6
+}
+
+pub fn grand_bucket_for_acc(accout_pubkey: Pubkey) -> u16 {
+    grand_bucket_for_bucket(bucket_for_acc(accout_pubkey))
+}
+
 pub const BUBBLEGUM_EPOCH_INVALIDATED: BubblegumEpoch = BubblegumEpoch {
     checksum: Checksum::Invalidated,
 };
@@ -74,6 +96,14 @@ pub const BUBBLEGUM_GRAND_EPOCH_INVALIDATED: BubblegumGrandEpoch = BubblegumGran
 
 pub const BUBBLEGUM_GRAND_EPOCH_CALCULATING: BubblegumGrandEpoch = BubblegumGrandEpoch {
     checksum: Checksum::Calculating,
+};
+
+pub const ACC_BUCKET_INVALIDATE: AccountNftBucket = AccountNftBucket {
+    checksum: Checksum::Invalidated,
+};
+
+pub const ACC_GRAND_BUCKET_INVALIDATE: AccountNftGrandBucket = AccountNftGrandBucket {
+    checksum: Checksum::Invalidated,
 };
 
 /// Checksum value for bubblegum epoch/account bucket.
@@ -264,15 +294,14 @@ impl TypedColumn for BubblegumGrandEpoch {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
 pub struct AccountNftChangeKey {
-    pub slot_number: u64,
+    pub epoch: u32,
     pub account_pubkey: Pubkey,
-    write_version: u64,
+    pub slot: u64,
+    pub write_version: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
-pub struct AccountNftChange {
-    pub checksum: Vec<u8>,
-}
+pub struct AccountNftChange {}
 
 impl TypedColumn for AccountNftChange {
     type KeyType = AccountNftChangeKey;
@@ -290,13 +319,94 @@ impl TypedColumn for AccountNftChange {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
+pub struct AccountNftKey {
+    pub account_pubkey: Pubkey,
+}
+
+impl AccountNftKey {
+    pub fn new(account_pubkey: Pubkey) -> AccountNftKey {
+        AccountNftKey { account_pubkey }
+    }
+
+    /// bincode which is used to encode the AccountNftKey,
+    /// preserves same bytes as in unencoded version of account Pubkey.
+    pub fn extract_bucket(key_raw_bytes: &[u8]) -> u16 {
+        let mut arr = [0u8; 2];
+        arr[0] = key_raw_bytes[0];
+        arr[1] = key_raw_bytes[1];
+        u16::from_be_bytes(arr)
+    }
+
+    pub fn bucket_start_key(bucket: u16) -> AccountNftKey {
+        let leading_bytes = bucket.to_be_bytes();
+        let mut pk = [0u8; 32];
+        pk[0] = leading_bytes[0];
+        pk[1] = leading_bytes[1];
+        AccountNftKey {
+            account_pubkey: Pubkey::new_from_array(pk),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
+pub struct AccountNft {
+    pub last_slot: u64,
+    pub last_write_version: u64,
+}
+
+impl AccountNft {
+    pub fn new(last_slot: u64, last_write_version: u64) -> AccountNft {
+        AccountNft {
+            last_slot,
+            last_write_version,
+        }
+    }
+}
+
+impl TypedColumn for AccountNft {
+    type KeyType = AccountNftKey;
+
+    type ValueType = AccountNft;
+
+    const NAME: &'static str = "ACC_NFT_LAST";
+
+    fn encode_key(key: Self::KeyType) -> Vec<u8> {
+        bincode::serialize(&key).unwrap()
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> crate::Result<Self::KeyType> {
+        let key = bincode::deserialize(&bytes)?;
+        Ok(key)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
 pub struct AccountNftBucketKey {
-    pub epoch_num: u64,
+    pub bucket: u16,
+}
+
+impl AccountNftBucketKey {
+    pub fn new(bucket: u16) -> AccountNftBucketKey {
+        AccountNftBucketKey { bucket }
+    }
+    pub fn grand_bucket_start_key(grand_bucket: u16) -> AccountNftBucketKey {
+        AccountNftBucketKey {
+            bucket: grand_bucket << 6,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
 pub struct AccountNftBucket {
-    pub checksum: Vec<u8>,
+    pub checksum: Checksum,
+}
+
+impl AccountNftBucket {
+    pub fn new(checksum: [u8; 32]) -> AccountNftBucket {
+        AccountNftBucket {
+            checksum: Checksum::Value(checksum),
+        }
+    }
 }
 
 impl TypedColumn for AccountNftBucket {
@@ -316,20 +426,32 @@ impl TypedColumn for AccountNftBucket {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
 pub struct AccountNftGrandBucketKey {
-    pub epoch_num: u64,
-    pub checksum: Vec<u8>,
+    pub grand_bucket: u16,
+}
+
+impl AccountNftGrandBucketKey {
+    pub fn new(grand_bucket: u16) -> AccountNftGrandBucketKey {
+        AccountNftGrandBucketKey { grand_bucket }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
 pub struct AccountNftGrandBucket {
-    pub epoch_num: u64,
-    pub checksum: Vec<u8>,
+    pub checksum: Checksum,
+}
+
+impl AccountNftGrandBucket {
+    pub fn new(checksum: [u8; 32]) -> AccountNftGrandBucket {
+        AccountNftGrandBucket {
+            checksum: Checksum::Value(checksum),
+        }
+    }
 }
 
 impl TypedColumn for AccountNftGrandBucket {
     type KeyType = AccountNftGrandBucketKey;
     type ValueType = Self;
-    const NAME: &'static str = "ACC_NFT_GRAND_EPOCHS";
+    const NAME: &'static str = "ACC_NFT_GRAND_BUCKET";
 
     fn encode_key(key: Self::KeyType) -> Vec<u8> {
         bincode::serialize(&key).unwrap()
