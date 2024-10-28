@@ -107,7 +107,11 @@ impl BatchSaveStorage {
         let acd = data.convert_to_fb(&mut builder);
         builder.finish_minimal(acd);
         self.batch.merge_cf(
-            &self.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+            &self
+                .storage
+                .db
+                .cf_handle(AssetCompleteDetails::NAME)
+                .unwrap(),
             AssetCompleteDetails::encode_key(data.pubkey),
             builder.finished_data(),
         );

@@ -19,7 +19,6 @@ use async_trait::async_trait;
 use entities::asset_generated::asset as fb;
 use entities::enums::{SpecificationAssetClass, TokenMetadataEdition};
 use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated};
-use interface::token_accounts;
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 
@@ -111,7 +110,7 @@ impl Storage {
         asset_ids: Vec<Pubkey>,
     ) -> Result<(Vec<AssetIndex>, HashSet<Pubkey>, HashMap<Pubkey, String>)> {
         let db = self.db.clone();
-        let d_fut = tokio::task::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
             let d = db.batched_multi_get_cf(
                 &db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
                 asset_ids,
@@ -139,15 +138,14 @@ impl Storage {
                         .dynamic_details()
                         .and_then(|d| d.url())
                         .and_then(|u| u.value())
-                        .map(|u| urls.insert(key.clone(), u.to_string()));
+                        .map(|u| urls.insert(key, u.to_string()));
                     asset_indexes.push(asset.into());
                 }
             }
             Ok::<(_, _, _), StorageError>((asset_indexes, assets_collection_pks, urls))
-        });
-        d_fut
-            .await
-            .map_err(|e| StorageError::Common(e.to_string()))?
+        })
+        .await
+        .map_err(|e| StorageError::Common(e.to_string()))?
     }
 
     pub async fn get_assets_with_collections_and_urls(
@@ -159,7 +157,7 @@ impl Storage {
         HashMap<Pubkey, String>,
     )> {
         let db = self.db.clone();
-        let d_fut = tokio::task::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
             let d = db.batched_multi_get_cf(
                 &db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
                 asset_ids,
@@ -187,15 +185,14 @@ impl Storage {
                         .dynamic_details()
                         .and_then(|d| d.url())
                         .and_then(|u| u.value())
-                        .map(|u| urls.insert(key.clone(), u.to_string()));
+                        .map(|u| urls.insert(key, u.to_string()));
                     assets_data.insert(key, asset.into());
                 }
             }
             Ok::<(_, _, _), StorageError>((assets_data, assets_collection_pks, urls))
-        });
-        d_fut
-            .await
-            .map_err(|e| StorageError::Common(e.to_string()))?
+        })
+        .await
+        .map_err(|e| StorageError::Common(e.to_string()))?
     }
 }
 
@@ -203,64 +200,43 @@ impl Storage {
 impl AssetIndexReader for Storage {
     async fn get_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>> {
         let start_time: chrono::DateTime<chrono::Utc> = chrono::Utc::now();
-        // let assets_data_fut = self.asset_data.batch_get(keys.to_vec());
 
-        let assets_i_fut = self.get_asset_indexes_with_collections_and_urls(keys.to_vec());
+        let asset_index_collection_url_fut =
+            self.get_asset_indexes_with_collections_and_urls(keys.to_vec());
         // these data will be used only during live synchronization
         // during full sync will be passed mint keys meaning response will be always empty
         let token_accounts_fut = self.token_accounts.batch_get(keys.to_vec());
 
-        // let (asset_details, token_accounts_details) =
-        //     tokio::join!(assets_data_fut, token_accounts_fut);
-        // let asset_details = asset_details?;
-        // let token_accounts_details = token_accounts_details?;
-
-        let (mut asset_indexes, assets_collection_pks, urls) = assets_i_fut.await?;
-
-        // let assets_collection_pks = asset_details
-        //     .iter()
-        //     .flat_map(|c| c.as_ref().map(|c| c.collection.as_ref()))
-        //     .flatten()
-        //     .map(|c| c.collection.value)
-        //     .collect::<Vec<_>>();
-
-        // let urls = asset_details
-        //     .iter()
-        //     .flatten()
-        //     .filter_map(|asset| asset.dynamic_details.as_ref().map(|d| d.url.value.clone()))
-        //     .collect::<Vec<_>>();
+        let (mut asset_indexes, assets_collection_pks, urls) =
+            asset_index_collection_url_fut.await?;
 
         let offchain_data_downloaded_map_fut = self
             .asset_offchain_data
             .batch_get(urls.values().map(|u| u.to_string()).collect());
-        // let mpl_core_collections_fut = self.asset_data.batch_get(assets_collection_pks);
 
         let mut mpl_core_collections = HashMap::new();
-        let d = self.db.batched_multi_get_cf(
+        let core_collections_iterator = self.db.batched_multi_get_cf(
             &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
             assets_collection_pks,
             false,
         );
-        for asset in d {
+        for asset in core_collections_iterator {
             let asset = asset?;
             if let Some(asset) = asset {
                 let asset = fb::root_as_asset_complete_details(asset.as_ref())
                     .map_err(|e| StorageError::Common(e.to_string()))?;
-                asset
+                if let Some(auth) = asset
                     .collection()
                     .and_then(|collection| collection.authority())
                     .and_then(|auth| auth.value())
-                    .map(|auth| {
-                        let key = Pubkey::new_from_array(
-                            asset.pubkey().unwrap().bytes().try_into().unwrap(),
-                        );
-                        let auth_value = Pubkey::new_from_array(auth.bytes().try_into().unwrap());
-                        mpl_core_collections.insert(key, auth_value);
-                    });
+                {
+                    let key =
+                        Pubkey::new_from_array(asset.pubkey().unwrap().bytes().try_into().unwrap());
+                    let auth_value = Pubkey::new_from_array(auth.bytes().try_into().unwrap());
+                    mpl_core_collections.insert(key, auth_value);
+                };
             }
         }
-        // let (offchain_data_downloaded_map, mpl_core_collections) =
-        //     tokio::join!(offchain_data_downloaded_map_fut, mpl_core_collections_fut);
         let offchain_data_downloaded_map: HashMap<String, bool> = offchain_data_downloaded_map_fut
             .await?
             .into_iter()
@@ -272,15 +248,6 @@ impl AssetIndexReader for Storage {
                 )
             })
             .collect::<HashMap<_, _>>();
-
-        // let mpl_core_collections = mpl_core_collections?
-        //     .into_iter()
-        //     .flatten()
-        //     .filter_map(|asset: crate::asset::AssetCompleteDetails| {
-        //         asset.collection.map(|v| (asset.pubkey, v))
-        //     })
-        //     .filter_map(|(pubkey, asset)| asset.authority.value.map(|v| (pubkey, v)))
-        //     .collect::<HashMap<_, _>>();
 
         asset_indexes.iter_mut().for_each(|ref mut asset_index| {
             if let Some(coll) = asset_index.collection {

@@ -1,31 +1,26 @@
-use crate::{asset::AssetCompleteDetails, column::Column, storage_traits::Dumper, Storage};
+use crate::{column::Column, storage_traits::Dumper, Storage};
 use async_trait::async_trait;
-use bincode::deserialize;
 use csv::WriterBuilder;
 use entities::asset_generated::asset as fb;
 use entities::{
     enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
-    models::{AssetIndex, TokenAccount, UrlWithStatus},
+    models::{TokenAccount, UrlWithStatus},
 };
 use hex;
 use inflector::Inflector;
 use metrics_utils::SynchronizerMetricsConfig;
 use serde::{Serialize, Serializer};
-use solana_sdk::pubkey::Pubkey;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::BufWriter,
     sync::Arc,
 };
-use tokio::{sync::broadcast, task::JoinSet, time::Instant};
-use tokio::{sync::mpsc, task::JoinError};
+use tokio::time::Instant;
 use tracing::{error, info};
-use usecase::graceful_stop::graceful_stop;
 
-const MPSC_BUFFER_SIZE: usize = 1_000_000;
+const BUF_CAPACITY: usize = 1024 * 1024 * 32;
 
-const ONE_G: usize = 1024 * 1024 * 32;
 fn serialize_as_snake_case<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -100,76 +95,6 @@ impl Storage {
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), String> {
-        let mut iterator_tasks = JoinSet::new();
-        let mut writer_tasks = JoinSet::new();
-
-        let (iterator_shutdown_tx, iterator_shutdown_rx) = broadcast::channel::<()>(1);
-        let (writer_shutdown_tx, writer_shutdown_rx) = broadcast::channel::<()>(1);
-
-        // let (tx_indexes, rx_indexes) = async_channel::unbounded();
-
-        // Launch async tokio task for each worker which writes data to csv file.
-        // As a result they process every type of data independently.
-        // let (tx_metadata, rx_metadata) = mpsc::channel(MPSC_BUFFER_SIZE);
-        // let rx_cloned = rx.resubscribe();
-        // let shutdown_cloned = writer_shutdown_rx.resubscribe();
-
-        // let cloned_metrics = synchronizer_metrics.clone();
-        // writer_tasks.spawn_blocking(move || {
-        //     Self::write_to_file(
-        //         metadata_file_and_path,
-        //         rx_cloned,
-        //         shutdown_cloned,
-        //         rx_metadata,
-        //         cloned_metrics,
-        //     )
-        // });
-
-        // let (tx_assets, rx_assets) = mpsc::channel(MPSC_BUFFER_SIZE);
-        // let rx_cloned = rx.resubscribe();
-        // let shutdown_cloned = writer_shutdown_rx.resubscribe();
-
-        // let cloned_metrics = synchronizer_metrics.clone();
-        // writer_tasks.spawn_blocking(move || {
-        //     Self::write_to_file(
-        //         assets_file_and_path,
-        //         rx_cloned,
-        //         shutdown_cloned,
-        //         rx_assets,
-        //         cloned_metrics,
-        //     )
-        // });
-
-        // let (tx_creators, rx_creators) = mpsc::channel(MPSC_BUFFER_SIZE);
-        // let rx_cloned = rx.resubscribe();
-        // let shutdown_cloned = writer_shutdown_rx.resubscribe();
-
-        // let cloned_metrics = synchronizer_metrics.clone();
-        // writer_tasks.spawn_blocking(move || {
-        //     Self::write_to_file(
-        //         creators_file_and_path,
-        //         rx_cloned,
-        //         shutdown_cloned,
-        //         rx_creators,
-        //         cloned_metrics,
-        //     )
-        // });
-
-        // let (tx_authority, rx_authority) = mpsc::channel(MPSC_BUFFER_SIZE);
-        // let rx_cloned = rx.resubscribe();
-        // let shutdown_cloned = writer_shutdown_rx.resubscribe();
-
-        // let cloned_metrics = synchronizer_metrics.clone();
-        // writer_tasks.spawn_blocking(move || {
-        //     Self::write_to_file(
-        //         authority_file_and_path,
-        //         rx_cloned,
-        //         shutdown_cloned,
-        //         rx_authority,
-        //         cloned_metrics,
-        //     )
-        // });
-
         // dump fungible assets in separate blocking thread
         let column: Column<TokenAccount> = Self::column(self.db.clone(), self.red_metrics.clone());
         let cloned_metrics = synchronizer_metrics.clone();
@@ -181,19 +106,6 @@ impl Storage {
                 cloned_metrics,
             )
         });
-
-        // let rx_cloned = rx.resubscribe();
-        // let shutdown_cloned = iterator_shutdown_rx.resubscribe();
-        // iterator_tasks.spawn(Self::iterate_over_indexes(
-        //     rx_cloned,
-        //     shutdown_cloned,
-        //     rx_indexes,
-        //     tx_metadata,
-        //     tx_creators,
-        //     tx_assets,
-        //     tx_authority,
-        //     synchronizer_metrics.clone(),
-        // ));
 
         let mut core_collections: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
         let mut core_collections_iter = self.db.raw_iterator_cf(&self.asset_data.handle());
@@ -224,22 +136,22 @@ impl Storage {
         let mut metadata_key_set = HashSet::new();
         let mut authorities_key_set = HashSet::new();
 
-        let buf_writer = BufWriter::with_capacity(ONE_G, assets_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, assets_file_and_path.0);
 
         let mut asset_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
 
-        let buf_writer = BufWriter::with_capacity(ONE_G, authority_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, authority_file_and_path.0);
         let mut authority_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
-        let buf_writer = BufWriter::with_capacity(ONE_G, creators_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, creators_file_and_path.0);
         let mut creators_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
 
-        let buf_writer = BufWriter::with_capacity(ONE_G, metadata_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, metadata_file_and_path.0);
         let mut metadata_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
@@ -257,14 +169,9 @@ impl Storage {
             }
             let metadata_url = asset
                 .dynamic_details()
-                .map(|dd| {
-                    dd.url().map(|url| {
-                        url.value()
-                            .map(|v| (UrlWithStatus::get_metadata_id_for(v), v))
-                    })
-                })
-                .flatten()
-                .flatten();
+                .and_then(|dd| dd.url())
+                .and_then(|url| url.value())
+                .map(|s| (UrlWithStatus::get_metadata_id_for(s), s));
             if let Some((ref metadata_key, ref url)) = metadata_url {
                 {
                     if !metadata_key_set.contains(metadata_key) {
@@ -274,9 +181,9 @@ impl Storage {
                             url.to_string(),
                             "pending".to_string(),
                         )) {
-                            error!("Error sending message: {:?}", e);
+                            error!("Error writing metadata to csv: {:?}", e);
                         }
-                        synchronizer_metrics.inc_num_of_records_sent_to_channel("metadata", 1);
+                        synchronizer_metrics.inc_num_of_records_written("metadata", 1);
                     }
                 }
             }
@@ -294,9 +201,9 @@ impl Storage {
                         creator.creator_verified(),
                         slot_updated,
                     )) {
-                        error!("Error sending message: {:?}", e);
+                        error!("Error writing creator to csv: {:?}", e);
                     }
-                    synchronizer_metrics.inc_num_of_records_sent_to_channel("creators", 1);
+                    synchronizer_metrics.inc_num_of_records_written("creators", 1);
                 }
             }
             let update_authority = asset
@@ -329,25 +236,24 @@ impl Storage {
                     .into(),
                 ast_royalty_amount: asset
                     .dynamic_details()
-                    .map(|d| d.royalty_amount().map(|ra| ra.value()))
-                    .flatten()
+                    .and_then(|d| d.royalty_amount())
+                    .map(|ra| ra.value())
                     .unwrap_or_default() as i64,
                 ast_slot_created: asset.static_details().unwrap().created_at(),
                 ast_owner_type: asset
                     .owner()
-                    .map(|o| o.owner_type().map(|o| OwnerType::from(o.value())))
-                    .flatten(),
+                    .and_then(|o| o.owner_type().map(|o| OwnerType::from(o.value()))),
                 ast_owner: asset
                     .owner()
-                    .map(|o| o.owner().map(|o| o.value().map(|v| v.bytes())))
-                    .flatten()
-                    .flatten()
+                    .and_then(|o| o.owner())
+                    .and_then(|o| o.value())
+                    .map(|v| v.bytes())
                     .map(Self::encode),
                 ast_delegate: asset
                     .owner()
-                    .map(|o| o.delegate().map(|o| o.value().map(|v| v.bytes())))
-                    .flatten()
-                    .flatten()
+                    .and_then(|o| o.delegate())
+                    .and_then(|o| o.value())
+                    .map(|v| v.bytes())
                     .map(Self::encode),
                 ast_authority_fk: if let Some(collection) = collection.as_ref() {
                     if update_authority.is_some() {
@@ -395,12 +301,10 @@ impl Storage {
                 ast_slot_updated: slot_updated,
             };
 
-            if let Err(e) = asset_writer.serialize(record)
-            //tx_assets.send(record).await
-            {
-                error!("Error sending message: {:?}", e);
+            if let Err(e) = asset_writer.serialize(record) {
+                error!("Error writing asset to csv: {:?}", e);
             }
-
+            synchronizer_metrics.inc_num_of_records_written("asset", 1);
             let authority_key = if update_authority.is_some() {
                 collection
             } else {
@@ -416,9 +320,9 @@ impl Storage {
                             Self::encode(authority),
                             slot_updated,
                         )) {
-                            error!("Error sending message: {:?}", e);
+                            error!("Error writing authority to csv: {:?}", e);
                         }
-                        synchronizer_metrics.inc_num_of_records_sent_to_channel("authority", 1);
+                        synchronizer_metrics.inc_num_of_records_written("authority", 1);
                     }
                 }
             }
@@ -426,6 +330,7 @@ impl Storage {
                 return Err("dump cancelled".to_string());
             }
             iter.next();
+            synchronizer_metrics.inc_num_of_assets_iter("asset", 1);
         }
         _ = tokio::try_join!(
             tokio::task::spawn_blocking(move || asset_writer.flush()),
@@ -435,6 +340,7 @@ impl Storage {
         )
         .map_err(|e| e.to_string())?;
 
+        info!("asset writers are flushed.");
         if let Err(e) = fungible_assets_join.await {
             error!(
                 "Error happened during fungible assets dumping: {}",
@@ -442,24 +348,6 @@ impl Storage {
             );
         }
         info!("Finish dumping fungible assets.");
-
-        // Once we iterate through all the assets in RocksDB we have to send stop signal
-        //     to iterators and wait until they finish its job.
-        // Because that workers populate channel for writers.
-        iterator_shutdown_tx
-            .send(())
-            .map_err(|e| format!("Error sending stop signal for indexes iterator: {}", e))?;
-        info!("Stopping iterators...");
-        graceful_stop(&mut iterator_tasks).await;
-        info!("All iterators are stopped.");
-
-        // Once iterators are stopped it's safe to shut down writers.
-        writer_shutdown_tx
-            .send(())
-            .map_err(|e| format!("Error sending stop signal for file writers: {}", e))?;
-        info!("Stopping writers...");
-        graceful_stop(&mut writer_tasks).await;
-        info!("All writers are stopped.");
 
         Ok(())
     }
@@ -470,7 +358,7 @@ impl Storage {
         batch_size: usize,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) {
-        let buf_writer = BufWriter::with_capacity(ONE_G, file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, file_and_path.0);
         let mut writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
@@ -523,210 +411,6 @@ impl Storage {
                 file_and_path.1, e
             );
         }
-    }
-
-    /// The `iterate_over_indexes` function is an asynchronous method responsible for iterating over a stream of asset indexes and processing them.
-    /// It extracts `metadata`, `creators`, `assets`, and `authority` information from each index and sends this data to channels for further processing.
-    /// The function listens to shut down signals to gracefully stop its operations.
-    #[allow(clippy::too_many_arguments)]
-    async fn iterate_over_indexes(
-        rx_cloned: tokio::sync::broadcast::Receiver<()>,
-        shutdown_cloned: tokio::sync::broadcast::Receiver<()>,
-        rx_indexes_cloned: async_channel::Receiver<AssetIndex>,
-        tx_metadata_cloned: tokio::sync::mpsc::Sender<(String, String, String)>,
-        tx_creators_cloned: tokio::sync::mpsc::Sender<(String, String, bool, i64)>,
-        tx_assets_cloned: tokio::sync::mpsc::Sender<AssetRecord>,
-        tx_authority_cloned: tokio::sync::mpsc::Sender<(String, String, i64)>,
-        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
-    ) -> Result<(), JoinError> {
-        let mut metadata_key_set = HashSet::new();
-        let mut authorities_key_set = HashSet::new();
-
-        loop {
-            // whole application is stopped
-            if !rx_cloned.is_empty() {
-                break;
-            }
-            // process with data collection stopped
-            if !shutdown_cloned.is_empty() && rx_indexes_cloned.is_empty() {
-                break;
-            }
-
-            if rx_indexes_cloned.is_empty() {
-                continue;
-            } else if let Ok(index) = rx_indexes_cloned.try_recv() {
-                let metadata_url = index
-                    .metadata_url
-                    .map(|url| (url.get_metadata_id(), url.metadata_url.trim().to_owned()));
-                if let Some((ref metadata_key, ref url)) = metadata_url {
-                    {
-                        if !metadata_key_set.contains(metadata_key) {
-                            metadata_key_set.insert(metadata_key.clone());
-                            if let Err(e) = tx_metadata_cloned
-                                .send((
-                                    Self::encode(metadata_key),
-                                    url.to_string(),
-                                    "pending".to_string(),
-                                ))
-                                .await
-                            {
-                                error!("Error sending message: {:?}", e);
-                            }
-                            synchronizer_metrics.inc_num_of_records_sent_to_channel("metadata", 1);
-                        }
-                    }
-                }
-                for creator in index.creators {
-                    if let Err(e) = tx_creators_cloned
-                        .send((
-                            Self::encode(index.pubkey.to_bytes()),
-                            Self::encode(creator.creator),
-                            creator.creator_verified,
-                            index.slot_updated,
-                        ))
-                        .await
-                    {
-                        error!("Error sending message: {:?}", e);
-                    }
-                    synchronizer_metrics.inc_num_of_records_sent_to_channel("creators", 1);
-                }
-                let record = AssetRecord {
-                    ast_pubkey: Self::encode(index.pubkey.to_bytes()),
-                    ast_specification_version: index.specification_version,
-                    ast_specification_asset_class: index.specification_asset_class,
-                    ast_royalty_target_type: index.royalty_target_type,
-                    ast_royalty_amount: index.royalty_amount,
-                    ast_slot_created: index.slot_created,
-                    ast_owner_type: index.owner_type,
-                    ast_owner: index.owner.map(Self::encode),
-                    ast_delegate: index.delegate.map(Self::encode),
-                    ast_authority_fk: if let Some(collection) = index.collection {
-                        if index.update_authority.is_some() {
-                            Some(Self::encode(collection))
-                        } else if index.authority.is_some() {
-                            Some(Self::encode(index.pubkey))
-                        } else {
-                            None
-                        }
-                    } else if index.authority.is_some() {
-                        Some(Self::encode(index.pubkey))
-                    } else {
-                        None
-                    },
-                    ast_collection: index.collection.map(Self::encode),
-                    ast_is_collection_verified: index.is_collection_verified,
-                    ast_is_burnt: index.is_burnt,
-                    ast_is_compressible: index.is_compressible,
-                    ast_is_compressed: index.is_compressed,
-                    ast_is_frozen: index.is_frozen,
-                    ast_supply: index.supply,
-                    ast_metadata_url_id: metadata_url.map(|(k, _)| k).map(Self::encode),
-                    ast_slot_updated: index.slot_updated,
-                };
-                if let Err(e) = tx_assets_cloned.send(record).await {
-                    error!("Error sending message: {:?}", e);
-                }
-                let authority = index.update_authority.or(index.authority);
-                let authority_key = if index.update_authority.is_some() {
-                    index.collection
-                } else {
-                    Some(index.pubkey)
-                };
-                if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
-                    {
-                        if !authorities_key_set.contains(&authority_key) {
-                            authorities_key_set.insert(authority_key);
-                            if let Err(e) = tx_authority_cloned
-                                .send((
-                                    Self::encode(authority_key.to_bytes()),
-                                    Self::encode(authority.to_bytes()),
-                                    index.slot_updated,
-                                ))
-                                .await
-                            {
-                                error!("Error sending message: {:?}", e);
-                            }
-                            synchronizer_metrics.inc_num_of_records_sent_to_channel("authority", 1);
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// The `write_to_file` function is an asynchronous method responsible for writing
-    ///     serialized data to a file using a buffered writer.
-    /// It listens for data from a `tokio::sync::mpsc::Receiver` channel,
-    ///     and the writing process is controlled by two shutdown signals: one for the application and one for the worker.
-    ///
-    /// # Args:
-    /// `file_and_path` - A tuple containing:
-    ///     A File object used for writing the serialized data.
-    ///     A String representing the file path (for logging and debugging purposes).
-    ///
-    /// `application_shutdown` - A `broadcast::Receiver` channel that listens for an application-wide shutdown signal.
-    ///     If this signal is received, the loop will terminate, and writing will stop.
-    ///
-    /// `worker_shutdown` - A `broadcast::Receiver` channel that listens for a worker-specific shutdown signal.
-    ///     Writing will stop if both the worker shutdown signal is received and there is no more data to process in the `data_channel`.
-    ///
-    /// `data_channel` - An `mpsc::Receiver` channel that provides the serialized data (`T: Serialize`) to be written to the file.
-    ///     Data is processed in the loop until one of the shutdown signals is triggered.
-    fn write_to_file<T: Serialize>(
-        file_and_path: (File, String),
-        application_shutdown: tokio::sync::broadcast::Receiver<()>,
-        worker_shutdown: tokio::sync::broadcast::Receiver<()>,
-        mut data_channel: tokio::sync::mpsc::Receiver<T>,
-        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
-    ) -> Result<(), JoinError> {
-        let buf_writer = BufWriter::with_capacity(ONE_G, file_and_path.0);
-        let mut writer = WriterBuilder::new()
-            .has_headers(false)
-            .from_writer(buf_writer);
-
-        loop {
-            if !application_shutdown.is_empty() {
-                break;
-            }
-
-            if !worker_shutdown.is_empty() && data_channel.is_empty() {
-                break;
-            }
-
-            if data_channel.is_empty() {
-                continue;
-            } else if let Ok(k) = data_channel.try_recv() {
-                let start = Instant::now();
-
-                if let Err(e) = writer.serialize(k).map_err(|e| e.to_string()) {
-                    error!(
-                        "Error while writing data into {:?}. Err: {:?}",
-                        file_and_path.1, e
-                    );
-                }
-
-                synchronizer_metrics.set_file_write_time(
-                    file_and_path.1.as_ref(),
-                    start.elapsed().as_millis() as f64,
-                );
-                synchronizer_metrics.inc_num_of_records_written(&file_and_path.1, 1);
-            }
-        }
-
-        let start = Instant::now();
-        if let Err(e) = writer.flush().map_err(|e| e.to_string()) {
-            error!(
-                "Error happened during flushing data to {:?}. Err: {:?}",
-                file_and_path.1, e
-            );
-        }
-        synchronizer_metrics
-            .set_file_write_time(file_and_path.1.as_ref(), start.elapsed().as_millis() as f64);
-        synchronizer_metrics.inc_num_of_records_written(&file_and_path.1, 1);
-
-        Ok(())
     }
 
     fn encode<T: AsRef<[u8]>>(v: T) -> String {

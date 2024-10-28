@@ -97,12 +97,37 @@ impl Storage {
 
     pub async fn apply_migration_merge(&self) -> Result<()> {
         let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2048);
-        convert_and_merge!(self.asset_static_data, builder, &self.asset_data.handle(), self.db);
-        convert_and_merge!(self.asset_dynamic_data, builder, &self.asset_data.handle(), self.db);
-        convert_and_merge!(self.asset_authority_data, builder, &self.asset_data.handle(), self.db);
-        convert_and_merge!(self.asset_owner_data, builder, &self.asset_data.handle(), self.db);
-        convert_and_merge!(self.asset_collection_data, builder, &self.asset_data.handle(), self.db);
-        
+        convert_and_merge!(
+            self.asset_static_data,
+            builder,
+            &self.asset_data.handle(),
+            self.db
+        );
+        convert_and_merge!(
+            self.asset_dynamic_data,
+            builder,
+            &self.asset_data.handle(),
+            self.db
+        );
+        convert_and_merge!(
+            self.asset_authority_data,
+            builder,
+            &self.asset_data.handle(),
+            self.db
+        );
+        convert_and_merge!(
+            self.asset_owner_data,
+            builder,
+            &self.asset_data.handle(),
+            self.db
+        );
+        convert_and_merge!(
+            self.asset_collection_data,
+            builder,
+            &self.asset_data.handle(),
+            self.db
+        );
+
         self.db.drop_cf(AssetStaticDetails::NAME)?;
         self.db.drop_cf(AssetDynamicDetails::NAME)?;
         self.db.drop_cf(AssetAuthority::NAME)?;

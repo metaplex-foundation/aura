@@ -16,7 +16,6 @@ use rocks_db::{
     Storage,
 };
 use tokio::{sync::Mutex, task::JoinSet};
-use tracing::error;
 
 const DEFAULT_TEST_URL: &str = "http://example.com";
 
@@ -170,7 +169,8 @@ impl RocksTestEnvironment {
                     let asset_data = complete_asset.convert_to_fb(&mut builder);
                     builder.finish_minimal(asset_data);
                     batch.put_cf(
-                        &self.storage
+                        &self
+                            .storage
                             .db
                             .cf_handle(AssetCompleteDetails::NAME)
                             .unwrap(),

@@ -1,4 +1,3 @@
-use entities::models::AssetIndex;
 use metrics_utils::SynchronizerMetricsConfig;
 use postgre_client::storage_traits::{AssetIndexStorage, TempClientProvider};
 use rocks_db::{

@@ -1,12 +1,9 @@
 use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
-use std::io::Read;
 use std::sync::atomic::Ordering;
 
-use crate::asset::{
-    self, AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey,
-};
-use crate::column::{Column, TypedColumn};
+use crate::asset::{AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey};
+use crate::column::Column;
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
@@ -15,7 +12,7 @@ use entities::asset_generated::asset as fb;
 use entities::enums::TokenMetadataEdition;
 use entities::models::{EditionData, PubkeyWithSlot};
 use futures_util::FutureExt;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 impl Storage {
     fn get_next_asset_update_seq(&self) -> Result<u64> {
@@ -89,48 +86,14 @@ macro_rules! to_map {
 }
 
 impl Storage {
-// todo: remove this method
-    // pub async fn get_assets_b(
-    //     &self,
-    //     asset_ids: Vec<Pubkey>,
-    // ) -> Result<HashMap<Pubkey, AssetCompleteDetails>> {
-    //     let db = self.db.clone();
-    //     let d_fut = tokio::task::spawn_blocking(move || {
-    //         let d = db.batched_multi_get_cf(
-    //             &db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
-    //             asset_ids,
-    //             false, //sorting the input and using true here slows down the method by 5% for batches or 15% for an indiviual asset
-    //         );
-    //         let mut assets_data = HashMap::new();
-            
-    //         for asset in d {
-    //             let asset = asset?;
-    //             if let Some(asset) = asset {
-    //                 let asset = fb::root_as_asset_complete_details(asset.as_ref())
-    //                     .map_err(|e| StorageError::Common(e.to_string()))?;
-    //                 let key =
-    //                     Pubkey::new_from_array(asset.pubkey().unwrap().bytes().try_into().unwrap());
-    //                 assets_data.insert(key, asset.into());
-    //             }
-    //         }
-    //         Ok(assets_data)
-    //     });
-    //     d_fut
-    //         .await
-    //         .map_err(|e| StorageError::Common(e.to_string()))?
-    // }
-
     pub async fn get_asset_selected_maps_async(
         &self,
         asset_ids: Vec<Pubkey>,
         owner_address: &Option<Pubkey>,
         options: &Options,
     ) -> Result<AssetSelectedMaps> {
-        let d_fut = self.get_assets_with_collections_and_urls(asset_ids.clone());
-        // let d_fut = self.get_assets_b(asset_ids.clone());
-
-        // let assets_data_fut = self.asset_data.batch_get(asset_ids.clone());
-
+        let assets_with_collections_and_urls_fut =
+            self.get_assets_with_collections_and_urls(asset_ids.clone());
         let assets_leaf_fut = self.asset_leaf_data.batch_get(asset_ids.clone());
         let token_accounts_fut = if let Some(owner_address) = owner_address {
             self.get_raw_token_accounts(Some(*owner_address), None, None, None, None, None, true)
@@ -145,56 +108,12 @@ impl Storage {
         } else {
             async { Ok(Vec::new()) }.boxed()
         };
-        let (mut assets_data, assets_collection_pks, mut urls) = d_fut.await?;
-        // let mut assets_data = d_fut.await?;
+        let (mut assets_data, assets_collection_pks, mut urls) =
+            assets_with_collections_and_urls_fut.await?;
 
-        // let mut assets_data = HashMap::new();
-        // let mut assets_collection_pks = HashSet::new();
-
-        // let mut urls = HashMap::new();
-        // let d = d_fut
-        //     .await
-        //     .map_err(|e| StorageError::Common(e.to_string()))?;
-        // for asset in d {
-        //     let asset = asset?;
-        //     if let Some(asset) = asset {
-        //         let asset = fb::root_as_asset_complete_details(asset.as_ref())
-        //             .map_err(|e| StorageError::Common(e.to_string()))?;
-        //         let key =
-        //             Pubkey::new_from_array(asset.pubkey().unwrap().bytes().try_into().unwrap());
-        //         asset
-        //             .collection()
-        //             .and_then(|c| c.collection())
-        //             .and_then(|c| c.value())
-        //             .map(|c| assets_collection_pks.insert(Pubkey::try_from(c.bytes()).unwrap()));
-        //         asset
-        //             .dynamic_details()
-        //             .and_then(|d| d.url())
-        //             .and_then(|u| u.value())
-        //             .map(|u| urls.insert(key.clone(), u.to_string()));
-        //         assets_data.insert(key, asset.into());
-        //     }
-        // }
-        // let mut assets_data = to_map!(assets_data_fut.await);
-        // let assets_collection_pks = assets_data
-        //     .iter()
-        //     .filter_map(|(_, asset)| asset.collection.as_ref())
-        //     .map(|c| c.collection.value)
-        //     .collect::<Vec<_>>();
-
-        // let mut urls: HashMap<_, _> = assets_data
-        //     .iter()
-        //     .filter_map(|(key, asset)| {
-        //         asset
-        //             .dynamic_details
-        //             .as_ref()
-        //             .map(|d| (*key, d.url.value.clone()))
-        //     })
-        //     .collect();
         // todo: consider async/future here, but not likely as the very next call depends on urls from this one
         if !assets_collection_pks.is_empty() {
             let assets_collection_pks = assets_collection_pks.into_iter().collect::<Vec<_>>();
-            // assets_collection_pks.sort_unstable();
             let collection_d = self.db.batched_multi_get_cf(
                 &self.asset_data.handle(),
                 assets_collection_pks.clone(),
@@ -212,33 +131,12 @@ impl Storage {
                             .dynamic_details()
                             .and_then(|d| d.url())
                             .and_then(|u| u.value())
-                            .map(|u| urls.insert(key.clone(), u.to_string()));
+                            .map(|u| urls.insert(key, u.to_string()));
                     }
                     assets_data.insert(key, asset.into());
                 }
             }
         }
-
-        // let collection_data = to_map!(
-        //     self.asset_data
-        //         .batch_get(assets_collection_pks.clone())
-        //         .await
-        // );
-        // assets_data.extend(collection_data.clone());
-
-        // if options.show_collection_metadata {
-        //     let collection_urls: HashMap<_, _> = collection_data
-        //         .iter()
-        //         .filter_map(|(key, asset)| {
-        //             asset
-        //                 .dynamic_details
-        //                 .as_ref()
-        //                 .map(|d| (*key, d.url.value.clone()))
-        //         })
-        //         .collect();
-
-        //     urls.extend(collection_urls.clone());
-        // };
 
         let offchain_data_fut = self
             .asset_offchain_data

@@ -8,7 +8,10 @@ use std::{
 use criterion::{criterion_group, criterion_main, Criterion};
 use entities::{api_req_params::Options, enums::SpecificationAssetClass};
 use metrics_utils::SynchronizerMetricsConfig;
-use rocks_db::{storage_traits::{AssetIndexReader, Dumper}, Storage};
+use rocks_db::{
+    storage_traits::{AssetIndexReader, Dumper},
+    Storage,
+};
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 use tracing::info;
@@ -97,10 +100,8 @@ async fn bench_get_assets_individually(storage: Arc<Storage>, pubkeys: Vec<Pubke
 
 async fn bench_dump(storage: Arc<Storage>, batch_size: usize) {
     let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
-    // let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-    // let temp_dir_path = temp_dir.path();
-    let temp_dir_path =
-        Path::new("/Users/stanislavcherviakov/src/everstake/metaplex/utility-chain/datadir");
+    let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
+    let temp_dir_path = temp_dir.path();
 
     let sync_metrics = Arc::new(SynchronizerMetricsConfig::new());
     storage
@@ -120,10 +121,8 @@ async fn test_dump() {
     env.generate_assets(cnt, 25).await;
     println!("assets generated");
     let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
-    // let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-    // let temp_dir_path = temp_dir.path();
-    let temp_dir_path =
-        Path::new("/Users/stanislavcherviakov/src/everstake/metaplex/utility-chain/datadir");
+    let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
+    let temp_dir_path = temp_dir.path();
     let sync_metrics = Arc::new(SynchronizerMetricsConfig::new());
     env.storage
         .dump_db(temp_dir_path, batch_size, &rx, sync_metrics)
@@ -163,7 +162,12 @@ fn dump_benchmark(c: &mut Criterion) {
         })
     });
     group.bench_function("get_asset_indexes", |b| {
-        b.iter(|| rt.block_on(bench_get_asset_indexes(storage.clone(), sampled_pubkeys.clone())))
+        b.iter(|| {
+            rt.block_on(bench_get_asset_indexes(
+                storage.clone(),
+                sampled_pubkeys.clone(),
+            ))
+        })
     });
     // group.bench_function("batch_get_keys", |b| {
     //     b.iter(|| rt.block_on(bench_batch_get_keys(storage.clone(), sampled_pubkeys.clone())))

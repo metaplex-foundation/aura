@@ -62,8 +62,7 @@ fn convert_rocks_asset_model(
         .cloned();
     let collection_dynamic_data = collection_data
         .as_ref()
-        .map(|c| c.dynamic_details.clone())
-        .flatten();
+        .and_then(|c| c.dynamic_details.clone());
 
     let inscription = asset_selected_maps.inscriptions.get(asset_pubkey).cloned();
     Ok(FullAsset {
@@ -77,7 +76,7 @@ fn convert_rocks_asset_model(
         edition_data: static_data
             .edition_address
             .and_then(|e| asset_selected_maps.editions.get(&e).cloned()),
-        mpl_core_collections: collection_data.map(|c| c.collection).flatten().clone(),
+        mpl_core_collections: collection_data.and_then(|c| c.collection).clone(),
         collection_offchain_data: collection_dynamic_data
             .as_ref()
             .and_then(|dynamic_data| {
@@ -130,8 +129,7 @@ fn asset_selected_maps_into_full_asset(
         if let Some(collection_data) = asset_selected_maps
             .asset_complete_details
             .get(id)
-            .map(|a| a.collection.clone())
-            .flatten()
+            .and_then(|a| a.collection.clone())
         {
             if !collection_data.is_collection_verified.value {
                 return None;

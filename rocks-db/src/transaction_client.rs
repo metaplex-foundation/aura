@@ -12,7 +12,6 @@ use crate::{
     transaction::{InstructionResult, TransactionResult, TransactionResultPersister},
     Storage,
 };
-use entities::asset_generated::asset as fb;
 
 #[async_trait]
 impl TransactionResultPersister for Storage {
@@ -91,11 +90,7 @@ impl Storage {
                 let acd = AssetCompleteDetails {
                     pubkey: pk,
                     static_details: update.static_update.as_ref().map(|s| s.details.clone()),
-                    dynamic_details: update
-                        .update
-                        .as_ref()
-                        .map(|u| u.dynamic_data.clone())
-                        .flatten(),
+                    dynamic_details: update.update.as_ref().and_then(|u| u.dynamic_data.clone()),
                     owner: update.owner_update.as_ref().map(|o| o.details.clone()),
                     authority: update.authority_update.as_ref().map(|a| a.details.clone()),
                     collection: update.collection_update.as_ref().map(|c| c.details.clone()),
@@ -108,8 +103,8 @@ impl Storage {
                     AssetCompleteDetails::encode_key(pk),
                     builder.finished_data(),
                 );
-                if let Some(leaf) = update.update.as_ref().map(|u| u.leaf.as_ref()).flatten() {
-                    self.asset_leaf_data.merge_with_batch(batch, pk, &leaf)?
+                if let Some(leaf) = update.update.as_ref().and_then(|u| u.leaf.as_ref()) {
+                    self.asset_leaf_data.merge_with_batch(batch, pk, leaf)?
                 };
                 if let Some(slot) = update.update.as_ref().map(|u| u.slot) {
                     self.asset_updated_with_batch(batch, slot, pk)?;

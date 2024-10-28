@@ -196,7 +196,7 @@ impl<'a> From<fb::AssetCompleteDetails<'a>> for AssetIndex {
     fn from(value: fb::AssetCompleteDetails<'a>) -> Self {
         let pubkey = Pubkey::try_from(value.pubkey().unwrap().bytes()).unwrap();
         AssetIndex {
-            pubkey: pubkey,
+            pubkey,
             specification_version: SpecificationVersions::V1,
             specification_asset_class: value
                 .static_details()
@@ -241,7 +241,7 @@ impl<'a> From<fb::AssetCompleteDetails<'a>> for AssetIndex {
                 .dynamic_details()
                 .and_then(|d| d.creators())
                 .and_then(|u| u.value())
-                .map(|v| v.iter().map(|creator| Creator::from(creator)).collect())
+                .map(|v| v.iter().map(Creator::from).collect())
                 .unwrap_or_default(),
             royalty_amount: value
                 .dynamic_details()

@@ -1,6 +1,6 @@
 use bincode::{deserialize, serialize};
 use criterion::{criterion_group, criterion_main, Criterion};
-use rocks_db::{ AssetDynamicDetails};
+use rocks_db::AssetDynamicDetails;
 use setup::rocks::RocksTestEnvironmentSetup;
 use solana_sdk::pubkey::Pubkey;
 
