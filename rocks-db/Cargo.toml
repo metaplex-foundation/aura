@@ -67,3 +67,6 @@ name = "column_copier"
 
 [[bin]]
 name = "fork_detector"
+
+[[bin]]
+name = "leaf_checker"
