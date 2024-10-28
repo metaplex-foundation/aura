@@ -144,7 +144,7 @@ fn asset_selected_maps_into_full_asset(
 
     let offchain_data = asset_selected_maps
         .urls
-        .get(&id.to_string())
+        .get(id)
         .and_then(|url| asset_selected_maps.offchain_data.get(url).cloned())
         .unwrap_or_default();
 

@@ -10,6 +10,7 @@ use entities::models::{
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
+use solana_sdk::account::create_account;
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use std::cmp::Ordering;
 use tracing::{error, warn};
@@ -23,7 +24,7 @@ pub struct AssetSelectedMaps {
     pub asset_complete_details: HashMap<Pubkey, AssetCompleteDetails>,
     pub assets_leaf: HashMap<Pubkey, AssetLeaf>,
     pub offchain_data: HashMap<String, OffChainData>,
-    pub urls: HashMap<String, String>,
+    pub urls: HashMap<Pubkey, String>,
     pub editions: HashMap<Pubkey, EditionData>,
     pub inscriptions: HashMap<Pubkey, Inscription>,
     pub inscriptions_data: HashMap<Pubkey, InscriptionData>,
@@ -88,6 +89,145 @@ impl AssetCompleteDetails {
                 collection,
             },
         )
+    }
+}
+
+impl<'a> From<fb::AssetCompleteDetails<'a>> for AssetCompleteDetails {
+    fn from(value: fb::AssetCompleteDetails<'a>) -> Self {
+        let pubkey = Pubkey::try_from(value.pubkey().unwrap().bytes()).unwrap();
+        AssetCompleteDetails {
+            pubkey,
+            static_details: value.static_details().map(From::from),
+            dynamic_details: value.dynamic_details().map(From::from),
+            authority: value.authority().map(From::from),
+            owner: value.owner().map(From::from),
+            collection: value.collection().map(From::from),
+        }
+    }
+}
+
+impl<'a> From<fb::AssetStaticDetails<'a>> for AssetStaticDetails {
+    fn from(value: fb::AssetStaticDetails<'a>) -> Self {
+        let pubkey = Pubkey::try_from(value.pubkey().unwrap().bytes()).unwrap();
+        let edition_address = value
+            .edition_address()
+            .map(|ea| Pubkey::try_from(ea.bytes()).unwrap());
+        AssetStaticDetails {
+            pubkey,
+            specification_asset_class: value.specification_asset_class().into(),
+            royalty_target_type: value.royalty_target_type().into(),
+            created_at: value.created_at(),
+            edition_address,
+        }
+    }
+}
+
+impl<'a> From<fb::AssetDynamicDetails<'a>> for AssetDynamicDetails {
+    fn from(value: fb::AssetDynamicDetails<'a>) -> Self {
+        let pubkey = Pubkey::try_from(value.pubkey().unwrap().bytes()).unwrap();
+        let is_compressible = value.is_compressible().map(updated_bool_from_fb).unwrap();
+        let is_compressed = value.is_compressed().map(updated_bool_from_fb).unwrap();
+        let is_frozen = value.is_frozen().map(updated_bool_from_fb).unwrap();
+        let supply = value.supply().map(updated_u64_from_fb);
+        let seq = value.seq().map(updated_u64_from_fb);
+        let is_burnt = value.is_burnt().map(updated_bool_from_fb).unwrap();
+        let was_decompressed = value.was_decompressed().map(updated_bool_from_fb).unwrap();
+        let onchain_data = value.onchain_data().and_then(updated_string_from_fb);
+        let creators = value.creators().map(updated_creators_from_fb).unwrap();
+        let royalty_amount = value.royalty_amount().map(updated_u16_from_fb).unwrap();
+        let url = value.url().and_then(updated_string_from_fb).unwrap();
+        let chain_mutability = value.chain_mutability().map(updated_chain_mutability_from_fb);
+        let lamports = value.lamports().map(updated_u64_from_fb);
+        let executable = value.executable().map(updated_bool_from_fb);
+        let metadata_owner = value.metadata_owner().and_then(updated_string_from_fb);
+        let raw_name = value.raw_name().and_then(updated_string_from_fb);
+        let mpl_core_plugins = value.mpl_core_plugins().and_then(updated_string_from_fb);
+        let mpl_core_unknown_plugins = value.mpl_core_unknown_plugins().and_then(updated_string_from_fb);
+        let rent_epoch = value.rent_epoch().map(updated_u64_from_fb);
+        let num_minted = value.num_minted().map(updated_u32_from_fb);
+        let current_size = value.current_size().map(updated_u32_from_fb);
+        let plugins_json_version = value.plugins_json_version().map(updated_u32_from_fb);
+        let mpl_core_external_plugins = value.mpl_core_external_plugins().and_then(updated_string_from_fb);
+        let mpl_core_unknown_external_plugins = value.mpl_core_unknown_external_plugins().and_then(updated_string_from_fb);
+        let mint_extensions = value.mint_extensions().and_then(updated_string_from_fb);
+        AssetDynamicDetails {
+            pubkey,
+            is_compressible,
+            is_compressed,
+            is_frozen,
+            supply,
+            seq,
+            is_burnt,
+            was_decompressed,
+            onchain_data,
+            creators,
+            royalty_amount,
+            url,
+            chain_mutability,
+            lamports,
+            executable,
+            metadata_owner,
+            raw_name,
+            mpl_core_plugins,
+            mpl_core_unknown_plugins,
+            rent_epoch,
+            num_minted,
+            current_size,
+            plugins_json_version,
+            mpl_core_external_plugins,
+            mpl_core_unknown_external_plugins,
+            mint_extensions,
+        }
+    }
+}
+
+impl<'a> From<fb::AssetAuthority<'a>> for AssetAuthority {
+    fn from(value: fb::AssetAuthority<'a>) -> Self {
+        let pubkey = Pubkey::try_from(value.pubkey().unwrap().bytes()).unwrap();
+        let v;
+        // using unsafe because the generated code does not have a safe way to get the optional value without default
+        unsafe {
+            v = value._tab.get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None);
+        }
+        let authority = Pubkey::try_from(value.authority().unwrap().bytes()).unwrap();
+        AssetAuthority {
+            pubkey,
+            authority,
+            slot_updated: value.slot_updated(),
+            write_version: v,
+        }
+    }
+}
+
+impl<'a> From<fb::AssetOwner<'a>> for AssetOwner {
+    fn from(value: fb::AssetOwner<'a>) -> Self {
+        let pubkey = Pubkey::try_from(value.pubkey().unwrap().bytes()).unwrap();
+        let owner = value.owner().map(updated_optional_pubkey_from_fb).unwrap();
+        let delegate = value.delegate().map(updated_optional_pubkey_from_fb).unwrap();
+        let owner_type = value.owner_type().map(updated_owner_type_from_fb).unwrap();
+        let owner_delegate_seq = value.owner_delegate_seq().map(updated_optional_u64_from_fb).unwrap();
+        AssetOwner {
+            pubkey,
+            owner,
+            delegate,
+            owner_type,
+            owner_delegate_seq,
+        }
+    }
+}
+
+impl<'a> From<fb::AssetCollection<'a>> for AssetCollection {
+    fn from(value: fb::AssetCollection<'a>) -> Self {
+        let pubkey = Pubkey::try_from(value.pubkey().unwrap().bytes()).unwrap();
+        let collection = value.collection().map(updated_pubkey_from_fb).unwrap();
+        let is_collection_verified = value.is_collection_verified().map(updated_bool_from_fb).unwrap();
+        let authority = value.authority().map(updated_optional_pubkey_from_fb).unwrap();
+        AssetCollection {
+            pubkey,
+            collection,
+            is_collection_verified,
+            authority,
+        }
     }
 }
 
@@ -229,29 +369,28 @@ fn asset_dynamic_details_to_fb<'a>(
     let pubkey_bytes = pubkey_to_bytes(&dynamic_details.pubkey);
     let pubkey_fb = builder.create_vector(&pubkey_bytes);
 
-    let is_compressible_fb = convert_updated_bool_to_fb(builder, &dynamic_details.is_compressible);
-    let is_compressed_fb = convert_updated_bool_to_fb(builder, &dynamic_details.is_compressed);
-    let is_frozen_fb = convert_updated_bool_to_fb(builder, &dynamic_details.is_frozen);
+    let is_compressible_fb = updated_bool_to_fb(builder, &dynamic_details.is_compressible);
+    let is_compressed_fb = updated_bool_to_fb(builder, &dynamic_details.is_compressed);
+    let is_frozen_fb = updated_bool_to_fb(builder, &dynamic_details.is_frozen);
 
     // Optional fields
     let supply_fb = dynamic_details
         .supply
         .as_ref()
-        .map(|supply| convert_updated_u64_to_fb(builder, supply));
+        .map(|supply| updated_u64_to_fb(builder, supply));
     let seq_fb = dynamic_details
         .seq
         .as_ref()
-        .map(|seq| convert_updated_u64_to_fb(builder, seq));
-    let is_burnt_fb = convert_updated_bool_to_fb(builder, &dynamic_details.is_burnt);
-    let was_decompressed_fb =
-        convert_updated_bool_to_fb(builder, &dynamic_details.was_decompressed);
+        .map(|seq| updated_u64_to_fb(builder, seq));
+    let is_burnt_fb = updated_bool_to_fb(builder, &dynamic_details.is_burnt);
+    let was_decompressed_fb = updated_bool_to_fb(builder, &dynamic_details.was_decompressed);
     let onchain_data_fb = dynamic_details
         .onchain_data
         .as_ref()
-        .map(|onchain_data| convert_updated_string_to_fb(builder, onchain_data));
+        .map(|onchain_data| updated_string_to_fb(builder, onchain_data));
     let creators_fb = updated_creators_to_fb(builder, &dynamic_details.creators);
-    let royalty_amount_fb = convert_updated_u16_to_u32_fb(builder, &dynamic_details.royalty_amount);
-    let url_fb = convert_updated_string_to_fb(builder, &dynamic_details.url);
+    let royalty_amount_fb = updated_u16_to_u32_fb(builder, &dynamic_details.royalty_amount);
+    let url_fb = updated_string_to_fb(builder, &dynamic_details.url);
     let chain_mutability_fb = dynamic_details
         .chain_mutability
         .as_ref()
@@ -259,63 +398,57 @@ fn asset_dynamic_details_to_fb<'a>(
     let lamports_fb = dynamic_details
         .lamports
         .as_ref()
-        .map(|lamports| convert_updated_u64_to_fb(builder, lamports));
+        .map(|lamports| updated_u64_to_fb(builder, lamports));
     let executable_fb = dynamic_details
         .executable
         .as_ref()
-        .map(|executable| convert_updated_bool_to_fb(builder, executable));
+        .map(|executable| updated_bool_to_fb(builder, executable));
     let metadata_owner_fb = dynamic_details
         .metadata_owner
         .as_ref()
-        .map(|metadata_owner| convert_updated_string_to_fb(builder, metadata_owner));
+        .map(|metadata_owner| updated_string_to_fb(builder, metadata_owner));
     let raw_name_fb = dynamic_details
         .raw_name
         .as_ref()
-        .map(|raw_name| convert_updated_string_to_fb(builder, raw_name));
+        .map(|raw_name| updated_string_to_fb(builder, raw_name));
     let mpl_core_plugins_fb = dynamic_details
         .mpl_core_plugins
         .as_ref()
-        .map(|mpl_core_plugins| convert_updated_string_to_fb(builder, mpl_core_plugins));
-    let mpl_core_unknown_plugins_fb =
-        dynamic_details
-            .mpl_core_unknown_plugins
-            .as_ref()
-            .map(|mpl_core_unknown_plugins| {
-                convert_updated_string_to_fb(builder, mpl_core_unknown_plugins)
-            });
+        .map(|mpl_core_plugins| updated_string_to_fb(builder, mpl_core_plugins));
+    let mpl_core_unknown_plugins_fb = dynamic_details
+        .mpl_core_unknown_plugins
+        .as_ref()
+        .map(|mpl_core_unknown_plugins| updated_string_to_fb(builder, mpl_core_unknown_plugins));
     let rent_epoch_fb = dynamic_details
         .rent_epoch
         .as_ref()
-        .map(|rent_epoch| convert_updated_u64_to_fb(builder, rent_epoch));
+        .map(|rent_epoch| updated_u64_to_fb(builder, rent_epoch));
     let num_minted_fb = dynamic_details
         .num_minted
         .as_ref()
-        .map(|num_minted| convert_updated_u32_to_fb(builder, num_minted));
+        .map(|num_minted| updated_u32_to_fb(builder, num_minted));
     let current_size_fb = dynamic_details
         .current_size
         .as_ref()
-        .map(|current_size| convert_updated_u32_to_fb(builder, current_size));
+        .map(|current_size| updated_u32_to_fb(builder, current_size));
     let plugins_json_version_fb = dynamic_details
         .plugins_json_version
         .as_ref()
-        .map(|plugins_json_version| convert_updated_u32_to_fb(builder, plugins_json_version));
-    let mpl_core_external_plugins_fb =
-        dynamic_details
-            .mpl_core_external_plugins
-            .as_ref()
-            .map(|mpl_core_external_plugins| {
-                convert_updated_string_to_fb(builder, mpl_core_external_plugins)
-            });
+        .map(|plugins_json_version| updated_u32_to_fb(builder, plugins_json_version));
+    let mpl_core_external_plugins_fb = dynamic_details
+        .mpl_core_external_plugins
+        .as_ref()
+        .map(|mpl_core_external_plugins| updated_string_to_fb(builder, mpl_core_external_plugins));
     let mpl_core_unknown_external_plugins_fb = dynamic_details
         .mpl_core_unknown_external_plugins
         .as_ref()
         .map(|mpl_core_unknown_external_plugins| {
-            convert_updated_string_to_fb(builder, mpl_core_unknown_external_plugins)
+            updated_string_to_fb(builder, mpl_core_unknown_external_plugins)
         });
     let mint_extensions_fb = dynamic_details
         .mint_extensions
         .as_ref()
-        .map(|mint_extensions| convert_updated_string_to_fb(builder, mint_extensions));
+        .map(|mint_extensions| updated_string_to_fb(builder, mint_extensions));
     // Continue converting other fields similarly
 
     fb::AssetDynamicDetails::create(
@@ -361,15 +494,14 @@ fn asset_authority_to_fb<'a>(
     let authority_bytes = pubkey_to_bytes(&authority.authority);
     let authority_fb = builder.create_vector(&authority_bytes);
 
-    fb::AssetAuthority::create(
-        builder,
-        &fb::AssetAuthorityArgs {
-            pubkey: Some(pubkey_fb),
-            authority: Some(authority_fb),
-            slot_updated: authority.slot_updated,
-            write_version: authority.write_version.unwrap_or(0),
-        },
-    )
+    let mut b = fb::AssetAuthorityBuilder::new(builder);
+    if let Some(wv) = authority.write_version {
+        b.add_write_version(wv);
+    }
+    b.add_slot_updated(authority.slot_updated);
+    b.add_authority(authority_fb);
+    b.add_pubkey(pubkey_fb);
+    b.finish()
 }
 fn asset_owner_to_fb<'a>(
     builder: &mut FlatBufferBuilder<'a>,
@@ -402,8 +534,7 @@ fn asset_collection_to_fb<'a>(
     let pubkey_fb = builder.create_vector(&pubkey_bytes);
 
     let collection_fb = updated_pubkey_to_fb(builder, &collection.collection);
-    let is_collection_verified_fb =
-        convert_updated_bool_to_fb(builder, &collection.is_collection_verified);
+    let is_collection_verified_fb = updated_bool_to_fb(builder, &collection.is_collection_verified);
     let authority_fb = updated_optional_pubkey_to_fb(builder, &collection.authority);
 
     fb::AssetCollection::create(
@@ -463,8 +594,17 @@ fn chain_mutability_to_fb(value: ChainMutability) -> fb::ChainMutability {
         ChainMutability::Mutable => fb::ChainMutability::Mutable,
     }
 }
+fn updated_bool_from_fb(updated: fb::UpdatedBool) -> Updated<bool> {
+    Updated {
+        slot_updated: updated.slot_updated(),
+        update_version: updated
+            .update_version()
+            .and_then(convert_update_version_from_fb),
+        value: updated.value(),
+    }
+}
 
-fn convert_updated_bool_to_fb<'a>(
+fn updated_bool_to_fb<'a>(
     builder: &mut FlatBufferBuilder<'a>,
     updated: &Updated<bool>,
 ) -> WIPOffset<fb::UpdatedBool<'a>> {
@@ -480,7 +620,17 @@ fn convert_updated_bool_to_fb<'a>(
     )
 }
 
-fn convert_updated_u64_to_fb<'a>(
+fn updated_u64_from_fb(updated: fb::UpdatedU64) -> Updated<u64> {
+    Updated {
+        slot_updated: updated.slot_updated(),
+        update_version: updated
+            .update_version()
+            .and_then(convert_update_version_from_fb),
+        value: updated.value(),
+    }
+}
+
+fn updated_u64_to_fb<'a>(
     builder: &mut FlatBufferBuilder<'a>,
     updated: &Updated<u64>,
 ) -> WIPOffset<fb::UpdatedU64<'a>> {
@@ -496,7 +646,17 @@ fn convert_updated_u64_to_fb<'a>(
     )
 }
 
-fn convert_updated_u32_to_fb<'a>(
+fn updated_u32_from_fb(updated: fb::UpdatedU32) -> Updated<u32> {
+    Updated {
+        slot_updated: updated.slot_updated(),
+        update_version: updated
+            .update_version()
+            .and_then(convert_update_version_from_fb),
+        value: updated.value(),
+    }
+}
+
+fn updated_u32_to_fb<'a>(
     builder: &mut FlatBufferBuilder<'a>,
     updated: &Updated<u32>,
 ) -> WIPOffset<fb::UpdatedU32<'a>> {
@@ -512,7 +672,17 @@ fn convert_updated_u32_to_fb<'a>(
     )
 }
 
-fn convert_updated_u16_to_u32_fb<'a>(
+fn updated_u16_from_fb(updated: fb::UpdatedU32) -> Updated<u16> {
+    Updated {
+        slot_updated: updated.slot_updated(),
+        update_version: updated
+            .update_version()
+            .and_then(convert_update_version_from_fb),
+        value: updated.value() as u16,
+    }
+}
+
+fn updated_u16_to_u32_fb<'a>(
     builder: &mut FlatBufferBuilder<'a>,
     updated: &Updated<u16>,
 ) -> WIPOffset<fb::UpdatedU32<'a>> {
@@ -527,8 +697,21 @@ fn convert_updated_u16_to_u32_fb<'a>(
         },
     )
 }
+fn updated_string_from_fb(updated: fb::UpdatedString) -> Option<Updated<String>> {
+    if let Some(value) = updated.value() {
+        Some(Updated {
+            slot_updated: updated.slot_updated(),
+            update_version: updated
+                .update_version()
+                .and_then(convert_update_version_from_fb),
+            value: value.to_string(),
+        })
+    } else {
+        None
+    }
+}
 
-fn convert_updated_string_to_fb<'a>(
+fn updated_string_to_fb<'a>(
     builder: &mut FlatBufferBuilder<'a>,
     updated: &Updated<String>,
 ) -> WIPOffset<fb::UpdatedString<'a>> {
@@ -544,6 +727,16 @@ fn convert_updated_string_to_fb<'a>(
             value: Some(value),
         },
     )
+}
+
+fn updated_pubkey_from_fb(updated: fb::UpdatedPubkey) -> Updated<Pubkey> {
+    Updated {
+        slot_updated: updated.slot_updated(),
+        update_version: updated
+            .update_version()
+            .and_then(convert_update_version_from_fb),
+        value: Pubkey::try_from(updated.value().unwrap().bytes()).unwrap(),
+    }
 }
 
 fn updated_pubkey_to_fb<'a>(
@@ -563,6 +756,16 @@ fn updated_pubkey_to_fb<'a>(
             value: Some(pubkey_fb),
         },
     )
+}
+
+fn updated_optional_pubkey_from_fb(updated: fb::UpdatedOptionalPubkey) -> Updated<Option<Pubkey>> {
+    Updated {
+        slot_updated: updated.slot_updated(),
+        update_version: updated
+            .update_version()
+            .and_then(convert_update_version_from_fb),
+        value: updated.value().map(|pubkey| Pubkey::try_from(pubkey.bytes()).unwrap()),
+    }
 }
 
 fn updated_optional_pubkey_to_fb<'a>(
@@ -585,6 +788,19 @@ fn updated_optional_pubkey_to_fb<'a>(
         },
     )
 }
+fn updated_optional_u64_from_fb(updated: fb::UpdatedU64) -> Updated<Option<u64>> {
+    let v;
+    unsafe {
+        v = updated._tab.get::<u64>(fb::UpdatedU64::VT_VALUE, None);
+    }
+    Updated {
+        slot_updated: updated.slot_updated(),
+        update_version: updated
+            .update_version()
+            .and_then(convert_update_version_from_fb),
+        value: v,
+    }
+}
 
 fn updated_optional_u64_to_fb<'a>(
     builder: &mut FlatBufferBuilder<'a>,
@@ -598,6 +814,32 @@ fn updated_optional_u64_to_fb<'a>(
         ub.add_value(value);
     }
     ub.finish()
+}
+
+fn creator_from_fb(creator: fb::Creator) -> entities::models::Creator {
+    entities::models::Creator {
+        creator: Pubkey::try_from(creator.creator().unwrap().bytes()).unwrap(),
+        creator_verified: creator.creator_verified(),
+        creator_share: creator.creator_share() as u8,
+    }
+}
+
+fn updated_creators_from_fb(
+    updated: fb::UpdatedCreators,
+) -> Updated<Vec<entities::models::Creator>> {
+    let mut ve = Vec::new();
+    if let Some(cc) = updated.value() {
+        for creator in cc {
+            ve.push(creator_from_fb(creator));
+        }
+    }
+    Updated {
+        slot_updated: updated.slot_updated(),
+        update_version: updated
+            .update_version()
+            .and_then(convert_update_version_from_fb),
+        value: ve,
+    }
 }
 
 fn updated_creators_to_fb<'a>(
@@ -633,6 +875,16 @@ fn updated_creators_to_fb<'a>(
     )
 }
 
+fn updated_owner_type_from_fb(updated: fb::UpdatedOwnerType) -> Updated<OwnerType> {
+    Updated {
+        slot_updated: updated.slot_updated(),
+        update_version: updated
+            .update_version()
+            .and_then(convert_update_version_from_fb),
+        value: updated.value().into(),
+    }
+}
+
 fn updated_owner_type_to_fb<'a>(
     builder: &mut FlatBufferBuilder<'a>,
     updated: &Updated<OwnerType>,
@@ -644,9 +896,21 @@ fn updated_owner_type_to_fb<'a>(
         &fb::UpdatedOwnerTypeArgs {
             slot_updated: updated.slot_updated,
             update_version: Some(update_version),
-            value: owner_type_to_fb(updated.value),
+            value: updated.value.into(),
         },
     )
+}
+
+fn updated_chain_mutability_from_fb(
+    updated: fb::UpdatedChainMutability,
+) -> Updated<ChainMutability> {
+    Updated {
+        slot_updated: updated.slot_updated(),
+        update_version: updated
+            .update_version()
+            .and_then(convert_update_version_from_fb),
+        value: updated.value().into(),
+    }
 }
 
 fn updated_chain_mutability_to_fb<'a>(
@@ -682,6 +946,19 @@ fn convert_update_version_to_fb<'a>(
             version_value,
         },
     )
+}
+
+fn convert_update_version_from_fb(update_version: fb::UpdateVersion) -> Option<UpdateVersion> {
+    match update_version.version_type() {
+        fb::UpdateVersionType::Sequence => {
+            Some(UpdateVersion::Sequence(update_version.version_value()))
+        }
+        fb::UpdateVersionType::WriteVersion => {
+            Some(UpdateVersion::WriteVersion(update_version.version_value()))
+        }
+        fb::UpdateVersionType::None => None,
+        _ => None,
+    }
 }
 fn pubkey_to_bytes(pubkey: &Pubkey) -> [u8; 32] {
     pubkey.to_bytes()

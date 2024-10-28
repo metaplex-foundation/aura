@@ -149,12 +149,12 @@ fn dump_benchmark(c: &mut Criterion) {
     // group.measurement_time(std::time::Duration::from_secs(60));
 
     let storage = env.storage;
-    // group.bench_function("get_assets", |b| {
-    //     b.iter(|| rt.block_on(bench_get_assets(storage.clone(), sampled_pubkeys.clone())))
-    // });
-    // group.bench_function("get_assets_individually", |b| {
-    //     b.iter(|| rt.block_on(bench_get_assets_individually(storage.clone(), sampled_pubkeys.clone())))
-    // });
+    group.bench_function("get_assets", |b| {
+        b.iter(|| rt.block_on(bench_get_assets(storage.clone(), sampled_pubkeys.clone())))
+    });
+    group.bench_function("get_assets_individually", |b| {
+        b.iter(|| rt.block_on(bench_get_assets_individually(storage.clone(), sampled_pubkeys.clone())))
+    });
     // group.bench_function("batch_get_keys", |b| {
     //     b.iter(|| rt.block_on(bench_batch_get_keys(storage.clone(), sampled_pubkeys.clone())))
     // });

@@ -25,7 +25,7 @@ use usecase::graceful_stop::graceful_stop;
 
 const MPSC_BUFFER_SIZE: usize = 1_000_000;
 
-const ONE_G: usize = 1024 * 1024 * 64;
+const ONE_G: usize = 1024 * 1024 * 32;
 fn serialize_as_snake_case<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -201,7 +201,10 @@ impl Storage {
         while core_collections_iter.valid() {
             let key = core_collections_iter.key().unwrap();
             let value = core_collections_iter.value().unwrap();
-            let asset = fb::root_as_asset_complete_details(value).map_err(|e| e.to_string())?;
+            let asset;
+            unsafe {
+                asset = fb::root_as_asset_complete_details_unchecked(value);
+            }
             if let Some(static_details) = asset.static_details() {
                 if static_details.specification_asset_class()
                     == fb::SpecificationAssetClass::MplCoreCollection
@@ -209,11 +212,8 @@ impl Storage {
                 {
                     let collection = asset.collection().unwrap();
                     if let Some(authority) = collection.authority() {
-                        if let (Some(auth_value), Some(pk)) =
-                            (authority.value(), collection.pubkey())
-                        {
-                            core_collections
-                                .insert(pk.bytes().to_vec(), auth_value.bytes().to_vec());
+                        if let Some(auth_value) = authority.value() {
+                            core_collections.insert(key.to_vec(), auth_value.bytes().to_vec());
                         }
                     }
                 }
@@ -238,7 +238,7 @@ impl Storage {
         let mut creators_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
-        
+
         let buf_writer = BufWriter::with_capacity(ONE_G, metadata_file_and_path.0);
         let mut metadata_writer = WriterBuilder::new()
             .has_headers(false)
@@ -251,8 +251,10 @@ impl Storage {
             let key = iter.key().unwrap();
             let encoded_key = Self::encode(key);
             let value = iter.value().unwrap();
-            let asset = fb::root_as_asset_complete_details(value).map_err(|e| e.to_string())?;
-
+            let asset;
+            unsafe {
+                asset = fb::root_as_asset_complete_details_unchecked(value);
+            }
             let metadata_url = asset
                 .dynamic_details()
                 .map(|dd| {
@@ -267,13 +269,11 @@ impl Storage {
                 {
                     if !metadata_key_set.contains(metadata_key) {
                         metadata_key_set.insert(metadata_key.clone());
-                        if let Err(e) = metadata_writer
-                            .serialize((
-                                Self::encode(metadata_key),
-                                url.to_string(),
-                                "pending".to_string(),
-                            ))
-                        {
+                        if let Err(e) = metadata_writer.serialize((
+                            Self::encode(metadata_key),
+                            url.to_string(),
+                            "pending".to_string(),
+                        )) {
                             error!("Error sending message: {:?}", e);
                         }
                         synchronizer_metrics.inc_num_of_records_sent_to_channel("metadata", 1);
@@ -432,7 +432,8 @@ impl Storage {
             tokio::task::spawn_blocking(move || authority_writer.flush()),
             tokio::task::spawn_blocking(move || creators_writer.flush()),
             tokio::task::spawn_blocking(move || metadata_writer.flush())
-        ).map_err(|e|e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
 
         if let Err(e) = fungible_assets_join.await {
             error!(

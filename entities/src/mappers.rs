@@ -54,6 +54,26 @@ impl_from_enum!(
 );
 impl_from_enum!(OwnerType, fb::OwnerType, Unknown, Token, Single);
 
+impl From<ChainMutability> for fb::ChainMutability {
+    fn from(value: ChainMutability) -> Self {
+        match value {
+            ChainMutability::Mutable => fb::ChainMutability::Mutable,
+            ChainMutability::Immutable => fb::ChainMutability::Immutable,
+        }
+    }
+}
+
+impl From<fb::ChainMutability> for ChainMutability {
+    fn from(value: fb::ChainMutability) -> Self {
+        match value {
+            fb::ChainMutability::Mutable => ChainMutability::Mutable,
+            fb::ChainMutability::Immutable => ChainMutability::Immutable,
+            _ => ChainMutability::Immutable,
+        }
+    }
+    
+}
+
 impl<'a> fb::AssetCompleteDetails<'a> {
     pub fn get_slot_updated(&'a self) -> u64 {
         // Collect the slot_updated values from all available fields
