@@ -1,7 +1,9 @@
 use crate::asset::{AssetCollection, AssetCompleteDetails, MetadataMintMap};
+use crate::column::TypedColumn;
 use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::Result;
 use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
+use entities::asset_generated::asset as fb;
 use entities::enums::TokenMetadataEdition;
 use entities::models::{
     InscriptionDataInfo, InscriptionInfo, Mint, TokenAccount, TokenAccountMintOwnerIdxKey,
@@ -101,10 +103,15 @@ impl BatchSaveStorage {
     }
 
     fn store_complete(&mut self, data: &AssetCompleteDetails) -> Result<()> {
-        let res = self
-            .storage
-            .asset_data
-            .merge_with_batch(&mut self.batch, data.pubkey, data);
+        let mut builder = flatbuffers::FlatBufferBuilder::new();
+        let acd = data.convert_to_fb(&mut builder);
+        builder.finish_minimal(acd);
+        self.batch.merge_cf(
+            &self.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+            AssetCompleteDetails::encode_key(data.pubkey),
+            builder.finished_data(),
+        );
+        let res = Ok(());
         result_to_metrics(
             self.metrics.clone(),
             &res,
@@ -218,14 +225,23 @@ impl BatchSaveStorage {
     }
 
     pub fn get_authority(&self, address: Pubkey) -> Pubkey {
-        self.storage
-            .asset_data
-            .get(address)
-            .unwrap_or(None)
-            .map(|a| a.authority)
-            .flatten()
-            .map(|authority| authority.authority)
-            .unwrap_or_default()
+        if let Ok(Some(data)) = self.storage.db.get_pinned_cf(
+            &self
+                .storage
+                .db
+                .cf_handle(AssetCompleteDetails::NAME)
+                .unwrap(),
+            AssetCompleteDetails::encode_key(address),
+        ) {
+            let asset = fb::root_as_asset_complete_details(&data);
+            return asset
+                .ok()
+                .and_then(|a| a.authority())
+                .and_then(|auth| auth.authority())
+                .map(|k| Pubkey::try_from(k.bytes()).unwrap())
+                .unwrap_or_default();
+        }
+        Pubkey::default()
     }
 
     pub fn get_mint_map(&self, key: Pubkey) -> Result<Option<MetadataMintMap>> {

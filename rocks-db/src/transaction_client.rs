@@ -4,6 +4,7 @@ use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::asset::AssetCompleteDetails;
+use crate::column::TypedColumn;
 use crate::parameters::Parameter;
 use crate::{
     parameters,
@@ -11,6 +12,7 @@ use crate::{
     transaction::{InstructionResult, TransactionResult, TransactionResultPersister},
     Storage,
 };
+use entities::asset_generated::asset as fb;
 
 #[async_trait]
 impl TransactionResultPersister for Storage {
@@ -86,24 +88,26 @@ impl Storage {
                 .or(update.authority_update.as_ref().map(|a| a.pk))
                 .or(update.collection_update.as_ref().map(|c| c.pk));
             if let Some(pk) = pk {
-                if let Err(e) = self.asset_data.merge_with_batch(
-                    batch,
-                    pk,
-                    &AssetCompleteDetails {
-                        pubkey: pk,
-                        static_details: update.static_update.as_ref().map(|s| s.details.clone()),
-                        dynamic_details: update
-                            .update
-                            .as_ref()
-                            .map(|u| u.dynamic_data.clone())
-                            .flatten(),
-                        owner: update.owner_update.as_ref().map(|o| o.details.clone()),
-                        authority: update.authority_update.as_ref().map(|a| a.details.clone()),
-                        collection: update.collection_update.as_ref().map(|c| c.details.clone()),
-                    },
-                ) {
-                    tracing::error!("Failed to merge asset leaf data: {}", e);
-                }
+                let acd = AssetCompleteDetails {
+                    pubkey: pk,
+                    static_details: update.static_update.as_ref().map(|s| s.details.clone()),
+                    dynamic_details: update
+                        .update
+                        .as_ref()
+                        .map(|u| u.dynamic_data.clone())
+                        .flatten(),
+                    owner: update.owner_update.as_ref().map(|o| o.details.clone()),
+                    authority: update.authority_update.as_ref().map(|a| a.details.clone()),
+                    collection: update.collection_update.as_ref().map(|c| c.details.clone()),
+                };
+                let mut builder = flatbuffers::FlatBufferBuilder::new();
+                let acd = acd.convert_to_fb(&mut builder);
+                builder.finish_minimal(acd);
+                batch.merge_cf(
+                    &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                    AssetCompleteDetails::encode_key(pk),
+                    builder.finished_data(),
+                );
                 if let Some(leaf) = update.update.as_ref().map(|u| u.leaf.as_ref()).flatten() {
                     self.asset_leaf_data.merge_with_batch(batch, pk, &leaf)?
                 };
@@ -136,18 +140,14 @@ impl Storage {
         if let Some(ref decompressed) = ix.decompressed {
             self.asset_leaf_data
                 .delete_with_batch(batch, decompressed.pk);
-
-            if let Err(e) = self.asset_data.merge_with_batch(
-                batch,
-                decompressed.pk,
-                &AssetCompleteDetails {
-                    pubkey: decompressed.pk,
-                    dynamic_details: Some(decompressed.details.clone()),
-                    ..Default::default()
-                },
-            ) {
-                tracing::error!("Failed to save tx data and asset updated: {}", e);
-            }
+            let mut builder = flatbuffers::FlatBufferBuilder::new();
+            let acd = decompressed.details.convert_to_fb(&mut builder);
+            builder.finish_minimal(acd);
+            batch.merge_cf(
+                &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                AssetCompleteDetails::encode_key(decompressed.pk),
+                builder.finished_data(),
+            );
         }
         if let Some(ref tree_update) = ix.tree_update {
             self.save_changelog_with_batch(batch, &tree_update.event, tree_update.slot);

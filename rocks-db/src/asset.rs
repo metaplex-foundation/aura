@@ -969,8 +969,8 @@ fn bytes_to_pubkey(bytes: &[u8]) -> Pubkey {
     Pubkey::new(bytes)
 }
 
-impl From<AssetDynamicDetails> for AssetCompleteDetails {
-    fn from(value: AssetDynamicDetails) -> Self {
+impl From<&AssetDynamicDetails> for AssetCompleteDetails {
+    fn from(value: &AssetDynamicDetails) -> Self {
         Self {
             pubkey: value.pubkey,
             static_details: None,
