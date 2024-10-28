@@ -171,7 +171,7 @@ impl AssetIndexReader for Storage {
         // let asset_details = asset_details?;
         // let token_accounts_details = token_accounts_details?;
 
-        let (mut asset_details, assets_collection_pks, mut urls) = assets_d_fut.await?;
+        let (asset_details, assets_collection_pks, urls) = assets_d_fut.await?;
 
         // let assets_collection_pks = asset_details
         //     .iter()
