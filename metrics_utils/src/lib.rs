@@ -39,6 +39,7 @@ impl IntegrityVerificationMetrics {
 
 #[derive(Debug)]
 pub struct MetricState {
+    pub message_process_metrics: Arc<MessageProcessMetricsConfig>,
     pub ingester_metrics: Arc<IngesterMetricsConfig>,
     pub api_metrics: Arc<ApiMetricsConfig>,
     pub json_downloader_metrics: Arc<JsonDownloaderMetricsConfig>,
@@ -63,6 +64,7 @@ impl Default for MetricState {
 impl MetricState {
     pub fn new() -> Self {
         Self {
+            message_process_metrics: Arc::new(MessageProcessMetricsConfig::new()),
             ingester_metrics: Arc::new(IngesterMetricsConfig::new()),
             api_metrics: Arc::new(ApiMetricsConfig::new()),
             json_downloader_metrics: Arc::new(JsonDownloaderMetricsConfig::new()),
@@ -117,6 +119,43 @@ impl fmt::Display for MetricStatus {
 pub struct MetricLabelWithStatus {
     pub name: String,
     pub status: MetricStatus,
+}
+
+#[derive(Debug, Clone)]
+pub struct MessageProcessMetricsConfig {
+    data_read: Family<MetricLabel, Histogram>,
+}
+
+impl Default for MessageProcessMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MessageProcessMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            data_read: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(1.0, 2.4, 10))
+            }),
+        }
+    }
+
+    pub fn set_data_read_time(&self, label: &str, duration: f64) {
+        self.data_read
+            .get_or_create(&MetricLabel {
+                name: label.to_string(),
+            })
+            .observe(duration);
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "data_read_time",
+            "Time pass between Geyser push data to the queue and ingester process it",
+            self.data_read.clone(),
+        );
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -526,6 +565,7 @@ impl MetricsTrait for MetricState {
         self.batch_mint_processor_metrics.start_time();
 
         self.api_metrics.register(&mut self.registry);
+        self.message_process_metrics.register(&mut self.registry);
         self.ingester_metrics.register(&mut self.registry);
 
         self.json_downloader_metrics.register(&mut self.registry);
