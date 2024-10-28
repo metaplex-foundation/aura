@@ -123,8 +123,7 @@ pub struct MetricLabelWithStatus {
 
 #[derive(Debug, Clone)]
 pub struct MessageProcessMetricsConfig {
-    accounts_read: Family<MetricLabel, Histogram>,
-    transactions_read: Family<MetricLabel, Histogram>,
+    data_read: Family<MetricLabel, Histogram>,
 }
 
 impl Default for MessageProcessMetricsConfig {
@@ -136,25 +135,14 @@ impl Default for MessageProcessMetricsConfig {
 impl MessageProcessMetricsConfig {
     pub fn new() -> Self {
         Self {
-            accounts_read: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 1.8, 10))
-            }),
-            transactions_read: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 1.8, 10))
+            data_read: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(1.0, 2.4, 10))
             }),
         }
     }
 
-    pub fn set_accounts_read_time(&self, label: &str, duration: f64) {
-        self.accounts_read
-            .get_or_create(&MetricLabel {
-                name: label.to_string(),
-            })
-            .observe(duration);
-    }
-
-    pub fn set_transactions_read_time(&self, label: &str, duration: f64) {
-        self.transactions_read
+    pub fn set_data_read_time(&self, label: &str, duration: f64) {
+        self.data_read
             .get_or_create(&MetricLabel {
                 name: label.to_string(),
             })
@@ -163,15 +151,9 @@ impl MessageProcessMetricsConfig {
 
     pub fn register(&self, registry: &mut Registry) {
         registry.register(
-            "accounts_data_read_time",
-            "Time pass between Geyser push accounts data to queue and ingester read it",
-            self.accounts_read.clone(),
-        );
-
-        registry.register(
-            "transactions_data_read_time",
-            "Time pass between Geyser push transactions data to queue and ingester read it",
-            self.transactions_read.clone(),
+            "data_read_time",
+            "Time pass between Geyser push data to the queue and ingester process it",
+            self.data_read.clone(),
         );
     }
 }

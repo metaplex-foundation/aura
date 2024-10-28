@@ -241,7 +241,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 if let Some(message_timestamp) = get_timestamp_from_id(&unprocessed_account.id) {
                     let current_timestamp = Utc::now().timestamp_millis() as u64;
 
-                    message_process_metrics.set_accounts_read_time(
+                    message_process_metrics.set_data_read_time(
                         "accounts",
                         current_timestamp
                             .checked_sub(message_timestamp)

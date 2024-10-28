@@ -47,7 +47,7 @@ pub async fn run_transaction_processor<TG>(
                             if let Some(message_timestamp) = get_timestamp_from_id(&tx.id) {
                                 let current_timestamp = Utc::now().timestamp_millis() as u64;
 
-                                message_process_metrics.set_transactions_read_time(
+                                message_process_metrics.set_data_read_time(
                                     "transactions",
                                     current_timestamp
                                         .checked_sub(message_timestamp)
