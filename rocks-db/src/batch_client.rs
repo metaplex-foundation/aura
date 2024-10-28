@@ -301,74 +301,79 @@ impl Storage {
         } else {
             None
         };
-        let mut batch = rocksdb::WriteBatch::default();
-        self.asset_data.merge_with_batch(
-            &mut batch,
-            data.pubkey,
-            &AssetCompleteDetails {
+        let mut builder = flatbuffers::FlatBufferBuilder::new();
+        let acd = AssetCompleteDetails {
+            pubkey: data.pubkey,
+            static_details: Some(AssetStaticDetails {
                 pubkey: data.pubkey,
-                static_details: Some(AssetStaticDetails {
-                    pubkey: data.pubkey,
-                    specification_asset_class: data.specification_asset_class,
-                    royalty_target_type: data.royalty_target_type,
-                    created_at: data.slot_created as i64,
-                    edition_address: data.edition_address,
+                specification_asset_class: data.specification_asset_class,
+                royalty_target_type: data.royalty_target_type,
+                created_at: data.slot_created as i64,
+                edition_address: data.edition_address,
+            }),
+            dynamic_details: Some(AssetDynamicDetails {
+                pubkey: data.pubkey,
+                is_compressible: data.is_compressible,
+                is_compressed: data.is_compressed,
+                is_frozen: data.is_frozen,
+                supply: data.supply,
+                seq: data.seq,
+                is_burnt: data.is_burnt,
+                was_decompressed: data.was_decompressed,
+                onchain_data: data.onchain_data.map(|chain_data| {
+                    Updated::new(
+                        chain_data.slot_updated,
+                        chain_data.update_version,
+                        json!(chain_data.value).to_string(),
+                    )
                 }),
-                dynamic_details: Some(AssetDynamicDetails {
-                    pubkey: data.pubkey,
-                    is_compressible: data.is_compressible,
-                    is_compressed: data.is_compressed,
-                    is_frozen: data.is_frozen,
-                    supply: data.supply,
-                    seq: data.seq,
-                    is_burnt: data.is_burnt,
-                    was_decompressed: data.was_decompressed,
-                    onchain_data: data.onchain_data.map(|chain_data| {
-                        Updated::new(
-                            chain_data.slot_updated,
-                            chain_data.update_version,
-                            json!(chain_data.value).to_string(),
-                        )
-                    }),
-                    creators: data.creators,
-                    royalty_amount: data.royalty_amount,
-                    url: data.url,
-                    chain_mutability: data.chain_mutability,
-                    lamports: data.lamports,
-                    executable: data.executable,
-                    metadata_owner: data.metadata_owner,
-                    raw_name: data.raw_name,
-                    mpl_core_plugins: data.mpl_core_plugins,
-                    mpl_core_unknown_plugins: data.mpl_core_unknown_plugins,
-                    rent_epoch: data.rent_epoch,
-                    num_minted: data.num_minted,
-                    current_size: data.current_size,
-                    plugins_json_version: data.plugins_json_version,
-                    mpl_core_external_plugins: data.mpl_core_external_plugins,
-                    mpl_core_unknown_external_plugins: data.mpl_core_unknown_external_plugins,
-                    mint_extensions: data.mint_extensions,
-                }),
-                authority: Some(AssetAuthority {
-                    pubkey: data.pubkey,
-                    authority: data.authority.value,
-                    slot_updated: data.authority.slot_updated,
-                    write_version,
-                }),
-                owner: Some(AssetOwner {
-                    pubkey: data.pubkey,
-                    owner: data.owner,
-                    delegate: data.delegate,
-                    owner_type: data.owner_type,
-                    owner_delegate_seq: data.owner_delegate_seq,
-                }),
-                collection: data.collection.map(|collection| AssetCollection {
-                    pubkey: data.pubkey,
-                    collection: collection.collection,
-                    is_collection_verified: collection.is_collection_verified,
-                    authority: collection.authority,
-                }),
-            },
-        )?;
+                creators: data.creators,
+                royalty_amount: data.royalty_amount,
+                url: data.url,
+                chain_mutability: data.chain_mutability,
+                lamports: data.lamports,
+                executable: data.executable,
+                metadata_owner: data.metadata_owner,
+                raw_name: data.raw_name,
+                mpl_core_plugins: data.mpl_core_plugins,
+                mpl_core_unknown_plugins: data.mpl_core_unknown_plugins,
+                rent_epoch: data.rent_epoch,
+                num_minted: data.num_minted,
+                current_size: data.current_size,
+                plugins_json_version: data.plugins_json_version,
+                mpl_core_external_plugins: data.mpl_core_external_plugins,
+                mpl_core_unknown_external_plugins: data.mpl_core_unknown_external_plugins,
+                mint_extensions: data.mint_extensions,
+            }),
+            authority: Some(AssetAuthority {
+                pubkey: data.pubkey,
+                authority: data.authority.value,
+                slot_updated: data.authority.slot_updated,
+                write_version,
+            }),
+            owner: Some(AssetOwner {
+                pubkey: data.pubkey,
+                owner: data.owner,
+                delegate: data.delegate,
+                owner_type: data.owner_type,
+                owner_delegate_seq: data.owner_delegate_seq,
+            }),
+            collection: data.collection.map(|collection| AssetCollection {
+                pubkey: data.pubkey,
+                collection: collection.collection,
+                is_collection_verified: collection.is_collection_verified,
+                authority: collection.authority,
+            }),
+        }
+        .convert_to_fb(&mut builder);
+
+        let mut batch = rocksdb::WriteBatch::default();
+        builder.finish_minimal(acd);
+        batch.merge_cf(
+            &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+            AssetCompleteDetails::encode_key(data.pubkey),
+            builder.finished_data(),
+        );
 
         if let Some(leaf) = data.asset_leaf {
             self.asset_leaf_data.merge_with_batch(
