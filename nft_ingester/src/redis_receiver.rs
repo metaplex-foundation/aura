@@ -128,3 +128,10 @@ impl UnprocessedAccountsGetter for RedisReceiver {
         }
     }
 }
+
+/// id - Redis stream data ID. Which is milliseconds timestamp
+/// id example - 1692632086370-0
+/// where `0` is message sequence which is ignored here
+pub fn get_timestamp_from_id(id: &str) -> Option<u64> {
+    id.split('-').next().and_then(|t| t.parse().ok())
+}

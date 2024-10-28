@@ -207,6 +207,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     config.accounts_buffer_size,
                     config.mpl_core_fees_buffer_size,
                     metrics_state.ingester_metrics.clone(),
+                    Some(metrics_state.message_process_metrics.clone()),
                     index_pg_storage.clone(),
                     rpc_client.clone(),
                     mutexed_tasks.clone(),
@@ -222,6 +223,8 @@ pub async fn main() -> Result<(), IngesterError> {
                     config.accounts_buffer_size,
                     config.mpl_core_fees_buffer_size,
                     metrics_state.ingester_metrics.clone(),
+                    // TCP sender does not send any ids with timestamps so we may not pass message process metrics here
+                    None,
                     index_pg_storage.clone(),
                     rpc_client.clone(),
                     mutexed_tasks.clone(),
@@ -241,6 +244,8 @@ pub async fn main() -> Result<(), IngesterError> {
             config.snapshot_parsing_batch_size,
             config.mpl_core_fees_buffer_size,
             metrics_state.ingester_metrics.clone(),
+            // during snapshot parsing we don't want to collect message process metrics
+            None,
             index_pg_storage.clone(),
             rpc_client.clone(),
             mutexed_tasks.clone(),
@@ -395,6 +400,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     mutexed_tasks.clone(),
                     redis_receiver,
                     geyser_bubblegum_updates_processor.clone(),
+                    Some(metrics_state.message_process_metrics.clone()),
                 )
                 .await;
             }
@@ -404,6 +410,8 @@ pub async fn main() -> Result<(), IngesterError> {
                     mutexed_tasks.clone(),
                     buffer.clone(),
                     geyser_bubblegum_updates_processor.clone(),
+                    // TCP sender does not send any ids with timestamps so we may not pass message process metrics here
+                    None,
                 )
                 .await;
             }

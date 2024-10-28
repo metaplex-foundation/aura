@@ -1,6 +1,9 @@
 use crate::bubblegum_updates_processor::BubblegumTxProcessor;
 use crate::error::IngesterError;
+use crate::redis_receiver::get_timestamp_from_id;
+use chrono::Utc;
 use interface::signature_persistence::UnprocessedTransactionsGetter;
+use metrics_utils::MessageProcessMetricsConfig;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
@@ -16,6 +19,7 @@ pub async fn run_transaction_processor<TG>(
     mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     unprocessed_transactions_getter: Arc<TG>,
     geyser_bubblegum_updates_processor: Arc<BubblegumTxProcessor>,
+    message_process_metrics: Option<Arc<MessageProcessMetricsConfig>>,
 ) where
     TG: UnprocessedTransactionsGetter + Send + Sync + 'static,
 {
@@ -38,7 +42,23 @@ pub async fn run_transaction_processor<TG>(
                     .process_transaction(tx.tx)
                     .await
                 {
-                    Ok(_) => unprocessed_transactions_getter.ack(tx.id),
+                    Ok(_) => {
+                        if let Some(message_process_metrics) = &message_process_metrics {
+                            if let Some(message_timestamp) = get_timestamp_from_id(&tx.id) {
+                                let current_timestamp = Utc::now().timestamp_millis() as u64;
+
+                                message_process_metrics.set_transactions_read_time(
+                                    "transactions",
+                                    current_timestamp
+                                        .checked_sub(message_timestamp)
+                                        .unwrap_or_default()
+                                        as f64,
+                                );
+                            }
+                        }
+
+                        unprocessed_transactions_getter.ack(tx.id)
+                    }
                     Err(IngesterError::NotImplemented) => {}
                     Err(err) => {
                         error!("Background saver could not process received data: {}", err);
