@@ -106,6 +106,7 @@ impl<'a> From<fb::AssetCompleteDetails<'a>> for AssetCompleteDetails {
     }
 }
 
+
 impl<'a> From<fb::AssetStaticDetails<'a>> for AssetStaticDetails {
     fn from(value: fb::AssetStaticDetails<'a>) -> Self {
         let pubkey = Pubkey::try_from(value.pubkey().unwrap().bytes()).unwrap();
@@ -1115,8 +1116,7 @@ impl AssetCompleteDetails {
             update_authority: self
                 .collection
                 .as_ref()
-                .map(|c| mpl_core_collections.get(&c.collection.value))
-                .flatten()
+                .and_then(|c| mpl_core_collections.get(&c.collection.value))
                 .copied(),
             fungible_asset_mint: None,
             fungible_asset_balance: None,

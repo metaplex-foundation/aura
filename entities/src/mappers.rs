@@ -1,3 +1,5 @@
+use solana_sdk::pubkey::Pubkey;
+
 use crate::asset_generated::asset as fb;
 use crate::enums::*;
 use crate::models::*;
@@ -71,7 +73,6 @@ impl From<fb::ChainMutability> for ChainMutability {
             _ => ChainMutability::Immutable,
         }
     }
-    
 }
 
 impl<'a> fb::AssetCompleteDetails<'a> {
@@ -178,5 +179,108 @@ impl<'a> fb::AssetCompleteDetails<'a> {
         ];
         // Filter out None values and find the maximum slot_updated
         slots.iter().filter_map(|&slot| slot).max().unwrap_or(0)
+    }
+}
+
+impl<'a> From<fb::Creator<'a>> for Creator {
+    fn from(value: fb::Creator<'a>) -> Self {
+        Creator {
+            creator: Pubkey::try_from(value.creator().unwrap().bytes()).unwrap(),
+            creator_verified: value.creator_verified(),
+            creator_share: value.creator_share() as u8,
+        }
+    }
+}
+
+impl<'a> From<fb::AssetCompleteDetails<'a>> for AssetIndex {
+    fn from(value: fb::AssetCompleteDetails<'a>) -> Self {
+        let pubkey = Pubkey::try_from(value.pubkey().unwrap().bytes()).unwrap();
+        AssetIndex {
+            pubkey: pubkey,
+            specification_version: SpecificationVersions::V1,
+            specification_asset_class: value
+                .static_details()
+                .map(|v| v.specification_asset_class().into())
+                .unwrap_or_default(),
+            royalty_target_type: value
+                .static_details()
+                .map(|a| a.royalty_target_type().into())
+                .unwrap_or_default(),
+            slot_created: value
+                .static_details()
+                .map(|a| a.created_at())
+                .unwrap_or_default(),
+            owner_type: value
+                .owner()
+                .and_then(|o| o.owner_type())
+                .map(|u| u.value().into()),
+            owner: value
+                .owner()
+                .and_then(|o| o.owner())
+                .and_then(|u| u.value())
+                .map(|k| Pubkey::try_from(k.bytes()).unwrap()),
+            delegate: value
+                .owner()
+                .and_then(|o| o.delegate())
+                .and_then(|u| u.value())
+                .map(|k| Pubkey::try_from(k.bytes()).unwrap()),
+            authority: value
+                .authority()
+                .and_then(|a| a.authority())
+                .map(|k| Pubkey::try_from(k.bytes()).unwrap()),
+            collection: value
+                .collection()
+                .and_then(|c| c.collection())
+                .and_then(|u| u.value())
+                .map(|k| Pubkey::try_from(k.bytes()).unwrap()),
+            is_collection_verified: value
+                .collection()
+                .and_then(|c| c.is_collection_verified())
+                .map(|u| u.value()),
+            creators: value
+                .dynamic_details()
+                .and_then(|d| d.creators())
+                .and_then(|u| u.value())
+                .map(|v| v.iter().map(|creator| Creator::from(creator)).collect())
+                .unwrap_or_default(),
+            royalty_amount: value
+                .dynamic_details()
+                .and_then(|u| u.royalty_amount())
+                .map(|d| d.value() as i64)
+                .unwrap_or_default(),
+            is_burnt: value
+                .dynamic_details()
+                .and_then(|d| d.is_burnt())
+                .map(|u| u.value())
+                .unwrap_or_default(),
+            is_compressible: value
+                .dynamic_details()
+                .and_then(|d| d.is_compressible())
+                .map(|u| u.value())
+                .unwrap_or_default(),
+            is_compressed: value
+                .dynamic_details()
+                .and_then(|d| d.is_compressed())
+                .map(|u| u.value())
+                .unwrap_or_default(),
+            is_frozen: value
+                .dynamic_details()
+                .and_then(|d| d.is_frozen())
+                .map(|u| u.value())
+                .unwrap_or_default(),
+            supply: value
+                .dynamic_details()
+                .and_then(|d| d.supply())
+                .map(|u| u.value() as i64),
+            update_authority: None, // requires mpl core collections
+            metadata_url: value
+                .dynamic_details()
+                .and_then(|d| d.url())
+                .and_then(|u| u.value())
+                .map(|s| UrlWithStatus::new(s, false)),
+            slot_updated: value.get_slot_updated() as i64,
+            fungible_asset_mint: None,
+            fungible_asset_balance: None,
+        }
     }
 }

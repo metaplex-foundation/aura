@@ -355,13 +355,7 @@ where
         }
 
         index_storage
-            .update_asset_indexes_batch(
-                asset_indexes
-                    .values()
-                    .cloned()
-                    .collect::<Vec<AssetIndex>>()
-                    .as_slice(),
-            )
+            .update_asset_indexes_batch(asset_indexes.as_slice())
             .await?;
         metrics.inc_number_of_records_synchronized(
             "synchronized_records",

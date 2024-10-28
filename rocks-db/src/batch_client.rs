@@ -106,7 +106,51 @@ impl AssetUpdateIndexStorage for Storage {
 }
 
 impl Storage {
-    pub(crate) async fn get_assets_with_collections_and_urls(
+    pub async fn get_asset_indexes_with_collections_and_urls(
+        &self,
+        asset_ids: Vec<Pubkey>,
+    ) -> Result<(Vec<AssetIndex>, HashSet<Pubkey>, HashMap<Pubkey, String>)> {
+        let db = self.db.clone();
+        let d_fut = tokio::task::spawn_blocking(move || {
+            let d = db.batched_multi_get_cf(
+                &db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                asset_ids,
+                false, //sorting the input and using true here slows down the method by 5% for batches or 15% for an indiviual asset
+            );
+            let mut asset_indexes = Vec::new();
+            let mut assets_collection_pks = HashSet::new();
+            let mut urls = HashMap::new();
+
+            for asset in d {
+                let asset = asset?;
+                if let Some(asset) = asset {
+                    let asset = fb::root_as_asset_complete_details(asset.as_ref())
+                        .map_err(|e| StorageError::Common(e.to_string()))?;
+                    let key =
+                        Pubkey::new_from_array(asset.pubkey().unwrap().bytes().try_into().unwrap());
+                    asset
+                        .collection()
+                        .and_then(|c| c.collection())
+                        .and_then(|c| c.value())
+                        .map(|c| {
+                            assets_collection_pks.insert(Pubkey::try_from(c.bytes()).unwrap())
+                        });
+                    asset
+                        .dynamic_details()
+                        .and_then(|d| d.url())
+                        .and_then(|u| u.value())
+                        .map(|u| urls.insert(key.clone(), u.to_string()));
+                    asset_indexes.push(asset.into());
+                }
+            }
+            Ok::<(_, _, _), StorageError>((asset_indexes, assets_collection_pks, urls))
+        });
+        d_fut
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?
+    }
+
+    pub async fn get_assets_with_collections_and_urls(
         &self,
         asset_ids: Vec<Pubkey>,
     ) -> Result<(
@@ -157,11 +201,11 @@ impl Storage {
 
 #[async_trait]
 impl AssetIndexReader for Storage {
-    async fn get_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<HashMap<Pubkey, AssetIndex>> {
-        let start_time = chrono::Utc::now();
+    async fn get_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>> {
+        let start_time: chrono::DateTime<chrono::Utc> = chrono::Utc::now();
         // let assets_data_fut = self.asset_data.batch_get(keys.to_vec());
 
-        let assets_d_fut = self.get_assets_with_collections_and_urls(keys.to_vec());
+        let assets_i_fut = self.get_asset_indexes_with_collections_and_urls(keys.to_vec());
         // these data will be used only during live synchronization
         // during full sync will be passed mint keys meaning response will be always empty
         let token_accounts_fut = self.token_accounts.batch_get(keys.to_vec());
@@ -171,7 +215,7 @@ impl AssetIndexReader for Storage {
         // let asset_details = asset_details?;
         // let token_accounts_details = token_accounts_details?;
 
-        let (asset_details, assets_collection_pks, urls) = assets_d_fut.await?;
+        let (mut asset_indexes, assets_collection_pks, urls) = assets_i_fut.await?;
 
         // let assets_collection_pks = asset_details
         //     .iter()
@@ -238,35 +282,34 @@ impl AssetIndexReader for Storage {
         //     .filter_map(|(pubkey, asset)| asset.authority.value.map(|v| (pubkey, v)))
         //     .collect::<HashMap<_, _>>();
 
-        let mut asset_indexes: HashMap<Pubkey, AssetIndex> = asset_details
-            .iter()
-            .map(|(key, asset)| {
-                let mut asset_index = asset.to_index_without_url_checks(&mpl_core_collections);
-                if let Some(ref mut mut_val) = asset_index.metadata_url {
-                    mut_val.is_downloaded = offchain_data_downloaded_map
-                        .get(&mut_val.metadata_url)
-                        .copied()
-                        .unwrap_or_default();
-                }
-                (*key, asset_index)
-            })
-            .collect();
+        asset_indexes.iter_mut().for_each(|ref mut asset_index| {
+            if let Some(coll) = asset_index.collection {
+                asset_index.update_authority = mpl_core_collections.get(&coll).copied();
+            }
+            if let Some(ref mut mut_val) = asset_index.metadata_url {
+                mut_val.is_downloaded = offchain_data_downloaded_map
+                    .get(&mut_val.metadata_url)
+                    .copied()
+                    .unwrap_or_default();
+            }
+        });
         let token_accounts_details = token_accounts_fut.await?;
 
         // compare to other data this data is saved in HashMap by token account keys, not mints
-        asset_indexes.extend(token_accounts_details.iter().flatten().map(|token_acc| {
-            let asset_index = AssetIndex {
-                pubkey: token_acc.pubkey,
-                specification_asset_class: SpecificationAssetClass::FungibleToken,
-                owner: Some(token_acc.owner),
-                fungible_asset_mint: Some(token_acc.mint),
-                fungible_asset_balance: Some(token_acc.amount as u64),
-                slot_updated: token_acc.slot_updated,
-                ..Default::default()
-            };
-
-            (token_acc.pubkey, asset_index)
-        }));
+        asset_indexes.extend(
+            token_accounts_details
+                .iter()
+                .flatten()
+                .map(|token_acc| AssetIndex {
+                    pubkey: token_acc.pubkey,
+                    specification_asset_class: SpecificationAssetClass::FungibleToken,
+                    owner: Some(token_acc.owner),
+                    fungible_asset_mint: Some(token_acc.mint),
+                    fungible_asset_balance: Some(token_acc.amount as u64),
+                    slot_updated: token_acc.slot_updated,
+                    ..Default::default()
+                }),
+        );
 
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,

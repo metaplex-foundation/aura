@@ -37,7 +37,7 @@ pub trait AssetUpdateIndexStorage {
 #[automock]
 #[async_trait]
 pub trait AssetIndexReader {
-    async fn get_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<HashMap<Pubkey, AssetIndex>>;
+    async fn get_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>>;
 }
 
 #[automock]
@@ -91,7 +91,7 @@ impl AssetUpdateIndexStorage for MockAssetIndexStorage {
 
 #[async_trait]
 impl AssetIndexReader for MockAssetIndexStorage {
-    async fn get_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<HashMap<Pubkey, AssetIndex>> {
+    async fn get_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>> {
         self.mock_asset_index_reader.get_asset_indexes(keys).await
     }
 }
