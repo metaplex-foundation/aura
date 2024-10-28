@@ -8,11 +8,10 @@ use std::{
 use criterion::{criterion_group, criterion_main, Criterion};
 use entities::{api_req_params::Options, enums::SpecificationAssetClass};
 use metrics_utils::SynchronizerMetricsConfig;
-use rocks_db::{storage_traits::Dumper, Storage};
+use rocks_db::{storage_traits::{AssetIndexReader, Dumper}, Storage};
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 use tracing::info;
-
 
 async fn bench_batch_get_keys(storage: Arc<Storage>, pubkeys: Vec<Pubkey>) {
     storage.asset_dynamic_data.batch_get(pubkeys).await.unwrap();
@@ -20,7 +19,6 @@ async fn bench_batch_get_keys(storage: Arc<Storage>, pubkeys: Vec<Pubkey>) {
     //     .await
     //     .unwrap();
 }
-
 
 // async fn simple_iterate(storage: Arc<Storage>) {
 //     for k in storage.asset_data.iter_start() {
@@ -84,6 +82,10 @@ async fn bench_get_assets(storage: Arc<Storage>, pubkeys: Vec<Pubkey>) {
         .unwrap();
 }
 
+async fn bench_get_asset_indexes(storage: Arc<Storage>, pubkeys: Vec<Pubkey>) {
+    storage.get_asset_indexes(&pubkeys).await.unwrap();
+}
+
 async fn bench_get_assets_individually(storage: Arc<Storage>, pubkeys: Vec<Pubkey>) {
     for pubkey in pubkeys {
         storage
@@ -99,7 +101,7 @@ async fn bench_dump(storage: Arc<Storage>, batch_size: usize) {
     // let temp_dir_path = temp_dir.path();
     let temp_dir_path =
         Path::new("/Users/stanislavcherviakov/src/everstake/metaplex/utility-chain/datadir");
-    
+
     let sync_metrics = Arc::new(SynchronizerMetricsConfig::new());
     storage
         .dump_db(temp_dir_path, batch_size, &rx, sync_metrics)
@@ -153,7 +155,15 @@ fn dump_benchmark(c: &mut Criterion) {
         b.iter(|| rt.block_on(bench_get_assets(storage.clone(), sampled_pubkeys.clone())))
     });
     group.bench_function("get_assets_individually", |b| {
-        b.iter(|| rt.block_on(bench_get_assets_individually(storage.clone(), sampled_pubkeys.clone())))
+        b.iter(|| {
+            rt.block_on(bench_get_assets_individually(
+                storage.clone(),
+                sampled_pubkeys.clone(),
+            ))
+        })
+    });
+    group.bench_function("get_asset_indexes", |b| {
+        b.iter(|| rt.block_on(bench_get_asset_indexes(storage.clone(), sampled_pubkeys.clone())))
     });
     // group.bench_function("batch_get_keys", |b| {
     //     b.iter(|| rt.block_on(bench_batch_get_keys(storage.clone(), sampled_pubkeys.clone())))
