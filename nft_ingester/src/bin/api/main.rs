@@ -27,7 +27,7 @@ use usecase::proofs::MaybeProofChecker;
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
-pub const DEFAULT_SECONDARY_FIRST_ROCKSDB_PATH: &str = "./my_rocksdb_secondary_first";
+pub const DEFAULT_SECONDARY_FIRST_ROCKSDB_PATH_CONTAINER: &str = "./my_rocksdb_secondary_first";
 pub const DEFAULT_SECONDARY_SECOND_ROCKSDB_PATH_CONTAINER: &str = "./my_rocksdb_secondary_second";
 
 #[tokio::main(flavor = "multi_thread")]
@@ -88,9 +88,9 @@ pub async fn main() -> Result<(), IngesterError> {
         .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string());
 
     let secondary_storage_first_path = config
-        .rocks_db_secondary_path_container
+        .rocks_db_secondary_first_path_container
         .clone()
-        .unwrap_or(DEFAULT_SECONDARY_FIRST_ROCKSDB_PATH.to_string());
+        .unwrap_or(DEFAULT_SECONDARY_FIRST_ROCKSDB_PATH_CONTAINER.to_string());
     let secondary_storage_first = Storage::open_secondary(
         &primary_storage_path,
         &secondary_storage_first_path,
@@ -101,9 +101,9 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let secondary_storage_second_path = config
-        .rocks_db_secondary_path_container
+        .rocks_db_secondary_first_path_container
         .clone()
-        .unwrap_or(DEFAULT_SECONDARY_FIRST_ROCKSDB_PATH.to_string());
+        .unwrap_or(DEFAULT_SECONDARY_SECOND_ROCKSDB_PATH_CONTAINER.to_string());
     let secondary_storage_second_path = Storage::open_secondary(
         &primary_storage_path,
         &secondary_storage_second_path,
