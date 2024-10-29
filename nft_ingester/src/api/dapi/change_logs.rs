@@ -35,8 +35,10 @@ pub async fn get_proof_for_assets(
     if !rocks_db.can_process_assets(asset_ids.as_slice()).await {
         return Err(StorageError::CannotServiceRequest);
     }
-    let mut results: HashMap<String, Option<AssetProof>> =
-        asset_ids.iter().map(|id| (id.to_string(), None)).collect();
+    let mut results: HashMap<String, Option<AssetProof>> = asset_ids
+        .iter()
+        .map(|id: &Pubkey| (id.to_string(), None))
+        .collect();
 
     let tree_ids = fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids)
         .values()

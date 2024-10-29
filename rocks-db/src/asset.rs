@@ -31,7 +31,7 @@ pub struct AssetSelectedMaps {
     pub spl_mints: HashMap<Pubkey, SplMint>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct AssetCompleteDetails {
     pub pubkey: Pubkey,
     pub static_details: Option<AssetStaticDetails>,
@@ -1094,7 +1094,7 @@ impl AssetCompleteDetails {
 // The following structures are used to store the asset data in the rocksdb database. The data is spread across multiple columns based on the update pattern.
 // The final representation of the asset should be reconstructed by querying the database for the asset and its associated columns.
 // Some values, like slot_updated should be calculated based on the latest update to the asset.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct AssetStaticDetails {
     pub pubkey: Pubkey,
     pub specification_asset_class: SpecificationAssetClass,
@@ -1111,7 +1111,7 @@ pub struct AssetStaticDetailsDeprecated {
     pub created_at: i64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct AssetDynamicDetails {
     pub pubkey: Pubkey,
     pub is_compressible: Updated<bool>,
@@ -1165,7 +1165,7 @@ pub struct MetadataMintMap {
     pub mint_key: Pubkey,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct AssetAuthority {
     pub pubkey: Pubkey,
     pub authority: Pubkey,
@@ -1180,7 +1180,7 @@ pub struct AssetAuthorityDeprecated {
     pub slot_updated: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct AssetOwner {
     pub pubkey: Pubkey,
     pub owner: Updated<Option<Pubkey>>,
@@ -1213,7 +1213,7 @@ pub struct AssetLeaf {
     pub slot_updated: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct AssetCollection {
     pub pubkey: Pubkey,
     pub collection: Updated<Pubkey>,
@@ -1507,6 +1507,14 @@ pub fn merge_complete_details_fb(
     existing_val: Option<&[u8]>,
     operands: &MergeOperands,
 ) -> Option<Vec<u8>> {
+    merge_complete_details_fb_raw(_new_key, existing_val, operands.iter())
+}
+
+pub fn merge_complete_details_fb_raw<'a>(
+    _new_key: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: impl Iterator<Item = &'a [u8]>,
+) -> Option<Vec<u8>> {
     let mut builder = FlatBufferBuilder::with_capacity(4048);
     // Deserialize existing value into an iterator
     let existing_iter = existing_val
@@ -1523,9 +1531,7 @@ pub fn merge_complete_details_fb(
         .into_iter();
 
     // Deserialize operands into an iterator
-    let operands_iter = operands
-        .iter()
-        .filter_map(|bytes| fb::root_as_asset_complete_details(bytes).ok());
+    let operands_iter = operands.filter_map(|bytes| fb::root_as_asset_complete_details(bytes).ok());
 
     // Combine existing and operands into a single iterator
     let all_assets: Vec<_> = existing_iter.chain(operands_iter).collect();
@@ -1574,7 +1580,7 @@ pub fn merge_complete_details_fb(
             collection,
         },
     );
-    builder.finish(res, None);
+    builder.finish_minimal(res);
     Some(builder.finished_data().to_vec())
 }
 
@@ -1623,7 +1629,7 @@ macro_rules! merge_updated_primitive {
     ($func_name:ident, $updated_type:ident, $updated_args:ident) => {
         fn $func_name<'a, T, F>(
             builder: &mut flatbuffers::FlatBufferBuilder<'a>,
-            iter: impl Iterator<Item = T>,
+            iter: impl Iterator<Item = T> + DoubleEndedIterator,
             extract_fn: F,
         ) -> Option<flatbuffers::WIPOffset<fb::$updated_type<'a>>>
         where
@@ -1631,6 +1637,7 @@ macro_rules! merge_updated_primitive {
             T: 'a,
         {
             iter.filter_map(extract_fn)
+                .rev() // Reverse the iterator for max_by to get the first-most element for the case of multiple equal values
                 .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                 .map(|v| {
                     let version_offset = v.update_version().map(|uv| {
@@ -1659,7 +1666,7 @@ macro_rules! merge_updated_offset {
     ($func_name:ident, $updated_type:ident, $updated_args:ident, $value_create_fn:path) => {
         fn $func_name<'a, T, F>(
             builder: &mut flatbuffers::FlatBufferBuilder<'a>,
-            iter: impl Iterator<Item = T>,
+            iter: impl Iterator<Item = T> + DoubleEndedIterator,
             extract_fn: F,
         ) -> Option<flatbuffers::WIPOffset<fb::$updated_type<'a>>>
         where
@@ -1667,6 +1674,7 @@ macro_rules! merge_updated_offset {
             T: 'a,
         {
             iter.filter_map(extract_fn)
+                .rev() // Reverse the iterator for max_by to get the first-most element for the case of multiple equal values
                 .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                 .map(|v| {
                     let version_offset = v.update_version().map(|uv| {
@@ -1739,7 +1747,7 @@ merge_updated_offset!(
 
 fn merge_updated_creators<'a, T, F>(
     builder: &mut flatbuffers::FlatBufferBuilder<'a>,
-    iter: impl Iterator<Item = T>,
+    iter: impl Iterator<Item = T> + DoubleEndedIterator,
     extract_fn: F,
 ) -> Option<flatbuffers::WIPOffset<fb::UpdatedCreators<'a>>>
 where
@@ -1747,6 +1755,7 @@ where
     T: 'a,
 {
     iter.filter_map(extract_fn)
+        .rev() // Reverse the iterator for max_by to get the first-most element for the case of multiple equal values
         .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
         .map(|v| {
             // Create UpdateVersion
@@ -1900,6 +1909,7 @@ fn merge_authority<'a>(
     pk?;
     iter.iter()
         .cloned()
+        .rev() // Reverse the iterator for max_by to get the first-most element for the case of multiple equal values
         .max_by(|a, b| {
             if let (Some(a_write_version), Some(b_write_version)) = unsafe {
                 (
@@ -2487,5 +2497,237 @@ impl SlotAssetIdxKey {
             slot,
             pubkey: asset,
         })
+    }
+}
+#[cfg(test)]
+mod tests {
+
+    use entities::models::Creator;
+
+    use super::*;
+
+    fn create_full_complete_asset() -> AssetCompleteDetails {
+        let pubkey = Pubkey::from(rand::random::<[u8; 32]>());
+        let static_details = AssetStaticDetails {
+            pubkey: pubkey,
+            specification_asset_class: SpecificationAssetClass::Nft,
+            royalty_target_type: RoyaltyTargetType::Creators,
+            created_at: 12345,
+            edition_address: None,
+        };
+
+        let dynamic_details = AssetDynamicDetails {
+            pubkey: pubkey,
+            is_compressible: Updated::new(58, Some(UpdateVersion::Sequence(500)), false),
+            is_compressed: Updated::new(580, Some(UpdateVersion::Sequence(530)), true),
+            is_frozen: Updated::new(50, None, false),
+            supply: Some(Updated::new(50, None, 1)),
+            seq: Some(Updated::new(580, Some(UpdateVersion::Sequence(530)), 530)),
+            is_burnt: Updated::new(50, None, false),
+            was_decompressed: Updated::new(50, None, false),
+            onchain_data: Some(Updated::new(
+                50,
+                Some(UpdateVersion::Sequence(530)),
+                "onchain_data".to_string(),
+            )),
+            creators: Updated::new(
+                50,
+                None,
+                vec![Creator {
+                    creator: pubkey,
+                    creator_verified: true,
+                    creator_share: 100,
+                }],
+            ),
+            royalty_amount: Updated::new(50, None, 100),
+            url: Updated::new(50, None, "url".to_string()),
+            chain_mutability: Some(Updated::new(50, None, ChainMutability::Mutable)),
+            lamports: Some(Updated::new(50, None, 100)),
+            executable: Some(Updated::new(50, Some(UpdateVersion::Sequence(531)), false)),
+            metadata_owner: Some(Updated::new(
+                50,
+                Some(UpdateVersion::Sequence(533)),
+                "metadata_owner".to_string(),
+            )),
+            raw_name: Some(Updated::new(50, None, "raw_name".to_string())),
+            mpl_core_plugins: Some(Updated::new(50, None, "mpl_core_plugins".to_string())),
+            mpl_core_unknown_plugins: Some(Updated::new(
+                50,
+                None,
+                "mpl_core_unknown_plugins".to_string(),
+            )),
+            rent_epoch: Some(Updated::new(50, Some(UpdateVersion::Sequence(533)), 100)),
+            num_minted: Some(Updated::new(50, None, 100)),
+            current_size: Some(Updated::new(50, Some(UpdateVersion::Sequence(533)), 100)),
+            plugins_json_version: Some(Updated::new(50, Some(UpdateVersion::Sequence(535)), 100)),
+            mpl_core_external_plugins: Some(Updated::new(
+                50,
+                Some(UpdateVersion::Sequence(537)),
+                "mpl_core_external_plugins".to_string(),
+            )),
+            mpl_core_unknown_external_plugins: Some(Updated::new(
+                50,
+                Some(UpdateVersion::Sequence(539)),
+                "mpl_core_unknown_external_plugins".to_string(),
+            )),
+            mint_extensions: Some(Updated::new(50, None, "mint_extensions".to_string())),
+        };
+
+        let authority = AssetAuthority {
+            pubkey: pubkey,
+            write_version: Some(500),
+            slot_updated: 5000,
+            authority: Pubkey::from(rand::random::<[u8; 32]>()),
+        };
+        let owner = AssetOwner {
+            pubkey: pubkey,
+            owner_type: Updated::new(50, None, OwnerType::Single),
+            owner: Updated::new(
+                51,
+                Some(UpdateVersion::Sequence(53)),
+                Some(Pubkey::from(rand::random::<[u8; 32]>())),
+            ),
+            delegate: Updated::new(
+                56,
+                Some(UpdateVersion::Sequence(54)),
+                Some(Pubkey::from(rand::random::<[u8; 32]>())),
+            ),
+            owner_delegate_seq: Updated::new(58, None, None),
+        };
+
+        let collection = AssetCollection {
+            pubkey: pubkey,
+            collection: Updated::new(50, None, Pubkey::from(rand::random::<[u8; 32]>())),
+            is_collection_verified: Updated::new(50, None, true),
+            authority: Updated::new(
+                58,
+                Some(UpdateVersion::Sequence(48)),
+                Some(Pubkey::from(rand::random::<[u8; 32]>())),
+            ),
+        };
+
+        AssetCompleteDetails {
+            pubkey,
+            static_details: Some(static_details),
+            dynamic_details: Some(dynamic_details),
+            authority: Some(authority),
+            owner: Some(owner),
+            collection: Some(collection),
+        }
+    }
+
+    #[test]
+    fn test_merge_complete_details_with_no_operands_keeps_object_unchanged() {
+        let asset = create_full_complete_asset();
+        let mut builder = FlatBufferBuilder::new();
+        let asset_fb = asset.convert_to_fb(&mut builder);
+        builder.finish_minimal(asset_fb);
+        let origin_bytes = builder.finished_data();
+        let operands = vec![];
+        let key = rand::random::<[u8; 32]>();
+        let result = merge_complete_details_fb_raw(&key, Some(origin_bytes), operands.into_iter())
+            .expect("should return a result");
+        assert_eq!(result, origin_bytes);
+        fb::root_as_asset_complete_details(&result).expect("should decode");
+    }
+
+    #[test]
+    fn test_merge_on_empty_existing_value() {
+        let asset = create_full_complete_asset();
+        let mut builder = FlatBufferBuilder::new();
+        let asset_fb = asset.convert_to_fb(&mut builder);
+        builder.finish_minimal(asset_fb);
+        let origin_bytes = builder.finished_data();
+        let operands = vec![origin_bytes];
+        let key = rand::random::<[u8; 32]>();
+        let result = merge_complete_details_fb_raw(&key, None, operands.into_iter())
+            .expect("should return a result");
+        assert_eq!(result, origin_bytes);
+        fb::root_as_asset_complete_details(&result).expect("should decode");
+    }
+
+    #[test]
+    fn test_merge_only_dynamic_data_on_existing_data_without_dynamic_data() {
+        let original_asset = create_full_complete_asset();
+        let mut asset = original_asset.clone();
+        asset.dynamic_details = None;
+        let operand_asset = AssetCompleteDetails {
+            pubkey: original_asset.pubkey.clone(),
+            dynamic_details: original_asset.dynamic_details.clone(),
+            ..Default::default()
+        };
+        let mut builder = FlatBufferBuilder::new();
+        let existing_fb = asset.convert_to_fb(&mut builder);
+        builder.finish_minimal(existing_fb);
+        let existing_bytes = builder.finished_data().to_owned();
+        builder.reset();
+        let operand_asset_fb = operand_asset.convert_to_fb(&mut builder);
+        builder.finish_minimal(operand_asset_fb);
+        let operand_bytes = builder.finished_data().to_owned();
+        let operands = vec![operand_bytes.as_slice()];
+        let key = rand::random::<[u8; 32]>();
+        builder.reset();
+        let expected_fb = original_asset.convert_to_fb(&mut builder);
+        builder.finish_minimal(expected_fb);
+        let expected_bytes = builder.finished_data();
+        let result =
+            merge_complete_details_fb_raw(&key, Some(&existing_bytes), operands.into_iter())
+                .expect("should return a result");
+        assert_eq!(result, expected_bytes);
+        let result_asset = fb::root_as_asset_complete_details(&result).expect("should decode");
+        assert_eq!(AssetCompleteDetails::from(result_asset), original_asset);
+    }
+
+    #[test]
+    fn test_merge_with_some_fields_updated_with_higher_sequences_while_others_have_lower_sequences()
+    {
+        let original_asset = create_full_complete_asset();
+        let operand_asset = AssetCompleteDetails {
+            pubkey: original_asset.pubkey.clone(),
+            dynamic_details: Some(AssetDynamicDetails {
+                pubkey: original_asset.pubkey.clone(),
+                is_compressible: Updated::new(59, Some(UpdateVersion::Sequence(510)), true),
+                is_compressed: Updated::new(580, Some(UpdateVersion::Sequence(530)), false), // should not be updated (should keep original value)
+                onchain_data: Some(Updated::new(
+                    50,
+                    Some(UpdateVersion::Sequence(540)),
+                    "new_onchain_data".to_string(),
+                )),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let mut expected_asset = original_asset.clone();
+        expected_asset.dynamic_details.as_mut().map(|ref mut dd| {
+            dd.is_compressible = Updated::new(59, Some(UpdateVersion::Sequence(510)), true)
+        });
+        expected_asset.dynamic_details.as_mut().map(|ref mut dd| {
+            dd.onchain_data = Some(Updated::new(
+                50,
+                Some(UpdateVersion::Sequence(540)),
+                "new_onchain_data".to_string(),
+            ))
+        });
+
+        let mut builder = FlatBufferBuilder::new();
+        let existing_fb = original_asset.convert_to_fb(&mut builder);
+        builder.finish_minimal(existing_fb);
+        let existing_bytes = builder.finished_data().to_owned();
+        builder.reset();
+        let operand_asset_fb = operand_asset.convert_to_fb(&mut builder);
+        builder.finish_minimal(operand_asset_fb);
+        let operand_bytes = builder.finished_data().to_owned();
+        let operands = vec![operand_bytes.as_slice()];
+        let key = rand::random::<[u8; 32]>();
+        builder.reset();
+        let expected_fb = expected_asset.convert_to_fb(&mut builder);
+        builder.finish_minimal(expected_fb);
+        let expected_bytes = builder.finished_data();
+        let result =
+            merge_complete_details_fb_raw(&key, Some(&existing_bytes), operands.into_iter())
+                .expect("should return a result");
+        let result_asset = fb::root_as_asset_complete_details(&result).expect("should decode");
+        assert_eq!(AssetCompleteDetails::from(result_asset), expected_asset);
+        assert_eq!(result, expected_bytes);
     }
 }
