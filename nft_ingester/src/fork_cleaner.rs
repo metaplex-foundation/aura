@@ -76,6 +76,35 @@ where
         let mut forked_slots = 0;
         let mut delete_items = Vec::new();
 
+        // from this column data will be dropped by slot
+        // if we have any update from forked slot we have to delete it
+        for cl_item in self.cl_items_manager.cl_items_iter() {
+            if !rx.is_empty() {
+                info!("Stop iteration over cl items iterator...");
+                return;
+            }
+
+            if cl_item.slot_updated == 0 || cl_item.slot_updated > last_slot_for_check {
+                continue;
+            }
+
+            if !all_non_forked_slots.contains(&cl_item.slot_updated) {
+                delete_items.push(ForkedItem {
+                    tree: cl_item.cli_tree_key,
+                    seq: cl_item.cli_seq,
+                    node_idx: cl_item.cli_node_idx,
+                });
+            }
+
+            if delete_items.len() >= CI_ITEMS_DELETE_BATCH_SIZE {
+                self.delete_cl_items(&mut delete_items).await;
+            }
+        }
+
+        if !delete_items.is_empty() {
+            self.delete_cl_items(&mut delete_items).await;
+        }
+
         let mut signatures_to_drop = Vec::new();
 
         // fork cleaner iterate over signatures which are saved for each parsed transaction
@@ -156,36 +185,6 @@ where
 
         if !delete_items.is_empty() {
             self.delete_tree_seq_idx(&mut delete_items).await;
-        }
-
-        // once we cleaned tree_seq_idx column family it time to clean cl_items
-        // from this column data will be dropped by slot
-        // if we have any update from forked slot we have to delete it
-        for cl_item in self.cl_items_manager.cl_items_iter() {
-            if !rx.is_empty() {
-                info!("Stop iteration over cl items iterator...");
-                return;
-            }
-
-            if cl_item.slot_updated == 0 || cl_item.slot_updated > last_slot_for_check {
-                continue;
-            }
-
-            if !all_non_forked_slots.contains(&cl_item.slot_updated) {
-                delete_items.push(ForkedItem {
-                    tree: cl_item.cli_tree_key,
-                    seq: cl_item.cli_seq,
-                    node_idx: cl_item.cli_node_idx,
-                });
-            }
-
-            if delete_items.len() >= CI_ITEMS_DELETE_BATCH_SIZE {
-                self.delete_cl_items(&mut delete_items).await;
-            }
-        }
-
-        if !delete_items.is_empty() {
-            self.delete_cl_items(&mut delete_items).await;
         }
 
         if !signatures_to_drop.is_empty() {
