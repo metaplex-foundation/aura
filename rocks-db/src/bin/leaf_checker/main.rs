@@ -44,7 +44,10 @@ pub async fn main() {
 
     println!("Start looking for a missed CL items...");
 
-    let mut batch = Vec::new();
+    let mut delete_batch = Vec::new();
+
+    let mut select_batch_keys = Vec::new();
+    let mut select_batch_data = Vec::new();
 
     for cl_leaf in source_db.cl_leafs.iter_start() {
         match cl_leaf {
@@ -53,47 +56,66 @@ pub async fn main() {
 
                 let key = ClItemKey::new(cl_leaf_data.cli_node_idx, cl_leaf_data.cli_tree_key);
 
-                let cl_item_row = source_db.cl_items.get(key).unwrap();
-                if cl_item_row.is_none() {
-                    assets_with_missed_cl_items += 1;
+                select_batch_keys.push(key);
+                select_batch_data.push(cl_leaf_data);
 
-                    let asset_id =
-                        get_asset_id(&cl_leaf_data.cli_tree_key, &cl_leaf_data.cli_leaf_idx).await;
-                    println!("Found missed CL item for: {}", asset_id);
+                if select_batch_keys.len() >= 5000 {
+                    let cl_item_rows = source_db
+                        .cl_items
+                        .batch_get(std::mem::take(&mut select_batch_keys))
+                        .await
+                        .unwrap();
 
-                    let asset_dynamic_data = source_db
-                        .asset_dynamic_data
-                        .get(asset_id)
-                        .ok()
-                        .and_then(|opt| opt)
-                        .and_then(|a| a.seq.map(|s| s.value))
-                        .unwrap_or_default();
+                    for (i, value) in cl_item_rows.iter().enumerate() {
+                        if value.is_none() {
+                            assets_with_missed_cl_items += 1;
 
-                    let asset_leaf_data = source_db
-                        .asset_leaf_data
-                        .get(asset_id)
-                        .ok()
-                        .and_then(|opt| opt)
-                        .and_then(|a| a.leaf_seq)
-                        .unwrap_or_default();
+                            let data = select_batch_data.get(i).unwrap();
 
-                    let max_asset_sequence = std::cmp::max(asset_dynamic_data, asset_leaf_data);
+                            let asset_id =
+                                get_asset_id(&data.cli_tree_key, &data.cli_leaf_idx).await;
 
-                    // if seq is 0 means asset does not exist at all
-                    // found a few such assets during testing, not sure how it happened yet
-                    if max_asset_sequence == 0 {
-                        continue;
+                            let (asset_dynamic_data, asset_leaf_data) = tokio::join!(
+                                source_db.asset_dynamic_data.batch_get(vec![asset_id]),
+                                source_db.asset_leaf_data.batch_get(vec![asset_id])
+                            );
+
+                            let asset_dynamic_data = asset_dynamic_data
+                                .ok()
+                                .and_then(|vec| vec.into_iter().next())
+                                .and_then(|data_opt| data_opt)
+                                .and_then(|data| data.seq.map(|s| s.value))
+                                .unwrap_or_default();
+
+                            let asset_leaf_data = asset_leaf_data
+                                .ok()
+                                .and_then(|vec| vec.into_iter().next())
+                                .and_then(|data_opt| data_opt)
+                                .and_then(|data| data.leaf_seq)
+                                .unwrap_or_default();
+
+                            let max_asset_sequence =
+                                std::cmp::max(asset_dynamic_data, asset_leaf_data);
+
+                            // if seq is 0 means asset does not exist at all
+                            // found a few such assets during testing, not sure how it happened yet
+                            if max_asset_sequence == 0 {
+                                continue;
+                            }
+
+                            delete_batch.push((data.cli_tree_key, max_asset_sequence));
+
+                            if delete_batch.len() >= BATCH_SIZE {
+                                source_db
+                                    .tree_seq_idx
+                                    .delete_batch(std::mem::take(&mut delete_batch))
+                                    .await
+                                    .unwrap();
+                            }
+                        }
                     }
 
-                    batch.push((cl_leaf_data.cli_tree_key, max_asset_sequence));
-
-                    if batch.len() >= BATCH_SIZE {
-                        source_db
-                            .tree_seq_idx
-                            .delete_batch(std::mem::take(&mut batch))
-                            .await
-                            .unwrap();
-                    }
+                    select_batch_data.clear();
                 }
             }
             Err(e) => {
@@ -102,10 +124,10 @@ pub async fn main() {
         }
     }
 
-    if !batch.is_empty() {
+    if !delete_batch.is_empty() {
         source_db
             .tree_seq_idx
-            .delete_batch(std::mem::take(&mut batch))
+            .delete_batch(std::mem::take(&mut delete_batch))
             .await
             .unwrap();
     }
