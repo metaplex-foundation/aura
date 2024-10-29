@@ -1502,6 +1502,505 @@ impl AssetCompleteDetails {
     }
 }
 
+pub fn merge_complete_details_fb(
+    _new_key: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: &MergeOperands,
+) -> Option<Vec<u8>> {
+    let mut builder = FlatBufferBuilder::with_capacity(4048);
+    // Deserialize existing value into an iterator
+    let existing_iter = existing_val
+        .and_then(|bytes| {
+            fb::root_as_asset_complete_details(bytes)
+                .map_err(|e| {
+                    error!(
+                        "RocksDB: AssetCompleteDetails deserialize existing_val: {}",
+                        e
+                    )
+                })
+                .ok()
+        })
+        .into_iter();
+
+    // Deserialize operands into an iterator
+    let operands_iter = operands
+        .iter()
+        .filter_map(|bytes| fb::root_as_asset_complete_details(bytes).ok());
+
+    // Combine existing and operands into a single iterator
+    let all_assets: Vec<_> = existing_iter.chain(operands_iter).collect();
+
+    let pubkey = all_assets
+        .iter()
+        .filter_map(|asset| asset.pubkey())
+        .next()
+        .map(|k| builder.create_vector(k.bytes()));
+    pubkey?;
+
+    let static_details = merge_static_details(
+        &mut builder,
+        all_assets
+            .iter()
+            .filter_map(|a| a.static_details())
+            .collect(),
+    );
+    let dynamic_details = merge_dynamic_details(
+        &mut builder,
+        all_assets
+            .iter()
+            .filter_map(|a| a.dynamic_details())
+            .collect(),
+    );
+    let authority = merge_authority(
+        &mut builder,
+        all_assets.iter().filter_map(|a| a.authority()).collect(),
+    );
+    let owner = merge_owner(
+        &mut builder,
+        all_assets.iter().filter_map(|a| a.owner()).collect(),
+    );
+    let collection = merge_collection(
+        &mut builder,
+        all_assets.iter().filter_map(|a| a.collection()).collect(),
+    );
+    let res = fb::AssetCompleteDetails::create(
+        &mut builder,
+        &fb::AssetCompleteDetailsArgs {
+            pubkey,
+            static_details,
+            dynamic_details,
+            authority,
+            owner,
+            collection,
+        },
+    );
+    builder.finish(res, None);
+    Some(builder.finished_data().to_vec())
+}
+
+fn merge_static_details<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    iter: Vec<fb::AssetStaticDetails<'a>>,
+) -> Option<WIPOffset<fb::AssetStaticDetails<'a>>> {
+    let pk = iter
+        .iter()
+        .cloned()
+        .filter_map(|asset| asset.pubkey())
+        .next()
+        .map(|k| builder.create_vector(k.bytes()));
+    pk?;
+    let args = fb::AssetStaticDetailsArgs {
+        pubkey: pk,
+        specification_asset_class: iter
+            .iter()
+            .cloned()
+            .map(|asset| asset.specification_asset_class())
+            .next()
+            .unwrap_or_default(),
+        royalty_target_type: iter
+            .iter()
+            .cloned()
+            .map(|asset| asset.royalty_target_type())
+            .next()
+            .unwrap_or_default(),
+        created_at: iter
+            .iter()
+            .cloned()
+            .map(|asset| asset.created_at())
+            .next()
+            .unwrap_or_default(),
+        edition_address: iter
+            .iter()
+            .cloned()
+            .filter_map(|asset| asset.edition_address())
+            .next()
+            .map(|k| builder.create_vector(k.bytes())),
+    };
+    Some(fb::AssetStaticDetails::create(builder, &args))
+}
+
+macro_rules! merge_updated_primitive {
+    ($func_name:ident, $updated_type:ident, $updated_args:ident) => {
+        fn $func_name<'a, T, F>(
+            builder: &mut flatbuffers::FlatBufferBuilder<'a>,
+            iter: impl Iterator<Item = T>,
+            extract_fn: F,
+        ) -> Option<flatbuffers::WIPOffset<fb::$updated_type<'a>>>
+        where
+            F: Fn(T) -> Option<fb::$updated_type<'a>>,
+            T: 'a,
+        {
+            iter.filter_map(extract_fn)
+                .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|v| {
+                    let version_offset = v.update_version().map(|uv| {
+                        fb::UpdateVersion::create(
+                            builder,
+                            &fb::UpdateVersionArgs {
+                                version_type: uv.version_type(),
+                                version_value: uv.version_value(),
+                            },
+                        )
+                    });
+                    fb::$updated_type::create(
+                        builder,
+                        &fb::$updated_args {
+                            slot_updated: v.slot_updated(),
+                            update_version: version_offset,
+                            value: v.value(),
+                        },
+                    )
+                })
+        }
+    };
+}
+
+macro_rules! merge_updated_offset {
+    ($func_name:ident, $updated_type:ident, $updated_args:ident, $value_create_fn:path) => {
+        fn $func_name<'a, T, F>(
+            builder: &mut flatbuffers::FlatBufferBuilder<'a>,
+            iter: impl Iterator<Item = T>,
+            extract_fn: F,
+        ) -> Option<flatbuffers::WIPOffset<fb::$updated_type<'a>>>
+        where
+            F: Fn(T) -> Option<fb::$updated_type<'a>>,
+            T: 'a,
+        {
+            iter.filter_map(extract_fn)
+                .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|v| {
+                    let version_offset = v.update_version().map(|uv| {
+                        fb::UpdateVersion::create(
+                            builder,
+                            &fb::UpdateVersionArgs {
+                                version_type: uv.version_type(),
+                                version_value: uv.version_value(),
+                            },
+                        )
+                    });
+                    let value_offset = v.value().map(|value| $value_create_fn(builder, value));
+                    fb::$updated_type::create(
+                        builder,
+                        &fb::$updated_args {
+                            slot_updated: v.slot_updated(),
+                            update_version: version_offset,
+                            value: value_offset,
+                        },
+                    )
+                })
+        }
+    };
+}
+
+merge_updated_primitive!(merge_updated_bool, UpdatedBool, UpdatedBoolArgs);
+merge_updated_primitive!(merge_updated_u64, UpdatedU64, UpdatedU64Args);
+merge_updated_primitive!(merge_updated_u32, UpdatedU32, UpdatedU32Args);
+merge_updated_primitive!(
+    merge_updated_chain_mutability,
+    UpdatedChainMutability,
+    UpdatedChainMutabilityArgs
+);
+merge_updated_primitive!(
+    merge_updated_owner_type,
+    UpdatedOwnerType,
+    UpdatedOwnerTypeArgs
+);
+merge_updated_offset!(
+    merge_updated_string,
+    UpdatedString,
+    UpdatedStringArgs,
+    create_string_offset
+);
+fn create_string_offset<'a>(
+    builder: &mut flatbuffers::FlatBufferBuilder<'a>,
+    value: &str,
+) -> flatbuffers::WIPOffset<&'a str> {
+    builder.create_string(value)
+}
+
+fn create_vector_offset<'a>(
+    builder: &mut flatbuffers::FlatBufferBuilder<'a>,
+    value: flatbuffers::Vector<'a, u8>,
+) -> flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>> {
+    builder.create_vector(value.bytes())
+}
+merge_updated_offset!(
+    merge_updated_pubkey,
+    UpdatedPubkey,
+    UpdatedPubkeyArgs,
+    create_vector_offset
+);
+merge_updated_offset!(
+    merge_updated_optional_pubkey,
+    UpdatedOptionalPubkey,
+    UpdatedOptionalPubkeyArgs,
+    create_vector_offset
+);
+
+fn merge_updated_creators<'a, T, F>(
+    builder: &mut flatbuffers::FlatBufferBuilder<'a>,
+    iter: impl Iterator<Item = T>,
+    extract_fn: F,
+) -> Option<flatbuffers::WIPOffset<fb::UpdatedCreators<'a>>>
+where
+    F: Fn(T) -> Option<fb::UpdatedCreators<'a>>,
+    T: 'a,
+{
+    iter.filter_map(extract_fn)
+        .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|v| {
+            // Create UpdateVersion
+            let version_offset = v.update_version().map(|uv| {
+                fb::UpdateVersion::create(
+                    builder,
+                    &fb::UpdateVersionArgs {
+                        version_type: uv.version_type(),
+                        version_value: uv.version_value(),
+                    },
+                )
+            });
+            let creators_fb = if let Some(creator_original) = v.value() {
+                let mut creators = Vec::with_capacity(creator_original.len());
+                for creator in &creator_original {
+                    let pubkey_fb = creator.creator().map(|c| builder.create_vector(c.bytes()));
+
+                    let creator_fb = fb::Creator::create(
+                        builder,
+                        &fb::CreatorArgs {
+                            creator: pubkey_fb,
+                            creator_verified: creator.creator_verified(),
+                            creator_share: creator.creator_share(),
+                        },
+                    );
+                    creators.push(creator_fb);
+                }
+                Some(builder.create_vector(creators.as_slice()))
+            } else {
+                None
+            };
+
+            // Create UpdatedCreators
+            fb::UpdatedCreators::create(
+                builder,
+                &fb::UpdatedCreatorsArgs {
+                    slot_updated: v.slot_updated(),
+                    update_version: version_offset,
+                    value: creators_fb,
+                },
+            )
+        })
+}
+
+fn merge_dynamic_details<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    iter: Vec<fb::AssetDynamicDetails<'a>>,
+) -> Option<WIPOffset<fb::AssetDynamicDetails<'a>>> {
+    let pk = iter
+        .iter()
+        .cloned()
+        .filter_map(|asset| asset.pubkey())
+        .next()
+        .map(|k| builder.create_vector(k.bytes()));
+    pk?;
+    let is_compressible = merge_updated_bool(builder, iter.iter().cloned(), |asset| {
+        asset.is_compressible()
+    });
+    let is_compressed =
+        merge_updated_bool(builder, iter.iter().cloned(), |asset| asset.is_compressed());
+    let is_frozen = merge_updated_bool(builder, iter.iter().cloned(), |asset| asset.is_frozen());
+    let supply = merge_updated_u64(builder, iter.iter().cloned(), |asset| asset.supply());
+    let seq = merge_updated_u64(builder, iter.iter().cloned(), |asset| asset.seq());
+    let is_burnt = merge_updated_bool(builder, iter.iter().cloned(), |asset| asset.is_burnt());
+    let was_decompressed = merge_updated_bool(builder, iter.iter().cloned(), |asset| {
+        asset.was_decompressed()
+    });
+    let onchain_data =
+        merge_updated_string(builder, iter.iter().cloned(), |asset| asset.onchain_data());
+    let creators = merge_updated_creators(builder, iter.iter().cloned(), |a| a.creators());
+    let royalty_amount = merge_updated_u32(builder, iter.iter().cloned(), |asset| {
+        asset.royalty_amount()
+    });
+    let url = merge_updated_string(builder, iter.iter().cloned(), |asset| asset.url());
+    let chain_mutability = merge_updated_chain_mutability(builder, iter.iter().cloned(), |asset| {
+        asset.chain_mutability()
+    });
+    let lamports = merge_updated_u64(builder, iter.iter().cloned(), |asset| asset.lamports());
+    let executable = merge_updated_bool(builder, iter.iter().cloned(), |asset| asset.executable());
+    let metadata_owner = merge_updated_string(builder, iter.iter().cloned(), |asset| {
+        asset.metadata_owner()
+    });
+    let raw_name = merge_updated_string(builder, iter.iter().cloned(), |asset| asset.raw_name());
+    let mpl_core_plugins = merge_updated_string(builder, iter.iter().cloned(), |asset| {
+        asset.mpl_core_plugins()
+    });
+    let mpl_core_unknown_plugins = merge_updated_string(builder, iter.iter().cloned(), |asset| {
+        asset.mpl_core_unknown_plugins()
+    });
+    let rent_epoch = merge_updated_u64(builder, iter.iter().cloned(), |asset| asset.rent_epoch());
+    let num_minted = merge_updated_u32(builder, iter.iter().cloned(), |asset| asset.num_minted());
+    let current_size =
+        merge_updated_u32(builder, iter.iter().cloned(), |asset| asset.current_size());
+    let plugins_json_version = merge_updated_u32(builder, iter.iter().cloned(), |asset| {
+        asset.plugins_json_version()
+    });
+    let mpl_core_external_plugins = merge_updated_string(builder, iter.iter().cloned(), |asset| {
+        asset.mpl_core_external_plugins()
+    });
+    let mpl_core_unknown_external_plugins =
+        merge_updated_string(builder, iter.iter().cloned(), |asset| {
+            asset.mpl_core_unknown_external_plugins()
+        });
+    let mint_extensions = merge_updated_string(builder, iter.iter().cloned(), |asset| {
+        asset.mint_extensions()
+    });
+
+    Some(fb::AssetDynamicDetails::create(
+        builder,
+        &fb::AssetDynamicDetailsArgs {
+            pubkey: pk,
+            is_compressible,
+            is_compressed,
+            is_frozen,
+            supply,
+            seq,
+            is_burnt,
+            was_decompressed,
+            onchain_data,
+            creators,
+            royalty_amount,
+            url,
+            chain_mutability,
+            lamports,
+            executable,
+            metadata_owner,
+            raw_name,
+            mpl_core_plugins,
+            mpl_core_unknown_plugins,
+            rent_epoch,
+            num_minted,
+            current_size,
+            plugins_json_version,
+            mpl_core_external_plugins,
+            mpl_core_unknown_external_plugins,
+            mint_extensions,
+        },
+    ))
+}
+
+fn merge_authority<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    iter: Vec<fb::AssetAuthority<'a>>,
+) -> Option<WIPOffset<fb::AssetAuthority<'a>>> {
+    let pk = iter
+        .iter()
+        .cloned()
+        .filter_map(|asset| asset.pubkey())
+        .next()
+        .map(|k| builder.create_vector(k.bytes()));
+    pk?;
+    iter.iter()
+        .cloned()
+        .max_by(|a, b| {
+            if let (Some(a_write_version), Some(b_write_version)) = unsafe {
+                (
+                    a._tab
+                        .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None),
+                    b._tab
+                        .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None),
+                )
+            } {
+                a_write_version.cmp(&b_write_version)
+            } else {
+                a.slot_updated().cmp(&b.slot_updated())
+            }
+        })
+        .map(|authority_original| {
+            let write_version = unsafe {
+                authority_original
+                    ._tab
+                    .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None)
+            };
+            let auth = authority_original
+                .authority()
+                .map(|x| builder.create_vector(x.bytes()));
+            let mut auth_builder = fb::AssetAuthorityBuilder::new(builder);
+            if let Some(wv) = write_version {
+                auth_builder.add_write_version(wv);
+            }
+            auth_builder.add_slot_updated(authority_original.slot_updated());
+            if let Some(x) = auth {
+                auth_builder.add_authority(x);
+            }
+            if let Some(x) = pk {
+                auth_builder.add_pubkey(x);
+            }
+            auth_builder.finish()
+        })
+}
+
+fn merge_owner<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    iter: Vec<fb::AssetOwner<'a>>,
+) -> Option<WIPOffset<fb::AssetOwner<'a>>> {
+    let pk = iter
+        .iter()
+        .cloned()
+        .filter_map(|owner| owner.pubkey())
+        .next()
+        .map(|k| builder.create_vector(k.bytes()));
+    pk?;
+    let owner = merge_updated_optional_pubkey(builder, iter.iter().cloned(), |owner| owner.owner());
+    let delegate =
+        merge_updated_optional_pubkey(builder, iter.iter().cloned(), |owner| owner.delegate());
+    let owner_type =
+        merge_updated_owner_type(builder, iter.iter().cloned(), |owner| owner.owner_type());
+    let owner_delegate_seq = merge_updated_u64(builder, iter.iter().cloned(), |owner| {
+        owner.owner_delegate_seq()
+    });
+
+    Some(fb::AssetOwner::create(
+        builder,
+        &fb::AssetOwnerArgs {
+            pubkey: pk,
+            owner,
+            delegate,
+            owner_type,
+            owner_delegate_seq,
+        },
+    ))
+}
+fn merge_collection<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    iter: Vec<fb::AssetCollection<'a>>,
+) -> Option<WIPOffset<fb::AssetCollection<'a>>> {
+    let pk = iter
+        .iter()
+        .cloned()
+        .filter_map(|collection| collection.pubkey())
+        .next()
+        .map(|k| builder.create_vector(k.bytes()));
+    pk?;
+    let collection = merge_updated_pubkey(builder, iter.iter().cloned(), |collection| {
+        collection.collection()
+    });
+    let is_collection_verified = merge_updated_bool(builder, iter.iter().cloned(), |collection| {
+        collection.is_collection_verified()
+    });
+    let authority = merge_updated_optional_pubkey(builder, iter.iter().cloned(), |collection| {
+        collection.authority()
+    });
+
+    Some(fb::AssetCollection::create(
+        builder,
+        &fb::AssetCollectionArgs {
+            pubkey: pk,
+            collection,
+            is_collection_verified,
+            authority,
+        },
+    ))
+}
+
 impl AssetDynamicDetails {
     pub fn merge(&mut self, new_val: Self) {
         update_field(&mut self.is_compressible, &new_val.is_compressible);

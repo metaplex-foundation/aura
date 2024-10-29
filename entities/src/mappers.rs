@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use solana_sdk::pubkey::Pubkey;
 
 use crate::asset_generated::asset as fb;
@@ -284,3 +286,47 @@ impl<'a> From<fb::AssetCompleteDetails<'a>> for AssetIndex {
         }
     }
 }
+
+impl PartialOrd for fb::UpdateVersion<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self.version_type(), other.version_type()) {
+            (fb::UpdateVersionType::Sequence, fb::UpdateVersionType::Sequence)
+            | (fb::UpdateVersionType::WriteVersion, fb::UpdateVersionType::WriteVersion) => {
+                self.version_value().partial_cmp(&other.version_value())
+            }
+            // this is asset decompress case. Update with write version field is always most recent
+            (fb::UpdateVersionType::Sequence, fb::UpdateVersionType::WriteVersion) => {
+                Some(Ordering::Less)
+            }
+            (fb::UpdateVersionType::WriteVersion, fb::UpdateVersionType::Sequence) => None,
+            _ => None,
+        }
+    }
+}
+macro_rules! impl_partial_ord_for_updated {
+    ($name:ident) => {
+        impl PartialOrd for fb::$name<'_> {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(
+                    match self.update_version().partial_cmp(&other.update_version()) {
+                        Some(std::cmp::Ordering::Equal) => {
+                            self.slot_updated().cmp(&other.slot_updated())
+                        }
+                        Some(ord) => ord,
+                        None => self.slot_updated().cmp(&other.slot_updated()),
+                    },
+                )
+            }
+        }
+    };
+}
+
+impl_partial_ord_for_updated!(UpdatedBool);
+impl_partial_ord_for_updated!(UpdatedU64);
+impl_partial_ord_for_updated!(UpdatedU32);
+impl_partial_ord_for_updated!(UpdatedString);
+impl_partial_ord_for_updated!(UpdatedPubkey);
+impl_partial_ord_for_updated!(UpdatedOptionalPubkey);
+impl_partial_ord_for_updated!(UpdatedCreators);
+impl_partial_ord_for_updated!(UpdatedChainMutability);
+impl_partial_ord_for_updated!(UpdatedOwnerType);
