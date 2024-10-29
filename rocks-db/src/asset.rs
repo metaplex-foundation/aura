@@ -14,10 +14,10 @@ use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use std::cmp::Ordering;
 use tracing::{error, warn};
 
+use crate::asset_generated::asset as fb;
 use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
 use crate::Result;
 use crate::TypedColumn;
-use entities::asset_generated::asset as fb;
 #[derive(Debug)]
 pub struct AssetSelectedMaps {
     pub asset_complete_details: HashMap<Pubkey, AssetCompleteDetails>,

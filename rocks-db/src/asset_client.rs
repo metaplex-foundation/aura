@@ -3,12 +3,12 @@ use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::Ordering;
 
 use crate::asset::{AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey};
+use crate::asset_generated::asset as fb;
 use crate::column::Column;
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
 use entities::api_req_params::Options;
-use entities::asset_generated::asset as fb;
 use entities::enums::TokenMetadataEdition;
 use entities::models::{EditionData, PubkeyWithSlot};
 use futures_util::FutureExt;

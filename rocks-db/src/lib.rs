@@ -79,6 +79,15 @@ pub mod token_prices;
 pub mod transaction;
 pub mod transaction_client;
 pub mod tree_seq;
+// import the flatbuffers runtime library
+extern crate flatbuffers;
+#[allow(
+    clippy::missing_safety_doc,
+    unused_imports,
+    clippy::extra_unused_lifetimes
+)]
+pub mod asset_generated;
+pub mod mappers;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 

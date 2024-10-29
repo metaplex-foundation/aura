@@ -1,9 +1,9 @@
 use crate::asset::{AssetCollection, AssetCompleteDetails, MetadataMintMap};
+use crate::asset_generated::asset as fb;
 use crate::column::TypedColumn;
 use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::Result;
 use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
-use entities::asset_generated::asset as fb;
 use entities::enums::TokenMetadataEdition;
 use entities::models::{
     InscriptionDataInfo, InscriptionInfo, Mint, TokenAccount, TokenAccountMintOwnerIdxKey,

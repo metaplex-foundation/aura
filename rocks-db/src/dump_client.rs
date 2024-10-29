@@ -1,7 +1,7 @@
+use crate::asset_generated::asset as fb;
 use crate::{column::Column, storage_traits::Dumper, Storage};
 use async_trait::async_trait;
 use csv::WriterBuilder;
-use entities::asset_generated::asset as fb;
 use entities::{
     enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
     models::{TokenAccount, UrlWithStatus},

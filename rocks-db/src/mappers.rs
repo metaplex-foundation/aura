@@ -3,8 +3,8 @@ use std::cmp::Ordering;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::asset_generated::asset as fb;
-use crate::enums::*;
-use crate::models::*;
+use entities::enums::*;
+use entities::models::*;
 
 macro_rules! impl_from_enum {
     ($src:ty, $dst:ty, $($variant:ident),*) => {

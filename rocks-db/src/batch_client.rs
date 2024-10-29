@@ -4,6 +4,7 @@ use crate::asset::{
     AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, SlotAssetIdx,
     SlotAssetIdxKey,
 };
+use crate::asset_generated::asset as fb;
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
 use crate::column::TypedColumn;
 use crate::errors::StorageError;
@@ -16,7 +17,6 @@ use crate::{
     BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
 use async_trait::async_trait;
-use entities::asset_generated::asset as fb;
 use entities::enums::{SpecificationAssetClass, TokenMetadataEdition};
 use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated};
 use serde_json::json;
