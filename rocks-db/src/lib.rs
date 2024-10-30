@@ -406,7 +406,7 @@ impl Storage {
             asset::AssetCompleteDetails::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_complete_details",
-                    asset::merge_complete_details_fb,
+                    asset::merge_complete_details_fb_simplified,
                 );
             }
             AssetStaticDetails::NAME => {

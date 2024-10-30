@@ -1734,6 +1734,13 @@ fn create_updated_creators_offset<'a>(
         },
     )
 }
+pub fn merge_complete_details_fb_simplified<'a>(
+    new_key: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: &MergeOperands,
+) -> Option<Vec<u8>> {
+    merge_complete_details_fb_simple_raw(new_key, existing_val, operands.iter())
+}
 
 pub fn merge_complete_details_fb_simple_raw<'a>(
     _new_key: &[u8],
