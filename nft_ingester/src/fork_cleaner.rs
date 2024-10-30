@@ -167,6 +167,10 @@ where
                 return;
             }
 
+            if cl_item.slot_updated == 0 || cl_item.slot_updated > last_slot_for_check {
+                continue;
+            }
+
             if !all_non_forked_slots.contains(&cl_item.slot_updated) {
                 delete_items.push(ForkedItem {
                     tree: cl_item.cli_tree_key,

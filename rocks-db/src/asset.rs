@@ -1734,7 +1734,8 @@ fn create_updated_creators_offset<'a>(
         },
     )
 }
-pub fn merge_complete_details_fb_simplified<'a>(
+
+pub fn merge_complete_details_fb_simplified(
     new_key: &[u8],
     existing_val: Option<&[u8]>,
     operands: &MergeOperands,

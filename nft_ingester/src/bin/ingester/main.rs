@@ -2,6 +2,7 @@ use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
 use nft_ingester::batch_mint::batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister};
 use nft_ingester::scheduler::Scheduler;
+use postgre_client::PG_MIGRATIONS_PATH;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -69,7 +70,6 @@ use usecase::slots_collector::SlotsCollector;
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
-pub const PG_MIGRATIONS_PATH: &str = "./migrations";
 pub const ARWEAVE_WALLET_PATH: &str = "./arweave_wallet.json";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
@@ -109,9 +109,12 @@ pub async fn main() -> Result<(), IngesterError> {
         Arc::new(init_primary_storage(&config, &metrics_state, mutexed_tasks.clone(), DEFAULT_ROCKSDB_PATH).await?);
     let index_pg_storage = Arc::new(
         init_index_storage_with_migration(
-            &config,
-            &metrics_state,
-            DEFAULT_MAX_POSTGRES_CONNECTIONS,
+            &config.database_config.get_database_url()?,
+            config
+                .database_config
+                .get_max_postgres_connections()
+                .unwrap_or(DEFAULT_MAX_POSTGRES_CONNECTIONS),
+            metrics_state.red_metrics.clone(),
             DEFAULT_MIN_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,
         )
@@ -204,6 +207,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     config.accounts_buffer_size,
                     config.mpl_core_fees_buffer_size,
                     metrics_state.ingester_metrics.clone(),
+                    Some(metrics_state.message_process_metrics.clone()),
                     index_pg_storage.clone(),
                     rpc_client.clone(),
                     mutexed_tasks.clone(),
@@ -219,6 +223,8 @@ pub async fn main() -> Result<(), IngesterError> {
                     config.accounts_buffer_size,
                     config.mpl_core_fees_buffer_size,
                     metrics_state.ingester_metrics.clone(),
+                    // TCP sender does not send any ids with timestamps so we may not pass message process metrics here
+                    None,
                     index_pg_storage.clone(),
                     rpc_client.clone(),
                     mutexed_tasks.clone(),
@@ -238,6 +244,8 @@ pub async fn main() -> Result<(), IngesterError> {
             config.snapshot_parsing_batch_size,
             config.mpl_core_fees_buffer_size,
             metrics_state.ingester_metrics.clone(),
+            // during snapshot parsing we don't want to collect message process metrics
+            None,
             index_pg_storage.clone(),
             rpc_client.clone(),
             mutexed_tasks.clone(),
@@ -326,6 +334,16 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let api_config = setup_config::<ApiConfig>(INGESTER_CONFIG_PREFIX);
 
+    // it will check if asset which was requested is from the tree which has gaps in sequences
+    // gap in sequences means missed transactions and  as a result incorrect asset data
+    let tree_gaps_checker = {
+        if api_config.skip_check_tree_gaps {
+            None
+        } else {
+            Some(cloned_rocks_storage.clone())
+        }
+    };
+
     let cloned_index_storage = index_pg_storage.clone();
     let file_storage_path = api_config.file_storage_path_container.clone();
     mutexed_tasks.lock().await.spawn(async move {
@@ -336,6 +354,7 @@ pub async fn main() -> Result<(), IngesterError> {
             cloned_api_metrics,
             api_config.server_port,
             proof_checker,
+            tree_gaps_checker,
             api_config.max_page_limit,
             middleware_json_downloader.clone(),
             middleware_json_downloader,
@@ -381,6 +400,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     mutexed_tasks.clone(),
                     redis_receiver,
                     geyser_bubblegum_updates_processor.clone(),
+                    Some(metrics_state.message_process_metrics.clone()),
                 )
                 .await;
             }
@@ -390,6 +410,8 @@ pub async fn main() -> Result<(), IngesterError> {
                     mutexed_tasks.clone(),
                     buffer.clone(),
                     geyser_bubblegum_updates_processor.clone(),
+                    // TCP sender does not send any ids with timestamps so we may not pass message process metrics here
+                    None,
                 )
                 .await;
             }

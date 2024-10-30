@@ -21,7 +21,6 @@ use entities::enums::{SpecificationAssetClass, TokenMetadataEdition};
 use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated};
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
-
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         _ = self.db.try_catch_up_with_primary();

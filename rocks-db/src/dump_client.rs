@@ -395,12 +395,19 @@ impl Storage {
 
         if !batch.is_empty() {
             for rec in &batch {
+                let start = Instant::now();
                 if let Err(e) = writer.serialize(rec).map_err(|e| e.to_string()) {
                     error!(
                         "Error while writing data into {:?}. Err: {:?}",
                         file_and_path.1, e
                     );
                 }
+
+                synchronizer_metrics.set_file_write_time(
+                    file_and_path.1.as_ref(),
+                    start.elapsed().as_millis() as f64,
+                );
+                synchronizer_metrics.inc_num_of_records_written(&file_and_path.1, 1);
             }
             batch.clear();
         }

@@ -64,6 +64,7 @@ services:
       - ${SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:${SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:rw
       - ${SYNCHRONIZER_ROCKS_DB_SECONDARY_PATH_CONTAINER}:${SYNCHRONIZER_ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
       - ./heaps:/usr/src/app/heaps:rw
+      - ./migrations:/usr/src/app/migrations
     depends_on:
       - db
     build:

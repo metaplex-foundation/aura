@@ -3,11 +3,13 @@ use crate::inscriptions_processor::InscriptionsProcessor;
 use crate::mpl_core_fee_indexing_processor::MplCoreFeeProcessor;
 use crate::mpl_core_processor::MplCoreProcessor;
 use crate::mplx_updates_processor::MplxAccountsProcessor;
+use crate::redis_receiver::get_timestamp_from_id;
 use crate::token_updates_processor::TokenAccountsProcessor;
+use chrono::Utc;
 use entities::enums::UnprocessedAccount;
 use entities::models::{CoreAssetFee, UnprocessedAccountMessage};
 use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
-use metrics_utils::IngesterMetricsConfig;
+use metrics_utils::{IngesterMetricsConfig, MessageProcessMetricsConfig};
 use postgre_client::PgClient;
 use rocks_db::batch_savers::BatchSaveStorage;
 use rocks_db::Storage;
@@ -36,6 +38,7 @@ pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send 
     account_buffer_size: usize,
     fees_buffer_size: usize,
     metrics: Arc<IngesterMetricsConfig>,
+    message_process_metrics: Option<Arc<MessageProcessMetricsConfig>>,
     postgre_client: Arc<PgClient>,
     rpc_client: Arc<RpcClient>,
     join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
@@ -46,6 +49,7 @@ pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send 
             fees_buffer_size,
             unprocessed_transactions_getter,
             metrics,
+            message_process_metrics,
             postgre_client,
             rpc_client,
             join_set,
@@ -70,6 +74,7 @@ pub struct AccountsProcessor<T: UnprocessedAccountsGetter> {
     inscription_processor: InscriptionsProcessor,
     core_fees_processor: MplCoreFeeProcessor,
     metrics: Arc<IngesterMetricsConfig>,
+    message_process_metrics: Option<Arc<MessageProcessMetricsConfig>>,
 }
 
 // AccountsProcessor responsible for processing all account updates received
@@ -84,6 +89,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         fees_batch_size: usize,
         unprocessed_account_getter: Arc<T>,
         metrics: Arc<IngesterMetricsConfig>,
+        message_process_metrics: Option<Arc<MessageProcessMetricsConfig>>,
         postgre_client: Arc<PgClient>,
         rpc_client: Arc<RpcClient>,
         join_set: Arc<Mutex<JoinSet<Result<(), tokio::task::JoinError>>>>,
@@ -106,6 +112,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             inscription_processor,
             core_fees_processor,
             metrics,
+            message_process_metrics,
         })
     }
 
@@ -229,6 +236,20 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             }
             self.metrics
                 .inc_accounts(unprocessed_account.account.into());
+
+            if let Some(message_process_metrics) = &self.message_process_metrics {
+                if let Some(message_timestamp) = get_timestamp_from_id(&unprocessed_account.id) {
+                    let current_timestamp = Utc::now().timestamp_millis() as u64;
+
+                    message_process_metrics.set_data_read_time(
+                        "accounts",
+                        current_timestamp
+                            .checked_sub(message_timestamp)
+                            .unwrap_or_default() as f64,
+                    );
+                }
+            }
+
             ack_ids.push(unprocessed_account.id);
             if batch_storage.batch_filled() {
                 self.flush(batch_storage, ack_ids, interval, batch_fill_instant);

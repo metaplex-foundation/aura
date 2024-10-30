@@ -26,19 +26,27 @@ struct SimpleChangeLog {
     cli_tree: Vec<u8>,
 }
 
-pub async fn get_proof_for_assets(
+pub async fn get_proof_for_assets<
+    PC: ProofChecker + Sync + Send + 'static,
+    PPC: ProcessingPossibilityChecker + Sync + Send + 'static,
+>(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
-    proof_checker: Option<Arc<impl ProofChecker + Sync + Send + 'static>>,
+    proof_checker: Option<Arc<PC>>,
+    tree_gaps_checker: &Option<Arc<PPC>>,
     metrics: Arc<ApiMetricsConfig>,
 ) -> Result<HashMap<String, Option<AssetProof>>, StorageError> {
-    if !rocks_db.can_process_assets(asset_ids.as_slice()).await {
-        return Err(StorageError::CannotServiceRequest);
+    if let Some(tree_gaps_checker) = tree_gaps_checker {
+        if !tree_gaps_checker
+            .can_process_assets(asset_ids.as_slice())
+            .await
+        {
+            return Err(StorageError::CannotServiceRequest);
+        }
     }
-    let mut results: HashMap<String, Option<AssetProof>> = asset_ids
-        .iter()
-        .map(|id: &Pubkey| (id.to_string(), None))
-        .collect();
+
+    let mut results: HashMap<String, Option<AssetProof>> =
+        asset_ids.iter().map(|id| (id.to_string(), None)).collect();
 
     let tree_ids = fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids)
         .values()

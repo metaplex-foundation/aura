@@ -41,6 +41,7 @@ use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
 use rocks_db::batch_mint::FailedBatchMintKey;
+use rocks_db::Storage;
 use serde_json::json;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::instruction::CompiledInstruction;
@@ -416,10 +417,12 @@ async fn batch_mint_with_verified_creators_test() {
         JsonWorker,
         MockAccountBalanceGetter,
         RaydiumTokenPriceFetcher,
+        Storage,
     >::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
         Arc::new(ApiMetricsConfig::new()),
+        None,
         None,
         50,
         None,
@@ -569,10 +572,12 @@ async fn batch_mint_with_unverified_creators_test() {
         JsonWorker,
         MockAccountBalanceGetter,
         RaydiumTokenPriceFetcher,
+        Storage,
     >::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
         Arc::new(ApiMetricsConfig::new()),
+        None,
         None,
         50,
         None,
@@ -665,10 +670,12 @@ async fn batch_mint_persister_test() {
         JsonWorker,
         MockAccountBalanceGetter,
         RaydiumTokenPriceFetcher,
+        Storage,
     >::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
         Arc::new(ApiMetricsConfig::new()),
+        None,
         None,
         50,
         None,
