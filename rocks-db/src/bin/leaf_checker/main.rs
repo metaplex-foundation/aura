@@ -10,6 +10,8 @@ use rocks_db::{
 use solana_sdk::pubkey::Pubkey;
 use tokio::{sync::Mutex, task::JoinSet};
 
+pub const NUM_OF_THREADS: usize = 2500;
+
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() {
     // Retrieve the database paths from command-line arguments
@@ -53,7 +55,7 @@ pub async fn main() {
             Ok((_, value)) => {
                 select_batch.push(value.to_vec());
 
-                if select_batch.len() >= 2500 {
+                if select_batch.len() >= NUM_OF_THREADS {
                     process_batch(source_db.clone(), &mut select_batch, &mut delete_batch).await;
 
                     if !delete_batch.is_empty() {
@@ -131,16 +133,7 @@ async fn process_leaf(storage: Arc<Storage>, data: Vec<u8>) -> Option<(Pubkey, u
 
     let key = ClItemKey::new(cl_leaf_data.cli_node_idx, cl_leaf_data.cli_tree_key);
 
-    let cl_item_rows = storage
-        .cl_items
-        .batch_get(vec![key])
-        .await
-        .unwrap()
-        .into_iter()
-        .next()
-        .and_then(|cl| cl);
-
-    if cl_item_rows.is_none() {
+    if !storage.cl_items.has_key(key).await.unwrap() {
         let asset_id = get_asset_id(&cl_leaf_data.cli_tree_key, &cl_leaf_data.cli_leaf_idx).await;
 
         let (asset_dynamic_data, asset_leaf_data) = tokio::join!(
