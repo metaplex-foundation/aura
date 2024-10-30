@@ -282,7 +282,8 @@ pub struct SynchronizerConfig {
 pub struct ApiConfig {
     pub database_config: DatabaseConfig,
     pub rocks_db_path_container: Option<String>,
-    pub rocks_db_secondary_path_container: Option<String>,
+    pub rocks_db_secondary_first_path_container: Option<String>,
+    pub rocks_db_secondary_second_path_container: Option<String>,
     pub rocks_sync_interval_seconds: u64,
     pub metrics_port: Option<u16>,
     pub server_port: u16,
