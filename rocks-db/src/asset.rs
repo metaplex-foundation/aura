@@ -1427,6 +1427,63 @@ impl AssetCompleteDetails {
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
+        Self::merge_complete_details_raw(_new_key, existing_val, operands.iter())
+    }
+
+    pub fn merge_raw(existing: &mut Option<Self>, operands: &[Self]){
+        for op in operands {
+            if let Some(ref mut current_val) = existing {
+                // Merge dynamic_details
+                if let Some(new_dynamic_details) = &op.dynamic_details {
+                    if let Some(ref mut current_dynamic_details) = current_val.dynamic_details {
+                        current_dynamic_details.merge(new_dynamic_details);
+                    } else {
+                        current_val.dynamic_details = Some(new_dynamic_details.to_owned());
+                    }
+                }
+
+                // Keep existing static_details if present
+                if current_val.static_details.is_none() {
+                    current_val.static_details = op.static_details.clone();
+                }
+
+                // Merge authority
+                if let Some(new_authority) = &op.authority {
+                    if let Some(ref mut current_authority) = current_val.authority {
+                        current_authority.merge(new_authority);
+                    } else {
+                        current_val.authority = Some(new_authority.clone());
+                    }
+                }
+
+                // Merge owner
+                if let Some(new_owner) = &op.owner {
+                    if let Some(ref mut current_owner) = current_val.owner {
+                        current_owner.merge(new_owner);
+                    } else {
+                        current_val.owner = Some(new_owner.clone());
+                    }
+                }
+
+                // Merge collection
+                if let Some(new_collection) = &op.collection {
+                    if let Some(ref mut current_collection) = current_val.collection {
+                        current_collection.merge(new_collection);
+                    } else {
+                        current_val.collection = Some(new_collection.clone());
+                    }
+                }
+            } else {
+                *existing = Some(op.clone());
+            }
+        }
+    }
+    
+    pub fn merge_complete_details_raw<'a>(
+        _new_key: &[u8],
+        existing_val: Option<&[u8]>,
+        operands: impl Iterator<Item = &'a [u8]>,
+    ) -> Option<Vec<u8>> {
         let mut result: Option<Self> = None;
         if let Some(existing_val) = existing_val {
             match deserialize::<Self>(existing_val) {
@@ -1451,7 +1508,7 @@ impl AssetCompleteDetails {
                             if let Some(ref mut current_dynamic_details) =
                                 current_val.dynamic_details
                             {
-                                current_dynamic_details.merge(new_dynamic_details);
+                                current_dynamic_details.merge(&new_dynamic_details);
                             } else {
                                 current_val.dynamic_details = Some(new_dynamic_details);
                             }
@@ -1465,7 +1522,7 @@ impl AssetCompleteDetails {
                         // Merge authority
                         if let Some(new_authority) = new_val.authority {
                             if let Some(ref mut current_authority) = current_val.authority {
-                                current_authority.merge(new_authority);
+                                current_authority.merge(&new_authority);
                             } else {
                                 current_val.authority = Some(new_authority);
                             }
@@ -1474,7 +1531,7 @@ impl AssetCompleteDetails {
                         // Merge owner
                         if let Some(new_owner) = new_val.owner {
                             if let Some(ref mut current_owner) = current_val.owner {
-                                current_owner.merge(new_owner);
+                                current_owner.merge(&new_owner);
                             } else {
                                 current_val.owner = Some(new_owner);
                             }
@@ -1483,7 +1540,7 @@ impl AssetCompleteDetails {
                         // Merge collection
                         if let Some(new_collection) = new_val.collection {
                             if let Some(ref mut current_collection) = current_val.collection {
-                                current_collection.merge(new_collection);
+                                current_collection.merge(&new_collection);
                             } else {
                                 current_val.collection = Some(new_collection);
                             }
@@ -1509,7 +1566,29 @@ pub fn merge_complete_details_fb(
 ) -> Option<Vec<u8>> {
     merge_complete_details_fb_raw(_new_key, existing_val, operands.iter())
 }
-
+pub fn merge_complete_details_fb_through_proxy<'a>(
+    _new_key: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: impl Iterator<Item = &'a [u8]>,
+) -> Option<Vec<u8>> {
+    let mut existing_val = existing_val.and_then(|bytes| {
+        fb::root_as_asset_complete_details(bytes)
+            .map_err(|e| {
+                error!(
+                    "RocksDB: AssetCompleteDetails deserialize existing_val: {}",
+                    e
+                )
+            })
+            .ok()
+    }).map(AssetCompleteDetails::from);
+    AssetCompleteDetails::merge_raw(&mut existing_val, operands.filter_map(|op| fb::root_as_asset_complete_details(op).ok()).map(AssetCompleteDetails::from).collect::<Vec<_>>().as_slice());
+    existing_val.map(|r| {
+        let mut builder = FlatBufferBuilder::with_capacity(4048);
+        let tt = r.convert_to_fb(&mut builder);
+        builder.finish_minimal(tt);
+        builder.finished_data().to_vec()
+    })
+}
 pub fn merge_complete_details_fb_raw<'a>(
     _new_key: &[u8],
     existing_val: Option<&[u8]>,
@@ -2012,7 +2091,7 @@ fn merge_collection<'a>(
 }
 
 impl AssetDynamicDetails {
-    pub fn merge(&mut self, new_val: Self) {
+    pub fn merge(&mut self, new_val: &Self) {
         update_field(&mut self.is_compressible, &new_val.is_compressible);
         update_field(&mut self.is_compressed, &new_val.is_compressed);
         update_field(&mut self.is_frozen, &new_val.is_frozen);
@@ -2075,7 +2154,7 @@ impl AssetDynamicDetails {
             match deserialize::<Self>(op) {
                 Ok(new_val) => {
                     if let Some(ref mut current_val) = result {
-                        current_val.merge(new_val);
+                        current_val.merge(&new_val);
                     } else {
                         result = Some(new_val);
                     }
@@ -2122,15 +2201,15 @@ impl AssetDynamicDetails {
 }
 
 impl AssetAuthority {
-    pub fn merge(&mut self, new_val: Self) {
+    pub fn merge(&mut self, new_val: &Self) {
         if let (Some(self_write_version), Some(new_write_version)) =
             (self.write_version, new_val.write_version)
         {
             if new_write_version > self_write_version {
-                *self = new_val;
+                *self = new_val.to_owned();
             }
         } else if new_val.slot_updated > self.slot_updated {
-            *self = new_val;
+            *self = new_val.to_owned();
         }
         // If neither condition is met, retain existing `self`
     }
@@ -2209,7 +2288,7 @@ impl TypedColumn for AssetOwner {
     }
 }
 impl AssetOwner {
-    pub fn merge(&mut self, new_val: Self) {
+    pub fn merge(&mut self, new_val: &Self) {
         update_field(&mut self.owner_type, &new_val.owner_type);
         update_field(&mut self.owner, &new_val.owner);
         update_field(&mut self.owner_delegate_seq, &new_val.owner_delegate_seq);
@@ -2364,7 +2443,7 @@ impl TypedColumn for AssetCollection {
 }
 
 impl AssetCollection {
-    pub fn merge(&mut self, new_val: Self) {
+    pub fn merge(&mut self, new_val: &Self) {
         update_field(&mut self.collection, &new_val.collection);
         update_field(
             &mut self.is_collection_verified,
@@ -2394,7 +2473,7 @@ impl AssetCollection {
             match deserialize::<Self>(op) {
                 Ok(new_val) => {
                     result = Some(if let Some(mut current_val) = result {
-                        current_val.merge(new_val);
+                        current_val.merge(&new_val);
                         current_val
                     } else {
                         new_val
