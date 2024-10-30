@@ -311,7 +311,7 @@ impl Storage {
         } else {
             None
         };
-        let mut builder = flatbuffers::FlatBufferBuilder::new();
+        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
         let acd = AssetCompleteDetails {
             pubkey: data.pubkey,
             static_details: Some(AssetStaticDetails {

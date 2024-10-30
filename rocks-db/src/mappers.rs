@@ -330,3 +330,21 @@ impl_partial_ord_for_updated!(UpdatedOptionalPubkey);
 impl_partial_ord_for_updated!(UpdatedCreators);
 impl_partial_ord_for_updated!(UpdatedChainMutability);
 impl_partial_ord_for_updated!(UpdatedOwnerType);
+
+impl fb::AssetAuthority<'_> {
+    pub fn compare(&self, other: &Self) -> Ordering {
+        if let (Some(self_write_version), Some(other_write_version)) = unsafe {
+            (
+                self._tab
+                    .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None),
+                other
+                    ._tab
+                    .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None),
+            )
+        } {
+            self_write_version.cmp(&other_write_version)
+        } else {
+            self.slot_updated().cmp(&other.slot_updated())
+        }
+    }
+}

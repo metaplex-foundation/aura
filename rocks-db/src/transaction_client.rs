@@ -95,7 +95,7 @@ impl Storage {
                     authority: update.authority_update.as_ref().map(|a| a.details.clone()),
                     collection: update.collection_update.as_ref().map(|c| c.details.clone()),
                 };
-                let mut builder = flatbuffers::FlatBufferBuilder::new();
+                let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
                 let acd = acd.convert_to_fb(&mut builder);
                 builder.finish_minimal(acd);
                 batch.merge_cf(
@@ -135,7 +135,7 @@ impl Storage {
         if let Some(ref decompressed) = ix.decompressed {
             self.asset_leaf_data
                 .delete_with_batch(batch, decompressed.pk);
-            let mut builder = flatbuffers::FlatBufferBuilder::new();
+            let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
             let acd = decompressed.details.convert_to_fb(&mut builder);
             builder.finish_minimal(acd);
             batch.merge_cf(

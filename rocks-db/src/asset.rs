@@ -1430,7 +1430,7 @@ impl AssetCompleteDetails {
         Self::merge_complete_details_raw(_new_key, existing_val, operands.iter())
     }
 
-    pub fn merge_raw(existing: &mut Option<Self>, operands: &[Self]){
+    pub fn merge_raw(existing: &mut Option<Self>, operands: &[Self]) {
         for op in operands {
             if let Some(ref mut current_val) = existing {
                 // Merge dynamic_details
@@ -1478,7 +1478,7 @@ impl AssetCompleteDetails {
             }
         }
     }
-    
+
     pub fn merge_complete_details_raw<'a>(
         _new_key: &[u8],
         existing_val: Option<&[u8]>,
@@ -1571,7 +1571,176 @@ pub fn merge_complete_details_fb_through_proxy<'a>(
     existing_val: Option<&[u8]>,
     operands: impl Iterator<Item = &'a [u8]>,
 ) -> Option<Vec<u8>> {
-    let mut existing_val = existing_val.and_then(|bytes| {
+    let mut existing_val = existing_val
+        .and_then(|bytes| {
+            fb::root_as_asset_complete_details(bytes)
+                .map_err(|e| {
+                    error!(
+                        "RocksDB: AssetCompleteDetails deserialize existing_val: {}",
+                        e
+                    )
+                })
+                .ok()
+        })
+        .map(AssetCompleteDetails::from);
+    AssetCompleteDetails::merge_raw(
+        &mut existing_val,
+        operands
+            .filter_map(|op| fb::root_as_asset_complete_details(op).ok())
+            .map(AssetCompleteDetails::from)
+            .collect::<Vec<_>>()
+            .as_slice(),
+    );
+    existing_val.map(|r| {
+        let mut builder = FlatBufferBuilder::with_capacity(2500);
+        let tt = r.convert_to_fb(&mut builder);
+        builder.finish_minimal(tt);
+        builder.finished_data().to_vec()
+    })
+}
+
+macro_rules! create_updated_primitive_offset {
+    ($func_name:ident, $updated_type:ident, $updated_args:ident) => {
+        fn $func_name<'a>(
+            builder: &mut flatbuffers::FlatBufferBuilder<'a>,
+            updated: &fb::$updated_type<'a>,
+        ) -> flatbuffers::WIPOffset<fb::$updated_type<'a>> {
+            let update_version_offset = updated.update_version().map(|uv| {
+                fb::UpdateVersion::create(
+                    builder,
+                    &fb::UpdateVersionArgs {
+                        version_type: uv.version_type(),
+                        version_value: uv.version_value(),
+                    },
+                )
+            });
+
+            fb::$updated_type::create(
+                builder,
+                &fb::$updated_args {
+                    slot_updated: updated.slot_updated(),
+                    update_version: update_version_offset,
+                    value: updated.value(),
+                },
+            )
+        }
+    };
+}
+macro_rules! create_updated_offset {
+    ($func_name:ident, $updated_type:ident, $updated_args:ident, $create_value_fn:expr) => {
+        fn $func_name<'a>(
+            builder: &mut flatbuffers::FlatBufferBuilder<'a>,
+            updated: &fb::$updated_type<'a>,
+        ) -> flatbuffers::WIPOffset<fb::$updated_type<'a>> {
+            let update_version_offset = updated.update_version().map(|uv| {
+                fb::UpdateVersion::create(
+                    builder,
+                    &fb::UpdateVersionArgs {
+                        version_type: uv.version_type(),
+                        version_value: uv.version_value(),
+                    },
+                )
+            });
+
+            let value_offset = updated
+                .value()
+                .map(|value| $create_value_fn(builder, value));
+
+            fb::$updated_type::create(
+                builder,
+                &fb::$updated_args {
+                    slot_updated: updated.slot_updated(),
+                    update_version: update_version_offset,
+                    value: value_offset,
+                },
+            )
+        }
+    };
+}
+
+create_updated_primitive_offset!(create_updated_bool_offset, UpdatedBool, UpdatedBoolArgs);
+create_updated_primitive_offset!(create_updated_u64_offset, UpdatedU64, UpdatedU64Args);
+create_updated_primitive_offset!(create_updated_u32_offset, UpdatedU32, UpdatedU32Args);
+create_updated_primitive_offset!(
+    create_updated_chain_mutability_offset,
+    UpdatedChainMutability,
+    UpdatedChainMutabilityArgs
+);
+create_updated_primitive_offset!(
+    create_updated_owner_type_offset,
+    UpdatedOwnerType,
+    UpdatedOwnerTypeArgs
+);
+
+create_updated_offset!(
+    create_updated_string_offset,
+    UpdatedString,
+    UpdatedStringArgs,
+    create_string_offset
+);
+create_updated_offset!(
+    create_updated_pubkey_offset,
+    UpdatedPubkey,
+    UpdatedPubkeyArgs,
+    create_vector_offset
+);
+create_updated_offset!(
+    create_updated_optional_pubkey_offset,
+    UpdatedOptionalPubkey,
+    UpdatedOptionalPubkeyArgs,
+    create_vector_offset
+);
+
+fn create_updated_creators_offset<'a>(
+    builder: &mut flatbuffers::FlatBufferBuilder<'a>,
+    updated: &fb::UpdatedCreators<'a>,
+) -> flatbuffers::WIPOffset<fb::UpdatedCreators<'a>> {
+    let update_version_offset = updated.update_version().map(|uv| {
+        fb::UpdateVersion::create(
+            builder,
+            &fb::UpdateVersionArgs {
+                version_type: uv.version_type(),
+                version_value: uv.version_value(),
+            },
+        )
+    });
+
+    let value_offset = if let Some(creator_original) = updated.value() {
+        let mut creators = Vec::with_capacity(creator_original.len());
+        for creator in &creator_original {
+            let pubkey_fb = creator.creator().map(|c| builder.create_vector(c.bytes()));
+
+            let creator_fb = fb::Creator::create(
+                builder,
+                &fb::CreatorArgs {
+                    creator: pubkey_fb,
+                    creator_verified: creator.creator_verified(),
+                    creator_share: creator.creator_share(),
+                },
+            );
+            creators.push(creator_fb);
+        }
+        Some(builder.create_vector(creators.as_slice()))
+    } else {
+        None
+    };
+
+    fb::UpdatedCreators::create(
+        builder,
+        &fb::UpdatedCreatorsArgs {
+            slot_updated: updated.slot_updated(),
+            update_version: update_version_offset,
+            value: value_offset,
+        },
+    )
+}
+
+pub fn merge_complete_details_fb_simple_raw<'a>(
+    _new_key: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: impl Iterator<Item = &'a [u8]>,
+) -> Option<Vec<u8>> {
+    let existing_val = existing_val.and_then(|bytes| {
         fb::root_as_asset_complete_details(bytes)
             .map_err(|e| {
                 error!(
@@ -1580,21 +1749,411 @@ pub fn merge_complete_details_fb_through_proxy<'a>(
                 )
             })
             .ok()
-    }).map(AssetCompleteDetails::from);
-    AssetCompleteDetails::merge_raw(&mut existing_val, operands.filter_map(|op| fb::root_as_asset_complete_details(op).ok()).map(AssetCompleteDetails::from).collect::<Vec<_>>().as_slice());
-    existing_val.map(|r| {
-        let mut builder = FlatBufferBuilder::with_capacity(4048);
-        let tt = r.convert_to_fb(&mut builder);
-        builder.finish_minimal(tt);
-        builder.finished_data().to_vec()
-    })
+    });
+    let mut pk = existing_val.and_then(|a| a.pubkey());
+    let mut static_details = existing_val.and_then(|a| a.static_details());
+    // creating a copy of every single field of the rest of the asset fields including the pubkeys to properly select the latest ones and reconstruct the asset
+    let mut dynamic_details_pubkey = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.pubkey());
+    let mut dynamic_details_is_compressible = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.is_compressible());
+    let mut dynamic_details_is_compressed = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.is_compressed());
+    let mut dynamic_details_is_frozen = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.is_frozen());
+    let mut dynamic_details_supply = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.supply());
+    let mut dynamic_details_seq = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.seq());
+    let mut dynamic_details_is_burnt = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.is_burnt());
+    let mut dynamic_details_was_decompressed = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.was_decompressed());
+    let mut dynamic_details_onchain_data = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.onchain_data());
+    let mut dynamic_details_creators = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.creators());
+    let mut dynamic_details_royalty_amount = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.royalty_amount());
+    let mut dynamic_details_url = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.url());
+    let mut dynamic_details_chain_mutability = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.chain_mutability());
+    let mut dynamic_details_lamports = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.lamports());
+    let mut dynamic_details_executable = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.executable());
+    let mut dynamic_details_metadata_owner = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.metadata_owner());
+    let mut dynamic_details_raw_name = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.raw_name());
+    let mut dynamic_details_mpl_core_plugins = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.mpl_core_plugins());
+    let mut dynamic_details_mpl_core_unknown_plugins = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.mpl_core_unknown_plugins());
+    let mut dynamic_details_rent_epoch = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.rent_epoch());
+    let mut dynamic_details_num_minted = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.num_minted());
+    let mut dynamic_details_current_size = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.current_size());
+    let mut dynamic_details_plugins_json_version = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.plugins_json_version());
+    let mut dynamic_details_mpl_core_external_plugins = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.mpl_core_external_plugins());
+    let mut dynamic_details_mpl_core_unknown_external_plugins = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.mpl_core_unknown_external_plugins());
+    let mut dynamic_details_mint_extensions = existing_val
+        .and_then(|a| a.dynamic_details())
+        .and_then(|d| d.mint_extensions());
+    let mut authority = existing_val.and_then(|a| a.authority());
+    let mut owner_pubkey = existing_val
+        .and_then(|a| a.owner())
+        .and_then(|d| d.pubkey());
+    let mut owner_owner = existing_val.and_then(|a| a.owner()).and_then(|d| d.owner());
+    let mut owner_delegate = existing_val
+        .and_then(|a| a.owner())
+        .and_then(|d| d.delegate());
+    let mut owner_owner_type = existing_val
+        .and_then(|a| a.owner())
+        .and_then(|d| d.owner_type());
+    let mut owner_owner_delegate_seq = existing_val
+        .and_then(|a| a.owner())
+        .and_then(|d| d.owner_delegate_seq());
+    let mut collection_pubkey = existing_val
+        .and_then(|a| a.collection())
+        .and_then(|d| d.pubkey());
+    let mut collection_collection = existing_val
+        .and_then(|a| a.collection())
+        .and_then(|d| d.collection());
+    let mut collection_is_collection_verified = existing_val
+        .and_then(|a| a.collection())
+        .and_then(|d| d.is_collection_verified());
+    let mut collection_authority = existing_val
+        .and_then(|a| a.collection())
+        .and_then(|d| d.authority());
+    for op in operands {
+        if let Ok(new_val) = fb::root_as_asset_complete_details(op) {
+            if pk.is_none() {
+                pk = new_val.pubkey();
+            }
+            // Keep existing static_details if present
+            if static_details.is_none() {
+                static_details = new_val.static_details();
+            }
+            // Merge dynamic_details
+            if let Some(new_dynamic_details) = new_val.dynamic_details() {
+                if dynamic_details_pubkey.is_none() {
+                    dynamic_details_pubkey = new_dynamic_details.pubkey()
+                }
+                merge_field(
+                    &mut dynamic_details_is_compressible,
+                    new_dynamic_details.is_compressible(),
+                );
+                merge_field(
+                    &mut dynamic_details_is_compressed,
+                    new_dynamic_details.is_compressed(),
+                );
+                merge_field(
+                    &mut dynamic_details_is_frozen,
+                    new_dynamic_details.is_frozen(),
+                );
+                merge_field(&mut dynamic_details_supply, new_dynamic_details.supply());
+                merge_field(&mut dynamic_details_seq, new_dynamic_details.seq());
+                merge_field(
+                    &mut dynamic_details_is_burnt,
+                    new_dynamic_details.is_burnt(),
+                );
+                merge_field(
+                    &mut dynamic_details_was_decompressed,
+                    new_dynamic_details.was_decompressed(),
+                );
+                merge_field(
+                    &mut dynamic_details_onchain_data,
+                    new_dynamic_details.onchain_data(),
+                );
+                merge_field(
+                    &mut dynamic_details_creators,
+                    new_dynamic_details.creators(),
+                );
+                merge_field(
+                    &mut dynamic_details_royalty_amount,
+                    new_dynamic_details.royalty_amount(),
+                );
+                merge_field(&mut dynamic_details_url, new_dynamic_details.url());
+                merge_field(
+                    &mut dynamic_details_chain_mutability,
+                    new_dynamic_details.chain_mutability(),
+                );
+                merge_field(
+                    &mut dynamic_details_lamports,
+                    new_dynamic_details.lamports(),
+                );
+                merge_field(
+                    &mut dynamic_details_executable,
+                    new_dynamic_details.executable(),
+                );
+                merge_field(
+                    &mut dynamic_details_metadata_owner,
+                    new_dynamic_details.metadata_owner(),
+                );
+                merge_field(
+                    &mut dynamic_details_raw_name,
+                    new_dynamic_details.raw_name(),
+                );
+                merge_field(
+                    &mut dynamic_details_mpl_core_plugins,
+                    new_dynamic_details.mpl_core_plugins(),
+                );
+                merge_field(
+                    &mut dynamic_details_mpl_core_unknown_plugins,
+                    new_dynamic_details.mpl_core_unknown_plugins(),
+                );
+                merge_field(
+                    &mut dynamic_details_rent_epoch,
+                    new_dynamic_details.rent_epoch(),
+                );
+                merge_field(
+                    &mut dynamic_details_num_minted,
+                    new_dynamic_details.num_minted(),
+                );
+                merge_field(
+                    &mut dynamic_details_current_size,
+                    new_dynamic_details.current_size(),
+                );
+                merge_field(
+                    &mut dynamic_details_plugins_json_version,
+                    new_dynamic_details.plugins_json_version(),
+                );
+                merge_field(
+                    &mut dynamic_details_mpl_core_external_plugins,
+                    new_dynamic_details.mpl_core_external_plugins(),
+                );
+                merge_field(
+                    &mut dynamic_details_mpl_core_unknown_external_plugins,
+                    new_dynamic_details.mpl_core_unknown_external_plugins(),
+                );
+                merge_field(
+                    &mut dynamic_details_mint_extensions,
+                    new_dynamic_details.mint_extensions(),
+                );
+            }
+            // Merge authority
+            if let Some(new_authority) = new_val.authority() {
+                if authority.map_or(true, |current_authority| {
+                    new_authority.compare(&current_authority) == Ordering::Greater
+                }) {
+                    authority = Some(new_authority);
+                }
+            }
+            // Merge owner
+            if let Some(new_owner) = new_val.owner() {
+                if owner_pubkey.is_none() {
+                    owner_pubkey = new_owner.pubkey();
+                }
+                merge_field(&mut owner_owner, new_owner.owner());
+                merge_field(&mut owner_delegate, new_owner.delegate());
+                merge_field(&mut owner_owner_type, new_owner.owner_type());
+                merge_field(
+                    &mut owner_owner_delegate_seq,
+                    new_owner.owner_delegate_seq(),
+                );
+            }
+
+            // Merge collection
+            if let Some(new_collection) = new_val.collection() {
+                if collection_pubkey.is_none() {
+                    collection_pubkey = new_collection.pubkey();
+                }
+                merge_field(&mut collection_collection, new_collection.collection());
+                merge_field(
+                    &mut collection_is_collection_verified,
+                    new_collection.is_collection_verified(),
+                );
+                merge_field(&mut collection_authority, new_collection.authority());
+            }
+        }
+    }
+    pk?;
+    let mut builder = FlatBufferBuilder::with_capacity(2500);
+
+    let pk: Option<WIPOffset<flatbuffers::Vector<'_, u8>>> =
+        pk.map(|k| builder.create_vector(k.bytes()));
+    let static_details = static_details.map(|s| {
+        let args = fb::AssetStaticDetailsArgs {
+            pubkey: s.pubkey().map(|k| builder.create_vector(k.bytes())),
+            specification_asset_class: s.specification_asset_class(),
+            royalty_target_type: s.royalty_target_type(),
+            created_at: s.created_at(),
+            edition_address: s
+                .edition_address()
+                .map(|k| builder.create_vector(k.bytes())),
+        };
+        fb::AssetStaticDetails::create(&mut builder, &args)
+    });
+
+    let dynamic_details = dynamic_details_pubkey.map(|d| {
+        let args = fb::AssetDynamicDetailsArgs {
+            pubkey: Some(builder.create_vector(d.bytes())),
+            is_compressible: dynamic_details_is_compressible
+                .map(|u| create_updated_bool_offset(&mut builder, &u)),
+            is_compressed: dynamic_details_is_compressed
+                .map(|u| create_updated_bool_offset(&mut builder, &u)),
+            is_frozen: dynamic_details_is_frozen
+                .map(|u| create_updated_bool_offset(&mut builder, &u)),
+            supply: dynamic_details_supply.map(|u| create_updated_u64_offset(&mut builder, &u)),
+            seq: dynamic_details_seq.map(|u| create_updated_u64_offset(&mut builder, &u)),
+            is_burnt: dynamic_details_is_burnt
+                .map(|u| create_updated_bool_offset(&mut builder, &u)),
+            was_decompressed: dynamic_details_was_decompressed
+                .map(|u| create_updated_bool_offset(&mut builder, &u)),
+            onchain_data: dynamic_details_onchain_data
+                .map(|u| create_updated_string_offset(&mut builder, &u)),
+            creators: dynamic_details_creators
+                .map(|u| create_updated_creators_offset(&mut builder, &u)),
+            royalty_amount: dynamic_details_royalty_amount
+                .map(|u| create_updated_u32_offset(&mut builder, &u)),
+            url: dynamic_details_url.map(|u| create_updated_string_offset(&mut builder, &u)),
+            chain_mutability: dynamic_details_chain_mutability
+                .map(|u| create_updated_chain_mutability_offset(&mut builder, &u)),
+            lamports: dynamic_details_lamports.map(|u| create_updated_u64_offset(&mut builder, &u)),
+            executable: dynamic_details_executable
+                .map(|u| create_updated_bool_offset(&mut builder, &u)),
+            metadata_owner: dynamic_details_metadata_owner
+                .map(|u| create_updated_string_offset(&mut builder, &u)),
+            raw_name: dynamic_details_raw_name
+                .map(|u| create_updated_string_offset(&mut builder, &u)),
+            mpl_core_plugins: dynamic_details_mpl_core_plugins
+                .map(|u| create_updated_string_offset(&mut builder, &u)),
+            mpl_core_unknown_plugins: dynamic_details_mpl_core_unknown_plugins
+                .map(|u| create_updated_string_offset(&mut builder, &u)),
+            rent_epoch: dynamic_details_rent_epoch
+                .map(|u| create_updated_u64_offset(&mut builder, &u)),
+            num_minted: dynamic_details_num_minted
+                .map(|u| create_updated_u32_offset(&mut builder, &u)),
+            current_size: dynamic_details_current_size
+                .map(|u| create_updated_u32_offset(&mut builder, &u)),
+            plugins_json_version: dynamic_details_plugins_json_version
+                .map(|u| create_updated_u32_offset(&mut builder, &u)),
+            mpl_core_external_plugins: dynamic_details_mpl_core_external_plugins
+                .map(|u| create_updated_string_offset(&mut builder, &u)),
+            mpl_core_unknown_external_plugins: dynamic_details_mpl_core_unknown_external_plugins
+                .map(|u| create_updated_string_offset(&mut builder, &u)),
+            mint_extensions: dynamic_details_mint_extensions
+                .map(|u| create_updated_string_offset(&mut builder, &u)),
+        };
+        fb::AssetDynamicDetails::create(&mut builder, &args)
+    });
+    let authority = authority.map(|a| {
+        let write_version = unsafe {
+            a._tab
+                .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None)
+        };
+        let auth = a.authority().map(|x| builder.create_vector(x.bytes()));
+        let pk = a.pubkey().map(|x| builder.create_vector(x.bytes()));
+        let mut auth_builder = fb::AssetAuthorityBuilder::new(&mut builder);
+        if let Some(wv) = write_version {
+            auth_builder.add_write_version(wv);
+        }
+        auth_builder.add_slot_updated(a.slot_updated());
+        if let Some(x) = auth {
+            auth_builder.add_authority(x);
+        }
+        if let Some(x) = pk {
+            auth_builder.add_pubkey(x);
+        }
+        auth_builder.finish()
+    });
+
+    let owner = owner_pubkey.map(|k| {
+        let args = fb::AssetOwnerArgs {
+            pubkey: Some(builder.create_vector(k.bytes())),
+            owner: owner_owner.map(|u| create_updated_optional_pubkey_offset(&mut builder, &u)),
+            delegate: owner_delegate
+                .map(|u| create_updated_optional_pubkey_offset(&mut builder, &u)),
+            owner_type: owner_owner_type
+                .map(|u| create_updated_owner_type_offset(&mut builder, &u)),
+            owner_delegate_seq: owner_owner_delegate_seq
+                .map(|u| create_updated_u64_offset(&mut builder, &u)),
+        };
+        fb::AssetOwner::create(&mut builder, &args)
+    });
+    let collection = collection_pubkey.map(|c| {
+        let args = fb::AssetCollectionArgs {
+            pubkey: Some(builder.create_vector(c.bytes())),
+            collection: collection_collection
+                .map(|u| create_updated_pubkey_offset(&mut builder, &u)),
+            is_collection_verified: collection_is_collection_verified
+                .map(|u| create_updated_bool_offset(&mut builder, &u)),
+            authority: collection_authority
+                .map(|u| create_updated_optional_pubkey_offset(&mut builder, &u)),
+        };
+        fb::AssetCollection::create(&mut builder, &args)
+    });
+    let res = fb::AssetCompleteDetails::create(
+        &mut builder,
+        &fb::AssetCompleteDetailsArgs {
+            pubkey: pk,
+            static_details,
+            dynamic_details,
+            authority,
+            owner,
+            collection,
+        },
+    );
+    builder.finish_minimal(res);
+    Some(builder.finished_data().to_vec())
 }
+
+fn merge_field<'a, T>(existing_field: &mut Option<T>, new_field: Option<T>)
+where
+    T: PartialOrd + 'a,
+{
+    if let Some(new_val) = new_field {
+        match existing_field {
+            None => {
+                *existing_field = Some(new_val);
+            }
+            Some(existing_value) => {
+                if new_val.partial_cmp(existing_value) == Some(std::cmp::Ordering::Greater) {
+                    *existing_field = Some(new_val);
+                }
+            }
+        }
+    }
+}
+
 pub fn merge_complete_details_fb_raw<'a>(
     _new_key: &[u8],
     existing_val: Option<&[u8]>,
     operands: impl Iterator<Item = &'a [u8]>,
 ) -> Option<Vec<u8>> {
-    let mut builder = FlatBufferBuilder::with_capacity(4048);
+    let mut builder = FlatBufferBuilder::with_capacity(2500);
     // Deserialize existing value into an iterator
     let existing_iter = existing_val
         .and_then(|bytes| {
@@ -2698,7 +3257,7 @@ mod tests {
     #[test]
     fn test_merge_complete_details_with_no_operands_keeps_object_unchanged() {
         let asset = create_full_complete_asset();
-        let mut builder = FlatBufferBuilder::new();
+        let mut builder = FlatBufferBuilder::with_capacity(2500);
         let asset_fb = asset.convert_to_fb(&mut builder);
         builder.finish_minimal(asset_fb);
         let origin_bytes = builder.finished_data();
@@ -2707,13 +3266,14 @@ mod tests {
         let result = merge_complete_details_fb_raw(&key, Some(origin_bytes), operands.into_iter())
             .expect("should return a result");
         assert_eq!(result, origin_bytes);
+        assert_eq!(result.len(), 2048);
         fb::root_as_asset_complete_details(&result).expect("should decode");
     }
 
     #[test]
     fn test_merge_on_empty_existing_value() {
         let asset = create_full_complete_asset();
-        let mut builder = FlatBufferBuilder::new();
+        let mut builder = FlatBufferBuilder::with_capacity(2500);
         let asset_fb = asset.convert_to_fb(&mut builder);
         builder.finish_minimal(asset_fb);
         let origin_bytes = builder.finished_data();
@@ -2735,7 +3295,7 @@ mod tests {
             dynamic_details: original_asset.dynamic_details.clone(),
             ..Default::default()
         };
-        let mut builder = FlatBufferBuilder::new();
+        let mut builder = FlatBufferBuilder::with_capacity(2500);
         let existing_fb = asset.convert_to_fb(&mut builder);
         builder.finish_minimal(existing_fb);
         let existing_bytes = builder.finished_data().to_owned();
@@ -2788,7 +3348,7 @@ mod tests {
             ))
         });
 
-        let mut builder = FlatBufferBuilder::new();
+        let mut builder = FlatBufferBuilder::with_capacity(2500);
         let existing_fb = original_asset.convert_to_fb(&mut builder);
         builder.finish_minimal(existing_fb);
         let existing_bytes = builder.finished_data().to_owned();

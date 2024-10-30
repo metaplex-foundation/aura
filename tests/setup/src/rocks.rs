@@ -143,7 +143,7 @@ impl RocksTestEnvironment {
             },
         )?;
 
-        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2048);
+        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         generated_assets
             .pubkeys
@@ -274,9 +274,9 @@ impl RocksTestEnvironmentSetup {
             .iter()
             .map(|pubkey| AssetAuthority {
                 pubkey: *pubkey,
-                authority: Pubkey::new_unique(),
+                authority: Pubkey::from(rand::random::<[u8; 32]>()),
                 slot_updated: rand::thread_rng().gen_range(0..100),
-                write_version: None,
+                write_version: Some(rand::thread_rng().gen_range(0..100)),
             })
             .collect()
     }
@@ -286,12 +286,12 @@ impl RocksTestEnvironmentSetup {
             .iter()
             .map(|pubkey| AssetOwner {
                 pubkey: *pubkey,
-                owner: generate_test_updated(Some(Pubkey::new_unique())),
+                owner: generate_test_updated(Some(Pubkey::from(rand::random::<[u8; 32]>()))),
                 owner_type: generate_test_updated(entities::enums::OwnerType::Single),
                 owner_delegate_seq: generate_test_updated(Some(
                     rand::thread_rng().gen_range(0..100),
                 )),
-                delegate: generate_test_updated(Some(Pubkey::new_unique())),
+                delegate: generate_test_updated(Some(Pubkey::from(rand::random::<[u8; 32]>()))),
             })
             .collect()
     }
@@ -327,36 +327,59 @@ impl RocksTestEnvironmentSetup {
 pub const DEFAULT_PUBKEY_OF_ONES: Pubkey = Pubkey::new_from_array([1u8; 32]);
 pub const PUBKEY_OF_TWOS: Pubkey = Pubkey::new_from_array([2u8; 32]);
 
-pub fn create_test_dynamic_data(pubkey: Pubkey, slot: u64, url: String) -> AssetDynamicDetails {
+pub fn create_test_dynamic_data(pubkey: Pubkey, _slot: u64, url: String) -> AssetDynamicDetails {
     AssetDynamicDetails {
         pubkey,
-        is_compressible: Updated::new(slot, None, false),
-        is_compressed: Updated::new(slot, None, false),
-        is_frozen: Updated::new(slot, None, false),
-        supply: Some(Updated::new(slot, None, 1)),
-        seq: None,
-        is_burnt: Updated::new(slot, None, false),
-        was_decompressed: Updated::new(slot, None, false),
-        onchain_data: None,
-        creators: Updated::new(slot, None, vec![generate_test_creator()]),
-        royalty_amount: Updated::new(slot, None, 0),
-        url: Updated::new(slot, None, url),
-        chain_mutability: Default::default(),
-        lamports: None,
-        executable: None,
+        is_compressible: generate_test_updated(rand::thread_rng().gen_bool(0.5)),
+        is_compressed: generate_test_updated(rand::thread_rng().gen_bool(0.5)),
+        is_frozen: generate_test_updated(rand::thread_rng().gen_bool(0.5)),
+        supply: maybe_generate_test_updated(1),
+        seq: maybe_generate_test_updated(rand::thread_rng().gen_range(0..50000)),
+        is_burnt: generate_test_updated(rand::thread_rng().gen_bool(0.5)),
+        was_decompressed: generate_test_updated(rand::thread_rng().gen_bool(0.5)),
+        onchain_data: maybe_generate_test_updated("some onchain data".to_string()),
+        creators: generate_test_updated(vec![generate_test_creator()]),
+        royalty_amount: generate_test_updated(rand::thread_rng().gen_range(0..50)),
+        url: generate_test_updated(url),
+        chain_mutability: maybe_generate_test_updated(entities::enums::ChainMutability::Mutable),
+        lamports: maybe_generate_test_updated(rand::thread_rng().gen_range(0..50000)),
+        executable: maybe_generate_test_updated(false),
         metadata_owner: None,
-        ..Default::default()
+        raw_name: None,
+        mpl_core_plugins: maybe_generate_test_updated("some core plugins".to_string()),
+        mpl_core_unknown_plugins: maybe_generate_test_updated("some unknown plugins".to_string()),
+        rent_epoch: maybe_generate_test_updated(rand::thread_rng().gen_range(1110..1000000)),
+        num_minted: maybe_generate_test_updated(rand::thread_rng().gen_range(10..1000)),
+        current_size: maybe_generate_test_updated(rand::thread_rng().gen_range(20..1000)),
+        plugins_json_version: maybe_generate_test_updated(rand::thread_rng().gen_range(0..10)),
+        mpl_core_external_plugins: maybe_generate_test_updated("some external plugins".to_string()),
+        mpl_core_unknown_external_plugins: maybe_generate_test_updated("some unknown".to_string()),
+        mint_extensions: maybe_generate_test_updated("value".to_string()),
     }
 }
 
 fn generate_test_creator() -> entities::models::Creator {
     entities::models::Creator {
-        creator: Pubkey::new_unique(),
+        creator: Pubkey::from(rand::random::<[u8; 32]>()),
         creator_verified: random(),
         creator_share: rand::thread_rng().gen_range(0..100),
     }
 }
 
 fn generate_test_updated<T>(v: T) -> Updated<T> {
-    Updated::new(rand::thread_rng().gen_range(0..100), None, v)
+    Updated::new(
+        rand::thread_rng().gen_range(0..1000),
+        Some(entities::models::UpdateVersion::Sequence(
+            rand::thread_rng().gen_range(100..200),
+        )),
+        v,
+    )
+}
+
+fn maybe_generate_test_updated<T>(value: T) -> Option<Updated<T>> {
+    if rand::thread_rng().gen_bool(0.5) {
+        Some(generate_test_updated(value))
+    } else {
+        None
+    }
 }

@@ -1,3 +1,4 @@
+use rocks_db::asset_generated::asset as fb;
 use std::io::Read;
 
 use bincode::{deserialize, serialize};
@@ -74,7 +75,7 @@ fn flatbuffer_vs_bincode_merge_functions_benchmark(c: &mut Criterion) {
         .iter()
         .map(|a| serialize(&a).unwrap())
         .collect::<Vec<_>>();
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
+    let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
     let fb_bytes_versions = assets_versions
         .iter()
         .map(|asset| {
@@ -122,6 +123,37 @@ fn flatbuffer_vs_bincode_merge_functions_benchmark(c: &mut Criterion) {
                     vec![fb_bytes.as_slice()].into_iter(),
                 );
                 existing_val = Some(new_val.expect("should merge"))
+            });
+        })
+    });
+    c.bench_function("merge with a flatbuffer object via a simpler merger", |b| {
+        b.iter(|| {
+            let mut existing_val: Option<Vec<u8>> = None;
+            fb_bytes_versions.iter().for_each(|fb_bytes| {
+                let new_val = asset::merge_complete_details_fb_simple_raw(
+                    &key,
+                    existing_val.as_ref().map(|v| v.as_slice()),
+                    vec![fb_bytes.as_slice()].into_iter(),
+                );
+                existing_val = Some(new_val.expect("should merge"))
+            });
+        })
+    });
+    c.bench_function("deserialize a flatbuffer objects ", |b| {
+        b.iter(|| {
+            fb_bytes_versions.iter().for_each(|fb_bytes| {
+                fb::root_as_asset_complete_details(fb_bytes).expect("should deserialize");
+            });
+        })
+    });
+    c.bench_function("serialize using a builder with conversion", |b| {
+        b.iter(|| {
+            let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
+            assets_versions.iter().for_each(|asset| {
+                builder.reset();
+                let asset_fb = asset.convert_to_fb(&mut builder);
+                builder.finish_minimal(asset_fb);
+                builder.finished_data().to_vec();
             });
         })
     });

@@ -96,7 +96,7 @@ impl Storage {
     }
 
     pub async fn apply_migration_merge(&self) -> Result<()> {
-        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2048);
+        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
         convert_and_merge!(
             self.asset_static_data,
             builder,
