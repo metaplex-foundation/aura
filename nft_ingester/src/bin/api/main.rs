@@ -226,7 +226,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let cloned_rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
-        rocks_db_manager.catch_up(shutdown_rx).await;
+        rocks_db_manager.catch_up(cloned_rx).await;
 
         Ok(())
     });

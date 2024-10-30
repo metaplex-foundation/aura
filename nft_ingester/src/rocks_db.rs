@@ -137,7 +137,7 @@ impl RocksDbManager {
                     % 2;
                 let free_node = &duplicate_mode.rocks_db_instances[free_node_idx];
 
-                while Arc::<rocks_db::Storage>::strong_count(&free_node) > 1 {
+                while Arc::<rocks_db::Storage>::strong_count(free_node) > 1 {
                     if !shutdown_rx.is_empty() {
                         return;
                     }
