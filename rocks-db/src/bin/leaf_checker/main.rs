@@ -10,8 +10,6 @@ use rocks_db::{
 use solana_sdk::pubkey::Pubkey;
 use tokio::{sync::Mutex, task::JoinSet};
 
-pub const BATCH_SIZE: usize = 1000;
-
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() {
     // Retrieve the database paths from command-line arguments
@@ -28,13 +26,15 @@ pub async fn main() {
 
     println!("Opening DB...");
 
-    let source_db = Storage::open(
-        source_db_path,
-        Arc::new(Mutex::new(JoinSet::new())),
-        red_metrics.clone(),
-        MigrationState::Last,
-    )
-    .unwrap();
+    let source_db = Arc::new(
+        Storage::open(
+            source_db_path,
+            Arc::new(Mutex::new(JoinSet::new())),
+            red_metrics.clone(),
+            MigrationState::Last,
+        )
+        .unwrap(),
+    );
 
     println!("Opened in {:?}", start.elapsed());
 
@@ -46,76 +46,25 @@ pub async fn main() {
 
     let mut delete_batch = Vec::new();
 
-    let mut select_batch_keys = Vec::new();
-    let mut select_batch_data = Vec::new();
+    let mut select_batch = Vec::new();
 
     for cl_leaf in source_db.cl_leafs.iter_start() {
         match cl_leaf {
             Ok((_, value)) => {
-                let cl_leaf_data = deserialize::<ClLeaf>(value.to_vec().as_ref()).unwrap();
+                select_batch.push(value.to_vec());
 
-                let key = ClItemKey::new(cl_leaf_data.cli_node_idx, cl_leaf_data.cli_tree_key);
+                if select_batch.len() >= 2500 {
+                    process_batch(source_db.clone(), &mut select_batch, &mut delete_batch).await;
 
-                select_batch_keys.push(key);
-                select_batch_data.push(cl_leaf_data);
+                    if !delete_batch.is_empty() {
+                        assets_with_missed_cl_items += delete_batch.len();
 
-                if select_batch_keys.len() >= 5000 {
-                    let cl_item_rows = source_db
-                        .cl_items
-                        .batch_get(std::mem::take(&mut select_batch_keys))
-                        .await
-                        .unwrap();
-
-                    for (i, value) in cl_item_rows.iter().enumerate() {
-                        if value.is_none() {
-                            assets_with_missed_cl_items += 1;
-
-                            let data = select_batch_data.get(i).unwrap();
-
-                            let asset_id =
-                                get_asset_id(&data.cli_tree_key, &data.cli_leaf_idx).await;
-
-                            let (asset_dynamic_data, asset_leaf_data) = tokio::join!(
-                                source_db.asset_dynamic_data.batch_get(vec![asset_id]),
-                                source_db.asset_leaf_data.batch_get(vec![asset_id])
-                            );
-
-                            let asset_dynamic_data = asset_dynamic_data
-                                .ok()
-                                .and_then(|vec| vec.into_iter().next())
-                                .and_then(|data_opt| data_opt)
-                                .and_then(|data| data.seq.map(|s| s.value))
-                                .unwrap_or_default();
-
-                            let asset_leaf_data = asset_leaf_data
-                                .ok()
-                                .and_then(|vec| vec.into_iter().next())
-                                .and_then(|data_opt| data_opt)
-                                .and_then(|data| data.leaf_seq)
-                                .unwrap_or_default();
-
-                            let max_asset_sequence =
-                                std::cmp::max(asset_dynamic_data, asset_leaf_data);
-
-                            // if seq is 0 means asset does not exist at all
-                            // found a few such assets during testing, not sure how it happened yet
-                            if max_asset_sequence == 0 {
-                                continue;
-                            }
-
-                            delete_batch.push((data.cli_tree_key, max_asset_sequence));
-
-                            if delete_batch.len() >= BATCH_SIZE {
-                                source_db
-                                    .tree_seq_idx
-                                    .delete_batch(std::mem::take(&mut delete_batch))
-                                    .await
-                                    .unwrap();
-                            }
-                        }
+                        source_db
+                            .tree_seq_idx
+                            .delete_batch(std::mem::take(&mut delete_batch))
+                            .await
+                            .unwrap();
                     }
-
-                    select_batch_data.clear();
                 }
             }
             Err(e) => {
@@ -124,7 +73,13 @@ pub async fn main() {
         }
     }
 
+    if !select_batch.is_empty() {
+        process_batch(source_db.clone(), &mut select_batch, &mut delete_batch).await;
+    }
+
     if !delete_batch.is_empty() {
+        assets_with_missed_cl_items += delete_batch.len();
+
         source_db
             .tree_seq_idx
             .delete_batch(std::mem::take(&mut delete_batch))
@@ -137,6 +92,88 @@ pub async fn main() {
         "Found {} assets with missed CL items.",
         assets_with_missed_cl_items
     );
+}
+
+async fn process_batch(
+    storage: Arc<Storage>,
+    batch_data: &mut Vec<Vec<u8>>,
+    delete_batch: &mut Vec<(Pubkey, u64)>,
+) {
+    let mut tasks = JoinSet::new();
+
+    for data in batch_data.iter() {
+        tasks.spawn(process_leaf(storage.clone(), data.clone()));
+    }
+
+    while let Some(task_result) = tasks.join_next().await {
+        match task_result {
+            Ok(key) => {
+                if let Some(key) = key {
+                    delete_batch.push(key);
+                }
+            }
+            Err(err) if err.is_panic() => {
+                let err = err.into_panic();
+                println!("Task panic: {:?}", err);
+            }
+            Err(err) => {
+                let err = err.to_string();
+                println!("Task error: {}", err);
+            }
+        }
+    }
+
+    batch_data.clear();
+}
+
+async fn process_leaf(storage: Arc<Storage>, data: Vec<u8>) -> Option<(Pubkey, u64)> {
+    let cl_leaf_data = deserialize::<ClLeaf>(data.as_ref()).unwrap();
+
+    let key = ClItemKey::new(cl_leaf_data.cli_node_idx, cl_leaf_data.cli_tree_key);
+
+    let cl_item_rows = storage
+        .cl_items
+        .batch_get(vec![key])
+        .await
+        .unwrap()
+        .into_iter()
+        .next()
+        .and_then(|cl| cl);
+
+    if cl_item_rows.is_none() {
+        let asset_id = get_asset_id(&cl_leaf_data.cli_tree_key, &cl_leaf_data.cli_leaf_idx).await;
+
+        let (asset_dynamic_data, asset_leaf_data) = tokio::join!(
+            storage.asset_dynamic_data.batch_get(vec![asset_id]),
+            storage.asset_leaf_data.batch_get(vec![asset_id])
+        );
+
+        let asset_dynamic_data = asset_dynamic_data
+            .ok()
+            .and_then(|vec| vec.into_iter().next())
+            .and_then(|data_opt| data_opt)
+            .and_then(|data| data.seq.map(|s| s.value))
+            .unwrap_or_default();
+
+        let asset_leaf_data = asset_leaf_data
+            .ok()
+            .and_then(|vec| vec.into_iter().next())
+            .and_then(|data_opt| data_opt)
+            .and_then(|data| data.leaf_seq)
+            .unwrap_or_default();
+
+        let max_asset_sequence = std::cmp::max(asset_dynamic_data, asset_leaf_data);
+
+        // if seq is 0 means asset does not exist at all
+        // found a few such assets during testing, not sure how it happened yet
+        if max_asset_sequence == 0 {
+            return None;
+        }
+
+        return Some((cl_leaf_data.cli_tree_key, max_asset_sequence));
+    }
+
+    None
 }
 
 async fn get_asset_id(tree_id: &Pubkey, nonce: &u64) -> Pubkey {
