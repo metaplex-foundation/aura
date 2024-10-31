@@ -12,6 +12,7 @@ use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::asset::{AssetCompleteDetails, SlotAssetIdxKey};
+use crate::asset_generated::asset as fb;
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
 use crate::{
     asset::{AssetLeaf, SlotAssetIdx},
@@ -89,14 +90,20 @@ async fn get_complete_asset_details(
     pubkey: Pubkey,
     metrics: Arc<RequestErrorDurationMetrics>,
 ) -> crate::Result<CompleteAssetDetails> {
-    let data =
-        Storage::column::<AssetCompleteDetails>(backend.clone(), metrics.clone()).get(pubkey)?;
+    let data = backend.get_pinned_cf(
+        &backend.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+        AssetCompleteDetails::encode_key(pubkey),
+    )?;
     let data = match data {
         None => {
             return Err(StorageError::Common("Asset data not found".to_string()));
         }
         Some(data) => data,
     };
+    let data = fb::root_as_asset_complete_details(&data)
+        .map_err(|e| StorageError::Common(e.to_string()))?;
+    // TODO: optimization point: this may be optimized by using the flatbuffers directly instead of converting to a struct, skipping for now
+    let data = AssetCompleteDetails::from(data);
     let static_data = match data.static_details {
         None => {
             return Err(StorageError::Common(
