@@ -14,6 +14,8 @@ use tokio::time::sleep as tokio_sleep;
 use tokio::time::Instant;
 use tracing::info;
 
+use crate::consistency_calculator::NftChangesTracker;
+
 const CI_ITEMS_DELETE_BATCH_SIZE: usize = 100;
 const SLOT_CHECK_OFFSET: u64 = 1500;
 
@@ -49,6 +51,7 @@ where
     cl_items_manager: Arc<CM>,
     fork_checker: Arc<FC>,
     data_consistency_storage: Arc<dyn DataConsistencyStorage + Send + Sync>,
+    nft_changes_tracker: Option<Arc<NftChangesTracker>>,
     metrics: Arc<ForkCleanerMetricsConfig>,
 }
 
@@ -61,12 +64,14 @@ where
         cl_items_manager: Arc<CM>,
         fork_checker: Arc<FC>,
         data_consistency_storage: Arc<dyn DataConsistencyStorage + Send + Sync>,
+        nft_changes_tracker: Option<Arc<NftChangesTracker>>,
         metrics: Arc<ForkCleanerMetricsConfig>,
     ) -> Self {
         Self {
             cl_items_manager,
             fork_checker,
             data_consistency_storage,
+            nft_changes_tracker,
             metrics,
         }
     }
@@ -165,6 +170,11 @@ where
                 self.data_consistency_storage
                     .drop_forked_bubblegum_changes(&changes_to_delete)
                     .await;
+                if let Some(changes_tracker) = self.nft_changes_tracker.as_ref() {
+                    changes_tracker
+                        .watch_remove_forked_bubblegum_changes(&changes_to_delete)
+                        .await;
+                }
                 self.delete_tree_seq_idx(&mut delete_items).await;
             }
         }
@@ -173,6 +183,11 @@ where
             self.data_consistency_storage
                 .drop_forked_bubblegum_changes(&changes_to_delete)
                 .await;
+            if let Some(changes_tracker) = self.nft_changes_tracker.as_ref() {
+                changes_tracker
+                    .watch_remove_forked_bubblegum_changes(&changes_to_delete)
+                    .await;
+            }
             self.delete_tree_seq_idx(&mut delete_items).await;
         }
 

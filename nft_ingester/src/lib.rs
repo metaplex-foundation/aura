@@ -28,7 +28,6 @@ pub mod redis_receiver;
 pub mod rocks_db;
 pub mod scheduler;
 pub mod sequence_consistent;
-pub mod solana_slot_service;
 pub mod tcp_receiver;
 pub mod token_updates_processor;
 pub mod transaction_ingester;

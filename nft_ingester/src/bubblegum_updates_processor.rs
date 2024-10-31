@@ -1,3 +1,4 @@
+use crate::consistency_calculator::NftChangesTracker;
 use crate::error::IngesterError;
 use crate::flatbuffer_mapper::FlatbufferMapper;
 use crate::plerkle;
@@ -60,6 +61,7 @@ pub struct BubblegumTxProcessor {
     pub transaction_parser: Arc<FlatbufferMapper>,
     pub instruction_parser: Arc<BubblegumParser>,
     pub rocks_client: Arc<rocks_db::Storage>,
+    pub nft_change_tracker: Option<Arc<NftChangesTracker>>,
 
     pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
     pub metrics: Arc<IngesterMetricsConfig>,
@@ -70,11 +72,13 @@ impl BubblegumTxProcessor {
         rocks_client: Arc<rocks_db::Storage>,
         metrics: Arc<IngesterMetricsConfig>,
         json_tasks: Arc<Mutex<VecDeque<Task>>>,
+        nft_change_tracker: Option<Arc<NftChangesTracker>>,
     ) -> Self {
         BubblegumTxProcessor {
             transaction_parser: Arc::new(FlatbufferMapper {}),
             instruction_parser: Arc::new(BubblegumParser {}),
             rocks_client,
+            nft_change_tracker,
             json_tasks,
             metrics,
         }
@@ -1173,8 +1177,23 @@ impl BubblegumTxProcessor {
         Ok(())
     }
 
+    /// Checks if the given instruction is a late instruction, belongs to a previous epoch,
+    /// and emits notification a notification, that will force the checksum calculator component
+    /// to recalculate epoch checksum.
+    ///
+    /// Note: this function only sends the notification, the saving of bubblgum changes
+    /// happens in [Storage::store_instruction_result_with_batch] by calling
+    /// [Storage::track_tree_change_with_batch]
     async fn calc_checksums_if_needed(&self, instructions: &[InstructionResult]) {
-        // TODO: if there was a change with a slot from the previous epoch, **emit** checksum recalc
+        if let Some(nft_change_tracker) = self.nft_change_tracker.as_ref() {
+            for ix in instructions {
+                if let Some(tree_update) = ix.tree_update.as_ref() {
+                    nft_change_tracker
+                        .watch_bubblegum_change(tree_update.tree, tree_update.slot)
+                        .await;
+                }
+            }
+        }
     }
 }
 

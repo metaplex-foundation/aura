@@ -35,6 +35,7 @@ async fn bench_ingest(
         rocks_dest.clone(),
         Arc::new(IngesterMetricsConfig::new()),
         buffer.json_tasks.clone(),
+        None,
     ));
 
     let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(

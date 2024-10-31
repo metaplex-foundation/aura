@@ -20,20 +20,24 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::{column::TypedColumn, transaction::TreeUpdate, Storage};
 
-use std::{cell::Cell, collections::HashSet};
+use std::{collections::HashSet, sync::atomic::AtomicU64};
 
-/// Holds the number for an epoch that is happening at the moment
-/// It should be super presize, i.e. it is OK (and even preferable)
-/// to have a small lag between real epoch change (current solana slot)
-/// and update of this variable.
-const CURRENT_ESTIMATED_EPOCH: Cell<u32> = Cell::new(0);
+static LAST_SLOT: AtomicU64 = AtomicU64::new(0);
 
 pub fn current_estimated_epoch() -> u32 {
-    CURRENT_ESTIMATED_EPOCH.get()
+    epoch_of_slot(LAST_SLOT.load(std::sync::atomic::Ordering::Relaxed))
 }
 
-pub fn update_estimated_epoch(new_value: u32) {
-    CURRENT_ESTIMATED_EPOCH.set(new_value);
+pub fn last_tracked_slot() -> u64 {
+    LAST_SLOT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub fn track_slot_counter(slot: u64) -> u64 {
+    let prev = LAST_SLOT.load(std::sync::atomic::Ordering::Relaxed);
+    if slot > prev {
+        LAST_SLOT.store(slot, std::sync::atomic::Ordering::Relaxed);
+    }
+    prev
 }
 
 pub fn epoch_of_slot(slot: u64) -> u32 {
@@ -64,8 +68,8 @@ pub fn slots_to_next_epoch(slot: u64) -> u64 {
 /// which means we have 65536 buckets.
 /// This allows to have records in "account NFT changes" collumn family
 /// "grouped" by the bucket number.
-pub fn bucket_for_acc(accout_pubkey: Pubkey) -> u16 {
-    let bytes = accout_pubkey.to_bytes();
+pub fn bucket_for_acc(account_pubkey: Pubkey) -> u16 {
+    let bytes = account_pubkey.to_bytes();
     let mut b = <[u8; 2]>::default();
     b.clone_from_slice(&bytes[0..2]);
 
@@ -78,8 +82,8 @@ pub fn grand_bucket_for_bucket(bucket: u16) -> u16 {
     bucket >> 6
 }
 
-pub fn grand_bucket_for_acc(accout_pubkey: Pubkey) -> u16 {
-    grand_bucket_for_bucket(bucket_for_acc(accout_pubkey))
+pub fn grand_bucket_for_acc(account_pubkey: Pubkey) -> u16 {
+    grand_bucket_for_bucket(bucket_for_acc(account_pubkey))
 }
 
 pub const BUBBLEGUM_EPOCH_INVALIDATED: BubblegumEpoch = BubblegumEpoch {
@@ -110,8 +114,7 @@ pub const ACC_GRAND_BUCKET_INVALIDATE: AccountNftGrandBucket = AccountNftGrandBu
 /// Since the arrival of Solana data is asynchronous and has no strict order guarantees,
 /// we can easily fall into a situation when we are in the process of calculation
 /// of a checksum for an epoch, and a new update came befor the checksum has been written.
-/// ```norun
-///
+/// ```img
 /// epoch end     a change for previous epoch arrived
 ///   |               |
 ///   V               V
@@ -170,7 +173,7 @@ impl BubblegumChangeKey {
     pub fn tree_epoch_start_key(tree_pubkey: Pubkey, epoch: u32) -> BubblegumChangeKey {
         BubblegumChangeKey {
             epoch,
-            tree_pubkey: tree_pubkey,
+            tree_pubkey,
             slot: first_slot_in_epoch(epoch),
             seq: 0,
         }
@@ -216,6 +219,12 @@ impl BubblegumEpochKey {
     pub fn grand_epoch_start_key(grand_epoch: u16) -> BubblegumEpochKey {
         BubblegumEpochKey {
             tree_pubkey: Pubkey::from([0u8; 32]),
+            epoch_num: first_epoch_in_grand_epoch(grand_epoch),
+        }
+    }
+    pub fn tree_grand_epoch_start_key(tree_pubkey: Pubkey, grand_epoch: u16) -> BubblegumEpochKey {
+        BubblegumEpochKey {
+            tree_pubkey,
             epoch_num: first_epoch_in_grand_epoch(grand_epoch),
         }
     }
@@ -472,8 +481,7 @@ impl Storage {
         batch: &mut rocksdb::WriteBatch,
         tree_update: &TreeUpdate,
     ) -> crate::Result<()> {
-        let key =
-            BubblegumChangeKey::new(tree_update.tree.clone(), tree_update.slot, tree_update.seq);
+        let key = BubblegumChangeKey::new(tree_update.tree, tree_update.slot, tree_update.seq);
         let value = BubblegumChange {
             signature: tree_update.tx.clone(),
         };
@@ -564,7 +572,9 @@ impl DataConsistencyStorage for Storage {
 
 // TODO: Replace with LazyLock after rustc update.
 lazy_static::lazy_static! {
+    pub static ref BUBBLEGUM_EPOCH_INVALIDATED_BYTES: Vec<u8> = bincode::serialize(&BUBBLEGUM_EPOCH_INVALIDATED).unwrap();
     pub static ref BUBBLEGUM_EPOCH_CALCULATING_BYTES: Vec<u8> = bincode::serialize(&BUBBLEGUM_EPOCH_CALCULATING).unwrap();
+    pub static ref BUBBLEGUM_GRAND_EPOCH_INVALIDATED_BYTES: Vec<u8> = bincode::serialize(&BUBBLEGUM_GRAND_EPOCH_INVALIDATED).unwrap();
     pub static ref BUBBLEGUM_GRAND_EPOCH_CALCULATING_BYTES: Vec<u8> = bincode::serialize(&BUBBLEGUM_GRAND_EPOCH_CALCULATING).unwrap();
 }
 

@@ -6,6 +6,9 @@ use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
     self, init_logger, setup_config, BackfillerConfig, RawBackfillConfig, INGESTER_CONFIG_PREFIX,
 };
+use nft_ingester::consistency_calculator;
+use nft_ingester::consistency_calculator::NftChangesTracker;
+use nft_ingester::consistency_calculator::NTF_CHANGES_NOTIFICATION_QUEUE_SIZE;
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::transaction_ingester;
@@ -19,6 +22,7 @@ use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
 use rocks_db::bubblegum_slots::BubblegumSlotGetter;
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
+use tokio::sync::mpsc;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 
@@ -139,6 +143,17 @@ pub async fn main() -> Result<(), IngesterError> {
     );
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
+    let (nft_change_snd, nft_change_rcv) = mpsc::channel(NTF_CHANGES_NOTIFICATION_QUEUE_SIZE);
+    let changes_tracker = Arc::new(NftChangesTracker::new(
+        rocks_storage.clone(),
+        nft_change_snd.clone(),
+    ));
+    consistency_calculator::run_bg_consistency_calculator(
+        nft_change_rcv,
+        rocks_storage.clone(),
+        shutdown_rx.resubscribe(),
+    );
+
     match backfiller_config.backfiller_mode {
         config::BackfillerMode::IngestDirectly => {
             todo!();
@@ -174,6 +189,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 rocks_storage.clone(),
                 ingester_metrics.clone(),
                 buffer.json_tasks.clone(),
+                Some(changes_tracker.clone()),
             ));
 
             let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(

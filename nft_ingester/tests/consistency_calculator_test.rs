@@ -1,12 +1,15 @@
 #[cfg(test)]
 mod tests {
-    use nft_ingester::consistency_calculator::{calc_acc_nft_checksums, calc_bubblegum_checksums};
+    use nft_ingester::consistency_calculator::ConsistencyCalcMsg;
+    use nft_ingester::consistency_calculator::{
+        calc_acc_nft_checksums, calc_bubblegum_checksums, NftChangesTracker,
+    };
     use rocks_db::{
         column::TypedColumn,
         storage_consistency::{
-            AccountNft, AccountNftBucket, AccountNftBucketKey, AccountNftChange,
-            AccountNftChangeKey, AccountNftKey, BubblegumChange, BubblegumChangeKey,
-            BubblegumEpoch, BubblegumEpochKey, BubblegumGrandEpochKey, Checksum,
+            AccountNft, AccountNftBucketKey, AccountNftChange, AccountNftChangeKey, AccountNftKey,
+            BubblegumChange, BubblegumChangeKey, BubblegumEpoch, BubblegumEpochKey,
+            BubblegumGrandEpochKey, Checksum,
         },
     };
     use setup::rocks::RocksTestEnvironment;
@@ -63,7 +66,7 @@ mod tests {
             .unwrap();
 
         // Calculate epoch and grand epoch checksum
-        calc_bubblegum_checksums(&storage, 1).await;
+        calc_bubblegum_checksums(&storage, 1, None).await;
 
         let expected_epoch_checksum = {
             let mut hasher = Hasher::default();
@@ -213,6 +216,27 @@ mod tests {
         assert_eq!(
             bucket1_val.checksum,
             Checksum::Value(expected_bucket1_checksum)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_notification_on_epoch_change() {
+        let storage = RocksTestEnvironment::new(&[]).storage;
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1000);
+        let sut = NftChangesTracker::new(storage, sender);
+
+        let tree = Pubkey::new_unique();
+
+        sut.watch_bubblegum_change(tree, 90_001).await;
+        sut.watch_bubblegum_change(tree, 100_001).await;
+
+        assert_eq!(
+            Ok(ConsistencyCalcMsg::EpochChanged { new_epoch: 10 }),
+            receiver.try_recv()
+        );
+        assert_eq!(
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty),
+            receiver.try_recv()
         );
     }
 

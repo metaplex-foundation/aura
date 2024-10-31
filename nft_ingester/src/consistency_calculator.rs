@@ -1,54 +1,251 @@
+//! The module contains functionality for calculating transaction-based
+//! and account-based NFT checsums that are used in peer-to-peer
+//! Aura nodes communication to identify missing data on a node.
+
 use rocks_db::{
     column::TypedColumn,
     storage_consistency::{
-        self, bucket_for_acc, grand_bucket_for_bucket, grand_epoch_of_epoch, AccountNft,
-        AccountNftBucket, AccountNftBucketKey, AccountNftChange, AccountNftChangeKey,
+        self, bucket_for_acc, epoch_of_slot, grand_bucket_for_bucket, grand_epoch_of_epoch,
+        AccountNft, AccountNftBucket, AccountNftBucketKey, AccountNftChange, AccountNftChangeKey,
         AccountNftGrandBucket, AccountNftGrandBucketKey, AccountNftKey, BubblegumChange,
         BubblegumChangeKey, BubblegumEpoch, BubblegumEpochKey, BubblegumGrandEpoch,
         BubblegumGrandEpochKey, ACC_BUCKET_INVALIDATE, ACC_GRAND_BUCKET_INVALIDATE,
+        BUBBLEGUM_GRAND_EPOCH_INVALIDATED,
     },
     Storage,
 };
 use solana_sdk::{hash::Hasher, pubkey::Pubkey};
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeSet, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 use storage_consistency::{BUBBLEGUM_EPOCH_CALCULATING, BUBBLEGUM_GRAND_EPOCH_CALCULATING};
-use tokio::{sync::mpsc::UnboundedReceiver, task::JoinHandle};
+use tokio::sync::{
+    mpsc::{Receiver, Sender},
+    Mutex,
+};
 
+pub const NTF_CHANGES_NOTIFICATION_QUEUE_SIZE: usize = 1000;
+
+/// Wait this amount of seconds for late data before starting to calculate the epoch
+const EPOCH_CALC_LAG_SEC: u64 = 300;
+
+/// This message is used to send notifications abount changes from:
+/// - bubblegum processor
+/// - account processor
+/// - fork cleaner
+#[derive(Debug, PartialEq, Eq)]
 pub enum ConsistencyCalcMsg {
-    EpochChanged { epoch: u32 },
+    StartingBackfilling,
+    FinishedBackfilling,
+    EpochChanged { new_epoch: u32 },
     BubblegumUpdated { tree: Pubkey, slot: u64 },
     AccUpdated { account: Pubkey, slot: u64 },
 }
 
+/// Component for convenient storing of account NFT changes,
+/// and notifying checksum calculator when a whole epoch,
+/// or an individual bubblegum three/account checksum should be calculated.
+pub struct NftChangesTracker {
+    storage: Arc<Storage>,
+    sender: Sender<ConsistencyCalcMsg>,
+}
+
+impl NftChangesTracker {
+    pub fn new(storage: Arc<Storage>, sender: Sender<ConsistencyCalcMsg>) -> NftChangesTracker {
+        NftChangesTracker { storage, sender }
+    }
+
+    /// Persists given account NFT change into the sotrage, and, if the change is from the epoch
+    /// that is previous to the current epoch, then also notifies checksums calculator
+    /// about late data.
+    ///
+    /// ## Args:
+    /// * `account_pubkey` - Pubkey of the NFT account
+    /// * `slot` - the slot number that change is made in
+    /// * `write_version` - write version of the change
+    pub async fn track_account_change(
+        &self,
+        account_pubkey: Pubkey,
+        slot: u64,
+        write_version: u64,
+    ) {
+        let epoch = epoch_of_slot(slot);
+        let key = AccountNftChangeKey {
+            epoch,
+            account_pubkey,
+            slot,
+            write_version,
+        };
+        let value = AccountNftChange {};
+
+        let last_slot = storage_consistency::track_slot_counter(slot);
+        let last_slot_epoch = epoch_of_slot(last_slot);
+
+        if epoch < last_slot_epoch {
+            let bucket = bucket_for_acc(account_pubkey);
+            let grand_bucket = grand_bucket_for_bucket(bucket);
+            let _ = self
+                .storage
+                .acc_nft_grand_buckets
+                .put_async(
+                    AccountNftGrandBucketKey::new(grand_bucket),
+                    ACC_GRAND_BUCKET_INVALIDATE,
+                )
+                .await;
+            let _ = self
+                .storage
+                .acc_nft_buckets
+                .put_async(AccountNftBucketKey::new(bucket), ACC_BUCKET_INVALIDATE)
+                .await;
+        }
+
+        let _ = self.storage.acc_nft_changes.put_async(key, value).await;
+
+        if epoch < last_slot_epoch {
+            let _ = self
+                .sender
+                .send(ConsistencyCalcMsg::AccUpdated {
+                    account: account_pubkey,
+                    slot,
+                })
+                .await;
+        } else if epoch > last_slot_epoch && last_slot != 0 {
+            let _ = self
+                .sender
+                .send(ConsistencyCalcMsg::EpochChanged { new_epoch: epoch })
+                .await;
+        }
+    }
+
+    /// Checks bubble tree slot, and if the slot number is from an epoch previous to the current,
+    /// emits notification to the checksums calculator.
+    ///
+    /// In contrast to account notification tracking method, for bubblegum we don't
+    /// store tree change here, since it is stored inside of [rocks_db::transaction_client]
+    /// in scope of the same batch that persists Bubblegum tree change details.
+    pub async fn watch_bubblegum_change(&self, tree: Pubkey, slot: u64) {
+        let epoch = epoch_of_slot(slot);
+        let last_slot = storage_consistency::track_slot_counter(slot);
+        let last_slot_epoch = epoch_of_slot(last_slot);
+        if epoch < last_slot_epoch {
+            let _ = self
+                .sender
+                .send(ConsistencyCalcMsg::BubblegumUpdated { tree, slot })
+                .await;
+        } else if epoch > last_slot_epoch && last_slot != 0 {
+            let _ = self
+                .sender
+                .send(ConsistencyCalcMsg::EpochChanged { new_epoch: epoch })
+                .await;
+        }
+    }
+
+    /// Iterates over bubblegum changes, and for each of them check if the change from an epoch
+    /// previous to the current. If the change is from the previous epoch,
+    /// it sends a notification for the checksums calculator.
+    /// This method is called from the fork cleaner.
+    pub async fn watch_remove_forked_bubblegum_changes(&self, keys: &[BubblegumChangeKey]) {
+        let last_slot = storage_consistency::last_tracked_slot();
+        let last_slot_epoch = epoch_of_slot(last_slot);
+        for key in keys {
+            if key.epoch < last_slot_epoch {
+                let _ = self
+                    .sender
+                    .send(ConsistencyCalcMsg::BubblegumUpdated {
+                        tree: key.tree_pubkey,
+                        slot: key.slot,
+                    })
+                    .await;
+            }
+        }
+    }
+}
+
 /// An entry point for checksums calculation component.
 /// Should be called from "main".
-pub async fn run_bg_consistency_calculator(
-    mut rcv: UnboundedReceiver<ConsistencyCalcMsg>,
+/// Accepts notifications about epoch change, or changes in specific bubblegum tree or account,
+/// and schedules checksum calculation.
+pub fn run_bg_consistency_calculator(
+    mut rcv: Receiver<ConsistencyCalcMsg>,
     storage: Arc<Storage>,
+    mut shutdown_signal: tokio::sync::broadcast::Receiver<()>,
 ) {
     tokio::spawn(async move {
-        let mut _bubblegum_task = None;
+        let bbgm_tasks: Arc<Mutex<BTreeSet<BbgmTask>>> = Arc::new(Mutex::new(BTreeSet::new()));
+        let acc_tasks: Arc<Mutex<BTreeSet<AccTask>>> = Arc::new(Mutex::new(BTreeSet::new()));
 
-        // Don't look here too much for now, it is to be implemented
+        // Taks that calculates bubblegum checksums
+        let _bbgm_bg = {
+            let storage = storage.clone();
+            let bbgm_tasks = bbgm_tasks.clone();
+            tokio::spawn(async move {
+                process_bbgm_tasks(storage, bbgm_tasks).await;
+            })
+        };
+        // Taks that calculates account NFT checksums
+        let _acc_bg = {
+            let storage = storage.clone();
+            let acc_tasks = acc_tasks.clone();
+            tokio::spawn(async move {
+                process_acc_tasks(storage, acc_tasks).await;
+            })
+        };
+
         loop {
-            match rcv.recv().await {
-                Some(msg) => match msg {
-                    ConsistencyCalcMsg::EpochChanged { epoch } => {
-                        // TODO: check sequnce_consistent.rs before calculating the checksums
+            let calc_msg = tokio::select! {
+                msg = rcv.recv() => msg,
+                _ = shutdown_signal.recv() => {
+                    tracing::info!("Received stop signal, stopping consistency calculator");
+                    break;
+                }
+            };
 
-                        // TODO: Scheduler epoch calc. Should calc immediately or wait, since more data can come?
-                        let t = schedule_bublegum_calc(
-                            Duration::from_secs(300),
-                            storage.clone(),
-                            epoch,
-                        );
-                        _bubblegum_task = Some(t);
+            match calc_msg {
+                Some(msg) => match msg {
+                    ConsistencyCalcMsg::EpochChanged { new_epoch } => {
+                        let prev_epoch = new_epoch.saturating_sub(1);
+                        {
+                            // We don't wait for gaps filles (sequnce_consistent.rs) to process
+                            // slots up to the last in the epoch, just will recalculate then if needed.
+                            let mut guard = bbgm_tasks.lock().await;
+                            guard.insert(BbgmTask::CalcEpoch(prev_epoch));
+                        }
+                        {
+                            let mut guard = acc_tasks.lock().await;
+                            guard.insert(AccTask::CalcEpoch(prev_epoch));
+                        }
                     }
-                    ConsistencyCalcMsg::BubblegumUpdated { tree: _, slot: _ } => todo!(),
-                    ConsistencyCalcMsg::AccUpdated {
-                        account: _,
-                        slot: _,
-                    } => todo!(),
+                    ConsistencyCalcMsg::BubblegumUpdated { tree, slot } => {
+                        let mut guard = bbgm_tasks.lock().await;
+                        guard.insert(BbgmTask::CalcTree(epoch_of_slot(slot), tree));
+                    }
+                    ConsistencyCalcMsg::AccUpdated { account: _, slot } => {
+                        // It's actually more reasonable to just process all late changes
+                        let mut guard = acc_tasks.lock().await;
+                        guard.insert(AccTask::CalcEpoch(epoch_of_slot(slot)));
+                    }
+                    ConsistencyCalcMsg::StartingBackfilling => {
+                        {
+                            let mut guard = bbgm_tasks.lock().await;
+                            guard.insert(BbgmTask::Suspend);
+                        }
+                        {
+                            let mut guard = acc_tasks.lock().await;
+                            guard.insert(AccTask::Suspend);
+                        }
+                    }
+                    ConsistencyCalcMsg::FinishedBackfilling => {
+                        {
+                            let mut guard = bbgm_tasks.lock().await;
+                            guard.insert(BbgmTask::Resume);
+                        }
+                        {
+                            let mut guard = acc_tasks.lock().await;
+                            guard.insert(AccTask::Resume);
+                        }
+                    }
                 },
                 None => break,
             }
@@ -56,27 +253,100 @@ pub async fn run_bg_consistency_calculator(
     });
 }
 
-/// After a given lag, launches checksum calculation for the given epoch.
-///
-/// ## Args:
-/// * `start_lag` - time to wait before actual calculation.
-///   Required because we might want to wait for late updates.
-/// * `storage` - database
-/// * `epoch` - the epoch the calculation should be done for
-fn schedule_bublegum_calc(
-    start_lag: Duration,
-    storage: Arc<Storage>,
-    epoch: u32,
-) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        tokio::time::sleep(start_lag).await;
-        calc_bubblegum_checksums(&storage, epoch).await;
-    })
+/// Fields order matters!
+/// We want whole epochs to be calculates before individual tree epochs from late changes.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum BbgmTask {
+    /// Suspend checksum calculation, e.g. before backfilling
+    Suspend,
+    /// Resume checksum calculation (backfilling is finished)
+    Resume,
+    /// Calculate checksums for all bubblegum trees in the given epoch
+    CalcEpoch(u32),
+    /// Calculate checksums only for the given bubblegum tree in the given epoch
+    CalcTree(u32, Pubkey),
 }
 
-pub async fn calc_bubblegum_checksums(storage: &Storage, epoch: u32) {
-    calc_bubblegum_epoch(&storage, epoch).await;
-    calc_bubblegum_grand_epoch(&storage, grand_epoch_of_epoch(epoch)).await;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum AccTask {
+    Suspend,
+    Resume,
+    CalcEpoch(u32),
+}
+
+async fn process_bbgm_tasks(storage: Arc<Storage>, tasks: Arc<Mutex<BTreeSet<BbgmTask>>>) {
+    let mut is_suspended = false;
+    loop {
+        if is_suspended {
+            let guard = tasks.lock().await;
+            if guard
+                .first()
+                .map(|t| *t != BbgmTask::Resume)
+                .unwrap_or(true)
+            {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                continue;
+            }
+        }
+        let maybe_task = {
+            let mut guard = tasks.lock().await;
+            guard.pop_first()
+        };
+        match maybe_task {
+            Some(BbgmTask::CalcEpoch(epoch)) => {
+                tokio::time::sleep(Duration::from_secs(EPOCH_CALC_LAG_SEC)).await;
+                tracing::info!("Calculating Bubblegum ckecksum epoch: {epoch}");
+                calc_bubblegum_checksums(&storage, epoch, None).await;
+                tracing::info!("Finished calculating Bubblegum ckecksum epoch: {epoch}");
+            }
+            Some(BbgmTask::CalcTree(epoch, tree)) => {
+                calc_bubblegum_checksums(&storage, epoch, Some(tree)).await
+            }
+            Some(BbgmTask::Suspend) => is_suspended = true,
+            Some(BbgmTask::Resume) => is_suspended = false,
+            None => tokio::time::sleep(Duration::from_secs(10)).await,
+        };
+    }
+}
+
+async fn process_acc_tasks(storage: Arc<Storage>, tasks: Arc<Mutex<BTreeSet<AccTask>>>) {
+    let mut is_suspended = false;
+    loop {
+        if is_suspended {
+            let guard = tasks.lock().await;
+            if guard.first().map(|t| *t != AccTask::Resume).unwrap_or(true) {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                continue;
+            }
+        }
+        let maybe_task = {
+            let mut guard = tasks.lock().await;
+            guard.pop_first()
+        };
+        match maybe_task {
+            Some(AccTask::CalcEpoch(epoch)) => calc_acc_nft_checksums(&storage, epoch).await,
+            Some(AccTask::Suspend) => is_suspended = true,
+            Some(AccTask::Resume) => is_suspended = false,
+            None => tokio::time::sleep(Duration::from_secs(10)).await,
+        };
+    }
+}
+
+/// Bubblegum checksums calculation start point.
+/// Iterates over all the bubblegum trees changes in the given epoch, and calculates epochs
+/// and grand epochs checksums.
+pub async fn calc_bubblegum_checksums(storage: &Storage, epoch: u32, only_tree: Option<Pubkey>) {
+    // For now let's just ignore trees that are update in the process of calculation,
+    // anywhay we'll have a separate notification for each of tree late update.
+    let trees_updated_in_the_process = calc_bubblegum_epoch(storage, epoch, only_tree).await;
+    let invalidated_grand_epoch_trees =
+        calc_bubblegum_grand_epoch(storage, grand_epoch_of_epoch(epoch), only_tree).await;
+    if only_tree.is_none() {
+        tracing::info!(
+            "Calculated bubblegum epoch {epoch}. {} epoch and {} grand epoch trees were updated in the process",
+            trees_updated_in_the_process.len(), invalidated_grand_epoch_trees.len(),
+        );
+    }
 }
 
 /// Calculates and stores bubblegum epoch checksums for bubblegum updates
@@ -85,14 +355,20 @@ pub async fn calc_bubblegum_checksums(storage: &Storage, epoch: u32) {
 /// ## Args:
 /// * `storage` - database
 /// * `target_epoch` - the number of an epoch the checksum should be calculated for
-async fn calc_bubblegum_epoch(storage: &Storage, target_epoch: u32) {
-    // iterate over changes and calculate checksum per tree.
-
+async fn calc_bubblegum_epoch(
+    storage: &Storage,
+    target_epoch: u32,
+    only_tree: Option<Pubkey>,
+) -> Vec<Pubkey> {
+    let mut to_recalc = Vec::new();
     let mut current_tree: Option<Pubkey> = None;
 
-    let mut it = storage
-        .bubblegum_changes
-        .iter(BubblegumChangeKey::epoch_start_key(target_epoch));
+    let start_key = if let Some(tree) = only_tree {
+        BubblegumChangeKey::tree_epoch_start_key(tree, target_epoch)
+    } else {
+        BubblegumChangeKey::epoch_start_key(target_epoch)
+    };
+    let mut it = storage.bubblegum_changes.iter(start_key);
     let mut hasher = Hasher::default();
 
     while let Some(Ok((k, v))) = it.next() {
@@ -100,6 +376,12 @@ async fn calc_bubblegum_epoch(storage: &Storage, target_epoch: u32) {
             continue;
         };
         if change_key.epoch > target_epoch {
+            break;
+        }
+        if only_tree
+            .map(|t| t != change_key.tree_pubkey)
+            .unwrap_or(false)
+        {
             break;
         }
         if current_tree != Some(change_key.tree_pubkey) {
@@ -116,14 +398,13 @@ async fn calc_bubblegum_epoch(storage: &Storage, target_epoch: u32) {
                 if let Ok(Some(storage_consistency::BUBBLEGUM_EPOCH_INVALIDATED)) =
                     storage.bubblegum_epochs.get_async(epoch_key).await
                 {
-                    // TODO: Means more changes for the tree have come while the epoch chechsum calculation was in process.
-                    //       How to handle?
+                    to_recalc.push(current_tree.unwrap());
                 }
             }
             current_tree = Some(change_key.tree_pubkey);
 
             let new_epoch_key = BubblegumEpochKey::new(current_tree.unwrap(), target_epoch);
-            storage
+            let _ = storage
                 .bubblegum_epochs
                 .put_async(new_epoch_key, BUBBLEGUM_EPOCH_CALCULATING)
                 .await;
@@ -140,16 +421,35 @@ async fn calc_bubblegum_epoch(storage: &Storage, target_epoch: u32) {
             epoch_num: target_epoch,
         };
         let epoch_val = BubblegumEpoch::from(hasher.result().to_bytes());
-        let _ = storage.bubblegum_epochs.merge(epoch_key, epoch_val).await;
+        let _ = storage
+            .bubblegum_epochs
+            .merge(epoch_key.clone(), epoch_val)
+            .await;
+        if let Ok(Some(storage_consistency::BUBBLEGUM_EPOCH_INVALIDATED)) =
+            storage.bubblegum_epochs.get_async(epoch_key).await
+        {
+            to_recalc.push(current_tree);
+        }
     }
+
+    to_recalc
 }
 
-async fn calc_bubblegum_grand_epoch(storage: &Storage, target_grand_epoch: u16) {
+async fn calc_bubblegum_grand_epoch(
+    storage: &Storage,
+    target_grand_epoch: u16,
+    only_tree: Option<Pubkey>,
+) -> Vec<Pubkey> {
+    let mut to_recalc = Vec::new();
     let mut current_tree: Option<Pubkey> = None;
+    let mut contains_invalidated_epoch = false;
 
-    let mut it = storage
-        .bubblegum_epochs
-        .iter(BubblegumEpochKey::grand_epoch_start_key(target_grand_epoch));
+    let start_key = if let Some(tree) = only_tree {
+        BubblegumEpochKey::tree_grand_epoch_start_key(tree, target_grand_epoch)
+    } else {
+        BubblegumEpochKey::grand_epoch_start_key(target_grand_epoch)
+    };
+    let mut it = storage.bubblegum_epochs.iter(start_key);
     let mut hasher = Hasher::default();
 
     while let Some(Ok((k, v))) = it.next() {
@@ -160,26 +460,47 @@ async fn calc_bubblegum_grand_epoch(storage: &Storage, target_grand_epoch: u16) 
         if element_grand_epoch > target_grand_epoch {
             break;
         }
+        if only_tree
+            .map(|t| t != epoch_key.tree_pubkey)
+            .unwrap_or(false)
+        {
+            break;
+        }
+        if v.as_ref() == storage_consistency::BUBBLEGUM_EPOCH_INVALIDATED_BYTES.as_slice() {
+            contains_invalidated_epoch = true;
+            let new_grand_epoch_key =
+                BubblegumGrandEpochKey::new(current_tree.unwrap(), target_grand_epoch);
+            let _ = storage
+                .bubblegum_grand_epochs
+                .put_async(new_grand_epoch_key, BUBBLEGUM_GRAND_EPOCH_INVALIDATED)
+                .await;
+        }
         if current_tree != Some(epoch_key.tree_pubkey) {
             if current_tree.is_some() {
-                // write checksum for previous tree
-                let grand_epoch_key =
-                    BubblegumGrandEpochKey::new(current_tree.unwrap(), target_grand_epoch);
-                let grand_epoch_val = BubblegumGrandEpoch::from(hasher.result().to_bytes());
-                let _ = storage
-                    .bubblegum_grand_epochs
-                    .merge(grand_epoch_key.clone(), grand_epoch_val)
-                    .await;
+                if !contains_invalidated_epoch {
+                    // write checksum for previous tree
+                    let grand_epoch_key =
+                        BubblegumGrandEpochKey::new(current_tree.unwrap(), target_grand_epoch);
+                    let grand_epoch_val = BubblegumGrandEpoch::from(hasher.result().to_bytes());
+                    let _ = storage
+                        .bubblegum_grand_epochs
+                        .merge(grand_epoch_key.clone(), grand_epoch_val)
+                        .await;
 
-                if let Ok(Some(storage_consistency::BUBBLEGUM_GRAND_EPOCH_INVALIDATED)) = storage
-                    .bubblegum_grand_epochs
-                    .get_async(grand_epoch_key)
-                    .await
-                {
-                    // TODO: ???
+                    if let Ok(Some(storage_consistency::BUBBLEGUM_GRAND_EPOCH_INVALIDATED)) =
+                        storage
+                            .bubblegum_grand_epochs
+                            .get_async(grand_epoch_key)
+                            .await
+                    {
+                        to_recalc.push(current_tree.unwrap());
+                    }
+                } else {
+                    to_recalc.push(current_tree.unwrap());
                 }
             }
             current_tree = Some(epoch_key.tree_pubkey);
+            contains_invalidated_epoch = false;
 
             let new_grand_epoch_key =
                 BubblegumGrandEpochKey::new(current_tree.unwrap(), target_grand_epoch);
@@ -189,6 +510,8 @@ async fn calc_bubblegum_grand_epoch(storage: &Storage, target_grand_epoch: u16) 
                 .await;
 
             hasher = Hasher::default();
+        } else if contains_invalidated_epoch {
+            continue;
         }
         hasher.hash(&k);
         hasher.hash(&v);
@@ -202,16 +525,25 @@ async fn calc_bubblegum_grand_epoch(storage: &Storage, target_grand_epoch: u16) 
         let grand_epoch_val = BubblegumGrandEpoch::from(hasher.result().to_bytes());
         let _ = storage
             .bubblegum_grand_epochs
-            .merge(grand_epoch_key, grand_epoch_val)
+            .merge(grand_epoch_key.clone(), grand_epoch_val)
             .await;
+        if let Ok(Some(storage_consistency::BUBBLEGUM_GRAND_EPOCH_INVALIDATED)) = storage
+            .bubblegum_grand_epochs
+            .get_async(grand_epoch_key)
+            .await
+        {
+            to_recalc.push(current_tree);
+        }
     }
+
+    to_recalc
 }
 
 pub async fn calc_acc_nft_checksums(storage: &Storage, epoch: u32) {
-    match calc_acc_latest_state(&storage, epoch).await {
+    match calc_acc_latest_state(storage, epoch).await {
         Ok((invalidated_buckets, invalidated_grand_buckets)) => {
-            calc_acc_buckets(&storage, invalidated_buckets.iter()).await;
-            calc_acc_grand_buckets(&storage, invalidated_grand_buckets.iter()).await;
+            calc_acc_buckets(storage, invalidated_buckets.iter()).await;
+            calc_acc_grand_buckets(storage, invalidated_grand_buckets.iter()).await;
         }
         Err(e) => tracing::warn!("Error calculating accounts checksum: {e}"),
     };
@@ -300,7 +632,7 @@ async fn update_acc_if_needed(
         .unwrap_or(true);
 
     if need_to_update {
-        storage
+        let _ = storage
             .acc_nft_last
             .put_async(acc_key, AccountNft::new(change.slot, change.write_version))
             .await;
@@ -308,10 +640,13 @@ async fn update_acc_if_needed(
         let bucket = bucket_for_acc(change.account_pubkey);
         let grand_bucket = grand_bucket_for_bucket(bucket);
         if !invalidated_grand_buckets.contains(&grand_bucket) {
-            let _ = storage.acc_nft_grand_buckets.put_async(
-                AccountNftGrandBucketKey::new(grand_bucket),
-                ACC_GRAND_BUCKET_INVALIDATE,
-            );
+            let _ = storage
+                .acc_nft_grand_buckets
+                .put_async(
+                    AccountNftGrandBucketKey::new(grand_bucket),
+                    ACC_GRAND_BUCKET_INVALIDATE,
+                )
+                .await;
             invalidated_grand_buckets.insert(grand_bucket);
         }
 

@@ -597,6 +597,24 @@ pub struct UnprocessedAccountMessage {
     pub id: String,
 }
 
+impl UnprocessedAccountMessage {
+    pub fn solana_change_info(&self) -> (Pubkey, u64, u64) {
+        let (slot, write_version) = match &self.account {
+            UnprocessedAccount::MetadataInfo(v) => (v.slot_updated, v.write_version),
+            UnprocessedAccount::Token(v) => (v.slot_updated as u64, v.write_version),
+            UnprocessedAccount::Mint(v) => (v.slot_updated as u64, v.write_version),
+            UnprocessedAccount::Edition(v) => (v.slot_updated, v.write_version),
+            UnprocessedAccount::BurnMetadata(v) => (v.slot_updated, v.write_version),
+            UnprocessedAccount::BurnMplCore(v) => (v.slot_updated, v.write_version),
+            UnprocessedAccount::MplCore(v) => (v.slot_updated, v.write_version),
+            UnprocessedAccount::Inscription(v) => (v.slot_updated, v.write_version),
+            UnprocessedAccount::InscriptionData(v) => (v.slot_updated, v.write_version),
+            UnprocessedAccount::MplCoreFee(v) => (v.slot_updated, v.write_version),
+        };
+        (self.key, slot, write_version)
+    }
+}
+
 pub struct BufferedTxWithID {
     pub tx: BufferedTransaction,
     pub id: String,
