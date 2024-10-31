@@ -3,7 +3,7 @@ use std::sync::Arc;
 use entities::models::{OffChainData, Updated};
 use rand::{random, Rng};
 use rocks_db::asset::AssetCompleteDetails;
-use rocks_db::column::{Column, TypedColumn};
+use rocks_db::column::TypedColumn;
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 
@@ -124,7 +124,7 @@ impl RocksTestEnvironment {
     }
 
     fn generate_and_store_pubkey(&self, slot: u64) -> Pubkey {
-        let pubkey = Pubkey::new_unique();
+        let pubkey = Pubkey::from(rand::random::<[u8; 32]>());
         self.storage
             .asset_updated(slot, pubkey)
             .expect("Cannot update assets.");
@@ -174,7 +174,7 @@ impl RocksTestEnvironment {
                             .db
                             .cf_handle(AssetCompleteDetails::NAME)
                             .unwrap(),
-                        Column::<AssetCompleteDetails>::encode_key(*pubkey),
+                        *pubkey,
                         builder.finished_data(),
                     );
                     builder.reset();
@@ -286,12 +286,16 @@ impl RocksTestEnvironmentSetup {
             .iter()
             .map(|pubkey| AssetOwner {
                 pubkey: *pubkey,
-                owner: generate_test_updated(Some(Pubkey::from(rand::random::<[u8; 32]>()))),
-                owner_type: generate_test_updated(entities::enums::OwnerType::Single),
-                owner_delegate_seq: generate_test_updated(Some(
-                    rand::thread_rng().gen_range(0..100),
-                )),
-                delegate: generate_test_updated(Some(Pubkey::from(rand::random::<[u8; 32]>()))),
+                owner: generate_test_updated(None, Some(Pubkey::from(rand::random::<[u8; 32]>()))),
+                owner_type: generate_test_updated(None, entities::enums::OwnerType::Single),
+                owner_delegate_seq: generate_test_updated(
+                    None,
+                    Some(rand::thread_rng().gen_range(0..100)),
+                ),
+                delegate: generate_test_updated(
+                    None,
+                    Some(Pubkey::from(rand::random::<[u8; 32]>())),
+                ),
             })
             .collect()
     }
@@ -316,9 +320,9 @@ impl RocksTestEnvironmentSetup {
             .iter()
             .map(|pubkey| AssetCollection {
                 pubkey: *pubkey,
-                collection: generate_test_updated(Pubkey::new_unique()),
-                is_collection_verified: generate_test_updated(false),
-                authority: generate_test_updated(authority),
+                collection: generate_test_updated(None, Pubkey::new_unique()),
+                is_collection_verified: generate_test_updated(None, false),
+                authority: generate_test_updated(None, authority),
             })
             .collect()
     }
@@ -327,34 +331,59 @@ impl RocksTestEnvironmentSetup {
 pub const DEFAULT_PUBKEY_OF_ONES: Pubkey = Pubkey::new_from_array([1u8; 32]);
 pub const PUBKEY_OF_TWOS: Pubkey = Pubkey::new_from_array([2u8; 32]);
 
-pub fn create_test_dynamic_data(pubkey: Pubkey, _slot: u64, url: String) -> AssetDynamicDetails {
+pub fn create_test_dynamic_data(pubkey: Pubkey, slot: u64, url: String) -> AssetDynamicDetails {
     AssetDynamicDetails {
         pubkey,
-        is_compressible: generate_test_updated(rand::thread_rng().gen_bool(0.5)),
-        is_compressed: generate_test_updated(rand::thread_rng().gen_bool(0.5)),
-        is_frozen: generate_test_updated(rand::thread_rng().gen_bool(0.5)),
-        supply: maybe_generate_test_updated(1),
-        seq: maybe_generate_test_updated(rand::thread_rng().gen_range(0..50000)),
-        is_burnt: generate_test_updated(rand::thread_rng().gen_bool(0.5)),
-        was_decompressed: generate_test_updated(rand::thread_rng().gen_bool(0.5)),
-        onchain_data: maybe_generate_test_updated("some onchain data".to_string()),
-        creators: generate_test_updated(vec![generate_test_creator()]),
-        royalty_amount: generate_test_updated(rand::thread_rng().gen_range(0..50)),
-        url: generate_test_updated(url),
-        chain_mutability: maybe_generate_test_updated(entities::enums::ChainMutability::Mutable),
-        lamports: maybe_generate_test_updated(rand::thread_rng().gen_range(0..50000)),
-        executable: maybe_generate_test_updated(false),
+        is_compressible: generate_test_updated(Some(slot), rand::thread_rng().gen_bool(0.5)),
+        is_compressed: generate_test_updated(Some(slot), rand::thread_rng().gen_bool(0.5)),
+        is_frozen: generate_test_updated(Some(slot), rand::thread_rng().gen_bool(0.5)),
+        supply: maybe_generate_test_updated(Some(slot), 1),
+        seq: maybe_generate_test_updated(Some(slot), rand::thread_rng().gen_range(0..50000)),
+        is_burnt: generate_test_updated(Some(slot), rand::thread_rng().gen_bool(0.5)),
+        was_decompressed: generate_test_updated(Some(slot), rand::thread_rng().gen_bool(0.5)),
+        onchain_data: maybe_generate_test_updated(
+            Some(slot),
+            "{\"name\":\"onchain data\",\"symbol\":\"some\",\"primary_sale_happened\":false}"
+                .to_string(),
+        ),
+        creators: generate_test_updated(Some(slot), vec![generate_test_creator()]),
+        royalty_amount: generate_test_updated(Some(slot), rand::thread_rng().gen_range(0..50)),
+        url: generate_test_updated(Some(slot), url),
+        chain_mutability: maybe_generate_test_updated(
+            Some(slot),
+            entities::enums::ChainMutability::Mutable,
+        ),
+        lamports: maybe_generate_test_updated(Some(slot), rand::thread_rng().gen_range(0..50000)),
+        executable: maybe_generate_test_updated(Some(slot), false),
         metadata_owner: None,
         raw_name: None,
-        mpl_core_plugins: maybe_generate_test_updated("some core plugins".to_string()),
-        mpl_core_unknown_plugins: maybe_generate_test_updated("some unknown plugins".to_string()),
-        rent_epoch: maybe_generate_test_updated(rand::thread_rng().gen_range(1110..1000000)),
-        num_minted: maybe_generate_test_updated(rand::thread_rng().gen_range(10..1000)),
-        current_size: maybe_generate_test_updated(rand::thread_rng().gen_range(20..1000)),
-        plugins_json_version: maybe_generate_test_updated(rand::thread_rng().gen_range(0..10)),
-        mpl_core_external_plugins: maybe_generate_test_updated("some external plugins".to_string()),
-        mpl_core_unknown_external_plugins: maybe_generate_test_updated("some unknown".to_string()),
-        mint_extensions: maybe_generate_test_updated("value".to_string()),
+        mpl_core_plugins: maybe_generate_test_updated(Some(slot), "some core plugins".to_string()),
+        mpl_core_unknown_plugins: maybe_generate_test_updated(
+            Some(slot),
+            "some unknown plugins".to_string(),
+        ),
+        rent_epoch: maybe_generate_test_updated(
+            Some(slot),
+            rand::thread_rng().gen_range(1110..1000000),
+        ),
+        num_minted: maybe_generate_test_updated(Some(slot), rand::thread_rng().gen_range(10..1000)),
+        current_size: maybe_generate_test_updated(
+            Some(slot),
+            rand::thread_rng().gen_range(20..1000),
+        ),
+        plugins_json_version: maybe_generate_test_updated(
+            Some(slot),
+            rand::thread_rng().gen_range(0..10),
+        ),
+        mpl_core_external_plugins: maybe_generate_test_updated(
+            Some(slot),
+            "some external plugins".to_string(),
+        ),
+        mpl_core_unknown_external_plugins: maybe_generate_test_updated(
+            Some(slot),
+            "some unknown".to_string(),
+        ),
+        mint_extensions: maybe_generate_test_updated(Some(slot), "value".to_string()),
     }
 }
 
@@ -366,9 +395,9 @@ fn generate_test_creator() -> entities::models::Creator {
     }
 }
 
-fn generate_test_updated<T>(v: T) -> Updated<T> {
+fn generate_test_updated<T>(slot: Option<u64>, v: T) -> Updated<T> {
     Updated::new(
-        rand::thread_rng().gen_range(0..1000),
+        slot.unwrap_or(rand::thread_rng().gen_range(0..1000)),
         Some(entities::models::UpdateVersion::Sequence(
             rand::thread_rng().gen_range(100..200),
         )),
@@ -376,9 +405,9 @@ fn generate_test_updated<T>(v: T) -> Updated<T> {
     )
 }
 
-fn maybe_generate_test_updated<T>(value: T) -> Option<Updated<T>> {
+fn maybe_generate_test_updated<T>(slot: Option<u64>, value: T) -> Option<Updated<T>> {
     if rand::thread_rng().gen_bool(0.5) {
-        Some(generate_test_updated(value))
+        Some(generate_test_updated(slot, value))
     } else {
         None
     }

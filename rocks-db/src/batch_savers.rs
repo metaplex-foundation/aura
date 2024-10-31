@@ -112,7 +112,7 @@ impl BatchSaveStorage {
                 .db
                 .cf_handle(AssetCompleteDetails::NAME)
                 .unwrap(),
-            AssetCompleteDetails::encode_key(data.pubkey),
+            data.pubkey,
             builder.finished_data(),
         );
         let res = Ok(());
@@ -235,7 +235,7 @@ impl BatchSaveStorage {
                 .db
                 .cf_handle(AssetCompleteDetails::NAME)
                 .unwrap(),
-            AssetCompleteDetails::encode_key(address),
+            address,
         ) {
             let asset = fb::root_as_asset_complete_details(&data);
             return asset

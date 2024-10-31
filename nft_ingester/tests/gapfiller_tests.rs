@@ -5,7 +5,8 @@ use interface::asset_streaming_and_discovery::{
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
-use rocks_db::migrator::MigrationState;
+use rocks_db::asset_generated::asset as fb;
+use rocks_db::{asset::AssetCompleteDetails, column::TypedColumn, migrator::MigrationState};
 use solana_sdk::pubkey::Pubkey;
 use solana_transaction_status::UiConfirmedBlock;
 use std::sync::Arc;
@@ -53,20 +54,35 @@ async fn test_process_asset_details_stream() {
             ])))
         });
     process_asset_details_stream(rx, storage.clone(), 100, 200, mock).await;
-
     let selected_data = storage
-        .asset_dynamic_data
-        .get(first_key.clone())
+        .db
+        .get_pinned_cf(
+            &storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+            first_key.clone(),
+        )
         .unwrap()
         .unwrap();
-    assert_eq!(selected_data.supply, Some(Updated::new(1, None, 10)));
+    let selected_data = fb::root_as_asset_complete_details(&selected_data).unwrap();
+    let selected_data = AssetCompleteDetails::from(selected_data);
+    assert_eq!(
+        selected_data.dynamic_details.unwrap().supply,
+        Some(Updated::new(1, None, 10))
+    );
 
     let selected_data = storage
-        .asset_dynamic_data
-        .get(second_key.clone())
+        .db
+        .get_pinned_cf(
+            &storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+            second_key.clone(),
+        )
         .unwrap()
         .unwrap();
-    assert_eq!(selected_data.supply, Some(Updated::new(1, None, 10)));
+    let selected_data = fb::root_as_asset_complete_details(&selected_data).unwrap();
+    let selected_data = AssetCompleteDetails::from(selected_data);
+    assert_eq!(
+        selected_data.dynamic_details.unwrap().supply,
+        Some(Updated::new(1, None, 10))
+    );
 }
 
 #[tokio::test]

@@ -100,7 +100,7 @@ impl Storage {
                 builder.finish_minimal(acd);
                 batch.merge_cf(
                     &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
-                    AssetCompleteDetails::encode_key(pk),
+                    pk,
                     builder.finished_data(),
                 );
                 if let Some(leaf) = update.update.as_ref().and_then(|u| u.leaf.as_ref()) {
@@ -140,7 +140,7 @@ impl Storage {
             builder.finish_minimal(acd);
             batch.merge_cf(
                 &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
-                AssetCompleteDetails::encode_key(decompressed.pk),
+                decompressed.pk,
                 builder.finished_data(),
             );
         }

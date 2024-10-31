@@ -3274,7 +3274,6 @@ mod tests {
         let result = merge_complete_details_fb_raw(&key, Some(origin_bytes), operands.into_iter())
             .expect("should return a result");
         assert_eq!(result, origin_bytes);
-        assert_eq!(result.len(), 2048);
         fb::root_as_asset_complete_details(&result).expect("should decode");
     }
 
