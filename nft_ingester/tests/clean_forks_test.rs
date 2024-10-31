@@ -2,8 +2,7 @@ use bincode::deserialize;
 use blockbuster::instruction::InstructionBundle;
 use blockbuster::programs::bubblegum::BubblegumInstruction;
 use entities::models::{RawBlock, SignatureWithSlot};
-use metrics_utils::utils::start_metrics;
-use metrics_utils::{MetricState, MetricsTrait};
+use metrics_utils::MetricState;
 use mpl_bubblegum::types::{BubblegumEventType, LeafSchema, Version};
 use mpl_bubblegum::{InstructionName, LeafSchemaEvent};
 use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
@@ -15,10 +14,8 @@ use rocks_db::tree_seq::TreeSeqIdx;
 use setup::rocks::RocksTestEnvironment;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use solana_transaction_status::UiConfirmedBlock;
 use spl_account_compression::events::ChangeLogEventV1;
 use spl_account_compression::state::PathNode;
-use std::str::FromStr;
 use tokio::sync::broadcast;
 
 #[cfg(test)]
