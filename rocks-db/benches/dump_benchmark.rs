@@ -1,12 +1,7 @@
-use std::{
-    collections::{HashMap, HashSet},
-    default,
-    path::Path,
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use entities::{api_req_params::Options, enums::SpecificationAssetClass};
+use entities::{api_req_params::Options};
 use metrics_utils::SynchronizerMetricsConfig;
 use rocks_db::{
     storage_traits::{AssetIndexReader, Dumper},
@@ -14,7 +9,6 @@ use rocks_db::{
 };
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
-use tracing::info;
 
 async fn bench_batch_get_keys(storage: Arc<Storage>, pubkeys: Vec<Pubkey>) {
     storage.asset_dynamic_data.batch_get(pubkeys).await.unwrap();
