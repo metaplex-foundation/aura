@@ -79,16 +79,16 @@ async fn copy_column_families(
     let mut set = JoinSet::new();
 
     // Create a MultiProgress to manage multiple progress bars
-    let m = Arc::new(MultiProgress::new());
+    let progress_manager = Arc::new(MultiProgress::new());
 
     columns_to_copy.iter().cloned().for_each(|cf_name| {
         let sdb = source_db.db.clone();
         let ddb = destination_db.db.clone();
-        let m_clone = m.clone();
+        let progress_manager_clone = progress_manager.clone();
 
         set.spawn(tokio::task::spawn_blocking(move || {
             // Create a progress bar for this column
-            let pb = m_clone.add(ProgressBar::new_spinner());
+            let pb = progress_manager_clone.add(ProgressBar::new_spinner());
             pb.set_style(
                 ProgressStyle::default_spinner()
                     .template("{spinner:.green} {msg}")
