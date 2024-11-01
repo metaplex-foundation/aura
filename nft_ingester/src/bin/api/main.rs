@@ -210,16 +210,16 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_rx = shutdown_rx.resubscribe();
     let cloned_rocks_storage = rocks_storage.clone();
     let dur = tokio::time::Duration::from_secs(config.rocks_sync_interval_seconds);
-    mutexed_tasks.lock().await.spawn(async move {
-        while cloned_rx.is_empty() {
-            if let Err(e) = cloned_rocks_storage.db.try_catch_up_with_primary() {
-                error!("Sync rocksdb error: {}", e);
-            }
-            tokio::time::sleep(dur).await;
-        }
-
-        Ok(())
-    });
+    // mutexed_tasks.lock().await.spawn(async move {
+    //     while cloned_rx.is_empty() {
+    //         if let Err(e) = cloned_rocks_storage.db.try_catch_up_with_primary() {
+    //             error!("Sync rocksdb error: {}", e);
+    //         }
+    //         tokio::time::sleep(dur).await;
+    //     }
+    //
+    //     Ok(())
+    // });
 
     // --stop
     graceful_stop(

@@ -242,7 +242,7 @@ impl Storage {
     ) -> Result<Self> {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
         let db = Arc::new(DB::open_cf_descriptors(
-            &Self::get_db_options(),
+            &Self::get_db_options(false),
             db_path,
             cf_descriptors,
         )?);
@@ -258,7 +258,7 @@ impl Storage {
     ) -> Result<Self> {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
         let db = Arc::new(DB::open_cf_descriptors_as_secondary(
-            &Self::get_db_options(),
+            &Self::get_db_options(true),
             primary_path,
             secondary_path,
             cf_descriptors,
@@ -333,7 +333,7 @@ impl Storage {
         }
     }
 
-    fn get_db_options() -> Options {
+    fn get_db_options(disable_auto_compactions: bool) -> Options {
         let mut options = Options::default();
 
         // Create missing items to support a clean start
@@ -350,6 +350,7 @@ impl Storage {
         // which can service these writes.
         env.set_high_priority_background_threads(4);
         options.set_env(&env);
+        options.set_disable_auto_compactions(disable_auto_compactions);
 
         // Set max total wal size to 4G.
         options.set_max_total_wal_size(4 * 1024 * 1024 * 1024);
