@@ -1,16 +1,9 @@
-use entities::enums::TokenMetadataEdition;
-use entities::models::{AssetSignature, TokenAccount};
+use entities::models::{OffChainData, RawBlock};
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::asset::MetadataMintMap;
 use rocks_db::column::TypedColumn;
 use rocks_db::migrator::MigrationState;
-use rocks_db::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
-use rocks_db::tree_seq::{TreeSeqIdx, TreesGaps};
-use rocks_db::{
-    asset, cl_items, signature_client, AssetAuthority, AssetDynamicDetails, AssetOwner,
-    AssetStaticDetails, Storage,
-};
-use rocksdb::IteratorMode;
+use rocks_db::Storage;
+
 use std::env;
 use std::sync::Arc;
 use std::time::Instant;
@@ -34,27 +27,7 @@ pub async fn main() -> Result<(), String> {
     println!("Starting data migration...");
 
     // Specify the column families you plan to copy
-    let columns_to_copy = vec![
-        AssetStaticDetails::NAME,
-        AssetDynamicDetails::NAME,
-        AssetAuthority::NAME,
-        asset::AssetLeaf::NAME,
-        asset::AssetCollection::NAME,
-        cl_items::ClItem::NAME,
-        cl_items::ClLeaf::NAME,
-        asset::AssetsUpdateIdx::NAME,
-        asset::SlotAssetIdx::NAME,
-        AssetOwner::NAME,
-        TreeSeqIdx::NAME,
-        signature_client::SignatureIdx::NAME,
-        MetadataMintMap::NAME,
-        TreesGaps::NAME,
-        TokenMetadataEdition::NAME,
-        AssetSignature::NAME,
-        TokenAccount::NAME,
-        TokenAccountOwnerIdx::NAME,
-        TokenAccountMintOwnerIdx::NAME,
-    ];
+    let columns_to_copy = vec![RawBlock::NAME.to_string(), OffChainData::NAME.to_string()];
 
     println!(
         "Columns to be copied from {} to {}: {:?}",
@@ -66,8 +39,10 @@ pub async fn main() -> Result<(), String> {
         source_db_path,
         secondary_rocks_dir.path().to_str().unwrap(),
         destination_db_path,
-        &columns_to_copy,
-    ) {
+        columns_to_copy,
+    )
+    .await
+    {
         println!("Failed to copy data: {}.", e);
     } else {
         println!("Data copied successfully.");
@@ -76,11 +51,11 @@ pub async fn main() -> Result<(), String> {
     Ok(())
 }
 
-fn copy_column_families(
+async fn copy_column_families(
     source_path: &str,
     secondary_source_path: &str,
     destination_path: &str,
-    columns_to_copy: &[&str],
+    columns_to_copy: Vec<String>,
 ) -> Result<(), String> {
     let start = Instant::now();
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
@@ -101,27 +76,39 @@ fn copy_column_families(
     )
     .map_err(|e| e.to_string())?;
 
-    for &cf_name in columns_to_copy {
-        let start_column = Instant::now();
-        let iter = source_db.db.iterator_cf(
-            &source_db.db.cf_handle(cf_name).unwrap(),
-            IteratorMode::Start,
-        );
-        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
-        for (key, value) in iter.flatten() {
-            batch.put_cf(&destination_db.db.cf_handle(cf_name).unwrap(), key, value);
-            if batch.len() >= BATCH_SIZE {
-                destination_db.db.write(batch).map_err(|e| e.to_string())?;
-                batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+    let tasks = columns_to_copy.iter().cloned().map(|cf_name| {
+        let sdb = source_db.db.clone();
+        let ddb = destination_db.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let start_column = Instant::now();
+            let mut iter = sdb.raw_iterator_cf(&sdb.cf_handle(&cf_name).unwrap());
+            iter.seek_to_first();
+            let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+            let dest_handle = &ddb.cf_handle(&cf_name).unwrap();
+            while iter.valid() {
+                batch.put_cf(dest_handle, iter.key().unwrap(), iter.value().unwrap());
+                if batch.len() >= BATCH_SIZE {
+                    if let Err(e) = ddb.write(batch) {
+                        tracing::error!("Error copying {}: {}", cf_name, e);
+                    }
+                    batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+                }
+                iter.next();
             }
-        }
-        destination_db.db.write(batch).map_err(|e| e.to_string())?;
-        println!(
-            "Migrated {} column in {} seconds",
-            cf_name,
-            start_column.elapsed().as_secs()
-        );
+            if let Err(e) = ddb.write(batch) {
+                tracing::error!("Error copying {}: {}", cf_name, e);
+            }
+            println!(
+                "Migrated {} column in {} seconds",
+                cf_name,
+                start_column.elapsed().as_secs()
+            );
+        })
+    });
+    for task in tasks {
+        task.await.unwrap();
     }
+
     println!(
         "Migrated all columns in {} seconds",
         start.elapsed().as_secs()
