@@ -27,7 +27,7 @@ pub async fn main() -> Result<(), String> {
     println!("Starting data migration...");
 
     // Specify the column families you plan to copy
-    let columns_to_copy = vec![RawBlock::NAME.to_string(), OffChainData::NAME.to_string()];
+    let columns_to_copy = [RawBlock::NAME, OffChainData::NAME];
 
     println!(
         "Columns to be copied from {} to {}: {:?}",
@@ -39,7 +39,7 @@ pub async fn main() -> Result<(), String> {
         source_db_path,
         secondary_rocks_dir.path().to_str().unwrap(),
         destination_db_path,
-        columns_to_copy,
+        &columns_to_copy,
     )
     .await
     {
@@ -55,7 +55,7 @@ async fn copy_column_families(
     source_path: &str,
     secondary_source_path: &str,
     destination_path: &str,
-    columns_to_copy: Vec<String>,
+    columns_to_copy: &[&'static str],
 ) -> Result<(), String> {
     let start = Instant::now();
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
@@ -76,10 +76,11 @@ async fn copy_column_families(
     )
     .map_err(|e| e.to_string())?;
 
-    let tasks = columns_to_copy.iter().cloned().map(|cf_name| {
+    let mut set = JoinSet::new();
+    for cf_name in columns_to_copy.iter().cloned() {
         let sdb = source_db.db.clone();
         let ddb = destination_db.db.clone();
-        tokio::task::spawn_blocking(move || {
+        set.spawn(tokio::task::spawn_blocking(move || {
             let start_column = Instant::now();
             let mut iter = sdb.raw_iterator_cf(&sdb.cf_handle(&cf_name).unwrap());
             iter.seek_to_first();
@@ -103,10 +104,7 @@ async fn copy_column_families(
                 cf_name,
                 start_column.elapsed().as_secs()
             );
-        })
-    });
-    for task in tasks {
-        task.await.unwrap();
+        }));
     }
 
     println!(
