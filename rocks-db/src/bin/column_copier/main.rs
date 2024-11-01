@@ -9,8 +9,8 @@ use std::env;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
+
+use tokio::{sync::Mutex, task::JoinSet};
 
 const BATCH_SIZE: usize = 10_000;
 
@@ -84,11 +84,11 @@ async fn copy_column_families(
     columns_to_copy.iter().cloned().for_each(|cf_name| {
         let sdb = source_db.db.clone();
         let ddb = destination_db.db.clone();
-        let progress_manager_clone = progress_manager.clone();
+        let progress_manager = progress_manager.clone();
 
-        set.spawn(tokio::task::spawn_blocking(move || {
+        set.spawn_blocking(move || {
             // Create a progress bar for this column
-            let pb = progress_manager_clone.add(ProgressBar::new_spinner());
+            let pb = progress_manager.add(ProgressBar::new_spinner());
             pb.set_style(
                 ProgressStyle::default_spinner()
                     .template("{spinner:.green} {msg}")
@@ -120,16 +120,22 @@ async fn copy_column_families(
             }
             if let Err(e) = ddb.write(batch) {
                 tracing::error!("Error copying {}: {}", cf_name, e);
+                return Err(e.to_string());
             }
             pb.finish_with_message(format!(
                 "Finished copying column {} in {} seconds",
                 cf_name,
                 start_column.elapsed().as_secs()
             ));
-        }));
+
+            Ok(())
+        });
     });
-    for _ in 0..columns_to_copy.len() {
-        set.join_next().await.unwrap().unwrap().unwrap();
+
+    while let Some(res) = set.join_next().await {
+        if let Err(err) = res {
+            return Err(err.to_string());
+        }
     }
 
     println!(
