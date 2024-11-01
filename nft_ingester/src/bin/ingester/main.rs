@@ -189,7 +189,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rpc_client = Arc::new(RpcClient::new(config.rpc_host.clone()));
     let (nft_change_snd, nft_change_rcv) = mpsc::channel(NTF_CHANGES_NOTIFICATION_QUEUE_SIZE);
-    let changes_tracker = Arc::new(NftChangesTracker::new(primary_rocks_storage.clone(), nft_change_snd.clone()));
+    let changes_tracker = Arc::new(NftChangesTracker::new(nft_change_snd.clone()));
     consistency_calculator::run_bg_consistency_calculator(
         nft_change_rcv,
         primary_rocks_storage.clone(),

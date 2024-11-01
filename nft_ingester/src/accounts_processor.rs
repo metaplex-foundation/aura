@@ -235,7 +235,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 let (account_pubkey, slot, write_version) =
                     unprocessed_account.solana_change_info();
                 nft_changes_tracker
-                    .track_account_change(account_pubkey, slot, write_version)
+                    .track_account_change(batch_storage, account_pubkey, slot, write_version)
                     .await;
             }
             self.metrics

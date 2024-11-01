@@ -2,6 +2,7 @@
 //! and account-based NFT checsums that are used in peer-to-peer
 //! Aura nodes communication to identify missing data on a node.
 
+use rocks_db::batch_savers::BatchSaveStorage;
 use rocks_db::{
     column::TypedColumn,
     storage_consistency::{
@@ -48,13 +49,12 @@ pub enum ConsistencyCalcMsg {
 /// and notifying checksum calculator when a whole epoch,
 /// or an individual bubblegum three/account checksum should be calculated.
 pub struct NftChangesTracker {
-    storage: Arc<Storage>,
     sender: Sender<ConsistencyCalcMsg>,
 }
 
 impl NftChangesTracker {
-    pub fn new(storage: Arc<Storage>, sender: Sender<ConsistencyCalcMsg>) -> NftChangesTracker {
-        NftChangesTracker { storage, sender }
+    pub fn new(sender: Sender<ConsistencyCalcMsg>) -> NftChangesTracker {
+        NftChangesTracker { sender }
     }
 
     /// Persists given account NFT change into the sotrage, and, if the change is from the epoch
@@ -62,11 +62,13 @@ impl NftChangesTracker {
     /// about late data.
     ///
     /// ## Args:
+    /// * `batch_storage` - same batch storage that is used to save account data
     /// * `account_pubkey` - Pubkey of the NFT account
     /// * `slot` - the slot number that change is made in
     /// * `write_version` - write version of the change
     pub async fn track_account_change(
         &self,
+        batch_storage: &mut BatchSaveStorage,
         account_pubkey: Pubkey,
         slot: u64,
         write_version: u64,
@@ -86,22 +88,15 @@ impl NftChangesTracker {
         if epoch < last_slot_epoch {
             let bucket = bucket_for_acc(account_pubkey);
             let grand_bucket = grand_bucket_for_bucket(bucket);
-            let _ = self
-                .storage
-                .acc_nft_grand_buckets
-                .put_async(
-                    AccountNftGrandBucketKey::new(grand_bucket),
-                    ACC_GRAND_BUCKET_INVALIDATE,
-                )
-                .await;
-            let _ = self
-                .storage
-                .acc_nft_buckets
-                .put_async(AccountNftBucketKey::new(bucket), ACC_BUCKET_INVALIDATE)
-                .await;
+            let _ = batch_storage.put_acc_grand_bucket(
+                AccountNftGrandBucketKey::new(grand_bucket),
+                ACC_GRAND_BUCKET_INVALIDATE,
+            );
+            let _ = batch_storage
+                .put_acc_bucket(AccountNftBucketKey::new(bucket), ACC_BUCKET_INVALIDATE);
         }
 
-        let _ = self.storage.acc_nft_changes.put_async(key, value).await;
+        let _ = batch_storage.put_account_change(key, value);
 
         if epoch < last_slot_epoch {
             let _ = self
@@ -278,14 +273,17 @@ async fn process_bbgm_tasks(storage: Arc<Storage>, tasks: Arc<Mutex<BTreeSet<Bbg
     let mut is_suspended = false;
     loop {
         if is_suspended {
-            let guard = tasks.lock().await;
-            if guard
-                .first()
-                .map(|t| *t != BbgmTask::Resume)
-                .unwrap_or(true)
-            {
-                tokio::time::sleep(Duration::from_secs(10)).await;
-                continue;
+            let mut guard = tasks.lock().await;
+            match guard.first() {
+                Some(t) if *t != BbgmTask::Resume => (),
+                Some(t) if *t != BbgmTask::Suspend => {
+                    guard.pop_first();
+                    continue;
+                }
+                _ => {
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    continue;
+                }
             }
         }
         let maybe_task = {
@@ -313,10 +311,17 @@ async fn process_acc_tasks(storage: Arc<Storage>, tasks: Arc<Mutex<BTreeSet<AccT
     let mut is_suspended = false;
     loop {
         if is_suspended {
-            let guard = tasks.lock().await;
-            if guard.first().map(|t| *t != AccTask::Resume).unwrap_or(true) {
-                tokio::time::sleep(Duration::from_secs(10)).await;
-                continue;
+            let mut guard = tasks.lock().await;
+            match guard.first() {
+                Some(t) if *t != AccTask::Resume => (),
+                Some(t) if *t != AccTask::Suspend => {
+                    guard.pop_first();
+                    continue;
+                }
+                _ => {
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    continue;
+                }
             }
         }
         let maybe_task = {

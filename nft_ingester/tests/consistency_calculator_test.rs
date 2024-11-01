@@ -223,7 +223,7 @@ mod tests {
     async fn test_notification_on_epoch_change() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1000);
-        let sut = NftChangesTracker::new(storage, sender);
+        let sut = NftChangesTracker::new(sender);
 
         let tree = Pubkey::new_unique();
 

@@ -309,6 +309,18 @@ pub struct AccountNftChangeKey {
     pub write_version: u64,
 }
 
+impl AccountNftChangeKey {
+    pub fn new(account_pubkey: Pubkey, slot: u64, write_version: u64) -> AccountNftChangeKey {
+        let epoch = epoch_of_slot(slot);
+        AccountNftChangeKey {
+            epoch,
+            account_pubkey,
+            slot,
+            write_version,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
 pub struct AccountNftChange {}
 
