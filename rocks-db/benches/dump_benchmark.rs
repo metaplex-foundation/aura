@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use entities::{api_req_params::Options};
+use entities::api_req_params::Options;
 use metrics_utils::SynchronizerMetricsConfig;
 use rocks_db::{
     storage_traits::{AssetIndexReader, Dumper},

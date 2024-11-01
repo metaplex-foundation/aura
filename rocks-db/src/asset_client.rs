@@ -2,9 +2,11 @@ use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::Ordering;
 
-use crate::asset::{AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey};
+use crate::asset::{
+    AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey,
+};
 use crate::asset_generated::asset as fb;
-use crate::column::Column;
+use crate::column::{Column, TypedColumn};
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
@@ -265,5 +267,38 @@ impl Storage {
             .into_iter()
             .map(|edition| (edition.key, edition))
             .collect::<HashMap<_, _>>())
+    }
+
+    pub fn get_complete_asset_details(
+        &self,
+        pubkey: Pubkey,
+    ) -> Result<Option<AssetCompleteDetails>> {
+        let data = self.db.get_pinned_cf(
+            &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+            pubkey,
+        )?;
+        match data {
+            Some(data) => {
+                let asset = fb::root_as_asset_complete_details(&data)
+                    .map_err(|e| StorageError::Common(e.to_string()))?;
+                Ok(Some(AssetCompleteDetails::from(asset)))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    pub fn put_complete_asset_details_batch(
+        &self,
+        assets: HashMap<Pubkey, AssetCompleteDetails>,
+    ) -> Result<()> {
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        for (pubkey, asset) in assets {
+            batch.put_cf(
+                &self.asset_data.handle(),
+                pubkey,
+                asset.convert_to_fb_bytes(),
+            );
+        }
+        self.db.write(batch).map_err(|e| StorageError::RocksDb(e))
     }
 }

@@ -27,7 +27,9 @@ mod tests {
     use nft_ingester::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::plerkle;
     use nft_ingester::token_updates_processor::TokenAccountsProcessor;
+    use rocks_db::asset::AssetCompleteDetails;
     use rocks_db::batch_savers::BatchSaveStorage;
+    use rocks_db::column::TypedColumn;
     use rocks_db::AssetAuthority;
     use solana_program::pubkey::Pubkey;
     use std::collections::HashMap;
@@ -153,37 +155,26 @@ mod tests {
             .unwrap();
         batch_storage.flush().unwrap();
 
-        let first_owner_from_db = env
+        let first_from_db = env
             .rocks_env
             .storage
-            .asset_owner_data
-            .get(first_mint)
+            .get_complete_asset_details(first_mint)
             .unwrap()
             .unwrap();
-        let second_owner_from_db = env
+        let second_from_db = env
             .rocks_env
             .storage
-            .asset_owner_data
-            .get(second_mint)
+            .get_complete_asset_details(second_mint)
             .unwrap()
             .unwrap();
+
+        let first_owner_from_db = first_from_db.owner.unwrap();
+        let second_owner_from_db = second_from_db.owner.unwrap();
         assert_eq!(first_owner_from_db.owner.value.unwrap(), first_owner);
         assert_eq!(second_owner_from_db.owner.value.unwrap(), second_owner);
 
-        let first_dynamic_from_db = env
-            .rocks_env
-            .storage
-            .asset_dynamic_data
-            .get(first_mint)
-            .unwrap()
-            .unwrap();
-        let second_dynamic_from_db = env
-            .rocks_env
-            .storage
-            .asset_dynamic_data
-            .get(second_mint)
-            .unwrap()
-            .unwrap();
+        let first_dynamic_from_db = first_from_db.dynamic_details.unwrap();
+        let second_dynamic_from_db = second_from_db.dynamic_details.unwrap();
         assert_eq!(first_dynamic_from_db.supply.unwrap().value, 1);
         assert_eq!(second_dynamic_from_db.supply.unwrap().value, 1);
     }
@@ -267,15 +258,13 @@ mod tests {
         let first_static_from_db = env
             .rocks_env
             .storage
-            .asset_static_data
-            .get(first_mint)
+            .get_complete_asset_details(first_mint)
             .unwrap()
             .unwrap();
         let second_static_from_db = env
             .rocks_env
             .storage
-            .asset_static_data
-            .get(second_mint)
+            .get_complete_asset_details(second_mint)
             .unwrap()
             .unwrap();
         assert_eq!(first_static_from_db.pubkey, first_mint);
@@ -409,17 +398,27 @@ mod tests {
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
         let mpl_core_parser = MplCoreProcessor::new(Arc::new(IngesterMetricsConfig::new()));
-        env.rocks_env
-            .storage
-            .asset_authority_data
-            .put(
-                second_authority,
-                AssetAuthority {
+        let second_authority_complete_asset = AssetCompleteDetails {
+            pubkey: second_authority,
+            authority: Some(AssetAuthority {
                     pubkey: Default::default(),
                     authority: second_owner,
                     slot_updated: 0,
                     write_version: None,
-                },
+            }),
+            ..Default::default()
+        };
+        env.rocks_env
+            .storage
+            .db
+            .merge_cf(
+                &env.rocks_env
+                    .storage
+                    .db
+                    .cf_handle(AssetCompleteDetails::NAME)
+                    .unwrap(),
+                second_authority,
+                second_authority_complete_asset.convert_to_fb_bytes(),
             )
             .unwrap();
 
@@ -444,27 +443,15 @@ mod tests {
             .unwrap();
         batch_storage.flush().unwrap();
 
-        let first_dynamic_from_db = env
+        let first = env
             .rocks_env
             .storage
-            .asset_dynamic_data
-            .get(first_mpl_core)
+            .get_complete_asset_details(first_mpl_core)
             .unwrap()
             .unwrap();
-        let first_owner_from_db = env
-            .rocks_env
-            .storage
-            .asset_owner_data
-            .get(first_mpl_core)
-            .unwrap()
-            .unwrap();
-        let first_authority_from_db = env
-            .rocks_env
-            .storage
-            .asset_authority_data
-            .get(first_mpl_core)
-            .unwrap()
-            .unwrap();
+        let first_dynamic_from_db = first.dynamic_details.unwrap();
+        let first_owner_from_db = first.owner.unwrap();
+        let first_authority_from_db = first.authority.unwrap();
         assert_eq!(first_dynamic_from_db.pubkey, first_mpl_core);
         assert_eq!(first_dynamic_from_db.is_frozen.value, true);
         assert_eq!(first_dynamic_from_db.url.value, first_uri.to_string());
@@ -475,27 +462,16 @@ mod tests {
         assert_eq!(first_owner_from_db.owner.value.unwrap(), first_owner);
         assert_eq!(first_authority_from_db.authority, first_authority);
 
-        let second_dynamic_from_db = env
+        let second = env
             .rocks_env
             .storage
-            .asset_dynamic_data
-            .get(second_mpl_core)
+            .get_complete_asset_details(second_mpl_core)
             .unwrap()
             .unwrap();
-        let second_owner_from_db = env
-            .rocks_env
-            .storage
-            .asset_owner_data
-            .get(second_mpl_core)
-            .unwrap()
-            .unwrap();
-        let second_authority_from_db = env
-            .rocks_env
-            .storage
-            .asset_authority_data
-            .get(second_mpl_core)
-            .unwrap()
-            .unwrap();
+        let second_dynamic_from_db = second.dynamic_details.unwrap();
+        let second_owner_from_db = second.owner.unwrap();
+        let second_authority_from_db = second.authority.unwrap();
+
         assert_eq!(second_dynamic_from_db.pubkey, second_mpl_core);
         assert_eq!(second_dynamic_from_db.is_frozen.value, false);
         assert_eq!(second_dynamic_from_db.url.value, second_uri.to_string());

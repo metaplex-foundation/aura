@@ -61,6 +61,7 @@ pub async fn main() {
                         get_asset_id(&cl_leaf_data.cli_tree_key, &cl_leaf_data.cli_leaf_idx).await;
                     println!("Found missed CL item for: {}", asset_id);
 
+                    // todo: change to get over complete assets
                     let asset_dynamic_data = source_db
                         .asset_dynamic_data
                         .get(asset_id)

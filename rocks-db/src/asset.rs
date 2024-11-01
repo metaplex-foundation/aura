@@ -55,6 +55,13 @@ impl From<AssetStaticDetails> for AssetCompleteDetails {
 }
 
 impl AssetCompleteDetails {
+    pub fn convert_to_fb_bytes(&self) -> Vec<u8> {
+        let mut builder = FlatBufferBuilder::new();
+        let asset_complete_details = self.convert_to_fb(&mut builder);
+        builder.finish_minimal(asset_complete_details);
+        builder.finished_data().to_vec()
+    }
+
     pub fn convert_to_fb<'a>(
         &self,
         builder: &mut FlatBufferBuilder<'a>,
