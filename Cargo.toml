@@ -16,7 +16,7 @@ members = [
 
 [workspace.dependencies]
 # Tokio ecosystem
-tokio = { version = "1.37.0", features = ["full", "sync", "tracing"] }
+tokio = { version = "1.37.0", features = ["full", "tracing"] }
 tokio-stream = "0.1.11"
 tokio-util = { version = "0.7.10", features = ["codec", "compat"] }
 
