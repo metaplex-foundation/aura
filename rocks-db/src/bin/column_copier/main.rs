@@ -28,7 +28,7 @@ pub async fn main() -> Result<(), String> {
     println!("Starting data migration...");
 
     // Specify the column families you plan to copy
-    let columns_to_copy = vec![RawBlock::NAME.to_string(), OffChainData::NAME.to_string()];
+    let columns_to_copy = [RawBlock::NAME, OffChainData::NAME];
 
     println!(
         "Columns to be copied from {} to {}: {:?}",
@@ -40,7 +40,7 @@ pub async fn main() -> Result<(), String> {
         source_db_path,
         secondary_rocks_dir.path().to_str().unwrap(),
         destination_db_path,
-        columns_to_copy,
+        &columns_to_copy,
     )
     .await
     {
@@ -56,7 +56,7 @@ async fn copy_column_families(
     source_path: &str,
     secondary_source_path: &str,
     destination_path: &str,
-    columns_to_copy: Vec<String>,
+    columns_to_copy: &[&'static str],
 ) -> Result<(), String> {
     let start = Instant::now();
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
