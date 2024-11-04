@@ -7,7 +7,7 @@ mod tests {
     use entities::{api_req_params::GetByMethodsOptions, models::UrlWithStatus};
     use metrics_utils::{IngesterMetricsConfig, SynchronizerMetricsConfig};
     use nft_ingester::index_syncronizer::Synchronizer;
-    use nft_ingester::token_updates_processor::TokenAccountsProcessor;
+    use nft_ingester::processors::account_based::token_updates_processor::TokenAccountsProcessor;
     use postgre_client::{
         model::{AssetSortBy, AssetSortDirection, AssetSorting, SearchAssetsFilter},
         storage_traits::AssetPubkeyFilteredFetcher,

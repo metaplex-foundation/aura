@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use nft_ingester::backfiller::{BackfillSource, Backfiller, DirectBlockParser, TransactionsParser};
-use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
     self, init_logger, setup_config, BackfillerConfig, RawBackfillConfig, INGESTER_CONFIG_PREFIX,
 };
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
+use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::transaction_ingester;
 use prometheus_client::registry::Registry;
 use tempfile::TempDir;

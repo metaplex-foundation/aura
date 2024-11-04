@@ -29,7 +29,6 @@ use grpc::client::Client;
 use grpc::service::PeerGapFillerServiceImpl;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait};
-use nft_ingester::accounts_processor::run_accounts_processor;
 use nft_ingester::ack::create_ack_channel;
 use nft_ingester::api::account_balance::AccountBalanceGetterImpl;
 use nft_ingester::api::service::start_api;
@@ -38,7 +37,6 @@ use nft_ingester::backfiller::{
     DirectBlockParser, ForceReingestableSlotGetter, TransactionsParser,
 };
 use nft_ingester::batch_mint::batch_mint_processor::{process_batch_mints, BatchMintProcessor, NoopBatchMintTxSender};
-use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::buffer::{debug_buffer, Buffer};
 use nft_ingester::config::{
     setup_config, ApiConfig, BackfillerConfig, BackfillerMode, IngesterConfig, MessageSource, INGESTER_CONFIG_PREFIX,
@@ -49,11 +47,13 @@ use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration, init_primary_storage};
 use nft_ingester::json_worker::JsonWorker;
 use nft_ingester::message_handler::MessageHandlerIngester;
+use nft_ingester::processors::accounts_processor::run_accounts_processor;
+use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
+use nft_ingester::processors::transaction_processor::run_transaction_processor;
 use nft_ingester::redis_receiver::RedisReceiver;
 use nft_ingester::rocks_db::{perform_backup, receive_last_saved_slot, restore_rocksdb};
 use nft_ingester::tcp_receiver::{connect_to_geyser, connect_to_snapshot_receiver, TcpReceiver};
 use nft_ingester::transaction_ingester::BackfillTransactionIngester;
-use nft_ingester::transaction_processor::run_transaction_processor;
 use nft_ingester::{config::init_logger, error::IngesterError};
 use rocks_db::backup_service;
 use rocks_db::backup_service::BackupService;
@@ -707,21 +707,22 @@ pub async fn main() -> Result<(), IngesterError> {
                 .spawn(run_slot_force_persister(force_reingestable_transactions_parser, rx));
         }
 
-        let fork_cleaner = ForkCleaner::new(
-            primary_rocks_storage.clone(),
-            primary_rocks_storage.clone(),
-            metrics_state.fork_cleaner_metrics.clone(),
-        );
-        let rx = shutdown_rx.resubscribe();
-        let metrics = metrics_state.fork_cleaner_metrics.clone();
-        mutexed_tasks.lock().await.spawn(run_fork_cleaner(
-            fork_cleaner,
-            metrics,
-            rx,
-            config.sequence_consistent_checker_wait_period_sec,
-        ));
+        if config.run_fork_cleaner {
+            let fork_cleaner = ForkCleaner::new(
+                primary_rocks_storage.clone(),
+                primary_rocks_storage.clone(),
+                metrics_state.fork_cleaner_metrics.clone(),
+            );
+            let rx = shutdown_rx.resubscribe();
+            let metrics = metrics_state.fork_cleaner_metrics.clone();
+            mutexed_tasks.lock().await.spawn(run_fork_cleaner(
+                fork_cleaner,
+                metrics,
+                rx,
+                config.sequence_consistent_checker_wait_period_sec,
+            ));
+        }
     }
-
     if let Ok(arweave) =
         Arweave::from_keypair_path(PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(), ARWEAVE_BASE_URL.parse().unwrap())
     {

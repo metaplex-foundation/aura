@@ -1,10 +1,5 @@
-use crate::error::IngesterError;
-use crate::inscriptions_processor::InscriptionsProcessor;
-use crate::mpl_core_fee_indexing_processor::MplCoreFeeProcessor;
-use crate::mpl_core_processor::MplCoreProcessor;
-use crate::mplx_updates_processor::MplxAccountsProcessor;
-use crate::redis_receiver::get_timestamp_from_id;
-use crate::token_updates_processor::TokenAccountsProcessor;
+use crate::{error::IngesterError, redis_receiver::get_timestamp_from_id};
+
 use chrono::Utc;
 use entities::enums::UnprocessedAccount;
 use entities::models::{CoreAssetFee, UnprocessedAccountMessage};
@@ -23,6 +18,12 @@ use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tokio::time::Instant;
 use tracing::error;
+
+use super::account_based::{
+    inscriptions_processor::InscriptionsProcessor,
+    mpl_core_fee_indexing_processor::MplCoreFeeProcessor, mpl_core_processor::MplCoreProcessor,
+    mplx_updates_processor::MplxAccountsProcessor, token_updates_processor::TokenAccountsProcessor,
+};
 
 // worker idle timeout
 const WORKER_IDLE_TIMEOUT: Duration = Duration::from_millis(100);
