@@ -175,6 +175,8 @@ pub struct IngesterConfig {
     pub rpc_retry_interval_millis: u64,
     #[serde(default)]
     pub run_sequence_consistent_checker: bool,
+    #[serde(default)]
+    pub run_fork_cleaner: bool,
     #[serde(default = "default_sequence_consistent_checker_wait_period_sec")]
     pub sequence_consistent_checker_wait_period_sec: u64,
     pub rpc_host: String,
