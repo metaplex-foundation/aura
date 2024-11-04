@@ -10,13 +10,13 @@ mod tests {
     use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
     use nft_ingester::config::JsonMiddlewareConfig;
     use nft_ingester::json_worker::JsonWorker;
-    use nft_ingester::mplx_updates_processor::MplxAccountsProcessor;
+    use nft_ingester::processors::account_based::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
-        bubblegum_updates_processor::BubblegumTxProcessor,
         buffer::Buffer,
-        token_updates_processor::TokenAccountsProcessor,
+        processors::account_based::token_updates_processor::TokenAccountsProcessor,
+        processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
     use rocks_db::batch_savers::BatchSaveStorage;

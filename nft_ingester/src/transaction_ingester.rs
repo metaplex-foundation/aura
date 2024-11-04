@@ -1,4 +1,4 @@
-use crate::bubblegum_updates_processor::BubblegumTxProcessor;
+use crate::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
 use entities::models::BufferedTransaction;
 use interface::{error::StorageError, signature_persistence::TransactionIngester};
 use rocks_db::transaction::{TransactionProcessor, TransactionResult};

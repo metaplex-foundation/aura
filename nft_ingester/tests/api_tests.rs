@@ -42,12 +42,12 @@ mod tests {
     };
     use nft_ingester::api::dapi::rpc_asset_models::Asset;
     use nft_ingester::api::error::DasApiError;
-    use nft_ingester::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater};
+    use nft_ingester::processors::account_based::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
     use nft_ingester::{
         config::JsonMiddlewareConfig, json_worker::JsonWorker,
-        token_updates_processor::TokenAccountsProcessor,
+        processors::account_based::token_updates_processor::TokenAccountsProcessor,
     };
     use rocks_db::asset::AssetLeaf;
     use rocks_db::batch_savers::BatchSaveStorage;

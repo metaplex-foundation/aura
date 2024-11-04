@@ -33,10 +33,10 @@ use nft_ingester::batch_mint::batch_mint_persister::{
 use nft_ingester::batch_mint::batch_mint_processor::{
     BatchMintProcessor, MockPermanentStorageClient,
 };
-use nft_ingester::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::config::JsonMiddlewareConfig;
 use nft_ingester::error::IngesterError;
 use nft_ingester::json_worker::JsonWorker;
+use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
