@@ -6277,6 +6277,7 @@ dependencies = [
  "flatbuffers 24.3.25",
  "futures-util",
  "hex",
+ "indicatif",
  "interface",
  "lz4",
  "metrics-utils",

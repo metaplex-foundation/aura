@@ -41,7 +41,9 @@ usecase = { path = "../usecase" }
 tempfile = { workspace = true }
 bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "0d529f5" }
 num-traits = { workspace = true }
-flatbuffers = { version="24.3.25", features = ["serialize"]}
+# using a different version of flatbuffer compared to the rest of the project as this one is compatible with generator used for AssetCompleteDetails structures
+flatbuffers = { version="24.3.25", features = ["serialize"]} 
+indicatif = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }
