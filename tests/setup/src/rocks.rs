@@ -150,19 +150,17 @@ impl RocksTestEnvironment {
             .iter()
             .zip(generated_assets.static_details.iter())
             .zip(generated_assets.dynamic_details.iter())
-            .zip(generated_assets.authorities.iter())
             .zip(generated_assets.collections.iter())
             .zip(generated_assets.owners.iter())
+            .enumerate()
             .for_each(
-                |(
-                    ((((pubkey, static_details), dynamic_details), authority), collection),
-                    owner,
-                )| {
+                |(index, ((((pubkey, static_details), dynamic_details), collection), owner))| {
+                    let authority = generated_assets.authorities.get(index);
                     let complete_asset = AssetCompleteDetails {
                         pubkey: *pubkey,
                         static_details: Some(static_details.clone()),
                         dynamic_details: Some(dynamic_details.clone()),
-                        authority: Some(authority.clone()),
+                        authority: authority.cloned(),
                         collection: Some(collection.clone()),
                         owner: Some(owner.clone()),
                     };
