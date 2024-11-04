@@ -6265,6 +6265,7 @@ dependencies = [
  "figment",
  "futures-util",
  "hex",
+ "indicatif",
  "interface",
  "lz4",
  "metrics-utils",

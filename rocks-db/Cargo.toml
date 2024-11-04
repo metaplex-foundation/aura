@@ -41,6 +41,7 @@ usecase = { path = "../usecase" }
 tempfile = { workspace = true }
 bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "0d529f5" }
 num-traits = { workspace = true }
+indicatif = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }
