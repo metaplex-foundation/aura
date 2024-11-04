@@ -21,6 +21,7 @@ use crate::TypedColumn;
 #[derive(Debug)]
 pub struct AssetSelectedMaps {
     pub asset_complete_details: HashMap<Pubkey, AssetCompleteDetails>,
+    pub mpl_core_collections: HashMap<Pubkey, AssetCollection>,
     pub assets_leaf: HashMap<Pubkey, AssetLeaf>,
     pub offchain_data: HashMap<String, OffChainData>,
     pub urls: HashMap<Pubkey, String>,

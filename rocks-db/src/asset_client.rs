@@ -3,7 +3,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::Ordering;
 
 use crate::asset::{
-    AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey,
+    AssetCollection, AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey
 };
 use crate::asset_generated::asset as fb;
 use crate::column::{Column, TypedColumn};
@@ -112,7 +112,7 @@ impl Storage {
         };
         let (mut assets_data, assets_collection_pks, mut urls) =
             assets_with_collections_and_urls_fut.await?;
-
+        let mut mpl_core_collections = HashMap::new();
         // todo: consider async/future here, but not likely as the very next call depends on urls from this one
         if !assets_collection_pks.is_empty() {
             let assets_collection_pks = assets_collection_pks.into_iter().collect::<Vec<_>>();
@@ -134,8 +134,11 @@ impl Storage {
                             .and_then(|d| d.url())
                             .and_then(|u| u.value())
                             .map(|u| urls.insert(key, u.to_string()));
+                        assets_data.insert(key, asset.into());
                     }
-                    assets_data.insert(key, asset.into());
+                    if let Some(collection) = asset.collection() {
+                        mpl_core_collections.insert(key, AssetCollection::from(collection));
+                    }
                 }
             }
         }
@@ -191,6 +194,7 @@ impl Storage {
                         .collect::<Vec<_>>(),
                 )
                 .await?,
+            mpl_core_collections,
             asset_complete_details: assets_data,
             assets_leaf: to_map!(assets_leaf),
             offchain_data,

@@ -76,7 +76,14 @@ fn convert_rocks_asset_model(
         edition_data: static_data
             .edition_address
             .and_then(|e| asset_selected_maps.editions.get(&e).cloned()),
-        mpl_core_collections: collection_data.and_then(|c| c.collection).clone(),
+        mpl_core_collections: data
+            .collection.as_ref()
+            .and_then(|collection| {
+                asset_selected_maps
+                    .mpl_core_collections
+                    .get(&collection.collection.value)
+            })
+            .cloned(),
         collection_offchain_data: collection_dynamic_data
             .as_ref()
             .and_then(|dynamic_data| {

@@ -3085,34 +3085,7 @@ mod tests {
             amount: 30000,
             write_version: 10,
         };
-        let mut batch_storage = BatchSaveStorage::new(
-            env.rocks_env.storage.clone(),
-            10,
-            Arc::new(IngesterMetricsConfig::new()),
-        );
-        let token_accounts_processor =
-            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
-        token_accounts_processor
-            .transform_and_save_token_account(
-                &mut batch_storage,
-                fungible_token_account1,
-                &token_account1,
-            )
-            .unwrap();
-        token_accounts_processor
-            .transform_and_save_token_account(
-                &mut batch_storage,
-                fungible_token_account2,
-                &token_account2,
-            )
-            .unwrap();
-        token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint1)
-            .unwrap();
-        token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint2)
-            .unwrap();
-        batch_storage.flush().unwrap();
+
         let ftm_complete = AssetCompleteDetails {
             pubkey: fungible_token_mint2,
             static_details: Some(AssetStaticDetails {
@@ -3145,7 +3118,34 @@ mod tests {
                 ftm_complete.convert_to_fb_bytes(),
             )
             .unwrap();
-
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        let token_accounts_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        token_accounts_processor
+            .transform_and_save_token_account(
+                &mut batch_storage,
+                fungible_token_account1,
+                &token_account1,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_token_account(
+                &mut batch_storage,
+                fungible_token_account2,
+                &token_account2,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint2)
+            .unwrap();
+        batch_storage.flush().unwrap();
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
             .synchronize_asset_indexes(&rx, 0)
