@@ -364,12 +364,13 @@ impl Storage {
             .from_writer(buf_writer);
 
         // asset, owner, balance, slot updated
-        let mut batch: Vec<(String, String, i64, i64)> = Vec::new();
+        let mut batch: Vec<(String, String, String, i64, i64)> = Vec::new();
 
         for (_, token) in storage.pairs_iterator(storage.iter_start()) {
             batch.push((
                 token.pubkey.to_string(),
                 token.owner.to_string(),
+                token.mint.to_string(),
                 token.amount,
                 token.slot_updated,
             ));
@@ -407,7 +408,8 @@ impl Storage {
                     file_and_path.1.as_ref(),
                     start.elapsed().as_millis() as f64,
                 );
-                synchronizer_metrics.inc_num_of_records_written(&file_and_path.1, 1);
+                synchronizer_metrics
+                    .inc_num_of_records_written(&file_and_path.1, batch.len() as u64);
             }
             batch.clear();
         }
