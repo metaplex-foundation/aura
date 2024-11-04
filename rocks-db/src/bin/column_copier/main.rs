@@ -97,10 +97,10 @@ async fn copy_column_families(
             pb.set_message(format!("Copying column {}", cf_name));
             pb.enable_steady_tick(Duration::from_millis(100));
             let start_column = Instant::now();
-            let mut iter = sdb.raw_iterator_cf(&sdb.cf_handle(&cf_name).unwrap());
+            let mut iter = sdb.raw_iterator_cf(&sdb.cf_handle(cf_name).unwrap());
             iter.seek_to_first();
             let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
-            let dest_handle = &ddb.cf_handle(&cf_name).unwrap();
+            let dest_handle = &ddb.cf_handle(cf_name).unwrap();
             let mut batch_count = 0;
             while iter.valid() {
                 batch.put_cf(dest_handle, iter.key().unwrap(), iter.value().unwrap());
