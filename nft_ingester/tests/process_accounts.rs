@@ -21,12 +21,12 @@ mod tests {
     };
     use metrics_utils::IngesterMetricsConfig;
     use nft_ingester::buffer::Buffer;
-    use nft_ingester::inscriptions_processor::InscriptionsProcessor;
     use nft_ingester::message_parser::MessageParser;
-    use nft_ingester::mpl_core_processor::MplCoreProcessor;
-    use nft_ingester::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::plerkle;
-    use nft_ingester::token_updates_processor::TokenAccountsProcessor;
+    use nft_ingester::processors::account_based::inscriptions_processor::InscriptionsProcessor;
+    use nft_ingester::processors::account_based::mpl_core_processor::MplCoreProcessor;
+    use nft_ingester::processors::account_based::mplx_updates_processor::MplxAccountsProcessor;
+    use nft_ingester::processors::account_based::token_updates_processor::TokenAccountsProcessor;
     use rocks_db::batch_savers::BatchSaveStorage;
     use rocks_db::AssetAuthority;
     use solana_program::pubkey::Pubkey;

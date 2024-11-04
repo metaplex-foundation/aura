@@ -1,8 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use nft_ingester::{
     backfiller::{DirectBlockParser, TransactionsParser},
-    bubblegum_updates_processor::BubblegumTxProcessor,
     buffer::Buffer,
+    processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
     transaction_ingester,
 };
 use rocks_db::Storage;

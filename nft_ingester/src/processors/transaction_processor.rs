@@ -1,4 +1,4 @@
-use crate::bubblegum_updates_processor::BubblegumTxProcessor;
+use super::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
 use crate::error::IngesterError;
 use crate::redis_receiver::get_timestamp_from_id;
 use chrono::Utc;

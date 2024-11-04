@@ -1,6 +1,10 @@
 use std::ops::Deref;
 use std::{sync::Arc, time::Duration};
 
+use crate::{
+    error::IngesterError,
+    processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
+};
 use async_trait::async_trait;
 use bubblegum_batch_sdk::model::BatchMint;
 use entities::enums::PersistingBatchMintState;
@@ -10,8 +14,6 @@ use metrics_utils::{BatchMintPersisterMetricsConfig, MetricStatus};
 use rocks_db::batch_mint::BatchMintWithStaker;
 use tokio::{sync::broadcast::Receiver, task::JoinError, time::Instant};
 use tracing::{error, info};
-
-use crate::{bubblegum_updates_processor::BubblegumTxProcessor, error::IngesterError};
 
 pub const MAX_BATCH_MINT_DOWNLOAD_ATTEMPTS: u8 = 5;
 

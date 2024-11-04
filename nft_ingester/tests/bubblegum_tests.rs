@@ -11,8 +11,8 @@ mod tests {
     use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
     use nft_ingester::{
         backfiller::{DirectBlockParser, TransactionsParser},
-        bubblegum_updates_processor::BubblegumTxProcessor,
         buffer::Buffer,
+        processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
         transaction_ingester::{self, BackfillTransactionIngester},
     };
     use rocks_db::migrator::MigrationState;
