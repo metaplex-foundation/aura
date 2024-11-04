@@ -157,23 +157,9 @@ pub async fn main() -> Result<(), IngesterError> {
             info!("running backfiller to persist raw data");
         }
         config::BackfillerMode::IngestPersisted => {
-            let buffer = Arc::new(Buffer::new());
-            // run dev->null buffer consumer
-            let cloned_rx = shutdown_rx.resubscribe();
-            let clonned_json_deque = buffer.json_tasks.clone();
-            mutexed_tasks.lock().await.spawn(async move {
-                info!("Running empty buffer consumer...");
-                while cloned_rx.is_empty() {
-                    clonned_json_deque.lock().await.clear();
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                }
-
-                Ok(())
-            });
             let bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
                 rocks_storage.clone(),
                 ingester_metrics.clone(),
-                buffer.json_tasks.clone(),
             ));
 
             let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(

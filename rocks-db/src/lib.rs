@@ -2,6 +2,7 @@ use asset_previews::{AssetPreviews, UrlToDownload};
 use entities::schedule::ScheduledJob;
 use inflector::Inflector;
 use leaf_signatures::LeafSignature;
+use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
@@ -98,7 +99,7 @@ const FULL_ITERATION_ACTION: &str = "full_iteration";
 const BATCH_ITERATION_ACTION: &str = "batch_iteration";
 const BATCH_GET_ACTION: &str = "batch_get";
 const ITERATOR_TOP_ACTION: &str = "iterator_top";
-
+const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 pub struct Storage {
     pub asset_data: Column<AssetCompleteDetails>,
     pub asset_static_data: Column<AssetStaticDetails>,
@@ -246,12 +247,15 @@ impl Storage {
         }
     }
 
-    pub fn open(
-        db_path: &str,
+    pub fn open<P>(
+        db_path: P,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         migration_state: MigrationState,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
         let db = Arc::new(DB::open_cf_descriptors(
             &Self::get_db_options(),
@@ -278,35 +282,46 @@ impl Storage {
         Ok(Self::new(db, join_set, red_metrics))
     }
 
+    pub fn open_readonly_with_cfs(
+        db_path: &str,
+        c_names: Vec<&str>,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Self> {
+        let db = Arc::new(Self::open_readonly_with_cfs_only_db(db_path, c_names)?);
+        Ok(Self::new(db, join_set, red_metrics))
+    }
+
+    pub fn open_readonly_with_cfs_only_db<P>(db_path: P, c_names: Vec<&str>) -> Result<DB>
+    where
+        P: AsRef<Path>,
+    {
+        let cf_descriptors: Vec<ColumnFamilyDescriptor> = c_names
+            .iter()
+            .map(|name| ColumnFamilyDescriptor::new(*name, Self::get_default_cf_options()))
+            .collect();
+        DB::open_cf_descriptors_read_only(&Self::get_db_options(), db_path, cf_descriptors, false)
+            .map_err(StorageError::RocksDb)
+    }
+
     fn create_cf_descriptors(migration_state: &MigrationState) -> Vec<ColumnFamilyDescriptor> {
         vec![
             Self::new_cf_descriptor::<OffChainData>(migration_state),
-            Self::new_cf_descriptor::<AssetStaticDetails>(migration_state),
-            Self::new_cf_descriptor::<AssetDynamicDetails>(migration_state),
-            Self::new_cf_descriptor::<AssetDynamicDetailsDeprecated>(migration_state),
             Self::new_cf_descriptor::<AssetCompleteDetails>(migration_state),
             Self::new_cf_descriptor::<MetadataMintMap>(migration_state),
-            Self::new_cf_descriptor::<AssetAuthority>(migration_state),
-            Self::new_cf_descriptor::<AssetAuthorityDeprecated>(migration_state),
-            Self::new_cf_descriptor::<AssetOwnerDeprecated>(migration_state),
             Self::new_cf_descriptor::<asset::AssetLeaf>(migration_state),
-            Self::new_cf_descriptor::<asset::AssetCollection>(migration_state),
-            Self::new_cf_descriptor::<AssetCollectionDeprecated>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClItem>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClLeaf>(migration_state),
             Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(migration_state),
             Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(migration_state),
             Self::new_cf_descriptor::<asset::SlotAssetIdx>(migration_state),
             Self::new_cf_descriptor::<signature_client::SignatureIdx>(migration_state),
-            Self::new_cf_descriptor::<RawBlock>(migration_state),
             Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(migration_state),
             Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(migration_state),
             Self::new_cf_descriptor::<bubblegum_slots::ForceReingestableSlots>(migration_state),
-            Self::new_cf_descriptor::<AssetOwner>(migration_state),
             Self::new_cf_descriptor::<TreeSeqIdx>(migration_state),
             Self::new_cf_descriptor::<TreesGaps>(migration_state),
             Self::new_cf_descriptor::<TokenMetadataEdition>(migration_state),
-            Self::new_cf_descriptor::<AssetStaticDetailsDeprecated>(migration_state),
             Self::new_cf_descriptor::<AssetSignature>(migration_state),
             Self::new_cf_descriptor::<TokenAccount>(migration_state),
             Self::new_cf_descriptor::<TokenAccountOwnerIdx>(migration_state),
@@ -376,9 +391,7 @@ impl Storage {
         options
     }
 
-    fn get_cf_options<C: TypedColumn>(migration_state: &MigrationState) -> Options {
-        const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
-
+    fn get_default_cf_options() -> Options {
         let mut cf_options = Options::default();
         // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
         cf_options.set_max_write_buffer_number(8);
@@ -392,6 +405,11 @@ impl Storage {
         cf_options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
         cf_options.set_max_bytes_for_level_base(total_size_base);
         cf_options.set_target_file_size_base(file_size_base);
+        cf_options
+    }
+
+    fn get_cf_options<C: TypedColumn>(migration_state: &MigrationState) -> Options {
+        let mut cf_options = Self::get_default_cf_options();
 
         if matches!(migration_state, &MigrationState::CreateColumnFamilies) {
             cf_options.set_merge_operator_associative(
