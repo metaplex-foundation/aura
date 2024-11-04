@@ -11,9 +11,7 @@ use solana_sdk::pubkey::Pubkey;
 
 fn bincode_decode_benchmark(c: &mut Criterion) {
     let cnt = 1_000;
-    let pubkeys = (0..cnt)
-        .map(|_| Pubkey::from(rand::random::<[u8; 32]>()))
-        .collect::<Vec<_>>();
+    let pubkeys = (0..cnt).map(|_| Pubkey::new_unique()).collect::<Vec<_>>();
     let slot = 100;
     let assets = pubkeys
         .iter()
@@ -34,9 +32,7 @@ fn flatbuffer_vs_bincode_merge_functions_benchmark(c: &mut Criterion) {
     let cnt = 1;
     let updates_number = 1000;
     let slot = 100;
-    let pubkeys = (0..cnt)
-        .map(|_| Pubkey::from(rand::random::<[u8; 32]>()))
-        .collect::<Vec<_>>();
+    let pubkeys = (0..cnt).map(|_| Pubkey::new_unique()).collect::<Vec<_>>();
     let static_details = RocksTestEnvironmentSetup::static_data_for_nft(&pubkeys, slot);
     let authorities = (0..updates_number)
         .map(|_| RocksTestEnvironmentSetup::with_authority(&pubkeys))

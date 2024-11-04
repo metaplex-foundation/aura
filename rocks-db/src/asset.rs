@@ -3161,7 +3161,7 @@ mod tests {
     use super::*;
 
     fn create_full_complete_asset() -> AssetCompleteDetails {
-        let pubkey = Pubkey::from(rand::random::<[u8; 32]>());
+        let pubkey = Pubkey::new_unique();
         let static_details = AssetStaticDetails {
             pubkey: pubkey,
             specification_asset_class: SpecificationAssetClass::Nft,
@@ -3231,7 +3231,7 @@ mod tests {
             pubkey: pubkey,
             write_version: Some(500),
             slot_updated: 5000,
-            authority: Pubkey::from(rand::random::<[u8; 32]>()),
+            authority: Pubkey::new_unique(),
         };
         let owner = AssetOwner {
             pubkey: pubkey,
@@ -3239,24 +3239,24 @@ mod tests {
             owner: Updated::new(
                 51,
                 Some(UpdateVersion::Sequence(53)),
-                Some(Pubkey::from(rand::random::<[u8; 32]>())),
+                Some(Pubkey::new_unique()),
             ),
             delegate: Updated::new(
                 56,
                 Some(UpdateVersion::Sequence(54)),
-                Some(Pubkey::from(rand::random::<[u8; 32]>())),
+                Some(Pubkey::new_unique()),
             ),
             owner_delegate_seq: Updated::new(58, None, None),
         };
 
         let collection = AssetCollection {
             pubkey: pubkey,
-            collection: Updated::new(50, None, Pubkey::from(rand::random::<[u8; 32]>())),
+            collection: Updated::new(50, None, Pubkey::new_unique()),
             is_collection_verified: Updated::new(50, None, true),
             authority: Updated::new(
                 58,
                 Some(UpdateVersion::Sequence(48)),
-                Some(Pubkey::from(rand::random::<[u8; 32]>())),
+                Some(Pubkey::new_unique()),
             ),
         };
 
