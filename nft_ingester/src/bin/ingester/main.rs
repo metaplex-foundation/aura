@@ -712,21 +712,22 @@ pub async fn main() -> Result<(), IngesterError> {
                 .spawn(run_slot_force_persister(force_reingestable_transactions_parser, rx));
         }
 
-        let fork_cleaner = ForkCleaner::new(
-            primary_rocks_storage.clone(),
-            primary_rocks_storage.clone(),
-            metrics_state.fork_cleaner_metrics.clone(),
-        );
-        let rx = shutdown_rx.resubscribe();
-        let metrics = metrics_state.fork_cleaner_metrics.clone();
-        mutexed_tasks.lock().await.spawn(run_fork_cleaner(
-            fork_cleaner,
-            metrics,
-            rx,
-            config.sequence_consistent_checker_wait_period_sec,
-        ));
+        if config.run_fork_cleaner {
+            let fork_cleaner = ForkCleaner::new(
+                primary_rocks_storage.clone(),
+                primary_rocks_storage.clone(),
+                metrics_state.fork_cleaner_metrics.clone(),
+            );
+            let rx = shutdown_rx.resubscribe();
+            let metrics = metrics_state.fork_cleaner_metrics.clone();
+            mutexed_tasks.lock().await.spawn(run_fork_cleaner(
+                fork_cleaner,
+                metrics,
+                rx,
+                config.sequence_consistent_checker_wait_period_sec,
+            ));
+        }
     }
-
     if let Ok(arweave) =
         Arweave::from_keypair_path(PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(), ARWEAVE_BASE_URL.parse().unwrap())
     {
