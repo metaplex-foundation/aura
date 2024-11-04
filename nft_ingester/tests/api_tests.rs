@@ -617,7 +617,7 @@ mod tests {
             .db
             .put_cf(
                 &env.rocks_env
-            .storage
+                    .storage
                     .db
                     .cf_handle(AssetCompleteDetails::NAME)
                     .unwrap(),
@@ -742,7 +742,7 @@ mod tests {
             .db
             .put_cf(
                 &env.rocks_env
-            .storage
+                    .storage
                     .db
                     .cf_handle(AssetCompleteDetails::NAME)
                     .unwrap(),
@@ -2365,7 +2365,7 @@ mod tests {
             .db
             .put_cf(
                 &env.rocks_env
-            .storage
+                    .storage
                     .db
                     .cf_handle(AssetCompleteDetails::NAME)
                     .unwrap(),
@@ -2723,32 +2723,32 @@ mod tests {
                 AssetCompleteDetails {
                     pubkey: collection.collection.value,
                     dynamic_details: Some(AssetDynamicDetails {
-                    pubkey: collection.collection.value,
-                    url: Updated::new(
-                        100,
-                        Some(UpdateVersion::Sequence(100)),
-                        "http://example.com".to_string(),
-                    ),
-                    onchain_data: Some(Updated::new(
-                        100,
-                        Some(UpdateVersion::Sequence(100)),
-                        "{
+                        pubkey: collection.collection.value,
+                        url: Updated::new(
+                            100,
+                            Some(UpdateVersion::Sequence(100)),
+                            "http://example.com".to_string(),
+                        ),
+                        onchain_data: Some(Updated::new(
+                            100,
+                            Some(UpdateVersion::Sequence(100)),
+                            "{
                             \"name\": \"WIF Drop\",
                             \"symbol\": \"6WIF\"\
                          }"
-                        .to_string(),
-                    )),
-                    ..Default::default()
+                            .to_string(),
+                        )),
+                        ..Default::default()
                     }),
                     ..Default::default()
                 },
             );
         });
         let o = env.rocks_env.storage.asset_offchain_data.put_async(
-                "http://example.com".to_string(),
-                OffChainData {
-                    url: "http://example.com".to_string(),
-                    metadata: "{
+            "http://example.com".to_string(),
+            OffChainData {
+                url: "http://example.com".to_string(),
+                metadata: "{
                       \"name\": \"WIF Drop\",
                       \"symbol\": \"6WIF\",
                       \"description\": \"Random Drop event! https://3000wif.com\",
@@ -2782,7 +2782,7 @@ mod tests {
                         ]
                       }
                     }"
-                    .to_string(),
+                .to_string(),
             },
         );
         env.rocks_env
@@ -3089,18 +3089,18 @@ mod tests {
         let ftm_complete = AssetCompleteDetails {
             pubkey: fungible_token_mint2,
             static_details: Some(AssetStaticDetails {
-                    pubkey: fungible_token_mint2,
-                    specification_asset_class: SpecificationAssetClass::FungibleAsset,
-                    royalty_target_type: RoyaltyTargetType::Single,
-                    created_at: 10,
-                    edition_address: None,
+                pubkey: fungible_token_mint2,
+                specification_asset_class: SpecificationAssetClass::FungibleAsset,
+                royalty_target_type: RoyaltyTargetType::Single,
+                created_at: 10,
+                edition_address: None,
             }),
             owner: Some(AssetOwner {
-                    pubkey: fungible_token_mint2,
-                    owner: Updated::new(10, Some(UpdateVersion::WriteVersion(10)), None),
-                    delegate: Default::default(),
-                    owner_type: Default::default(),
-                    owner_delegate_seq: Default::default(),
+                pubkey: fungible_token_mint2,
+                owner: Updated::new(10, Some(UpdateVersion::WriteVersion(10)), None),
+                delegate: Default::default(),
+                owner_type: Default::default(),
+                owner_delegate_seq: Default::default(),
             }),
             ..Default::default()
         };

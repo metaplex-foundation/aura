@@ -77,7 +77,8 @@ fn convert_rocks_asset_model(
             .edition_address
             .and_then(|e| asset_selected_maps.editions.get(&e).cloned()),
         mpl_core_collections: data
-            .collection.as_ref()
+            .collection
+            .as_ref()
             .and_then(|collection| {
                 asset_selected_maps
                     .mpl_core_collections

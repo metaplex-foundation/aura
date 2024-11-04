@@ -401,10 +401,10 @@ mod tests {
         let second_authority_complete_asset = AssetCompleteDetails {
             pubkey: second_authority,
             authority: Some(AssetAuthority {
-                    pubkey: Default::default(),
-                    authority: second_owner,
-                    slot_updated: 0,
-                    write_version: None,
+                pubkey: Default::default(),
+                authority: second_owner,
+                slot_updated: 0,
+                write_version: None,
             }),
             ..Default::default()
         };

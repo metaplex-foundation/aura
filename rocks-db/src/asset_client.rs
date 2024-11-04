@@ -3,7 +3,8 @@ use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::Ordering;
 
 use crate::asset::{
-    AssetCollection, AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey
+    AssetCollection, AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx,
+    SlotAssetIdxKey,
 };
 use crate::asset_generated::asset as fb;
 use crate::column::{Column, TypedColumn};
@@ -303,6 +304,6 @@ impl Storage {
                 asset.convert_to_fb_bytes(),
             );
         }
-        self.db.write(batch).map_err(|e| StorageError::RocksDb(e))
+        self.db.write(batch).map_err(StorageError::RocksDb)
     }
 }

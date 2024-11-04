@@ -138,7 +138,7 @@ async fn process_leaf(storage: Arc<Storage>, data: Vec<u8>) -> Option<(Pubkey, u
         let asset_leaf_data_fut = storage.asset_leaf_data.batch_get(vec![asset_id]);
         let asset_complete_data = storage.get_complete_asset_details(asset_id);
         let asset_leaf_data = asset_leaf_data_fut.await;
-        
+
         let asset_dynamic_seq = asset_complete_data
             .ok()
             .and_then(|data_opt| data_opt)
