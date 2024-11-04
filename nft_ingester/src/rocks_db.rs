@@ -5,7 +5,7 @@ use rocks_db::errors::BackupServiceError;
 use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::{backup_service, Storage};
 use std::fs::{create_dir_all, remove_dir_all};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::{Receiver, Sender};
@@ -80,4 +80,84 @@ pub async fn restore_rocksdb(config: &IngesterConfig) -> Result<(), BackupServic
 
     info!("restore_rocksdb fin");
     Ok(())
+}
+
+pub enum RocksDbManager {
+    Primary(Arc<Storage>),
+    Secondary(RocksDbSecondaryDuplicateMode),
+}
+
+impl RocksDbManager {
+    /// Instantiate a new RocksDbManager with primary storage
+    pub fn new_primary(primary: Arc<Storage>) -> Self {
+        RocksDbManager::Primary(primary)
+    }
+
+    /// Instantiate a new RocksDbManager with secondary storage
+    pub fn new_secondary(primary: Storage, secondary: Storage) -> Self {
+        RocksDbManager::Secondary(RocksDbSecondaryDuplicateMode {
+            rocks_db_instances: [primary.into(), secondary.into()],
+            serving_instance_toggle: AtomicBool::new(false),
+        })
+    }
+
+    /// Returns the current storage instance
+    ///
+    /// It's always the same storage for primary mode
+    /// For secondary mode, it will return a storage instance
+    /// based on it's sync status with the primary storage
+    pub fn acquire(&self) -> Arc<Storage> {
+        match self {
+            RocksDbManager::Primary(storage) => storage.clone(),
+            RocksDbManager::Secondary(duplicate_mode) => duplicate_mode.rocks_db_instances
+                [duplicate_mode
+                    .serving_instance_toggle
+                    .load(Ordering::Relaxed) as usize]
+                .clone(),
+        }
+    }
+
+    /// Syncronize secondary rocksdb with primary
+    ///
+    /// One of the DB will be blocked while the other one is processing request
+    pub async fn catch_up(&self, shutdown_rx: Receiver<()>) {
+        if !shutdown_rx.is_empty() {
+            return;
+        }
+
+        const SLEEP_TIME_MS: Duration = Duration::from_millis(10);
+
+        match self {
+            RocksDbManager::Primary(_) => {}
+            RocksDbManager::Secondary(duplicate_mode) => {
+                let free_node_idx = (duplicate_mode
+                    .serving_instance_toggle
+                    .load(Ordering::Relaxed) as usize
+                    + 1)
+                    % 2;
+                let free_node = &duplicate_mode.rocks_db_instances[free_node_idx];
+
+                while Arc::<rocks_db::Storage>::strong_count(free_node) > 1 {
+                    if !shutdown_rx.is_empty() {
+                        return;
+                    }
+
+                    tokio_sleep(SLEEP_TIME_MS).await;
+                }
+
+                if let Err(e) = free_node.db.try_catch_up_with_primary() {
+                    error!("Sync rocksdb error: {}", e);
+                }
+
+                duplicate_mode
+                    .serving_instance_toggle
+                    .store(free_node_idx != 0, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+pub struct RocksDbSecondaryDuplicateMode {
+    rocks_db_instances: [Arc<Storage>; 2],
+    serving_instance_toggle: AtomicBool,
 }

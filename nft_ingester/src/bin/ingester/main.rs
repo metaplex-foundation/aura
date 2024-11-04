@@ -50,7 +50,7 @@ use nft_ingester::init::{graceful_stop, init_index_storage_with_migration, init_
 use nft_ingester::json_worker::JsonWorker;
 use nft_ingester::message_handler::MessageHandlerIngester;
 use nft_ingester::redis_receiver::RedisReceiver;
-use nft_ingester::rocks_db::{perform_backup, receive_last_saved_slot, restore_rocksdb};
+use nft_ingester::rocks_db::{perform_backup, receive_last_saved_slot, restore_rocksdb, RocksDbManager};
 use nft_ingester::tcp_receiver::{connect_to_geyser, connect_to_snapshot_receiver, TcpReceiver};
 use nft_ingester::transaction_ingester::BackfillTransactionIngester;
 use nft_ingester::transaction_processor::run_transaction_processor;
@@ -256,25 +256,20 @@ pub async fn main() -> Result<(), IngesterError> {
     let last_saved_slot = primary_rocks_storage.last_saved_slot()?.unwrap_or_default();
     let first_processed_slot = Arc::new(AtomicU64::new(0));
     let first_processed_slot_clone = first_processed_slot.clone();
-    let cloned_rocks_storage = primary_rocks_storage.clone();
     let cloned_rx = shutdown_rx.resubscribe();
     let cloned_tx = shutdown_tx.clone();
 
     mutexed_tasks.lock().await.spawn(receive_last_saved_slot(
         cloned_rx,
         cloned_tx,
-        cloned_rocks_storage,
+        primary_rocks_storage.clone(),
         first_processed_slot_clone,
         last_saved_slot,
     ));
-
+    let rocks_db = Arc::new(RocksDbManager::new_primary(primary_rocks_storage));
     let json_processor = Arc::new(
-        JsonWorker::new(
-            index_pg_storage.clone(),
-            primary_rocks_storage.clone(),
-            metrics_state.json_downloader_metrics.clone(),
-        )
-        .await,
+        JsonWorker::new(index_pg_storage.clone(), rocks_db.clone(), metrics_state.json_downloader_metrics.clone())
+            .await,
     );
 
     let grpc_client = Client::connect(config.clone())
@@ -287,7 +282,6 @@ pub async fn main() -> Result<(), IngesterError> {
             tokio_sleep(Duration::from_millis(100)).await
         }
 
-        let cloned_rocks_storage = primary_rocks_storage.clone();
         if shutdown_rx.is_empty() {
             let gaped_data_client_clone = gaped_data_client.clone();
 
@@ -295,18 +289,17 @@ pub async fn main() -> Result<(), IngesterError> {
             let cloned_rx = shutdown_rx.resubscribe();
             mutexed_tasks.lock().await.spawn(process_asset_details_stream_wrapper(
                 cloned_rx,
-                cloned_rocks_storage,
+                rocks_db.acquire(),
                 last_saved_slot,
                 first_processed_slot_value,
                 gaped_data_client_clone.clone(),
                 false,
             ));
 
-            let cloned_rocks_storage = primary_rocks_storage.clone();
             let cloned_rx = shutdown_rx.resubscribe();
             mutexed_tasks.lock().await.spawn(process_asset_details_stream_wrapper(
                 cloned_rx,
-                cloned_rocks_storage,
+                rocks_db.acquire(),
                 last_saved_slot,
                 first_processed_slot_value,
                 gaped_data_client_clone,
@@ -315,7 +308,6 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     };
 
-    let cloned_rocks_storage = primary_rocks_storage.clone();
     let cloned_api_metrics = metrics_state.api_metrics.clone();
     let account_balance_getter = Arc::new(AccountBalanceGetterImpl::new(rpc_client.clone()));
     let proof_checker = config.check_proofs.then_some(Arc::new(MaybeProofChecker::new(
@@ -340,16 +332,17 @@ pub async fn main() -> Result<(), IngesterError> {
         if api_config.skip_check_tree_gaps {
             None
         } else {
-            Some(cloned_rocks_storage.clone())
+            Some(rocks_db.acquire())
         }
     };
 
     let cloned_index_storage = index_pg_storage.clone();
     let file_storage_path = api_config.file_storage_path_container.clone();
+    let rocks_db_clone = rocks_db.clone();
     mutexed_tasks.lock().await.spawn(async move {
         match start_api(
             cloned_index_storage,
-            cloned_rocks_storage.clone(),
+            rocks_db_clone,
             cloned_rx,
             cloned_api_metrics,
             api_config.server_port,
@@ -379,7 +372,7 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     let geyser_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
-        primary_rocks_storage.clone(),
+        rocks_db.acquire(),
         metrics_state.ingester_metrics.clone(),
         buffer.json_tasks.clone(),
     ));
@@ -426,7 +419,7 @@ pub async fn main() -> Result<(), IngesterError> {
         .spawn(json_worker::run(cloned_jp, cloned_rx).map(|_| Ok(())));
 
     let backfill_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
-        primary_rocks_storage.clone(),
+        rocks_db.acquire(),
         metrics_state.ingester_metrics.clone(),
         buffer.json_tasks.clone(),
     ));
@@ -441,13 +434,14 @@ pub async fn main() -> Result<(), IngesterError> {
         .await,
     );
     let backfiller =
-        Arc::new(Backfiller::new(primary_rocks_storage.clone(), backfiller_source.clone(), backfiller_config.clone()));
+        Arc::new(Backfiller::new(rocks_db.acquire(), backfiller_source.clone(), backfiller_config.clone()));
 
     let rpc_backfiller = Arc::new(BackfillRPC::connect(config.backfill_rpc_address.clone()));
     if config.run_bubblegum_backfiller {
         if backfiller_config.should_reingest {
             warn!("'Reingest' flag is set, deleting last fetched slot.");
-            primary_rocks_storage
+            rocks_db
+                .acquire()
                 .delete_parameter::<u64>(rocks_db::parameters::Parameter::LastFetchedSlot)
                 .await?;
         }
@@ -456,7 +450,7 @@ pub async fn main() -> Result<(), IngesterError> {
             BackfillerMode::IngestDirectly => {
                 let consumer = Arc::new(DirectBlockParser::new(
                     tx_ingester.clone(),
-                    primary_rocks_storage.clone(),
+                    rocks_db.acquire(),
                     metrics_state.backfiller_metrics.clone(),
                 ));
                 backfiller
@@ -471,7 +465,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 info!("Running Backfiller directly from bigtable to ingester.");
             }
             BackfillerMode::Persist => {
-                let consumer = primary_rocks_storage.clone();
+                let consumer = rocks_db.acquire();
                 backfiller
                     .start_backfill(
                         mutexed_tasks.clone(),
@@ -486,14 +480,14 @@ pub async fn main() -> Result<(), IngesterError> {
             BackfillerMode::IngestPersisted => {
                 let consumer = Arc::new(DirectBlockParser::new(
                     tx_ingester.clone(),
-                    primary_rocks_storage.clone(),
+                    rocks_db.acquire(),
                     metrics_state.backfiller_metrics.clone(),
                 ));
-                let producer = primary_rocks_storage.clone();
+                let producer = rocks_db.acquire();
 
                 let transactions_parser = Arc::new(TransactionsParser::new(
-                    primary_rocks_storage.clone(),
-                    Arc::new(BubblegumSlotGetter::new(primary_rocks_storage.clone())),
+                    rocks_db.acquire(),
+                    Arc::new(BubblegumSlotGetter::new(rocks_db.acquire())),
                     consumer,
                     producer,
                     metrics_state.backfiller_metrics.clone(),
@@ -534,11 +528,11 @@ pub async fn main() -> Result<(), IngesterError> {
 
                 // run perpetual slot persister
                 let rx = shutdown_rx.resubscribe();
-                let consumer = primary_rocks_storage.clone();
+                let consumer = rocks_db.acquire();
                 let producer = backfiller_source.clone();
                 let metrics = Arc::new(BackfillerMetricsConfig::new());
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_persister_");
-                let slot_getter = Arc::new(BubblegumSlotGetter::new(primary_rocks_storage.clone()));
+                let slot_getter = Arc::new(BubblegumSlotGetter::new(rocks_db.acquire()));
                 let backfiller_clone = backfiller.clone();
                 mutexed_tasks.lock().await.spawn(run_perpetual_slot_processing(
                     backfiller_clone,
@@ -554,13 +548,13 @@ pub async fn main() -> Result<(), IngesterError> {
                 let rx = shutdown_rx.resubscribe();
                 let consumer = Arc::new(DirectBlockParser::new(
                     tx_ingester.clone(),
-                    primary_rocks_storage.clone(),
+                    rocks_db.acquire(),
                     metrics_state.backfiller_metrics.clone(),
                 ));
-                let producer = primary_rocks_storage.clone();
+                let producer = rocks_db.acquire();
                 let metrics = Arc::new(BackfillerMetricsConfig::new());
                 metrics.register_with_prefix(&mut metrics_state.registry, "slot_ingester_");
-                let slot_getter = Arc::new(IngestableSlotGetter::new(primary_rocks_storage.clone()));
+                let slot_getter = Arc::new(IngestableSlotGetter::new(rocks_db.acquire()));
                 let backfiller_clone = backfiller.clone();
                 let backup = backfiller_source.clone();
                 mutexed_tasks.lock().await.spawn(run_perpetual_slot_processing(
@@ -591,10 +585,10 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
     // setup dependencies for grpc server
-    let uc = AssetStreamer::new(config.peer_grpc_max_gap_slots, primary_rocks_storage.clone());
-    let bs = BlocksStreamer::new(config.peer_grpc_max_gap_slots, primary_rocks_storage.clone());
-    let serv = PeerGapFillerServiceImpl::new(Arc::new(uc), Arc::new(bs), primary_rocks_storage.clone());
-    let asset_url_serv = AssetUrlServiceImpl::new(primary_rocks_storage.clone());
+    let uc = AssetStreamer::new(config.peer_grpc_max_gap_slots, rocks_db.acquire());
+    let bs = BlocksStreamer::new(config.peer_grpc_max_gap_slots, rocks_db.acquire());
+    let serv = PeerGapFillerServiceImpl::new(Arc::new(uc), Arc::new(bs), rocks_db.acquire());
+    let asset_url_serv = AssetUrlServiceImpl::new(rocks_db.acquire());
     let addr = format!("0.0.0.0:{}", config.peer_grpc_port).parse()?;
     // Spawn the gRPC server task and add to JoinSet
     let mut rx = shutdown_rx.resubscribe();
@@ -611,11 +605,10 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    Scheduler::run_in_background(Scheduler::new(primary_rocks_storage.clone())).await;
+    Scheduler::run_in_background(Scheduler::new(rocks_db.acquire())).await;
 
-    let rocks_clone = primary_rocks_storage.clone();
     let signature_fetcher = SignatureFetcher::new(
-        rocks_clone,
+        rocks_db.acquire(),
         rpc_backfiller.clone(),
         tx_ingester.clone(),
         metrics_state.rpc_backfiller_metrics.clone(),
@@ -650,10 +643,10 @@ pub async fn main() -> Result<(), IngesterError> {
 
     if config.run_sequence_consistent_checker {
         let force_reingestable_slot_processor = Arc::new(ForceReingestableSlotGetter::new(
-            primary_rocks_storage.clone(),
+            rocks_db.acquire(),
             Arc::new(DirectBlockParser::new(
                 tx_ingester.clone(),
-                primary_rocks_storage.clone(),
+                rocks_db.acquire(),
                 metrics_state.backfiller_metrics.clone(),
             )),
         ));
@@ -663,7 +656,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 backfiller_source.clone(),
                 metrics_state.backfiller_metrics.clone(),
             ),
-            primary_rocks_storage.clone(),
+            rocks_db.acquire(),
             metrics_state.sequence_consistent_gapfill_metrics.clone(),
             shutdown_rx.resubscribe(),
             rpc_backfiller.clone(),
@@ -679,7 +672,7 @@ pub async fn main() -> Result<(), IngesterError> {
         metrics.register_with_prefix(&mut metrics_state.registry, "force_slot_persister_");
         if let Some(client) = grpc_client {
             let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
-                primary_rocks_storage.clone(),
+                rocks_db.acquire(),
                 force_reingestable_slot_processor.clone(),
                 force_reingestable_slot_processor.clone(),
                 Arc::new(client),
@@ -693,7 +686,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 .spawn(run_slot_force_persister(force_reingestable_transactions_parser, rx));
         } else {
             let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
-                primary_rocks_storage.clone(),
+                rocks_db.acquire(),
                 force_reingestable_slot_processor.clone(),
                 force_reingestable_slot_processor.clone(),
                 producer.clone(),
@@ -707,11 +700,8 @@ pub async fn main() -> Result<(), IngesterError> {
                 .spawn(run_slot_force_persister(force_reingestable_transactions_parser, rx));
         }
 
-        let fork_cleaner = ForkCleaner::new(
-            primary_rocks_storage.clone(),
-            primary_rocks_storage.clone(),
-            metrics_state.fork_cleaner_metrics.clone(),
-        );
+        let fork_cleaner =
+            ForkCleaner::new(rocks_db.acquire(), rocks_db.acquire(), metrics_state.fork_cleaner_metrics.clone());
         let rx = shutdown_rx.resubscribe();
         let metrics = metrics_state.fork_cleaner_metrics.clone();
         mutexed_tasks.lock().await.spawn(run_fork_cleaner(
@@ -728,7 +718,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let arweave = Arc::new(arweave);
         let batch_mint_processor = Arc::new(BatchMintProcessor::new(
             index_pg_storage.clone(),
-            primary_rocks_storage.clone(),
+            rocks_db.acquire(),
             Arc::new(NoopBatchMintTxSender),
             arweave,
             file_storage_path,
@@ -743,7 +733,7 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     let batch_mint_persister = BatchMintPersister::new(
-        primary_rocks_storage.clone(),
+        rocks_db.acquire(),
         BatchMintDownloaderForPersister,
         metrics_state.batch_mint_persisting_metrics.clone(),
     );

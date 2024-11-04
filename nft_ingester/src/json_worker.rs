@@ -1,5 +1,6 @@
 use crate::api::dapi::rpc_asset_convertors::parse_files;
 use crate::config::{setup_config, IngesterConfig, INGESTER_CONFIG_PREFIX};
+use crate::rocks_db::RocksDbManager;
 use async_trait::async_trait;
 use entities::enums::TaskStatus;
 use entities::models::{JsonDownloadTask, OffChainData};
@@ -10,7 +11,6 @@ use postgre_client::tasks::UpdatedTask;
 use postgre_client::PgClient;
 use reqwest::{Client, ClientBuilder};
 use rocks_db::asset_previews::UrlToDownload;
-use rocks_db::Storage;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
@@ -28,7 +28,7 @@ pub const CLIENT_TIMEOUT: u64 = 5;
 
 pub struct JsonWorker {
     pub db_client: Arc<PgClient>,
-    pub rocks_db: Arc<Storage>,
+    pub rocks_db: Arc<RocksDbManager>,
     pub num_of_parallel_workers: i32,
     pub metrics: Arc<JsonDownloaderMetricsConfig>,
 }
@@ -36,7 +36,7 @@ pub struct JsonWorker {
 impl JsonWorker {
     pub async fn new(
         db_client: Arc<PgClient>,
-        rocks_db: Arc<Storage>,
+        rocks_db: Arc<RocksDbManager>,
         metrics: Arc<JsonDownloaderMetricsConfig>,
     ) -> Self {
         let config: IngesterConfig = setup_config(INGESTER_CONFIG_PREFIX);
@@ -404,6 +404,7 @@ impl JsonPersister for JsonWorker {
                 .collect::<HashMap<_, _>>();
 
             self.rocks_db
+                .acquire()
                 .asset_offchain_data
                 .put_batch(rocks_updates)
                 .await
@@ -411,6 +412,7 @@ impl JsonPersister for JsonWorker {
 
             if let Err(e) = self
                 .rocks_db
+                .acquire()
                 .urls_to_download
                 .put_batch(urls_to_download)
                 .await
