@@ -179,60 +179,6 @@ impl RocksTestEnvironment {
                 },
             );
         self.storage.db.write(batch)?;
-
-        // let static_data_batch = self.storage.asset_static_data.put_batch(
-        //     generated_assets
-        //         .static_details
-        //         .iter()
-        //         .map(|value| (value.pubkey, value.clone()))
-        //         .collect(),
-        // );
-        // let authority_batch = self.storage.asset_authority_data.put_batch(
-        //     generated_assets
-        //         .authorities
-        //         .iter()
-        //         .map(|value| (value.pubkey, value.clone()))
-        //         .collect(),
-        // );
-        // let owners_batch = self.storage.asset_owner_data.put_batch(
-        //     generated_assets
-        //         .owners
-        //         .iter()
-        //         .map(|value| (value.pubkey, value.clone()))
-        //         .collect(),
-        // );
-        // let dynamic_details_batch = self.storage.asset_dynamic_data.put_batch(
-        //     generated_assets
-        //         .dynamic_details
-        //         .iter()
-        //         .map(|value| (value.pubkey, value.clone()))
-        //         .collect(),
-        // );
-        // let collections_batch = self.storage.asset_collection_data.put_batch(
-        //     generated_assets
-        //         .collections
-        //         .iter()
-        //         .map(|value| (value.pubkey, value.clone()))
-        //         .collect(),
-        // );
-
-        // tokio::try_join!(
-        //     static_data_batch,
-        //     authority_batch,
-        //     owners_batch,
-        //     dynamic_details_batch,
-        //     collections_batch
-        // )
-        // .map_err(|e| {
-        //     error!("join failed {}", e);
-        //     e
-        // })?;
-
-        // self.storage.apply_migration1().await.map_err(|e| {
-        //     error!("appliying migration failed {}", e);
-        //     e
-        // })?;
-
         Ok(())
     }
 }
