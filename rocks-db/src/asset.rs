@@ -783,6 +783,24 @@ impl TypedColumn for AssetsUpdateIdx {
     }
 }
 
+/// FungibleAssetsUpdateIx is the same as AssetsUpdateIdx, but for fungible assets.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FungibleAssetsUpdateIdx {}
+
+impl TypedColumn for FungibleAssetsUpdateIdx {
+    type KeyType = Vec<u8>;
+    type ValueType = Self;
+    const NAME: &'static str = "FUNGIBLE_ASSETS_UPDATED_IN_SLOT_IDX";
+
+    fn encode_key(key: Vec<u8>) -> Vec<u8> {
+        key
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        Ok(bytes)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SlotAssetIdx {}
 

@@ -36,6 +36,20 @@ impl TokenAccountsProcessor {
         res
     }
 
+    pub fn transform_and_save_fungible_token_account(
+        &self,
+        storage: &mut BatchSaveStorage,
+        key: Pubkey,
+        token_account: &TokenAccount,
+    ) -> Result<(), StorageError> {
+        self.save_token_account_with_idxs(storage, key, token_account)?;
+
+        storage.fungible_asset_updated_with_batch(
+            token_account.slot_updated as u64,
+            token_account.pubkey,
+        )?;
+    }
+
     pub fn transform_and_save_token_account(
         &self,
         storage: &mut BatchSaveStorage,

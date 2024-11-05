@@ -168,6 +168,12 @@ impl BatchSaveStorage {
         )?;
         Ok(())
     }
+    pub fn fungible_asset_updated_with_batch(&mut self, slot: u64, pubkey: Pubkey) -> Result<()> {
+        self.storage
+            .fungible_asset_updated_with_batch(&mut self.batch, slot, pubkey)?;
+        Ok(())
+    }
+
     pub fn asset_updated_with_batch(&mut self, slot: u64, pubkey: Pubkey) -> Result<()> {
         self.storage
             .asset_updated_with_batch(&mut self.batch, slot, pubkey)?;
