@@ -58,7 +58,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
 
     let storage = Storage::open(
-        &config.json_target_db.clone(),
+        config.json_target_db.clone(),
         mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,

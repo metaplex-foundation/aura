@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use async_channel;
 use clap::Parser;
 use entities::models::RawBlock;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -17,7 +16,6 @@ use nft_ingester::{
 use rocks_db::migrator::MigrationState;
 use rocks_db::{column::TypedColumn, Storage};
 use tracing::{error, info};
-use tracing_subscriber;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -255,7 +253,7 @@ async fn main() {
             let raw_block_data = value.to_vec();
 
             // Send the slot and data to the channel
-            if let Err(_) = slot_sender.send((slot, raw_block_data)).await {
+            if slot_sender.send((slot, raw_block_data)).await.is_err() {
                 error!("Failed to send slot {} to workers", slot);
                 break;
             }

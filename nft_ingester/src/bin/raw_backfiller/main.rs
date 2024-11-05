@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use nft_ingester::backfiller::{BackfillSource, Backfiller, DirectBlockParser, TransactionsParser};
-use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
     self, init_logger, setup_config, BackfillerConfig, RawBackfillConfig, INGESTER_CONFIG_PREFIX,
 };
@@ -78,7 +77,7 @@ pub async fn main() -> Result<(), IngesterError> {
         // storage with MigrationState::CreateColumnFamilies in order to create
         // all column families
         Storage::open(
-            &config
+            config
                 .rocks_db_path_container
                 .clone()
                 .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string()),

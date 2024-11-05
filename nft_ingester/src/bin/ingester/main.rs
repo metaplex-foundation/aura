@@ -378,11 +378,8 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     });
 
-    let geyser_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
-        primary_rocks_storage.clone(),
-        metrics_state.ingester_metrics.clone(),
-        buffer.json_tasks.clone(),
-    ));
+    let geyser_bubblegum_updates_processor =
+        Arc::new(BubblegumTxProcessor::new(primary_rocks_storage.clone(), metrics_state.ingester_metrics.clone()));
 
     for _ in 0..config.transactions_parsing_workers {
         match config.message_source {
@@ -425,11 +422,8 @@ pub async fn main() -> Result<(), IngesterError> {
         .await
         .spawn(json_worker::run(cloned_jp, cloned_rx).map(|_| Ok(())));
 
-    let backfill_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
-        primary_rocks_storage.clone(),
-        metrics_state.ingester_metrics.clone(),
-        buffer.json_tasks.clone(),
-    ));
+    let backfill_bubblegum_updates_processor =
+        Arc::new(BubblegumTxProcessor::new(primary_rocks_storage.clone(), metrics_state.ingester_metrics.clone()));
     let tx_ingester = Arc::new(BackfillTransactionIngester::new(backfill_bubblegum_updates_processor.clone()));
     let backfiller_config = setup_config::<BackfillerConfig>(INGESTER_CONFIG_PREFIX);
     let backfiller_source = Arc::new(
