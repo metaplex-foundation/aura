@@ -1,0 +1,143 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+
+package consistencyapi;
+
+message BbgmEarlistGrandEpoch {
+    optional uint32 grand_epoch = 1;
+}
+
+message BbgmGrandEpochList {
+    repeated BbgmGrandEpoch list = 1;
+}
+
+message BbgmGrandEpoch {
+    uint32 grand_epoch = 1;
+    bytes tree_pubkey = 2;
+    optional bytes checksum = 3;
+}
+
+message BbgmEpochList {
+    repeated BbgmEpoch list = 1;
+}
+
+message BbgmEpoch {
+    uint32 epoch = 1;
+    bytes tree_pubkey = 2;
+    optional bytes checksum = 3;
+}
+
+message BbgmChangeList {
+    repeated BbgmChange list = 1;
+}
+
+message BbgmChange {
+    bytes tree_pubkey = 1;
+    uint64 slot = 2;
+    uint64 seq = 3;
+}
+
+// Request object for getting grand epoch trees checksums
+message GetBbgmGrandEpochsReq {
+    // Grand epoch number
+    uint32 grand_epoch = 1;
+    // Maximum amount of tree checksums to return
+    optional uint64 limit = 2;
+    // Return trees checksums that are after given
+    optional bytes after = 3;
+}
+
+// Request object for getting epoch tree checksums in the geven grand epoch
+message GetBbgmEpochsReq {
+    // Public key of the bubblegum tree, checksum should be returned for
+    bytes tree_pubkey = 1;
+    // Number of grand epoch which nested epochs should be returned
+    uint32 grand_epoch = 2;
+}
+
+// Request object for getting list of individual bubblegum tree changes
+// that happened in the given epoch
+message GetBbgmChangesReq {
+    // Pubkey of bubblegum tree
+    bytes tree_pubkey = 1;
+    // Number of epoch changes are listed from
+    uint32 epoch = 2;
+    // Maximum amount of bubblegum changes to return
+    optional uint64 limit = 3;
+    // Return changes starting from given slot
+    optional bytes from_slot = 4;
+    // Return changes starting from given write version, works only in conjunction with slot
+    optional bytes after_write_version = 5;
+}
+
+// Represents account NFT grand bucket checksum.
+message AccGrandBucketChecksum {
+    uint32 grand_bucket = 1;
+    optional bytes checksum = 2;
+}
+
+// List of account NFT grand bucket checksums.
+message AccGrandBucketChecksumsList {
+    repeated AccGrandBucketChecksum list = 1;
+}
+
+message AccBucketChecksum {
+    uint32 bucket = 1;
+    optional bytes checksum = 2;
+}
+
+message AccBucketChecksumsList {
+    repeated AccBucketChecksum list = 1;
+}
+
+// Represents last tracked account NFT change
+message Acc {
+    bytes account_pubkey = 1;
+    uint64 slot = 2;
+    uint64 write_version = 3;
+}
+
+// Represents list of last tracked account NFT changes
+message AccList {
+    repeated Acc list = 1;
+}
+
+message GetAccBucketsReq {
+    uint32 grand_bucket = 1;
+}
+
+message GetAccReq {
+    // number of bucket
+    uint32 bucket = 1;
+    // maximum amount of account latest states to return
+    optional uint64 limit = 2;
+    // return account that are after the given
+    optional bytes after = 3;
+}
+
+service BbgmConsistencyService {
+    // Returns earliest grand epoch avaible on the peer.
+    rpc GetBbgmEarliestGrandEpoch(google.protobuf.Empty) returns (BbgmEarlistGrandEpoch);
+
+    // Request list of tree checksums in the given grand epoch
+    // No need to use stream since in the worst case the response size
+    // is still significanly less than 1 MB
+    rpc GetBbgmGrandEpochChecksums(GetBbgmGrandEpochsReq) returns (BbgmGrandEpochList);
+    rpc GetBbgmEpochChecksumsInGrandEpoch(GetBbgmEpochsReq) returns (BbgmEpochList);
+    rpc GetBbgmChangesInEpoch(GetBbgmChangesReq) returns (BbgmChangeList);
+
+    // Propose bubblegum changes to a peer, that has these changes missing.
+    // Can be called after after the "get changes" API is called, and a portion
+    // of missing bubblegum changes detected on the peer.
+    rpc ProposeMissingBbgmChanges(BbgmChangeList) returns (google.protobuf.Empty);
+}
+
+service AccConsistencyService {
+    rpc GetAccGrandBucketChecksums(google.protobuf.Empty) returns (AccGrandBucketChecksumsList);
+    rpc GetAccBucketChecksumsInGrandBucket(GetAccBucketsReq) returns (AccBucketChecksumsList);
+    rpc GetAccsInBucket(GetAccReq) returns (AccList);
+
+    rpc ProposeMissingAccChanges(AccList) returns (google.protobuf.Empty);
+}
