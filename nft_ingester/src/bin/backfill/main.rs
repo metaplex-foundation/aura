@@ -1,10 +1,10 @@
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicU64, Ordering};
 
+use async_channel;
 use clap::Parser;
 use entities::models::RawBlock;
-use futures::stream::{FuturesUnordered, StreamExt};
 use indicatif::{ProgressBar, ProgressStyle};
 use interface::signature_persistence::BlockConsumer;
 use metrics_utils::BackfillerMetricsConfig;
@@ -16,8 +16,6 @@ use nft_ingester::{
 };
 use rocks_db::migrator::MigrationState;
 use rocks_db::{column::TypedColumn, Storage};
-use tokio::sync::{Mutex as AsyncMutex, Semaphore};
-use tokio::task::JoinSet;
 use tracing::{error, info};
 use tracing_subscriber;
 
@@ -37,7 +35,7 @@ struct Args {
     start_slot: Option<u64>,
 
     /// Number of concurrent workers (default: 16)
-    #[arg(short = 'w', long, default_value_t = 32)]
+    #[arg(short = 'w', long, default_value_t = 16)]
     workers: usize,
 }
 
@@ -49,18 +47,16 @@ async fn main() {
     let args = Args::parse();
 
     // Open source RocksDB in readonly mode
-    let source_db = Storage::open_readonly_with_cfs_only_db(
-        &args.source_db_path,
-        vec![RawBlock::NAME],
-    )
-    .expect("Failed to open source RocksDB");
+    let source_db =
+        Storage::open_readonly_with_cfs_only_db(&args.source_db_path, vec![RawBlock::NAME])
+            .expect("Failed to open source RocksDB");
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
 
     // Open target RocksDB
     let target_db = Arc::new(
         Storage::open(
             &args.target_db_path,
-            Arc::new(AsyncMutex::new(JoinSet::new())),
+            Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
             red_metrics.clone(),
             MigrationState::Last,
         )
@@ -127,26 +123,104 @@ async fn main() {
 
     // Concurrency setup
     let num_workers = args.workers;
-    let semaphore = Arc::new(Semaphore::new(num_workers));
-    let slots_initiated = Arc::new(AtomicU64::new(0));
+    let (slot_sender, slot_receiver) = async_channel::bounded::<(u64, Vec<u8>)>(num_workers * 2);
+    let slots_processed = Arc::new(AtomicU64::new(0));
     let last_slot_processed = Arc::new(AtomicU64::new(start_slot));
     let rate = Arc::new(Mutex::new(0.0));
+    let shutdown_flag = Arc::new(AtomicBool::new(false));
+
+    // Spawn a task to handle graceful shutdown on Ctrl+C
+    let shutdown_flag_clone = shutdown_flag.clone();
+    let slot_sender_clone = slot_sender.clone();
+    tokio::spawn(async move {
+        // Wait for Ctrl+C signal
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {
+                info!("Received Ctrl+C, shutting down gracefully...");
+                shutdown_flag_clone.store(true, Ordering::SeqCst);
+                // Close the channel to signal workers to stop
+                slot_sender_clone.close();
+            }
+            Err(err) => {
+                error!("Unable to listen for shutdown signal: {}", err);
+            }
+        }
+    });
+
+    // Spawn worker tasks
+    let mut worker_handles = Vec::new();
+    for _ in 0..num_workers {
+        let consumer = consumer.clone();
+        let progress_bar = progress_bar.clone();
+        let slots_processed = slots_processed.clone();
+        let last_slot_processed = last_slot_processed.clone();
+        let rate = rate.clone();
+        let shutdown_flag = shutdown_flag.clone();
+
+        let slot_receiver = slot_receiver.clone();
+
+        let handle = tokio::spawn(async move {
+            let slot_receiver = slot_receiver;
+            while let Ok((slot, raw_block_data)) = slot_receiver.recv().await {
+                if shutdown_flag.load(Ordering::SeqCst) {
+                    break;
+                }
+
+                // Process the slot
+                let raw_block: RawBlock = match serde_cbor::from_slice(&raw_block_data) {
+                    Ok(rb) => rb,
+                    Err(e) => {
+                        error!("Failed to decode the value for slot {}: {}", slot, e);
+                        continue;
+                    }
+                };
+
+                if let Err(e) = consumer.consume_block(slot, raw_block.block).await {
+                    error!("Error processing slot {}: {}", slot, e);
+                }
+
+                // Update last_slot_processed
+                last_slot_processed.store(slot, Ordering::Relaxed);
+
+                // Increment slots_processed
+                let current_slots_processed = slots_processed.fetch_add(1, Ordering::Relaxed) + 1;
+
+                // Update progress bar position and message
+                let progress = slot - start_slot + 1;
+                progress_bar.set_position(progress);
+
+                let current_rate = {
+                    let rate_guard = rate.lock().unwrap();
+                    *rate_guard
+                };
+                progress_bar.set_message(format!(
+                    "Slots Processed: {} Current Slot: {} Rate: {:.2}/s",
+                    current_slots_processed, slot, current_rate
+                ));
+            }
+        });
+
+        worker_handles.push(handle);
+    }
 
     // Spawn a task to update the rate periodically
-    let progress_bar_clone = progress_bar.clone();
-    let slots_initiated_clone = slots_initiated.clone();
-    let last_slot_processed_clone = last_slot_processed.clone();
+    let slots_processed_clone = slots_processed.clone();
     let rate_clone = rate.clone();
+    let shutdown_flag_clone = shutdown_flag.clone();
 
     tokio::spawn(async move {
         let mut last_time = std::time::Instant::now();
-        let mut last_count = slots_initiated_clone.load(Ordering::Relaxed);
+        let mut last_count = slots_processed_clone.load(Ordering::Relaxed);
 
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
+            if shutdown_flag_clone.load(Ordering::SeqCst) {
+                break;
+            }
+
             let current_time = std::time::Instant::now();
-            let current_count = slots_initiated_clone.load(Ordering::Relaxed);
+            let current_count = slots_processed_clone.load(Ordering::Relaxed);
 
             let elapsed = current_time.duration_since(last_time).as_secs_f64();
             let count = current_count - last_count;
@@ -163,91 +237,43 @@ async fn main() {
                 *rate_guard = current_rate;
             }
 
-            // Update progress bar message
-            let current_slot = last_slot_processed_clone.load(Ordering::Relaxed);
-
-            progress_bar_clone.set_message(format!(
-                "Slots Initiated: {} Current Slot: {} Rate: {:.2}/s",
-                current_count, current_slot, current_rate
-            ));
-
             // Update for next iteration
             last_time = current_time;
             last_count = current_count;
         }
     });
 
-    let mut tasks = FuturesUnordered::new();
-    let mut num_tasks = 0;
-
+    // Send slots to the channel
     while iter.valid() {
+        if shutdown_flag.load(Ordering::SeqCst) {
+            info!("Shutdown signal received. Stopping the submission of new slots.");
+            break;
+        }
+
         if let Some((key, value)) = iter.item() {
             let slot = u64::from_be_bytes(key.try_into().expect("Failed to decode the slot key"));
             let raw_block_data = value.to_vec();
 
-            let permit = semaphore.clone().acquire_owned().await.unwrap();
-
-            let consumer = consumer.clone();
-            let progress_bar = progress_bar.clone();
-            let slots_initiated = slots_initiated.clone();
-            let last_slot_processed = last_slot_processed.clone();
-            
-            // Update slots_initiated
-            let current_slots_initiated =
-                slots_initiated.fetch_add(1, Ordering::Relaxed) + 1;
-
-            // Update progress bar position
-            progress_bar.set_position(current_slots_initiated);
-
-            // Spawn the task
-            tasks.push(tokio::spawn(async move {
-                // Keep the permit alive until the task is done
-                let _permit = permit;
-
-                // Process the slot
-                let raw_block: RawBlock = match serde_cbor::from_slice(&raw_block_data) {
-                    Ok(rb) => rb,
-                    Err(e) => {
-                        error!("Failed to decode the value for slot {}: {}", slot, e);
-                        return;
-                    }
-                };
-
-                if let Err(e) = consumer.consume_block(slot, raw_block.block).await {
-                    error!("Error processing slot {}: {}", slot, e);
-                }
-
-                // Update last_slot_processed
-                last_slot_processed.store(slot, Ordering::Relaxed);
-            }));
-
-            num_tasks += 1;
+            // Send the slot and data to the channel
+            if let Err(_) = slot_sender.send((slot, raw_block_data)).await {
+                error!("Failed to send slot {} to workers", slot);
+                break;
+            }
 
             // Move to the next slot
             iter.next();
-
-            // If tasks.len() >= num_workers * 2, await one task
-            if num_tasks >= num_workers * 2 {
-                if let Some(result) = tasks.next().await {
-                    num_tasks -= 1;
-                    if let Err(e) = result {
-                        error!("Task failed: {}", e);
-                    }
-                }
-            }
         } else {
             break;
         }
     }
 
-    // Await remaining tasks
-    while let Some(result) = tasks.next().await {
-        num_tasks -= 1;
-        if let Err(e) = result {
-            error!("Task failed: {}", e);
-        }
+    // Close the sender to signal that no more items will be sent
+    slot_sender.close();
+
+    // Wait for workers to finish
+    for handle in worker_handles {
+        let _ = handle.await;
     }
 
-    progress_bar
-        .finish_with_message("Processing complete");
+    progress_bar.finish_with_message("Processing complete");
 }
