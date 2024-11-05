@@ -1,3 +1,4 @@
+use crate::consistency_calculator::calc_solana_account_data_hash;
 use crate::error::IngesterError;
 use crate::error::IngesterError::MissingFlatbuffersFieldError;
 use crate::inscription_raw_parsing::ParsedInscription;
@@ -193,6 +194,7 @@ impl MessageParser {
                     slot_updated: account_update.slot as i64,
                     amount: ta.amount as i64,
                     write_version: account_update.write_version,
+                    data_hash: calc_solana_account_data_hash(&account_update.data),
                 })
             }
             TokenProgramAccount::Mint(m) => {
@@ -206,6 +208,7 @@ impl MessageParser {
                     token_program: account_update.owner,
                     extensions: None,
                     write_version: account_update.write_version,
+                    data_hash: calc_solana_account_data_hash(&account_update.data),
                 }))
             }
         }
@@ -244,6 +247,7 @@ impl MessageParser {
                                     slot_updated: account_update.slot as i64,
                                     amount: ta.account.amount as i64,
                                     write_version: account_update.write_version,
+                                    data_hash: calc_solana_account_data_hash(&account_update.data),
                                 }))
                             }
                             TokenExtensionsProgramAccount::MintAccount(m) => {
@@ -257,6 +261,7 @@ impl MessageParser {
                                     token_program: account_update.owner,
                                     extensions: Some(m.extensions.clone()),
                                     write_version: account_update.write_version,
+                                    data_hash: calc_solana_account_data_hash(&account_update.data),
                                 })))
                             }
                             _ => None,
@@ -293,6 +298,9 @@ impl MessageParser {
                                     entities::models::BurntMetadataSlot {
                                         slot_updated: account_info.slot,
                                         write_version: account_info.write_version,
+                                        data_hash: calc_solana_account_data_hash(
+                                            &account_info.data,
+                                        ),
                                     },
                                 ))
                             }
@@ -306,6 +314,9 @@ impl MessageParser {
                                         executable: account_info.executable,
                                         rent_epoch: account_info.rent_epoch,
                                         metadata_owner: Some(account_info.owner.to_string()),
+                                        data_hash: calc_solana_account_data_hash(
+                                            &account_info.data,
+                                        ),
                                     },
                                 ))
                             }
@@ -323,6 +334,9 @@ impl MessageParser {
                                             ),
                                         write_version: account_info.write_version,
                                         slot_updated: account_info.slot,
+                                        data_hash: calc_solana_account_data_hash(
+                                            &account_info.data,
+                                        ),
                                     },
                                 ))
                             }
@@ -340,6 +354,9 @@ impl MessageParser {
                                             ),
                                         write_version: account_info.write_version,
                                         slot_updated: account_info.slot,
+                                        data_hash: calc_solana_account_data_hash(
+                                            &account_info.data,
+                                        ),
                                     },
                                 ))
                             }
@@ -356,6 +373,9 @@ impl MessageParser {
                                         ),
                                         write_version: account_info.write_version,
                                         slot_updated: account_info.slot,
+                                        data_hash: calc_solana_account_data_hash(
+                                            &account_info.data,
+                                        ),
                                     },
                                 ))
                             }
@@ -415,6 +435,7 @@ impl MessageParser {
                             inscription,
                             write_version: account_info.write_version,
                             slot_updated: account_info.slot,
+                            data_hash: calc_solana_account_data_hash(&account_info.data),
                         },
                     ))
                 }
@@ -424,6 +445,7 @@ impl MessageParser {
                             inscription_data,
                             write_version: account_info.write_version,
                             slot_updated: account_info.slot,
+                            data_hash: calc_solana_account_data_hash(&account_info.data),
                         },
                     ))
                 }
@@ -448,6 +470,7 @@ impl MessageParser {
                 entities::models::BurntMetadataSlot {
                     slot_updated: account_update.slot,
                     write_version: account_update.write_version,
+                    data_hash: calc_solana_account_data_hash(&account_update.data),
                 },
             )),
             MplCoreAccountData::Asset(_) | MplCoreAccountData::Collection(_) => response.push(
@@ -458,6 +481,7 @@ impl MessageParser {
                     lamports: account_update.lamports,
                     executable: account_update.executable,
                     rent_epoch: account_update.rent_epoch,
+                    data_hash: calc_solana_account_data_hash(&account_update.data),
                 }),
             ),
             _ => debug!("Not implemented"),
@@ -473,6 +497,7 @@ impl MessageParser {
                     write_version: account_update.write_version,
                     lamports: account_update.lamports,
                     rent_epoch: account_update.rent_epoch,
+                    data_hash: calc_solana_account_data_hash(&account_update.data),
                 },
             )),
             _ => {}

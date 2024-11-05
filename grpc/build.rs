@@ -6,6 +6,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Paths to the .proto files
                 "proto/gap_filler.proto",
                 "proto/asset_urls.proto",
+                "proto/consistency_api.proto",
             ],
             &["proto"], // Include paths for proto file dependencies
         )?;

@@ -16,6 +16,7 @@ use rocks_db::{
     Storage,
 };
 use solana_sdk::{hash::Hasher, pubkey::Pubkey};
+use std::sync::atomic::AtomicI32;
 use std::{
     collections::{BTreeSet, HashSet},
     sync::Arc,
@@ -26,6 +27,45 @@ use tokio::sync::{
     mpsc::{Receiver, Sender},
     Mutex,
 };
+
+/// This flag is set to true before bubblegum epoch calculation is started,
+/// and set to false after the calculation is finished.
+static IS_CALCULATING_BBGM_EPOCH: AtomicI32 = AtomicI32::new(-1);
+static IS_CALCULATING_ACC_EPOCH: AtomicI32 = AtomicI32::new(-1);
+
+fn set_currently_calculated_bbgm_epoch(epoch: u32) {
+    IS_CALCULATING_BBGM_EPOCH.store(epoch as i32, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn finish_currently_calculated_bbgm_epoch() {
+    IS_CALCULATING_BBGM_EPOCH.store(-1, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn set_currently_calculated_acc_epoch(epoch: u32) {
+    IS_CALCULATING_ACC_EPOCH.store(epoch as i32, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn finish_currently_calculated_acc_epoch() {
+    IS_CALCULATING_ACC_EPOCH.store(-1, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn get_calculating_bbgm_epoch() -> Option<u32> {
+    let epoch = IS_CALCULATING_BBGM_EPOCH.load(std::sync::atomic::Ordering::Relaxed);
+    if epoch > -1 {
+        Some(epoch as u32)
+    } else {
+        None
+    }
+}
+
+pub fn get_calculating_acc_epoch() -> Option<u32> {
+    let epoch = IS_CALCULATING_ACC_EPOCH.load(std::sync::atomic::Ordering::Relaxed);
+    if epoch > -1 {
+        Some(epoch as u32)
+    } else {
+        None
+    }
+}
 
 pub const NTF_CHANGES_NOTIFICATION_QUEUE_SIZE: usize = 1000;
 
@@ -72,6 +112,7 @@ impl NftChangesTracker {
         account_pubkey: Pubkey,
         slot: u64,
         write_version: u64,
+        data_hash: u64,
     ) {
         let epoch = epoch_of_slot(slot);
         let key = AccountNftChangeKey {
@@ -79,6 +120,7 @@ impl NftChangesTracker {
             account_pubkey,
             slot,
             write_version,
+            data_hash,
         };
         let value = AccountNftChange {};
 
@@ -248,7 +290,9 @@ pub fn run_bg_consistency_calculator(
     });
 }
 
-/// Fields order matters!
+/// Type for messages that are used to send commands to bubblegum epochs checksums calculator.
+///
+/// Fields order matters, because we use sorted set to pass commands to the calculator.
 /// We want whole epochs to be calculates before individual tree epochs from late changes.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum BbgmTask {
@@ -262,6 +306,7 @@ enum BbgmTask {
     CalcTree(u32, Pubkey),
 }
 
+/// Type for messages that are used to send commands to account buckets checksums calculator.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum AccTask {
     Suspend,
@@ -294,7 +339,9 @@ async fn process_bbgm_tasks(storage: Arc<Storage>, tasks: Arc<Mutex<BTreeSet<Bbg
             Some(BbgmTask::CalcEpoch(epoch)) => {
                 tokio::time::sleep(Duration::from_secs(EPOCH_CALC_LAG_SEC)).await;
                 tracing::info!("Calculating Bubblegum ckecksum epoch: {epoch}");
+                set_currently_calculated_bbgm_epoch(epoch);
                 calc_bubblegum_checksums(&storage, epoch, None).await;
+                finish_currently_calculated_bbgm_epoch();
                 tracing::info!("Finished calculating Bubblegum ckecksum epoch: {epoch}");
             }
             Some(BbgmTask::CalcTree(epoch, tree)) => {
@@ -329,7 +376,11 @@ async fn process_acc_tasks(storage: Arc<Storage>, tasks: Arc<Mutex<BTreeSet<AccT
             guard.pop_first()
         };
         match maybe_task {
-            Some(AccTask::CalcEpoch(epoch)) => calc_acc_nft_checksums(&storage, epoch).await,
+            Some(AccTask::CalcEpoch(epoch)) => {
+                set_currently_calculated_acc_epoch(epoch);
+                calc_acc_nft_checksums(&storage, epoch).await;
+                finish_currently_calculated_acc_epoch();
+            }
             Some(AccTask::Suspend) => is_suspended = true,
             Some(AccTask::Resume) => is_suspended = false,
             None => tokio::time::sleep(Duration::from_secs(10)).await,
@@ -631,15 +682,20 @@ async fn update_acc_if_needed(
         .ok()
         .flatten()
         .map(|in_db| {
-            change.slot > in_db.last_slot
-                || change.slot == in_db.last_slot && change.write_version > in_db.last_write_version
+            change.data_hash != in_db.last_data_hash
+                && (change.slot > in_db.last_slot
+                    || change.slot == in_db.last_slot
+                        && change.write_version > in_db.last_write_version)
         })
         .unwrap_or(true);
 
     if need_to_update {
         let _ = storage
             .acc_nft_last
-            .put_async(acc_key, AccountNft::new(change.slot, change.write_version))
+            .put_async(
+                acc_key,
+                AccountNft::new(change.slot, change.write_version, change.data_hash),
+            )
             .await;
 
         let bucket = bucket_for_acc(change.account_pubkey);
@@ -718,4 +774,12 @@ async fn calc_acc_grand_buckets<'a>(
             )
             .await;
     }
+}
+
+/// Calculates hash for solana account data.
+/// This is used for account NFTs, to solve the duplicates problem
+/// caused by solana forks and by fetching of same data from multiple
+/// different sources.
+pub fn calc_solana_account_data_hash(data: &[u8]) -> u64 {
+    xxhash_rust::xxh3::xxh3_64(data)
 }

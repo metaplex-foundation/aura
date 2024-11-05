@@ -118,12 +118,14 @@ mod tests {
             account_pubkey: acc1_pubkey,
             slot: 11,
             write_version: 1,
+            data_hash: 1,
         };
         let acc1_change_key2 = AccountNftChangeKey {
             epoch: 0,
             account_pubkey: acc1_pubkey,
             slot: 12,
             write_version: 2,
+            data_hash: 2,
         };
         // won't take part in calculation
         let acc1_change_key3 = AccountNftChangeKey {
@@ -131,6 +133,7 @@ mod tests {
             account_pubkey: acc1_pubkey,
             slot: 10_0001,
             write_version: 10,
+            data_hash: 3,
         };
         storage
             .acc_nft_changes
@@ -151,6 +154,7 @@ mod tests {
             account_pubkey: acc2_pubkey,
             slot: 21,
             write_version: 21,
+            data_hash: 4,
         };
         storage
             .acc_nft_changes
@@ -221,7 +225,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_notification_on_epoch_change() {
-        let storage = RocksTestEnvironment::new(&[]).storage;
         let (sender, mut receiver) = tokio::sync::mpsc::channel(1000);
         let sut = NftChangesTracker::new(sender);
 

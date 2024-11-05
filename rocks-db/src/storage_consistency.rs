@@ -14,13 +14,19 @@
 //! Bubblgum epoch: (tree, epoch) => (checksum)
 //!                     V
 //! Bubblegum grand epoch: (tree, grand epoch) => (checksum)
+use async_trait::async_trait;
+use interface::checksums_storage::Chksm;
+use interface::checksums_storage::{
+    AccBucketCksm, AccChecksumServiceApi, AccGrandBucketCksm, AccLastChange, BbgmChangePos,
+    BbgmChangeRecord, BbgmChecksumServiceApi, BbgmEpochCksm, BbgmGrandEpochCksm,
+};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{column::TypedColumn, transaction::TreeUpdate, Storage};
 
-use std::{collections::HashSet, sync::atomic::AtomicU64};
+use std::{collections::HashSet, sync::atomic::AtomicU64, u64};
 
 static LAST_SLOT: AtomicU64 = AtomicU64::new(0);
 
@@ -48,8 +54,8 @@ pub fn grand_epoch_of_slot(slot: u64) -> u16 {
     (slot / 100_000) as u16
 }
 
-pub fn grand_epoch_of_epoch(slot: u32) -> u16 {
-    (slot / 10) as u16
+pub fn grand_epoch_of_epoch(epoch: u32) -> u16 {
+    (epoch / 10) as u16
 }
 
 pub fn first_slot_in_epoch(epoch: u32) -> u64 {
@@ -62,6 +68,14 @@ pub fn first_epoch_in_grand_epoch(grand_epoch: u16) -> u32 {
 
 pub fn slots_to_next_epoch(slot: u64) -> u64 {
     slot % 100_000
+}
+
+pub fn calc_exchange_slot_for_epoch(epoch: u32) -> u64 {
+    (epoch + 1) as u64 * 10_000 * 1500
+}
+
+pub fn slots_to_time(slots: u64) -> std::time::Duration {
+    std::time::Duration::from_millis(slots * 400)
 }
 
 /// We use 2 leading bytes of an account pubkey as a bucket number,
@@ -140,7 +154,16 @@ pub const ACC_GRAND_BUCKET_INVALIDATE: AccountNftGrandBucket = AccountNftGrandBu
 pub enum Checksum {
     Invalidated,
     Calculating,
-    Value([u8; 32]),
+    Value(Chksm),
+}
+
+impl Checksum {
+    pub fn ok(&self) -> Option<Chksm> {
+        match self {
+            Checksum::Value(chksm) => Some(chksm.to_owned()),
+            _ => None,
+        }
+    }
 }
 
 /// Key for storing a change detected for bubblegum contract.
@@ -235,8 +258,8 @@ pub struct BubblegumEpoch {
     pub checksum: Checksum,
 }
 
-impl From<[u8; 32]> for BubblegumEpoch {
-    fn from(value: [u8; 32]) -> Self {
+impl From<Chksm> for BubblegumEpoch {
+    fn from(value: Chksm) -> Self {
         BubblegumEpoch {
             checksum: Checksum::Value(value),
         }
@@ -260,8 +283,8 @@ impl TypedColumn for BubblegumEpoch {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
 pub struct BubblegumGrandEpochKey {
-    pub tree_pubkey: Pubkey,
     pub grand_epoch_num: u16,
+    pub tree_pubkey: Pubkey,
 }
 
 impl BubblegumGrandEpochKey {
@@ -278,8 +301,8 @@ pub struct BubblegumGrandEpoch {
     pub checksum: Checksum,
 }
 
-impl From<[u8; 32]> for BubblegumGrandEpoch {
-    fn from(value: [u8; 32]) -> Self {
+impl From<Chksm> for BubblegumGrandEpoch {
+    fn from(value: Chksm) -> Self {
         BubblegumGrandEpoch {
             checksum: Checksum::Value(value),
         }
@@ -307,16 +330,23 @@ pub struct AccountNftChangeKey {
     pub account_pubkey: Pubkey,
     pub slot: u64,
     pub write_version: u64,
+    pub data_hash: u64,
 }
 
 impl AccountNftChangeKey {
-    pub fn new(account_pubkey: Pubkey, slot: u64, write_version: u64) -> AccountNftChangeKey {
+    pub fn new(
+        account_pubkey: Pubkey,
+        slot: u64,
+        write_version: u64,
+        data_hash: u64,
+    ) -> AccountNftChangeKey {
         let epoch = epoch_of_slot(slot);
         AccountNftChangeKey {
             epoch,
             account_pubkey,
             slot,
             write_version,
+            data_hash,
         }
     }
 }
@@ -373,13 +403,15 @@ impl AccountNftKey {
 pub struct AccountNft {
     pub last_slot: u64,
     pub last_write_version: u64,
+    pub last_data_hash: u64,
 }
 
 impl AccountNft {
-    pub fn new(last_slot: u64, last_write_version: u64) -> AccountNft {
+    pub fn new(last_slot: u64, last_write_version: u64, last_data_hash: u64) -> AccountNft {
         AccountNft {
             last_slot,
             last_write_version,
+            last_data_hash,
         }
     }
 }
@@ -423,7 +455,7 @@ pub struct AccountNftBucket {
 }
 
 impl AccountNftBucket {
-    pub fn new(checksum: [u8; 32]) -> AccountNftBucket {
+    pub fn new(checksum: Chksm) -> AccountNftBucket {
         AccountNftBucket {
             checksum: Checksum::Value(checksum),
         }
@@ -462,7 +494,7 @@ pub struct AccountNftGrandBucket {
 }
 
 impl AccountNftGrandBucket {
-    pub fn new(checksum: [u8; 32]) -> AccountNftGrandBucket {
+    pub fn new(checksum: Chksm) -> AccountNftGrandBucket {
         AccountNftGrandBucket {
             checksum: Checksum::Value(checksum),
         }
@@ -632,5 +664,203 @@ pub(crate) fn merge_bubblgum_grand_epoch_checksum(
         Some(v.to_vec())
     } else {
         None
+    }
+}
+
+#[allow(clippy::while_let_on_iterator)]
+#[async_trait]
+impl BbgmChecksumServiceApi for Storage {
+    async fn get_earliest_grand_epoch(&self) -> anyhow::Result<Option<u16>> {
+        let Some(first_record) = self.bubblegum_grand_epochs.iter_start().next() else {
+            return Ok(None);
+        };
+        let (k, _v) = first_record?;
+        let first_key = BubblegumGrandEpoch::decode_key(k.to_vec())?;
+        Ok(Some(first_key.grand_epoch_num))
+    }
+
+    async fn list_grand_epoch_checksums(
+        &self,
+        grand_epoch: u16,
+        limit: Option<u64>,
+        after: Option<Pubkey>,
+    ) -> anyhow::Result<Vec<BbgmGrandEpochCksm>> {
+        let max_result = limit.unwrap_or(u64::MAX) as usize;
+        let mut it = if let Some(after) = after {
+            let mut it = self
+                .bubblegum_grand_epochs
+                .iter(BubblegumGrandEpochKey::new(after, grand_epoch));
+            let _ = it.next();
+            it
+        } else {
+            self.bubblegum_grand_epochs.iter_start()
+        };
+        let mut result = Vec::new();
+        while let Some(next) = it.next() {
+            let pair = next?;
+            let k = BubblegumGrandEpoch::decode_key(pair.0.to_vec())?;
+            let v = bincode::deserialize::<BubblegumGrandEpoch>(&pair.1)?;
+            if k.grand_epoch_num != grand_epoch {
+                break;
+            }
+            result.push(BbgmGrandEpochCksm {
+                tree_pubkey: k.tree_pubkey,
+                checksum: v.checksum.ok(),
+            });
+            if result.len() >= max_result {
+                break;
+            }
+        }
+        Ok(result)
+    }
+
+    async fn list_epoch_checksums(
+        &self,
+        grand_epoch: u16,
+        tree_pubkey: Pubkey,
+    ) -> anyhow::Result<Vec<BbgmEpochCksm>> {
+        let first_epoch = first_epoch_in_grand_epoch(grand_epoch);
+        let mut it = self
+            .bubblegum_epochs
+            .iter(BubblegumEpochKey::new(tree_pubkey, first_epoch));
+        let mut result = Vec::new();
+        while let Some(next) = it.next() {
+            let pair = next?;
+            let k = BubblegumEpoch::decode_key(pair.0.to_vec())?;
+            let v = bincode::deserialize::<BubblegumEpoch>(&pair.1)?;
+            if grand_epoch_of_epoch(k.epoch_num) != grand_epoch || k.tree_pubkey != tree_pubkey {
+                break;
+            }
+            result.push(BbgmEpochCksm {
+                tree_pubkey,
+                epoch: k.epoch_num,
+                checksum: v.checksum.ok(),
+            });
+        }
+        Ok(result)
+    }
+
+    async fn list_epoch_changes(
+        &self,
+        epoch: u32,
+        tree_pubkey: Pubkey,
+        limit: Option<u64>,
+        after: Option<BbgmChangePos>,
+    ) -> anyhow::Result<Vec<BbgmChangeRecord>> {
+        let max_result = limit.unwrap_or(u64::MAX) as usize;
+        let BbgmChangePos { slot, seq } = after.unwrap_or_default();
+
+        let mut it = self.bubblegum_changes.iter(BubblegumChangeKey {
+            epoch,
+            tree_pubkey,
+            slot,
+            seq,
+        });
+
+        let mut result = Vec::new();
+        while let Some(next) = it.next() {
+            let pair = next?;
+            let k = BubblegumChange::decode_key(pair.0.to_vec())?;
+            let v = bincode::deserialize::<BubblegumChange>(&pair.1)?;
+            if k.tree_pubkey != tree_pubkey || epoch_of_slot(k.slot) != epoch {
+                break;
+            }
+            result.push(BbgmChangeRecord {
+                tree_pubkey,
+                slot: k.slot,
+                seq: k.seq,
+                signature: v.signature,
+            });
+            if result.len() >= max_result {
+                break;
+            }
+        }
+
+        Ok(result)
+    }
+
+    async fn propose_missing_changes(&self, _changes: &[BbgmChangeRecord]) {
+        // TODO: how handle?
+    }
+}
+
+#[allow(clippy::while_let_on_iterator)]
+#[async_trait]
+impl AccChecksumServiceApi for Storage {
+    async fn list_grand_buckets(&self) -> anyhow::Result<Vec<AccGrandBucketCksm>> {
+        let mut it = self.acc_nft_grand_buckets.iter_start();
+        let mut result = Vec::new();
+        while let Some(rec) = it.next() {
+            if let Ok((Ok(k), Ok(v))) = rec.map(|(k, v)| {
+                (
+                    AccountNftGrandBucket::decode_key(k.to_vec()),
+                    bincode::deserialize::<AccountNftGrandBucket>(&v),
+                )
+            }) {
+                result.push(AccGrandBucketCksm {
+                    grand_bucket: k.grand_bucket,
+                    checksum: v.checksum.ok(),
+                });
+            }
+        }
+        Ok(result)
+    }
+
+    async fn list_bucket_checksums(&self, grand_bucket: u16) -> anyhow::Result<Vec<AccBucketCksm>> {
+        let mut it = self
+            .acc_nft_buckets
+            .iter(AccountNftBucketKey::grand_bucket_start_key(grand_bucket));
+        let mut result = Vec::new();
+        while let Some(next) = it.next() {
+            let pair = next?;
+            let k = AccountNftBucket::decode_key(pair.0.to_vec())?;
+            let v = bincode::deserialize::<AccountNftBucket>(&pair.1)?;
+            if grand_bucket_for_bucket(k.bucket) != grand_bucket {
+                break;
+            }
+            result.push(AccBucketCksm {
+                bucket: k.bucket,
+                checksum: v.checksum.ok(),
+            });
+        }
+        Ok(result)
+    }
+
+    async fn list_accounts(
+        &self,
+        bucket: u16,
+        limit: Option<u64>,
+        after: Option<Pubkey>,
+    ) -> anyhow::Result<Vec<AccLastChange>> {
+        let max_result = limit.unwrap_or(u64::MAX) as usize;
+        let start_key = after
+            .map(|account_pubkey| AccountNftKey { account_pubkey })
+            .unwrap_or(AccountNftKey::bucket_start_key(bucket));
+        let mut it = self.acc_nft_last.iter(start_key);
+        let mut result = Vec::new();
+        while let Some(next) = it.next() {
+            let pair = next?;
+            let k = AccountNft::decode_key(pair.0.to_vec())?;
+            let v = bincode::deserialize::<AccountNft>(&pair.1)?;
+            if bucket_for_acc(k.account_pubkey) != bucket {
+                break;
+            }
+            result.push(AccLastChange {
+                account_pubkey: k.account_pubkey,
+                slot: v.last_slot,
+                write_version: v.last_write_version,
+            });
+            if result.len() >= max_result {
+                break;
+            }
+        }
+        Ok(result)
+    }
+
+    async fn propose_missing_changes(
+        &self,
+        _changes: Vec<interface::checksums_storage::AccLastChange>,
+    ) {
+        // TODO: how handle?
     }
 }

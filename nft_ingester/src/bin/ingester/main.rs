@@ -1,6 +1,7 @@
 use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
 use nft_ingester::batch_mint::batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister};
+use nft_ingester::consistency_bg_job::FileSrcAuraPeersProvides;
 use nft_ingester::scheduler::Scheduler;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -195,6 +196,11 @@ pub async fn main() -> Result<(), IngesterError> {
         primary_rocks_storage.clone(),
         shutdown_rx.resubscribe(),
     );
+
+    if let Some(peer_urls_file) = config.peer_urls_file.as_ref() {
+        let peers_provider = Arc::new(FileSrcAuraPeersProvides::new(peer_urls_file.clone()));
+        nft_ingester::consistency_bg_job::run_consistenct_bg_job(primary_rocks_storage.clone(), peers_provider);
+    }
 
     for _ in 0..config.accounts_parsing_workers {
         match config.message_source {

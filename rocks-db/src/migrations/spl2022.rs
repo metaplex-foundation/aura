@@ -22,6 +22,7 @@ pub struct TokenAccountWithoutExtentions {
     pub slot_updated: i64,
     pub amount: i64,
     pub write_version: u64,
+    pub data_hash: u64,
 }
 
 impl_merge_values!(TokenAccountWithoutExtentions);
@@ -39,6 +40,7 @@ impl From<TokenAccountWithoutExtentions> for TokenAccount {
             slot_updated: value.slot_updated,
             amount: value.amount,
             write_version: value.write_version,
+            data_hash: value.data_hash,
         }
     }
 }

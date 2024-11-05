@@ -516,6 +516,7 @@ pub struct MetadataInfo {
     pub rent_epoch: u64,
     pub executable: bool,
     pub metadata_owner: Option<String>,
+    pub data_hash: u64,
 }
 
 #[derive(Clone)]
@@ -523,12 +524,14 @@ pub struct EditionMetadata {
     pub edition: TokenMetadataEdition,
     pub write_version: u64,
     pub slot_updated: u64,
+    pub data_hash: u64,
 }
 
 #[derive(Clone, Debug)]
 pub struct BurntMetadataSlot {
     pub slot_updated: u64,
     pub write_version: u64,
+    pub data_hash: u64,
 }
 
 #[derive(Clone)]
@@ -539,6 +542,7 @@ pub struct IndexableAssetWithAccountInfo {
     pub slot_updated: u64,
     pub write_version: u64,
     pub rent_epoch: u64,
+    pub data_hash: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -553,6 +557,7 @@ pub struct TokenAccount {
     pub slot_updated: i64,
     pub amount: i64,
     pub write_version: u64,
+    pub data_hash: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -566,12 +571,14 @@ pub struct Mint {
     pub token_program: Pubkey,
     pub extensions: Option<MintAccountExtensions>,
     pub write_version: u64,
+    pub data_hash: u64,
 }
 
 pub struct InscriptionInfo {
     pub inscription: Inscription,
     pub write_version: u64,
     pub slot_updated: u64,
+    pub data_hash: u64,
 }
 
 #[derive(Clone)]
@@ -579,6 +586,7 @@ pub struct InscriptionDataInfo {
     pub inscription_data: Vec<u8>,
     pub write_version: u64,
     pub slot_updated: u64,
+    pub data_hash: u64,
 }
 
 #[derive(Clone)]
@@ -589,6 +597,7 @@ pub struct CoreAssetFee {
     pub rent_epoch: u64,
     pub slot_updated: u64,
     pub write_version: u64,
+    pub data_hash: u64,
 }
 
 pub struct UnprocessedAccountMessage {
@@ -598,20 +607,22 @@ pub struct UnprocessedAccountMessage {
 }
 
 impl UnprocessedAccountMessage {
-    pub fn solana_change_info(&self) -> (Pubkey, u64, u64) {
-        let (slot, write_version) = match &self.account {
-            UnprocessedAccount::MetadataInfo(v) => (v.slot_updated, v.write_version),
-            UnprocessedAccount::Token(v) => (v.slot_updated as u64, v.write_version),
-            UnprocessedAccount::Mint(v) => (v.slot_updated as u64, v.write_version),
-            UnprocessedAccount::Edition(v) => (v.slot_updated, v.write_version),
-            UnprocessedAccount::BurnMetadata(v) => (v.slot_updated, v.write_version),
-            UnprocessedAccount::BurnMplCore(v) => (v.slot_updated, v.write_version),
-            UnprocessedAccount::MplCore(v) => (v.slot_updated, v.write_version),
-            UnprocessedAccount::Inscription(v) => (v.slot_updated, v.write_version),
-            UnprocessedAccount::InscriptionData(v) => (v.slot_updated, v.write_version),
-            UnprocessedAccount::MplCoreFee(v) => (v.slot_updated, v.write_version),
+    pub fn solana_change_info(&self) -> (Pubkey, u64, u64, u64) {
+        let (slot, write_version, data_hash) = match &self.account {
+            UnprocessedAccount::MetadataInfo(v) => (v.slot_updated, v.write_version, v.data_hash),
+            UnprocessedAccount::Token(v) => (v.slot_updated as u64, v.write_version, v.data_hash),
+            UnprocessedAccount::Mint(v) => (v.slot_updated as u64, v.write_version, v.data_hash),
+            UnprocessedAccount::Edition(v) => (v.slot_updated, v.write_version, v.data_hash),
+            UnprocessedAccount::BurnMetadata(v) => (v.slot_updated, v.write_version, v.data_hash),
+            UnprocessedAccount::BurnMplCore(v) => (v.slot_updated, v.write_version, v.data_hash),
+            UnprocessedAccount::MplCore(v) => (v.slot_updated, v.write_version, v.data_hash),
+            UnprocessedAccount::Inscription(v) => (v.slot_updated, v.write_version, v.data_hash),
+            UnprocessedAccount::InscriptionData(v) => {
+                (v.slot_updated, v.write_version, v.data_hash)
+            }
+            UnprocessedAccount::MplCoreFee(v) => (v.slot_updated, v.write_version, v.data_hash),
         };
-        (self.key, slot, write_version)
+        (self.key, slot, write_version, data_hash)
     }
 }
 
