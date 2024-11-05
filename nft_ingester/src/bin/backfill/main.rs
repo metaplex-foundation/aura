@@ -101,7 +101,7 @@ async fn main() {
         ProgressStyle::default_bar()
             .template(
                 "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {percent}% \
-                 ({pos}/{len}) Slots Initiated: {slots_initiated} Current Slot: {current_slot} Rate: {rate}/s",
+                 ({pos}/{len}) {msg}",
             )
             .expect("Failed to set progress bar style")
             .progress_chars("#>-"),
