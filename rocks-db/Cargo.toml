@@ -39,7 +39,7 @@ Inflector = { workspace = true }
 base64 = { workspace = true }
 usecase = { path = "../usecase" }
 tempfile = { workspace = true }
-bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "0d529f5" }
+bubblegum-batch-sdk = { workspace = true }
 num-traits = { workspace = true }
 indicatif = { workspace = true }
 

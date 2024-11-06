@@ -138,8 +138,8 @@ solana-sdk = "~1.18.11"
 solana-program = "~1.18.11"
 solana-client = "~1.18.11"
 solana-transaction-status = "~1.18.11"
-spl-concurrent-merkle-tree = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root" }
-spl-account-compression = { git = "https://github.com/StanChe/solana-program-library.git", branch = "feature/init_with_root", features = ["no-entrypoint"] }
+spl-concurrent-merkle-tree = { version="0.4.1" }
+spl-account-compression = { version="0.4.2", features = ["no-entrypoint"] }
 solana-storage-bigtable = "~1.18.11"
 solana-bigtable-connection = "1.10.31"
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
@@ -150,9 +150,9 @@ spl-pod = "0.1.0"
 anchor-lang = "=0.30.1"
 
 # Metaplex ecosystem
-blockbuster = { git = "https://github.com/adm-metaex/blockbuster", branch = "feat/create-tree-with-root" }
-mpl-bubblegum = { git = "https://github.com/adm-metaex/mpl-bubblegum", branch = "feature/cleanup", features = ["serde"] }
-bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "0d529f5" }
+blockbuster = { git = "https://github.com/metaplex-foundation/blockbuster", rev = "0aa1878" }
+mpl-bubblegum = { git = "https://github.com/metaplex-foundation/mpl-bubblegum.git", rev = "07678e6", features = ["serde"] }
+bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "27ecf48" }
 mpl-token-metadata = "4.1.1"
 libreplex_inscriptions = "0.5.1"
 
