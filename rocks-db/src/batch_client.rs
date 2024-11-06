@@ -17,7 +17,9 @@ use crate::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
     BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
-use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, UrlWithStatus};
+use entities::models::{
+    AssetIndex, CompleteAssetDetails, FungibleAssetIndex, UpdateVersion, Updated, UrlWithStatus,
+};
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
@@ -103,6 +105,38 @@ impl AssetUpdateIndexStorage for Storage {
 
 #[async_trait]
 impl AssetIndexReader for Storage {
+    async fn get_fungible_assets_indexes(
+        &self,
+        keys: &[Pubkey],
+    ) -> Result<HashMap<Pubkey, FungibleAssetIndex>> {
+        let mut fungible_assets_indexes: HashMap<Pubkey, FungibleAssetIndex> = HashMap::new();
+        let start_time = chrono::Utc::now();
+
+        let token_accounts_details = self.token_accounts.batch_get(keys.to_vec()).await?;
+
+        for token_acc in token_accounts_details.iter().flatten() {
+            let fungible_asset_index = FungibleAssetIndex {
+                pubkey: token_acc.pubkey,
+                specification_asset_class: SpecificationAssetClass::FungibleToken,
+                owner: Some(token_acc.owner),
+                fungible_asset_mint: Some(token_acc.mint),
+                fungible_asset_balance: Some(token_acc.amount as u64),
+                slot_updated: token_acc.slot_updated,
+            };
+
+            fungible_assets_indexes.insert(token_acc.pubkey, fungible_asset_index);
+        }
+
+        self.red_metrics.observe_request(
+            ROCKS_COMPONENT,
+            BATCH_ITERATION_ACTION,
+            "collect_fungible_assets_indexes",
+            start_time,
+        );
+
+        Ok(fungible_assets_indexes)
+    }
+
     async fn get_asset_indexes<'a>(
         &self,
         keys: &[Pubkey],

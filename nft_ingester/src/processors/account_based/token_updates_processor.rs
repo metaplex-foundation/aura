@@ -47,7 +47,7 @@ impl TokenAccountsProcessor {
         storage.fungible_asset_updated_with_batch(
             token_account.slot_updated as u64,
             token_account.pubkey,
-        )?;
+        )
     }
 
     pub fn transform_and_save_token_account(

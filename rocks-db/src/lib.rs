@@ -213,6 +213,7 @@ impl Storage {
             fungible_assets_update_idx,
             slot_asset_idx,
             assets_update_last_seq: AtomicU64::new(0),
+            fungible_assets_update_last_seq: AtomicU64::new(0),
             join_set,
             tree_seq_idx,
             trees_gaps,

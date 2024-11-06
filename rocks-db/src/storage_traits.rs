@@ -6,7 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 
 pub use crate::Result;
 use crate::Storage;
-use entities::models::AssetIndex;
+use entities::models::{AssetIndex, FungibleAssetIndex};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssetUpdatedKey {
@@ -37,6 +37,11 @@ pub trait AssetUpdateIndexStorage {
 #[automock]
 #[async_trait]
 pub trait AssetIndexReader {
+    async fn get_fungible_assets_indexes(
+        &self,
+        keys: &[Pubkey],
+    ) -> Result<HashMap<Pubkey, FungibleAssetIndex>>;
+
     async fn get_asset_indexes<'a>(
         &self,
         keys: &[Pubkey],
@@ -95,6 +100,15 @@ impl AssetUpdateIndexStorage for MockAssetIndexStorage {
 
 #[async_trait]
 impl AssetIndexReader for MockAssetIndexStorage {
+    async fn get_fungible_assets_indexes(
+        &self,
+        keys: &[Pubkey],
+    ) -> Result<HashMap<Pubkey, FungibleAssetIndex>> {
+        self.mock_asset_index_reader
+            .get_fungible_assets_indexes(keys)
+            .await
+    }
+
     async fn get_asset_indexes<'a>(
         &self,
         keys: &[Pubkey],

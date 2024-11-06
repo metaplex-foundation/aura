@@ -74,7 +74,7 @@ impl Storage {
         Ok(())
     }
 
-    pub fn fungible_asset_with_batch(
+    pub fn fungible_asset_updated_with_batch(
         &self,
         batch: &mut rocksdb::WriteBatchWithTransaction<false>,
         slot: u64,
