@@ -6,6 +6,7 @@ use nft_ingester::config::{
 use nft_ingester::error::IngesterError;
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration};
+use postgre_client::asset_index_client::AssetType;
 use postgre_client::PG_MIGRATIONS_PATH;
 use prometheus_client::registry::Registry;
 
@@ -111,7 +112,7 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    let synchronizer = Synchronizer::new(
+    let synchronizer = Arc::new(Synchronizer::new(
         rocks_storage.clone(),
         index_storage.clone(),
         index_storage.clone(),
@@ -120,7 +121,7 @@ pub async fn main() -> Result<(), IngesterError> {
         metrics.clone(),
         config.parallel_tasks,
         config.run_temp_sync_during_dump,
-    );
+    ));
 
     if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
         tracing::error!("Sync rocksdb error: {}", e);
@@ -133,21 +134,34 @@ pub async fn main() -> Result<(), IngesterError> {
         if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
             tracing::error!("Sync rocksdb error: {}", e);
         }
-        let res = synchronizer
-            .synchronize_asset_indexes(&shutdown_rx, config.dump_sync_threshold)
-            .await;
-        match res {
-            Ok(_) => {
-                tracing::info!("Synchronization finished successfully");
-            }
-            Err(e) => {
-                tracing::error!("Synchronization failed: {:?}", e);
-            }
-        }
-        tokio::time::sleep(tokio::time::Duration::from_secs(
-            config.timeout_between_syncs_sec,
-        ))
-        .await;
+        [AssetType::Fungible, AssetType::NonFungible]
+            .into_iter()
+            .for_each(|asset_type| {
+                let synchronizer = synchronizer.clone();
+                let shutdown_rx = shutdown_rx.resubscribe();
+
+                tokio::spawn(async move {
+                    match synchronizer
+                        .synchronize_asset_indexes(
+                            &shutdown_rx,
+                            config.dump_sync_threshold,
+                            asset_type,
+                        )
+                        .await
+                    {
+                        Ok(_) => {
+                            tracing::info!("Synchronization finished successfully");
+                        }
+                        Err(e) => {
+                            tracing::error!("Synchronization failed: {:?}", e);
+                        }
+                    }
+                    tokio::time::sleep(tokio::time::Duration::from_secs(
+                        config.timeout_between_syncs_sec,
+                    ))
+                    .await;
+                });
+            })
     }
     Ok(())
 }

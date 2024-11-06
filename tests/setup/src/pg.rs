@@ -1,6 +1,7 @@
 use entities::enums::*;
 use entities::models::{AssetIndex, Creator, UrlWithStatus};
 use metrics_utils::red::RequestErrorDurationMetrics;
+use postgre_client::asset_index_client::AssetType;
 use postgre_client::storage_traits::AssetIndexStorage;
 use postgre_client::PgClient;
 use rand::Rng;
@@ -179,11 +180,15 @@ pub async fn setup_database<T: Image>(node: &Container<'_, T>) -> (Pool<Postgres
         .unwrap();
 
     // Verify initial fetch_last_synced_id returns None
-    assert!(asset_index_storage
-        .fetch_last_synced_id()
-        .await
-        .unwrap()
-        .is_none());
+
+    let asset_types = [AssetType::Fungible, AssetType::NonFungible];
+    for asset_type in asset_types {
+        assert!(asset_index_storage
+            .fetch_last_synced_id(asset_type)
+            .await
+            .unwrap()
+            .is_none());
+    }
 
     (test_db_pool, db_name)
 }

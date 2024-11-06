@@ -2,6 +2,7 @@ use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
 use nft_ingester::batch_mint::batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister};
 use nft_ingester::scheduler::Scheduler;
+use postgre_client::asset_index_client::AssetType;
 use postgre_client::PG_MIGRATIONS_PATH;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -580,15 +581,19 @@ pub async fn main() -> Result<(), IngesterError> {
         };
     }
 
+    let synchronizer = Arc::new(synchronizer);
     if !config.disable_synchronizer {
-        let rx = shutdown_rx.resubscribe();
-        mutexed_tasks.lock().await.spawn(async move {
-            synchronizer
-                .run(&rx, config.dump_sync_threshold, Duration::from_secs(5))
-                .await;
-
-            Ok(())
-        });
+        [AssetType::Fungible, AssetType::NonFungible]
+            .into_iter()
+            .for_each(|asset_type| {
+                let rx = shutdown_rx.resubscribe();
+                let synchronizer = synchronizer.clone();
+                tokio::spawn(async move {
+                    synchronizer
+                        .run(&rx, config.dump_sync_threshold, Duration::from_secs(5), asset_type)
+                        .await;
+                });
+            })
     }
     // setup dependencies for grpc server
     let uc = AssetStreamer::new(config.peer_grpc_max_gap_slots, primary_rocks_storage.clone());

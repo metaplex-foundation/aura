@@ -26,16 +26,23 @@ pub const INSERT_ASSET_CREATOR_PARAMETERS_COUNT: usize = 4;
 pub const INSERT_AUTHORITY_PARAMETERS_COUNT: usize = 3;
 pub const INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT: usize = 4;
 
+#[derive(Debug, Copy, Clone)]
+pub enum AssetType {
+    NonFungible = 1,
+    Fungible = 2,
+}
+
 impl PgClient {
     pub(crate) async fn fetch_last_synced_id_impl(
         &self,
         table_name: &str,
         executor: impl Executor<'_, Database = Postgres>,
+        asset_type: AssetType,
     ) -> Result<Option<Vec<u8>>, IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("SELECT last_synced_asset_update_key FROM ");
         query_builder.push(table_name);
-        query_builder.push(" WHERE id = 1");
+        query_builder.push(format!(" WHERE id = {}", asset_type as i32));
         let start_time = chrono::Utc::now();
         let query = query_builder.build_query_as::<(Option<Vec<u8>>,)>();
         let result = query.fetch_one(executor).await.map_err(|e| {
@@ -244,8 +251,11 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
 
 #[async_trait]
 impl AssetIndexStorage for PgClient {
-    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError> {
-        self.fetch_last_synced_id_impl("last_synced_key", &self.pool)
+    async fn fetch_last_synced_id(
+        &self,
+        asset_type: AssetType,
+    ) -> Result<Option<Vec<u8>>, IndexDbError> {
+        self.fetch_last_synced_id_impl("last_synced_key", &self.pool, asset_type)
             .await
     }
 
@@ -521,8 +531,8 @@ impl PgClient {
                 .push_bind(asset_index.slot_updated);
         });
         query_builder.push(
-            " ON CONFLICT (ast_pubkey) 
-        DO UPDATE SET 
+            " ON CONFLICT (ast_pubkey)
+        DO UPDATE SET
             ast_specification_version = EXCLUDED.ast_specification_version,
             ast_specification_asset_class = EXCLUDED.ast_specification_asset_class,
             ast_royalty_target_type = EXCLUDED.ast_royalty_target_type,

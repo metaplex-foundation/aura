@@ -1,3 +1,4 @@
+use crate::asset_index_client::AssetType;
 use crate::error::IndexDbError;
 use crate::model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter};
 use crate::temp_index_client::TempClient;
@@ -8,7 +9,10 @@ use mockall::{automock, mock};
 
 #[async_trait]
 pub trait AssetIndexStorage {
-    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError>;
+    async fn fetch_last_synced_id(
+        &self,
+        asset_type: AssetType,
+    ) -> Result<Option<Vec<u8>>, IndexDbError>;
     async fn update_asset_indexes_batch(
         &self,
         asset_indexes: &[AssetIndex],
@@ -25,7 +29,7 @@ mock!(
     pub AssetIndexStorageMock {}
     #[async_trait]
     impl AssetIndexStorage for AssetIndexStorageMock {
-        async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError>;
+        async fn fetch_last_synced_id(&self, asset_type: AssetType) -> Result<Option<Vec<u8>>, IndexDbError>;
         async fn update_asset_indexes_batch(
             &self,
             asset_indexes: &[AssetIndex],

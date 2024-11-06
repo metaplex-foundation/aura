@@ -2,8 +2,11 @@ pub mod awaitility;
 pub mod pg;
 pub mod rocks;
 
+use std::sync::Arc;
+
 use crate::rocks::RocksTestEnvironmentSetup;
 use metrics_utils::MetricsTrait;
+use postgre_client::asset_index_client::AssetType;
 use rocks_db::asset::AssetCollection;
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
 use solana_sdk::pubkey::Pubkey;
@@ -75,7 +78,20 @@ impl<'a> TestEnvironment<'a> {
             false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        syncronizer.synchronize_asset_indexes(&rx, 0).await.unwrap();
+        let synchronizer = Arc::new(syncronizer);
+        [AssetType::NonFungible, AssetType::Fungible]
+            .into_iter()
+            .for_each(|asset_type| {
+                let asset_type = asset_type.clone();
+                let synchronizer = synchronizer.clone();
+                let rx = rx.resubscribe();
+                tokio::spawn(async move {
+                    synchronizer
+                        .synchronize_asset_indexes(&rx, 0, asset_type)
+                        .await
+                        .unwrap();
+                });
+            });
         (env, generated_data)
     }
 

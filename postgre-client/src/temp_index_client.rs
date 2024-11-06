@@ -5,7 +5,7 @@ use sqlx::{pool::PoolConnection, Connection, Postgres, QueryBuilder};
 use tokio::sync::Mutex;
 
 use crate::{
-    asset_index_client::{split_assets_into_components, TableNames},
+    asset_index_client::{split_assets_into_components, AssetType, TableNames},
     error::IndexDbError,
     storage_traits::{AssetIndexStorage, TempClientProvider},
     PgClient, BATCH_UPSERT_ACTION, CREATE_ACTION, DROP_ACTION, INSERT_ACTION, UPDATE_ACTION,
@@ -119,8 +119,8 @@ impl TempClient {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("INSERT INTO assets_v3 SELECT * FROM ");
         query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
-        query_builder.push("assets_v3 ON CONFLICT (ast_pubkey) 
-        DO UPDATE SET 
+        query_builder.push("assets_v3 ON CONFLICT (ast_pubkey)
+        DO UPDATE SET
             ast_specification_version = EXCLUDED.ast_specification_version,
             ast_specification_asset_class = EXCLUDED.ast_specification_asset_class,
             ast_royalty_target_type = EXCLUDED.ast_royalty_target_type,
@@ -222,13 +222,17 @@ impl TempClient {
 
 #[async_trait]
 impl AssetIndexStorage for TempClient {
-    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError> {
+    async fn fetch_last_synced_id(
+        &self,
+        asset_type: AssetType,
+    ) -> Result<Option<Vec<u8>>, IndexDbError> {
         let mut c = self.pooled_connection.lock().await;
         let mut tx = c.begin().await?;
         self.pg_client
             .fetch_last_synced_id_impl(
                 format!("{}last_synced_key", TEMP_INDEXING_TABLE_PREFIX).as_str(),
                 &mut tx,
+                asset_type,
             )
             .await
     }

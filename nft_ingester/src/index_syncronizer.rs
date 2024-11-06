@@ -1,6 +1,9 @@
 use entities::models::AssetIndex;
 use metrics_utils::SynchronizerMetricsConfig;
-use postgre_client::storage_traits::{AssetIndexStorage, TempClientProvider};
+use postgre_client::{
+    asset_index_client::AssetType,
+    storage_traits::{AssetIndexStorage, TempClientProvider},
+};
 use rocks_db::{
     key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey},
     storage_traits::{AssetIndexStorage as AssetIndexSourceStorage, AssetUpdatedKey},
@@ -74,16 +77,20 @@ where
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
     ) {
-        if let Ok(SyncStatus::FullSyncRequired(_)) =
-            self.get_sync_state(run_full_sync_threshold).await
-        {
-            let res = self.full_syncronize(rx).await;
-            match res {
-                Ok(_) => {
-                    tracing::info!("Full synchronization finished successfully");
-                }
-                Err(e) => {
-                    tracing::error!("Full synchronization failed: {:?}", e);
+        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
+        for asset_type in asset_types {
+            if let Ok(SyncStatus::FullSyncRequired(_)) = self
+                .get_sync_state(run_full_sync_threshold, asset_type)
+                .await
+            {
+                let res = self.full_syncronize(rx).await;
+                match res {
+                    Ok(_) => {
+                        tracing::info!("Full synchronization finished successfully");
+                    }
+                    Err(e) => {
+                        tracing::error!("Full synchronization failed: {:?}", e);
+                    }
                 }
             }
         }
@@ -94,10 +101,11 @@ where
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
         timeout_duration: tokio::time::Duration,
+        asset_type: AssetType,
     ) {
         while rx.is_empty() {
             let res = self
-                .synchronize_asset_indexes(rx, run_full_sync_threshold)
+                .synchronize_asset_indexes(&rx, run_full_sync_threshold, asset_type)
                 .await;
             match res {
                 Ok(_) => {
@@ -116,8 +124,9 @@ where
     async fn get_sync_state(
         &self,
         run_full_sync_threshold: i64,
+        asset_type: AssetType,
     ) -> Result<SyncStatus, IngesterError> {
-        let last_indexed_key = self.index_storage.fetch_last_synced_id().await?;
+        let last_indexed_key = self.index_storage.fetch_last_synced_id(asset_type).await?;
         let last_indexed_key = match last_indexed_key {
             Some(bytes) => {
                 let decoded_key = decode_u64x2_pubkey(bytes)?;
@@ -163,8 +172,11 @@ where
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
+        asset_type: AssetType,
     ) -> Result<(), IngesterError> {
-        let state = self.get_sync_state(run_full_sync_threshold).await?;
+        let state = self
+            .get_sync_state(run_full_sync_threshold, asset_type)
+            .await?;
         match state {
             SyncStatus::FullSyncRequired(state) => {
                 tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
@@ -210,17 +222,32 @@ where
             1,
             false,
         ));
-        let task = tokio::spawn(async move {
-            temp_syncronizer
-                .run(&local_rx, -1, tokio::time::Duration::from_millis(100))
-                .await;
-        });
+
+        let mut join_set = JoinSet::new();
+        for asset_type in [AssetType::Fungible, AssetType::NonFungible] {
+            let local_rx = local_rx.resubscribe();
+            let temp_syncronizer = temp_syncronizer.clone();
+            join_set.spawn(async move {
+                temp_syncronizer
+                    .run(
+                        &local_rx,
+                        -1,
+                        tokio::time::Duration::from_millis(100),
+                        asset_type,
+                    )
+                    .await;
+            });
+        }
 
         self.dump_sync(last_included_rocks_key.as_slice(), rx)
             .await?;
 
         tx.send(()).map_err(|e| e.to_string())?;
-        task.await.map_err(|e| e.to_string())?;
+
+        while let Some(result) = join_set.join_next().await {
+            result.map_err(|e| e.to_string())?;
+        }
+
         // now we can copy temp storage to the main storage
         temp_storage.copy_to_main().await?;
         Ok(())
@@ -426,11 +453,15 @@ mod tests {
         let mut metrics_state = MetricState::new();
         let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
+        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
 
-        index_storage
-            .expect_fetch_last_synced_id()
-            .once()
-            .return_once(|| Ok(None));
+        asset_types.iter().for_each(|asset_type| {
+            index_storage
+                .expect_fetch_last_synced_id()
+                .once()
+                .return_once(|asset_type| Ok(None));
+        });
+
         primary_storage
             .mock_update_index_storage
             .expect_last_known_asset_updated_key()
@@ -447,10 +478,17 @@ mod tests {
             false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer
-            .synchronize_asset_indexes(&rx, 0)
-            .await
-            .unwrap();
+        let synchronizer = Arc::new(synchronizer);
+        asset_types.into_iter().for_each(|asset_type| {
+            let synchronizer = synchronizer.clone();
+            let rx = rx.resubscribe();
+            tokio::spawn(async move {
+                synchronizer
+                    .synchronize_asset_indexes(&rx, 0, asset_type)
+                    .await
+                    .unwrap();
+            });
+        });
     }
 
     #[tokio::test]
@@ -460,12 +498,13 @@ mod tests {
         let mut metrics_state = MetricState::new();
         let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
-
-        // Index storage starts empty
-        index_storage
-            .expect_fetch_last_synced_id()
-            .once()
-            .return_once(|| Ok(None));
+        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
+        asset_types.iter().for_each(|asset_type| {
+            index_storage
+                .expect_fetch_last_synced_id()
+                .once()
+                .return_once(|asset_type| Ok(None));
+        });
 
         let key = Pubkey::new_from_array([1u8; 32]);
         let index_key = AssetUpdatedKey::new(100, 2, key.clone());
@@ -517,10 +556,17 @@ mod tests {
             false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer
-            .synchronize_asset_indexes(&rx, 0)
-            .await
-            .unwrap();
+        let synchronizer = Arc::new(synchronizer);
+        asset_types.into_iter().for_each(|asset_type| {
+            let synchronizer = synchronizer.clone();
+            let rx = rx.resubscribe();
+            tokio::spawn(async move {
+                synchronizer
+                    .synchronize_asset_indexes(&rx, 0, asset_type)
+                    .await
+                    .unwrap();
+            });
+        });
     }
 
     #[tokio::test]
@@ -530,12 +576,15 @@ mod tests {
         let mut metrics_state = MetricState::new();
         let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
+        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
 
         // Index storage starts empty
-        index_storage
-            .expect_fetch_last_synced_id()
-            .once()
-            .return_once(|| Ok(None));
+        asset_types.iter().for_each(|asset_type| {
+            index_storage
+                .expect_fetch_last_synced_id()
+                .once()
+                .return_once(|asset_type| Ok(None));
+        });
 
         let key = Pubkey::new_from_array([1u8; 32]);
         let index_key = AssetUpdatedKey::new(100, 2, key.clone());
@@ -597,10 +646,18 @@ mod tests {
             false,
         ); // Small batch size
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer
-            .synchronize_asset_indexes(&rx, 0)
-            .await
-            .unwrap();
+        let synchronizer = Arc::new(synchronizer);
+        asset_types.into_iter().for_each(|asset_type| {
+            let asset_type = asset_type.clone();
+            let rx = rx.resubscribe();
+            let synchronizer = synchronizer.clone();
+            tokio::spawn(async move {
+                synchronizer
+                    .synchronize_asset_indexes(&rx, 0, asset_type)
+                    .await
+                    .unwrap();
+            });
+        });
     }
 
     #[tokio::test]
@@ -615,10 +672,15 @@ mod tests {
         let last_synced_binary_key =
             encode_u64x2_pubkey(index_key.seq, index_key.slot, index_key.pubkey.clone());
 
-        index_storage
-            .expect_fetch_last_synced_id()
-            .once()
-            .return_once(|| Ok(Some(last_synced_binary_key)));
+        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
+
+        asset_types.iter().for_each(|asset_type| {
+            let last_synced_binary_key = last_synced_binary_key.clone();
+            index_storage
+                .expect_fetch_last_synced_id()
+                .once()
+                .return_once(|asset_type| Ok(Some(last_synced_binary_key)));
+        });
 
         let key = Pubkey::new_from_array([1u8; 32]);
         let index_key_first_batch = AssetUpdatedKey::new(100, 2, key.clone());
@@ -720,10 +782,20 @@ mod tests {
             false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer
-            .synchronize_asset_indexes(&rx, 0)
-            .await
-            .unwrap();
+        let synchronizer = Arc::new(synchronizer);
+        [AssetType::NonFungible, AssetType::Fungible]
+            .into_iter()
+            .for_each(|asset_type| {
+                let asset_type = asset_type.clone();
+                let synchronizer = synchronizer.clone();
+                let rx = rx.resubscribe();
+                tokio::spawn(async move {
+                    synchronizer
+                        .synchronize_asset_indexes(&rx, 0, asset_type)
+                        .await
+                        .unwrap();
+                });
+            });
     }
 
     #[tokio::test]
@@ -743,16 +815,22 @@ mod tests {
             .once()
             .return_once(move || Ok(Some(index_key_clone)));
         let index_key_clone = index_key.clone();
-        index_storage
-            .expect_fetch_last_synced_id()
-            .once()
-            .return_once(move || {
-                Ok(Some(encode_u64x2_pubkey(
-                    index_key_clone.seq,
-                    index_key_clone.slot,
-                    index_key_clone.pubkey.clone(),
-                )))
-            });
+
+        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
+
+        asset_types.iter().for_each(|asset_type| {
+            let index_key_clone = index_key.clone();
+            index_storage
+                .expect_fetch_last_synced_id()
+                .once()
+                .return_once(move |asset_type| {
+                    Ok(Some(encode_u64x2_pubkey(
+                        index_key_clone.seq,
+                        index_key_clone.slot,
+                        index_key_clone.pubkey.clone(),
+                    )))
+                });
+        });
 
         // Expect no calls to fetch_asset_updated_keys since databases are synced
         primary_storage
@@ -771,9 +849,17 @@ mod tests {
             false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer
-            .synchronize_asset_indexes(&rx, 0)
-            .await
-            .unwrap();
+        let synchronizer = Arc::new(synchronizer);
+        asset_types.into_iter().for_each(|asset_type| {
+            let asset_type = asset_type.clone();
+            let rx = rx.resubscribe();
+            let synchronizer = synchronizer.clone();
+            tokio::spawn(async move {
+                synchronizer
+                    .synchronize_asset_indexes(&rx, 0, asset_type)
+                    .await
+                    .unwrap();
+            });
+        });
     }
 }
