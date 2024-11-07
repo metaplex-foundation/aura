@@ -354,6 +354,7 @@ impl Storage {
         options.set_max_background_jobs(0);
         options.set_max_background_compactions(0);
         options.set_max_background_flushes(0);
+        options.set_level_zero_file_num_compaction_trigger(-1);
 
         // Set max total wal size to 4G.
         options.set_max_total_wal_size(4 * 1024 * 1024 * 1024);
