@@ -372,10 +372,13 @@ impl Storage {
 
         let mut cf_options = Options::default();
         cf_options.set_disable_auto_compactions(true);
+        cf_options.set_max_background_jobs(0);
+        cf_options.set_max_background_compactions(0);
+        cf_options.set_max_background_flushes(0);
         // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
         cf_options.set_max_write_buffer_number(8);
         cf_options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE as usize);
-        let file_num_compaction_trigger = 0;
+        let file_num_compaction_trigger = -1;
         // Recommend that this be around the size of level 0. Level 0 estimated size in stable state is
         // write_buffer_size * min_write_buffer_number_to_merge * level0_file_num_compaction_trigger
         // Source: https://docs.rs/rocksdb/0.6.0/rocksdb/struct.Options.html#method.set_level_zero_file_num_compaction_trigger
