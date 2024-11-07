@@ -352,6 +352,8 @@ impl Storage {
         options.set_env(&env);
         options.set_disable_auto_compactions(disable_auto_compactions);
         options.set_max_background_jobs(0);
+        options.set_max_background_compactions(0);
+        options.set_max_background_flushes(0);
 
         // Set max total wal size to 4G.
         options.set_max_total_wal_size(4 * 1024 * 1024 * 1024);
@@ -369,18 +371,19 @@ impl Storage {
         const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 
         let mut cf_options = Options::default();
+        cf_options.set_disable_auto_compactions(true);
         // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
         cf_options.set_max_write_buffer_number(8);
         cf_options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE as usize);
-        let file_num_compaction_trigger = 4;
+        let file_num_compaction_trigger = 0;
         // Recommend that this be around the size of level 0. Level 0 estimated size in stable state is
         // write_buffer_size * min_write_buffer_number_to_merge * level0_file_num_compaction_trigger
         // Source: https://docs.rs/rocksdb/0.6.0/rocksdb/struct.Options.html#method.set_level_zero_file_num_compaction_trigger
         let total_size_base = MAX_WRITE_BUFFER_SIZE * file_num_compaction_trigger;
         let file_size_base = total_size_base / 10;
         cf_options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
-        cf_options.set_max_bytes_for_level_base(total_size_base);
-        cf_options.set_target_file_size_base(file_size_base);
+        // cf_options.set_max_bytes_for_level_base(total_size_base);
+        // cf_options.set_target_file_size_base(file_size_base);
 
         if matches!(migration_state, &MigrationState::CreateColumnFamilies) {
             cf_options.set_merge_operator_associative(
