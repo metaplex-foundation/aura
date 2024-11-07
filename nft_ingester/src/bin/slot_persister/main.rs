@@ -19,7 +19,7 @@ use tokio::sync::{broadcast, Mutex};
 use tokio_retry::strategy::ExponentialBackoff;
 use tokio_retry::RetryIf;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use usecase::bigtable::BigTableClient;
 use usecase::slots_collector::SlotsCollector;
 
@@ -148,17 +148,21 @@ async fn fetch_block_with_retries(
                     info!("Fetch cancelled for slot {} due to shutdown signal.", slot);
                     Err((slot, FetchError::Cancelled))
                 } else {
+                    debug!("Fetching slot {}", slot);
                     match bt_connection
                         .get_block(slot, None::<Arc<BigTableClient>>)
                         .await
                     {
-                        Ok(block_data) => Ok((
+                        Ok(block_data) => 
+                        {
+                            debug!("Successfully fetched block for slot {}", slot);
+                            Ok((
                             slot,
                             RawBlock {
                                 slot,
                                 block: block_data,
                             },
-                        )),
+                        ))},
                         Err(e) => {
                             error!("Error fetching block for slot {}: {}", slot, e);
                             Err((slot, FetchError::Other(e.to_string())))
@@ -249,12 +253,13 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut start_slot = start_slot;
     loop {
         if shutdown_token.is_cancelled() {
-            info!("Shutdown signal received, exiting loop...");
+            info!("Shutdown signal received, exiting main loop...");
             break;
         }
 
         match rpc_client.get_finalized_slot().await {
             Ok(finalized_slot) => {
+                info!("Finalized slot from RPC: {}", finalized_slot);
                 let top_collected_slot = slots_collector
                     .collect_slots(
                         &blockbuster::programs::bubblegum::ID,
@@ -328,6 +333,10 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         if new_failed_slots.is_empty() {
                             // All slots fetched successfully, save to database
+                            debug!(
+                                "All slots fetched successfully for current batch. Saving {} slots to RocksDB.",
+                                successful_blocks.len()
+                            );
                             if let Err(e) = target_db
                                 .raw_blocks_cbor
                                 .put_batch_cbor(successful_blocks.clone())
@@ -351,6 +360,11 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             } else {
                                 // Successfully saved, proceed to next batch
+                                let last_slot = successful_blocks.keys().max().cloned().unwrap_or(0);
+                                info!(
+                                    "Successfully saved batch to RocksDB. Last stored slot: {}",
+                                    last_slot
+                                );
                                 break;
                             }
                         } else {
@@ -391,5 +405,6 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
         };
     }
+    info!("Slot persister has stopped.");
     Ok(())
 }
