@@ -351,6 +351,7 @@ impl Storage {
         env.set_high_priority_background_threads(4);
         options.set_env(&env);
         options.set_disable_auto_compactions(disable_auto_compactions);
+        options.set_max_background_jobs(0);
 
         // Set max total wal size to 4G.
         options.set_max_total_wal_size(4 * 1024 * 1024 * 1024);
