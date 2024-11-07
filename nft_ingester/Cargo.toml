@@ -81,6 +81,7 @@ libreplex_inscriptions = { workspace = true }
 spl-token-2022 = { workspace = true }
 moka = { workspace = true }
 indicatif = { workspace = true }
+tokio-retry = { workspace = true }
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }
@@ -133,3 +134,6 @@ name = "raw_backup"
 
 [[bin]]
 name = "backfill"
+
+[[bin]]
+name = "slot_persister"

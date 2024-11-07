@@ -282,24 +282,48 @@ impl Storage {
         Ok(Self::new(db, join_set, red_metrics))
     }
 
-    pub fn open_readonly_with_cfs(
-        db_path: &str,
+    pub fn open_cfs<P>(
+        db_path: P,
         c_names: Vec<&str>,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let cf_descriptors = Self::cfs_to_column_families(c_names);
+        let db = Arc::new(DB::open_cf_descriptors(
+            &Self::get_db_options(),
+            db_path,
+            cf_descriptors,
+        )?);
+        Ok(Self::new(db, join_set, red_metrics))
+    }
+
+    pub fn open_readonly_with_cfs<P>(
+        db_path: P,
+        c_names: Vec<&str>,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
         let db = Arc::new(Self::open_readonly_with_cfs_only_db(db_path, c_names)?);
         Ok(Self::new(db, join_set, red_metrics))
+    }
+
+    fn cfs_to_column_families(cfs: Vec<&str>) -> Vec<ColumnFamilyDescriptor> {
+        cfs.iter()
+            .map(|name| ColumnFamilyDescriptor::new(*name, Self::get_default_cf_options()))
+            .collect()
     }
 
     pub fn open_readonly_with_cfs_only_db<P>(db_path: P, c_names: Vec<&str>) -> Result<DB>
     where
         P: AsRef<Path>,
     {
-        let cf_descriptors: Vec<ColumnFamilyDescriptor> = c_names
-            .iter()
-            .map(|name| ColumnFamilyDescriptor::new(*name, Self::get_default_cf_options()))
-            .collect();
+        let cf_descriptors = Self::cfs_to_column_families(c_names);
         DB::open_cf_descriptors_read_only(&Self::get_db_options(), db_path, cf_descriptors, false)
             .map_err(StorageError::RocksDb)
     }
