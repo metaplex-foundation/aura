@@ -1,13 +1,14 @@
 use async_trait::async_trait;
 use backfill_rpc::rpc::BackfillRPC;
 use clap::Parser;
-use entities::models::RawBlock;
+use entities::models::{OffChainData, RawBlock};
 use futures::future::join_all;
 use interface::signature_persistence::BlockProducer;
 use interface::slot_getter::FinalizedSlotGetter;
 use interface::slots_dumper::SlotsDumper;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{MetricState, MetricsTrait};
+use rocks_db::migrator::MigrationVersions;
 use rocks_db::{column::TypedColumn, Storage};
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
@@ -192,7 +193,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let target_db = Arc::new(
         Storage::open_cfs(
             &args.target_db_path,
-            vec![RawBlock::NAME],
+            vec![RawBlock::NAME, MigrationVersions::NAME, OffChainData::NAME],
             Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
             metrics_state.red_metrics.clone(),
         )
