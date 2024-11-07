@@ -15,8 +15,7 @@ use entities::enums::{
     SpecificationAssetClass, TokenStandard, UseMethod,
 };
 use entities::models::{
-    BatchMintToVerify, BufferedTransaction, OffChainData, SignatureWithSlot, Task, UpdateVersion,
-    Updated,
+    BatchMintToVerify, BufferedTransaction, OffChainData, SignatureWithSlot, UpdateVersion, Updated,
 };
 use entities::models::{ChainDataV1, Creator, Uses};
 use lazy_static::lazy_static;
@@ -40,7 +39,6 @@ use solana_sdk::signature::Signature;
 use std::collections::{HashSet, VecDeque};
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tokio::time::Instant;
 use tracing::{debug, error};
 use usecase::save_metrics::result_to_metrics;
@@ -61,21 +59,15 @@ pub struct BubblegumTxProcessor {
     pub instruction_parser: Arc<BubblegumParser>,
     pub rocks_client: Arc<rocks_db::Storage>,
 
-    pub json_tasks: Arc<Mutex<VecDeque<Task>>>,
     pub metrics: Arc<IngesterMetricsConfig>,
 }
 
 impl BubblegumTxProcessor {
-    pub fn new(
-        rocks_client: Arc<rocks_db::Storage>,
-        metrics: Arc<IngesterMetricsConfig>,
-        json_tasks: Arc<Mutex<VecDeque<Task>>>,
-    ) -> Self {
+    pub fn new(rocks_client: Arc<rocks_db::Storage>, metrics: Arc<IngesterMetricsConfig>) -> Self {
         BubblegumTxProcessor {
             transaction_parser: Arc::new(FlatbufferMapper {}),
             instruction_parser: Arc::new(BubblegumParser {}),
             rocks_client,
-            json_tasks,
             metrics,
         }
     }
