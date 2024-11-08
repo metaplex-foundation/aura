@@ -4,7 +4,7 @@ mod tests {
     use setup::pg::*;
 
     use entities::models::{AssetIndex, Creator};
-    use postgre_client::storage_traits::AssetIndexStorage;
+    use postgre_client::{asset_index_client::AssetType, storage_traits::AssetIndexStorage};
     use rand::Rng;
     use testcontainers::clients::Cli;
     use tokio;
@@ -16,11 +16,14 @@ mod tests {
         let asset_index_storage = &env.client;
 
         // Verify initial fetch_last_synced_id returns None
-        assert!(asset_index_storage
-            .fetch_last_synced_id()
-            .await
-            .unwrap()
-            .is_none());
+        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
+        for asset_type in asset_types.iter() {
+            assert!(asset_index_storage
+                .fetch_last_synced_id(*asset_type)
+                .await
+                .unwrap()
+                .is_none());
+        }
 
         // Generate random asset indexes
         let asset_indexes = generate_asset_index_records(100);
@@ -36,7 +39,10 @@ mod tests {
             .await
             .unwrap();
         // Check fetch_last_synced_id again
-        let last_synced_key = asset_index_storage.fetch_last_synced_id().await.unwrap();
+        let last_synced_key = asset_index_storage
+            .fetch_last_synced_id(AssetType::NonFungible)
+            .await
+            .unwrap();
         assert!(last_synced_key.is_some());
         assert_eq!(last_synced_key.unwrap().as_slice(), &last_known_key[..]);
 
@@ -64,7 +70,10 @@ mod tests {
             .update_last_synced_key(&new_known_key)
             .await
             .unwrap();
-        let last_synced_key = asset_index_storage.fetch_last_synced_id().await.unwrap();
+        let last_synced_key = asset_index_storage
+            .fetch_last_synced_id(AssetType::NonFungible)
+            .await
+            .unwrap();
         assert!(last_synced_key.is_some());
         assert_eq!(last_synced_key.unwrap().as_slice(), &new_known_key[..]);
 

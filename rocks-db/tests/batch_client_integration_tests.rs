@@ -34,7 +34,7 @@ mod tests {
 
         // Call fetch_asset_updated_keys on an empty database
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, None, 10, None)
+            .fetch_non_fungible_asset_updated_keys(None, None, 10, None)
             .expect("Failed to fetch asset updated keys");
         // Assertions
         assert!(keys.is_empty(), "Expected no keys from an empty database");
@@ -79,7 +79,7 @@ mod tests {
         .storage;
         // Verify fetch_asset_updated_keys with None as last key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, None, 10, None)
+            .fetch_non_fungible_asset_updated_keys(None, None, 10, None)
             .unwrap();
         assert_eq!(keys.len(), 1, "Expected a single key");
         assert_eq!(
@@ -90,7 +90,7 @@ mod tests {
         assert!(last_key.is_some(), "Expected a last key");
         // Verify fetch_asset_updated_keys with the last key from previous call
         let (new_keys, new_last_key) = storage
-            .fetch_asset_updated_keys(last_key.clone(), None, 10, None)
+            .fetch_non_fungible_asset_updated_keys(last_key.clone(), None, 10, None)
             .unwrap();
         assert!(
             new_keys.is_empty(),
@@ -109,7 +109,7 @@ mod tests {
         .storage;
         // Verify fetch_asset_updated_keys with None as last key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, None, 1, None)
+            .fetch_non_fungible_asset_updated_keys(None, None, 1, None)
             .unwrap();
         assert_eq!(keys.len(), 1, "Expected a single key");
         assert_eq!(
@@ -120,7 +120,7 @@ mod tests {
         assert!(last_key.is_some(), "Expected a last key");
         // Verify fetch_asset_updated_keys with the last key from previous call
         let (new_keys, new_last_key) = storage
-            .fetch_asset_updated_keys(last_key.clone(), None, 1, Some(keys))
+            .fetch_non_fungible_asset_updated_keys(last_key.clone(), None, 1, Some(keys))
             .unwrap();
         assert!(
             new_keys.is_empty(),
@@ -139,7 +139,7 @@ mod tests {
         .storage;
         // Verify fetch_asset_updated_keys with None as last key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(
+            .fetch_non_fungible_asset_updated_keys(
                 None,
                 None,
                 1,
@@ -168,7 +168,7 @@ mod tests {
 
         // Verify fetch_asset_updated_keys with up to key which is less then the first key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(
+            .fetch_non_fungible_asset_updated_keys(
                 None,
                 Some(AssetUpdatedKey::new(0, 2, DEFAULT_PUBKEY_OF_ONES.clone())),
                 10,
@@ -180,7 +180,7 @@ mod tests {
 
         // verify fetch_asset_updated_keys with up to key which is equal to the first key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(
+            .fetch_non_fungible_asset_updated_keys(
                 None,
                 Some(AssetUpdatedKey::new(1, 4, DEFAULT_PUBKEY_OF_ONES.clone())),
                 10,
@@ -205,7 +205,7 @@ mod tests {
 
         // verify fetch_asset_updated_keys with up to key which is equal to the last key returns all the keys
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(
+            .fetch_non_fungible_asset_updated_keys(
                 None,
                 Some(AssetUpdatedKey::new(4, 5, PUBKEY_OF_TWOS.clone())),
                 10,
@@ -236,7 +236,7 @@ mod tests {
     fn test_last_known_asset_updated_key_on_empty_db() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let last_key = storage
-            .last_known_asset_updated_key()
+            .last_known_non_fungible_asset_updated_key()
             .expect("Failed to get last known asset updated key");
         assert!(last_key.is_none(), "Expected no last key");
     }
@@ -251,7 +251,7 @@ mod tests {
         ])
         .storage;
         let last_key = storage
-            .last_known_asset_updated_key()
+            .last_known_non_fungible_asset_updated_key()
             .expect("Failed to get last known asset updated key");
         assert!(last_key.is_some(), "Expected a last key");
         let expected_key = AssetUpdatedKey::new(4, 5, PUBKEY_OF_TWOS.clone());
@@ -272,7 +272,7 @@ mod tests {
         ])
         .storage;
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, None, 10, None)
+            .fetch_non_fungible_asset_updated_keys(None, None, 10, None)
             .unwrap();
 
         assert_eq!(keys.len(), 2, "Expected 2 keys");
@@ -296,7 +296,7 @@ mod tests {
         let key = Pubkey::new_unique();
         storage.asset_updated(5, key.clone()).unwrap();
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(last_key, None, 10, None)
+            .fetch_non_fungible_asset_updated_keys(last_key, None, 10, None)
             .unwrap();
 
         assert_eq!(keys.len(), 1, "Expected 1 key");
@@ -326,7 +326,7 @@ mod tests {
         let mut last_seen_key = last_key.clone();
         for i in 0..10 {
             let (new_keys, last_key) = storage
-                .fetch_asset_updated_keys(last_seen_key, None, 1000, None)
+                .fetch_non_fungible_asset_updated_keys(last_seen_key, None, 1000, None)
                 .unwrap();
             assert_eq!(new_keys.len(), 1000, "Expected 1000 keys");
             assert!(last_key.is_some(), "Expected a last key");

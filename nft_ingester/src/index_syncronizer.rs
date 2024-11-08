@@ -646,18 +646,17 @@ mod tests {
         metrics_state.register_metrics();
         let asset_types = [AssetType::Fungible, AssetType::NonFungible];
 
-        asset_types.iter().for_each(|asset_type| {
-            index_storage
-                .expect_fetch_last_synced_id()
-                .once()
-                .return_once(|asset_type| Ok(None));
-        });
+        index_storage
+            .expect_fetch_last_synced_id()
+            .once()
+            .return_once(|_| Ok(None));
 
         primary_storage
             .mock_update_index_storage
             .expect_last_known_fungible_asset_updated_key()
             .once()
             .return_once(|| Ok(None));
+
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
             Arc::new(index_storage),
@@ -719,7 +718,7 @@ mod tests {
         let index_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_last_known_asset_updated_key()
+            .expect_last_known_non_fungible_asset_updated_key()
             .once()
             .return_once(move || Ok(Some(index_clone)));
 
@@ -727,7 +726,7 @@ mod tests {
         let index_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_fetch_asset_updated_keys()
+            .expect_fetch_non_fungible_asset_updated_keys()
             .once()
             .return_once(move |_, _, _, _| Ok((updated_keys.clone(), Some(index_clone))));
 
@@ -797,11 +796,11 @@ mod tests {
         let asset_types = [AssetType::Fungible, AssetType::NonFungible];
 
         // Index storage starts empty
-        asset_types.iter().for_each(|asset_type| {
+        asset_types.iter().for_each(|_| {
             index_storage
                 .expect_fetch_last_synced_id()
                 .once()
-                .return_once(|asset_type| Ok(None));
+                .return_once(|_| Ok(None));
         });
 
         let key = Pubkey::new_from_array([1u8; 32]);
@@ -811,7 +810,7 @@ mod tests {
         let index_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_last_known_asset_updated_key()
+            .expect_last_known_non_fungible_asset_updated_key()
             .once()
             .return_once(move || Ok(Some(index_clone)));
 
@@ -819,7 +818,7 @@ mod tests {
         let index_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_fetch_asset_updated_keys()
+            .expect_fetch_non_fungible_asset_updated_keys()
             .times(2)
             .returning(move |_, _, _, _| {
                 static mut CALL_COUNT: usize = 0;
@@ -928,7 +927,7 @@ mod tests {
         let index_key_second_batch_clone = index_key_second_batch.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_last_known_asset_updated_key()
+            .expect_last_known_non_fungible_asset_updated_key()
             .once()
             .return_once(move || Ok(Some(index_key_second_batch_clone)));
 
@@ -938,7 +937,7 @@ mod tests {
         let index_key_second_batch_clone = index_key_second_batch.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_fetch_asset_updated_keys()
+            .expect_fetch_non_fungible_asset_updated_keys()
             .times(2)
             .returning(move |_, _, _, _| {
                 call_count += 1;
@@ -1051,19 +1050,17 @@ mod tests {
         let index_key_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_last_known_asset_updated_key()
+            .expect_last_known_non_fungible_asset_updated_key()
             .once()
             .return_once(move || Ok(Some(index_key_clone)));
-        let index_key_clone = index_key.clone();
 
         let asset_types = [AssetType::Fungible, AssetType::NonFungible];
-
-        asset_types.iter().for_each(|asset_type| {
+        asset_types.iter().for_each(|_| {
             let index_key_clone = index_key.clone();
             index_storage
                 .expect_fetch_last_synced_id()
                 .once()
-                .return_once(move |asset_type| {
+                .return_once(move |_| {
                     Ok(Some(encode_u64x2_pubkey(
                         index_key_clone.seq,
                         index_key_clone.slot,
@@ -1075,7 +1072,7 @@ mod tests {
         // Expect no calls to fetch_asset_updated_keys since databases are synced
         primary_storage
             .mock_update_index_storage
-            .expect_fetch_asset_updated_keys()
+            .expect_fetch_non_fungible_asset_updated_keys()
             .never();
 
         let synchronizer = Synchronizer::new(

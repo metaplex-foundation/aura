@@ -7,6 +7,7 @@ mod tests {
         ShadowInterestBearingConfig, ShadowTransferFee, ShadowTransferFeeConfig, UnixTimestamp,
     };
     use blockbuster::programs::token_extensions::MintAccountExtensions;
+    use postgre_client::asset_index_client::AssetType;
     use std::str::FromStr;
     use std::{collections::HashMap, sync::Arc};
 
@@ -3140,10 +3141,30 @@ mod tests {
             .unwrap();
 
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        synchronizer
-            .synchronize_asset_indexes(&rx, 0)
-            .await
-            .unwrap();
+
+        let synchronizer = Arc::new(synchronizer);
+        let mut join_set = JoinSet::new();
+
+        for asset_type in [AssetType::Fungible, AssetType::NonFungible] {
+            let rx = rx.resubscribe();
+            let synchronizer = synchronizer.clone();
+            match asset_type {
+                AssetType::Fungible => {
+                    join_set.spawn(async move {
+                        synchronizer
+                            .synchronize_fungible_asset_indexes(&rx, 0)
+                            .await
+                    });
+                }
+                AssetType::NonFungible => {
+                    join_set.spawn(async move {
+                        synchronizer
+                            .synchronize_non_fungible_asset_indexes(&rx, 0)
+                            .await
+                    });
+                }
+            }
+        }
 
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
