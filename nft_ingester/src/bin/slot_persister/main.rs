@@ -153,16 +153,16 @@ async fn fetch_block_with_retries(
                         .get_block(slot, None::<Arc<BigTableClient>>)
                         .await
                     {
-                        Ok(block_data) => 
-                        {
+                        Ok(block_data) => {
                             debug!("Successfully fetched block for slot {}", slot);
                             Ok((
-                            slot,
-                            RawBlock {
                                 slot,
-                                block: block_data,
-                            },
-                        ))},
+                                RawBlock {
+                                    slot,
+                                    block: block_data,
+                                },
+                            ))
+                        }
                         Err(e) => {
                             error!("Error fetching block for slot {}: {}", slot, e);
                             Err((slot, FetchError::Other(e.to_string())))
@@ -249,7 +249,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         bt_connection.big_table_inner_client.clone(),
         metrics_state.backfiller_metrics.clone(),
     );
-    let wait_period = Duration::from_secs(5);
+    let wait_period = Duration::from_secs(1);
     let mut start_slot = start_slot;
     loop {
         if shutdown_token.is_cancelled() {
@@ -360,7 +360,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             } else {
                                 // Successfully saved, proceed to next batch
-                                let last_slot = successful_blocks.keys().max().cloned().unwrap_or(0);
+                                let last_slot =
+                                    successful_blocks.keys().max().cloned().unwrap_or(0);
                                 info!(
                                     "Successfully saved batch to RocksDB. Last stored slot: {}",
                                     last_slot

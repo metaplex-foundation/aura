@@ -10,10 +10,10 @@ use solana_transaction_status::{
 };
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::error;
+use tracing::{error, warn};
 
 pub const GET_DATA_FROM_BG_RETRIES: u32 = 5;
-pub const SECONDS_TO_RETRY_GET_DATA_FROM_BG: u64 = 5;
+pub const SECONDS_TO_RETRY_GET_DATA_FROM_BG: u64 = 2;
 
 pub struct BigTableClient {
     pub big_table_client: Arc<LedgerStorage>,
@@ -72,7 +72,8 @@ impl BlockProducer for BigTableClient {
             let mut block = match self.big_table_client.get_confirmed_block(slot).await {
                 Ok(block) => block,
                 Err(err) => {
-                    error!("Error getting block: {}", err);
+                    // as this will be retried we're logging as warn. If the error persists, it will be returned as error
+                    warn!("Error getting block: {}, retrying", err);
                     counter -= 1;
                     if counter == 0 {
                         return Err(StorageError::Common(format!(
