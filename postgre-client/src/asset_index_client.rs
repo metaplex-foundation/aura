@@ -17,7 +17,7 @@ use crate::{
 };
 use entities::{
     enums::SpecificationAssetClass as AssetSpecClass,
-    models::{AssetIndex, Creator, FungibleToken, UrlWithStatus},
+    models::{AssetIndex, Creator, FungibleAssetIndex, FungibleToken, UrlWithStatus},
 };
 
 pub const INSERT_ASSET_PARAMETERS_COUNT: usize = 19;
@@ -150,12 +150,33 @@ pub(crate) struct AssetComponenents {
     pub authorities: Vec<Authority>,
     pub fungible_tokens: Vec<FungibleToken>,
 }
+
 pub(crate) struct TableNames {
     pub metadata_table: String,
     pub assets_table: String,
     pub creators_table: String,
     pub authorities_table: String,
     pub fungible_tokens_table: String,
+}
+
+pub(crate) fn split_fungible_assets_into_components(
+    asset_indexes: &[FungibleAssetIndex],
+) -> Vec<FungibleToken> {
+    asset_indexes
+        .iter()
+        .filter(|asset| asset.specification_asset_class == AssetSpecClass::FungibleToken)
+        .map(|asset| {
+            FungibleToken {
+                key: asset.pubkey,
+                slot_updated: asset.slot_updated,
+                // it's unlikely that rows below will not be filled for fungible token
+                // but even if that happens we will save asset with default values
+                owner: asset.owner.unwrap_or_default(),
+                asset: asset.fungible_asset_mint.unwrap_or_default(),
+                balance: asset.fungible_asset_balance.unwrap_or_default() as i64,
+            }
+        })
+        .collect()
 }
 
 pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> AssetComponenents {
@@ -271,6 +292,31 @@ impl AssetIndexStorage for PgClient {
             creators_table: "asset_creators_v3".to_string(),
             authorities_table: "assets_authorities".to_string(),
             fungible_tokens_table: "fungible_tokens".to_string(),
+        };
+        self.upsert_batched(&mut transaction, table_names, updated_components)
+            .await?;
+        self.commit_transaction(transaction).await
+    }
+
+    async fn update_fungible_asset_indexes_batch(
+        &self,
+        fungible_asset_indexes: &[FungibleAssetIndex],
+    ) -> Result<(), IndexDbError> {
+        let mut transaction = self.start_transaction().await?;
+        let table_names = TableNames {
+            metadata_table: "tasks".to_string(),
+            assets_table: "assets_v3".to_string(),
+            creators_table: "asset_creators_v3".to_string(),
+            authorities_table: "assets_authorities".to_string(),
+            fungible_tokens_table: "fungible_tokens".to_string(),
+        };
+        let updated_components = AssetComponenents {
+            fungible_tokens: split_fungible_assets_into_components(fungible_asset_indexes),
+            metadata_urls: vec![],
+            asset_indexes: vec![],
+            all_creators: vec![],
+            updated_keys: vec![],
+            authorities: vec![],
         };
         self.upsert_batched(&mut transaction, table_names, updated_components)
             .await?;

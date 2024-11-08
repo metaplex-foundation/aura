@@ -4,7 +4,7 @@ use crate::model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter};
 use crate::temp_index_client::TempClient;
 use async_trait::async_trait;
 use entities::api_req_params::GetByMethodsOptions;
-use entities::models::AssetIndex;
+use entities::models::{AssetIndex, FungibleAssetIndex};
 use mockall::{automock, mock};
 
 #[async_trait]
@@ -16,6 +16,10 @@ pub trait AssetIndexStorage {
     async fn update_asset_indexes_batch(
         &self,
         asset_indexes: &[AssetIndex],
+    ) -> Result<(), IndexDbError>;
+    async fn update_fungible_asset_indexes_batch(
+        &self,
+        asset_indexes: &[FungibleAssetIndex],
     ) -> Result<(), IndexDbError>;
     async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError>;
     async fn load_from_dump(
@@ -33,6 +37,10 @@ mock!(
         async fn update_asset_indexes_batch(
             &self,
             asset_indexes: &[AssetIndex],
+        ) -> Result<(), IndexDbError>;
+        async fn update_fungible_asset_indexes_batch(
+            &self,
+            asset_indexes: &[FungibleAssetIndex],
         ) -> Result<(), IndexDbError>;
         async fn load_from_dump(
             &self,

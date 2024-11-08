@@ -5,7 +5,10 @@ use entities::enums::{SpecificationAssetClass, SpecificationVersions, TokenMetad
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::asset::{AssetCollection, AssetLeaf, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey};
+use crate::asset::{
+    AssetCollection, AssetLeaf, AssetsUpdateIdx, FungibleAssetsUpdateIdx, SlotAssetIdx,
+    SlotAssetIdxKey,
+};
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
 use crate::column::TypedColumn;
 use crate::errors::StorageError;
@@ -22,7 +25,27 @@ use entities::models::{
 };
 
 impl AssetUpdateIndexStorage for Storage {
-    fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
+    fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
+        _ = self.db.try_catch_up_with_primary();
+        let start_time = chrono::Utc::now();
+        let mut iter = self.fungible_assets_update_idx.iter_end();
+        if let Some(pair) = iter.next() {
+            let (last_key, _) = pair?;
+            let key = FungibleAssetsUpdateIdx::decode_key(last_key.to_vec())?;
+            let decoded_key = decode_u64x2_pubkey(key).unwrap();
+            self.red_metrics.observe_request(
+                ROCKS_COMPONENT,
+                ITERATOR_TOP_ACTION,
+                FungibleAssetsUpdateIdx::NAME,
+                start_time,
+            );
+            Ok(Some(decoded_key))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn last_known_non_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         _ = self.db.try_catch_up_with_primary();
         let start_time = chrono::Utc::now();
         let mut iter = self.assets_update_idx.iter_end();
@@ -42,7 +65,66 @@ impl AssetUpdateIndexStorage for Storage {
         }
     }
 
-    fn fetch_asset_updated_keys(
+    fn fetch_fungible_asset_updated_keys(
+        &self,
+        from: Option<AssetUpdatedKey>,
+        up_to: Option<AssetUpdatedKey>,
+        limit: usize,
+        skip_keys: Option<HashSet<Pubkey>>,
+    ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)> {
+        let mut unique_pubkeys = HashSet::new();
+        let mut last_key = from;
+
+        if limit == 0 {
+            return Ok((unique_pubkeys, last_key));
+        }
+        let start_time = chrono::Utc::now();
+        let iterator = match last_key.clone() {
+            Some(key) => {
+                let encoded = encode_u64x2_pubkey(key.seq, key.slot, key.pubkey);
+                let mut iter = self.fungible_assets_update_idx.iter(encoded);
+                iter.next(); // Skip the first key, as it is the `from`
+                iter
+            }
+            None => self.assets_update_idx.iter_start(),
+        };
+
+        for pair in iterator {
+            let (idx_key, _) = pair?;
+            let key = FungibleAssetsUpdateIdx::decode_key(idx_key.to_vec())?;
+            // Stop if the current key is greater than `up_to`
+            if let Some(ref up_to_key) = up_to {
+                let up_to = encode_u64x2_pubkey(up_to_key.seq, up_to_key.slot, up_to_key.pubkey);
+                if key > up_to {
+                    break;
+                }
+            }
+            let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
+            last_key = Some(decoded_key.clone());
+            // Skip keys that are in the skip_keys set
+            if skip_keys
+                .as_ref()
+                .map_or(false, |sk| sk.contains(&decoded_key.pubkey))
+            {
+                continue;
+            }
+
+            unique_pubkeys.insert(decoded_key.pubkey);
+
+            if unique_pubkeys.len() >= limit {
+                break;
+            }
+        }
+        self.red_metrics.observe_request(
+            ROCKS_COMPONENT,
+            BATCH_ITERATION_ACTION,
+            FungibleAssetsUpdateIdx::NAME,
+            start_time,
+        );
+        Ok((unique_pubkeys, last_key))
+    }
+
+    fn fetch_non_fungible_asset_updated_keys(
         &self,
         from: Option<AssetUpdatedKey>,
         up_to: Option<AssetUpdatedKey>,

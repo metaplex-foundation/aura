@@ -134,34 +134,42 @@ pub async fn main() -> Result<(), IngesterError> {
         if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
             tracing::error!("Sync rocksdb error: {}", e);
         }
-        [AssetType::Fungible, AssetType::NonFungible]
-            .into_iter()
-            .for_each(|asset_type| {
-                let synchronizer = synchronizer.clone();
-                let shutdown_rx = shutdown_rx.resubscribe();
 
-                tokio::spawn(async move {
-                    match synchronizer
-                        .synchronize_asset_indexes(
-                            &shutdown_rx,
-                            config.dump_sync_threshold,
-                            asset_type,
-                        )
-                        .await
-                    {
-                        Ok(_) => {
-                            tracing::info!("Synchronization finished successfully");
-                        }
-                        Err(e) => {
-                            tracing::error!("Synchronization failed: {:?}", e);
-                        }
+        for asset_type in [AssetType::Fungible, AssetType::NonFungible] {
+            let synchronizer = synchronizer.clone();
+            let shutdown_rx = shutdown_rx.resubscribe();
+
+            tokio::spawn(async move {
+                let result = match asset_type {
+                    AssetType::NonFungible => {
+                        synchronizer
+                            .synchronize_non_fungible_asset_indexes(
+                                &shutdown_rx,
+                                config.dump_sync_threshold,
+                            )
+                            .await
                     }
-                    tokio::time::sleep(tokio::time::Duration::from_secs(
-                        config.timeout_between_syncs_sec,
-                    ))
-                    .await;
-                });
-            })
+                    AssetType::Fungible => {
+                        synchronizer
+                            .synchronize_fungible_asset_indexes(
+                                &shutdown_rx,
+                                config.dump_sync_threshold,
+                            )
+                            .await
+                    }
+                };
+
+                if let Err(e) = result {
+                    tracing::error!("Synchronization failed: {:?}", e);
+                } else {
+                    tracing::info!("Synchronization finished successfully");
+                }
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    config.timeout_between_syncs_sec,
+                ))
+                .await;
+            });
+        }
     }
     Ok(())
 }

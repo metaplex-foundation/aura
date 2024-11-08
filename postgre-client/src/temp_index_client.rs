@@ -5,12 +5,15 @@ use sqlx::{pool::PoolConnection, Connection, Postgres, QueryBuilder};
 use tokio::sync::Mutex;
 
 use crate::{
-    asset_index_client::{split_assets_into_components, AssetType, TableNames},
+    asset_index_client::{
+        split_assets_into_components, split_fungible_assets_into_components, AssetComponenents,
+        AssetType, TableNames,
+    },
     error::IndexDbError,
     storage_traits::{AssetIndexStorage, TempClientProvider},
     PgClient, BATCH_UPSERT_ACTION, CREATE_ACTION, DROP_ACTION, INSERT_ACTION, UPDATE_ACTION,
 };
-use entities::models::AssetIndex;
+use entities::models::{AssetIndex, FungibleAssetIndex};
 
 pub const TEMP_INDEXING_TABLE_PREFIX: &str = "indexing_temp_";
 #[derive(Clone)]
@@ -250,6 +253,33 @@ impl AssetIndexStorage for TempClient {
             creators_table: format!("{}asset_creators_v3", TEMP_INDEXING_TABLE_PREFIX),
             authorities_table: format!("{}assets_authorities", TEMP_INDEXING_TABLE_PREFIX),
             fungible_tokens_table: format!("{}fungible_tokens", TEMP_INDEXING_TABLE_PREFIX),
+        };
+        self.pg_client
+            .upsert_batched(&mut transaction, table_names, updated_components)
+            .await?;
+        self.pg_client.commit_transaction(transaction).await
+    }
+
+    async fn update_fungible_asset_indexes_batch(
+        &self,
+        fungible_asset_indexes: &[FungibleAssetIndex],
+    ) -> Result<(), IndexDbError> {
+        let mut c = self.pooled_connection.lock().await;
+        let mut transaction = c.begin().await?;
+        let table_names = TableNames {
+            metadata_table: format!("{}tasks", TEMP_INDEXING_TABLE_PREFIX),
+            assets_table: format!("{}assets_v3", TEMP_INDEXING_TABLE_PREFIX),
+            creators_table: format!("{}asset_creators_v3", TEMP_INDEXING_TABLE_PREFIX),
+            authorities_table: format!("{}assets_authorities", TEMP_INDEXING_TABLE_PREFIX),
+            fungible_tokens_table: format!("{}fungible_tokens", TEMP_INDEXING_TABLE_PREFIX),
+        };
+        let updated_components = AssetComponenents {
+            fungible_tokens: split_fungible_assets_into_components(fungible_asset_indexes),
+            metadata_urls: vec![],
+            asset_indexes: vec![],
+            all_creators: vec![],
+            updated_keys: vec![],
+            authorities: vec![],
         };
         self.pg_client
             .upsert_batched(&mut transaction, table_names, updated_components)

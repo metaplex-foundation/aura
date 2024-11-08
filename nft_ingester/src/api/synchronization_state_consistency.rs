@@ -63,7 +63,12 @@ impl SynchronizationStateConsistencyChecker {
                     let Ok(decoded_index_update_key) = decode_u64x2_pubkey(index_seq) else {
                         continue;
                     };
-                    let Ok(Some(primary_update_key)) = rocks_db.last_known_asset_updated_key() else {
+
+                    let last_known_updated_asset = match asset_type {
+                        AssetType::NonFungible => rocks_db.last_known_non_fungible_asset_updated_key(),
+                        AssetType::Fungible => rocks_db.last_known_fungible_asset_updated_key(),
+                    };
+                    let Ok(Some(primary_update_key)) = last_known_updated_asset else {
                         continue;
                     };
 

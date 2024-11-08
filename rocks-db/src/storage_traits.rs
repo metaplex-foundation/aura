@@ -23,9 +23,19 @@ impl AssetUpdatedKey {
 
 #[automock]
 pub trait AssetUpdateIndexStorage {
-    fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>>;
+    fn last_known_non_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>>;
+    fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>>;
+
     #[allow(clippy::type_complexity)]
-    fn fetch_asset_updated_keys(
+    fn fetch_non_fungible_asset_updated_keys(
+        &self,
+        from: Option<AssetUpdatedKey>,
+        up_to: Option<AssetUpdatedKey>,
+        limit: usize,
+        skip_keys: Option<HashSet<Pubkey>>,
+    ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)>;
+
+    fn fetch_fungible_asset_updated_keys(
         &self,
         from: Option<AssetUpdatedKey>,
         up_to: Option<AssetUpdatedKey>,
@@ -81,12 +91,17 @@ impl MockAssetIndexStorage {
 }
 
 impl AssetUpdateIndexStorage for MockAssetIndexStorage {
-    fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
+    fn last_known_non_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         self.mock_update_index_storage
-            .last_known_asset_updated_key()
+            .last_known_non_fungible_asset_updated_key()
     }
 
-    fn fetch_asset_updated_keys(
+    fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
+        self.mock_update_index_storage
+            .last_known_fungible_asset_updated_key()
+    }
+
+    fn fetch_non_fungible_asset_updated_keys(
         &self,
         from: Option<AssetUpdatedKey>,
         up_to: Option<AssetUpdatedKey>,
@@ -94,7 +109,18 @@ impl AssetUpdateIndexStorage for MockAssetIndexStorage {
         skip_keys: Option<HashSet<Pubkey>>,
     ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)> {
         self.mock_update_index_storage
-            .fetch_asset_updated_keys(from, up_to, limit, skip_keys)
+            .fetch_non_fungible_asset_updated_keys(from, up_to, limit, skip_keys)
+    }
+
+    fn fetch_fungible_asset_updated_keys(
+        &self,
+        from: Option<AssetUpdatedKey>,
+        up_to: Option<AssetUpdatedKey>,
+        limit: usize,
+        skip_keys: Option<HashSet<Pubkey>>,
+    ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)> {
+        self.mock_update_index_storage
+            .fetch_fungible_asset_updated_keys(from, up_to, limit, skip_keys)
     }
 }
 

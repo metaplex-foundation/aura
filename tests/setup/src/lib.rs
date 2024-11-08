@@ -79,19 +79,24 @@ impl<'a> TestEnvironment<'a> {
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(syncronizer);
-        [AssetType::NonFungible, AssetType::Fungible]
-            .into_iter()
-            .for_each(|asset_type| {
-                let asset_type = asset_type.clone();
-                let synchronizer = synchronizer.clone();
-                let rx = rx.resubscribe();
-                tokio::spawn(async move {
-                    synchronizer
-                        .synchronize_asset_indexes(&rx, 0, asset_type)
+
+        for asset_type in [AssetType::NonFungible, AssetType::Fungible] {
+            let asset_type = asset_type.clone();
+            let synchronizer = synchronizer.clone();
+            let rx = rx.resubscribe();
+            tokio::spawn(async move {
+                match asset_type {
+                    AssetType::NonFungible => synchronizer
+                        .synchronize_non_fungible_asset_indexes(&rx, 0)
                         .await
-                        .unwrap();
-                });
+                        .unwrap(),
+                    AssetType::Fungible => synchronizer
+                        .synchronize_fungible_asset_indexes(&rx, 0)
+                        .await
+                        .unwrap(),
+                }
             });
+        }
         (env, generated_data)
     }
 

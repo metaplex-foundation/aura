@@ -589,9 +589,18 @@ pub async fn main() -> Result<(), IngesterError> {
                 let rx = shutdown_rx.resubscribe();
                 let synchronizer = synchronizer.clone();
                 tokio::spawn(async move {
-                    synchronizer
-                        .run(&rx, config.dump_sync_threshold, Duration::from_secs(5), asset_type)
-                        .await;
+                    match asset_type {
+                        AssetType::NonFungible => {
+                            synchronizer
+                                .non_fungible_run(&rx, config.dump_sync_threshold, Duration::from_secs(5))
+                                .await
+                        }
+                        AssetType::Fungible => {
+                            synchronizer
+                                .fungible_run(&rx, config.dump_sync_threshold, Duration::from_secs(5))
+                                .await
+                        }
+                    }
                 });
             })
     }
