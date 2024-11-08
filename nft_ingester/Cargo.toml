@@ -137,3 +137,6 @@ name = "backfill"
 
 [[bin]]
 name = "slot_persister"
+
+[[bin]]
+name = "slot_checker"
