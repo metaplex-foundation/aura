@@ -30,11 +30,13 @@ impl BackfillingStateConsistencyChecker {
         let overwhelm_backfill_gap_clone = self.overwhelm_backfill_gap.clone();
         tasks.lock().await.spawn(async move {
             while rx.is_empty() {
-                overwhelm_backfill_gap_clone.store(
-                    rocks_db.bubblegum_slots.iter_start().count().saturating_add(rocks_db.ingestable_slots.iter_start().count())
-                        >= consistence_backfilling_slots_threshold as usize,
-                    Ordering::SeqCst,
-                );
+                // TODO: refactor this to use parameter from storage and last slot from slot storage
+
+                // overwhelm_backfill_gap_clone.store(
+                //     rocks_db.bubblegum_slots.iter_start().count().saturating_add(rocks_db.ingestable_slots.iter_start().count())
+                //         >= consistence_backfilling_slots_threshold as usize,
+                //     Ordering::SeqCst,
+                // );
                 tokio::select! {
                     _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)) => {},
                     _ = rx.recv() => {

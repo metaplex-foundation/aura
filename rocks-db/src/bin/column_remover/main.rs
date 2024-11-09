@@ -1,13 +1,20 @@
 use std::sync::Arc;
 
+use entities::schedule::ScheduledJob;
 use rocks_db::asset::{
-    self, AssetAuthorityDeprecated, AssetDynamicDetailsDeprecated, AssetOwnerDeprecated,
-    AssetStaticDetailsDeprecated, MetadataMintMap,
+    self, AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetDynamicDetailsDeprecated,
+    AssetOwnerDeprecated, AssetStaticDetailsDeprecated, MetadataMintMap,
 };
+use rocks_db::asset_previews::{AssetPreviews, UrlToDownload};
+use rocks_db::batch_mint::BatchMintWithStaker;
 use rocks_db::column::TypedColumn;
+use rocks_db::inscriptions::{Inscription, InscriptionData};
+use rocks_db::leaf_signatures::LeafSignature;
+use rocks_db::token_prices::TokenPrice;
 use rocks_db::tree_seq::{TreeSeqIdx, TreesGaps};
 use rocks_db::{
-    cl_items, signature_client, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+    bubblegum_slots, cl_items, parameters, signature_client, AssetAuthority, AssetDynamicDetails,
+    AssetOwner, AssetStaticDetails,
 };
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -18,7 +25,9 @@ use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
 use entities::enums::TokenMetadataEdition;
-use entities::models::{AssetSignature, TokenAccount};
+use entities::models::{
+    AssetSignature, BatchMintToVerify, FailedBatchMint, RawBlock, SplMint, TokenAccount,
+};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::migrator::MigrationState;
 use rocks_db::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
@@ -38,30 +47,9 @@ pub async fn main() -> Result<(), String> {
 
     // Specify the column families you plan to remove
     let columns_to_remove = vec![
-        AssetStaticDetails::NAME,
-        AssetDynamicDetails::NAME,
-        AssetAuthority::NAME,
-        AssetAuthorityDeprecated::NAME,
-        AssetOwnerDeprecated::NAME,
-        asset::AssetLeaf::NAME,
-        asset::AssetCollection::NAME,
-        asset::AssetCollectionDeprecated::NAME,
-        cl_items::ClItem::NAME,
-        cl_items::ClLeaf::NAME,
-        asset::AssetsUpdateIdx::NAME,
-        asset::SlotAssetIdx::NAME,
-        AssetOwner::NAME,
-        TreeSeqIdx::NAME,
-        signature_client::SignatureIdx::NAME,
-        AssetDynamicDetailsDeprecated::NAME,
-        MetadataMintMap::NAME,
-        TreesGaps::NAME,
-        TokenMetadataEdition::NAME,
-        AssetStaticDetailsDeprecated::NAME,
-        AssetSignature::NAME,
-        TokenAccount::NAME,
-        TokenAccountOwnerIdx::NAME,
-        TokenAccountMintOwnerIdx::NAME,
+        "BUBBLEGUM_SLOTS",  // bubblegum_slots::BubblegumSlots::NAME,
+        "INGESTABLE_SLOTS", // bubblegum_slots::IngestableSlots::NAME,
+        RawBlock::NAME,
     ];
 
     // Print the column families to be removed

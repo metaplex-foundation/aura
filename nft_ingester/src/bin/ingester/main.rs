@@ -8,6 +8,7 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 
 use clap::Parser;
 use futures::FutureExt;
@@ -16,7 +17,6 @@ use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use nft_ingester::json_worker;
 use plerkle_messenger::ConsumptionType;
 use pprof::ProfilerGuardBuilder;
-use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
@@ -33,8 +33,7 @@ use nft_ingester::ack::create_ack_channel;
 use nft_ingester::api::account_balance::AccountBalanceGetterImpl;
 use nft_ingester::api::service::start_api;
 use nft_ingester::backfiller::{
-    run_perpetual_slot_collection, run_perpetual_slot_processing, run_slot_force_persister, BackfillSource, Backfiller,
-    DirectBlockParser, ForceReingestableSlotGetter, TransactionsParser,
+    run_slot_force_persister, BackfillSource, DirectBlockParser, ForceReingestableSlotGetter, TransactionsParser,
 };
 use nft_ingester::batch_mint::batch_mint_processor::{process_batch_mints, BatchMintProcessor, NoopBatchMintTxSender};
 use nft_ingester::buffer::{debug_buffer, Buffer};
@@ -55,9 +54,9 @@ use nft_ingester::rocks_db::{perform_backup, receive_last_saved_slot, restore_ro
 use nft_ingester::tcp_receiver::{connect_to_geyser, connect_to_snapshot_receiver, TcpReceiver};
 use nft_ingester::transaction_ingester::BackfillTransactionIngester;
 use nft_ingester::{config::init_logger, error::IngesterError};
-use rocks_db::backup_service;
 use rocks_db::backup_service::BackupService;
 use rocks_db::storage_traits::AssetSlotStorage;
+use rocks_db::{backup_service, SlotStorage};
 use tonic::transport::Server;
 use usecase::asset_streamer::AssetStreamer;
 use usecase::proofs::MaybeProofChecker;
@@ -75,9 +74,18 @@ pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 
 #[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
 struct Args {
     #[arg(short, long)]
     restore_rocks_db: bool,
+
+    /// Path to the RocksDB instance with slots
+    #[arg(short, long)]
+    slots_db_path: PathBuf,
+
+    /// Path to the secondary RocksDB instance with slots
+    #[arg(long)]
+    secondary_slots_db_path: PathBuf,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -96,8 +104,10 @@ pub async fn main() -> Result<(), IngesterError> {
             .expect("Failed to build 'ProfilerGuardBuilder'!")
     });
 
+    let args = Args::parse();
+
     // try to restore rocksDB first
-    if Args::parse().restore_rocks_db {
+    if args.restore_rocks_db {
         restore_rocksdb(&config).await?;
     }
 
@@ -434,139 +444,51 @@ pub async fn main() -> Result<(), IngesterError> {
         )
         .await,
     );
-    let backfiller =
-        Arc::new(Backfiller::new(primary_rocks_storage.clone(), backfiller_source.clone(), backfiller_config.clone()));
 
     let rpc_backfiller = Arc::new(BackfillRPC::connect(config.backfill_rpc_address.clone()));
+
+    let slot_db = Arc::new(
+        SlotStorage::open_secondary(
+            args.slots_db_path,
+            args.secondary_slots_db_path,
+            mutexed_tasks.clone(),
+            metrics_state.red_metrics.clone(),
+        )
+        .expect("Failed to open slot storage"),
+    );
+    let shutdown_token = CancellationToken::new();
     if config.run_bubblegum_backfiller {
         if backfiller_config.should_reingest {
-            warn!("'Reingest' flag is set, deleting last fetched slot.");
+            warn!("'Reingest' flag is set, deleting last backfilled slot.");
             primary_rocks_storage
-                .delete_parameter::<u64>(rocks_db::parameters::Parameter::LastFetchedSlot)
+                .delete_parameter::<u64>(rocks_db::parameters::Parameter::LastBackfilledSlot)
                 .await?;
         }
 
         match backfiller_config.backfiller_mode {
             BackfillerMode::IngestDirectly => {
-                let consumer = Arc::new(DirectBlockParser::new(
-                    tx_ingester.clone(),
-                    primary_rocks_storage.clone(),
-                    metrics_state.backfiller_metrics.clone(),
-                ));
-                backfiller
-                    .start_backfill(
-                        mutexed_tasks.clone(),
-                        shutdown_rx.resubscribe(),
-                        metrics_state.backfiller_metrics.clone(),
-                        consumer,
-                        backfiller_source.clone(),
-                    )
-                    .await?;
-                info!("Running Backfiller directly from bigtable to ingester.");
+                panic!("IngestDirectly mode is not supported any more.");
             }
             BackfillerMode::Persist => {
-                let consumer = primary_rocks_storage.clone();
-                backfiller
-                    .start_backfill(
-                        mutexed_tasks.clone(),
-                        shutdown_rx.resubscribe(),
-                        metrics_state.backfiller_metrics.clone(),
-                        consumer,
-                        backfiller_source.clone(),
-                    )
-                    .await?;
-                info!("Running Backfiller to persist raw data.");
+                panic!("Persist mode is not supported any more. Use slot_persister binary instead.");
             }
             BackfillerMode::IngestPersisted => {
-                let consumer = Arc::new(DirectBlockParser::new(
-                    tx_ingester.clone(),
-                    primary_rocks_storage.clone(),
-                    metrics_state.backfiller_metrics.clone(),
-                ));
-                let producer = primary_rocks_storage.clone();
-
-                let transactions_parser = Arc::new(TransactionsParser::new(
-                    primary_rocks_storage.clone(),
-                    Arc::new(BubblegumSlotGetter::new(primary_rocks_storage.clone())),
-                    consumer,
-                    producer,
-                    metrics_state.backfiller_metrics.clone(),
-                    backfiller_config.workers_count,
-                    backfiller_config.chunk_size,
-                ));
-
-                let cloned_rx = shutdown_rx.resubscribe();
-                mutexed_tasks.lock().await.spawn(async move {
-                    info!("Running transactions parser...");
-
-                    transactions_parser
-                        .parse_raw_transactions(
-                            cloned_rx,
-                            backfiller_config.permitted_tasks,
-                            backfiller_config.slot_until,
-                        )
-                        .await;
-
-                    Ok(())
-                });
-
-                info!("Running Backfiller on persisted raw data.");
+                panic!("IngestDirectly mode is not supported any more. Use backfill binary instead.");
             }
             BackfillerMode::PersistAndIngest => {
-                let rx = shutdown_rx.resubscribe();
-                let metrics = Arc::new(BackfillerMetricsConfig::new());
-                metrics.register_with_prefix(&mut metrics_state.registry, "slot_fetcher_");
-                let backfiller_clone = backfiller.clone();
-                let rpc_backfiller_clone = rpc_backfiller.clone();
-                mutexed_tasks.lock().await.spawn(run_perpetual_slot_collection(
-                    backfiller_clone,
-                    rpc_backfiller_clone,
-                    metrics,
-                    backfiller_config.wait_period_sec,
-                    rx,
-                ));
-
-                // run perpetual slot persister
-                let rx = shutdown_rx.resubscribe();
-                let consumer = primary_rocks_storage.clone();
-                let producer = backfiller_source.clone();
-                let metrics = Arc::new(BackfillerMetricsConfig::new());
-                metrics.register_with_prefix(&mut metrics_state.registry, "slot_persister_");
-                let slot_getter = Arc::new(BubblegumSlotGetter::new(primary_rocks_storage.clone()));
-                let backfiller_clone = backfiller.clone();
-                mutexed_tasks.lock().await.spawn(run_perpetual_slot_processing(
-                    backfiller_clone,
-                    metrics,
-                    slot_getter,
-                    consumer,
-                    producer,
-                    backfiller_config.wait_period_sec,
-                    rx,
-                    None,
-                ));
-                // run perpetual ingester
-                let rx = shutdown_rx.resubscribe();
                 let consumer = Arc::new(DirectBlockParser::new(
                     tx_ingester.clone(),
                     primary_rocks_storage.clone(),
                     metrics_state.backfiller_metrics.clone(),
                 ));
-                let producer = primary_rocks_storage.clone();
-                let metrics = Arc::new(BackfillerMetricsConfig::new());
-                metrics.register_with_prefix(&mut metrics_state.registry, "slot_ingester_");
-                let slot_getter = Arc::new(IngestableSlotGetter::new(primary_rocks_storage.clone()));
-                let backfiller_clone = backfiller.clone();
-                let backup = backfiller_source.clone();
-                mutexed_tasks.lock().await.spawn(run_perpetual_slot_processing(
-                    backfiller_clone,
-                    metrics,
-                    slot_getter,
-                    consumer,
-                    producer,
-                    backfiller_config.wait_period_sec,
-                    rx,
-                    Some(backup),
-                ));
+                let shutdown_token = shutdown_token.clone();
+                let db = primary_rocks_storage.clone();
+                let metrics: Arc<BackfillerMetricsConfig> = metrics_state.backfiller_metrics.clone();
+                let slot_db = slot_db.clone();
+                mutexed_tasks.lock().await.spawn(async move {
+                    nft_ingester::backfiller::run_backfill_slots(shutdown_token, db, slot_db, consumer, metrics).await;
+                    Ok(())
+                });
             }
             BackfillerMode::None => {
                 info!("Not running Backfiller.");
@@ -586,7 +508,7 @@ pub async fn main() -> Result<(), IngesterError> {
     }
     // setup dependencies for grpc server
     let uc = AssetStreamer::new(config.peer_grpc_max_gap_slots, primary_rocks_storage.clone());
-    let bs = BlocksStreamer::new(config.peer_grpc_max_gap_slots, primary_rocks_storage.clone());
+    let bs = BlocksStreamer::new(config.peer_grpc_max_gap_slots, slot_db.clone());
     let serv = PeerGapFillerServiceImpl::new(Arc::new(uc), Arc::new(bs), primary_rocks_storage.clone());
     let asset_url_serv = AssetUrlServiceImpl::new(primary_rocks_storage.clone());
     let addr = format!("0.0.0.0:{}", config.peer_grpc_port).parse()?;
@@ -704,7 +626,7 @@ pub async fn main() -> Result<(), IngesterError> {
         if config.run_fork_cleaner {
             let fork_cleaner = ForkCleaner::new(
                 primary_rocks_storage.clone(),
-                primary_rocks_storage.clone(),
+                slot_db.clone(),
                 metrics_state.fork_cleaner_metrics.clone(),
             );
             let rx = shutdown_rx.resubscribe();
@@ -751,7 +673,15 @@ pub async fn main() -> Result<(), IngesterError> {
     start_metrics(metrics_state.registry, config.metrics_port).await;
 
     // --stop
-    graceful_stop(mutexed_tasks, shutdown_tx, guard, config.profiling_file_path_container, &config.heap_path).await;
+    graceful_stop(
+        mutexed_tasks,
+        shutdown_tx,
+        Some(shutdown_token),
+        guard,
+        config.profiling_file_path_container,
+        &config.heap_path,
+    )
+    .await;
 
     Ok(())
 }

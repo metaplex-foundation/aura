@@ -1,4 +1,4 @@
-use crate::column::TypedColumn;
+use crate::{column::TypedColumn, SlotStorage};
 use crate::errors::StorageError;
 use crate::Storage;
 use async_trait::async_trait;
@@ -12,14 +12,14 @@ use std::sync::Arc;
 use tokio_stream::wrappers::ReceiverStream;
 
 #[async_trait]
-impl RawBlocksStreamer for Storage {
+impl RawBlocksStreamer for SlotStorage {
     async fn get_raw_blocks_stream_in_range(
         &self,
         start_slot: u64,
         end_slot: u64,
     ) -> Result<RawBlocksStream, AsyncError> {
         let (tx, rx) = tokio::sync::mpsc::channel(32);
-        let backend = self.raw_blocks_cbor.backend.clone();
+        let backend = self.db.clone();
         let metrics = self.red_metrics.clone();
         self.join_set.lock().await.spawn(tokio::spawn(async move {
             let _ = process_raw_blocks_range(

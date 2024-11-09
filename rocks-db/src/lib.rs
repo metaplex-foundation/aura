@@ -73,7 +73,6 @@ pub mod raw_blocks_streaming_client;
 pub mod schedule;
 pub mod sequence_consistent;
 pub mod signature_client;
-pub mod slots_dumper;
 pub mod storage_traits;
 pub mod token_accounts;
 pub mod token_prices;
@@ -100,6 +99,52 @@ const BATCH_ITERATION_ACTION: &str = "batch_iteration";
 const BATCH_GET_ACTION: &str = "batch_get";
 const ITERATOR_TOP_ACTION: &str = "iterator_top";
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
+pub struct SlotStorage {
+    pub db: Arc<DB>,
+    pub raw_blocks_cbor: Column<RawBlock>,
+    join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+    red_metrics: Arc<RequestErrorDurationMetrics>,
+}
+
+impl SlotStorage {
+    pub fn new(
+        db: Arc<DB>,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Self {
+        let raw_blocks_cbor = Storage::column(db.clone(), red_metrics.clone());
+        Self {
+            db,
+            raw_blocks_cbor,
+            red_metrics,
+            join_set,
+        }
+    }
+
+    pub fn open_secondary<P>(
+        primary_path: P,
+        secondary_path: P,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let cf_descriptors = Storage::cfs_to_column_families(vec![
+            RawBlock::NAME,
+            MigrationVersions::NAME,
+            OffChainData::NAME,
+        ]);
+        let db = Arc::new(DB::open_cf_descriptors_as_secondary(
+            &Storage::get_db_options(),
+            primary_path,
+            secondary_path,
+            cf_descriptors,
+        )?);
+        Ok(Self::new(db, join_set, red_metrics))
+    }
+}
+
 pub struct Storage {
     pub asset_data: Column<AssetCompleteDetails>,
     pub asset_static_data: Column<AssetStaticDetails>,
@@ -117,10 +162,7 @@ pub struct Storage {
     pub asset_offchain_data: Column<OffChainData>,
     pub cl_items: Column<cl_items::ClItem>,
     pub cl_leafs: Column<cl_items::ClLeaf>,
-    pub bubblegum_slots: Column<bubblegum_slots::BubblegumSlots>,
-    pub ingestable_slots: Column<bubblegum_slots::IngestableSlots>,
     pub force_reingestable_slots: Column<bubblegum_slots::ForceReingestableSlots>,
-    pub raw_blocks_cbor: Column<RawBlock>,
     pub db: Arc<DB>,
     pub assets_update_idx: Column<AssetsUpdateIdx>,
     pub slot_asset_idx: Column<SlotAssetIdx>,
@@ -171,10 +213,7 @@ impl Storage {
         let cl_items = Self::column(db.clone(), red_metrics.clone());
         let cl_leafs = Self::column(db.clone(), red_metrics.clone());
 
-        let bubblegum_slots = Self::column(db.clone(), red_metrics.clone());
-        let ingestable_slots = Self::column(db.clone(), red_metrics.clone());
         let force_reingestable_slots = Self::column(db.clone(), red_metrics.clone());
-        let raw_blocks = Self::column(db.clone(), red_metrics.clone());
         let assets_update_idx = Self::column(db.clone(), red_metrics.clone());
         let slot_asset_idx = Self::column(db.clone(), red_metrics.clone());
         let tree_seq_idx = Self::column(db.clone(), red_metrics.clone());
@@ -214,10 +253,7 @@ impl Storage {
             asset_offchain_data,
             cl_items,
             cl_leafs,
-            bubblegum_slots,
-            ingestable_slots,
             force_reingestable_slots,
-            raw_blocks_cbor: raw_blocks,
             db,
             assets_update_idx,
             slot_asset_idx,
@@ -336,13 +372,11 @@ impl Storage {
             Self::new_cf_descriptor::<asset::AssetLeaf>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClItem>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClLeaf>(migration_state),
-            Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(migration_state),
             Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(migration_state),
             Self::new_cf_descriptor::<asset::SlotAssetIdx>(migration_state),
             Self::new_cf_descriptor::<signature_client::SignatureIdx>(migration_state),
             Self::new_cf_descriptor::<RawBlock>(migration_state),
             Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(migration_state),
-            Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(migration_state),
             Self::new_cf_descriptor::<bubblegum_slots::ForceReingestableSlots>(migration_state),
             Self::new_cf_descriptor::<TreeSeqIdx>(migration_state),
             Self::new_cf_descriptor::<TreesGaps>(migration_state),
@@ -558,18 +592,6 @@ impl Storage {
             cl_items::ClLeaf::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_cl_leaf_keep_existing",
-                    asset::AssetStaticDetails::merge_keep_existing,
-                );
-            }
-            bubblegum_slots::BubblegumSlots::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_bubblegum_slots_keep_existing",
-                    asset::AssetStaticDetails::merge_keep_existing,
-                );
-            }
-            bubblegum_slots::IngestableSlots::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_ingestable_slots_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }

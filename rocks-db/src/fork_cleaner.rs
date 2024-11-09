@@ -1,10 +1,12 @@
 use crate::{
-    cl_items::ClItemKey, column::TypedColumn, leaf_signatures::LeafSignature, Storage, DROP_ACTION,
-    FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION, RAW_BLOCKS_CBOR_ENDPOINT, ROCKS_COMPONENT,
+    cl_items::ClItemKey, column::TypedColumn, leaf_signatures::LeafSignature, SlotStorage, Storage,
+    DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION, RAW_BLOCKS_CBOR_ENDPOINT,
+    ROCKS_COMPONENT,
 };
 use async_trait::async_trait;
-use entities::models::{ClItem, ForkedItem, LeafSignatureAllData};
+use entities::models::{ClItem, ForkedItem, LeafSignatureAllData, RawBlock};
 use interface::fork_cleaner::{CompressedTreeChangesManager, ForkChecker};
+use rocksdb::IteratorMode;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use std::collections::HashSet;
 use tokio::sync::broadcast::Receiver;
@@ -94,11 +96,18 @@ impl CompressedTreeChangesManager for Storage {
 }
 
 #[async_trait]
-impl ForkChecker for Storage {
+impl ForkChecker for SlotStorage {
     fn get_all_non_forked_slots(&self, rx: Receiver<()>) -> HashSet<u64> {
         let start_time = chrono::Utc::now();
         let mut all_keys = HashSet::new();
-        for (key, _) in self.raw_blocks_cbor.iter_start().filter_map(Result::ok) {
+        for (key, _) in self
+            .db
+            .full_iterator_cf(
+                &self.db.cf_handle(RawBlock::NAME).unwrap(),
+                IteratorMode::Start,
+            )
+            .filter_map(Result::ok)
+        {
             if !rx.is_empty() {
                 info!("Stop iteration over raw_blocks_cbor iterator...");
                 return all_keys;
@@ -123,21 +132,19 @@ impl ForkChecker for Storage {
 
     fn last_slot_for_check(&self) -> u64 {
         let start_time = chrono::Utc::now();
-        for (key, _) in self.raw_blocks_cbor.iter_end().filter_map(Result::ok) {
-            match crate::key_encoders::decode_u64(key.to_vec()) {
-                Ok(key) => {
-                    self.red_metrics.observe_request(
-                        ROCKS_COMPONENT,
-                        ITERATOR_TOP_ACTION,
-                        RAW_BLOCKS_CBOR_ENDPOINT,
-                        start_time,
-                    );
-                    return key;
-                }
-                Err(e) => {
-                    error!("Decode raw block key: {}", e);
-                }
-            };
+        let mut it = self
+            .db
+            .raw_iterator_cf(&self.db.cf_handle(RawBlock::NAME).unwrap());
+        it.seek_to_last();
+        if !it.valid() {
+            self.red_metrics.observe_request(
+                ROCKS_COMPONENT,
+                ITERATOR_TOP_ACTION,
+                RAW_BLOCKS_CBOR_ENDPOINT,
+                start_time,
+            );
+            // if there are no saved blocks - we can not do any checks
+            return 0;
         }
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
@@ -145,7 +152,8 @@ impl ForkChecker for Storage {
             RAW_BLOCKS_CBOR_ENDPOINT,
             start_time,
         );
-        // if there no saved block - we cannot do any check
-        0
+        it.key()
+            .and_then(|b| RawBlock::decode_key(b.to_vec()).ok())
+            .unwrap_or_default()
     }
 }

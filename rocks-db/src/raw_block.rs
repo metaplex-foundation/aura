@@ -1,14 +1,11 @@
 use std::sync::Arc;
 
-use crate::{column::TypedColumn, key_encoders, Storage};
+use crate::SlotStorage;
+use crate::{column::TypedColumn, key_encoders};
 use async_trait::async_trait;
 use entities::models::RawBlock;
 use interface::error::StorageError as InterfaceStorageError;
-use interface::{
-    error::BlockConsumeError,
-    signature_persistence::{BlockConsumer, BlockProducer},
-};
-use tracing::error;
+use interface::signature_persistence::BlockProducer;
 
 impl TypedColumn for RawBlock {
     type KeyType = u64;
@@ -26,39 +23,7 @@ impl TypedColumn for RawBlock {
 }
 
 #[async_trait]
-impl BlockConsumer for Storage {
-    async fn consume_block(
-        &self,
-        slot: u64,
-        block: solana_transaction_status::UiConfirmedBlock,
-    ) -> Result<(), BlockConsumeError> {
-        let raw_block = RawBlock { slot, block };
-        self.raw_blocks_cbor
-            .put_cbor_encoded(raw_block.slot, raw_block.clone())
-            .await
-            .map_err(|e| {
-                error!(
-                    "Failed to put raw block for slot: {}, error: {}",
-                    raw_block.slot, e
-                );
-                BlockConsumeError::PersistenceErr(e.into())
-            })
-    }
-
-    async fn already_processed_slot(&self, slot: u64) -> Result<bool, BlockConsumeError> {
-        self.raw_blocks_cbor
-            .get_cbor_encoded(slot)
-            .await
-            .map(|r| r.is_some())
-            .map_err(|e| {
-                tracing::error!("Failed to get raw block for slot: {}, error: {}", slot, e);
-                BlockConsumeError::PersistenceErr(e.into())
-            })
-    }
-}
-
-#[async_trait]
-impl BlockProducer for Storage {
+impl BlockProducer for SlotStorage {
     async fn get_block(
         &self,
         slot: u64,
@@ -71,12 +36,9 @@ impl BlockProducer for Storage {
             .map_err(|e| InterfaceStorageError::Common(e.to_string()))?;
         if raw_block.is_none() {
             if let Some(backup_provider) = backup_provider {
-                let none_bp: Option<Arc<Storage>> = None;
+                let none_bp: Option<Arc<SlotStorage>> = None;
                 let block = backup_provider.get_block(slot, none_bp).await?;
                 tracing::info!("Got block from backup provider for slot: {}", slot);
-                self.consume_block(slot, block.clone())
-                    .await
-                    .map_err(|e| InterfaceStorageError::NotFound(e.to_string()))?;
                 return Ok(block);
             }
         }

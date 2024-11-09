@@ -163,6 +163,7 @@ pub struct BackfillerMetricsConfig {
     slots_collected: Family<MetricLabelWithStatus, Counter>,
     data_processed: Family<MetricLabel, Counter>, // slots & transactions
     last_processed_slot: Family<MetricLabel, Gauge>,
+    slot_delay: Family<MetricLabel, Histogram>,
 }
 
 impl Default for BackfillerMetricsConfig {
@@ -177,7 +178,18 @@ impl BackfillerMetricsConfig {
             slots_collected: Family::<MetricLabelWithStatus, Counter>::default(),
             data_processed: Family::<MetricLabel, Counter>::default(),
             last_processed_slot: Family::<MetricLabel, Gauge>::default(),
+            slot_delay: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(400.0, 1.8, 10))
+            }),
         }
+    }
+
+    pub fn set_slot_delay_time(&self, label: &str, duration: f64) {
+        self.slot_delay
+            .get_or_create(&MetricLabel {
+                name: label.to_string(),
+            })
+            .observe(duration);
     }
 
     pub fn inc_slots_collected(&self, label: &str, status: MetricStatus) -> u64 {
@@ -222,6 +234,12 @@ impl BackfillerMetricsConfig {
             format!("{}last_processed_slot", prefix),
             "The last processed slot by backfiller",
             self.last_processed_slot.clone(),
+        );
+        
+        registry.register(
+            format!("{}slot_delay", prefix),
+            "The delay between the slot time and the time when it was processed by the backfiller",
+            self.slot_delay.clone(),
         );
     }
 

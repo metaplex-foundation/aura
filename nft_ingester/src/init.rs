@@ -7,6 +7,7 @@ use pprof::protos::Message;
 use pprof::ProfilerGuard;
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
+use tokio_util::sync::CancellationToken;
 use std::fs::File;
 use std::io::Write;
 use std::ops::DerefMut;
@@ -85,12 +86,16 @@ pub async fn init_primary_storage(
 pub async fn graceful_stop(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     shutdown_tx: Sender<()>,
+    shutdown_token: Option<CancellationToken>,
     guard: Option<ProfilerGuard<'_>>,
     profile_path: Option<String>,
     heap_path: &str,
 ) {
     usecase::graceful_stop::listen_shutdown().await;
     let _ = shutdown_tx.send(());
+    if let Some(token) = shutdown_token {
+        token.cancel();
+    }
 
     if let Some(guard) = guard {
         if let Ok(report) = guard.report().build() {

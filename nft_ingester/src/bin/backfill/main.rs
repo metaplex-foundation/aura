@@ -15,6 +15,7 @@ use nft_ingester::{
 };
 use rocks_db::migrator::MigrationState;
 use rocks_db::{column::TypedColumn, Storage};
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 #[derive(Parser, Debug)]
@@ -128,14 +129,16 @@ async fn main() {
     let shutdown_flag = Arc::new(AtomicBool::new(false));
 
     // Spawn a task to handle graceful shutdown on Ctrl+C
-    let shutdown_flag_clone = shutdown_flag.clone();
+    let shutdown_token = CancellationToken::new();
+    let shutdown_token_clone = shutdown_token.clone();
+
     let slot_sender_clone = slot_sender.clone();
     tokio::spawn(async move {
         // Wait for Ctrl+C signal
         match tokio::signal::ctrl_c().await {
             Ok(()) => {
                 info!("Received Ctrl+C, shutting down gracefully...");
-                shutdown_flag_clone.store(true, Ordering::SeqCst);
+                shutdown_token_clone.cancel();
                 // Close the channel to signal workers to stop
                 slot_sender_clone.close();
             }
@@ -153,14 +156,14 @@ async fn main() {
         let slots_processed = slots_processed.clone();
         let last_slot_processed = last_slot_processed.clone();
         let rate = rate.clone();
-        let shutdown_flag = shutdown_flag.clone();
+        let shutdown_token = shutdown_token.clone();
 
         let slot_receiver = slot_receiver.clone();
 
         let handle = tokio::spawn(async move {
             let slot_receiver = slot_receiver;
             while let Ok((slot, raw_block_data)) = slot_receiver.recv().await {
-                if shutdown_flag.load(Ordering::SeqCst) {
+                if shutdown_token.is_cancelled() {
                     break;
                 }
 
@@ -204,7 +207,7 @@ async fn main() {
     // Spawn a task to update the rate periodically
     let slots_processed_clone = slots_processed.clone();
     let rate_clone = rate.clone();
-    let shutdown_flag_clone = shutdown_flag.clone();
+    let shutdown_token_clone = shutdown_token.clone();
 
     tokio::spawn(async move {
         let mut last_time = std::time::Instant::now();
@@ -213,7 +216,7 @@ async fn main() {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-            if shutdown_flag_clone.load(Ordering::SeqCst) {
+            if shutdown_token.is_cancelled() {
                 break;
             }
 
@@ -243,7 +246,7 @@ async fn main() {
 
     // Send slots to the channel
     while iter.valid() {
-        if shutdown_flag.load(Ordering::SeqCst) {
+        if shutdown_token.is_cancelled() {
             info!("Shutdown signal received. Stopping the submission of new slots.");
             break;
         }
