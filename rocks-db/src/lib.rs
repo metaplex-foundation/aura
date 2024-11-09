@@ -121,6 +121,27 @@ impl SlotStorage {
         }
     }
 
+    pub fn open<P>(
+        db_path: P,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let cf_descriptors = Storage::cfs_to_column_families(vec![
+            RawBlock::NAME,
+            MigrationVersions::NAME,
+            OffChainData::NAME,
+        ]);
+        let db = Arc::new(DB::open_cf_descriptors(
+            &Storage::get_db_options(),
+            db_path,
+            cf_descriptors,
+        )?);
+        Ok(Self::new(db, join_set, red_metrics))
+    }
+
     pub fn open_secondary<P>(
         primary_path: P,
         secondary_path: P,

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use backfill_rpc::rpc::BackfillRPC;
 use clap::Parser;
-use entities::models::{OffChainData, RawBlock};
+use entities::models::RawBlock;
 use futures::future::join_all;
 use interface::signature_persistence::BlockProducer;
 use interface::slot_getter::FinalizedSlotGetter;
@@ -9,9 +9,9 @@ use interface::slots_dumper::SlotsDumper;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{MetricState, MetricsTrait};
 use nft_ingester::backfiller::BackfillSource;
-use rocks_db::migrator::MigrationVersions;
-use rocks_db::{column::TypedColumn, Storage};
-use std::collections::{BTreeSet, HashMap};
+use rocks_db::column::TypedColumn;
+use rocks_db::SlotStorage;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -70,6 +70,10 @@ struct Args {
     /// Maximum number of concurrent requests
     #[arg(short = 'M', long, default_value_t = 20)]
     max_concurrency: usize,
+
+    /// Optional comma-separated list of slot numbers to check
+    #[arg(long)]
+    slots: Option<String>,
 }
 pub struct InMemorySlotsDumper {
     slots: Mutex<BTreeSet<u64>>,
@@ -110,7 +114,7 @@ impl SlotsDumper for InMemorySlotsDumper {
     }
 }
 
-pub fn get_last_persisted_slot(rocks_db: Arc<Storage>) -> u64 {
+pub fn get_last_persisted_slot(rocks_db: Arc<SlotStorage>) -> u64 {
     let mut it = rocks_db
         .db
         .raw_iterator_cf(&rocks_db.db.cf_handle(RawBlock::NAME).unwrap());
@@ -197,9 +201,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     start_metrics(metrics_state.registry, Some(args.metrics_port)).await;
     // Open target RocksDB
     let target_db = Arc::new(
-        Storage::open_cfs(
+        SlotStorage::open(
             &args.target_db_path,
-            vec![RawBlock::NAME, MigrationVersions::NAME, OffChainData::NAME],
             Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
             metrics_state.red_metrics.clone(),
         )
@@ -237,12 +240,12 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let rpc_client = Arc::new(BackfillRPC::connect(args.rpc_host));
+    let rpc_client = Arc::new(BackfillRPC::connect(args.rpc_host.clone()));
 
     let backfill_source = {
-        if let Some(bg_creds) = args.big_table_credentials {
+        if let Some(ref bg_creds) = args.big_table_credentials {
             Arc::new(BackfillSource::Bigtable(Arc::new(
-                BigTableClient::connect_new_with(bg_creds, args.big_table_timeout)
+                BigTableClient::connect_new_with(bg_creds.to_string(), args.big_table_timeout)
                     .await
                     .expect("expected to connect to big table"),
             )))
@@ -258,6 +261,46 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         metrics_state.backfiller_metrics.clone(),
     );
     let wait_period = Duration::from_secs(1);
+    // Check if slots are provided via --slots argument
+    let mut provided_slots = Vec::new();
+    if let Some(ref slots_str) = args.slots {
+        // Parse comma-separated list of slots
+        info!("Processing specific slots provided via command line.");
+        for part in slots_str.split(',') {
+            let slot_str = part.trim();
+            if let Ok(slot) = slot_str.parse::<u64>() {
+                provided_slots.push(slot);
+            } else {
+                warn!("Invalid slot number provided: {}", slot_str);
+            }
+        }
+
+        // Remove duplicates and sort slots
+        let mut slots_set = HashSet::new();
+        provided_slots = provided_slots
+            .into_iter()
+            .filter(|x| slots_set.insert(*x))
+            .collect();
+        provided_slots.sort_unstable();
+
+        if provided_slots.is_empty() {
+            error!("No valid slots to process. Exiting.");
+            return Ok(());
+        }
+
+        info!("Total slots to process: {}", provided_slots.len());
+
+        // Proceed to process the provided slots
+        process_slots(
+            provided_slots,
+            backfill_source,
+            target_db,
+            &args,
+            shutdown_token.clone(),
+        )
+        .await;
+        return Ok(()); // Exit after processing provided slots
+    }
     let mut start_slot = start_slot;
     loop {
         if shutdown_token.is_cancelled() {
@@ -288,118 +331,28 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     finalized_slot
                 );
                 // slots has all the slots numbers we need to downlaod and persist. Slots should be downloaded concurrently, but no slot shouold be persisted if the previous slot is not persisted.
+                if slots.is_empty() {
+                    info!("No new slots to process. Sleeping for {:?}", wait_period);
+                    let sleep = tokio::time::sleep(wait_period);
 
-                // Process slots in batches
-                for batch in slots.chunks(args.chunk_size) {
-                    if shutdown_token.is_cancelled() {
-                        info!("Shutdown signal received during batch processing, exiting...");
-                        break;
-                    }
-
-                    let mut batch_retries = 0;
-                    let mut batch_delay_ms = INITIAL_BATCH_DELAY_MS;
-
-                    // Initialize the list of slots to fetch and the map of successful blocks
-                    let mut slots_to_fetch: Vec<u64> = batch.to_vec();
-                    let mut successful_blocks: HashMap<u64, RawBlock> = HashMap::new();
-
-                    // Retry loop for the batch
-                    loop {
-                        if shutdown_token.is_cancelled() {
-                            info!("Shutdown signal received during batch processing, exiting...");
+                    tokio::select! {
+                        _ = sleep => {},
+                        _ = shutdown_token.cancelled() => {
+                            info!("Received shutdown signal, stopping loop...");
                             break;
-                        }
-
-                        let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
-
-                        let fetch_futures = slots_to_fetch.iter().map(|&slot| {
-                            let backfill_source = backfill_source.clone();
-                            let semaphore = semaphore.clone();
-                            let shutdown_token = shutdown_token.clone();
-
-                            async move {
-                                let _permit = semaphore.acquire().await;
-                                fetch_block_with_retries(backfill_source, slot, shutdown_token)
-                                    .await
-                            }
-                        });
-
-                        let results = join_all(fetch_futures).await;
-
-                        let mut new_failed_slots = Vec::new();
-
-                        for result in results {
-                            match result {
-                                Ok((slot, raw_block)) => {
-                                    successful_blocks.insert(slot, raw_block);
-                                }
-                                Err((slot, e)) => {
-                                    new_failed_slots.push(slot);
-                                    error!("Failed to fetch slot {}: {:?}", slot, e);
-                                }
-                            }
-                        }
-
-                        if new_failed_slots.is_empty() {
-                            // All slots fetched successfully, save to database
-                            debug!(
-                                "All slots fetched successfully for current batch. Saving {} slots to RocksDB.",
-                                successful_blocks.len()
-                            );
-                            if let Err(e) = target_db
-                                .raw_blocks_cbor
-                                .put_batch_cbor(successful_blocks.clone())
-                                .await
-                            {
-                                error!("Failed to save blocks to RocksDB: {}", e);
-                                // Handle error or retry saving as needed
-                                batch_retries += 1;
-                                if batch_retries >= MAX_BATCH_RETRIES {
-                                    panic!(
-                                        "Failed to save batch to RocksDB after {} retries. Discarding batch.",
-                                        MAX_BATCH_RETRIES
-                                    );
-                                } else {
-                                    warn!(
-                                        "Retrying batch save {}/{} after {} ms due to error.",
-                                        batch_retries, MAX_BATCH_RETRIES, batch_delay_ms
-                                    );
-                                    tokio::time::sleep(Duration::from_millis(batch_delay_ms)).await;
-                                    batch_delay_ms *= 2;
-                                }
-                            } else {
-                                // Successfully saved, proceed to next batch
-                                let last_slot =
-                                    successful_blocks.keys().max().cloned().unwrap_or(0);
-                                info!(
-                                    "Successfully saved batch to RocksDB. Last stored slot: {}",
-                                    last_slot
-                                );
-                                break;
-                            }
-                        } else {
-                            batch_retries += 1;
-                            if batch_retries >= MAX_BATCH_RETRIES {
-                                panic!(
-                                    "Failed to fetch all slots in batch after {} retries. Discarding batch.",
-                                    MAX_BATCH_RETRIES
-                                );
-                            } else {
-                                warn!(
-                                    "Retrying failed slots {}/{} after {} ms: {:?}",
-                                    batch_retries,
-                                    MAX_BATCH_RETRIES,
-                                    batch_delay_ms,
-                                    new_failed_slots
-                                );
-                                slots_to_fetch = new_failed_slots;
-                                // Exponential backoff before retrying
-                                tokio::time::sleep(Duration::from_millis(batch_delay_ms)).await;
-                                batch_delay_ms *= 2;
-                            }
-                        }
-                    }
+                        },
+                    };
+                    continue;
                 }
+                // Process the collected slots
+                process_slots(
+                    slots,
+                    backfill_source.clone(),
+                    target_db.clone(),
+                    &args,
+                    shutdown_token.clone(),
+                )
+                .await;
             }
             Err(e) => {
                 error!("Error getting finalized slot: {}", e);
@@ -417,4 +370,119 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     info!("Slot persister has stopped.");
     Ok(())
+}
+
+async fn process_slots(
+    slots: Vec<u64>,
+    backfill_source: Arc<BackfillSource>,
+    target_db: Arc<SlotStorage>,
+    args: &Args,
+    shutdown_token: CancellationToken,
+) {
+    // Process slots in batches
+    for batch in slots.chunks(args.chunk_size) {
+        if shutdown_token.is_cancelled() {
+            info!("Shutdown signal received during batch processing, exiting...");
+            break;
+        }
+
+        let mut batch_retries = 0;
+        let mut batch_delay_ms = INITIAL_BATCH_DELAY_MS;
+
+        // Initialize the list of slots to fetch and the map of successful blocks
+        let mut slots_to_fetch: Vec<u64> = batch.to_vec();
+        let mut successful_blocks: HashMap<u64, RawBlock> = HashMap::new();
+
+        // Retry loop for the batch
+        loop {
+            if shutdown_token.is_cancelled() {
+                info!("Shutdown signal received during batch processing, exiting...");
+                break;
+            }
+
+            let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
+
+            let fetch_futures = slots_to_fetch.iter().map(|&slot| {
+                let backfill_source = backfill_source.clone();
+                let semaphore = semaphore.clone();
+                let shutdown_token = shutdown_token.clone();
+
+                async move {
+                    let _permit = semaphore.acquire().await;
+                    fetch_block_with_retries(backfill_source, slot, shutdown_token).await
+                }
+            });
+
+            let results = join_all(fetch_futures).await;
+
+            let mut new_failed_slots = Vec::new();
+
+            for result in results {
+                match result {
+                    Ok((slot, raw_block)) => {
+                        successful_blocks.insert(slot, raw_block);
+                    }
+                    Err((slot, e)) => {
+                        new_failed_slots.push(slot);
+                        error!("Failed to fetch slot {}: {:?}", slot, e);
+                    }
+                }
+            }
+
+            if new_failed_slots.is_empty() {
+                // All slots fetched successfully, save to database
+                debug!(
+                    "All slots fetched successfully for current batch. Saving {} slots to RocksDB.",
+                    successful_blocks.len()
+                );
+                if let Err(e) = target_db
+                    .raw_blocks_cbor
+                    .put_batch_cbor(successful_blocks.clone())
+                    .await
+                {
+                    error!("Failed to save blocks to RocksDB: {}", e);
+                    // Handle error or retry saving as needed
+                    batch_retries += 1;
+                    if batch_retries >= MAX_BATCH_RETRIES {
+                        panic!(
+                            "Failed to save batch to RocksDB after {} retries. Discarding batch.",
+                            MAX_BATCH_RETRIES
+                        );
+                    } else {
+                        warn!(
+                            "Retrying batch save {}/{} after {} ms due to error.",
+                            batch_retries, MAX_BATCH_RETRIES, batch_delay_ms
+                        );
+                        tokio::time::sleep(Duration::from_millis(batch_delay_ms)).await;
+                        batch_delay_ms *= 2;
+                    }
+                } else {
+                    // Successfully saved, proceed to next batch
+                    let last_slot = successful_blocks.keys().max().cloned().unwrap_or(0);
+                    info!(
+                        "Successfully saved batch to RocksDB. Last stored slot: {}",
+                        last_slot
+                    );
+                    break;
+                }
+            } else {
+                batch_retries += 1;
+                if batch_retries >= MAX_BATCH_RETRIES {
+                    panic!(
+                        "Failed to fetch all slots in batch after {} retries. Discarding batch.",
+                        MAX_BATCH_RETRIES
+                    );
+                } else {
+                    warn!(
+                        "Retrying failed slots {}/{} after {} ms: {:?}",
+                        batch_retries, MAX_BATCH_RETRIES, batch_delay_ms, new_failed_slots
+                    );
+                    slots_to_fetch = new_failed_slots;
+                    // Exponential backoff before retrying
+                    tokio::time::sleep(Duration::from_millis(batch_delay_ms)).await;
+                    batch_delay_ms *= 2;
+                }
+            }
+        }
+    }
 }
