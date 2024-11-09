@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -11,7 +11,7 @@ use rocks_db::migrator::MigrationVersions;
 use rocks_db::Storage;
 use tokio::signal;
 use tokio::sync::{broadcast, Mutex as AsyncMutex};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use entities::models::{OffChainData, RawBlock};
 use interface::slots_dumper::SlotsDumper;
@@ -41,6 +41,10 @@ struct Args {
     /// Optional big table timeout (default: 1000)
     #[arg(short, long, default_value_t = 1000)]
     big_table_timeout: u32,
+
+    /// Optional comma-separated list of slot numbers to check
+    #[arg(short = 's', long)]
+    slots: Option<String>,
 }
 
 pub struct InMemorySlotsDumper {
@@ -150,6 +154,89 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 error!("Unable to listen for shutdown signal");
             }
         });
+    }
+    // Check if slots or slots_file is provided
+    let mut slots_to_check = Vec::new();
+
+    if let Some(slots_str) = args.slots {
+        // Parse comma-separated list of slots
+        info!("Checking specific slots provided via command line.");
+        for part in slots_str.split(',') {
+            let slot_str = part.trim();
+            if let Ok(slot) = slot_str.parse::<u64>() {
+                slots_to_check.push(slot);
+            } else {
+                warn!("Invalid slot number provided: {}", slot_str);
+            }
+        }
+    }
+    if !slots_to_check.is_empty() {
+        // Remove duplicates
+        let slots_to_check: Vec<u64> = {
+            let mut set = HashSet::new();
+            slots_to_check
+                .into_iter()
+                .filter(|x| set.insert(*x))
+                .collect()
+        };
+
+        let total_slots_to_check = slots_to_check.len();
+
+        info!("Total slots to check: {}", total_slots_to_check);
+
+        // Initialize progress bar for verification
+        let progress_bar = ProgressBar::new(total_slots_to_check as u64);
+        progress_bar.set_style(
+            ProgressStyle::default_bar()
+                .template("{msg} {bar:40.cyan/blue} {pos}/{len} [{eta_precise}]")
+                .unwrap()
+                .progress_chars("##-"),
+        );
+        progress_bar.set_message("Verifying slots");
+
+        let cf_handle = db.db.cf_handle(RawBlock::NAME).unwrap();
+
+        let mut present_slots = Vec::new();
+        let mut missing_slots = Vec::new();
+
+        // Sort slots to check for consistent batching
+        let mut slots_to_check = slots_to_check;
+        slots_to_check.sort_unstable();
+
+        // Prepare keys
+        let keys: Vec<_> = slots_to_check
+            .iter()
+            .map(|&slot| RawBlock::encode_key(slot))
+            .collect();
+
+        // Batch get
+        let results = db.db.batched_multi_get_cf(&cf_handle, keys, true);
+
+        for (i, result) in results.into_iter().enumerate() {
+            let slot = slots_to_check[i];
+            match result {
+                Ok(Some(_)) => {
+                    present_slots.push(slot);
+                }
+                Ok(None) => {
+                    missing_slots.push(slot);
+                }
+                Err(e) => {
+                    error!("Error fetching slot {}: {}", slot, e);
+                    missing_slots.push(slot); // Consider as missing on error
+                }
+            }
+            progress_bar.inc(1);
+        }
+
+        progress_bar.finish_with_message("Verification complete.");
+
+        // Output results
+        info!("Slots present in RocksDB: {:?}", present_slots);
+        
+        info!("Slots missing from RocksDB: {:?}", missing_slots);
+
+        return Ok(()); // Exit after processing
     }
 
     // Store missing slots
