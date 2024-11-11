@@ -14,7 +14,7 @@ use crate::storage_traits::{
 };
 use crate::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
-    BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
+    BATCH_GET_ACTION, BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
 use async_trait::async_trait;
 use entities::enums::{SpecificationAssetClass, TokenMetadataEdition};
@@ -156,7 +156,9 @@ impl Storage {
         HashMap<Pubkey, String>,
     )> {
         let db = self.db.clone();
+        let red_metrics = self.red_metrics.clone();
         tokio::task::spawn_blocking(move || {
+            let start_time = chrono::Utc::now();
             let d = db.batched_multi_get_cf(
                 &db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
                 asset_ids,
@@ -188,6 +190,12 @@ impl Storage {
                     assets_data.insert(key, asset.into());
                 }
             }
+            red_metrics.observe_request(
+                ROCKS_COMPONENT,
+                BATCH_GET_ACTION,
+                AssetCompleteDetails::NAME,
+                start_time,
+            );
             Ok::<(_, _, _), StorageError>((assets_data, assets_collection_pks, urls))
         })
         .await

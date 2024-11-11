@@ -149,6 +149,7 @@ pub async fn main() -> Result<(), IngesterError> {
             cloned_rocks_storage.clone(),
             cloned_rx,
             metrics.clone(),
+            Some(red_metrics.clone()),
             config.server_port,
             proof_checker,
             tree_gaps_checker,

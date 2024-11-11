@@ -283,6 +283,7 @@ pub async fn main() -> Result<(), IngesterError> {
             index_pg_storage.clone(),
             primary_rocks_storage.clone(),
             metrics_state.json_downloader_metrics.clone(),
+            metrics_state.red_metrics.clone(),
         )
         .await,
     );
@@ -356,12 +357,14 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let cloned_index_storage = index_pg_storage.clone();
     let file_storage_path = api_config.file_storage_path_container.clone();
+    let red_metrics = metrics_state.red_metrics.clone();
     mutexed_tasks.lock().await.spawn(async move {
         match start_api(
             cloned_index_storage,
             cloned_rocks_storage.clone(),
             cloned_rx,
             cloned_api_metrics,
+            Some(red_metrics),
             api_config.server_port,
             proof_checker,
             tree_gaps_checker,

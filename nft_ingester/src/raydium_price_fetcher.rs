@@ -2,39 +2,57 @@ use crate::error::IngesterError;
 use async_trait::async_trait;
 use interface::error::UsecaseError;
 use interface::price_fetcher::TokenPriceFetcher;
+use metrics_utils::red::RequestErrorDurationMetrics;
 use moka::future::Cache;
 use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
+use std::sync::Arc;
 
-const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+pub const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 
 pub struct RaydiumTokenPriceFetcher {
     host: String,
     price_cache: Cache<String, f64>,
     symbol_cache: Cache<String, String>,
+    red_metrics: Option<Arc<RequestErrorDurationMetrics>>,
 }
 
 impl Default for RaydiumTokenPriceFetcher {
     fn default() -> Self {
-        Self::new("https://api-v3.raydium.io".to_string(), CACHE_TTL)
+        Self::new("https://api-v3.raydium.io".to_string(), CACHE_TTL, None)
     }
 }
 
 impl RaydiumTokenPriceFetcher {
-    pub fn new(host: String, ttl: std::time::Duration) -> Self {
+    pub fn new(
+        host: String,
+        ttl: std::time::Duration,
+        red_metrics: Option<Arc<RequestErrorDurationMetrics>>,
+    ) -> Self {
         Self {
             host,
             price_cache: Cache::builder().time_to_live(ttl).build(),
             symbol_cache: Cache::builder().time_to_live(ttl).build(),
+            red_metrics,
         }
     }
 
     async fn get(&self, endpoint: &str) -> Result<serde_json::Value, IngesterError> {
-        reqwest::get(format!("{host}/{ep}", host = self.host, ep = endpoint))
+        let start_time = chrono::Utc::now();
+        let response = reqwest::get(format!("{host}/{ep}", host = self.host, ep = endpoint))
             .await?
             .json()
             .await
-            .map_err(Into::into)
+            .map_err(Into::into);
+        if let Some(red_metrics) = &self.red_metrics {
+            // cut the part after ? in the endpoint for metrics
+            let endpoint = endpoint.split('?').next().unwrap_or(endpoint);
+            match &response {
+                Ok(_) => red_metrics.observe_request("raydium", "get", endpoint, start_time),
+                Err(_) => red_metrics.observe_error("raydium", "get", endpoint),
+            }
+        }
+        response
     }
 }
 

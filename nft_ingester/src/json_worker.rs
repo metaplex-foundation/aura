@@ -5,6 +5,7 @@ use entities::enums::TaskStatus;
 use entities::models::{JsonDownloadTask, OffChainData};
 use interface::error::JsonDownloaderError;
 use interface::json::{JsonDownloader, JsonPersister};
+use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::tasks::UpdatedTask;
 use postgre_client::PgClient;
@@ -19,6 +20,7 @@ use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::{self, Duration, Instant};
 use tracing::{debug, error};
+use url::Url;
 
 pub const JSON_CONTENT_TYPE: &str = "application/json";
 pub const JSON_BATCH: usize = 300;
@@ -31,6 +33,7 @@ pub struct JsonWorker {
     pub rocks_db: Arc<Storage>,
     pub num_of_parallel_workers: i32,
     pub metrics: Arc<JsonDownloaderMetricsConfig>,
+    pub red_metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl JsonWorker {
@@ -38,6 +41,7 @@ impl JsonWorker {
         db_client: Arc<PgClient>,
         rocks_db: Arc<Storage>,
         metrics: Arc<JsonDownloaderMetricsConfig>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Self {
         let config: IngesterConfig = setup_config(INGESTER_CONFIG_PREFIX);
 
@@ -45,6 +49,7 @@ impl JsonWorker {
             db_client,
             num_of_parallel_workers: config.parallel_json_downloaders,
             metrics,
+            red_metrics,
             rocks_db,
         }
     }
@@ -258,19 +263,31 @@ pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
 #[async_trait]
 impl JsonDownloader for JsonWorker {
     async fn download_file(&self, url: String) -> Result<String, JsonDownloaderError> {
+        let start_time = chrono::Utc::now();
         let client = ClientBuilder::new()
             .timeout(time::Duration::from_secs(CLIENT_TIMEOUT))
             .build()
             .map_err(|e| {
                 JsonDownloaderError::ErrorDownloading(format!("Failed to create client: {:?}", e))
             })?;
-        let response = Client::get(&client, url)
+        let parsed_url = Url::parse(&url).map_err(|e| {
+            JsonDownloaderError::ErrorDownloading(format!("Failed to parse URL: {:?}", e))
+        })?;
+        let host = parsed_url.host_str().unwrap_or("no_host");
+        let response = client
+            .get(&url)
             .send()
             .await
             .map_err(|e| format!("Failed to make request: {:?}", e));
 
         match response {
             Ok(response) => {
+                self.red_metrics.observe_request(
+                    "json_downloader",
+                    "download_file",
+                    host,
+                    start_time,
+                );
                 if let Some(content_header) = response.headers().get("Content-Type") {
                     match content_header.to_str() {
                         Ok(header) => {
@@ -297,7 +314,11 @@ impl JsonDownloader for JsonWorker {
                     }
                 }
             }
-            Err(e) => Err(JsonDownloaderError::ErrorDownloading(e.to_string())),
+            Err(e) => {
+                self.red_metrics
+                    .observe_error("json_downloader", "download_file", host);
+                Err(JsonDownloaderError::ErrorDownloading(e.to_string()))
+            }
         }
     }
 }

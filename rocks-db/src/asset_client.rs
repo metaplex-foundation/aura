@@ -10,7 +10,7 @@ use crate::asset_generated::asset as fb;
 use crate::column::{Column, TypedColumn};
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
-use crate::{Result, Storage};
+use crate::{Result, Storage, BATCH_GET_ACTION, ROCKS_COMPONENT};
 use entities::api_req_params::Options;
 use entities::enums::TokenMetadataEdition;
 use entities::models::{EditionData, PubkeyWithSlot};
@@ -117,6 +117,7 @@ impl Storage {
         // todo: consider async/future here, but not likely as the very next call depends on urls from this one
         if !assets_collection_pks.is_empty() {
             let assets_collection_pks = assets_collection_pks.into_iter().collect::<Vec<_>>();
+            let start_time = chrono::Utc::now();
             let collection_d = self.db.batched_multi_get_cf(
                 &self.asset_data.handle(),
                 assets_collection_pks.clone(),
@@ -142,6 +143,11 @@ impl Storage {
                     }
                 }
             }
+            self.red_metrics.observe_request(ROCKS_COMPONENT,
+                BATCH_GET_ACTION,
+                "get_asset_collection",
+                start_time,
+            );
         }
 
         let offchain_data_fut = self
