@@ -1,5 +1,6 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use clap::Parser;
@@ -14,9 +15,10 @@ use nft_ingester::{
     transaction_ingester,
 };
 use rocks_db::migrator::MigrationState;
+use rocks_db::SlotStorage;
 use rocks_db::{column::TypedColumn, Storage};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -36,6 +38,10 @@ struct Args {
     /// Number of concurrent workers (default: 16)
     #[arg(short = 'w', long, default_value_t = 16)]
     workers: usize,
+
+    /// Optional comma-separated list of slot numbers to process
+    #[arg(short = 's', long)]
+    slots: Option<String>,
 }
 
 #[tokio::main]
@@ -47,7 +53,7 @@ async fn main() {
 
     // Open source RocksDB in readonly mode
     let source_db =
-        Storage::open_readonly_with_cfs_only_db(&args.source_db_path, vec![RawBlock::NAME])
+        Storage::open_readonly_with_cfs_only_db(&args.source_db_path, SlotStorage::cf_names())
             .expect("Failed to open source RocksDB");
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
 
@@ -60,46 +66,6 @@ async fn main() {
             MigrationState::Last,
         )
         .expect("Failed to open target RocksDB"),
-    );
-
-    // Get the last slot
-    let mut iter = source_db.raw_iterator_cf(&source_db.cf_handle(RawBlock::NAME).unwrap());
-    iter.seek_to_last();
-    if !iter.valid() {
-        error!("Failed to seek to last slot");
-        return;
-    }
-    let last_slot = iter
-        .key()
-        .map(|k| u64::from_be_bytes(k.try_into().expect("Failed to decode the last slot key")))
-        .expect("Failed to get the last slot");
-
-    // Determine the starting slot
-    let start_slot = if let Some(start_slot) = args.start_slot {
-        info!("Starting from slot: {}", start_slot);
-        iter.seek(RawBlock::encode_key(start_slot));
-        start_slot
-    } else {
-        info!("Starting from the first slot");
-        iter.seek_to_first();
-        iter.key()
-            .map(|k| u64::from_be_bytes(k.try_into().expect("Failed to decode the start slot key")))
-            .expect("Failed to get the start slot")
-    };
-
-    info!("Start slot: {}, Last slot: {}", start_slot, last_slot);
-
-    // Set up progress bar
-    let total_slots = last_slot - start_slot + 1;
-    let progress_bar = Arc::new(ProgressBar::new(total_slots));
-    progress_bar.set_style(
-        ProgressStyle::default_bar()
-            .template(
-                "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {percent}% \
-                 ({pos}/{len}) {msg}",
-            )
-            .expect("Failed to set progress bar style")
-            .progress_chars("#>-"),
     );
 
     // Initialize the DirectBlockParser
@@ -124,9 +90,7 @@ async fn main() {
     let num_workers = args.workers;
     let (slot_sender, slot_receiver) = async_channel::bounded::<(u64, Vec<u8>)>(num_workers * 2);
     let slots_processed = Arc::new(AtomicU64::new(0));
-    let last_slot_processed = Arc::new(AtomicU64::new(start_slot));
     let rate = Arc::new(Mutex::new(0.0));
-    let shutdown_flag = Arc::new(AtomicBool::new(false));
 
     // Spawn a task to handle graceful shutdown on Ctrl+C
     let shutdown_token = CancellationToken::new();
@@ -148,20 +112,91 @@ async fn main() {
         }
     });
 
+    // Parse slots if provided
+    let mut slots_to_process = Vec::new();
+    if let Some(slots_str) = args.slots {
+        info!("Processing specific slots provided via command line.");
+        for part in slots_str.split(',') {
+            let slot_str = part.trim();
+            if let Ok(slot) = slot_str.parse::<u64>() {
+                slots_to_process.push(slot);
+            } else {
+                warn!("Invalid slot number provided: {}", slot_str);
+            }
+        }
+
+        // Remove duplicates and sort slots
+        let mut slots_set = HashSet::new();
+        slots_to_process = slots_to_process
+            .into_iter()
+            .filter(|x| slots_set.insert(*x))
+            .collect();
+        slots_to_process.sort_unstable();
+
+        if slots_to_process.is_empty() {
+            error!("No valid slots to process. Exiting.");
+            return;
+        }
+
+        info!("Total slots to process: {}", slots_to_process.len());
+    }
+
+    // Set up progress bar
+    let total_slots = if !slots_to_process.is_empty() {
+        slots_to_process.len() as u64
+    } else {
+        // Get the last slot
+        let mut iter = source_db.raw_iterator_cf(&source_db.cf_handle(RawBlock::NAME).unwrap());
+        iter.seek_to_last();
+        if !iter.valid() {
+            error!("Failed to seek to last slot");
+            return;
+        }
+        let last_slot = iter
+            .key()
+            .map(|k| u64::from_be_bytes(k.try_into().expect("Failed to decode the last slot key")))
+            .expect("Failed to get the last slot");
+
+        // Determine the starting slot
+        let start_slot = if let Some(start_slot) = args.start_slot {
+            info!("Starting from slot: {}", start_slot);
+            start_slot
+        } else {
+            iter.seek_to_first();
+            iter.key()
+                .map(|k| u64::from_be_bytes(
+                    k.try_into().expect("Failed to decode the start slot key"),
+                ))
+                .expect("Failed to get the start slot")
+        };
+
+        info!("Start slot: {}, Last slot: {}", start_slot, last_slot);
+        last_slot - start_slot + 1
+    };
+
+    let progress_bar = Arc::new(ProgressBar::new(total_slots));
+    progress_bar.set_style(
+        ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {percent}% \
+                 ({pos}/{len}) {msg}",
+            )
+            .expect("Failed to set progress bar style")
+            .progress_chars("#>-"),
+    );
+
     // Spawn worker tasks
     let mut worker_handles = Vec::new();
     for _ in 0..num_workers {
         let consumer = consumer.clone();
         let progress_bar = progress_bar.clone();
         let slots_processed = slots_processed.clone();
-        let last_slot_processed = last_slot_processed.clone();
         let rate = rate.clone();
         let shutdown_token = shutdown_token.clone();
 
         let slot_receiver = slot_receiver.clone();
 
         let handle = tokio::spawn(async move {
-            let slot_receiver = slot_receiver;
             while let Ok((slot, raw_block_data)) = slot_receiver.recv().await {
                 if shutdown_token.is_cancelled() {
                     break;
@@ -180,15 +215,11 @@ async fn main() {
                     error!("Error processing slot {}: {}", slot, e);
                 }
 
-                // Update last_slot_processed
-                last_slot_processed.store(slot, Ordering::Relaxed);
-
                 // Increment slots_processed
                 let current_slots_processed = slots_processed.fetch_add(1, Ordering::Relaxed) + 1;
 
                 // Update progress bar position and message
-                let progress = slot - start_slot + 1;
-                progress_bar.set_position(progress);
+                progress_bar.inc(1);
 
                 let current_rate = {
                     let rate_guard = rate.lock().unwrap();
@@ -216,7 +247,7 @@ async fn main() {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-            if shutdown_token.is_cancelled() {
+            if shutdown_token_clone.is_cancelled() {
                 break;
             }
 
@@ -245,6 +276,89 @@ async fn main() {
     });
 
     // Send slots to the channel
+    if !slots_to_process.is_empty() {
+        // Process only the specified slots
+        send_slots_to_workers(
+            slots_to_process,
+            source_db,
+            slot_sender.clone(),
+            shutdown_token.clone(),
+        )
+        .await;
+    } else {
+        // Process all slots from start_slot
+        send_all_slots_to_workers(
+            source_db,
+            slot_sender.clone(),
+            shutdown_token.clone(),
+            args.start_slot,
+        )
+        .await;
+    }
+
+    // Close the sender to signal that no more items will be sent
+    slot_sender.close();
+
+    // Wait for workers to finish
+    for handle in worker_handles {
+        let _ = handle.await;
+    }
+
+    progress_bar.finish_with_message("Processing complete");
+}
+
+// Function to send specified slots to workers
+async fn send_slots_to_workers(
+    slots_to_process: Vec<u64>,
+    source_db: rocksdb::DB,
+    slot_sender: async_channel::Sender<(u64, Vec<u8>)>,
+    shutdown_token: CancellationToken,
+) {
+    let cf_handle = source_db.cf_handle(RawBlock::NAME).unwrap();
+
+    for slot in slots_to_process {
+        if shutdown_token.is_cancelled() {
+            info!("Shutdown signal received. Stopping the submission of new slots.");
+            break;
+        }
+
+        let key = RawBlock::encode_key(slot);
+        match source_db.get_pinned_cf(&cf_handle, key) {
+            Ok(Some(value)) => {
+                let raw_block_data = value.to_vec();
+                if slot_sender.send((slot, raw_block_data)).await.is_err() {
+                    error!("Failed to send slot {} to workers", slot);
+                    break;
+                }
+            }
+            Ok(None) => {
+                warn!("Slot {} not found in source database", slot);
+            }
+            Err(e) => {
+                error!("Error fetching slot {}: {}", slot, e);
+            }
+        }
+    }
+}
+
+// Function to send all slots starting from start_slot to workers
+async fn send_all_slots_to_workers(
+    source_db: rocksdb::DB,
+    slot_sender: async_channel::Sender<(u64, Vec<u8>)>,
+    shutdown_token: CancellationToken,
+    start_slot: Option<u64>,
+) {
+    let cf_handle = source_db.cf_handle(RawBlock::NAME).unwrap();
+    let mut iter = source_db.raw_iterator_cf(&cf_handle);
+
+    // Determine starting point
+    if let Some(start_slot) = start_slot {
+        iter.seek(RawBlock::encode_key(start_slot));
+    } else {
+        iter.seek_to_first();
+    }
+
+    // Send slots to the channel
     while iter.valid() {
         if shutdown_token.is_cancelled() {
             info!("Shutdown signal received. Stopping the submission of new slots.");
@@ -267,14 +381,4 @@ async fn main() {
             break;
         }
     }
-
-    // Close the sender to signal that no more items will be sent
-    slot_sender.close();
-
-    // Wait for workers to finish
-    for handle in worker_handles {
-        let _ = handle.await;
-    }
-
-    progress_bar.finish_with_message("Processing complete");
 }

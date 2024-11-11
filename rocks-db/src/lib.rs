@@ -121,6 +121,10 @@ impl SlotStorage {
         }
     }
 
+    pub fn cf_names() -> Vec<&'static str> {
+        vec![RawBlock::NAME, MigrationVersions::NAME, OffChainData::NAME]
+    }
+
     pub fn open<P>(
         db_path: P,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
@@ -129,11 +133,7 @@ impl SlotStorage {
     where
         P: AsRef<Path>,
     {
-        let cf_descriptors = Storage::cfs_to_column_families(vec![
-            RawBlock::NAME,
-            MigrationVersions::NAME,
-            OffChainData::NAME,
-        ]);
+        let cf_descriptors = Storage::cfs_to_column_families(Self::cf_names());
         let db = Arc::new(DB::open_cf_descriptors(
             &Storage::get_db_options(),
             db_path,
@@ -151,17 +151,28 @@ impl SlotStorage {
     where
         P: AsRef<Path>,
     {
-        let cf_descriptors = Storage::cfs_to_column_families(vec![
-            RawBlock::NAME,
-            MigrationVersions::NAME,
-            OffChainData::NAME,
-        ]);
+        let cf_descriptors = Storage::cfs_to_column_families(Self::cf_names());
         let db = Arc::new(DB::open_cf_descriptors_as_secondary(
             &Storage::get_db_options(),
             primary_path,
             secondary_path,
             cf_descriptors,
         )?);
+        Ok(Self::new(db, join_set, red_metrics))
+    }
+    pub fn open_readonly<P>(
+        db_path: P,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let db = Arc::new(Storage::open_readonly_with_cfs_only_db(
+            db_path,
+            Self::cf_names(),
+        )?);
+
         Ok(Self::new(db, join_set, red_metrics))
     }
 }

@@ -4607,6 +4607,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "rocks-db",
+ "rocksdb",
  "schemars",
  "serde",
  "serde_cbor",
