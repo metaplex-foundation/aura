@@ -288,6 +288,7 @@ impl Storage {
             Self::new_cf_descriptor::<cl_items::ClLeaf>(migration_state),
             Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(migration_state),
             Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(migration_state),
+            Self::new_cf_descriptor::<asset::FungibleAssetsUpdateIdx>(migration_state),
             Self::new_cf_descriptor::<asset::SlotAssetIdx>(migration_state),
             Self::new_cf_descriptor::<signature_client::SignatureIdx>(migration_state),
             Self::new_cf_descriptor::<RawBlock>(migration_state),
@@ -530,6 +531,12 @@ impl Storage {
             AssetsUpdateIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_assets_update_idx_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            FungibleAssetsUpdateIdx::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_fungible_assets_update_idx_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
