@@ -3166,6 +3166,13 @@ mod tests {
             }
         }
 
+        while let Some(res) = join_set.join_next().await {
+            match res {
+                Ok(_) => {}
+                Err(err) => panic!("{err}"),
+            }
+        }
+
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
             JsonWorker,
