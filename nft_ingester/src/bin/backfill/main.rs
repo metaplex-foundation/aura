@@ -164,9 +164,9 @@ async fn main() {
         } else {
             iter.seek_to_first();
             iter.key()
-                .map(|k| u64::from_be_bytes(
-                    k.try_into().expect("Failed to decode the start slot key"),
-                ))
+                .map(|k| {
+                    u64::from_be_bytes(k.try_into().expect("Failed to decode the start slot key"))
+                })
                 .expect("Failed to get the start slot")
         };
 

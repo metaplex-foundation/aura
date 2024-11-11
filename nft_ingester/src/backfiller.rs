@@ -27,6 +27,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use usecase::bigtable::{is_bubblegum_transaction_encoded, BigTableClient};
 use usecase::slots_collector::SlotsGetter;
+
 pub const GET_SIGNATURES_LIMIT: usize = 2000;
 pub const GET_SLOT_RETRIES: u32 = 3;
 pub const SECONDS_TO_WAIT_NEW_SLOTS: u64 = 10;
@@ -80,7 +81,7 @@ impl BackfillSource {
 
 #[async_trait]
 impl SlotsGetter for BackfillSource {
-    async fn get_slots(
+    async fn get_slots_sorted_desc(
         &self,
         collected_key: &Pubkey,
         start_at: u64,
@@ -90,10 +91,13 @@ impl SlotsGetter for BackfillSource {
             BackfillSource::Bigtable(bigtable) => {
                 bigtable
                     .big_table_inner_client
-                    .get_slots(collected_key, start_at, rows_limit)
+                    .get_slots_sorted_desc(collected_key, start_at, rows_limit)
                     .await
             }
-            BackfillSource::Rpc(rpc) => rpc.get_slots(collected_key, start_at, rows_limit).await,
+            BackfillSource::Rpc(rpc) => {
+                rpc.get_slots_sorted_desc(collected_key, start_at, rows_limit)
+                    .await
+            }
         }
     }
 }
@@ -343,8 +347,7 @@ pub async fn run_backfill_slots<C>(
     slot_db: Arc<SlotStorage>,
     consumer: Arc<C>,
     metrics: Arc<BackfillerMetricsConfig>,
-) 
-where
+) where
     C: BlockConsumer,
 {
     loop {

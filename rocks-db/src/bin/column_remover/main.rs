@@ -31,7 +31,7 @@ use entities::models::{
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::migrator::MigrationState;
 use rocks_db::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
-use std::env;
+use std::{env, option};
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), String> {
@@ -84,21 +84,12 @@ pub async fn main() -> Result<(), String> {
 
 fn remove_column_families(db_path: String, columns_to_remove: &[&str]) {
     let mut options = Options::default();
-    options.create_if_missing(true);
-    options.create_missing_column_families(true);
 
     // Get the existing column families
     let cf_names = DB::list_cf(&options, &db_path).expect("Failed to list column families.");
 
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
-    let db = rocks_db::Storage::open(
-        &db_path,
-        Arc::new(Mutex::new(JoinSet::new())),
-        red_metrics.clone(),
-        MigrationState::Last,
-    )
-    .expect("Failed to open DB.");
-    let db = db.db;
+    let db = DB::open_cf(&options, &db_path, &cf_names).expect("Failed to open DB.");
     columns_to_remove.iter().for_each(|cf_name| {
         if !cf_names.contains(&cf_name.to_string()) {
             println!("Column family {} does not exist. Skipping it", cf_name);

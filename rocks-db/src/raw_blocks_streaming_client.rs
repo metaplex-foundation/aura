@@ -1,6 +1,6 @@
-use crate::{column::TypedColumn, SlotStorage};
 use crate::errors::StorageError;
 use crate::Storage;
+use crate::{column::TypedColumn, SlotStorage};
 use async_trait::async_trait;
 use entities::models::RawBlock;
 use interface::asset_streaming_and_discovery::{

@@ -233,7 +233,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Output results
         info!("Slots present in RocksDB: {:?}", present_slots);
-        
+
         info!("Slots missing from RocksDB: {:?}", missing_slots);
 
         return Ok(()); // Exit after processing

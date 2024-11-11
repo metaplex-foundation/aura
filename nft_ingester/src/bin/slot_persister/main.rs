@@ -29,6 +29,8 @@ const INITIAL_DELAY_MS: u64 = 100;
 
 const MAX_BATCH_RETRIES: usize = 5;
 const INITIAL_BATCH_DELAY_MS: u64 = 500;
+// Offset to start collecting slots from, approximately 2 minutes before the finalized slot, given the eventual consistency of the big table
+const SLOT_COLLECTION_OFFSET: u64 = 300;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -245,7 +247,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let backfill_source = {
         if let Some(ref bg_creds) = args.big_table_credentials {
             Arc::new(BackfillSource::Bigtable(Arc::new(
-                BigTableClient::connect_new_with(bg_creds.to_string(), args.big_table_timeout)
+                BigTableClient::connect_new_with(bg_creds.clone(), args.big_table_timeout)
                     .await
                     .expect("expected to connect to big table"),
             )))
@@ -310,11 +312,15 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match rpc_client.get_finalized_slot().await {
             Ok(finalized_slot) => {
-                info!("Finalized slot from RPC: {}", finalized_slot);
+                let last_slot_to_check = finalized_slot.saturating_sub(SLOT_COLLECTION_OFFSET);
+                info!(
+                    "Finalized slot from RPC: {}, offsetting slot collection to: {}",
+                    finalized_slot, last_slot_to_check
+                );
                 let top_collected_slot = slots_collector
                     .collect_slots(
                         &blockbuster::programs::bubblegum::ID,
-                        finalized_slot,
+                        last_slot_to_check,
                         start_slot,
                         &shutdown_rx,
                     )
@@ -328,7 +334,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "Collected {} slots to persist between {} and {}",
                     slots.len(),
                     start_slot,
-                    finalized_slot
+                    last_slot_to_check
                 );
                 // slots has all the slots numbers we need to downlaod and persist. Slots should be downloaded concurrently, but no slot shouold be persisted if the previous slot is not persisted.
                 if slots.is_empty() {

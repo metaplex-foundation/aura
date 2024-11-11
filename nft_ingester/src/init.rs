@@ -7,7 +7,6 @@ use pprof::protos::Message;
 use pprof::ProfilerGuard;
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
-use tokio_util::sync::CancellationToken;
 use std::fs::File;
 use std::io::Write;
 use std::ops::DerefMut;
@@ -17,6 +16,7 @@ use tokio::process::Command;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 const MALLOC_CONF_ENV: &str = "MALLOC_CONF";

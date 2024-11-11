@@ -13,7 +13,7 @@ const TRY_SKIPPED_BLOCKS_COUNT: u64 = 25;
 
 #[async_trait]
 impl SlotsGetter for BackfillRPC {
-    async fn get_slots(
+    async fn get_slots_sorted_desc(
         &self,
         collected_key: &solana_program::pubkey::Pubkey,
         start_at: u64,
@@ -37,13 +37,16 @@ impl SlotsGetter for BackfillRPC {
                     slots.insert(sig.slot);
                 }
                 if slots.len() >= rows_limit as usize {
-                    return Ok(Vec::from_iter(slots));
+                    let mut slots = slots.into_iter().collect::<Vec<_>>();
+                    slots.sort_unstable_by(|a, b| b.cmp(a));
+                    return Ok(slots);
                 }
             }
             before = Some(last.signature);
         }
-
-        Ok(Vec::from_iter(slots))
+        let mut slots = slots.into_iter().collect::<Vec<_>>();
+        slots.sort_unstable_by(|a, b| b.cmp(a));
+        Ok(slots)
     }
 }
 
