@@ -57,7 +57,7 @@ impl SynchronizationStateConsistencyChecker {
             let mut rx = rx.resubscribe();
             tasks.lock().await.spawn(async move {
                 while rx.is_empty() {
-                    let Ok(Some(index_seq)) = pg_client.fetch_last_synced_id(asset_type.clone()).await else {
+                    let Ok(Some(index_seq)) = pg_client.fetch_last_synced_id(asset_type).await else {
                         continue;
                     };
                     let Ok(decoded_index_update_key) = decode_u64x2_pubkey(index_seq) else {

@@ -84,7 +84,6 @@ impl<'a> TestEnvironment<'a> {
 
         let mut tasks = JoinSet::new();
         for asset_type in [AssetType::NonFungible, AssetType::Fungible] {
-            let asset_type = asset_type.clone();
             let synchronizer = synchronizer.clone();
             let rx = rx.resubscribe();
             tasks.spawn(async move {
