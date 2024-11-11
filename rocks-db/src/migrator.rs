@@ -66,32 +66,33 @@ impl Storage {
         migration_storage_path: &str,
         migration_version_manager: Arc<impl PrimaryStorageMigrationVersionManager>,
     ) -> Result<()> {
-        let applied_migrations = migration_version_manager
-            .get_all_applied_migrations()
-            .map_err(StorageError::Common)?;
-        let migration_applier =
-            MigrationApplier::new(db_path, migration_storage_path, applied_migrations);
+        // TODO: how do I fix this for a brand new DB? 
+        // let applied_migrations = migration_version_manager
+        //     .get_all_applied_migrations()
+        //     .map_err(StorageError::Common)?;
+        // let migration_applier =
+        //     MigrationApplier::new(db_path, migration_storage_path, applied_migrations);
 
-        // apply all migrations
-        migration_applier
-            .apply_migration(crate::migrations::collection_authority::CollectionAuthorityMigration)
-            .await?;
-        migration_applier
-            .apply_migration(crate::migrations::external_plugins::ExternalPluginsMigration)
-            .await?;
-        migration_applier
-            .apply_migration(
-                crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration,
-            )
-            .await?;
-        migration_applier
-            .apply_migration(crate::migrations::spl2022::TokenAccounts2022ExtentionsMigration)
-            .await?;
-        migration_applier
-            .apply_migration(
-                crate::migrations::spl2022::DynamicDataToken2022MintExtentionsMigration,
-            )
-            .await?;
+        // // apply all migrations
+        // migration_applier
+        //     .apply_migration(crate::migrations::collection_authority::CollectionAuthorityMigration)
+        //     .await?;
+        // migration_applier
+        //     .apply_migration(crate::migrations::external_plugins::ExternalPluginsMigration)
+        //     .await?;
+        // migration_applier
+        //     .apply_migration(
+        //         crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration,
+        //     )
+        //     .await?;
+        // migration_applier
+        //     .apply_migration(crate::migrations::spl2022::TokenAccounts2022ExtentionsMigration)
+        //     .await?;
+        // migration_applier
+        //     .apply_migration(
+        //         crate::migrations::spl2022::DynamicDataToken2022MintExtentionsMigration,
+        //     )
+        //     .await?;
         Ok(())
     }
 
