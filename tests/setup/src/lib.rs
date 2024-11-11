@@ -12,6 +12,8 @@ use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetai
 use solana_sdk::pubkey::Pubkey;
 use testcontainers::clients::Cli;
 
+use tokio::task::JoinSet;
+
 pub struct TestEnvironment<'a> {
     pub rocks_env: rocks::RocksTestEnvironment,
     pub pg_env: pg::TestEnvironment<'a>,
@@ -80,11 +82,12 @@ impl<'a> TestEnvironment<'a> {
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(syncronizer);
 
+        let mut tasks = JoinSet::new();
         for asset_type in [AssetType::NonFungible, AssetType::Fungible] {
             let asset_type = asset_type.clone();
             let synchronizer = synchronizer.clone();
             let rx = rx.resubscribe();
-            tokio::spawn(async move {
+            tasks.spawn(async move {
                 match asset_type {
                     AssetType::NonFungible => synchronizer
                         .synchronize_non_fungible_asset_indexes(&rx, 0)
@@ -97,6 +100,13 @@ impl<'a> TestEnvironment<'a> {
                 }
             });
         }
+
+        while let Some(res) = tasks.join_next().await {
+            if let Err(err) = res {
+                panic!("{err}");
+            }
+        }
+
         (env, generated_data)
     }
 

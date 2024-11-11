@@ -3143,21 +3143,21 @@ mod tests {
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
 
         let synchronizer = Arc::new(synchronizer);
-        let mut join_set = JoinSet::new();
+        let mut tasks = JoinSet::new();
 
         for asset_type in [AssetType::Fungible, AssetType::NonFungible] {
             let rx = rx.resubscribe();
             let synchronizer = synchronizer.clone();
             match asset_type {
                 AssetType::Fungible => {
-                    join_set.spawn(async move {
+                    tasks.spawn(async move {
                         synchronizer
                             .synchronize_fungible_asset_indexes(&rx, 0)
                             .await
                     });
                 }
                 AssetType::NonFungible => {
-                    join_set.spawn(async move {
+                    tasks.spawn(async move {
                         synchronizer
                             .synchronize_non_fungible_asset_indexes(&rx, 0)
                             .await
@@ -3166,10 +3166,9 @@ mod tests {
             }
         }
 
-        while let Some(res) = join_set.join_next().await {
-            match res {
-                Ok(_) => {}
-                Err(err) => panic!("{err}"),
+        while let Some(res) = tasks.join_next().await {
+            if let Err(err) = res {
+                panic!("{err}");
             }
         }
 

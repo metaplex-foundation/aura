@@ -104,7 +104,7 @@ where
     ) {
         while rx.is_empty() {
             if let Err(e) = self
-                .synchronize_non_fungible_asset_indexes(&rx, run_full_sync_threshold)
+                .synchronize_non_fungible_asset_indexes(rx, run_full_sync_threshold)
                 .await
             {
                 tracing::error!("Synchronization failed: {:?}", e);
@@ -125,7 +125,7 @@ where
     ) {
         while rx.is_empty() {
             if let Err(e) = self
-                .synchronize_fungible_asset_indexes(&rx, run_full_sync_threshold)
+                .synchronize_fungible_asset_indexes(rx, run_full_sync_threshold)
                 .await
             {
                 tracing::error!("Synchronization failed: {:?}", e);
@@ -703,11 +703,11 @@ mod tests {
         let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
         let asset_types = [AssetType::Fungible, AssetType::NonFungible];
-        asset_types.iter().for_each(|asset_type| {
+        asset_types.iter().for_each(|_e| {
             index_storage
                 .expect_fetch_last_synced_id()
                 .once()
-                .return_once(|asset_type| Ok(None));
+                .return_once(|_| Ok(None));
         });
 
         let key = Pubkey::new_from_array([1u8; 32]);
@@ -903,12 +903,12 @@ mod tests {
 
         let asset_types = [AssetType::Fungible, AssetType::NonFungible];
 
-        asset_types.iter().for_each(|asset_type| {
+        asset_types.iter().for_each(|_| {
             let last_synced_binary_key = last_synced_binary_key.clone();
             index_storage
                 .expect_fetch_last_synced_id()
                 .once()
-                .return_once(|asset_type| Ok(Some(last_synced_binary_key)));
+                .return_once(|_| Ok(Some(last_synced_binary_key)));
         });
 
         let key = Pubkey::new_from_array([1u8; 32]);
