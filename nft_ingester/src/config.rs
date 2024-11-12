@@ -152,16 +152,6 @@ pub struct IngesterConfig {
     #[serde(default = "default_rocks_backup_dir")]
     pub rocks_backup_dir: String,
     pub run_bubblegum_backfiller: bool,
-    #[serde(default = "default_dump_synchronizer_batch_size")]
-    pub dump_synchronizer_batch_size: usize,
-    #[serde(default = "default_dump_path")]
-    pub dump_path: String,
-    #[serde(default = "default_dump_sync_threshold")]
-    pub dump_sync_threshold: i64,
-    #[serde(default)]
-    pub run_dump_synchronize_on_start: bool,
-    #[serde(default)]
-    pub disable_synchronizer: bool,
     #[serde(default = "default_gapfiller_peer_addr")]
     pub gapfiller_peer_addr: String,
     pub peer_grpc_port: u16,

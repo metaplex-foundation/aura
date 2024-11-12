@@ -42,7 +42,6 @@ use nft_ingester::config::{
 };
 use nft_ingester::fork_cleaner::{run_fork_cleaner, ForkCleaner};
 use nft_ingester::gapfiller::{process_asset_details_stream_wrapper, run_sequence_consistent_gapfiller};
-use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration, init_primary_storage};
 use nft_ingester::json_worker::JsonWorker;
 use nft_ingester::message_handler::MessageHandlerIngester;
@@ -131,51 +130,33 @@ pub async fn main() -> Result<(), IngesterError> {
         .await?,
     );
 
-    let synchronizer = Synchronizer::new(
-        primary_rocks_storage.clone(),
-        index_pg_storage.clone(),
-        index_pg_storage.clone(),
-        config.dump_synchronizer_batch_size,
-        config.dump_path.to_string(),
-        metrics_state.synchronizer_metrics.clone(),
-        config.synchronizer_parallel_tasks,
-        config.run_temp_sync_during_dump,
-    );
-
-    if config.run_dump_synchronize_on_start {
-        info!("Running dump synchronizer on start!");
-        synchronizer.full_syncronize(&shutdown_rx.resubscribe()).await?;
-    }
-
     // setup receiver
     let message_handler = Arc::new(MessageHandlerIngester::new(buffer.clone()));
-    let (geyser_tcp_receiver, geyser_addr) = (
-        TcpReceiver::new(message_handler.clone(), config.tcp_config.get_tcp_receiver_reconnect_interval()?),
-        config.tcp_config.get_tcp_receiver_addr_ingester()?,
-    );
-    // For now there is no snapshot mechanism via Redis, so we use snapshot_tcp_receiver for this purpose
-    let (snapshot_tcp_receiver, snapshot_addr) = (
-        TcpReceiver::new(message_handler.clone(), config.tcp_config.get_tcp_receiver_reconnect_interval()? * 2),
-        config.tcp_config.get_snapshot_addr_ingester()?,
-    );
-
+    
     let cloned_rx = shutdown_rx.resubscribe();
     let ack_channel = create_ack_channel(cloned_rx, config.redis_messenger_config.clone(), mutexed_tasks.clone()).await;
 
-    let cloned_rx = shutdown_rx.resubscribe();
     if config.message_source == MessageSource::TCP {
+        let (geyser_tcp_receiver, geyser_addr) = (
+            TcpReceiver::new(message_handler.clone(), config.tcp_config.get_tcp_receiver_reconnect_interval()?),
+            config.tcp_config.get_tcp_receiver_addr_ingester()?,
+        );
+        let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks
             .lock()
             .await
             .spawn(connect_to_geyser(geyser_tcp_receiver, geyser_addr, cloned_rx));
+        let (snapshot_tcp_receiver, snapshot_addr) = (
+            TcpReceiver::new(message_handler.clone(), config.tcp_config.get_tcp_receiver_reconnect_interval()? * 2),
+            config.tcp_config.get_snapshot_addr_ingester()?,
+        );
+        let cloned_rx = shutdown_rx.resubscribe();
+        mutexed_tasks
+            .lock()
+            .await
+            .spawn(connect_to_snapshot_receiver(snapshot_tcp_receiver, snapshot_addr, cloned_rx));    
     }
-
-    let cloned_rx = shutdown_rx.resubscribe();
-    mutexed_tasks
-        .lock()
-        .await
-        .spawn(connect_to_snapshot_receiver(snapshot_tcp_receiver, snapshot_addr, cloned_rx));
-
+    
     let cloned_buffer = buffer.clone();
     let cloned_rx = shutdown_rx.resubscribe();
     let cloned_metrics = metrics_state.ingester_metrics.clone();
@@ -499,16 +480,6 @@ pub async fn main() -> Result<(), IngesterError> {
         };
     }
 
-    if !config.disable_synchronizer {
-        let rx = shutdown_rx.resubscribe();
-        mutexed_tasks.lock().await.spawn(async move {
-            synchronizer
-                .run(&rx, config.dump_sync_threshold, Duration::from_secs(5))
-                .await;
-
-            Ok(())
-        });
-    }
     // setup dependencies for grpc server
     let uc = AssetStreamer::new(config.peer_grpc_max_gap_slots, primary_rocks_storage.clone());
     let bs = BlocksStreamer::new(config.peer_grpc_max_gap_slots, slot_db.clone());
