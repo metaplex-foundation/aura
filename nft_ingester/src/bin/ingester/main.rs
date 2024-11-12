@@ -89,10 +89,11 @@ struct Args {
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
-    info!("Starting Ingester...");
+    let args = Args::parse();
 
     let config = setup_config::<IngesterConfig>(INGESTER_CONFIG_PREFIX);
     init_logger(&config.get_log_level());
+    info!("Starting Ingester...");
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
 
@@ -103,14 +104,11 @@ pub async fn main() -> Result<(), IngesterError> {
             .expect("Failed to build 'ProfilerGuardBuilder'!")
     });
 
-    let args = Args::parse();
-
     // try to restore rocksDB first
     if args.restore_rocks_db {
         restore_rocksdb(&config).await?;
     }
 
-    let buffer = Arc::new(Buffer::new());
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
@@ -130,47 +128,11 @@ pub async fn main() -> Result<(), IngesterError> {
         .await?,
     );
 
-    // setup receiver
-    let message_handler = Arc::new(MessageHandlerIngester::new(buffer.clone()));
-    
-    let cloned_rx = shutdown_rx.resubscribe();
-    let ack_channel = create_ack_channel(cloned_rx, config.redis_messenger_config.clone(), mutexed_tasks.clone()).await;
-
-    if config.message_source == MessageSource::TCP {
-        let (geyser_tcp_receiver, geyser_addr) = (
-            TcpReceiver::new(message_handler.clone(), config.tcp_config.get_tcp_receiver_reconnect_interval()?),
-            config.tcp_config.get_tcp_receiver_addr_ingester()?,
-        );
-        let cloned_rx = shutdown_rx.resubscribe();
-        mutexed_tasks
-            .lock()
-            .await
-            .spawn(connect_to_geyser(geyser_tcp_receiver, geyser_addr, cloned_rx));
-        let (snapshot_tcp_receiver, snapshot_addr) = (
-            TcpReceiver::new(message_handler.clone(), config.tcp_config.get_tcp_receiver_reconnect_interval()? * 2),
-            config.tcp_config.get_snapshot_addr_ingester()?,
-        );
-        let cloned_rx = shutdown_rx.resubscribe();
-        mutexed_tasks
-            .lock()
-            .await
-            .spawn(connect_to_snapshot_receiver(snapshot_tcp_receiver, snapshot_addr, cloned_rx));    
-    }
-    
-    let cloned_buffer = buffer.clone();
-    let cloned_rx = shutdown_rx.resubscribe();
-    let cloned_metrics = metrics_state.ingester_metrics.clone();
-    if config.message_source == MessageSource::TCP {
-        mutexed_tasks
-            .lock()
-            .await
-            .spawn(debug_buffer(cloned_rx, cloned_buffer, cloned_metrics));
-    }
-
+    // todo: remove backup service from here and move it to a separate process with a secondary db - verify it's possible first!
     // start backup service
-    let backup_service = BackupService::new(primary_rocks_storage.db.clone(), &backup_service::load_config()?)?;
-    let cloned_metrics = metrics_state.ingester_metrics.clone();
     if config.store_db_backups() {
+        let backup_service = BackupService::new(primary_rocks_storage.db.clone(), &backup_service::load_config()?)?;
+        let cloned_metrics = metrics_state.ingester_metrics.clone();
         let cloned_rx = shutdown_rx.resubscribe();
         mutexed_tasks
             .lock()
@@ -178,10 +140,95 @@ pub async fn main() -> Result<(), IngesterError> {
             .spawn(perform_backup(backup_service, cloned_rx, cloned_metrics));
     }
 
+    let geyser_bubblegum_updates_processor =
+        Arc::new(BubblegumTxProcessor::new(primary_rocks_storage.clone(), metrics_state.ingester_metrics.clone()));
     let rpc_client = Arc::new(RpcClient::new(config.rpc_host.clone()));
-    for _ in 0..config.accounts_parsing_workers {
-        match config.message_source {
-            MessageSource::Redis => {
+
+    match config.message_source {
+        MessageSource::TCP => {
+            let buffer = Arc::new(Buffer::new());
+            // setup receiver
+            let message_handler = Arc::new(MessageHandlerIngester::new(buffer.clone()));
+            let (geyser_tcp_receiver, geyser_addr) = (
+                TcpReceiver::new(message_handler.clone(), config.tcp_config.get_tcp_receiver_reconnect_interval()?),
+                config.tcp_config.get_tcp_receiver_addr_ingester()?,
+            );
+            let cloned_rx = shutdown_rx.resubscribe();
+            mutexed_tasks
+                .lock()
+                .await
+                .spawn(connect_to_geyser(geyser_tcp_receiver, geyser_addr, cloned_rx));
+            let (snapshot_tcp_receiver, snapshot_addr) = (
+                TcpReceiver::new(message_handler.clone(), config.tcp_config.get_tcp_receiver_reconnect_interval()? * 2),
+                config.tcp_config.get_snapshot_addr_ingester()?,
+            );
+            let cloned_rx = shutdown_rx.resubscribe();
+            mutexed_tasks.lock().await.spawn(connect_to_snapshot_receiver(
+                snapshot_tcp_receiver,
+                snapshot_addr,
+                cloned_rx,
+            ));
+
+            let cloned_buffer = buffer.clone();
+            let cloned_rx = shutdown_rx.resubscribe();
+            let cloned_metrics = metrics_state.ingester_metrics.clone();
+            mutexed_tasks
+                .lock()
+                .await
+                .spawn(debug_buffer(cloned_rx, cloned_buffer, cloned_metrics));
+
+            // Workers for snapshot parsing
+            for _ in 0..config.snapshot_parsing_workers {
+                run_accounts_processor(
+                    shutdown_rx.resubscribe(),
+                    mutexed_tasks.clone(),
+                    buffer.clone(),
+                    primary_rocks_storage.clone(),
+                    config.snapshot_parsing_batch_size,
+                    config.mpl_core_fees_buffer_size,
+                    metrics_state.ingester_metrics.clone(),
+                    // during snapshot parsing we don't want to collect message process metrics
+                    None,
+                    index_pg_storage.clone(),
+                    rpc_client.clone(),
+                    mutexed_tasks.clone(),
+                )
+                .await;
+            }
+            for _ in 0..config.accounts_parsing_workers {
+                run_accounts_processor(
+                    shutdown_rx.resubscribe(),
+                    mutexed_tasks.clone(),
+                    buffer.clone(),
+                    primary_rocks_storage.clone(),
+                    config.accounts_buffer_size,
+                    config.mpl_core_fees_buffer_size,
+                    metrics_state.ingester_metrics.clone(),
+                    // TCP sender does not send any ids with timestamps so we may not pass message process metrics here
+                    None,
+                    index_pg_storage.clone(),
+                    rpc_client.clone(),
+                    mutexed_tasks.clone(),
+                )
+                .await;
+            }
+
+            run_transaction_processor(
+                shutdown_rx.resubscribe(),
+                mutexed_tasks.clone(),
+                buffer.clone(),
+                geyser_bubblegum_updates_processor.clone(),
+                // TCP sender does not send any ids with timestamps so we may not pass message process metrics here
+                None,
+            )
+            .await;
+        }
+        MessageSource::Redis => {
+            let cloned_rx = shutdown_rx.resubscribe();
+            let ack_channel =
+                create_ack_channel(cloned_rx, config.redis_messenger_config.clone(), mutexed_tasks.clone()).await;
+
+            for _ in 0..config.accounts_parsing_workers {
                 let redis_receiver = Arc::new(
                     RedisReceiver::new(
                         config.redis_messenger_config.clone(),
@@ -205,43 +252,25 @@ pub async fn main() -> Result<(), IngesterError> {
                 )
                 .await;
             }
-            MessageSource::TCP => {
-                run_accounts_processor(
+            for _ in 0..config.transactions_parsing_workers {
+                let redis_receiver = Arc::new(
+                    RedisReceiver::new(
+                        config.redis_messenger_config.clone(),
+                        ConsumptionType::All,
+                        ack_channel.clone(),
+                    )
+                    .await?,
+                );
+                run_transaction_processor(
                     shutdown_rx.resubscribe(),
                     mutexed_tasks.clone(),
-                    buffer.clone(),
-                    primary_rocks_storage.clone(),
-                    config.accounts_buffer_size,
-                    config.mpl_core_fees_buffer_size,
-                    metrics_state.ingester_metrics.clone(),
-                    // TCP sender does not send any ids with timestamps so we may not pass message process metrics here
-                    None,
-                    index_pg_storage.clone(),
-                    rpc_client.clone(),
-                    mutexed_tasks.clone(),
+                    redis_receiver,
+                    geyser_bubblegum_updates_processor.clone(),
+                    Some(metrics_state.message_process_metrics.clone()),
                 )
                 .await;
             }
         }
-    }
-
-    // Workers for snapshot parsing
-    for _ in 0..config.snapshot_parsing_workers {
-        run_accounts_processor(
-            shutdown_rx.resubscribe(),
-            mutexed_tasks.clone(),
-            buffer.clone(),
-            primary_rocks_storage.clone(),
-            config.snapshot_parsing_batch_size,
-            config.mpl_core_fees_buffer_size,
-            metrics_state.ingester_metrics.clone(),
-            // during snapshot parsing we don't want to collect message process metrics
-            None,
-            index_pg_storage.clone(),
-            rpc_client.clone(),
-            mutexed_tasks.clone(),
-        )
-        .await;
     }
 
     let last_saved_slot = primary_rocks_storage.last_saved_slot()?.unwrap_or_default();
@@ -371,43 +400,6 @@ pub async fn main() -> Result<(), IngesterError> {
             }
         }
     });
-
-    let geyser_bubblegum_updates_processor =
-        Arc::new(BubblegumTxProcessor::new(primary_rocks_storage.clone(), metrics_state.ingester_metrics.clone()));
-
-    for _ in 0..config.transactions_parsing_workers {
-        match config.message_source {
-            MessageSource::Redis => {
-                let redis_receiver = Arc::new(
-                    RedisReceiver::new(
-                        config.redis_messenger_config.clone(),
-                        ConsumptionType::All,
-                        ack_channel.clone(),
-                    )
-                    .await?,
-                );
-                run_transaction_processor(
-                    shutdown_rx.resubscribe(),
-                    mutexed_tasks.clone(),
-                    redis_receiver,
-                    geyser_bubblegum_updates_processor.clone(),
-                    Some(metrics_state.message_process_metrics.clone()),
-                )
-                .await;
-            }
-            MessageSource::TCP => {
-                run_transaction_processor(
-                    shutdown_rx.resubscribe(),
-                    mutexed_tasks.clone(),
-                    buffer.clone(),
-                    geyser_bubblegum_updates_processor.clone(),
-                    // TCP sender does not send any ids with timestamps so we may not pass message process metrics here
-                    None,
-                )
-                .await;
-            }
-        }
-    }
 
     let cloned_rx = shutdown_rx.resubscribe();
     let cloned_jp = json_processor.clone();
