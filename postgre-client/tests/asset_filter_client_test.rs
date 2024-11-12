@@ -2,6 +2,7 @@
 #[cfg(test)]
 mod tests {
     use entities::api_req_params::GetByMethodsOptions;
+    use postgre_client::asset_index_client::AssetType;
     use postgre_client::model::*;
     use postgre_client::storage_traits::{AssetIndexStorage, AssetPubkeyFilteredFetcher};
     use setup::pg::*;
@@ -80,7 +81,7 @@ mod tests {
             .await
             .unwrap();
         asset_filter_storage
-            .update_last_synced_key(&last_known_key)
+            .update_last_synced_key(&last_known_key, AssetType::NonFungible)
             .await
             .unwrap();
         let ref_value = &asset_indexes[asset_indexes.len() - 1];
@@ -284,7 +285,7 @@ mod tests {
             .await
             .unwrap();
         asset_filter_storage
-            .update_last_synced_key(&last_known_key)
+            .update_last_synced_key(&last_known_key, AssetType::NonFungible)
             .await
             .unwrap();
         let asset_indexes = generate_asset_index_records(100);
@@ -296,7 +297,7 @@ mod tests {
             .await
             .unwrap();
         asset_filter_storage
-            .update_last_synced_key(&last_known_key)
+            .update_last_synced_key(&last_known_key, AssetType::NonFungible)
             .await
             .unwrap();
         let order = AssetSorting {

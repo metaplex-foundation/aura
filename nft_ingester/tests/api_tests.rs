@@ -3091,14 +3091,14 @@ mod tests {
         let token_accounts_processor =
             TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
         token_accounts_processor
-            .transform_and_save_token_account(
+            .transform_and_save_fungible_token_account(
                 &mut batch_storage,
                 fungible_token_account1,
                 &token_account1,
             )
             .unwrap();
         token_accounts_processor
-            .transform_and_save_token_account(
+            .transform_and_save_fungible_token_account(
                 &mut batch_storage,
                 fungible_token_account2,
                 &token_account2,
@@ -3523,5 +3523,200 @@ mod tests {
             }
         });
         assert_eq!(res.mint_extensions.unwrap(), reference)
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_writing_fungible_into_dedicated_table() {
+        let cnt = 100;
+        let cli = Cli::default();
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
+            env.pg_env.client.clone(),
+            200_000,
+            "".to_string(),
+            Arc::new(SynchronizerMetricsConfig::new()),
+            1,
+            false,
+        );
+        let fungible_token_mint1 = generated_assets.pubkeys[0]; // non-existed token
+        let fungible_token_mint2 = generated_assets.pubkeys[1]; // MPLX token
+        let mint1 = Mint {
+            pubkey: fungible_token_mint1,
+            supply: 100000,
+            decimals: 2,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 10,
+            write_version: 10,
+            extensions: None,
+        };
+        let mint2 = Mint {
+            pubkey: fungible_token_mint2,
+            supply: 100000,
+            decimals: 2,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 7,
+            write_version: 10,
+            extensions: None,
+        };
+
+        let owner = generated_assets.owners[50].owner.value.unwrap();
+        let fungible_token_account1 = Pubkey::new_unique();
+        let fungible_token_account2 = Pubkey::new_unique();
+        let token_account1 = TokenAccount {
+            pubkey: fungible_token_account1,
+            mint: fungible_token_mint1,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 0,
+            write_version: 10,
+        };
+        let token_account2 = TokenAccount {
+            pubkey: fungible_token_account2,
+            mint: fungible_token_mint2,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 30000,
+            write_version: 10,
+        };
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        let token_accounts_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        token_accounts_processor
+            .transform_and_save_fungible_token_account(
+                &mut batch_storage,
+                fungible_token_account1,
+                &token_account1,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_fungible_token_account(
+                &mut batch_storage,
+                fungible_token_account2,
+                &token_account2,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint2)
+            .unwrap();
+        batch_storage.flush().unwrap();
+
+        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
+
+        let synchronizer = Arc::new(synchronizer);
+        let mut tasks = JoinSet::new();
+
+        for asset_type in [AssetType::Fungible, AssetType::NonFungible] {
+            let rx = rx.resubscribe();
+            let synchronizer = synchronizer.clone();
+            match asset_type {
+                AssetType::Fungible => {
+                    tasks.spawn(async move {
+                        synchronizer
+                            .synchronize_fungible_asset_indexes(&rx, 0)
+                            .await
+                    });
+                }
+                AssetType::NonFungible => {
+                    tasks.spawn(async move {
+                        synchronizer
+                            .synchronize_non_fungible_asset_indexes(&rx, 0)
+                            .await
+                    });
+                }
+            }
+        }
+
+        while let Some(res) = tasks.join_next().await {
+            if let Err(err) = res {
+                panic!("{err}");
+            }
+        }
+
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
+            Storage,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+            None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
+        );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: Some(SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
+            // They will be stored as non-fungible tokens
+            // because they didn't get into the list of popular fungible tokens
+            token_type: Some(TokenType::Fungible),
+            ..Default::default()
+        };
+        let res = api
+            .search_assets(payload, mutexed_tasks.clone())
+            .await
+            .unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // We created 2 fungible tokens^ 1 with real pubkey (MPLX)
+        // so this token contain info about symbol and price
+        // and 1 non-existed token, so response for it do not include such info
+        assert_eq!(res.items.len(), 2);
+        assert_eq!(
+            res.items[0]
+                .clone()
+                .token_info
+                .unwrap()
+                .associated_token_address
+                .unwrap(),
+            fungible_token_account2.to_string()
+        );
+        assert_eq!(
+            res.items[1]
+                .clone()
+                .token_info
+                .unwrap()
+                .associated_token_address
+                .unwrap(),
+            fungible_token_account1.to_string()
+        );
     }
 }

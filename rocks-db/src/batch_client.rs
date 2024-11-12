@@ -86,7 +86,7 @@ impl AssetUpdateIndexStorage for Storage {
                 iter.next(); // Skip the first key, as it is the `from`
                 iter
             }
-            None => self.assets_update_idx.iter_start(),
+            None => self.fungible_assets_update_idx.iter_start(),
         };
 
         for pair in iterator {

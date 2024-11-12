@@ -21,11 +21,16 @@ pub trait AssetIndexStorage {
         &self,
         asset_indexes: &[FungibleAssetIndex],
     ) -> Result<(), IndexDbError>;
-    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError>;
+    async fn update_last_synced_key(
+        &self,
+        last_key: &[u8],
+        asset_type: AssetType,
+    ) -> Result<(), IndexDbError>;
     async fn load_from_dump(
         &self,
         base_path: &std::path::Path,
         last_key: &[u8],
+        asset_type: AssetType,
     ) -> Result<(), IndexDbError>;
 }
 
@@ -46,8 +51,9 @@ mock!(
             &self,
             base_path: &std::path::Path,
             last_key: &[u8],
+            asset_type: AssetType,
         ) -> Result<(), IndexDbError>;
-        async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError>;
+        async fn update_last_synced_key(&self, last_key: &[u8], assset_type: AssetType) -> Result<(), IndexDbError>;
     }
 
     impl Clone for AssetIndexStorageMock {

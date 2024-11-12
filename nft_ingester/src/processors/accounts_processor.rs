@@ -30,10 +30,12 @@ const WORKER_IDLE_TIMEOUT: Duration = Duration::from_millis(100);
 // interval after which buffer is flushed
 const FLUSH_INTERVAL: Duration = Duration::from_millis(500);
 
+// EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 pub const USDC_MINT_BYTES: [u8; 32] = [
     198, 250, 122, 243, 190, 219, 173, 58, 61, 101, 243, 106, 171, 201, 116, 49, 177, 187, 228,
     194, 210, 246, 224, 228, 124, 166, 2, 3, 69, 47, 93, 97,
 ];
+// Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB
 pub const USDT_MINT_BYTES: [u8; 32] = [
     206, 1, 14, 96, 175, 237, 178, 39, 23, 189, 99, 25, 47, 84, 20, 90, 63, 150, 90, 51, 187, 130,
     210, 199, 2, 158, 178, 206, 30, 32, 130, 100,

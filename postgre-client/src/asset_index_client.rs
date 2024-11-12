@@ -26,7 +26,7 @@ pub const INSERT_ASSET_CREATOR_PARAMETERS_COUNT: usize = 4;
 pub const INSERT_AUTHORITY_PARAMETERS_COUNT: usize = 3;
 pub const INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT: usize = 4;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum AssetType {
     NonFungible = 1,
     Fungible = 2,
@@ -54,7 +54,22 @@ impl PgClient {
             .observe_request(SQL_COMPONENT, SELECT_ACTION, table_name, start_time);
         Ok(result.0)
     }
-    pub(crate) async fn upsert_batched(
+
+    pub(crate) async fn upsert_batched_fungible(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        fungible_tokens: Vec<FungibleToken>,
+    ) -> Result<(), IndexDbError> {
+        for fungible_token in fungible_tokens
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT)
+        {
+            self.insert_fungible_tokens(transaction, fungible_token, "fungible_tokens")
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn upsert_batched_non_fungible(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         table_names: TableNames,
@@ -81,17 +96,7 @@ impl PgClient {
             self.insert_assets(transaction, chunk, table_names.assets_table.as_str())
                 .await?;
         }
-        for chunk in updated_components
-            .fungible_tokens
-            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT)
-        {
-            self.insert_fungible_tokens(
-                transaction,
-                chunk,
-                table_names.fungible_tokens_table.as_str(),
-            )
-            .await?;
-        }
+
         let mut existing_creators: Vec<(Pubkey, Creator)> = vec![];
         for chunk in updated_components
             .updated_keys
@@ -148,7 +153,6 @@ pub(crate) struct AssetComponenents {
     pub all_creators: Vec<(Pubkey, Creator, i64)>,
     pub updated_keys: Vec<Vec<u8>>,
     pub authorities: Vec<Authority>,
-    pub fungible_tokens: Vec<FungibleToken>,
 }
 
 pub(crate) struct TableNames {
@@ -156,7 +160,6 @@ pub(crate) struct TableNames {
     pub assets_table: String,
     pub creators_table: String,
     pub authorities_table: String,
-    pub fungible_tokens_table: String,
 }
 
 pub(crate) fn split_fungible_assets_into_components(
@@ -244,30 +247,34 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     let mut authorities = authorities.into_values().collect::<Vec<_>>();
     authorities.sort_by(|a, b| a.key.cmp(&b.key));
 
-    let fungible_tokens = asset_indexes
-        .iter()
-        .filter(|asset| asset.specification_asset_class == AssetSpecClass::FungibleToken)
-        .map(|asset| {
-            FungibleToken {
-                key: asset.pubkey,
-                slot_updated: asset.slot_updated,
-                // it's unlikely that rows below will not be filled for fungible token
-                // but even if that happens we will save asset with default values
-                owner: asset.owner.unwrap_or_default(),
-                asset: asset.fungible_asset_mint.unwrap_or_default(),
-                balance: asset.fungible_asset_balance.unwrap_or_default() as i64,
-            }
-        })
-        .collect::<Vec<FungibleToken>>();
-
     AssetComponenents {
-        fungible_tokens,
         metadata_urls,
         asset_indexes,
         all_creators,
         updated_keys,
         authorities,
     }
+}
+
+pub(crate) fn split_into_fungible_tokens(
+    asset_indexes: &[FungibleAssetIndex],
+) -> Vec<FungibleToken> {
+    asset_indexes
+        .iter()
+        .filter_map(|asset_index| {
+            if let AssetSpecClass::FungibleToken = asset_index.specification_asset_class {
+                Some(FungibleToken {
+                    key: asset_index.pubkey,
+                    slot_updated: asset_index.slot_updated,
+                    owner: asset_index.owner.unwrap_or_default(),
+                    asset: asset_index.fungible_asset_mint.unwrap_or_default(),
+                    balance: asset_index.fungible_asset_balance.unwrap_or_default() as i64,
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[async_trait]
@@ -291,9 +298,8 @@ impl AssetIndexStorage for PgClient {
             assets_table: "assets_v3".to_string(),
             creators_table: "asset_creators_v3".to_string(),
             authorities_table: "assets_authorities".to_string(),
-            fungible_tokens_table: "fungible_tokens".to_string(),
         };
-        self.upsert_batched(&mut transaction, table_names, updated_components)
+        self.upsert_batched_non_fungible(&mut transaction, table_names, updated_components)
             .await?;
         self.commit_transaction(transaction).await
     }
@@ -303,23 +309,12 @@ impl AssetIndexStorage for PgClient {
         fungible_asset_indexes: &[FungibleAssetIndex],
     ) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
-        let table_names = TableNames {
-            metadata_table: "tasks".to_string(),
-            assets_table: "assets_v3".to_string(),
-            creators_table: "asset_creators_v3".to_string(),
-            authorities_table: "assets_authorities".to_string(),
-            fungible_tokens_table: "fungible_tokens".to_string(),
-        };
-        let updated_components = AssetComponenents {
-            fungible_tokens: split_fungible_assets_into_components(fungible_asset_indexes),
-            metadata_urls: vec![],
-            asset_indexes: vec![],
-            all_creators: vec![],
-            updated_keys: vec![],
-            authorities: vec![],
-        };
-        self.upsert_batched(&mut transaction, table_names, updated_components)
-            .await?;
+
+        self.upsert_batched_fungible(
+            &mut transaction,
+            split_into_fungible_tokens(fungible_asset_indexes),
+        )
+        .await?;
         self.commit_transaction(transaction).await
     }
 
@@ -327,6 +322,7 @@ impl AssetIndexStorage for PgClient {
         &self,
         base_path: &std::path::Path,
         last_key: &[u8],
+        asset_type: AssetType,
     ) -> Result<(), IndexDbError> {
         let Some(metadata_path) = base_path.join("metadata.csv").to_str().map(str::to_owned) else {
             return Err(IndexDbError::BadArgument(format!(
@@ -377,15 +373,19 @@ impl AssetIndexStorage for PgClient {
             &mut transaction,
         )
         .await?;
-        self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
+        self.update_last_synced_key(last_key, &mut transaction, "last_synced_key", asset_type)
             .await?;
         self.commit_transaction(transaction).await?;
         Ok(())
     }
 
-    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError> {
+    async fn update_last_synced_key(
+        &self,
+        last_key: &[u8],
+        asset_type: AssetType,
+    ) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
-        self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
+        self.update_last_synced_key(last_key, &mut transaction, "last_synced_key", asset_type)
             .await?;
         self.commit_transaction(transaction).await
     }
@@ -801,11 +801,14 @@ impl PgClient {
         last_key: &[u8],
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
+        asset_type: AssetType,
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("UPDATE ");
         query_builder.push(table);
         query_builder.push(" SET last_synced_asset_update_key = ");
-        query_builder.push_bind(last_key).push(" WHERE id = 1");
+        query_builder
+            .push_bind(last_key)
+            .push(format!(" WHERE id = {}", asset_type as i32));
         self.execute_query_with_metrics(transaction, &mut query_builder, UPDATE_ACTION, table)
             .await?;
         Ok(())

@@ -269,7 +269,9 @@ where
                 last_known_key.pubkey,
             );
             if !self.run_temp_sync_during_dump {
-                return self.dump_sync(last_included_rocks_key.as_slice(), rx).await;
+                return self
+                    .dump_sync(last_included_rocks_key.as_slice(), rx, asset_type)
+                    .await;
             }
             // start a regular synchronization into a temporary storage to catch up on it while the dump is being created and loaded, as it takes a loooong time
             let (tx, local_rx) = tokio::sync::broadcast::channel::<()>(1);
@@ -306,8 +308,7 @@ where
                     }
                 }
             });
-
-            self.dump_sync(last_included_rocks_key.as_slice(), rx)
+            self.dump_sync(last_included_rocks_key.as_slice(), rx, asset_type)
                 .await?;
 
             tx.send(()).map_err(|e| e.to_string())?;
@@ -326,6 +327,7 @@ where
         &self,
         last_included_rocks_key: &[u8],
         rx: &tokio::sync::broadcast::Receiver<()>,
+        asset_type: AssetType,
     ) -> Result<(), IngesterError> {
         let path = std::path::Path::new(self.dump_path.as_str());
         tracing::info!("Dumping the primary storage to {}", self.dump_path);
@@ -340,7 +342,7 @@ where
         tracing::info!("Dump is complete. Loading the dump into the index storage");
 
         self.index_storage
-            .load_from_dump(path, last_included_rocks_key)
+            .load_from_dump(path, last_included_rocks_key, asset_type)
             .await?;
         tracing::info!("Dump is loaded into the index storage");
         Ok(())
@@ -423,7 +425,7 @@ where
                     last_included_rocks_key.pubkey,
                 );
                 self.index_storage
-                    .update_last_synced_key(&last_included_rocks_key)
+                    .update_last_synced_key(&last_included_rocks_key, AssetType::Fungible)
                     .await?;
             } else {
                 break;
@@ -514,7 +516,7 @@ where
                     last_included_rocks_key.pubkey,
                 );
                 self.index_storage
-                    .update_last_synced_key(&last_included_rocks_key)
+                    .update_last_synced_key(&last_included_rocks_key, AssetType::NonFungible)
                     .await?;
             } else {
                 break;
@@ -746,9 +748,12 @@ mod tests {
             .return_once(|_| Ok(()));
         index_storage
             .expect_update_last_synced_key()
-            .with(mockall::predicate::eq(binary_key))
+            .with(
+                mockall::predicate::eq(binary_key),
+                mockall::predicate::eq(AssetType::Fungible),
+            )
             .once()
-            .return_once(|_| Ok(()));
+            .return_once(|_, _| Ok(()));
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
             Arc::new(index_storage),
@@ -848,9 +853,12 @@ mod tests {
             .return_once(|_| Ok(()));
         index_storage
             .expect_update_last_synced_key()
-            .with(mockall::predicate::eq(binary_key))
+            .with(
+                mockall::predicate::eq(binary_key),
+                mockall::predicate::eq(AssetType::Fungible),
+            )
             .once()
-            .return_once(|_| Ok(()));
+            .return_once(|_, _| Ok(()));
 
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
@@ -983,9 +991,12 @@ mod tests {
             .return_once(|_| Ok(()));
         index_storage
             .expect_update_last_synced_key()
-            .with(mockall::predicate::eq(binary_key_first_batch))
+            .with(
+                mockall::predicate::eq(binary_key_first_batch),
+                mockall::predicate::eq(AssetType::Fungible),
+            )
             .once()
-            .return_once(|_| Ok(()));
+            .return_once(|_, _| Ok(()));
 
         index_storage
             .expect_update_asset_indexes_batch()
@@ -996,9 +1007,12 @@ mod tests {
             .return_once(|_| Ok(()));
         index_storage
             .expect_update_last_synced_key()
-            .with(mockall::predicate::eq(binary_key_second_batch))
+            .with(
+                mockall::predicate::eq(binary_key_second_batch),
+                mockall::predicate::eq(AssetType::Fungible),
+            )
             .once()
-            .return_once(|_| Ok(()));
+            .return_once(|_, _| Ok(()));
 
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),

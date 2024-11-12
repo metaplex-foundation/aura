@@ -6,8 +6,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     asset_index_client::{
-        split_assets_into_components, split_fungible_assets_into_components, AssetComponenents,
-        AssetType, TableNames,
+        split_assets_into_components, split_fungible_assets_into_components, AssetType, TableNames,
     },
     error::IndexDbError,
     storage_traits::{AssetIndexStorage, TempClientProvider},
@@ -66,7 +65,20 @@ impl TempClient {
             )
             .await?;
         self.pg_client
-            .update_last_synced_key(initial_key, &mut tx, last_key_table_name.as_str())
+            .update_last_synced_key(
+                initial_key,
+                &mut tx,
+                last_key_table_name.as_str(),
+                AssetType::Fungible,
+            )
+            .await?;
+        self.pg_client
+            .update_last_synced_key(
+                initial_key,
+                &mut tx,
+                last_key_table_name.as_str(),
+                AssetType::NonFungible,
+            )
             .await?;
         self.pg_client
             .commit_transaction(tx)
@@ -252,10 +264,9 @@ impl AssetIndexStorage for TempClient {
             assets_table: format!("{}assets_v3", TEMP_INDEXING_TABLE_PREFIX),
             creators_table: format!("{}asset_creators_v3", TEMP_INDEXING_TABLE_PREFIX),
             authorities_table: format!("{}assets_authorities", TEMP_INDEXING_TABLE_PREFIX),
-            fungible_tokens_table: format!("{}fungible_tokens", TEMP_INDEXING_TABLE_PREFIX),
         };
         self.pg_client
-            .upsert_batched(&mut transaction, table_names, updated_components)
+            .upsert_batched_non_fungible(&mut transaction, table_names, updated_components)
             .await?;
         self.pg_client.commit_transaction(transaction).await
     }
@@ -266,28 +277,21 @@ impl AssetIndexStorage for TempClient {
     ) -> Result<(), IndexDbError> {
         let mut c = self.pooled_connection.lock().await;
         let mut transaction = c.begin().await?;
-        let table_names = TableNames {
-            metadata_table: format!("{}tasks", TEMP_INDEXING_TABLE_PREFIX),
-            assets_table: format!("{}assets_v3", TEMP_INDEXING_TABLE_PREFIX),
-            creators_table: format!("{}asset_creators_v3", TEMP_INDEXING_TABLE_PREFIX),
-            authorities_table: format!("{}assets_authorities", TEMP_INDEXING_TABLE_PREFIX),
-            fungible_tokens_table: format!("{}fungible_tokens", TEMP_INDEXING_TABLE_PREFIX),
-        };
-        let updated_components = AssetComponenents {
-            fungible_tokens: split_fungible_assets_into_components(fungible_asset_indexes),
-            metadata_urls: vec![],
-            asset_indexes: vec![],
-            all_creators: vec![],
-            updated_keys: vec![],
-            authorities: vec![],
-        };
+
         self.pg_client
-            .upsert_batched(&mut transaction, table_names, updated_components)
+            .upsert_batched_fungible(
+                &mut transaction,
+                split_fungible_assets_into_components(fungible_asset_indexes),
+            )
             .await?;
         self.pg_client.commit_transaction(transaction).await
     }
 
-    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError> {
+    async fn update_last_synced_key(
+        &self,
+        last_key: &[u8],
+        asset_type: AssetType,
+    ) -> Result<(), IndexDbError> {
         let mut c = self.pooled_connection.lock().await;
         let mut transaction = c.begin().await?;
         self.pg_client
@@ -295,6 +299,7 @@ impl AssetIndexStorage for TempClient {
                 last_key,
                 &mut transaction,
                 format!("{}last_synced_key", TEMP_INDEXING_TABLE_PREFIX).as_str(),
+                asset_type,
             )
             .await?;
         self.pg_client.commit_transaction(transaction).await
@@ -304,6 +309,7 @@ impl AssetIndexStorage for TempClient {
         &self,
         _base_path: &std::path::Path,
         _last_key: &[u8],
+        _asset_type: AssetType,
     ) -> Result<(), IndexDbError> {
         Err(IndexDbError::NotImplemented(
             "Temporary client does not support batch load from file".to_string(),

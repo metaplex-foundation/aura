@@ -35,7 +35,7 @@ mod tests {
             .unwrap();
 
         asset_index_storage
-            .update_last_synced_key(&last_known_key)
+            .update_last_synced_key(&last_known_key, AssetType::NonFungible)
             .await
             .unwrap();
         // Check fetch_last_synced_id again
@@ -67,7 +67,7 @@ mod tests {
             .await
             .unwrap();
         asset_index_storage
-            .update_last_synced_key(&new_known_key)
+            .update_last_synced_key(&new_known_key, AssetType::NonFungible)
             .await
             .unwrap();
         let last_synced_key = asset_index_storage
@@ -116,7 +116,7 @@ mod tests {
             .await
             .unwrap();
         asset_index_storage
-            .update_last_synced_key(&last_known_key)
+            .update_last_synced_key(&last_known_key, AssetType::NonFungible)
             .await
             .unwrap();
 
@@ -144,7 +144,7 @@ mod tests {
             .await
             .unwrap();
         asset_index_storage
-            .update_last_synced_key(&last_known_key)
+            .update_last_synced_key(&last_known_key, AssetType::NonFungible)
             .await
             .unwrap();
 
