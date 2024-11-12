@@ -208,23 +208,16 @@ pub async fn get_by_ids<
 
     let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
     // request prices and symbols only for fungibles when the option is set. This will prolong the request at least an order of magnitude
-    let (token_prices_fut, token_symbols_fut) = if options.show_fungible_tokens {
-        let token_prices_fut = token_price_fetcher.fetch_token_prices(unique_asset_ids.as_slice());
-        let token_symbols_fut =
-            token_price_fetcher.fetch_token_symbols(unique_asset_ids.as_slice());
-        (Some(token_prices_fut), Some(token_symbols_fut))
-    } else {
-        (None, None)
-    };
     let asset_selected_maps_fut =
         rocks_db.get_asset_selected_maps_async(unique_asset_ids.clone(), owner_address, &options);
-
-    let (token_prices, token_symbols, asset_selected_maps) = tokio::join!(
-        async { token_prices.unwrap_or(Ok(Default::default())).await },
-        async { token_symbols.unwrap_or(Ok(Default::default())).await },
-        asset_selected_maps_fut
-    );
-    let mut asset_selected_maps = asset_selected_maps?;
+    let (token_prices, token_symbols) = if options.show_fungible {
+        let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids.as_slice());
+        let token_symbols_fut = token_price_fetcher.fetch_token_symbols(asset_ids.as_slice());
+        tokio::join!(token_prices_fut, token_symbols_fut)
+    } else {
+        (Ok(HashMap::new()), Ok(HashMap::new()))
+    };
+    let mut asset_selected_maps = asset_selected_maps_fut.await?;
     let token_prices = token_prices.unwrap_or_else(|e| {
         error!("Fetch token prices: {}", e);
         metrics.inc_token_info_fetch_errors("prices");
