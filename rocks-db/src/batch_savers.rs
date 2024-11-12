@@ -102,7 +102,7 @@ impl BatchSaveStorage {
         self.batch.len() >= self.batch_size
     }
 
-    fn store_complete(&mut self, data: &AssetCompleteDetails) -> Result<()> {
+    pub fn store_complete(&mut self, data: &AssetCompleteDetails) -> Result<()> {
         let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
         let acd = data.convert_to_fb(&mut builder);
         builder.finish_minimal(acd);
@@ -122,15 +122,6 @@ impl BatchSaveStorage {
             "accounts_complete_data_merge_with_batch",
         );
         res
-    }
-
-    pub fn store_owner(&mut self, asset_owner: &AssetOwner) -> Result<()> {
-        let asset = &AssetCompleteDetails {
-            pubkey: asset_owner.pubkey,
-            owner: Some(asset_owner.clone()),
-            ..Default::default()
-        };
-        self.store_complete(asset)
     }
 
     pub fn store_dynamic(&mut self, asset_dynamic: &AssetDynamicDetails) -> Result<()> {

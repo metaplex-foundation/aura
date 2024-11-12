@@ -1,7 +1,7 @@
 use entities::enums::OwnerType;
 use entities::models::{Mint, TokenAccount, UpdateVersion, Updated};
 use metrics_utils::IngesterMetricsConfig;
-use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
+use rocks_db::asset::{AssetCompleteDetails, AssetDynamicDetails, AssetOwner};
 use rocks_db::batch_savers::BatchSaveStorage;
 use rocks_db::errors::StorageError;
 use solana_program::pubkey::Pubkey;
@@ -75,8 +75,13 @@ impl TokenAccountsProcessor {
         self.finalize_processing(
             storage,
             |storage: &mut BatchSaveStorage| {
-                storage.store_owner(&asset_owner_details)?;
-                storage.store_dynamic(&asset_dynamic_details)
+                let asset = &AssetCompleteDetails {
+                    pubkey: asset_owner_details.pubkey,
+                    owner: Some(asset_owner_details.clone()),
+                    dynamic_details: Some(asset_dynamic_details.clone()),
+                    ..Default::default()
+                };
+                storage.store_complete(asset)
             },
             "token_accounts_asset_components_merge_with_batch",
         )?;
@@ -145,8 +150,13 @@ impl TokenAccountsProcessor {
         self.finalize_processing(
             storage,
             |storage: &mut BatchSaveStorage| {
-                storage.store_owner(&asset_owner_details)?;
-                storage.store_dynamic(&asset_dynamic_details)?;
+                let asset = &AssetCompleteDetails {
+                    pubkey: asset_owner_details.pubkey,
+                    owner: Some(asset_owner_details.clone()),
+                    dynamic_details: Some(asset_dynamic_details.clone()),
+                    ..Default::default()
+                };
+                storage.store_complete(asset)?;
                 storage.store_spl_mint(mint)
             },
             "mint_accounts_merge_with_batch",
