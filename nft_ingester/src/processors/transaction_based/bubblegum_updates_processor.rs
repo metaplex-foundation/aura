@@ -1117,7 +1117,7 @@ impl BubblegumTxProcessor {
         };
         for batched_mint in batch_mint.batch_mints.iter() {
             let seq = batched_mint.tree_update.seq;
-            let event = (&blockbuster::programs::bubblegum::ChangeLogEventV1::from(
+            let event = (&spl_account_compression::events::ChangeLogEventV1::from(
                 &batched_mint.tree_update,
             ))
                 .into();

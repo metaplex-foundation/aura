@@ -580,19 +580,6 @@ dependencies = [
 
 [[package]]
 name = "anchor-spl"
-version = "0.29.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c4fd6e43b2ca6220d2ef1641539e678bfc31b6cc393cf892b373b5997b6a39a"
-dependencies = [
- "anchor-lang 0.29.0",
- "solana-program",
- "spl-associated-token-account 2.3.0",
- "spl-token 4.0.0",
- "spl-token-2022 0.9.0",
-]
-
-[[package]]
-name = "anchor-spl"
 version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04bd077c34449319a1e4e0bc21cea572960c9ae0d0fefda0dd7c52fcc3c647a3"
@@ -1077,7 +1064,7 @@ checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -1099,7 +1086,7 @@ checksum = "16e62a023e7c117e27523144c5d2459f4397fcc3cab0085af8e2224f643a0193"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -1110,7 +1097,7 @@ checksum = "6e0c28dcc82d7c8ead5cb13beb15405b57b8546e93215673ff8ca0349a028107"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -1380,7 +1367,7 @@ dependencies = [
  "regex",
  "rustc-hash",
  "shlex",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -1449,7 +1436,7 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 [[package]]
 name = "blockbuster"
 version = "2.4.0"
-source = "git+https://github.com/adm-metaex/blockbuster?branch=feat/create-tree-with-root#7a1f193f2275cbe46d60ba0587d7d7db9c802ff2"
+source = "git+https://github.com/metaplex-foundation/blockbuster?rev=0aa1878#0aa18784bf0e09d4ff43c9bc04b91b44c0a5a4ac"
 dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
@@ -1458,15 +1445,17 @@ dependencies = [
  "bytemuck",
  "lazy_static",
  "log",
+ "mpl-account-compression",
  "mpl-bubblegum",
  "mpl-core",
- "mpl-token-metadata 4.1.2",
+ "mpl-noop",
+ "mpl-token-metadata",
  "serde",
  "solana-sdk",
  "solana-transaction-status",
  "solana-zk-token-sdk",
- "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
- "spl-noop 0.2.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
+ "spl-account-compression 0.4.2",
+ "spl-noop",
  "spl-pod 0.1.1",
  "spl-token 4.0.0",
  "spl-token-2022 1.0.0",
@@ -1552,7 +1541,7 @@ dependencies = [
  "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
  "syn_derive",
 ]
 
@@ -1653,36 +1642,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "bubblegum"
-version = "0.13.0"
-source = "git+https://github.com/adm-metaex/mpl-bubblegum?branch=feature/cleanup#ec3dd4a31ad5fc20bd3deb01f9a71750f0601ad4"
-dependencies = [
- "anchor-lang 0.29.0",
- "anchor-spl 0.29.0",
- "bytemuck",
- "mpl-token-metadata 3.2.3",
- "mplx-rewards",
- "mplx-staking-states",
- "num-traits",
- "solana-program",
- "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
- "spl-associated-token-account 2.3.0",
- "spl-token 4.0.0",
-]
-
-[[package]]
 name = "bubblegum-batch-sdk"
 version = "0.1.0"
-source = "git+https://github.com/metaplex-foundation/bubblegum-batch-sdk.git?rev=0d529f5#0d529f5115e256df8aa9cf9f5c2ab7779512cd0a"
+source = "git+https://github.com/metaplex-foundation/bubblegum-batch-sdk.git?rev=27ecf48#27ecf486d86daaa4474ef96695f69a2ba8769c6e"
 dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
  "blockbuster",
- "borsh 0.10.3",
- "bubblegum",
+ "borsh 0.9.3",
  "bytemuck",
  "chrono",
  "mpl-bubblegum",
+ "mpl-common-constants",
+ "mplx-rewards",
  "mplx-staking-states",
  "paste",
  "rand 0.8.5",
@@ -1695,10 +1667,10 @@ dependencies = [
  "solana-program",
  "solana-rpc-client-api",
  "solana-sdk",
- "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
- "spl-concurrent-merkle-tree 0.3.0",
+ "spl-account-compression 0.4.2",
+ "spl-concurrent-merkle-tree 0.4.1",
  "spl-merkle-tree-reference",
- "spl-noop 0.2.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
+ "spl-noop",
  "thiserror",
  "uuid 1.8.0",
 ]
@@ -1721,9 +1693,9 @@ dependencies = [
 
 [[package]]
 name = "bytemuck"
-version = "1.17.0"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fd4c6dcc3b0aea2f5c0b4b82c2b15fe39ddbc76041a310848f4706edf76bb31"
+checksum = "8334215b81e418a0a7bdb8ef0849474f40bb10c8b71f1c4ed315cff49f32494d"
 dependencies = [
  "bytemuck_derive",
 ]
@@ -1736,7 +1708,7 @@ checksum = "1ee891b04274a59bd38b412188e24b849617b2e45a0fd8d057deb63e7403761b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -1989,7 +1961,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -2407,7 +2379,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim 0.11.1",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -2429,7 +2401,7 @@ checksum = "733cabb43482b1a1b53eee8583c2b9e8684d592215ea83efd305dd31bc2f0178"
 dependencies = [
  "darling_core 0.20.9",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -2586,7 +2558,7 @@ checksum = "487585f4d0c6655fe74905e2504d8ad6908e4db67f744eb140876906c2f3175d"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -2609,7 +2581,7 @@ checksum = "a6cbae11b3de8fce2a456e8ea3dada226b35fe791f0dc1d360c0941f0bb681f3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -2716,7 +2688,7 @@ dependencies = [
  "hex",
  "libreplex_inscriptions",
  "mpl-bubblegum",
- "mpl-token-metadata 4.1.2",
+ "mpl-token-metadata",
  "num-derive 0.4.2",
  "num-traits",
  "schemars",
@@ -2728,7 +2700,7 @@ dependencies = [
  "solana-program",
  "solana-sdk",
  "solana-transaction-status",
- "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
+ "spl-account-compression 0.4.2",
  "sqlx",
 ]
 
@@ -2769,7 +2741,7 @@ checksum = "a1ab991c1362ac86c61ab6f556cff143daa22e5a15e4e189df818b2fd19fe65b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -3082,7 +3054,7 @@ checksum = "87750cf4b7a4c0625b1529e4c543c2182106e4dedc60a2a6455e00d212c489ac"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -3751,7 +3723,7 @@ dependencies = [
  "solana-client",
  "solana-program",
  "solana-sdk",
- "spl-account-compression 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spl-account-compression 0.3.0",
  "spl-concurrent-merkle-tree 0.2.0",
  "thiserror",
  "tokio",
@@ -4359,7 +4331,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -4408,9 +4380,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "mpl-account-compression"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2ad6a6ba15b2e880d43b94f40510f1b64f2981a843cfc7b8877919467d2ab1a"
+dependencies = [
+ "anchor-lang 0.29.0",
+ "bytemuck",
+ "mpl-noop",
+ "solana-program",
+ "spl-concurrent-merkle-tree 0.4.1",
+]
+
+[[package]]
 name = "mpl-bubblegum"
-version = "1.4.0"
-source = "git+https://github.com/adm-metaex/mpl-bubblegum?branch=feature/cleanup#ec3dd4a31ad5fc20bd3deb01f9a71750f0601ad4"
+version = "1.5.0"
+source = "git+https://github.com/metaplex-foundation/mpl-bubblegum.git?rev=07678e6#07678e698dfd0d12c3fdf44855e1bb7e8101443a"
 dependencies = [
  "borsh 0.10.3",
  "kaigan",
@@ -4421,6 +4406,11 @@ dependencies = [
  "solana-program",
  "thiserror",
 ]
+
+[[package]]
+name = "mpl-common-constants"
+version = "0.1.0"
+source = "git+https://github.com/adm-metaex/mpl-common-constants.git?branch=main#0595ff629b4b1ba574431657f411ce269f906e5e"
 
 [[package]]
 name = "mpl-core"
@@ -4442,16 +4432,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "mpl-token-metadata"
-version = "3.2.3"
+name = "mpl-noop"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba8ee05284d79b367ae8966d558e1a305a781fc80c9df51f37775169117ba64f"
+checksum = "179556a9254920ca8b150b18728d2f3106879f710c1ef5a049a8f0d5b03eede5"
 dependencies = [
- "borsh 0.10.3",
- "num-derive 0.3.3",
- "num-traits",
  "solana-program",
- "thiserror",
 ]
 
 [[package]]
@@ -4472,7 +4458,7 @@ dependencies = [
 [[package]]
 name = "mplx-rewards"
 version = "0.1.0"
-source = "git+https://github.com/adm-metaex/mplx-rewards.git#406078fcc3656dfeb57ae776ee81097480a27a62"
+source = "git+https://github.com/metaplex-foundation/aura-rewards.git#37a685533015ca3653de3bf44833a30bcb90ec76"
 dependencies = [
  "borsh 1.5.1",
  "bytemuck",
@@ -4488,7 +4474,7 @@ dependencies = [
 [[package]]
 name = "mplx-staking-states"
 version = "0.0.1"
-source = "git+https://github.com/adm-metaex/mplx-staking.git#26f19bb5a92ed85119581acd6bce18d062fe36a0"
+source = "git+https://github.com/metaplex-foundation/aura-staking.git#4156294b2b502356ba2b68ca4e38e43fbb91398a"
 dependencies = [
  "anchor-lang 0.26.0",
  "anchor-spl 0.26.0",
@@ -4595,7 +4581,7 @@ dependencies = [
  "mockall",
  "moka",
  "mpl-bubblegum",
- "mpl-token-metadata 4.1.2",
+ "mpl-token-metadata",
  "multer",
  "num-traits",
  "open-rpc-schema",
@@ -4620,8 +4606,8 @@ dependencies = [
  "solana-sdk",
  "solana-storage-bigtable",
  "solana-transaction-status",
- "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
- "spl-concurrent-merkle-tree 0.3.0",
+ "spl-account-compression 0.4.2",
+ "spl-concurrent-merkle-tree 0.4.1",
  "spl-pod 0.1.1",
  "spl-token 4.0.0",
  "spl-token-2022 1.0.0",
@@ -4786,7 +4772,7 @@ checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -4889,7 +4875,7 @@ dependencies = [
  "proc-macro-crate 1.3.1",
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -4901,7 +4887,7 @@ dependencies = [
  "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -4981,7 +4967,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -5142,7 +5128,7 @@ dependencies = [
  "proc-macro2",
  "proc-macro2-diagnostics 0.10.1",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -5211,7 +5197,7 @@ checksum = "2f38a4412a78282e09a2cf38d195ea5420d15ba0602cb375210efbc877243965"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -5514,7 +5500,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f12335488a2f3b0a83b14edad48dca9879ce89b2edd10e80237e4e852dd645e"
 dependencies = [
  "proc-macro2",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -5604,7 +5590,7 @@ checksum = "af066a9c399a26e020ada66a034357a868728e72cd426f3adcd35f80d88d88c8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
  "version_check",
  "yansi 1.0.1",
 ]
@@ -5629,7 +5615,7 @@ checksum = "440f724eba9f6996b75d63681b0a92b06947f1457076d503a4d2e2c8f56442b8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -5723,7 +5709,7 @@ dependencies = [
  "prost 0.12.6",
  "prost-types 0.12.6",
  "regex",
- "syn 2.0.66",
+ "syn 2.0.87",
  "tempfile",
 ]
 
@@ -5763,7 +5749,7 @@ dependencies = [
  "itertools 0.12.1",
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -5845,7 +5831,7 @@ checksum = "9e2e25ee72f5b24d773cae88422baddefff7714f97aab68d96fe2b6fc4a28fb2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -6285,7 +6271,7 @@ dependencies = [
  "lz4",
  "metrics-utils",
  "mockall",
- "mpl-token-metadata 4.1.2",
+ "mpl-token-metadata",
  "num-traits",
  "num_cpus",
  "rand 0.8.5",
@@ -6298,7 +6284,7 @@ dependencies = [
  "setup",
  "solana-sdk",
  "solana-transaction-status",
- "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
+ "spl-account-compression 0.4.2",
  "tar",
  "tempfile",
  "thiserror",
@@ -6540,7 +6526,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde_derive_internals",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -6566,7 +6552,7 @@ checksum = "1db149f81d46d2deba7cd3c50772474707729550221e69588478ebf9ada425ae"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -6676,7 +6662,7 @@ checksum = "500cbc0ebeb6f46627f50f3f5811ccf6bf00643be300b4c3eabc0ef55dc5b5ba"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -6687,7 +6673,7 @@ checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -6782,7 +6768,7 @@ dependencies = [
  "darling 0.20.9",
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -6794,7 +6780,7 @@ dependencies = [
  "darling 0.20.9",
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -7245,7 +7231,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustc_version 0.4.0",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -7625,7 +7611,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -7923,19 +7909,20 @@ dependencies = [
  "anchor-lang 0.29.0",
  "bytemuck",
  "spl-concurrent-merkle-tree 0.2.0",
- "spl-noop 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spl-noop",
 ]
 
 [[package]]
 name = "spl-account-compression"
-version = "0.3.0"
-source = "git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root#623df9148b0c2ac36c3c685d8d28308f3a82efff"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2785042005954aec5d5db7fcb99a78754b222be906a89d10a3d66ebdbc8e9548"
 dependencies = [
  "anchor-lang 0.29.0",
  "bytemuck",
  "solana-program",
- "spl-concurrent-merkle-tree 0.3.0",
- "spl-noop 0.2.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
+ "spl-concurrent-merkle-tree 0.4.1",
+ "spl-noop",
 ]
 
 [[package]]
@@ -7999,8 +7986,9 @@ dependencies = [
 
 [[package]]
 name = "spl-concurrent-merkle-tree"
-version = "0.3.0"
-source = "git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root#623df9148b0c2ac36c3c685d8d28308f3a82efff"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a14033366e14117679851c7759c3d66c6430a495f0523bd88076d3a275828931"
 dependencies = [
  "bytemuck",
  "solana-program",
@@ -8037,7 +8025,7 @@ checksum = "07fd7858fc4ff8fb0e34090e41d7eb06a823e1057945c26d480bfc21d2338a93"
 dependencies = [
  "quote",
  "spl-discriminator-syn 0.1.2",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -8048,7 +8036,7 @@ checksum = "d9e8418ea6269dcfb01c712f0444d2c75542c04448b480e87de59d2865edc750"
 dependencies = [
  "quote",
  "spl-discriminator-syn 0.2.0",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -8060,7 +8048,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sha2 0.10.8",
- "syn 2.0.66",
+ "syn 2.0.87",
  "thiserror",
 ]
 
@@ -8073,7 +8061,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sha2 0.10.8",
- "syn 2.0.66",
+ "syn 2.0.87",
  "thiserror",
 ]
 
@@ -8097,8 +8085,9 @@ dependencies = [
 
 [[package]]
 name = "spl-merkle-tree-reference"
-version = "0.1.0"
-source = "git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root#623df9148b0c2ac36c3c685d8d28308f3a82efff"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70d540c0983d5214dbba3cc7f708e2f5ac7d99294e1f633fd36178a22434285d"
 dependencies = [
  "solana-program",
  "thiserror",
@@ -8109,14 +8098,6 @@ name = "spl-noop"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dd67ea3d0070a12ff141f5da46f9695f49384a03bce1203a5608f5739437950"
-dependencies = [
- "solana-program",
-]
-
-[[package]]
-name = "spl-noop"
-version = "0.2.0"
-source = "git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root#623df9148b0c2ac36c3c685d8d28308f3a82efff"
 dependencies = [
  "solana-program",
 ]
@@ -8184,7 +8165,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sha2 0.10.8",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -8196,21 +8177,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sha2 0.10.8",
- "syn 2.0.66",
-]
-
-[[package]]
-name = "spl-tlv-account-resolution"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "062e148d3eab7b165582757453632ffeef490c02c86a48bfdb4988f63eefb3b9"
-dependencies = [
- "bytemuck",
- "solana-program",
- "spl-discriminator 0.1.1",
- "spl-pod 0.1.1",
- "spl-program-error 0.3.1",
- "spl-type-length-value 0.3.1",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -8286,28 +8253,6 @@ dependencies = [
  "solana-zk-token-sdk",
  "spl-memo 3.0.1",
  "spl-token 3.5.0",
- "thiserror",
-]
-
-[[package]]
-name = "spl-token-2022"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4abf34a65ba420584a0c35f3903f8d727d1f13ababbdc3f714c6b065a686e86"
-dependencies = [
- "arrayref",
- "bytemuck",
- "num-derive 0.4.2",
- "num-traits",
- "num_enum 0.7.2",
- "solana-program",
- "solana-zk-token-sdk",
- "spl-memo 4.0.0",
- "spl-pod 0.1.1",
- "spl-token 4.0.0",
- "spl-token-metadata-interface 0.2.0",
- "spl-transfer-hook-interface 0.3.0",
- "spl-type-length-value 0.3.1",
  "thiserror",
 ]
 
@@ -8411,22 +8356,6 @@ dependencies = [
  "spl-pod 0.2.5",
  "spl-program-error 0.4.4",
  "spl-type-length-value 0.4.6",
-]
-
-[[package]]
-name = "spl-transfer-hook-interface"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "051d31803f873cabe71aec3c1b849f35248beae5d19a347d93a5c9cccc5d5a9b"
-dependencies = [
- "arrayref",
- "bytemuck",
- "solana-program",
- "spl-discriminator 0.1.1",
- "spl-pod 0.1.1",
- "spl-program-error 0.3.1",
- "spl-tlv-account-resolution 0.4.0",
- "spl-type-length-value 0.3.1",
 ]
 
 [[package]]
@@ -8776,9 +8705,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.66"
+version = "2.0.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c42f3f41a2de00b01c0aaad383c5a45241efc8b2d1eda5661812fda5f3cdcff5"
+checksum = "25aa4ce346d03a6dcd68dd8b4010bcb74e54e62c90c573f394c46eae99aba32d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8794,7 +8723,7 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -8923,22 +8852,22 @@ checksum = "23d434d3f8967a09480fb04132ebe0a3e088c173e6d0ee7897abbdf4eab0f8b9"
 
 [[package]]
 name = "thiserror"
-version = "1.0.63"
+version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0342370b38b6a11b6cc11d6a805569958d54cfa061a29969c3b5ce2ea405724"
+checksum = "02dd99dc800bbb97186339685293e1cc5d9df1f8fae2d0aecd9ff1c77efea892"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.63"
+version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4558b58466b9ad7ca0f102865eccc95938dca1a74a856f2b57b6629050da261"
+checksum = "a7c61ec9a6f64d2793d8a45faba21efbe3ced62a886d44c36a009b2b519b4c7e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -9102,7 +9031,7 @@ checksum = "5f5ae998a069d4b5aba8ee9dad856af7d520c3699e6159b185c2acd48155d39a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -9395,7 +9324,7 @@ dependencies = [
  "proc-macro2",
  "prost-build 0.12.6",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -9469,7 +9398,7 @@ checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -9763,8 +9692,8 @@ dependencies = [
  "solana-sdk",
  "solana-storage-bigtable",
  "solana-transaction-status",
- "spl-account-compression 0.3.0 (git+https://github.com/StanChe/solana-program-library.git?branch=feature/init_with_root)",
- "spl-concurrent-merkle-tree 0.3.0",
+ "spl-account-compression 0.4.2",
+ "spl-concurrent-merkle-tree 0.4.1",
  "thiserror",
  "tokio",
  "tracing",
@@ -9908,7 +9837,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
  "wasm-bindgen-shared",
 ]
 
@@ -9942,7 +9871,7 @@ checksum = "e94f17b526d0a461a191c78ea52bbce64071ed5c04c9ffe424dcb38f74171bb7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -10356,7 +10285,7 @@ checksum = "15e934569e47891f7d9411f1a451d947a60e000ab3bd24fbb970f000387d1b3b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -10376,7 +10305,7 @@ checksum = "ce36e65b0d2999d2aafac989fb249189a141aee1f53c612c1f37d72631959f69"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.87",
 ]
 
 [[package]]
