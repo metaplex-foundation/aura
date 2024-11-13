@@ -15,6 +15,8 @@ services:
       - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
       - ${INGESTER_FILE_STORAGE_PATH}:${INGESTER_FILE_STORAGE_PATH_CONTAINER}:rw
       - ${INGESTER_MIGRATION_STORAGE_PATH}:${INGESTER_MIGRATION_STORAGE_PATH}:rw
+      - ${INGESTER_SLOTS_DB_PATH}:${INGESTER_SLOTS_DB_PATH}:ro
+      - ${INGESTER_SECONDARY_SLOTS_DB_PATH}:${INGESTER_SECONDARY_SLOTS_DB_PATH}:rw
       - ./creds.json:/usr/src/app/creds.json
       - ./migrations:/usr/src/app/migrations
       - ./arweave_wallet.json:/usr/src/app/arweave_wallet.json
