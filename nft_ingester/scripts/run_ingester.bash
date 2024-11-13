@@ -1,6 +1,7 @@
 export RUST_LOG=error
 export INGESTER_DATABASE_CONFIG='{max_postgres_connections=500, url="postgres://solana:solana@localhost:5432/v3"}'
-export INGESTER_TCP_CONFIG='{receiver_addr=["eq15.everstake.one:2000", "127.0.0.1:3052"], receiver_connect_timeout=10, receiver_reconnect_interval=5, backfiller_receiver_addr="127.0.0.1:3334", backfiller_receiver_connect_timeout=10, backfiller_receiver_reconnect_interval=5, backfiller_sender_port=3334, backfiller_sender_batch_max_bytes=1, backfiller_sender_buffer_size=1,snapshot_receiver_addr="127.0.0.1:3052"}'
+export INGESTER_MESSENGER_CONFIG='{"TCP": {"key1": "value1", "key2": "value2"}}'
+# export INGESTER_TCP_CONFIG='{receiver_addr=["eq15.everstake.one:2000", "127.0.0.1:3052"], receiver_connect_timeout=10, receiver_reconnect_interval=5, backfiller_receiver_addr="127.0.0.1:3334", backfiller_receiver_connect_timeout=10, backfiller_receiver_reconnect_interval=5, backfiller_sender_port=3334, backfiller_sender_batch_max_bytes=1, backfiller_sender_buffer_size=1,snapshot_receiver_addr="127.0.0.1:3052"}'
 export INGESTER_TX_BACKGROUND_SAVERS=5
 export INGESTER_BACKFILL_BACKGROUND_SAVERS=1
 export INGESTER_MPLX_BUFFER_SIZE=500

@@ -3,7 +3,7 @@ use std::net::{SocketAddr, ToSocketAddrs};
 
 use figment::{providers::Env, Figment};
 use interface::asset_streaming_and_discovery::PeerDiscovery;
-use plerkle_messenger::MessengerConfig;
+use plerkle_messenger::{MessengerConfig, MessengerType};
 use serde::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
 use tracing_subscriber::fmt;
@@ -128,9 +128,11 @@ pub struct RawBackfillConfig {
     pub heap_path: String,
     pub migration_storage_path: String,
 }
+
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {
     pub database_config: DatabaseConfig,
+    // pub messenger_config: 
     pub tcp_config: TcpConfig,
     pub redis_messenger_config: MessengerConfig,
     pub message_source: MessageSource,
@@ -407,6 +409,28 @@ impl BigTableConfig {
             .ok_or(IngesterError::ConfigurationError {
                 msg: "BIG_TABLE_TIMEOUT_KEY missing".to_string(),
             })? as u32)
+    }
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct MessengerConf(figment::value::Dict);
+
+pub const MESSENGER_TYPE: &str = "messenger_type";
+
+impl MessengerConf {
+    pub fn get_messenger_type(&self) -> Result<MessageSource, IngesterError> {
+        let v = self.0
+        .get(MESSENGER_TYPE)
+        .and_then(|a| a.as_str())
+        .ok_or(IngesterError::ConfigurationError {
+            msg: format!("Messenger config is missing {} value", MESSENGER_TYPE),
+        })?;
+
+        let parsed_enum: MessageSource = serde_json::from_str(v).map_err(|e| IngesterError::ConfigurationError {
+            msg: format!("Incorrect value for MessageSource: {}", e),
+        })?;
+
+        Ok(parsed_enum)
     }
 }
 
