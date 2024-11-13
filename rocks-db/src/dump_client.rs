@@ -168,6 +168,7 @@ impl Storage {
                 asset = fb::root_as_asset_complete_details_unchecked(value);
             }
             if asset.static_details().is_none() {
+                iter.next();
                 continue;
             }
             let metadata_url = asset
