@@ -9,6 +9,7 @@ use metrics_utils::ApiMetricsConfig;
 use prometheus_client::registry::Registry;
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
+use rocksdb::{Options, DB};
 use serde::Deserialize;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -32,7 +33,7 @@ struct Config {
 }
 
 struct AppState {
-    db: Arc<Storage>,
+    db: Arc<DB>,
 }
 
 #[derive(Deserialize)]
@@ -62,24 +63,27 @@ async fn main() {
         temp_dir.path().to_str().unwrap().to_string()
     };
 
-    let tasks = JoinSet::new();
     let mut registry = Registry::default();
     let metrics = Arc::new(ApiMetricsConfig::new());
     metrics.register(&mut registry);
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     red_metrics.register(&mut registry);
-    let mutexed_tasks = Arc::new(Mutex::new(tasks));
+    
+    let options = Options::default();
 
-    let storage = Storage::open_secondary(
+    let cf_names =
+        DB::list_cf(&options, &config.primary_db_path).expect("Failed to list column families.");
+
+    let db = DB::open_cf_as_secondary(
+        &options,
         &config.primary_db_path,
         &secondary_db_path,
-        mutexed_tasks.clone(),
-        red_metrics.clone(),
-        MigrationState::Last,
+        &cf_names,
     )
-    .expect("Failed to open RocksDB storage");
+    .expect("Failed to open DB.");
+
     // Open the primary RocksDB database
-    let db = Arc::new(storage);
+    let db = Arc::new(db);
 
     let app_state = AppState { db };
 
@@ -167,14 +171,13 @@ async fn get_value(
 ///
 /// A `Result` containing a vector of Base58-encoded keys or an error message.
 fn iterate_keys_function(
-    db: &Storage,
+    db: &DB,
     cf_name: &str,
     start_key: Option<&[u8]>,
     limit: usize,
 ) -> Result<Vec<String>, String> {
     // Get the column family handle
     let cf_handle = db
-        .db
         .cf_handle(cf_name)
         .ok_or_else(|| "Column family not found".to_string())?;
 
@@ -184,7 +187,7 @@ fn iterate_keys_function(
         None => rocksdb::IteratorMode::Start,
     };
 
-    let iterator = db.db.iterator_cf(&cf_handle, iter_mode);
+    let iterator = db.iterator_cf(&cf_handle, iter_mode);
 
     // Collect keys up to the specified limit
     let keys: Vec<String> = iterator
@@ -209,15 +212,14 @@ fn iterate_keys_function(
 ///
 /// A `Result` containing an `Option<String>` with the Base58-encoded value if the key exists,
 /// or an error message.
-fn get_value_function(db: &Storage, cf_name: &str, key: &[u8]) -> Result<Option<String>, String> {
+fn get_value_function(db: &DB, cf_name: &str, key: &[u8]) -> Result<Option<String>, String> {
     // Get the column family handle
     let cf_handle = db
-        .db
         .cf_handle(cf_name)
         .ok_or_else(|| "Column family not found".to_string())?;
 
     // Retrieve the value for the key
-    match db.db.get_cf(&cf_handle, key) {
+    match db.get_cf(&cf_handle, key) {
         Ok(Some(value)) => Ok(Some(bs58::encode(value).into_string())),
         Ok(None) => Ok(None),
         Err(e) => Err(format!("DB error: {}", e)),
