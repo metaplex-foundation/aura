@@ -226,20 +226,21 @@ impl Storage {
                 ast_specification_version: SpecificationVersions::V1,
                 ast_specification_asset_class: asset
                     .static_details()
-                    .unwrap()
-                    .specification_asset_class()
-                    .into(),
+                    .map(|static_details| static_details.specification_asset_class().into())
+                    .unwrap_or_default(),
                 ast_royalty_target_type: asset
                     .static_details()
-                    .unwrap()
-                    .royalty_target_type()
-                    .into(),
+                    .map(|static_details| static_details.royalty_target_type().into())
+                    .unwrap_or_default(),
                 ast_royalty_amount: asset
                     .dynamic_details()
                     .and_then(|d| d.royalty_amount())
                     .map(|ra| ra.value())
                     .unwrap_or_default() as i64,
-                ast_slot_created: asset.static_details().unwrap().created_at(),
+                ast_slot_created: asset
+                    .static_details()
+                    .map(|static_details| static_details.created_at())
+                    .unwrap_or_default(),
                 ast_owner_type: asset
                     .owner()
                     .and_then(|o| o.owner_type().map(|o| OwnerType::from(o.value()))),
