@@ -52,17 +52,8 @@ pub async fn main() -> Result<(), IngesterError> {
     metrics.register(&mut registry);
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     red_metrics.register(&mut registry);
-    tokio::spawn(async move {
-        match setup_metrics(registry, config.metrics_port).await {
-            Ok(_) => {
-                tracing::info!("Setup metrics successfully")
-            }
-            Err(e) => {
-                tracing::error!("Setup metrics failed: {:?}", e)
-            }
-        }
-    });
-
+    metrics_utils::utils::start_metrics(registry, config.metrics_port).await;
+    
     let index_storage = Arc::new(
         init_index_storage_with_migration(
             &config.database_config.get_database_url().unwrap(),
@@ -102,6 +93,7 @@ pub async fn main() -> Result<(), IngesterError> {
         graceful_stop(
             cloned_tasks,
             shutdown_tx,
+            None,
             guard,
             config.profiling_file_path_container,
             &config.heap_path,

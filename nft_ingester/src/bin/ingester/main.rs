@@ -421,8 +421,6 @@ pub async fn main() -> Result<(), IngesterError> {
         .await,
     );
 
-    let rpc_backfiller = Arc::new(BackfillRPC::connect(config.backfill_rpc_address.clone()));
-
     let slot_db = Arc::new(
         SlotStorage::open_secondary(
             args.slots_db_path,
@@ -494,6 +492,8 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     Scheduler::run_in_background(Scheduler::new(primary_rocks_storage.clone())).await;
+
+    let rpc_backfiller = Arc::new(BackfillRPC::connect(config.backfill_rpc_address.clone()));
 
     let rocks_clone = primary_rocks_storage.clone();
     let signature_fetcher = SignatureFetcher::new(
