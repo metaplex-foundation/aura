@@ -3,10 +3,13 @@
 SHELL := /bin/bash
 
 build:
-	@docker compose -f docker-compose.yaml build ingester raw-backfiller das-api synchronizer core-indexing
+	@docker compose -f docker-compose.yaml build ingester raw-backfiller das-api synchronizer core-indexing slot-persister
 
 start:
 	@docker compose -f docker-compose.yaml up -d ingester
+
+start-slot-persister:
+	@docker compose -f docker-compose.yaml up -d slot-persister
 
 start-synchronizer:
 	@docker compose -f docker-compose.yaml up -d synchronizer

@@ -115,6 +115,41 @@ services:
       options:
         max-size: "2048m"
 
+  slot-persister:
+    container_name: slot-persister
+    restart: always
+    entrypoint: |
+      sh -c "
+      ARGS=\"--target-db-path $target_db_path\"
+      ARGS=\"$$ARGS --rpc-host $rpc_host\"
+      [ -n \"$start_slot\" ] && ARGS=\"$$ARGS --start-slot $start_slot\"
+      [ -n \"$big_table_credentials\" ] && ARGS=\"$$ARGS --big-table-credentials $big_table_credentials\"
+      [ -n \"$big_table_timeout\" ] && ARGS=\"$$ARGS --big-table-timeout $big_table_timeout\"
+      [ -n \"$metrics_port\" ] && ARGS=\"$$ARGS --metrics-port $metrics_port\"
+      [ -n \"$chunk_size\" ] && ARGS=\"$$ARGS --chunk-size $chunk_size\"
+      [ -n \"$max_concurrency\" ] && ARGS=\"$$ARGS --max-concurrency $max_concurrency\"
+
+      if [ -z \"$MALLOC_CONF\" ]; then
+        exec ./slot_persister $$ARGS
+      else
+        exec ./profiling_slot_persister $$ARGS
+      fi"
+    env_file:
+      - .env
+    network_mode: host
+    volumes:
+      - ${target_db_path}:${target_db_path}:rw
+      - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
+      - ${big_table_credentials:-/tmp/creds.json}:${big_table_credentials:-/tmp/creds.json}
+      - ./heaps:/usr/src/app/heaps:rw
+    stop_grace_period: 5m
+    build:
+      context: .
+      dockerfile: ingester.Dockerfile
+    logging:
+      options:
+        max-size: "2048m"
+
   core-indexing:
     container_name: core-indexing
     restart: always
