@@ -194,20 +194,6 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
 
-    let rpc_client = Arc::new(BackfillRPC::connect(args.rpc_host));
-
-    let backfill_source = {
-        if let Some(bg_creds) = args.big_table_credentials {
-            Arc::new(BackfillSource::Bigtable(Arc::new(
-                BigTableClient::connect_new_with(bg_creds, args.big_table_timeout)
-                    .await
-                    .expect("expected to connect to big table"),
-            )))
-        } else {
-            Arc::new(BackfillSource::Rpc(rpc_client.clone()))
-        }
-    };
-
     start_metrics(metrics_state.registry, Some(args.metrics_port)).await;
     // Open target RocksDB
     let target_db = Arc::new(
@@ -250,6 +236,20 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     });
+
+    let rpc_client = Arc::new(BackfillRPC::connect(args.rpc_host));
+
+    let backfill_source = {
+        if let Some(bg_creds) = args.big_table_credentials {
+            Arc::new(BackfillSource::Bigtable(Arc::new(
+                BigTableClient::connect_new_with(bg_creds, args.big_table_timeout)
+                    .await
+                    .expect("expected to connect to big table"),
+            )))
+        } else {
+            Arc::new(BackfillSource::Rpc(rpc_client.clone()))
+        }
+    };
 
     let in_mem_dumper = Arc::new(InMemorySlotsDumper::new());
     let slots_collector = SlotsCollector::new(
