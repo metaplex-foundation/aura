@@ -3,7 +3,7 @@ services:
   ingester:
     container_name: ingester
     restart: always
-    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then exec ./ingester; else exec ./profiling_ingester; fi"
+    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then exec ./ingester --slots-db-path $$INGESTER_SLOTS_DB_PATH --secondary-slots-db-path $$INGESTER_SECONDARY_SLOTS_DB_PATH; else exec ./profiling_ingester --slots-db-path $$INGESTER_SLOTS_DB_PATH --secondary-slots-db-path $$INGESTER_SECONDARY_SLOTS_DB_PATH; fi"
     env_file:
       - .env
     network_mode: host
