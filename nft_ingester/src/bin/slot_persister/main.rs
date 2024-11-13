@@ -8,6 +8,7 @@ use interface::slot_getter::FinalizedSlotGetter;
 use interface::slots_dumper::SlotsDumper;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{MetricState, MetricsTrait};
+use nft_ingester::backfiller::BackfillSource;
 use rocks_db::migrator::MigrationVersions;
 use rocks_db::{column::TypedColumn, Storage};
 use std::collections::{BTreeSet, HashMap};
@@ -51,10 +52,10 @@ struct Args {
 
     /// Big table credentials file path
     #[arg(short, long)]
-    big_table_credentials: String,
+    big_table_credentials: Option<String>,
 
     /// Optional big table timeout (default: 1000)
-    #[arg(short, long, default_value_t = 1000)]
+    #[arg(short = 'B', long, default_value_t = 1000)]
     big_table_timeout: u32,
 
     /// Metrics port
@@ -63,11 +64,11 @@ struct Args {
     metrics_port: u16,
 
     /// Number of slots to process in each batch
-    #[arg(short, long, default_value_t = 100)]
+    #[arg(short, long, default_value_t = 200)]
     chunk_size: usize,
 
     /// Maximum number of concurrent requests
-    #[arg(short, long, default_value_t = 10)]
+    #[arg(short = 'M', long, default_value_t = 20)]
     max_concurrency: usize,
 }
 pub struct InMemorySlotsDumper {
@@ -129,7 +130,7 @@ enum FetchError {
 }
 
 async fn fetch_block_with_retries(
-    bt_connection: Arc<BigTableClient>,
+    block_getter: Arc<BackfillSource>,
     slot: u64,
     shutdown_token: CancellationToken,
 ) -> Result<(u64, RawBlock), (u64, FetchError)> {
@@ -141,7 +142,7 @@ async fn fetch_block_with_retries(
     RetryIf::spawn(
         retry_strategy,
         || {
-            let bt_connection = bt_connection.clone();
+            let block_getter = block_getter.clone();
             let shutdown_token = shutdown_token.clone();
             async move {
                 if shutdown_token.is_cancelled() {
@@ -149,7 +150,7 @@ async fn fetch_block_with_retries(
                     Err((slot, FetchError::Cancelled))
                 } else {
                     debug!("Fetching slot {}", slot);
-                    match bt_connection
+                    match block_getter
                         .get_block(slot, None::<Arc<BigTableClient>>)
                         .await
                     {
@@ -189,8 +190,23 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting Slot persister...");
 
     let args = Args::parse();
+
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
+
+    let rpc_client = Arc::new(BackfillRPC::connect(args.rpc_host));
+
+    let backfill_source = {
+        if let Some(bg_creds) = args.big_table_credentials {
+            Arc::new(BackfillSource::Bigtable(Arc::new(
+                BigTableClient::connect_new_with(bg_creds, args.big_table_timeout)
+                    .await
+                    .expect("expected to connect to big table"),
+            )))
+        } else {
+            Arc::new(BackfillSource::Rpc(rpc_client.clone()))
+        }
+    };
 
     start_metrics(metrics_state.registry, Some(args.metrics_port)).await;
     // Open target RocksDB
@@ -235,18 +251,10 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let rpc_client = Arc::new(BackfillRPC::connect(args.rpc_host));
-
-    let bt_connection = Arc::new(
-        BigTableClient::connect_new_with(args.big_table_credentials, args.big_table_timeout)
-            .await
-            .expect("expected to connect to big table"),
-    );
-
     let in_mem_dumper = Arc::new(InMemorySlotsDumper::new());
     let slots_collector = SlotsCollector::new(
         in_mem_dumper.clone(),
-        bt_connection.big_table_inner_client.clone(),
+        backfill_source.clone(),
         metrics_state.backfiller_metrics.clone(),
     );
     let wait_period = Duration::from_secs(1);
@@ -305,13 +313,14 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
 
                         let fetch_futures = slots_to_fetch.iter().map(|&slot| {
-                            let bt_connection = bt_connection.clone();
+                            let backfill_source = backfill_source.clone();
                             let semaphore = semaphore.clone();
                             let shutdown_token = shutdown_token.clone();
 
                             async move {
                                 let _permit = semaphore.acquire().await;
-                                fetch_block_with_retries(bt_connection, slot, shutdown_token).await
+                                fetch_block_with_retries(backfill_source, slot, shutdown_token)
+                                    .await
                             }
                         });
 
