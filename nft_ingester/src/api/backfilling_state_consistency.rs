@@ -33,7 +33,7 @@ impl BackfillingStateConsistencyChecker {
                 overwhelm_backfill_gap_clone.store(
                     rocks_db.bubblegum_slots.iter_start().count().saturating_add(rocks_db.ingestable_slots.iter_start().count())
                         >= consistence_backfilling_slots_threshold as usize,
-                    Ordering::SeqCst,
+                    Ordering::Relaxed,
                 );
                 tokio::select! {
                     _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)) => {},
@@ -50,6 +50,6 @@ impl BackfillingStateConsistencyChecker {
 
 impl ConsistencyChecker for BackfillingStateConsistencyChecker {
     fn should_cancel_request(&self, _call: &Call) -> bool {
-        self.overwhelm_backfill_gap.load(Ordering::SeqCst)
+        self.overwhelm_backfill_gap.load(Ordering::Relaxed)
     }
 }
