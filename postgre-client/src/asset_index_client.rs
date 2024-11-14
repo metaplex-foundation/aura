@@ -164,7 +164,26 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
 
     let mut asset_indexes = asset_indexes.to_vec();
     asset_indexes.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
-
+    let fungible_tokens = asset_indexes
+        .iter()
+        .filter(|asset| asset.specification_asset_class == AssetSpecClass::FungibleToken)
+        .map(|asset| {
+            FungibleToken {
+                key: asset.pubkey,
+                slot_updated: asset.slot_updated,
+                // it's unlikely that rows below will not be filled for fungible token
+                // but even if that happens we will save asset with default values
+                owner: asset.owner.unwrap_or_default(),
+                asset: asset.fungible_asset_mint.unwrap_or_default(),
+                balance: asset.fungible_asset_balance.unwrap_or_default() as i64,
+            }
+        })
+        .collect::<Vec<FungibleToken>>();
+    let asset_indexes = asset_indexes
+        .into_iter()
+        .filter(|asset| asset.specification_asset_class != AssetSpecClass::FungibleToken)
+        .collect::<Vec<AssetIndex>>();
+    
     // Collect all creators from all assets
     let mut all_creators: Vec<(Pubkey, Creator, i64)> = asset_indexes
         .iter()
@@ -215,22 +234,6 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     }
     let mut authorities = authorities.into_values().collect::<Vec<_>>();
     authorities.sort_by(|a, b| a.key.cmp(&b.key));
-
-    let fungible_tokens = asset_indexes
-        .iter()
-        .filter(|asset| asset.specification_asset_class == AssetSpecClass::FungibleToken)
-        .map(|asset| {
-            FungibleToken {
-                key: asset.pubkey,
-                slot_updated: asset.slot_updated,
-                // it's unlikely that rows below will not be filled for fungible token
-                // but even if that happens we will save asset with default values
-                owner: asset.owner.unwrap_or_default(),
-                asset: asset.fungible_asset_mint.unwrap_or_default(),
-                balance: asset.fungible_asset_balance.unwrap_or_default() as i64,
-            }
-        })
-        .collect::<Vec<FungibleToken>>();
 
     AssetComponenents {
         fungible_tokens,
