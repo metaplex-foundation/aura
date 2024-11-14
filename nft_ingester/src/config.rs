@@ -1,9 +1,11 @@
 use core::time;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::{
+    collections::BTreeMap,
+    net::{SocketAddr, ToSocketAddrs},
+};
 
-use figment::{providers::Env, Figment};
+use figment::{providers::Env, value::Value, Figment};
 use interface::asset_streaming_and_discovery::PeerDiscovery;
-use plerkle_messenger::{MessengerConfig, MessengerType};
 use serde::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
 use tracing_subscriber::fmt;
@@ -132,10 +134,7 @@ pub struct RawBackfillConfig {
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {
     pub database_config: DatabaseConfig,
-    // pub messenger_config: 
-    pub tcp_config: TcpConfig,
-    pub redis_messenger_config: MessengerConfig,
-    pub message_source: MessageSource,
+    pub messenger_config: MessengerConf,
     pub accounts_buffer_size: usize,
     #[serde(default = "default_snapshot_parsing_workers")]
     pub snapshot_parsing_workers: u32,
@@ -417,31 +416,46 @@ pub struct MessengerConf(figment::value::Dict);
 
 pub const MESSENGER_TYPE: &str = "messenger_type";
 
-impl MessengerConf {
-    pub fn get_messenger_type(&self) -> Result<MessageSource, IngesterError> {
-        let v = self.0
-        .get(MESSENGER_TYPE)
-        .and_then(|a| a.as_str())
-        .ok_or(IngesterError::ConfigurationError {
-            msg: format!("Messenger config is missing {} value", MESSENGER_TYPE),
-        })?;
-
-        let parsed_enum: MessageSource = serde_json::from_str(v).map_err(|e| IngesterError::ConfigurationError {
-            msg: format!("Incorrect value for MessageSource: {}", e),
-        })?;
-
-        Ok(parsed_enum)
-    }
-}
-
-#[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct TcpConfig(figment::value::Dict);
+pub const REDIS_CONFIG: &str = "redis_config";
 
 pub const TCP_RECEIVER_ADDR: &str = "receiver_addr";
 pub const TCP_RECEIVER_RECONNECT_INTERVAL: &str = "receiver_reconnect_interval";
 pub const TCP_SNAPSHOT_RECEIVER_ADDR: &str = "snapshot_receiver_addr";
 
-impl TcpConfig {
+impl MessengerConf {
+    pub fn get_messenger_type(&self) -> Result<MessageSource, IngesterError> {
+        let v = self.0.get(MESSENGER_TYPE).and_then(|a| a.as_str()).ok_or(
+            IngesterError::ConfigurationError {
+                msg: format!("Messenger config is missing {} value", MESSENGER_TYPE),
+            },
+        )?;
+
+        match v {
+            "TCP" => Ok(MessageSource::TCP),
+            "Redis" => Ok(MessageSource::Redis),
+            _ => Err(IngesterError::ConfigurationError {
+                msg: "Incorrect value for MessageSource.".to_string(),
+            }),
+        }
+    }
+
+    pub fn get_redis_config(&self) -> Result<BTreeMap<String, Value>, IngesterError> {
+        let v = self
+            .0
+            .get(REDIS_CONFIG)
+            .ok_or(IngesterError::ConfigurationError {
+                msg: format!("Messenger config is missing {} value", REDIS_CONFIG),
+            })?;
+
+        if let Value::Dict(_, d) = v {
+            return Ok(d.clone());
+        }
+
+        Err(IngesterError::ConfigurationError {
+            msg: format!("Value {} has incorrect format", REDIS_CONFIG),
+        })
+    }
+
     pub fn get_tcp_receiver_reconnect_interval(&self) -> Result<time::Duration, IngesterError> {
         self.get_duration(TCP_RECEIVER_RECONNECT_INTERVAL)
     }
