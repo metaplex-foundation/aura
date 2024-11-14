@@ -20,7 +20,7 @@ use tokio::task::JoinSet;
 #[derive(Parser)]
 struct Config {
     /// Primary DB path
-    #[clap(short, long)]
+    #[clap(short('d'), long)]
     primary_db_path: String,
 
     /// Secondary DB path (optional)
