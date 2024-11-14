@@ -140,6 +140,7 @@ impl Storage {
                         .dynamic_details()
                         .and_then(|d| d.url())
                         .and_then(|u| u.value())
+                        .filter(|s| !s.is_empty())
                         .map(|u| urls.insert(key, u.to_string()));
                     asset_indexes.push(asset.into());
                 }

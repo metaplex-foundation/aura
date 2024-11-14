@@ -279,6 +279,7 @@ impl<'a> From<fb::AssetCompleteDetails<'a>> for AssetIndex {
                 .dynamic_details()
                 .and_then(|d| d.url())
                 .and_then(|u| u.value())
+                .filter(|s| !s.is_empty())
                 .map(|s| UrlWithStatus::new(s, false)),
             slot_updated: value.get_slot_updated() as i64,
             fungible_asset_mint: None,

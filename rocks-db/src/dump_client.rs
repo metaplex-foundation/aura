@@ -107,6 +107,7 @@ impl Storage {
             )
         });
 
+        //TODO: store a separate index for core collections
         let mut core_collections: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
         let mut core_collections_iter = self.db.raw_iterator_cf(&self.asset_data.handle());
         core_collections_iter.seek_to_first();
@@ -175,6 +176,7 @@ impl Storage {
                 .dynamic_details()
                 .and_then(|dd| dd.url())
                 .and_then(|url| url.value())
+                .filter(|s| !s.is_empty())
                 .map(|s| (UrlWithStatus::get_metadata_id_for(s), s));
             if let Some((ref metadata_key, ref url)) = metadata_url {
                 {
