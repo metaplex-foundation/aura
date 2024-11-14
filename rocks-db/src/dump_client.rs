@@ -1,3 +1,4 @@
+use crate::asset::MplCoreCollectionAuthority;
 use crate::asset_generated::asset as fb;
 use crate::{column::Column, storage_traits::Dumper, Storage};
 use async_trait::async_trait;
@@ -107,28 +108,17 @@ impl Storage {
             )
         });
 
-        //TODO: store a separate index for core collections
         let mut core_collections: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
-        let mut core_collections_iter = self.db.raw_iterator_cf(&self.asset_data.handle());
+        let mut core_collections_iter = self
+            .db
+            .raw_iterator_cf(&self.mpl_core_collection_authorities.handle());
         core_collections_iter.seek_to_first();
         while core_collections_iter.valid() {
             let key = core_collections_iter.key().unwrap();
             let value = core_collections_iter.value().unwrap();
-            let asset;
-            unsafe {
-                asset = fb::root_as_asset_complete_details_unchecked(value);
-            }
-            if let Some(static_details) = asset.static_details() {
-                if static_details.specification_asset_class()
-                    == fb::SpecificationAssetClass::MplCoreCollection
-                    && asset.collection().is_some()
-                {
-                    let collection = asset.collection().unwrap();
-                    if let Some(authority) = collection.authority() {
-                        if let Some(auth_value) = authority.value() {
-                            core_collections.insert(key.to_vec(), auth_value.bytes().to_vec());
-                        }
-                    }
+            if let Ok(value) = bincode::deserialize::<MplCoreCollectionAuthority>(value) {
+                if let Some(authority) = value.authority.value {
+                    core_collections.insert(key.to_vec(), authority.to_bytes().to_vec());
                 }
             }
             core_collections_iter.next();

@@ -1290,6 +1290,63 @@ pub(crate) fn update_optional_field<T: Clone + Default>(
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct MplCoreCollectionAuthority {
+    pub authority: Updated<Option<Pubkey>>,
+}
+
+impl TypedColumn for MplCoreCollectionAuthority {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "MPL_CORE_COLLECTION_AUTHORITY";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl MplCoreCollectionAuthority {
+    pub fn merge(
+        _new_key: &[u8],
+        existing_val: Option<&[u8]>,
+        operands: &MergeOperands,
+    ) -> Option<Vec<u8>> {
+        let mut result: Option<Self> = None;
+        if let Some(existing_val) = existing_val {
+            match deserialize::<Self>(existing_val) {
+                Ok(value) => {
+                    result = Some(value);
+                }
+                Err(e) => {
+                    error!("RocksDB: AssetCollection deserialize existing_val: {}", e)
+                }
+            }
+        }
+
+        for op in operands {
+            match deserialize::<Self>(op) {
+                Ok(new_val) => {
+                    result = Some(if let Some(mut current_val) = result {
+                        update_field(&mut current_val.authority, &new_val.authority);
+                        current_val
+                    } else {
+                        new_val
+                    });
+                }
+                Err(e) => {
+                    error!("RocksDB: AssetCollection deserialize new_val: {}", e)
+                }
+            }
+        }
+
+        result.and_then(|result| serialize(&result).ok())
+    }
+}
+
 impl TypedColumn for AssetStaticDetails {
     type KeyType = Pubkey;
     type ValueType = Self;

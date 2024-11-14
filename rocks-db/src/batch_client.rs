@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::asset::{
-    AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, SlotAssetIdx,
-    SlotAssetIdxKey,
+    AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, MplCoreCollectionAuthority,
+    SlotAssetIdx, SlotAssetIdxKey,
 };
 use crate::asset_generated::asset as fb;
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
@@ -322,7 +322,6 @@ impl Storage {
         } else {
             None
         };
-        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
         let acd = AssetCompleteDetails {
             pubkey: data.pubkey,
             static_details: Some(AssetStaticDetails {
@@ -385,16 +384,9 @@ impl Storage {
                 is_collection_verified: collection.is_collection_verified,
                 authority: collection.authority,
             }),
-        }
-        .convert_to_fb(&mut builder);
-
+        };
         let mut batch = rocksdb::WriteBatch::default();
-        builder.finish_minimal(acd);
-        batch.merge_cf(
-            &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
-            data.pubkey,
-            builder.finished_data(),
-        );
+        self.merge_compete_details_with_batch(&mut batch, &acd)?;
 
         if let Some(leaf) = data.asset_leaf {
             self.asset_leaf_data.merge_with_batch(
@@ -465,6 +457,38 @@ impl Storage {
                 .merge_with_batch(&mut batch, spl_mint.pubkey, &spl_mint)?;
         }
         self.write_batch(batch).await?;
+        Ok(())
+    }
+
+    pub(crate) fn merge_compete_details_with_batch(
+        &self,
+        batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        data: &AssetCompleteDetails,
+    ) -> Result<()> {
+        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
+        let acd = data.convert_to_fb(&mut builder);
+        builder.finish_minimal(acd);
+        batch.merge_cf(
+            &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+            data.pubkey,
+            builder.finished_data(),
+        );
+        // Store the MPL Core Collection authority for easy access
+        if data
+            .static_details
+            .as_ref()
+            .filter(|sd| sd.specification_asset_class == SpecificationAssetClass::MplCoreCollection)
+            .is_some()
+            && data.collection.is_some()
+        {
+            self.mpl_core_collection_authorities.merge_with_batch(
+                batch,
+                data.pubkey,
+                &MplCoreCollectionAuthority {
+                    authority: data.collection.as_ref().unwrap().authority.clone(),
+                },
+            )?; //this will never error in fact
+        }
         Ok(())
     }
 
