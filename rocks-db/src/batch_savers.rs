@@ -103,18 +103,8 @@ impl BatchSaveStorage {
     }
 
     pub fn store_complete(&mut self, data: &AssetCompleteDetails) -> Result<()> {
-        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
-        let acd = data.convert_to_fb(&mut builder);
-        builder.finish_minimal(acd);
-        self.batch.merge_cf(
-            &self
-                .storage
-                .db
-                .cf_handle(AssetCompleteDetails::NAME)
-                .unwrap(),
-            data.pubkey,
-            builder.finished_data(),
-        );
+        self.storage
+            .merge_compete_details_with_batch(&mut self.batch, data)?;
         let res = Ok(());
         result_to_metrics(
             self.metrics.clone(),

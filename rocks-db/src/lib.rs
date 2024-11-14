@@ -9,7 +9,7 @@ use std::{marker::PhantomData, sync::Arc};
 use asset::{
     AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetCompleteDetails,
     AssetDynamicDetailsDeprecated, AssetOwnerDeprecated, AssetStaticDetailsDeprecated,
-    MetadataMintMap, SlotAssetIdx,
+    MetadataMintMap, MplCoreCollectionAuthority, SlotAssetIdx,
 };
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
@@ -179,18 +179,22 @@ impl SlotStorage {
 
 pub struct Storage {
     pub asset_data: Column<AssetCompleteDetails>,
+    pub mpl_core_collection_authorities: Column<MplCoreCollectionAuthority>,
+
+    // TODO: Deprecated, remove start
     pub asset_static_data: Column<AssetStaticDetails>,
     pub asset_static_data_deprecated: Column<AssetStaticDetailsDeprecated>,
     pub asset_dynamic_data: Column<AssetDynamicDetails>,
     pub asset_dynamic_data_deprecated: Column<AssetDynamicDetailsDeprecated>,
-    pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_authority_data: Column<AssetAuthority>,
     pub asset_authority_deprecated: Column<AssetAuthorityDeprecated>,
     pub asset_owner_data_deprecated: Column<AssetOwnerDeprecated>,
     pub asset_owner_data: Column<AssetOwner>,
-    pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_collection_data: Column<asset::AssetCollection>,
     pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
+    // Deprecated, remove end
+    pub metadata_mint_map: Column<MetadataMintMap>,
+    pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_offchain_data: Column<OffChainData>,
     pub cl_items: Column<cl_items::ClItem>,
     pub cl_leafs: Column<cl_items::ClLeaf>,
@@ -232,6 +236,7 @@ impl Storage {
         let asset_dynamic_data = Self::column(db.clone(), red_metrics.clone());
         let asset_dynamic_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_data = Self::column(db.clone(), red_metrics.clone());
+        let mpl_core_collection_authorities = Self::column(db.clone(), red_metrics.clone());
         let metadata_mint_map = Self::column(db.clone(), red_metrics.clone());
         let asset_authority_data = Self::column(db.clone(), red_metrics.clone());
         let asset_authority_deprecated = Self::column(db.clone(), red_metrics.clone());
@@ -270,10 +275,12 @@ impl Storage {
         let spl_mints = Self::column(db.clone(), red_metrics.clone());
 
         Self {
+            asset_data,
+            mpl_core_collection_authorities,
+
             asset_static_data,
             asset_dynamic_data,
             asset_dynamic_data_deprecated,
-            asset_data,
             metadata_mint_map,
             asset_authority_data,
             asset_authority_deprecated,
@@ -400,6 +407,7 @@ impl Storage {
         vec![
             Self::new_cf_descriptor::<OffChainData>(migration_state),
             Self::new_cf_descriptor::<AssetCompleteDetails>(migration_state),
+            Self::new_cf_descriptor::<MplCoreCollectionAuthority>(migration_state),
             Self::new_cf_descriptor::<MetadataMintMap>(migration_state),
             Self::new_cf_descriptor::<asset::AssetLeaf>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClItem>(migration_state),
@@ -515,6 +523,12 @@ impl Storage {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_complete_details",
                     asset::merge_complete_details_fb_simplified,
+                );
+            }
+            MplCoreCollectionAuthority::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_mpl_core_collection_authority",
+                    asset::MplCoreCollectionAuthority::merge,
                 );
             }
             AssetStaticDetails::NAME => {
