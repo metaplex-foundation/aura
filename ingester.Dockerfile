@@ -36,12 +36,12 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # Building the services
 FROM cacher AS builder
 COPY . .
-RUN cargo build --release --bin ingester --bin api --bin raw_backfiller --bin synchronizer --bin slot_persister
+RUN cargo build --release --bin ingester --bin api --bin synchronizer --bin slot_persister
 
 # Building the profiling feature services
 FROM cacher AS builder-with-profiling
 COPY . .
-RUN cargo build --release --features profiling --bin ingester --bin api --bin raw_backfiller --bin synchronizer --bin slot_persister
+RUN cargo build --release --features profiling --bin ingester --bin api --bin synchronizer --bin slot_persister
 
 # Final image
 FROM rust:1.76-slim-bullseye AS runtime
@@ -52,12 +52,10 @@ ENV TZ=Etc/UTC APP_USER=appuser LD_PRELOAD="/usr/local/lib/libjemalloc.so.2"
 RUN groupadd $APP_USER && useradd -g $APP_USER $APP_USER && mkdir -p ${APP}
 
 COPY --from=builder /rust/target/release/ingester ${APP}/ingester
-COPY --from=builder /rust/target/release/raw_backfiller ${APP}/raw_backfiller
 COPY --from=builder /rust/target/release/api ${APP}/api
 COPY --from=builder /rust/target/release/synchronizer ${APP}/synchronizer
 COPY --from=builder /rust/target/release/slot_persister ${APP}/slot_persister
 COPY --from=builder-with-profiling /rust/target/release/ingester ${APP}/profiling_ingester
-COPY --from=builder-with-profiling /rust/target/release/raw_backfiller ${APP}/profiling_raw_backfiller
 COPY --from=builder-with-profiling /rust/target/release/api ${APP}/profiling_api
 COPY --from=builder-with-profiling /rust/target/release/synchronizer ${APP}/profiling_synchronizer
 COPY --from=builder-with-profiling /rust/target/release/slot_persister ${APP}/profiling_slot_persister
