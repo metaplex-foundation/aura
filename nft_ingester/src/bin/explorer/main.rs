@@ -82,7 +82,7 @@ async fn main() {
                 &format!("merge_fn_merge_{}", &name),
                 asset::AssetStaticDetails::merge_keep_existing,
             );
-            ColumnFamilyDescriptor::new(&name, Options::default())
+            ColumnFamilyDescriptor::new(&name, cf_options)
         })
         .collect();
 
