@@ -34,7 +34,7 @@ pub async fn receive_last_saved_slot(
     while cloned_rx.is_empty() {
         match cloned_rocks_storage.last_saved_slot() {
             Ok(Some(slot)) if slot != last_saved_slot => {
-                first_processed_slot_clone.store(slot, Ordering::SeqCst);
+                first_processed_slot_clone.store(slot, Ordering::Relaxed);
                 break;
             }
             Err(e) => {
