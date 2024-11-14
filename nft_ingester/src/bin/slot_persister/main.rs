@@ -41,40 +41,40 @@ const SLOT_COLLECTION_OFFSET: u64 = 300;
 )]
 struct Args {
     /// Path to the target RocksDB instance with slots
-    #[arg(short, long, env)]
+    #[arg(short, long, env="ASSETS_ROCKS_DB_PATH")]
     target_db_path: PathBuf,
 
     /// RPC host
-    #[arg(short, long, env)]
+    #[arg(short, long, env="SOLANA_RPC")]
     rpc_host: String,
 
     /// Optional starting slot number, this will override the last saved slot in the RocksDB
-    #[arg(short, long, env)]
+    #[arg(short, long, env="SLOT_PERSISTER_START_SLOT")]
     start_slot: Option<u64>,
 
     /// Big table credentials file path
-    #[arg(short, long, env)]
+    #[arg(short, long, env="BIG_TABLE_CREDENTIALS")]
     big_table_credentials: Option<String>,
 
     /// Optional big table timeout (default: 1000)
-    #[arg(short = 'B', long, env, default_value_t = 1000)]
+    #[arg(short = 'B', long, env="BIG_TABLE_TIMEOUT", default_value_t = 1000)]
     big_table_timeout: u32,
 
     /// Metrics port
     /// Default: 9090
-    #[arg(short, long, env, default_value = "9090")]
+    #[arg(short, long, env="SLOT_PERSISTER_METRICS_PORT", default_value = "9090")]
     metrics_port: u16,
 
     /// Number of slots to process in each batch
-    #[arg(short, long, env, default_value_t = 200)]
+    #[arg(short, long, env="SLOT_PERSISTER_CHUNK_SIZE", default_value_t = 200)]
     chunk_size: usize,
 
     /// Maximum number of concurrent requests
-    #[arg(short = 'M', long, env, default_value_t = 20)]
+    #[arg(short = 'M', long, env="SLOT_PERSISTER_MAX_CONCURRENCY", default_value_t = 20)]
     max_concurrency: usize,
 
     /// Optional comma-separated list of slot numbers to check
-    #[arg(long, env)]
+    #[arg(long, env="SLOT_PERSISTER_SLOTS")]
     slots: Option<String>,
 }
 pub struct InMemorySlotsDumper {
