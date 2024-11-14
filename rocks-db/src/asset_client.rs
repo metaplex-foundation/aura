@@ -143,7 +143,8 @@ impl Storage {
                     }
                 }
             }
-            self.red_metrics.observe_request(ROCKS_COMPONENT,
+            self.red_metrics.observe_request(
+                ROCKS_COMPONENT,
                 BATCH_GET_ACTION,
                 "get_asset_collection",
                 start_time,

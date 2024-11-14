@@ -53,7 +53,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     red_metrics.register(&mut registry);
     metrics_utils::utils::start_metrics(registry, config.metrics_port).await;
-    
+
     let index_storage = Arc::new(
         init_index_storage_with_migration(
             &config.database_config.get_database_url().unwrap(),

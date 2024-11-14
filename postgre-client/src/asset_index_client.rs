@@ -183,7 +183,7 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
         .into_iter()
         .filter(|asset| asset.specification_asset_class != AssetSpecClass::FungibleToken)
         .collect::<Vec<AssetIndex>>();
-    
+
     // Collect all creators from all assets
     let mut all_creators: Vec<(Pubkey, Creator, i64)> = asset_indexes
         .iter()

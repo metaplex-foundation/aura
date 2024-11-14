@@ -120,7 +120,11 @@ pub async fn start_api(
         json_middleware_config.unwrap_or_default(),
         account_balance_getter,
         storage_service_base_url,
-        Arc::new(RaydiumTokenPriceFetcher::new("https://api-v3.raydium.io".to_string(), crate::raydium_price_fetcher::CACHE_TTL, red_metrics)),
+        Arc::new(RaydiumTokenPriceFetcher::new(
+            "https://api-v3.raydium.io".to_string(),
+            crate::raydium_price_fetcher::CACHE_TTL,
+            red_metrics,
+        )),
     );
 
     run_api(

@@ -66,7 +66,7 @@ impl Storage {
         migration_storage_path: &str,
         migration_version_manager: Arc<impl PrimaryStorageMigrationVersionManager>,
     ) -> Result<()> {
-        // TODO: how do I fix this for a brand new DB? 
+        // TODO: how do I fix this for a brand new DB?
         // let applied_migrations = migration_version_manager
         //     .get_all_applied_migrations()
         //     .map_err(StorageError::Common)?;

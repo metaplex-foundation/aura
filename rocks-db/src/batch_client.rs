@@ -125,7 +125,7 @@ impl Storage {
                     let asset = fb::root_as_asset_complete_details(asset.as_ref())
                         .map_err(|e| StorageError::Common(e.to_string()))?;
                     if asset.static_details().is_none() {
-                        continue
+                        continue;
                     }
                     let key =
                         Pubkey::new_from_array(asset.pubkey().unwrap().bytes().try_into().unwrap());

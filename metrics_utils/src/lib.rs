@@ -235,7 +235,7 @@ impl BackfillerMetricsConfig {
             "The last processed slot by backfiller",
             self.last_processed_slot.clone(),
         );
-        
+
         registry.register(
             format!("{}slot_delay", prefix),
             "The delay between the slot time and the time when it was processed by the backfiller",
