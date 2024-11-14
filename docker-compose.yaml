@@ -100,13 +100,7 @@ services:
   slot-persister:
     container_name: slot-persister
     restart: always
-    entrypoint: |
-      sh -c "
-      if [ -z \"$MALLOC_CONF\" ]; then
-        exec ./slot_persister
-      else
-        exec ./profiling_slot_persister
-      fi"
+    entrypoint: "./slot_persister"
     env_file:
       - .env
     network_mode: host
