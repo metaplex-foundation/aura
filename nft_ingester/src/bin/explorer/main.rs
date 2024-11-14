@@ -7,9 +7,9 @@ use axum::{
 use clap::Parser;
 use metrics_utils::ApiMetricsConfig;
 use prometheus_client::registry::Registry;
-use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
-use rocksdb::{Options, DB};
+use rocks_db::{asset, migrator::MigrationState};
+use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 use serde::Deserialize;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -68,17 +68,29 @@ async fn main() {
     metrics.register(&mut registry);
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     red_metrics.register(&mut registry);
-    
+
     let options = Options::default();
 
     let cf_names =
         DB::list_cf(&options, &config.primary_db_path).expect("Failed to list column families.");
 
-    let db = DB::open_cf_as_secondary(
+    let cfs: Vec<ColumnFamilyDescriptor> = cf_names
+        .into_iter()
+        .map(|name| {
+            let mut cf_options = Options::default();
+            cf_options.set_merge_operator_associative(
+                &format!("merge_fn_merge_{}", &name),
+                asset::AssetStaticDetails::merge_keep_existing,
+            );
+            ColumnFamilyDescriptor::new(&name, Options::default())
+        })
+        .collect();
+
+    let db = DB::open_cf_descriptors_as_secondary(
         &options,
         &config.primary_db_path,
         &secondary_db_path,
-        &cf_names,
+        cfs,
     )
     .expect("Failed to open DB.");
 
