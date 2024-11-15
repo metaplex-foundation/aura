@@ -5,8 +5,8 @@ pub mod rocks;
 use std::sync::Arc;
 
 use crate::rocks::RocksTestEnvironmentSetup;
+use entities::enums::AssetType;
 use metrics_utils::MetricsTrait;
-use postgre_client::asset_index_client::AssetType;
 use rocks_db::asset::AssetCollection;
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
 use solana_sdk::pubkey::Pubkey;

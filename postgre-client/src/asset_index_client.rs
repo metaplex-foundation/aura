@@ -16,7 +16,7 @@ use crate::{
     SQL_COMPONENT, UPDATE_ACTION,
 };
 use entities::{
-    enums::SpecificationAssetClass as AssetSpecClass,
+    enums::AssetType,
     models::{AssetIndex, Creator, FungibleAssetIndex, FungibleToken, UrlWithStatus},
 };
 
@@ -25,12 +25,6 @@ pub const DELETE_ASSET_CREATOR_PARAMETERS_COUNT: usize = 2;
 pub const INSERT_ASSET_CREATOR_PARAMETERS_COUNT: usize = 4;
 pub const INSERT_AUTHORITY_PARAMETERS_COUNT: usize = 3;
 pub const INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT: usize = 4;
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum AssetType {
-    NonFungible = 1,
-    Fungible = 2,
-}
 
 impl PgClient {
     pub(crate) async fn fetch_last_synced_id_impl(
@@ -60,10 +54,10 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         fungible_tokens: Vec<FungibleToken>,
     ) -> Result<(), IndexDbError> {
-        for fungible_token in fungible_tokens
+        for fungible_tokens_chunk in fungible_tokens
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT)
         {
-            self.insert_fungible_tokens(transaction, fungible_token, "fungible_tokens")
+            self.insert_fungible_tokens(transaction, fungible_tokens_chunk, "fungible_tokens")
                 .await?;
         }
         Ok(())
@@ -162,21 +156,20 @@ pub(crate) struct TableNames {
     pub authorities_table: String,
 }
 
-pub(crate) fn split_fungible_assets_into_components(
+pub(crate) fn split_into_fungible_tokens(
     asset_indexes: &[FungibleAssetIndex],
 ) -> Vec<FungibleToken> {
     asset_indexes
         .iter()
-        .filter(|asset| asset.specification_asset_class == AssetSpecClass::FungibleToken)
-        .map(|asset| {
+        .map(|asset_index| {
             FungibleToken {
-                key: asset.pubkey,
-                slot_updated: asset.slot_updated,
+                key: asset_index.pubkey,
+                slot_updated: asset_index.slot_updated,
                 // it's unlikely that rows below will not be filled for fungible token
                 // but even if that happens we will save asset with default values
-                owner: asset.owner.unwrap_or_default(),
-                asset: asset.fungible_asset_mint.unwrap_or_default(),
-                balance: asset.fungible_asset_balance.unwrap_or_default() as i64,
+                owner: asset_index.owner.unwrap_or_default(),
+                asset: asset_index.fungible_asset_mint.unwrap_or_default(),
+                balance: asset_index.fungible_asset_balance.unwrap_or_default() as i64,
             }
         })
         .collect()
@@ -254,27 +247,6 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
         updated_keys,
         authorities,
     }
-}
-
-pub(crate) fn split_into_fungible_tokens(
-    asset_indexes: &[FungibleAssetIndex],
-) -> Vec<FungibleToken> {
-    asset_indexes
-        .iter()
-        .filter_map(|asset_index| {
-            if let AssetSpecClass::FungibleToken = asset_index.specification_asset_class {
-                Some(FungibleToken {
-                    key: asset_index.pubkey,
-                    slot_updated: asset_index.slot_updated,
-                    owner: asset_index.owner.unwrap_or_default(),
-                    asset: asset_index.fungible_asset_mint.unwrap_or_default(),
-                    balance: asset_index.fungible_asset_balance.unwrap_or_default() as i64,
-                })
-            } else {
-                None
-            }
-        })
-        .collect()
 }
 
 #[async_trait]

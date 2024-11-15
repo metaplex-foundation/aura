@@ -2,7 +2,7 @@
 #[cfg(test)]
 mod tests {
     use entities::api_req_params::GetByMethodsOptions;
-    use postgre_client::asset_index_client::AssetType;
+    use entities::enums::AssetType;
     use postgre_client::model::*;
     use postgre_client::storage_traits::{AssetIndexStorage, AssetPubkeyFilteredFetcher};
     use setup::pg::*;

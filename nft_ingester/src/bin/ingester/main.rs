@@ -1,9 +1,10 @@
 use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
+use entities::enums::AssetType;
 use nft_ingester::batch_mint::batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister};
 use nft_ingester::scheduler::Scheduler;
-use postgre_client::asset_index_client::AssetType;
 use postgre_client::PG_MIGRATIONS_PATH;
+use std::panic;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -122,7 +123,7 @@ pub async fn main() -> Result<(), IngesterError> {
         .await?,
     );
 
-    let synchronizer = Synchronizer::new(
+    let synchronizer = Arc::new(Synchronizer::new(
         primary_rocks_storage.clone(),
         index_pg_storage.clone(),
         index_pg_storage.clone(),
@@ -131,11 +132,33 @@ pub async fn main() -> Result<(), IngesterError> {
         metrics_state.synchronizer_metrics.clone(),
         config.synchronizer_parallel_tasks,
         config.run_temp_sync_during_dump,
-    );
+    ));
 
     if config.run_dump_synchronize_on_start {
         info!("Running dump synchronizer on start!");
-        synchronizer.full_syncronize(&shutdown_rx.resubscribe()).await?;
+        for asset_type in [AssetType::Fungible, AssetType::NonFungible].into_iter() {
+            let synchronizer = synchronizer.clone();
+            let shutdown_rx = shutdown_rx.resubscribe();
+
+            mutexed_tasks.lock().await.spawn(async move {
+                if let Err(e) = synchronizer
+                    .full_syncronize(&shutdown_rx.resubscribe(), asset_type)
+                    .await
+                {
+                    error!("Failed to syncronize on {:?} with error {}", asset_type, e);
+                    panic!("Failed to syncronize on {:?} with error {}", asset_type, e);
+                }
+
+                Ok(())
+            });
+        }
+    }
+    while let Some(res) = mutexed_tasks.lock().await.join_next().await {
+        match res {
+            Ok(_) => {}
+            Err(err) if err.is_panic() => panic::resume_unwind(err.into_panic()),
+            Err(err) => panic!("{err}"),
+        }
     }
 
     // setup receiver
@@ -581,29 +604,38 @@ pub async fn main() -> Result<(), IngesterError> {
         };
     }
 
-    let synchronizer = Arc::new(synchronizer);
     if !config.disable_synchronizer {
-        [AssetType::Fungible, AssetType::NonFungible]
-            .into_iter()
-            .for_each(|asset_type| {
-                let rx = shutdown_rx.resubscribe();
-                let synchronizer = synchronizer.clone();
-                tokio::spawn(async move {
-                    match asset_type {
-                        AssetType::NonFungible => {
-                            synchronizer
-                                .non_fungible_run(&rx, config.dump_sync_threshold, Duration::from_secs(5))
-                                .await
-                        }
-                        AssetType::Fungible => {
-                            synchronizer
-                                .fungible_run(&rx, config.dump_sync_threshold, Duration::from_secs(5))
-                                .await
-                        }
+        let synchronizer = Arc::new(synchronizer);
+
+        for asset_type in [AssetType::Fungible, AssetType::NonFungible].into_iter() {
+            let rx = shutdown_rx.resubscribe();
+            let synchronizer = synchronizer.clone();
+            mutexed_tasks.lock().await.spawn(async move {
+                match asset_type {
+                    AssetType::NonFungible => {
+                        synchronizer
+                            .non_fungible_run(&rx, config.dump_sync_threshold, Duration::from_secs(5))
+                            .await
                     }
-                });
-            })
+                    AssetType::Fungible => {
+                        synchronizer
+                            .fungible_run(&rx, config.dump_sync_threshold, Duration::from_secs(5))
+                            .await
+                    }
+                }
+
+                Ok(())
+            });
+        }
     }
+    while let Some(res) = mutexed_tasks.lock().await.join_next().await {
+        match res {
+            Ok(_) => {}
+            Err(err) if err.is_panic() => panic::resume_unwind(err.into_panic()),
+            Err(err) => panic!("{err}"),
+        }
+    }
+
     // setup dependencies for grpc server
     let uc = AssetStreamer::new(config.peer_grpc_max_gap_slots, primary_rocks_storage.clone());
     let bs = BlocksStreamer::new(config.peer_grpc_max_gap_slots, primary_rocks_storage.clone());

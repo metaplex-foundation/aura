@@ -1,14 +1,13 @@
-use std::sync::Arc;
-
+use entities::enums::AssetType;
 use nft_ingester::config::{
     init_logger, setup_config, SynchronizerConfig, SYNCHRONIZER_CONFIG_PREFIX,
 };
 use nft_ingester::error::IngesterError;
-use nft_ingester::index_syncronizer::Synchronizer;
+use nft_ingester::index_syncronizer::{SyncStatus, Synchronizer};
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration};
-use postgre_client::asset_index_client::AssetType;
 use postgre_client::PG_MIGRATIONS_PATH;
 use prometheus_client::registry::Registry;
+use std::sync::Arc;
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::SynchronizerMetricsConfig;
@@ -126,20 +125,43 @@ pub async fn main() -> Result<(), IngesterError> {
     if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
         tracing::error!("Sync rocksdb error: {}", e);
     }
-    synchronizer
-        .maybe_run_full_sync(&shutdown_rx, config.dump_sync_threshold)
-        .await;
+
+    let asset_types = [AssetType::Fungible, AssetType::NonFungible];
+    for asset_type in asset_types.clone().into_iter() {
+        let synchronizer = synchronizer.clone();
+        let shutdown_rx = shutdown_rx.resubscribe();
+
+        mutexed_tasks.lock().await.spawn(async move {
+            if let Ok(SyncStatus::FullSyncRequired(_)) = synchronizer
+                .get_sync_state(config.dump_sync_threshold, asset_type)
+                .await
+            {
+                let res = synchronizer.full_syncronize(&shutdown_rx, asset_type).await;
+                match res {
+                    Ok(_) => {
+                        tracing::info!("Full synchronization finished successfully");
+                    }
+                    Err(e) => {
+                        tracing::error!("Full synchronization failed: {:?}", e);
+                    }
+                }
+            }
+
+            Ok(())
+        });
+    }
+    while let Some(_) = mutexed_tasks.lock().await.join_next().await {}
 
     while shutdown_rx.is_empty() {
         if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
             tracing::error!("Sync rocksdb error: {}", e);
         }
 
-        for asset_type in [AssetType::Fungible, AssetType::NonFungible] {
+        for asset_type in asset_types.into_iter() {
             let synchronizer = synchronizer.clone();
             let shutdown_rx = shutdown_rx.resubscribe();
 
-            tokio::spawn(async move {
+            mutexed_tasks.lock().await.spawn(async move {
                 let result = match asset_type {
                     AssetType::NonFungible => {
                         synchronizer
@@ -159,16 +181,22 @@ pub async fn main() -> Result<(), IngesterError> {
                     }
                 };
 
-                if let Err(e) = result {
-                    tracing::error!("Synchronization failed: {:?}", e);
-                } else {
-                    tracing::info!("Synchronization finished successfully");
+                match result {
+                    Ok(_) => {
+                        tracing::info!("{:?} Synchronization finished successfully", asset_type)
+                    }
+                    Err(e) => tracing::error!("{:?} Synchronization failed: {:?}", asset_type, e),
                 }
-                tokio::time::sleep(tokio::time::Duration::from_secs(
-                    config.timeout_between_syncs_sec,
-                ))
-                .await;
+
+                Ok(())
             });
+
+            while let Some(_) = mutexed_tasks.lock().await.join_next().await {}
+
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                config.timeout_between_syncs_sec,
+            ))
+            .await;
         }
     }
     Ok(())

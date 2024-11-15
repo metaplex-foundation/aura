@@ -3,8 +3,11 @@
 mod tests {
     use setup::pg::*;
 
-    use entities::models::{AssetIndex, Creator};
-    use postgre_client::{asset_index_client::AssetType, storage_traits::AssetIndexStorage};
+    use entities::{
+        enums::AssetType,
+        models::{AssetIndex, Creator},
+    };
+    use postgre_client::storage_traits::AssetIndexStorage;
     use rand::Rng;
     use testcontainers::clients::Cli;
     use tokio;

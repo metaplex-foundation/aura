@@ -1,9 +1,9 @@
-use entities::models::{AssetIndex, FungibleAssetIndex};
-use metrics_utils::SynchronizerMetricsConfig;
-use postgre_client::{
-    asset_index_client::AssetType,
-    storage_traits::{AssetIndexStorage, TempClientProvider},
+use entities::{
+    enums::AssetType,
+    models::{AssetIndex, FungibleAssetIndex},
 };
+use metrics_utils::SynchronizerMetricsConfig;
+use postgre_client::storage_traits::{AssetIndexStorage, TempClientProvider};
 use rocks_db::{
     key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey},
     storage_traits::{AssetIndexStorage as AssetIndexSourceStorage, AssetUpdatedKey},
@@ -72,30 +72,6 @@ where
         }
     }
 
-    pub async fn maybe_run_full_sync(
-        &self,
-        rx: &tokio::sync::broadcast::Receiver<()>,
-        run_full_sync_threshold: i64,
-    ) {
-        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
-        for asset_type in asset_types {
-            if let Ok(SyncStatus::FullSyncRequired(_)) = self
-                .get_sync_state(run_full_sync_threshold, asset_type)
-                .await
-            {
-                let res = self.full_syncronize(rx).await;
-                match res {
-                    Ok(_) => {
-                        tracing::info!("Full synchronization finished successfully");
-                    }
-                    Err(e) => {
-                        tracing::error!("Full synchronization failed: {:?}", e);
-                    }
-                }
-            }
-        }
-    }
-
     pub async fn non_fungible_run(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
@@ -107,9 +83,9 @@ where
                 .synchronize_non_fungible_asset_indexes(rx, run_full_sync_threshold)
                 .await
             {
-                tracing::error!("Synchronization failed: {:?}", e);
+                tracing::error!("Non fungible synchronization failed: {:?}", e);
             } else {
-                tracing::info!("Synchronization finished successfully");
+                tracing::info!("Non fungible synchronization finished successfully");
             }
             if rx.is_empty() {
                 tokio::time::sleep(timeout_duration).await;
@@ -128,9 +104,9 @@ where
                 .synchronize_fungible_asset_indexes(rx, run_full_sync_threshold)
                 .await
             {
-                tracing::error!("Synchronization failed: {:?}", e);
+                tracing::error!("Fungible synchronization failed: {:?}", e);
             } else {
-                tracing::info!("Synchronization finished successfully");
+                tracing::info!("Fungible synchronization finished successfully");
             }
             if rx.is_empty() {
                 tokio::time::sleep(timeout_duration).await;
@@ -138,7 +114,7 @@ where
         }
     }
 
-    async fn get_sync_state(
+    pub async fn get_sync_state(
         &self,
         run_full_sync_threshold: i64,
         asset_type: AssetType,
@@ -249,77 +225,66 @@ where
     pub async fn full_syncronize(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
+        asset_type: AssetType,
     ) -> Result<(), IngesterError> {
-        let mut join_set = JoinSet::new();
-        for asset_type in [AssetType::Fungible, AssetType::NonFungible] {
-            let last_known_key = match asset_type {
-                AssetType::NonFungible => self
-                    .primary_storage
-                    .last_known_non_fungible_asset_updated_key()?,
-                AssetType::Fungible => self
-                    .primary_storage
-                    .last_known_fungible_asset_updated_key()?,
-            };
-            let Some(last_known_key) = last_known_key else {
-                continue;
-            };
-            let last_included_rocks_key = encode_u64x2_pubkey(
-                last_known_key.seq,
-                last_known_key.slot,
-                last_known_key.pubkey,
-            );
-            if !self.run_temp_sync_during_dump {
-                return self
-                    .dump_sync(last_included_rocks_key.as_slice(), rx, asset_type)
-                    .await;
-            }
-            // start a regular synchronization into a temporary storage to catch up on it while the dump is being created and loaded, as it takes a loooong time
-            let (tx, local_rx) = tokio::sync::broadcast::channel::<()>(1);
-            let temp_storage = Arc::new(self.temp_client_provider.create_temp_client().await?);
-            temp_storage
-                .initialize(last_included_rocks_key.as_slice())
-                .await?;
-            let temp_syncronizer = Arc::new(Synchronizer::new(
-                self.primary_storage.clone(),
-                temp_storage.clone(),
-                self.temp_client_provider.clone(),
-                self.dump_synchronizer_batch_size,
-                "not used".to_string(),
-                self.metrics.clone(),
-                1,
-                false,
-            ));
-
-            join_set.spawn(async move {
-                match asset_type {
-                    AssetType::NonFungible => {
-                        temp_syncronizer
-                            .non_fungible_run(
-                                &local_rx,
-                                -1,
-                                tokio::time::Duration::from_millis(100),
-                            )
-                            .await
-                    }
-                    AssetType::Fungible => {
-                        temp_syncronizer
-                            .fungible_run(&local_rx, -1, tokio::time::Duration::from_millis(100))
-                            .await
-                    }
-                }
-            });
-            self.dump_sync(last_included_rocks_key.as_slice(), rx, asset_type)
-                .await?;
-
-            tx.send(()).map_err(|e| e.to_string())?;
-
-            while let Some(result) = join_set.join_next().await {
-                result.map_err(|e| e.to_string())?;
-            }
-
-            // now we can copy temp storage to the main storage
-            temp_storage.copy_to_main().await?;
+        let last_known_key = match asset_type {
+            AssetType::NonFungible => self
+                .primary_storage
+                .last_known_non_fungible_asset_updated_key()?,
+            AssetType::Fungible => self
+                .primary_storage
+                .last_known_fungible_asset_updated_key()?,
+        };
+        let Some(last_known_key) = last_known_key else {
+            return Ok(());
+        };
+        let last_included_rocks_key = encode_u64x2_pubkey(
+            last_known_key.seq,
+            last_known_key.slot,
+            last_known_key.pubkey,
+        );
+        if !self.run_temp_sync_during_dump {
+            return self
+                .dump_sync(last_included_rocks_key.as_slice(), rx, asset_type)
+                .await;
         }
+        // start a regular synchronization into a temporary storage to catch up on it while the dump is being created and loaded, as it takes a loooong time
+        let (tx, local_rx) = tokio::sync::broadcast::channel::<()>(1);
+        let temp_storage = Arc::new(self.temp_client_provider.create_temp_client().await?);
+        temp_storage
+            .initialize(last_included_rocks_key.as_slice())
+            .await?;
+        let temp_syncronizer = Arc::new(Synchronizer::new(
+            self.primary_storage.clone(),
+            temp_storage.clone(),
+            self.temp_client_provider.clone(),
+            self.dump_synchronizer_batch_size,
+            "not used".to_string(),
+            self.metrics.clone(),
+            1,
+            false,
+        ));
+
+        match asset_type {
+            AssetType::NonFungible => {
+                temp_syncronizer
+                    .non_fungible_run(&local_rx, -1, tokio::time::Duration::from_millis(100))
+                    .await
+            }
+            AssetType::Fungible => {
+                temp_syncronizer
+                    .fungible_run(&local_rx, -1, tokio::time::Duration::from_millis(100))
+                    .await
+            }
+        }
+        self.dump_sync(last_included_rocks_key.as_slice(), rx, asset_type)
+            .await?;
+
+        tx.send(()).map_err(|e| e.to_string())?;
+
+        // now we can copy temp storage to the main storage
+        temp_storage.copy_to_main().await?;
+
         Ok(())
     }
 

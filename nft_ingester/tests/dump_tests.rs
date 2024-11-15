@@ -3,6 +3,7 @@
 mod tests {
     use std::sync::Arc;
 
+    use entities::enums::AssetType;
     use entities::models::TokenAccount;
     use entities::{api_req_params::GetByMethodsOptions, models::UrlWithStatus};
     use metrics_utils::{IngesterMetricsConfig, SynchronizerMetricsConfig};
@@ -17,6 +18,7 @@ mod tests {
     use solana_program::pubkey::Pubkey;
     use tempfile::TempDir;
     use testcontainers::clients::Cli;
+    use tokio::task::JoinSet;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
     #[tracing_test::traced_test]
@@ -58,7 +60,7 @@ mod tests {
         let cli: Cli = Cli::default();
         let pg_env = setup::pg::TestEnvironment::new_with_mount(&cli, temp_dir_path).await;
         let client = pg_env.client.clone();
-        let syncronizer = Synchronizer::new(
+        let syncronizer = Arc::new(Synchronizer::new(
             storage,
             client.clone(),
             client.clone(),
@@ -67,8 +69,20 @@ mod tests {
             Arc::new(SynchronizerMetricsConfig::new()),
             1,
             false,
-        );
-        syncronizer.full_syncronize(&rx).await.unwrap();
+        ));
+        let mut join_set = JoinSet::new();
+        for asset_type in [AssetType::Fungible, AssetType::NonFungible] {
+            let syncronizer = syncronizer.clone();
+            let rx = rx.resubscribe();
+            join_set.spawn(async move { syncronizer.full_syncronize(&rx, asset_type).await });
+        }
+
+        while let Some(task) = join_set.join_next().await {
+            if let Err(err) = task {
+                panic!("{err}");
+            }
+        }
+
         assert_eq!(pg_env.count_rows_in_metadata().await.unwrap(), 1);
         assert_eq!(
             pg_env.count_rows_in_creators().await.unwrap(),

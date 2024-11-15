@@ -1,7 +1,6 @@
 use entities::enums::*;
 use entities::models::{AssetIndex, Creator, UrlWithStatus};
 use metrics_utils::red::RequestErrorDurationMetrics;
-use postgre_client::asset_index_client::AssetType;
 use postgre_client::storage_traits::AssetIndexStorage;
 use postgre_client::PgClient;
 use rand::Rng;

@@ -89,15 +89,22 @@ impl AssetUpdateIndexStorage for Storage {
             None => self.fungible_assets_update_idx.iter_start(),
         };
 
+        let up_to = if let Some(up_to_key) = up_to {
+            Some(encode_u64x2_pubkey(
+                up_to_key.seq,
+                up_to_key.slot,
+                up_to_key.pubkey,
+            ))
+        } else {
+            None
+        };
+
         for pair in iterator {
             let (idx_key, _) = pair?;
             let key = FungibleAssetsUpdateIdx::decode_key(idx_key.to_vec())?;
             // Stop if the current key is greater than `up_to`
-            if let Some(ref up_to_key) = up_to {
-                let up_to = encode_u64x2_pubkey(up_to_key.seq, up_to_key.slot, up_to_key.pubkey);
-                if key > up_to {
-                    break;
-                }
+            if up_to.is_some() && &key > up_to.as_ref().unwrap() {
+                break;
             }
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
             last_key = Some(decoded_key.clone());
@@ -149,15 +156,22 @@ impl AssetUpdateIndexStorage for Storage {
             None => self.assets_update_idx.iter_start(),
         };
 
+        let up_to = if let Some(up_to_key) = up_to {
+            Some(encode_u64x2_pubkey(
+                up_to_key.seq,
+                up_to_key.slot,
+                up_to_key.pubkey,
+            ))
+        } else {
+            None
+        };
+
         for pair in iterator {
             let (idx_key, _) = pair?;
             let key = AssetsUpdateIdx::decode_key(idx_key.to_vec())?;
             // Stop if the current key is greater than `up_to`
-            if let Some(ref up_to_key) = up_to {
-                let up_to = encode_u64x2_pubkey(up_to_key.seq, up_to_key.slot, up_to_key.pubkey);
-                if key > up_to {
-                    break;
-                }
+            if up_to.is_some() && &key > up_to.as_ref().unwrap() {
+                break;
             }
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
             last_key = Some(decoded_key.clone());
@@ -199,7 +213,6 @@ impl AssetIndexReader for Storage {
         for token_acc in token_accounts_details.iter().flatten() {
             let fungible_asset_index = FungibleAssetIndex {
                 pubkey: token_acc.pubkey,
-                specification_asset_class: SpecificationAssetClass::FungibleToken,
                 owner: Some(token_acc.owner),
                 fungible_asset_mint: Some(token_acc.mint),
                 fungible_asset_balance: Some(token_acc.amount as u64),

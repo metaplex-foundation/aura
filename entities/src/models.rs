@@ -78,7 +78,6 @@ pub struct AssetIndex {
 pub struct FungibleAssetIndex {
     pub pubkey: Pubkey,
     pub owner: Option<Pubkey>,
-    pub specification_asset_class: SpecificationAssetClass,
     pub slot_updated: i64,
     pub fungible_asset_mint: Option<Pubkey>,
     pub fungible_asset_balance: Option<u64>,

@@ -7,7 +7,6 @@ mod tests {
         ShadowInterestBearingConfig, ShadowTransferFee, ShadowTransferFeeConfig, UnixTimestamp,
     };
     use blockbuster::programs::token_extensions::MintAccountExtensions;
-    use postgre_client::asset_index_client::AssetType;
     use std::str::FromStr;
     use std::{collections::HashMap, sync::Arc};
 
@@ -16,7 +15,7 @@ mod tests {
         DisplayOptions, GetAssetProof, GetAssetSignatures, GetByMethodsOptions, GetCoreFees,
         GetTokenAccounts, Options, SearchAssetsOptions,
     };
-    use entities::enums::TokenType;
+    use entities::enums::{AssetType, TokenType};
     use entities::models::{
         AssetSignature, AssetSignatureKey, BurntMetadataSlot, MetadataInfo, Mint, OffChainData,
         TokenAccount,

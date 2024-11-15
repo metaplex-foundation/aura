@@ -400,3 +400,9 @@ pub enum TokenType {
     CompressedNFT,
     All,
 }
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum AssetType {
+    NonFungible = 1,
+    Fungible = 2,
+}

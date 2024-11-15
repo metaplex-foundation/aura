@@ -1,9 +1,9 @@
-use crate::asset_index_client::AssetType;
 use crate::error::IndexDbError;
 use crate::model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter};
 use crate::temp_index_client::TempClient;
 use async_trait::async_trait;
 use entities::api_req_params::GetByMethodsOptions;
+use entities::enums::AssetType;
 use entities::models::{AssetIndex, FungibleAssetIndex};
 use mockall::{automock, mock};
 

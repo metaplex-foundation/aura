@@ -1,6 +1,6 @@
+use entities::enums::AssetType;
 use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::Call;
-use postgre_client::asset_index_client::AssetType;
 use postgre_client::storage_traits::AssetIndexStorage;
 use postgre_client::PgClient;
 use rocks_db::key_encoders::decode_u64x2_pubkey;
