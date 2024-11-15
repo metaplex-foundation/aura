@@ -131,9 +131,9 @@ pub struct RawBackfillConfig {
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {
     pub database_config: DatabaseConfig,
-    pub tcp_config: TcpConfig,
+    // pub tcp_config: TcpConfig,
     pub redis_messenger_config: MessengerConfig,
-    pub message_source: MessageSource,
+    // pub message_source: MessageSource,
     pub accounts_buffer_size: usize,
     #[serde(default = "default_snapshot_parsing_workers")]
     pub snapshot_parsing_workers: u32,
@@ -151,13 +151,13 @@ pub struct IngesterConfig {
     pub rocks_backup_archives_dir: String,
     #[serde(default = "default_rocks_backup_dir")]
     pub rocks_backup_dir: String,
-    pub run_bubblegum_backfiller: bool,
+    // pub run_bubblegum_backfiller: bool,
     #[serde(default = "default_gapfiller_peer_addr")]
     pub gapfiller_peer_addr: String,
-    pub peer_grpc_port: u16,
-    pub peer_grpc_max_gap_slots: u64,
+    // pub peer_grpc_port: u16,
+    // pub peer_grpc_max_gap_slots: u64,
     pub log_level: Option<String>,
-    pub backfill_rpc_address: String,
+    // pub backfill_rpc_address: String,
     pub run_profiling: Option<bool>,
     pub profiling_file_path_container: Option<String>,
     pub store_db_backups: Option<bool>,
@@ -187,7 +187,7 @@ pub struct IngesterConfig {
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
     #[serde(default = "default_heap_path")]
     pub heap_path: String,
-    pub migration_storage_path: String,
+    // pub migration_storage_path: String,
     #[serde(default = "default_price_monitoring_interval_sec")]
     pub price_monitoring_interval_sec: u64,
 }

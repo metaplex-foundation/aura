@@ -68,12 +68,12 @@ pub async fn init_primary_storage(
         MigrationState::Last,
     )?;
 
-    Storage::apply_all_migrations(
-        db_path,
-        &config.migration_storage_path,
-        Arc::new(migration_version_manager),
-    )
-    .await?;
+    // Storage::apply_all_migrations(
+    //     db_path,
+    //     &config.migration_storage_path,
+    //     Arc::new(migration_version_manager),
+    // )
+    // .await?;
 
     Ok(Storage::open(
         db_path,
