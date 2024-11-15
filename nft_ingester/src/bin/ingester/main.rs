@@ -307,7 +307,7 @@ pub async fn main() -> Result<(), IngesterError> {
         .ok();
 
     if let Some(gaped_data_client) = grpc_client.clone() {
-        while first_processed_slot.load(Ordering::SeqCst) == 0 && shutdown_rx.is_empty() {
+        while first_processed_slot.load(Ordering::Relaxed) == 0 && shutdown_rx.is_empty() {
             tokio_sleep(Duration::from_millis(100)).await
         }
 
@@ -315,7 +315,7 @@ pub async fn main() -> Result<(), IngesterError> {
         if shutdown_rx.is_empty() {
             let gaped_data_client_clone = gaped_data_client.clone();
 
-            let first_processed_slot_value = first_processed_slot.load(Ordering::SeqCst);
+            let first_processed_slot_value = first_processed_slot.load(Ordering::Relaxed);
             let cloned_rx = shutdown_rx.resubscribe();
             mutexed_tasks.lock().await.spawn(process_asset_details_stream_wrapper(
                 cloned_rx,

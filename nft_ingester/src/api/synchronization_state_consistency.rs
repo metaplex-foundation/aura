@@ -77,7 +77,7 @@ impl SynchronizationStateConsistencyChecker {
                             .seq
                             .saturating_sub(decoded_index_update_key.seq)
                             >= synchronization_api_threshold,
-                        Ordering::SeqCst,
+                        Ordering::Relaxed,
                     );
                     tokio::select! {
                         _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC))=> {},
@@ -95,7 +95,7 @@ impl SynchronizationStateConsistencyChecker {
 
 impl ConsistencyChecker for SynchronizationStateConsistencyChecker {
     fn should_cancel_request(&self, call: &Call) -> bool {
-        if !self.overwhelm_seq_gap.load(Ordering::SeqCst) {
+        if !self.overwhelm_seq_gap.load(Ordering::Relaxed) {
             return false;
         }
 
