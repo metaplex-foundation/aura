@@ -106,7 +106,6 @@ services:
     network_mode: host
     volumes:
       - ${TARGET_DB_PATH}:${TARGET_DB_PATH}:rw
-      - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
       - ${big_table_credentials:-/tmp/creds.json}:${big_table_credentials:-/tmp/creds.json}
       - ./heaps:/usr/src/app/heaps:rw
     stop_grace_period: 5m
