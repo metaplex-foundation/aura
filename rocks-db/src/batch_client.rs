@@ -89,15 +89,8 @@ impl AssetUpdateIndexStorage for Storage {
             None => self.fungible_assets_update_idx.iter_start(),
         };
 
-        let up_to = if let Some(up_to_key) = up_to {
-            Some(encode_u64x2_pubkey(
-                up_to_key.seq,
-                up_to_key.slot,
-                up_to_key.pubkey,
-            ))
-        } else {
-            None
-        };
+        let up_to = up_to
+            .map(|up_to_key| encode_u64x2_pubkey(up_to_key.seq, up_to_key.slot, up_to_key.pubkey));
 
         for pair in iterator {
             let (idx_key, _) = pair?;
@@ -156,15 +149,8 @@ impl AssetUpdateIndexStorage for Storage {
             None => self.assets_update_idx.iter_start(),
         };
 
-        let up_to = if let Some(up_to_key) = up_to {
-            Some(encode_u64x2_pubkey(
-                up_to_key.seq,
-                up_to_key.slot,
-                up_to_key.pubkey,
-            ))
-        } else {
-            None
-        };
+        let up_to = up_to
+            .map(|up_to_key| encode_u64x2_pubkey(up_to_key.seq, up_to_key.slot, up_to_key.pubkey));
 
         for pair in iterator {
             let (idx_key, _) = pair?;

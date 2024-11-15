@@ -127,7 +127,7 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     let asset_types = [AssetType::Fungible, AssetType::NonFungible];
-    for asset_type in asset_types.clone().into_iter() {
+    for asset_type in asset_types.into_iter() {
         let synchronizer = synchronizer.clone();
         let shutdown_rx = shutdown_rx.resubscribe();
 
@@ -150,7 +150,7 @@ pub async fn main() -> Result<(), IngesterError> {
             Ok(())
         });
     }
-    while let Some(_) = mutexed_tasks.lock().await.join_next().await {}
+    while (mutexed_tasks.lock().await.join_next().await).is_some() {}
 
     let shutdown_rx_clone = shutdown_rx.resubscribe();
     let synchronizer_clone = synchronizer.clone();
@@ -202,7 +202,7 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    while let Some(_) = mutexed_tasks.lock().await.join_next().await {}
+    while (mutexed_tasks.lock().await.join_next().await).is_some() {}
 
     Ok(())
 }
