@@ -308,7 +308,7 @@ where
         let latency_timer = Instant::now();
 
         let id = validate_pubkey(payload.id.clone())?;
-        let options = payload.options.unwrap_or_default();
+        let options = payload.options;
 
         let res = get_asset(
             self.rocks_db.clone(),
@@ -356,7 +356,7 @@ where
             .into_iter()
             .map(validate_pubkey)
             .collect::<Result<Vec<_>, _>>()?;
-        let options = payload.options.unwrap_or_default();
+        let options = payload.options;
 
         let res = get_asset_batch(
             self.rocks_db.clone(),

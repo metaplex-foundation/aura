@@ -26,8 +26,8 @@ macro_rules! impl_request_with_pagination {
                 self.sort_by.clone()
             }
 
-            fn get_options(&self) -> Option<GetByMethodsOptions> {
-                self.options.clone().map(Into::into)
+            fn get_options(&self) -> GetByMethodsOptions {
+                self.options.clone().into()
             }
         }
     };
