@@ -702,7 +702,7 @@ where
     {
         let pagination = payload.get_all_pagination_parameters();
         let sort_by = payload.get_sort_parameter().unwrap_or_default();
-        let options = payload.get_options().unwrap_or_default();
+        let options = payload.get_options();
 
         let query: SearchAssetsQuery = payload
             .try_into()
