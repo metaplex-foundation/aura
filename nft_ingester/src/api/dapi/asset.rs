@@ -215,12 +215,14 @@ pub async fn get_by_ids<
             asset_ids
                 .iter()
                 .map(|id| id.to_string().as_str())
+                .collect::<Vec<_>>()
                 .as_slice(),
         );
         let token_symbols_fut = token_price_fetcher.fetch_token_symbols(
             asset_ids
                 .iter()
                 .map(|id| id.to_string().as_str())
+                .collect::<Vec<_>>()
                 .as_slice(),
         );
         tokio::join!(token_prices_fut, token_symbols_fut)
