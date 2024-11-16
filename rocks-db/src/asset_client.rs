@@ -298,7 +298,7 @@ impl Storage {
             _ => Ok(None),
         }
     }
-    
+
     #[cfg(test)]
     pub fn put_complete_asset_details_batch(
         &self,

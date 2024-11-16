@@ -70,6 +70,7 @@ pub async fn start_api(
     file_storage_path: &str,
     account_balance_getter: Arc<AccountBalanceGetterImpl>,
     storage_service_base_url: Option<String>,
+    native_mint_pubkey: String,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -125,6 +126,7 @@ pub async fn start_api(
             crate::raydium_price_fetcher::CACHE_TTL,
             red_metrics,
         )),
+        native_mint_pubkey,
     );
 
     run_api(

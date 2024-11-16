@@ -270,6 +270,10 @@ pub struct SynchronizerConfig {
     pub heap_path: String,
 }
 
+fn default_native_mint() -> String {
+    String::from("So11111111111111111111111111111111111111112")
+}
+
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct ApiConfig {
     pub database_config: DatabaseConfig,
@@ -304,6 +308,8 @@ pub struct ApiConfig {
     pub storage_service_base_url: Option<String>,
     #[serde(default)]
     pub skip_check_tree_gaps: bool,
+    #[serde(default = "default_native_mint")]
+    pub native_mint_pubkey: String,
 }
 
 fn default_heap_path() -> String {

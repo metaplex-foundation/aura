@@ -211,8 +211,18 @@ pub async fn get_by_ids<
     let asset_selected_maps_fut =
         rocks_db.get_asset_selected_maps_async(unique_asset_ids.clone(), owner_address, &options);
     let (token_prices, token_symbols) = if options.show_fungible {
-        let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids.as_slice());
-        let token_symbols_fut = token_price_fetcher.fetch_token_symbols(asset_ids.as_slice());
+        let token_prices_fut = token_price_fetcher.fetch_token_prices(
+            asset_ids
+                .iter()
+                .map(|id| id.to_string().as_str())
+                .as_slice(),
+        );
+        let token_symbols_fut = token_price_fetcher.fetch_token_symbols(
+            asset_ids
+                .iter()
+                .map(|id| id.to_string().as_str())
+                .as_slice(),
+        );
         tokio::join!(token_prices_fut, token_symbols_fut)
     } else {
         (Ok(HashMap::new()), Ok(HashMap::new()))

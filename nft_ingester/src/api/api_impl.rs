@@ -59,6 +59,7 @@ where
     /// E.g. https://storage-service.xyz/
     storage_service_base_path: Option<String>,
     token_price_fetcher: Arc<TPF>,
+    native_mint_pubkey: String,
 }
 
 pub fn not_found() -> DasApiError {
@@ -88,6 +89,7 @@ where
         account_balance_getter: Arc<ABG>,
         storage_service_base_path: Option<String>,
         token_price_fetcher: Arc<TPF>,
+        native_mint_pubkey: String,
     ) -> Self {
         DasApi {
             pg_client,
@@ -102,6 +104,7 @@ where
             account_balance_getter,
             storage_service_base_path,
             token_price_fetcher,
+            native_mint_pubkey,
         }
     }
 
@@ -731,6 +734,7 @@ where
             self.token_price_fetcher.clone(),
             self.metrics.clone(),
             &self.tree_gaps_checker,
+            &self.native_mint_pubkey,
         )
         .await?;
 

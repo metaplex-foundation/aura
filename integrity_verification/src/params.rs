@@ -139,7 +139,10 @@ pub fn generate_get_assets_by_authority_params(
 }
 
 pub fn generate_get_asset_params(id: String) -> GetAsset {
-    GetAsset { id, options: Default::default() }
+    GetAsset {
+        id,
+        options: Default::default(),
+    }
 }
 
 pub fn generate_get_asset_proof_params(id: String) -> GetAssetProof {
