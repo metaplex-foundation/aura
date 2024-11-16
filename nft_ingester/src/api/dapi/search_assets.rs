@@ -249,7 +249,7 @@ async fn fetch_native_balance<TPF: TokenPriceFetcher>(
             .await
             .map_err(|e| StorageError::Common(format!("Account balance getter: {}", e)))?;
     let token_price = *token_price_fetcher
-        .fetch_token_prices(&[native_mint_pubkey])
+        .fetch_token_prices(&[native_mint_pubkey.to_string()])
         .await
         .map_err(|e| StorageError::Common(e.to_string()))?
         .get(&spl_token::native_mint::id().to_string())

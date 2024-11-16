@@ -12,10 +12,10 @@ pub trait PriceFetcher {
 pub trait TokenPriceFetcher {
     async fn fetch_token_symbols(
         &self,
-        token_ids: &[&str],
+        token_ids: &[String],
     ) -> Result<HashMap<String, String>, UsecaseError>;
     async fn fetch_token_prices(
         &self,
-        token_ids: &[&str],
+        token_ids: &[String],
     ) -> Result<HashMap<String, f64>, UsecaseError>;
 }

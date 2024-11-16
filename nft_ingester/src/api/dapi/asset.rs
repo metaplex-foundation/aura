@@ -14,6 +14,7 @@ use crate::api::dapi::rpc_asset_models::FullAsset;
 use futures::{stream, StreamExt};
 use interface::price_fetcher::TokenPriceFetcher;
 use interface::processing_possibility::ProcessingPossibilityChecker;
+use itertools::Itertools;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::asset::{AssetLeaf, AssetSelectedMaps};
 use rocks_db::{AssetAuthority, Storage};
@@ -210,21 +211,15 @@ pub async fn get_by_ids<
     // request prices and symbols only for fungibles when the option is set. This will prolong the request at least an order of magnitude
     let asset_selected_maps_fut =
         rocks_db.get_asset_selected_maps_async(unique_asset_ids.clone(), owner_address, &options);
+    let asset_ids_string = asset_ids
+        .clone()
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect_vec();
     let (token_prices, token_symbols) = if options.show_fungible {
-        let token_prices_fut = token_price_fetcher.fetch_token_prices(
-            asset_ids
-                .iter()
-                .map(|id| id.to_string().as_str())
-                .collect::<Vec<_>>()
-                .as_slice(),
-        );
-        let token_symbols_fut = token_price_fetcher.fetch_token_symbols(
-            asset_ids
-                .iter()
-                .map(|id| id.to_string().as_str())
-                .collect::<Vec<_>>()
-                .as_slice(),
-        );
+        let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids_string.as_slice());
+        let token_symbols_fut =
+            token_price_fetcher.fetch_token_symbols(asset_ids_string.as_slice());
         tokio::join!(token_prices_fut, token_symbols_fut)
     } else {
         (Ok(HashMap::new()), Ok(HashMap::new()))
