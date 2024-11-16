@@ -136,7 +136,9 @@ impl PgClient {
         filter: &'a SearchAssetsFilter,
         options: &'a GetByMethodsOptions,
     ) -> Result<QueryBuilder<'a, Postgres>, IndexDbError> {
-        let mut query_builder = QueryBuilder::new("SELECT COUNT(DISTINCT (assets_v3.ast_pubkey, assets_v3.ast_slot_created, assets_v3.ast_slot_updated)) AS total_groups FROM assets_v3 ");
+        let mut query_builder = QueryBuilder::new(
+            "SELECT COUNT(DISTINCT (assets_v3.ast_pubkey)) AS total_groups FROM assets_v3 ",
+        );
         add_filter_clause(&mut query_builder, filter, options);
         query_builder.push(";");
 
