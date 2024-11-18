@@ -142,3 +142,6 @@ name = "slot_checker"
 
 [[bin]]
 name = "explorer"
+
+[[bin]]
+name = "synchronizer_utils"

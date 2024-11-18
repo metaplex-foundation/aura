@@ -340,13 +340,16 @@ impl Storage {
         Ok(Self::new(db, join_set, red_metrics))
     }
 
-    pub fn open_secondary(
-        primary_path: &str,
-        secondary_path: &str,
+    pub fn open_secondary<P>(
+        primary_path: P,
+        secondary_path: P,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         migration_state: MigrationState,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
         let db = Arc::new(DB::open_cf_descriptors_as_secondary(
             &Self::get_db_options(),
