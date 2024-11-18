@@ -5,6 +5,7 @@ use axum::{
     Json, Router,
 };
 use clap::Parser;
+use itertools::Itertools;
 use metrics_utils::ApiMetricsConfig;
 use prometheus_client::registry::Registry;
 use rocks_db::Storage;
@@ -41,6 +42,13 @@ struct IterateKeysParams {
     cf_name: String,
     limit: Option<usize>,
     start_key: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct IterateKeysPatternParams {
+    cf_name: String,
+    pattern: String,
+    limit: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -102,6 +110,7 @@ async fn main() {
     // Build our application with the routes
     let app = Router::new()
         .route("/iterate_keys", get(iterate_keys))
+        .route("/iterate_keys_with_pattern", get(iterate_keys_with_pattern))
         .route("/get_value", get(get_value))
         .layer(Extension(Arc::new(app_state)));
 
@@ -141,6 +150,34 @@ async fn iterate_keys(
 
     // Call the iterate_keys function
     match iterate_keys_function(db, cf_name, start_key.as_deref(), limit) {
+        Ok(keys) => Ok(Json(keys)),
+        Err(err_msg) => Err((StatusCode::INTERNAL_SERVER_ERROR, err_msg)),
+    }
+}
+
+async fn iterate_keys_with_pattern(
+    Extension(state): Extension<Arc<AppState>>,
+    Query(params): Query<IterateKeysPatternParams>,
+) -> Result<Json<Vec<String>>, (StatusCode, String)> {
+    let db = &state.db;
+
+    // Extract parameters
+    let cf_name = &params.cf_name;
+    let limit = params.limit.unwrap_or(10); // Default limit if not provided
+
+    // Decode the pattern from Base58
+    let pattern_bytes = match bs58::decode(&params.pattern).into_vec() {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Invalid Base58 pattern".to_string(),
+            ))
+        }
+    };
+
+    // Call the iterate_keys_with_pattern function
+    match iterate_keys_with_pattern_function(db, cf_name, &pattern_bytes, limit) {
         Ok(keys) => Ok(Json(keys)),
         Err(err_msg) => Err((StatusCode::INTERNAL_SERVER_ERROR, err_msg)),
     }
@@ -236,4 +273,49 @@ fn get_value_function(db: &DB, cf_name: &str, key: &[u8]) -> Result<Option<Strin
         Ok(None) => Ok(None),
         Err(e) => Err(format!("DB error: {}", e)),
     }
+}
+
+/// Iterates over keys in a specified RocksDB column family,
+/// filtering keys that include a given byte pattern,
+/// and returns up to `limit` Base58-encoded keys.
+///
+/// # Parameters
+///
+/// - `db`: Reference to the RocksDB database.
+/// - `cf_name`: The name of the column family to iterate over.
+/// - `pattern`: Byte pattern to match within the keys.
+/// - `limit`: Maximum number of keys to return.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of Base58-encoded keys or an error message.
+fn iterate_keys_with_pattern_function(
+    db: &DB,
+    cf_name: &str,
+    pattern: &[u8],
+    limit: usize,
+) -> Result<Vec<String>, String> {
+    // Get the column family handle
+    let cf_handle = &db
+        .cf_handle(cf_name)
+        .ok_or_else(|| "Column family not found".to_string())?;
+
+    // Create an iterator starting from the beginning
+    let iter_mode = rocksdb::IteratorMode::Start;
+    let iterator = db.iterator_cf(cf_handle, iter_mode);
+
+    // Collect keys up to the specified limit that match the pattern
+    let keys: Vec<String> = iterator
+        .filter_map(Result::ok)
+        .filter_map(|(key, _)| {
+            if key.windows(pattern.len()).any(|window| window == pattern) {
+                Some(bs58::encode(key).into_string())
+            } else {
+                None
+            }
+        })
+        .take(limit)
+        .collect();
+
+    Ok(keys)
 }
