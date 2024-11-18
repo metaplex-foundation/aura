@@ -35,6 +35,7 @@ impl TempClient {
 
     pub async fn initialize(&self, initial_key: &[u8]) -> Result<(), String> {
         let mut c = self.pooled_connection.lock().await;
+        // todo: ensure the transactions are rolled back on error
         let mut tx = c.begin().await.map_err(|e| e.to_string())?;
         for table in [
             "tasks",

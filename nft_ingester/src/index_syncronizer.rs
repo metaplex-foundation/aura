@@ -117,13 +117,7 @@ where
         run_full_sync_threshold: i64,
     ) -> Result<SyncStatus, IngesterError> {
         let last_indexed_key = self.index_storage.fetch_last_synced_id().await?;
-        let last_indexed_key = match last_indexed_key {
-            Some(bytes) => {
-                let decoded_key = decode_u64x2_pubkey(bytes)?;
-                Some(decoded_key)
-            }
-            None => None,
-        };
+        let last_indexed_key =  last_indexed_key.map(decode_u64x2_pubkey).transpose()?;
 
         // Fetch the last known key from the primary storage
         let Some(last_key) = self.primary_storage.last_known_asset_updated_key()? else {
@@ -138,6 +132,17 @@ where
         let last_known_seq = last_key.seq as i64;
         self.metrics
             .set_last_synchronized_slot("last_known_updated_seq", last_known_seq);
+        self.metrics
+            .set_last_synchronized_slot("last_known_updated_slot", last_key.slot as i64);
+    
+        self.metrics.set_last_synchronized_slot(
+            "last_synchronized_slot",
+            last_indexed_key.as_ref().map(|k|k.slot).unwrap_or_default() as i64,
+        );
+        self.metrics.set_last_synchronized_slot(
+            "last_synchronized_seq",
+            last_indexed_key.as_ref().map(|k|k.seq).unwrap_or_default() as i64,
+        );
         if let Some(last_indexed_key) = &last_indexed_key {
             if last_indexed_key.seq >= last_key.seq {
                 return Ok(SyncStatus::NoSyncRequired);

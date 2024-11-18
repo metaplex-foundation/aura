@@ -5,7 +5,8 @@ use std::{
 
 use async_trait::async_trait;
 use solana_sdk::pubkey::Pubkey;
-use sqlx::{Executor, Postgres, QueryBuilder, Transaction};
+use sqlx::{Connection, Executor, Postgres, QueryBuilder, Transaction};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use crate::{
     error::IndexDbError,
@@ -13,7 +14,7 @@ use crate::{
     storage_traits::AssetIndexStorage,
     PgClient, BATCH_DELETE_ACTION, BATCH_SELECT_ACTION, BATCH_UPSERT_ACTION, CREATE_ACTION,
     DROP_ACTION, INSERT_TASK_PARAMETERS_COUNT, POSTGRES_PARAMETERS_COUNT_LIMIT, SELECT_ACTION,
-    SQL_COMPONENT, UPDATE_ACTION,
+    SQL_COMPONENT, TRANSACTION_ACTION, UPDATE_ACTION,
 };
 use entities::{
     enums::SpecificationAssetClass as AssetSpecClass,
@@ -257,7 +258,6 @@ impl AssetIndexStorage for PgClient {
         asset_indexes: &[AssetIndex],
     ) -> Result<(), IndexDbError> {
         let updated_components = split_assets_into_components(asset_indexes);
-        let mut transaction = self.start_transaction().await?;
         let table_names = TableNames {
             metadata_table: "tasks".to_string(),
             assets_table: "assets_v3".to_string(),
@@ -265,9 +265,37 @@ impl AssetIndexStorage for PgClient {
             authorities_table: "assets_authorities".to_string(),
             fungible_tokens_table: "fungible_tokens".to_string(),
         };
-        self.upsert_batched(&mut transaction, table_names, updated_components)
-            .await?;
-        self.commit_transaction(transaction).await
+        let mut transaction = self.start_transaction().await?;
+        let operation_start_time = chrono::Utc::now();
+
+        // Perform transactional operations
+        let result = self
+            .upsert_batched(&mut transaction, table_names, updated_components)
+            .await;
+
+        match result {
+            Ok(_) => {
+                // Commit the transaction and record the time taken
+                self.commit_transaction(transaction).await?;
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    TRANSACTION_ACTION,
+                    "transaction_total",
+                    operation_start_time,
+                );
+                Ok(())
+            }
+            Err(e) => {
+                // Transaction will be rolled back automatically when `transaction` goes out of scope
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    TRANSACTION_ACTION,
+                    "transaction_failed_total",
+                    operation_start_time,
+                );
+                Err(e)
+            }
+        }
     }
 
     async fn load_from_dump(
@@ -313,28 +341,64 @@ impl AssetIndexStorage for PgClient {
                 base_path
             )));
         };
+        let operation_start_time = chrono::Utc::now();
         let mut transaction = self.start_transaction().await?;
-
-        self.copy_all(
-            metadata_path,
-            creators_path,
-            assets_path,
-            assets_authorities_path,
-            fungible_tokens_path,
-            &mut transaction,
-        )
-        .await?;
-        self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
+        // Perform operations within the transaction
+        let result = (async {
+            self.copy_all(
+                metadata_path,
+                creators_path,
+                assets_path,
+                assets_authorities_path,
+                fungible_tokens_path,
+                &mut transaction,
+            )
             .await?;
-        self.commit_transaction(transaction).await?;
-        Ok(())
+            self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
+                .await?;
+            Ok(())
+        })
+        .await;
+        match result {
+            Ok(_) => {
+                // Commit the transaction and record the time taken
+                self.commit_transaction(transaction).await?;
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    TRANSACTION_ACTION,
+                    "load_from_dump_total",
+                    operation_start_time,
+                );
+                Ok(())
+            }
+            Err(e) => {
+                // Transaction will be rolled back automatically
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    TRANSACTION_ACTION,
+                    "load_from_dump_failed_total",
+                    operation_start_time,
+                );
+                Err(e)
+            }
+        }
     }
 
     async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
-        self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
-            .await?;
-        self.commit_transaction(transaction).await
+        match self
+            .update_last_synced_key(last_key, &mut transaction, "last_synced_key")
+            .await
+        {
+            Ok(_) => {
+                self.commit_transaction(transaction).await?;
+                Ok(())
+            }
+            Err(e) => {
+                self.rollback_transaction(transaction).await?;
+                Err(e)
+            }
+        }
     }
 }
 
@@ -356,20 +420,51 @@ pub struct CreatorsUpdates {
 }
 
 impl PgClient {
-    pub async fn get_existing_metadata_keys(&self) -> Result<HashSet<Vec<u8>>, String> {
+    pub async fn get_existing_metadata_keys(&self) -> Result<HashSet<Vec<u8>>, IndexDbError> {
+        let operation_start_time = chrono::Utc::now();
+
+        // Start the transaction
+        let mut transaction = self.start_transaction().await?;
+
+        // Call the transactional logic method
+        let result = self
+            .get_existing_metadata_keys_logic(&mut transaction)
+            .await;
+        // Roll back the transaction (since we only used it for the cursor)
+        self.rollback_transaction(transaction).await?;
+        self.metrics.observe_request(
+            SQL_COMPONENT,
+            TRANSACTION_ACTION,
+            "transaction_total",
+            operation_start_time,
+        );
+        result
+    }
+
+    // The transactional logic is encapsulated here
+    async fn get_existing_metadata_keys_logic(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<HashSet<Vec<u8>>, IndexDbError> {
         let mut set = HashSet::new();
-        let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
+
+        // Declare the cursor
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
             "DECLARE all_tasks CURSOR FOR SELECT tsk_id FROM tasks WHERE tsk_id IS NOT NULL",
         );
-        self.execute_query_with_metrics(&mut tx, &mut query_builder, CREATE_ACTION, "cursor")
+        self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, "cursor")
             .await?;
+
+        // Fetch rows in a loop
         loop {
             let mut query_builder: QueryBuilder<'_, Postgres> =
                 QueryBuilder::new("FETCH 10000 FROM all_tasks");
-            // Fetch a batch of rows from the cursor
             let query = query_builder.build_query_as::<TaskIdRawResponse>();
-            let rows = query.fetch_all(&mut tx).await.map_err(|e| e.to_string())?;
+            let rows = query.fetch_all(&mut *transaction).await.map_err(|e| {
+                self.metrics
+                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "FETCH_CURSOR");
+                IndexDbError::QueryExecErr(e)
+            })?;
 
             // If no rows were fetched, we are done
             if rows.is_empty() {
@@ -380,10 +475,12 @@ impl PgClient {
                 set.insert(row.tsk_id);
             }
         }
+
+        // Close the cursor
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("CLOSE all_tasks");
-        self.execute_query_with_metrics(&mut tx, &mut query_builder, DROP_ACTION, "cursor")
+        self.execute_query_with_metrics(transaction, &mut query_builder, DROP_ACTION, "cursor")
             .await?;
-        self.rollback_transaction(tx).await?;
+
         Ok(set)
     }
 
