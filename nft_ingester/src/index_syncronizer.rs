@@ -174,8 +174,10 @@ where
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
     ) -> Result<(), IngesterError> {
+        let asset_type = AssetType::NonFungible;
+
         let state = self
-            .get_sync_state(run_full_sync_threshold, AssetType::NonFungible)
+            .get_sync_state(run_full_sync_threshold, asset_type)
             .await?;
         match state {
             SyncStatus::FullSyncRequired(state) => {
@@ -185,7 +187,7 @@ where
                     state.last_indexed_key,
                     state.last_known_key,
                 )
-                .await
+                .await?;
             }
             SyncStatus::RegularSyncRequired(state) => {
                 self.regular_non_fungible_syncronize(
@@ -193,10 +195,12 @@ where
                     state.last_indexed_key,
                     state.last_known_key,
                 )
-                .await
+                .await?;
             }
-            SyncStatus::NoSyncRequired => Ok(()),
+            SyncStatus::NoSyncRequired => {}
         }
+
+        self.clean_syncronized_idxs(asset_type)
     }
 
     pub async fn synchronize_fungible_asset_indexes(
@@ -204,22 +208,32 @@ where
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
     ) -> Result<(), IngesterError> {
+        let asset_type = AssetType::Fungible;
+
         let state = self
-            .get_sync_state(run_full_sync_threshold, AssetType::Fungible)
+            .get_sync_state(run_full_sync_threshold, asset_type)
             .await?;
 
         match state {
             SyncStatus::FullSyncRequired(state) => {
                 tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
                 self.regular_fungible_syncronize(rx, state.last_indexed_key, state.last_known_key)
-                    .await
+                    .await?;
             }
             SyncStatus::RegularSyncRequired(state) => {
                 self.regular_fungible_syncronize(rx, state.last_indexed_key, state.last_known_key)
-                    .await
+                    .await?;
             }
-            SyncStatus::NoSyncRequired => Ok(()),
+            SyncStatus::NoSyncRequired => {}
         }
+
+        self.clean_syncronized_idxs(asset_type)
+    }
+
+    pub fn clean_syncronized_idxs(&self, asset_type: AssetType) -> Result<(), IngesterError> {
+        self.primary_storage.clean_syncronized_idxs(asset_type)?;
+
+        Ok(())
     }
 
     pub async fn full_syncronize(

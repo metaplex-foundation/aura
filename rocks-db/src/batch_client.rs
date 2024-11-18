@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
-use entities::enums::{SpecificationVersions, TokenMetadataEdition};
+use entities::enums::{AssetType, SpecificationVersions, TokenMetadataEdition};
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 
@@ -182,6 +182,10 @@ impl AssetUpdateIndexStorage for Storage {
             start_time,
         );
         Ok((unique_pubkeys, last_key))
+    }
+
+    fn clean_syncronized_idxs(&self, asset_type: AssetType) -> Result<()> {
+        self.clean_syncronized_idxs_with_batch(asset_type)
     }
 }
 

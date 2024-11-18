@@ -10,7 +10,7 @@ use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
 use entities::api_req_params::Options;
-use entities::enums::TokenMetadataEdition;
+use entities::enums::{AssetType, TokenMetadataEdition};
 use entities::models::{EditionData, PubkeyWithSlot};
 use futures_util::FutureExt;
 use std::collections::HashMap;
@@ -111,6 +111,41 @@ impl Storage {
             Column::<SlotAssetIdx>::encode_key(SlotAssetIdxKey::new(slot, pubkey)),
             serialized_value,
         );
+        Ok(())
+    }
+
+    pub fn clean_syncronized_idxs_with_batch(&self, asset_type: AssetType) -> Result<()> {
+        let (mut iter, cf) = match asset_type {
+            AssetType::Fungible => {
+                let cf = self.fungible_assets_update_idx.handle();
+                // TODO: use regular iter to avoid data inconcistency
+                let iter = self.fungible_assets_update_idx.iter_end();
+
+                (iter, cf)
+            }
+            AssetType::NonFungible => {
+                let cf = self.assets_update_idx.handle();
+                // TODO: use regular iter to avoid data inconcistency
+                let iter = self.assets_update_idx.iter_end();
+
+                (iter, cf)
+            }
+        };
+
+        // skip the latest key
+        if iter.next().is_none() {
+            return Ok(());
+        }
+
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        while let Some(item) = iter.next() {
+            let key = item?.0;
+
+            batch.delete_cf(&cf, key);
+        }
+
+        self.db.write(batch)?;
+
         Ok(())
     }
 }
