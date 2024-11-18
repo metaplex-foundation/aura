@@ -2,7 +2,7 @@ use crate::asset::{AssetCollection, MetadataMintMap};
 use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::Result;
 use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
-use entities::enums::TokenMetadataEdition;
+use entities::enums::{AssetType, TokenMetadataEdition};
 use entities::models::{
     InscriptionDataInfo, InscriptionInfo, Mint, TokenAccount, TokenAccountMintOwnerIdxKey,
     TokenAccountOwnerIdxKey,
@@ -210,6 +210,10 @@ impl BatchSaveStorage {
                 write_version: token_account.write_version,
             },
         )
+    }
+
+    pub fn clean_syncronized_idxs(&self, asset_type: AssetType) -> Result<()> {
+        self.storage.clean_syncronized_idxs_with_batch(asset_type)
     }
 
     pub fn get_authority(&self, address: Pubkey) -> Pubkey {

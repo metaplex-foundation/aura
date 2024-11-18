@@ -1,4 +1,4 @@
-use entities::enums::OwnerType;
+use entities::enums::{AssetType, OwnerType};
 use entities::models::{Mint, TokenAccount, UpdateVersion, Updated};
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::asset::{AssetDynamicDetails, AssetOwner};
@@ -181,6 +181,18 @@ impl TokenAccountsProcessor {
                 storage.save_token_account_with_idxs(key, token_account)
             },
             "token_accounts_with_idx_merge_with_batch",
+        )
+    }
+
+    pub fn clean_syncronized_idxs(
+        &self,
+        storage: &mut BatchSaveStorage,
+        asset_type: AssetType,
+    ) -> Result<(), StorageError> {
+        self.finalize_processing(
+            storage,
+            |storage: &mut BatchSaveStorage| storage.clean_syncronized_idxs(asset_type),
+            "clean_syncronized_idxs",
         )
     }
 }
