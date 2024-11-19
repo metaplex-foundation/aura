@@ -12,6 +12,7 @@ use postgre_client::PgClient;
 use reqwest::{Client, ClientBuilder};
 use rocks_db::asset_previews::UrlToDownload;
 use rocks_db::Storage;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
@@ -22,7 +23,6 @@ use tokio::time::{self, Duration, Instant};
 use tracing::{debug, error};
 use url::Url;
 
-pub const JSON_CONTENT_TYPE: &str = "application/json";
 pub const JSON_BATCH: usize = 300;
 pub const WIPE_PERIOD_SEC: u64 = 60;
 pub const SLEEP_TIME: u64 = 1;
@@ -291,7 +291,14 @@ impl JsonDownloader for JsonWorker {
                 if let Some(content_header) = response.headers().get("Content-Type") {
                     match content_header.to_str() {
                         Ok(header) => {
-                            if !header.contains(JSON_CONTENT_TYPE) {
+                            // Exclude certain content types that are definitely not JSON
+                            let excluded_types = [
+                                "image/",
+                                "audio/",
+                                "video/",
+                                "application/octet-stream",
+                            ];
+                            if excluded_types.iter().any(|&t| header.starts_with(t)) {
                                 return Err(JsonDownloaderError::GotNotJsonFile);
                             }
                         }
@@ -308,7 +315,12 @@ impl JsonDownloader for JsonWorker {
                 } else {
                     let metadata_body = response.text().await;
                     if let Ok(metadata) = metadata_body {
-                        return Ok(metadata.trim().replace('\0', ""));
+                        // Attempt to parse the response as JSON
+                        if serde_json::from_str::<Value>(&metadata).is_ok() {
+                            return Ok(metadata.trim().replace('\0', ""));
+                        } else {
+                            return Err(JsonDownloaderError::CouldNotDeserialize);
+                        }
                     } else {
                         Err(JsonDownloaderError::CouldNotDeserialize)
                     }
