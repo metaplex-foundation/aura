@@ -275,10 +275,6 @@ impl PgClient {
         self.drop_constraints(transaction).await?;
         self.truncate_table(transaction, "fungible_tokens").await?;
 
-        let table = "tasks";
-        self.create_temp_tables(table, transaction, true, TEMP_TABLE_PREFIX)
-            .await?;
-        self.insert_from_temp_table(transaction, table).await?;
         self.copy_table_from(
             transaction,
             fungible_tokens_copy_path,

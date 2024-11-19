@@ -18,7 +18,6 @@ mod tests {
     use solana_program::pubkey::Pubkey;
     use tempfile::TempDir;
     use testcontainers::clients::Cli;
-    use tokio::task::JoinSet;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
     #[tracing_test::traced_test]
@@ -46,8 +45,9 @@ mod tests {
                 amount: 1000,
                 write_version: 10,
             };
+            // TODO: is it really fungible?
             token_accounts_processor
-                .transform_and_save_token_account(&mut batch_storage, key, &token_account)
+                .transform_and_save_fungible_token_account(&mut batch_storage, key, &token_account)
                 .unwrap();
         }
         batch_storage.flush().unwrap();
@@ -70,17 +70,8 @@ mod tests {
             1,
             false,
         ));
-        let mut join_set = JoinSet::new();
         for asset_type in ASSET_TYPES {
-            let syncronizer = syncronizer.clone();
-            let rx = rx.resubscribe();
-            join_set.spawn(async move { syncronizer.full_syncronize(&rx, asset_type).await });
-        }
-
-        while let Some(task) = join_set.join_next().await {
-            if let Err(err) = task {
-                panic!("{err}");
-            }
+            syncronizer.full_syncronize(&rx, asset_type).await.unwrap();
         }
 
         assert_eq!(pg_env.count_rows_in_metadata().await.unwrap(), 1);
