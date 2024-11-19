@@ -3201,10 +3201,12 @@ dependencies = [
 name = "grpc"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "entities",
  "futures",
  "interface",
+ "metrics-utils",
  "mockall",
  "prost 0.12.6",
  "serde_cbor",
@@ -3726,6 +3728,7 @@ name = "interface"
 version = "0.1.0"
 dependencies = [
  "anchor-lang 0.30.1",
+ "anyhow",
  "async-trait",
  "bubblegum-batch-sdk",
  "entities",
@@ -4532,6 +4535,7 @@ name = "nft_ingester"
 version = "0.7.2"
 dependencies = [
  "anchor-lang 0.30.1",
+ "anyhow",
  "arweave-rs",
  "assertables",
  "async-channel 2.3.1",
@@ -6239,6 +6243,7 @@ name = "rocks-db"
 version = "0.1.0"
 dependencies = [
  "Inflector",
+ "anyhow",
  "async-channel 2.3.1",
  "async-trait",
  "base64 0.21.7",
@@ -6253,6 +6258,7 @@ dependencies = [
  "hex",
  "indicatif",
  "interface",
+ "lazy_static",
  "lz4",
  "metrics-utils",
  "mockall",

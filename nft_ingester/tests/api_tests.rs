@@ -823,6 +823,7 @@ mod tests {
             slot_updated: 1,
             amount: 1,
             write_version: 1,
+            data_hash: 0,
         };
 
         let mint_acc = Mint {
@@ -835,6 +836,7 @@ mod tests {
             token_program: Default::default(),
             extensions: None,
             write_version: 1,
+            data_hash: 0,
         };
 
         let metadata = MetadataInfo {
@@ -862,6 +864,7 @@ mod tests {
             executable: false,
             metadata_owner: None,
             rent_epoch: 0,
+            data_hash: 0,
         };
         let offchain_data = OffChainData {
             url: "https://ping-pong".to_string(),
@@ -914,6 +917,7 @@ mod tests {
             token_program: Default::default(),
             extensions: None,
             write_version: 2,
+            data_hash: 0,
         };
 
         let mut batch_storage = BatchSaveStorage::new(
@@ -1004,6 +1008,7 @@ mod tests {
                 amount: 1,
                 write_version: 1,
                 extensions: None,
+                data_hash: 0,
             };
 
             let mint_acc = Mint {
@@ -1016,6 +1021,7 @@ mod tests {
                 write_version: 1,
                 extensions: None,
                 token_program: Default::default(),
+                data_hash: 0,
             };
 
             let metadata = MetadataInfo {
@@ -1043,6 +1049,7 @@ mod tests {
                 executable: false,
                 metadata_owner: None,
                 rent_epoch: 0,
+                data_hash: 0,
             };
 
             metadata_info.insert(mint_key, metadata);
@@ -1166,6 +1173,7 @@ mod tests {
             amount: 1,
             write_version: 1,
             extensions: None,
+            data_hash: 0,
         };
 
         let mint_acc = Mint {
@@ -1178,6 +1186,7 @@ mod tests {
             write_version: 1,
             extensions: None,
             token_program: Default::default(),
+            data_hash: 0,
         };
 
         let metadata = MetadataInfo {
@@ -1205,6 +1214,7 @@ mod tests {
             executable: false,
             metadata_owner: None,
             rent_epoch: 0,
+            data_hash: 0,
         };
 
         let metadata_ofch = OffChainData {
@@ -1238,6 +1248,7 @@ mod tests {
                 &BurntMetadataSlot {
                     slot_updated: 2,
                     write_version: 100,
+                    data_hash: 0,
                 },
             )
             .unwrap();
@@ -1542,6 +1553,7 @@ mod tests {
                     amount: 1050,
                     write_version: 10,
                     extensions: None,
+                    data_hash: 0,
                 },
             );
             let pk = Pubkey::new_unique();
@@ -1558,6 +1570,7 @@ mod tests {
                     amount: 1050,
                     write_version: 10,
                     extensions: None,
+                    data_hash: 0,
                 },
             );
         }
@@ -1577,6 +1590,7 @@ mod tests {
                     amount: 0,
                     write_version: 10,
                     extensions: None,
+                    data_hash: 0,
                 },
             );
             let pk = Pubkey::new_unique();
@@ -1593,6 +1607,7 @@ mod tests {
                     amount: 0,
                     write_version: 10,
                     extensions: None,
+                    data_hash: 0,
                 },
             );
         }
@@ -1612,6 +1627,7 @@ mod tests {
                     amount: 140,
                     write_version: 10,
                     extensions: None,
+                    data_hash: 0,
                 },
             );
         }
@@ -1766,6 +1782,7 @@ mod tests {
                     amount: 1050,
                     write_version: 10,
                     extensions: None,
+                    data_hash: 0,
                 },
             );
             let pk = Pubkey::new_unique();
@@ -1782,6 +1799,7 @@ mod tests {
                     amount: 1050,
                     write_version: 10,
                     extensions: None,
+                    data_hash: 0,
                 },
             );
             let pk = Pubkey::new_unique();
@@ -1798,6 +1816,7 @@ mod tests {
                     amount: 1050,
                     write_version: 10,
                     extensions: None,
+                    data_hash: 0,
                 },
             );
         }
@@ -3044,6 +3063,7 @@ mod tests {
             slot_updated: 10,
             write_version: 10,
             extensions: None,
+            data_hash: 0,
         };
         let mint2 = Mint {
             pubkey: fungible_token_mint2,
@@ -3055,6 +3075,7 @@ mod tests {
             slot_updated: 7,
             write_version: 10,
             extensions: None,
+            data_hash: 0,
         };
 
         let owner = generated_assets.owners[50].owner.value.unwrap();
@@ -3071,6 +3092,7 @@ mod tests {
             slot_updated: 10,
             amount: 0,
             write_version: 10,
+            data_hash: 0,
         };
         let token_account2 = TokenAccount {
             pubkey: fungible_token_account2,
@@ -3083,6 +3105,7 @@ mod tests {
             slot_updated: 10,
             amount: 30000,
             write_version: 10,
+            data_hash: 0,
         };
         let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),
@@ -3450,6 +3473,7 @@ mod tests {
                 group_member_pointer: None,
                 token_group_member: None,
             }),
+            data_hash: 0,
         };
 
         let mut batch_storage = BatchSaveStorage::new(

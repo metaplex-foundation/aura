@@ -161,6 +161,7 @@ impl Storage {
             self.save_tree_with_batch(batch, tree_update);
             self.save_asset_signature_with_batch(batch, tree_update);
             self.save_leaf_signature_with_batch(batch, tree_update)?;
+            self.track_tree_change_with_batch(batch, tree_update)?; // for p2p consistency
         }
 
         Ok(())

@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 prost = { workspace = true }
@@ -13,6 +14,7 @@ futures = { workspace = true }
 solana-sdk = { workspace = true }
 interface = { path = "../interface" }
 entities = { path = "../entities" }
+metrics-utils = { path = "../metrics_utils" }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 solana-transaction-status = { workspace = true }

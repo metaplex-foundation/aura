@@ -279,6 +279,19 @@ where
         Ok(r)
     }
 
+    pub async fn get_async(&self, key: C::KeyType) -> Result<Option<C::ValueType>> {
+        let backend = self.backend.clone();
+
+        let raw_val = tokio::task::spawn_blocking(move || Self::get_raw(backend, key))
+            .await
+            .map_err(|e| StorageError::Common(e.to_string()))?;
+
+        raw_val.and_then(|op| {
+            op.map(|bytes: Vec<u8>| deserialize::<C::ValueType>(&bytes).map_err(StorageError::from))
+                .transpose()
+        })
+    }
+
     pub fn get(&self, key: C::KeyType) -> Result<Option<C::ValueType>> {
         let mut result = Ok(None);
 
@@ -432,6 +445,22 @@ where
     #[inline]
     pub(crate) fn handle(&self) -> Arc<BoundColumnFamily> {
         self.backend.cf_handle(C::NAME).unwrap()
+    }
+
+    pub async fn delete_async(&self, key: C::KeyType, await_operation: bool) -> Result<()> {
+        let backend = self.backend.clone();
+        let encoded_key = C::encode_key(key);
+
+        let task = tokio::task::spawn_blocking(move || {
+            backend.delete_cf(&backend.cf_handle(C::NAME).unwrap(), encoded_key)
+        });
+        if await_operation {
+            let _ = task
+                .await
+                .map_err(|e| StorageError::Common(e.to_string()))?;
+        }
+
+        Ok(())
     }
 
     pub fn delete(&self, key: C::KeyType) -> Result<()> {

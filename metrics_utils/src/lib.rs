@@ -52,6 +52,8 @@ pub struct MetricState {
     pub fork_cleaner_metrics: Arc<ForkCleanerMetricsConfig>,
     pub batch_mint_processor_metrics: Arc<BatchMintProcessorMetricsConfig>,
     pub batch_mint_persisting_metrics: Arc<BatchMintPersisterMetricsConfig>,
+    pub peer2peer_consistency_metrics: Arc<Peer2PeerConsistencyMetricsConfig>,
+    pub checksum_calculation_metrics: Arc<ChecksumCalculationMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -79,6 +81,8 @@ impl MetricState {
             batch_mint_processor_metrics: Arc::new(BatchMintProcessorMetricsConfig::new()),
             batch_mint_persisting_metrics: Arc::new(BatchMintPersisterMetricsConfig::new()),
             red_metrics: Arc::new(RequestErrorDurationMetrics::new()),
+            peer2peer_consistency_metrics: Arc::new(Peer2PeerConsistencyMetricsConfig::new()),
+            checksum_calculation_metrics: Arc::new(ChecksumCalculationMetricsConfig::default()),
             registry: Registry::default(),
         }
     }
@@ -96,6 +100,14 @@ pub struct MethodLabel {
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct MetricLabel {
     pub name: String,
+}
+
+impl From<&str> for MetricLabel {
+    fn from(value: &str) -> Self {
+        MetricLabel {
+            name: value.to_string(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelValue)]
@@ -227,6 +239,263 @@ impl BackfillerMetricsConfig {
 
     pub fn register(&self, registry: &mut Registry) {
         self.register_with_prefix(registry, "backfiller_")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Peer2PeerConsistencyMetricsConfig {
+    pub db_bubblegum_get_grand_epochs_latency: Histogram,
+    pub db_bubblegum_get_epochs_latency: Histogram,
+    pub db_bubblegum_get_changes_latency: Histogram,
+    pub db_account_get_grand_buckets_latency: Histogram,
+    pub db_account_get_buckets_latency: Histogram,
+    pub db_account_get_latests_latency: Histogram,
+
+    pub bbgm_consistency_grpc_client: Arc<BubblegumConsistencyGrpcClientMetricsConfig>,
+    pub acc_consistency_grpc_client: Arc<AccoountConsistencyGrpcClientMetricsConfig>,
+
+    pub found_missing_bubblegums: Gauge,
+    pub found_missing_accounts: Gauge,
+}
+
+impl Default for Peer2PeerConsistencyMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Peer2PeerConsistencyMetricsConfig {
+    pub fn new() -> Peer2PeerConsistencyMetricsConfig {
+        let mk_histogram = || Histogram::new(exponential_buckets(20.0, 1.8, 10));
+        Peer2PeerConsistencyMetricsConfig {
+            db_bubblegum_get_grand_epochs_latency: mk_histogram(),
+            db_bubblegum_get_epochs_latency: mk_histogram(),
+            db_bubblegum_get_changes_latency: mk_histogram(),
+            db_account_get_grand_buckets_latency: mk_histogram(),
+            db_account_get_buckets_latency: mk_histogram(),
+            db_account_get_latests_latency: mk_histogram(),
+
+            bbgm_consistency_grpc_client: Arc::new(
+                BubblegumConsistencyGrpcClientMetricsConfig::new(),
+            ),
+            acc_consistency_grpc_client: Arc::new(AccoountConsistencyGrpcClientMetricsConfig::new()),
+
+            found_missing_bubblegums: Gauge::default(),
+            found_missing_accounts: Gauge::default(),
+        }
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        self.bbgm_consistency_grpc_client.register(registry);
+        self.acc_consistency_grpc_client.register(registry);
+        registry.register(
+            "db_bubblegum_get_grand_epochs_latency",
+            "Time to query bubblegum grand epochs",
+            self.db_bubblegum_get_grand_epochs_latency.clone(),
+        );
+        registry.register(
+            "db_bubblegum_get_epochs_latency",
+            "Time to query bubblegum epochs",
+            self.db_bubblegum_get_epochs_latency.clone(),
+        );
+        registry.register(
+            "db_bubblegum_get_changes_latency",
+            "Time to query bubblegum changes",
+            self.db_bubblegum_get_changes_latency.clone(),
+        );
+        registry.register(
+            "db_account_get_grand_buckets_latency",
+            "Time to query account NFT grand buckets",
+            self.db_account_get_grand_buckets_latency.clone(),
+        );
+        registry.register(
+            "db_account_get_buckets_latency",
+            "Time to query account NFT buckets",
+            self.db_account_get_buckets_latency.clone(),
+        );
+        registry.register(
+            "db_account_get_latests_latency",
+            "Time to query account NFT last states",
+            self.db_account_get_latests_latency.clone(),
+        );
+
+        registry.register(
+            "found_missing_bubblegums",
+            "Number of identified missing bubblegum changes",
+            self.found_missing_bubblegums.clone(),
+        );
+        registry.register(
+            "found_missing_accounts",
+            "Number of identified missing account NFT last states",
+            self.found_missing_accounts.clone(),
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BubblegumConsistencyGrpcClientMetricsConfig {
+    pub peers_bubblegum_get_grand_epochs_latency: Histogram,
+    pub peers_bubblegum_get_epochs_latency: Histogram,
+    pub peers_bubblegum_get_changes_latency: Histogram,
+
+    pub peers_bubblegum_get_grand_epochs_errors: Family<MetricLabel, Counter>,
+    pub peers_bubblegum_get_epochs_errors: Family<MetricLabel, Counter>,
+    pub peers_bubblegum_get_changes_errors: Family<MetricLabel, Counter>,
+}
+
+impl Default for BubblegumConsistencyGrpcClientMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BubblegumConsistencyGrpcClientMetricsConfig {
+    pub fn new() -> BubblegumConsistencyGrpcClientMetricsConfig {
+        BubblegumConsistencyGrpcClientMetricsConfig {
+            peers_bubblegum_get_grand_epochs_latency: Histogram::new(exponential_buckets(
+                20.0, 1.8, 10,
+            )),
+            peers_bubblegum_get_epochs_latency: Histogram::new(exponential_buckets(20.0, 1.8, 10)),
+            peers_bubblegum_get_changes_latency: Histogram::new(exponential_buckets(20.0, 1.8, 10)),
+
+            peers_bubblegum_get_grand_epochs_errors: Family::<MetricLabel, Counter>::default(),
+            peers_bubblegum_get_epochs_errors: Family::<MetricLabel, Counter>::default(),
+            peers_bubblegum_get_changes_errors: Family::<MetricLabel, Counter>::default(),
+        }
+    }
+
+    pub fn track_get_grand_epochs_call_error(&self, peer: &str) {
+        self.peers_bubblegum_get_grand_epochs_errors
+            .get_or_create(&MetricLabel {
+                name: peer.to_string(),
+            })
+            .inc();
+    }
+    pub fn track_get_epochs_call_error(&self, peer: &str) {
+        self.peers_bubblegum_get_epochs_errors
+            .get_or_create(&MetricLabel {
+                name: peer.to_string(),
+            })
+            .inc();
+    }
+    pub fn track_get_changes_call_error(&self, peer: &str) {
+        self.peers_bubblegum_get_changes_errors
+            .get_or_create(&MetricLabel {
+                name: peer.to_string(),
+            })
+            .inc();
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "peers_bubblegum_get_grand_epochs_latency",
+            "Time to fetch bubblegum grand epochs",
+            self.peers_bubblegum_get_grand_epochs_latency.clone(),
+        );
+        registry.register(
+            "peers_bubblegum_get_epochs_latency",
+            "Time to fetch bubblegum epochs",
+            self.peers_bubblegum_get_epochs_latency.clone(),
+        );
+        registry.register(
+            "peers_bubblegum_get_changes_latency",
+            "Time to fetch bubblegum changes",
+            self.peers_bubblegum_get_changes_latency.clone(),
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AccoountConsistencyGrpcClientMetricsConfig {
+    pub peers_account_get_grand_buckets_latency: Histogram,
+    pub peers_account_get_buckets_latency: Histogram,
+    pub peers_account_get_latests_latency: Histogram,
+
+    pub peers_account_get_grand_buckets_errors: Family<MetricLabel, Counter>,
+    pub peers_account_get_buckets_errors: Family<MetricLabel, Counter>,
+    pub peers_account_get_latests_errors: Family<MetricLabel, Counter>,
+}
+
+impl Default for AccoountConsistencyGrpcClientMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AccoountConsistencyGrpcClientMetricsConfig {
+    pub fn new() -> AccoountConsistencyGrpcClientMetricsConfig {
+        AccoountConsistencyGrpcClientMetricsConfig {
+            peers_account_get_grand_buckets_latency: Histogram::new(exponential_buckets(
+                20.0, 1.8, 10,
+            )),
+            peers_account_get_buckets_latency: Histogram::new(exponential_buckets(20.0, 1.8, 10)),
+            peers_account_get_latests_latency: Histogram::new(exponential_buckets(20.0, 1.8, 10)),
+
+            peers_account_get_grand_buckets_errors: Family::<MetricLabel, Counter>::default(),
+            peers_account_get_buckets_errors: Family::<MetricLabel, Counter>::default(),
+            peers_account_get_latests_errors: Family::<MetricLabel, Counter>::default(),
+        }
+    }
+
+    pub fn track_get_grand_buckets_call_error(&self, peer: &str) {
+        self.peers_account_get_grand_buckets_errors
+            .get_or_create(&MetricLabel {
+                name: peer.to_string(),
+            })
+            .inc();
+    }
+    pub fn track_get_buckets_call_error(&self, peer: &str) {
+        self.peers_account_get_buckets_errors
+            .get_or_create(&MetricLabel {
+                name: peer.to_string(),
+            })
+            .inc();
+    }
+    pub fn track_get_latests_call_error(&self, peer: &str) {
+        self.peers_account_get_latests_errors
+            .get_or_create(&MetricLabel {
+                name: peer.to_string(),
+            })
+            .inc();
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "peers_account_get_grand_buckets_latency",
+            "Time to fetch account NFT grand buckets",
+            self.peers_account_get_grand_buckets_latency.clone(),
+        );
+        registry.register(
+            "peers_account_get_buckets_latency",
+            "Time to fetch account NFT buckets",
+            self.peers_account_get_buckets_latency.clone(),
+        );
+        registry.register(
+            "peers_account_get_latests_latency",
+            "Time to fetch account NFT last states",
+            self.peers_account_get_latests_latency.clone(),
+        );
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ChecksumCalculationMetricsConfig {
+    pub bubblegum_epoch_calculation_seconds: Gauge,
+    pub account_epoch_calculation_seconds: Gauge,
+}
+
+impl ChecksumCalculationMetricsConfig {
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "bubblegum_epoch_calculation_seconds",
+            "Took time to calculate bubblegum epoch checksums",
+            self.bubblegum_epoch_calculation_seconds.clone(),
+        );
+        registry.register(
+            "Account_epoch_calculation_seconds",
+            "Took time to calculate accounts checksums",
+            self.account_epoch_calculation_seconds.clone(),
+        );
     }
 }
 
@@ -603,6 +872,10 @@ impl MetricsTrait for MetricState {
         self.red_metrics.register(&mut self.registry);
         self.fork_cleaner_metrics.register(&mut self.registry);
         self.batch_mint_processor_metrics
+            .register(&mut self.registry);
+        self.peer2peer_consistency_metrics
+            .register(&mut self.registry);
+        self.checksum_calculation_metrics
             .register(&mut self.registry);
     }
 }

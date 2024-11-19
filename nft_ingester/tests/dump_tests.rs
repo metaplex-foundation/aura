@@ -44,6 +44,7 @@ mod tests {
                 slot_updated: 10,
                 amount: 1000,
                 write_version: 10,
+                data_hash: 0,
             };
             token_accounts_processor
                 .transform_and_save_token_account(&mut batch_storage, key, &token_account)

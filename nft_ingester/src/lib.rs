@@ -5,6 +5,8 @@ pub mod batch_mint;
 pub mod buffer;
 pub mod cleaners;
 pub mod config;
+pub mod consistency_bg_job;
+pub mod consistency_calculator;
 pub mod error;
 pub mod flatbuffer_mapper;
 pub mod gapfiller;

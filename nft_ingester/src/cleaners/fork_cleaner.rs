@@ -1,9 +1,13 @@
+use crate::consistency_calculator::NftChangesTracker;
 use entities::models::ForkedItem;
 use interface::fork_cleaner::{CompressedTreeChangesManager, ForkChecker};
 use metrics_utils::ForkCleanerMetricsConfig;
+use rocks_db::storage_consistency::BubblegumChangeKey;
+use rocks_db::storage_consistency::DataConsistencyStorage;
 use rocks_db::Storage;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
@@ -39,6 +43,12 @@ pub async fn run_fork_cleaner(
     Ok(())
 }
 
+static FORK_CLEANER_LAST_CHECKED_SLOT: AtomicU64 = AtomicU64::new(0);
+
+pub fn last_fork_cleaned_slot() -> u64 {
+    FORK_CLEANER_LAST_CHECKED_SLOT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub struct ForkCleaner<CM, FC>
 where
     CM: CompressedTreeChangesManager,
@@ -46,6 +56,8 @@ where
 {
     cl_items_manager: Arc<CM>,
     fork_checker: Arc<FC>,
+    data_consistency_storage: Arc<dyn DataConsistencyStorage + Send + Sync>,
+    nft_changes_tracker: Option<Arc<NftChangesTracker>>,
     metrics: Arc<ForkCleanerMetricsConfig>,
 }
 
@@ -57,11 +69,15 @@ where
     pub fn new(
         cl_items_manager: Arc<CM>,
         fork_checker: Arc<FC>,
+        data_consistency_storage: Arc<dyn DataConsistencyStorage + Send + Sync>,
+        nft_changes_tracker: Option<Arc<NftChangesTracker>>,
         metrics: Arc<ForkCleanerMetricsConfig>,
     ) -> Self {
         Self {
             cl_items_manager,
             fork_checker,
+            data_consistency_storage,
+            nft_changes_tracker,
             metrics,
         }
     }
@@ -75,6 +91,7 @@ where
 
         let mut forked_slots = 0;
         let mut delete_items = Vec::new();
+        let mut changes_to_delete = Vec::new();
 
         // from this column data will be dropped by slot
         // if we have any update from forked slot we have to delete it
@@ -162,7 +179,7 @@ where
                     // dropping only sequence 5 would result in an incorrect update during backfill.
                     // therefore, we need to drop sequence 4 as well. Sequence 5 must be dropped because
                     // it contains a different tree update in the main branch
-                    for sequences in signature.slot_sequences.values() {
+                    for (slot, sequences) in signature.slot_sequences.iter() {
                         for seq in sequences {
                             delete_items.push(ForkedItem {
                                 tree: signature.tree,
@@ -171,6 +188,11 @@ where
                                 // because deletion will happen by tree and seq values
                                 node_idx: 0,
                             });
+                            changes_to_delete.push(BubblegumChangeKey::new(
+                                signature.tree,
+                                *slot,
+                                *seq,
+                            ));
                         }
                     }
                 }
@@ -179,11 +201,27 @@ where
             }
 
             if delete_items.len() >= CI_ITEMS_DELETE_BATCH_SIZE {
+                self.data_consistency_storage
+                    .drop_forked_bubblegum_changes(&changes_to_delete)
+                    .await;
+                if let Some(changes_tracker) = self.nft_changes_tracker.as_ref() {
+                    changes_tracker
+                        .watch_remove_forked_bubblegum_changes(&changes_to_delete)
+                        .await;
+                }
                 self.delete_tree_seq_idx(&mut delete_items).await;
             }
         }
 
         if !delete_items.is_empty() {
+            self.data_consistency_storage
+                .drop_forked_bubblegum_changes(&changes_to_delete)
+                .await;
+            if let Some(changes_tracker) = self.nft_changes_tracker.as_ref() {
+                changes_tracker
+                    .watch_remove_forked_bubblegum_changes(&changes_to_delete)
+                    .await;
+            }
             self.delete_tree_seq_idx(&mut delete_items).await;
         }
 
@@ -191,6 +229,8 @@ where
             self.delete_leaf_signatures(signatures_to_drop).await;
         }
 
+        FORK_CLEANER_LAST_CHECKED_SLOT
+            .store(last_slot_for_check, std::sync::atomic::Ordering::Relaxed);
         self.metrics.set_forks_detected(forked_slots as i64);
     }
 
