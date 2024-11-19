@@ -1,12 +1,18 @@
 use clap::Parser;
 use itertools::Itertools;
 use nft_ingester::error::IngesterError;
+use rocks_db::asset::AssetCompleteDetails;
+use rocks_db::asset_generated::asset as fb;
+use rocks_db::column::TypedColumn;
 use rocks_db::key_encoders::decode_u64x2_pubkey;
 use rocks_db::migrator::MigrationState;
 use rocks_db::storage_traits::AssetIndexReader;
 use rocks_db::storage_traits::AssetUpdateIndexStorage;
 use rocks_db::Storage;
+use solana_sdk::pubkey::Pubkey;
+use std::collections::HashSet;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -25,6 +31,10 @@ struct Args {
 
     #[arg(short, long)]
     index_after: Option<String>,
+
+    /// Base58-encoded owner public key to filter assets
+    #[arg(short, long)]
+    owner_pubkey: Option<String>,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -63,6 +73,48 @@ pub async fn main() -> Result<(), IngesterError> {
             .await
             .expect("Failed to get indexes");
         println!("{:?}", index);
+    }
+    if let Some(owner_pubkey) = args.owner_pubkey {
+        let owner_pubkey = Pubkey::from_str(&owner_pubkey).expect("Failed to parse owner pubkey");
+        let owner_bytes = owner_pubkey.to_bytes();
+        let mut matching_pubkeys = HashSet::new();
+        let mut total_assets_processed = 0;
+
+        let mut it = storage
+            .db
+            .raw_iterator_cf(&storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap());
+        it.seek_to_first();
+        while it.valid() {
+            total_assets_processed += 1;
+            if let Some(value_bytes) = it.value() {
+                let data = fb::root_as_asset_complete_details(&value_bytes).expect("Failed to deserialize asset");
+
+                // Check if owner matches
+                if data
+                    .owner()
+                    .and_then(|o| o.owner())
+                    .and_then(|ow| ow.value())
+                    .filter(|owner| owner.bytes() == owner_bytes.as_slice())
+                    .is_some()
+                {
+                    let asset: AssetCompleteDetails = AssetCompleteDetails::from(data);
+                    println!("Matching asset: {:?}", asset);
+                    matching_pubkeys.insert(asset.pubkey.clone());
+                }
+            }
+            it.next();
+        }
+        info!("Iteration completed.");
+        info!(
+            "Total assets processed: {}. Matches found: {}.",
+            total_assets_processed,
+            matching_pubkeys.len()
+        );
+    
+        println!("Matching public keys:");
+        for pubkey in &matching_pubkeys {
+            println!("{}", pubkey);
+        }
     }
     Ok(())
 }
