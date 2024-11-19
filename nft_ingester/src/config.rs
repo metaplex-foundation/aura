@@ -190,6 +190,7 @@ pub struct IngesterConfig {
     pub backfiller_source_mode: BackfillerSourceMode,
     #[serde(default = "default_synchronizer_parallel_tasks")]
     pub synchronizer_parallel_tasks: usize,
+    pub peer_urls_file: Option<String>,
     #[serde(default)]
     pub run_temp_sync_during_dump: bool,
     #[serde(default = "default_parallel_json_downloaders")]

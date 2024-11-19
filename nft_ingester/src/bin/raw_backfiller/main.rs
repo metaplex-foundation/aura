@@ -5,6 +5,7 @@ use nft_ingester::buffer::Buffer;
 use nft_ingester::config::{
     self, init_logger, setup_config, BackfillerConfig, RawBackfillConfig, INGESTER_CONFIG_PREFIX,
 };
+use nft_ingester::consistency_calculator::NftChangesTracker;
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
@@ -15,7 +16,9 @@ use tracing::{error, info};
 
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::setup_metrics;
-use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
+use metrics_utils::{
+    BackfillerMetricsConfig, ChecksumCalculationMetricsConfig, IngesterMetricsConfig,
+};
 use rocks_db::bubblegum_slots::BubblegumSlotGetter;
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
@@ -51,6 +54,8 @@ pub async fn main() -> Result<(), IngesterError> {
     metrics.register(&mut registry);
     let ingester_metrics = Arc::new(IngesterMetricsConfig::new());
     ingester_metrics.register(&mut registry);
+    let checksum_calc_metrics = Arc::new(ChecksumCalculationMetricsConfig::default());
+    checksum_calc_metrics.register(&mut registry);
 
     tokio::spawn(async move {
         match setup_metrics(registry, config.metrics_port).await {
@@ -139,6 +144,8 @@ pub async fn main() -> Result<(), IngesterError> {
     );
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
+    let changes_tracker = Arc::new(NftChangesTracker::new(None));
+
     match backfiller_config.backfiller_mode {
         config::BackfillerMode::IngestDirectly => {
             todo!();
@@ -174,6 +181,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 rocks_storage.clone(),
                 ingester_metrics.clone(),
                 buffer.json_tasks.clone(),
+                Some(changes_tracker.clone()),
             ));
 
             let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(

@@ -643,6 +643,8 @@ async fn test_clean_forks() {
     let fork_cleaner = ForkCleaner::new(
         storage.clone(),
         storage.clone(),
+        storage.clone(),
+        None,
         metrics_state.fork_cleaner_metrics.clone(),
     );
     fork_cleaner.clean_forks(rx.resubscribe()).await;
@@ -972,6 +974,8 @@ async fn test_process_forked_transaction() {
     let fork_cleaner = ForkCleaner::new(
         storage.clone(),
         storage.clone(),
+        storage.clone(),
+        None,
         metrics_state.fork_cleaner_metrics.clone(),
     );
     fork_cleaner.clean_forks(shutdown_rx.resubscribe()).await;

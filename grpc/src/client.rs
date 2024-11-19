@@ -21,8 +21,11 @@ pub struct Client {
 
 impl Client {
     pub async fn connect(peer_discovery: impl PeerDiscovery) -> Result<Self, GrpcError> {
-        let url = Uri::from_str(peer_discovery.get_gapfiller_peer_addr().as_str())
-            .map_err(|e| GrpcError::UriCreate(e.to_string()))?;
+        Client::connect_to_url(peer_discovery.get_gapfiller_peer_addr().as_str()).await
+    }
+
+    pub async fn connect_to_url(url_str: &str) -> Result<Self, GrpcError> {
+        let url = Uri::from_str(url_str).map_err(|e| GrpcError::UriCreate(e.to_string()))?;
         let channel = Channel::builder(url).connect().await?;
 
         Ok(Self {
