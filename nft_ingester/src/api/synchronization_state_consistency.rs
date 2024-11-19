@@ -1,4 +1,4 @@
-use entities::enums::AssetType;
+use entities::enums::{AssetType, ASSET_TYPES};
 use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::Call;
 use postgre_client::storage_traits::AssetIndexStorage;
@@ -30,13 +30,15 @@ const INDEX_STORAGE_DEPENDS_METHODS: &[&str] = &[
 ];
 
 pub struct SynchronizationStateConsistencyChecker {
-    overwhelm_seq_gap: Arc<AtomicBool>,
+    overwhelm_non_fungible_seq_gap: Arc<AtomicBool>,
+    overwhelm_fungible_seq_gap: Arc<AtomicBool>,
 }
 
 impl SynchronizationStateConsistencyChecker {
     pub(crate) fn new() -> Self {
         Self {
-            overwhelm_seq_gap: Arc::new(AtomicBool::new(false)),
+            overwhelm_non_fungible_seq_gap: Arc::new(AtomicBool::new(false)),
+            overwhelm_fungible_seq_gap: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -48,10 +50,11 @@ impl SynchronizationStateConsistencyChecker {
         rocks_db: Arc<Storage>,
         synchronization_api_threshold: u64,
     ) {
-        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
-
-        for asset_type in asset_types {
-            let overwhelm_seq_gap = self.overwhelm_seq_gap.clone();
+        for asset_type in ASSET_TYPES {
+            let overwhelm_seq_gap = match asset_type {
+                AssetType::NonFungible => self.overwhelm_non_fungible_seq_gap.clone(),
+                AssetType::Fungible => self.overwhelm_fungible_seq_gap.clone(),
+            };
             let pg_client = pg_client.clone();
             let rocks_db = rocks_db.clone();
             let mut rx = rx.resubscribe();
@@ -95,7 +98,9 @@ impl SynchronizationStateConsistencyChecker {
 
 impl ConsistencyChecker for SynchronizationStateConsistencyChecker {
     fn should_cancel_request(&self, call: &Call) -> bool {
-        if !self.overwhelm_seq_gap.load(Ordering::Relaxed) {
+        if !&self.overwhelm_non_fungible_seq_gap.load(Ordering::Relaxed)
+            || !&self.overwhelm_fungible_seq_gap.load(Ordering::Relaxed)
+        {
             return false;
         }
 

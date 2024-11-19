@@ -561,7 +561,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entities::models::{AssetIndex, UrlWithStatus};
+    use entities::{
+        enums::ASSET_TYPES,
+        models::{AssetIndex, UrlWithStatus},
+    };
     use metrics_utils::{MetricState, MetricsTrait};
     use mockall;
     use postgre_client::storage_traits::{MockAssetIndexStorageMock, MockTempClientProviderMock};
@@ -611,7 +614,6 @@ mod tests {
         let mut metrics_state = MetricState::new();
         let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
-        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
 
         index_storage
             .expect_fetch_last_synced_id()
@@ -637,7 +639,7 @@ mod tests {
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
 
-        for asset_type in asset_types {
+        for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
             let rx = rx.resubscribe();
 
@@ -669,8 +671,7 @@ mod tests {
         let mut metrics_state = MetricState::new();
         let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
-        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
-        asset_types.iter().for_each(|_e| {
+        ASSET_TYPES.iter().for_each(|_e| {
             index_storage
                 .expect_fetch_last_synced_id()
                 .once()
@@ -731,7 +732,7 @@ mod tests {
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
-        for asset_type in asset_types {
+        for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
             let rx = rx.resubscribe();
 
@@ -763,10 +764,9 @@ mod tests {
         let mut metrics_state = MetricState::new();
         let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
-        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
 
         // Index storage starts empty
-        asset_types.iter().for_each(|_| {
+        ASSET_TYPES.iter().for_each(|_| {
             index_storage
                 .expect_fetch_last_synced_id()
                 .once()
@@ -837,7 +837,7 @@ mod tests {
         ); // Small batch size
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
-        for asset_type in asset_types {
+        for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
             let rx = rx.resubscribe();
 
@@ -874,9 +874,7 @@ mod tests {
         let last_synced_binary_key =
             encode_u64x2_pubkey(index_key.seq, index_key.slot, index_key.pubkey.clone());
 
-        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
-
-        asset_types.iter().for_each(|_| {
+        ASSET_TYPES.iter().for_each(|_| {
             let last_synced_binary_key = last_synced_binary_key.clone();
             index_storage
                 .expect_fetch_last_synced_id()
@@ -991,7 +989,7 @@ mod tests {
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
-        for asset_type in [AssetType::Fungible, AssetType::NonFungible] {
+        for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
             let rx = rx.resubscribe();
 
@@ -1033,8 +1031,7 @@ mod tests {
             .once()
             .return_once(move || Ok(Some(index_key_clone)));
 
-        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
-        asset_types.iter().for_each(|_| {
+        ASSET_TYPES.iter().for_each(|_| {
             let index_key_clone = index_key.clone();
             index_storage
                 .expect_fetch_last_synced_id()
@@ -1066,7 +1063,7 @@ mod tests {
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
-        for asset_type in asset_types {
+        for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
             let rx = rx.resubscribe();
 

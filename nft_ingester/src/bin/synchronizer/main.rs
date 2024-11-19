@@ -1,4 +1,4 @@
-use entities::enums::AssetType;
+use entities::enums::ASSET_TYPES;
 use nft_ingester::config::{
     init_logger, setup_config, SynchronizerConfig, SYNCHRONIZER_CONFIG_PREFIX,
 };
@@ -126,8 +126,7 @@ pub async fn main() -> Result<(), IngesterError> {
         tracing::error!("Sync rocksdb error: {}", e);
     }
 
-    let asset_types = [AssetType::Fungible, AssetType::NonFungible];
-    for asset_type in asset_types.into_iter() {
+    for asset_type in ASSET_TYPES {
         let synchronizer = synchronizer.clone();
         let shutdown_rx = shutdown_rx.resubscribe();
 

@@ -179,9 +179,7 @@ pub async fn setup_database<T: Image>(node: &Container<'_, T>) -> (Pool<Postgres
         .unwrap();
 
     // Verify initial fetch_last_synced_id returns None
-
-    let asset_types = [AssetType::Fungible, AssetType::NonFungible];
-    for asset_type in asset_types {
+    for asset_type in ASSET_TYPES {
         assert!(asset_index_storage
             .fetch_last_synced_id(asset_type)
             .await

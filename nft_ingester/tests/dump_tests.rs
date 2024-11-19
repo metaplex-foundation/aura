@@ -3,7 +3,7 @@
 mod tests {
     use std::sync::Arc;
 
-    use entities::enums::AssetType;
+    use entities::enums::ASSET_TYPES;
     use entities::models::TokenAccount;
     use entities::{api_req_params::GetByMethodsOptions, models::UrlWithStatus};
     use metrics_utils::{IngesterMetricsConfig, SynchronizerMetricsConfig};
@@ -71,7 +71,7 @@ mod tests {
             false,
         ));
         let mut join_set = JoinSet::new();
-        for asset_type in [AssetType::Fungible, AssetType::NonFungible] {
+        for asset_type in ASSET_TYPES {
             let syncronizer = syncronizer.clone();
             let rx = rx.resubscribe();
             join_set.spawn(async move { syncronizer.full_syncronize(&rx, asset_type).await });

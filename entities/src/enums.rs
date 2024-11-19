@@ -406,3 +406,5 @@ pub enum AssetType {
     NonFungible = 1,
     Fungible = 2,
 }
+
+pub const ASSET_TYPES: [AssetType; 2] = [AssetType::Fungible, AssetType::NonFungible];

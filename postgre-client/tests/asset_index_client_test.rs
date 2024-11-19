@@ -4,7 +4,7 @@ mod tests {
     use setup::pg::*;
 
     use entities::{
-        enums::AssetType,
+        enums::{AssetType, ASSET_TYPES},
         models::{AssetIndex, Creator},
     };
     use postgre_client::storage_traits::AssetIndexStorage;
@@ -19,10 +19,9 @@ mod tests {
         let asset_index_storage = &env.client;
 
         // Verify initial fetch_last_synced_id returns None
-        let asset_types = [AssetType::Fungible, AssetType::NonFungible];
-        for asset_type in asset_types.iter() {
+        for asset_type in ASSET_TYPES {
             assert!(asset_index_storage
-                .fetch_last_synced_id(*asset_type)
+                .fetch_last_synced_id(asset_type)
                 .await
                 .unwrap()
                 .is_none());

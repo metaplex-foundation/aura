@@ -15,7 +15,7 @@ mod tests {
         DisplayOptions, GetAssetProof, GetAssetSignatures, GetByMethodsOptions, GetCoreFees,
         GetTokenAccounts, Options, SearchAssetsOptions,
     };
-    use entities::enums::{AssetType, TokenType};
+    use entities::enums::{AssetType, TokenType, ASSET_TYPES};
     use entities::models::{
         AssetSignature, AssetSignatureKey, BurntMetadataSlot, MetadataInfo, Mint, OffChainData,
         TokenAccount,
@@ -3144,7 +3144,7 @@ mod tests {
         let synchronizer = Arc::new(synchronizer);
         let mut tasks = JoinSet::new();
 
-        for asset_type in [AssetType::Fungible, AssetType::NonFungible] {
+        for asset_type in ASSET_TYPES {
             let rx = rx.resubscribe();
             let synchronizer = synchronizer.clone();
             match asset_type {
@@ -3625,7 +3625,7 @@ mod tests {
         let synchronizer = Arc::new(synchronizer);
         let mut tasks = JoinSet::new();
 
-        for asset_type in [AssetType::Fungible, AssetType::NonFungible] {
+        for asset_type in ASSET_TYPES {
             let rx = rx.resubscribe();
             let synchronizer = synchronizer.clone();
             match asset_type {

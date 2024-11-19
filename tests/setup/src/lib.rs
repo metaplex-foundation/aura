@@ -5,7 +5,7 @@ pub mod rocks;
 use std::sync::Arc;
 
 use crate::rocks::RocksTestEnvironmentSetup;
-use entities::enums::AssetType;
+use entities::enums::{AssetType, ASSET_TYPES};
 use metrics_utils::MetricsTrait;
 use rocks_db::asset::AssetCollection;
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
@@ -83,7 +83,7 @@ impl<'a> TestEnvironment<'a> {
         let synchronizer = Arc::new(syncronizer);
 
         let mut tasks = JoinSet::new();
-        for asset_type in [AssetType::NonFungible, AssetType::Fungible] {
+        for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
             let rx = rx.resubscribe();
             tasks.spawn(async move {

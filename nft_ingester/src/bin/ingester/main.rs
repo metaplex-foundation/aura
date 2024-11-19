@@ -1,6 +1,6 @@
 use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
-use entities::enums::AssetType;
+use entities::enums::{AssetType, ASSET_TYPES};
 use nft_ingester::batch_mint::batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister};
 use nft_ingester::scheduler::Scheduler;
 use postgre_client::PG_MIGRATIONS_PATH;
@@ -136,7 +136,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     if config.run_dump_synchronize_on_start {
         info!("Running dump synchronizer on start!");
-        for asset_type in [AssetType::Fungible, AssetType::NonFungible].into_iter() {
+        for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
             let shutdown_rx = shutdown_rx.resubscribe();
 
@@ -607,7 +607,7 @@ pub async fn main() -> Result<(), IngesterError> {
     if !config.disable_synchronizer {
         let synchronizer = Arc::new(synchronizer);
 
-        for asset_type in [AssetType::Fungible, AssetType::NonFungible].into_iter() {
+        for asset_type in ASSET_TYPES {
             let rx = shutdown_rx.resubscribe();
             let synchronizer = synchronizer.clone();
             mutexed_tasks.lock().await.spawn(async move {
