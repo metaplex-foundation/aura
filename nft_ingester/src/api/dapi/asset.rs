@@ -240,11 +240,17 @@ pub async fn get_by_ids<
         let mut urls_to_download = Vec::new();
 
         for (_, url) in asset_selected_maps.urls.iter() {
+            if url.is_empty() {
+                continue;
+            }
+            let offchain_data = asset_selected_maps
+                .offchain_data
+                .get(url);
+            if offchain_data.is_none() || offchain_data.unwrap().metadata.is_empty() {
+                urls_to_download.push(url.clone());
+            }
             if urls_to_download.len() >= max_json_to_download {
                 break;
-            }
-            if !asset_selected_maps.offchain_data.contains_key(url) && !url.is_empty() {
-                urls_to_download.push(url.clone());
             }
         }
 

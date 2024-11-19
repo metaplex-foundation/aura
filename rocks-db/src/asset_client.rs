@@ -164,7 +164,11 @@ impl Storage {
         let offchain_data = offchain_data
             .map_err(|e| StorageError::Common(e.to_string()))?
             .into_iter()
-            .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
+            .filter_map(|asset| {
+                asset
+                    .filter(|a| !a.metadata.is_empty())
+                    .map(|a| (a.url.clone(), a))
+            })
             .collect::<HashMap<_, _>>();
 
         let (inscriptions, inscriptions_data) = if options.show_inscription {
