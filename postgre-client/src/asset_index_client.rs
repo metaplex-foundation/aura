@@ -13,7 +13,7 @@ use crate::{
     storage_traits::AssetIndexStorage,
     PgClient, BATCH_DELETE_ACTION, BATCH_SELECT_ACTION, BATCH_UPSERT_ACTION, CREATE_ACTION,
     DROP_ACTION, INSERT_TASK_PARAMETERS_COUNT, POSTGRES_PARAMETERS_COUNT_LIMIT, SELECT_ACTION,
-    SQL_COMPONENT, UPDATE_ACTION,
+    SQL_COMPONENT, TRANSACTION_ACTION, UPDATE_ACTION,
 };
 use entities::{
     enums::AssetType,
@@ -264,30 +264,83 @@ impl AssetIndexStorage for PgClient {
         asset_indexes: &[AssetIndex],
     ) -> Result<(), IndexDbError> {
         let updated_components = split_assets_into_components(asset_indexes);
-        let mut transaction = self.start_transaction().await?;
         let table_names = TableNames {
             metadata_table: "tasks".to_string(),
             assets_table: "assets_v3".to_string(),
             creators_table: "asset_creators_v3".to_string(),
             authorities_table: "assets_authorities".to_string(),
         };
-        self.upsert_batched_non_fungible(&mut transaction, table_names, updated_components)
-            .await?;
-        self.commit_transaction(transaction).await
+        let operation_start_time = chrono::Utc::now();
+        let mut transaction = self.start_transaction().await?;
+
+        // Perform transactional operations
+        let result = self
+            .upsert_batched_non_fungible(&mut transaction, table_names, updated_components)
+            .await;
+
+        match result {
+            Ok(_) => {
+                // Commit the transaction and record the time taken
+                self.commit_transaction(transaction).await?;
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    TRANSACTION_ACTION,
+                    "transaction_total",
+                    operation_start_time,
+                );
+                Ok(())
+            }
+            Err(e) => {
+                // Transaction will be rolled back automatically when `transaction` goes out of scope
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    TRANSACTION_ACTION,
+                    "transaction_failed_total",
+                    operation_start_time,
+                );
+                Err(e)
+            }
+        }
     }
 
     async fn update_fungible_asset_indexes_batch(
         &self,
         fungible_asset_indexes: &[FungibleAssetIndex],
     ) -> Result<(), IndexDbError> {
+        let operation_start_time = chrono::Utc::now();
         let mut transaction = self.start_transaction().await?;
 
-        self.upsert_batched_fungible(
-            &mut transaction,
-            split_into_fungible_tokens(fungible_asset_indexes),
-        )
-        .await?;
-        self.commit_transaction(transaction).await
+        // Perform transactional operations
+        let result = self
+            .upsert_batched_fungible(
+                &mut transaction,
+                split_into_fungible_tokens(fungible_asset_indexes),
+            )
+            .await;
+
+        match result {
+            Ok(_) => {
+                // Commit the transaction and record the time taken
+                self.commit_transaction(transaction).await?;
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    TRANSACTION_ACTION,
+                    "transaction_total",
+                    operation_start_time,
+                );
+                Ok(())
+            }
+            Err(e) => {
+                // Transaction will be rolled back automatically when `transaction` goes out of scope
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    TRANSACTION_ACTION,
+                    "transaction_failed_total",
+                    operation_start_time,
+                );
+                Err(e)
+            }
+        }
     }
 
     async fn load_from_dump(
