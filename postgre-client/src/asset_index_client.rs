@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    ops::Deref,
     vec,
 };
 
@@ -52,12 +53,13 @@ impl PgClient {
     pub(crate) async fn upsert_batched_fungible(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
+        table_name: FungibleTokenTable,
         fungible_tokens: Vec<FungibleToken>,
     ) -> Result<(), IndexDbError> {
         for fungible_tokens_chunk in fungible_tokens
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT)
         {
-            self.insert_fungible_tokens(transaction, fungible_tokens_chunk, "fungible_tokens")
+            self.insert_fungible_tokens(transaction, fungible_tokens_chunk, &table_name)
                 .await?;
         }
         Ok(())
@@ -154,6 +156,22 @@ pub(crate) struct TableNames {
     pub assets_table: String,
     pub creators_table: String,
     pub authorities_table: String,
+}
+
+pub(crate) struct FungibleTokenTable(String);
+
+impl FungibleTokenTable {
+    pub fn new(table_name: &str) -> Self {
+        Self(table_name.to_string())
+    }
+}
+
+impl Deref for FungibleTokenTable {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 pub(crate) fn split_into_fungible_tokens(
@@ -309,11 +327,13 @@ impl AssetIndexStorage for PgClient {
     ) -> Result<(), IndexDbError> {
         let operation_start_time = chrono::Utc::now();
         let mut transaction = self.start_transaction().await?;
+        let table_name = FungibleTokenTable::new("fungible_tokens");
 
         // Perform transactional operations
         let result = self
             .upsert_batched_fungible(
                 &mut transaction,
+                table_name,
                 split_into_fungible_tokens(fungible_asset_indexes),
             )
             .await;

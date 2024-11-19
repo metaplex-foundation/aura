@@ -5,7 +5,9 @@ use sqlx::{pool::PoolConnection, Connection, Postgres, QueryBuilder};
 use tokio::sync::Mutex;
 
 use crate::{
-    asset_index_client::{split_assets_into_components, split_into_fungible_tokens, TableNames},
+    asset_index_client::{
+        split_assets_into_components, split_into_fungible_tokens, FungibleTokenTable, TableNames,
+    },
     error::IndexDbError,
     storage_traits::{AssetIndexStorage, TempClientProvider},
     PgClient, BATCH_UPSERT_ACTION, CREATE_ACTION, DROP_ACTION, INSERT_ACTION, UPDATE_ACTION,
@@ -278,10 +280,14 @@ impl AssetIndexStorage for TempClient {
     ) -> Result<(), IndexDbError> {
         let mut c = self.pooled_connection.lock().await;
         let mut transaction = c.begin().await?;
+        let table_name = FungibleTokenTable::new(
+            format!("{}fungible_tokens", TEMP_INDEXING_TABLE_PREFIX).as_str(),
+        );
 
         self.pg_client
             .upsert_batched_fungible(
                 &mut transaction,
+                table_name,
                 split_into_fungible_tokens(fungible_asset_indexes),
             )
             .await?;
