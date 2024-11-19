@@ -35,6 +35,9 @@ struct Args {
     /// Base58-encoded owner public key to filter assets
     #[arg(short, long)]
     owner_pubkey: Option<String>,
+
+    #[arg(short, long, value_delimiter = ',', num_args = 0..)]
+    get_asset_maps_ids: Option<Vec<String>>,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -127,6 +130,17 @@ pub async fn main() -> Result<(), IngesterError> {
             .await
             .expect("Failed to get indexes");
         println!("{:?}", index);
+    }
+    if let Some(get_asset_maps_ids) = args.get_asset_maps_ids {
+        let keys = get_asset_maps_ids
+            .iter()
+            .map(|pk| Pubkey::from_str(pk).expect("invalid pubkey"))
+            .collect_vec();
+        let maps = storage
+            .get_asset_selected_maps_async(keys, &None, &Default::default())
+            .await
+            .expect("Failed to get asset selected maps");
+        println!("{:?}", maps);
     }
     Ok(())
 }
