@@ -502,7 +502,7 @@ where
         metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), IngesterError> {
         let asset_indexes = primary_storage
-            .get_asset_indexes(updated_keys_refs, None)
+            .get_non_fungible_asset_indexes(updated_keys_refs, None)
             .await?;
 
         if asset_indexes.is_empty() {
@@ -511,7 +511,7 @@ where
         }
 
         index_storage
-            .update_asset_indexes_batch(
+            .update_non_fungible_asset_indexes_batch(
                 asset_indexes
                     .values()
                     .cloned()
@@ -702,12 +702,12 @@ mod tests {
         let expected_indexes: Vec<AssetIndex> = map_of_asset_indexes.values().cloned().collect();
         primary_storage
             .mock_asset_index_reader
-            .expect_get_asset_indexes()
+            .expect_get_non_fungible_asset_indexes()
             .once()
             .return_once(move |_, _| Ok(map_of_asset_indexes));
 
         index_storage
-            .expect_update_asset_indexes_batch()
+            .expect_update_non_fungible_asset_indexes_batch()
             .with(mockall::predicate::eq(expected_indexes.clone()))
             .once()
             .return_once(|_| Ok(()));
@@ -807,12 +807,12 @@ mod tests {
         let expected_indexes: Vec<AssetIndex> = map_of_asset_indexes.values().cloned().collect();
         primary_storage
             .mock_asset_index_reader
-            .expect_get_asset_indexes()
+            .expect_get_non_fungible_asset_indexes()
             .once()
             .return_once(move |_, _| Ok(map_of_asset_indexes));
 
         index_storage
-            .expect_update_asset_indexes_batch()
+            .expect_update_non_fungible_asset_indexes_batch()
             .with(mockall::predicate::eq(expected_indexes.clone()))
             .once()
             .return_once(|_| Ok(()));
@@ -938,7 +938,7 @@ mod tests {
         let mut call_count2 = 0;
         primary_storage
             .mock_asset_index_reader
-            .expect_get_asset_indexes()
+            .expect_get_non_fungible_asset_indexes()
             .times(2)
             .returning(move |_, _| {
                 call_count2 += 1;
@@ -950,7 +950,7 @@ mod tests {
             });
 
         index_storage
-            .expect_update_asset_indexes_batch()
+            .expect_update_non_fungible_asset_indexes_batch()
             .with(mockall::predicate::eq(expected_indexes_first_batch.clone()))
             .once()
             .return_once(|_| Ok(()));
@@ -964,7 +964,7 @@ mod tests {
             .return_once(|_, _| Ok(()));
 
         index_storage
-            .expect_update_asset_indexes_batch()
+            .expect_update_non_fungible_asset_indexes_batch()
             .with(mockall::predicate::eq(
                 expected_indexes_second_batch.clone(),
             ))

@@ -52,7 +52,7 @@ pub trait AssetIndexReader {
         keys: &[Pubkey],
     ) -> Result<HashMap<Pubkey, FungibleAssetIndex>>;
 
-    async fn get_asset_indexes<'a>(
+    async fn get_non_fungible_asset_indexes<'a>(
         &self,
         keys: &[Pubkey],
         collection_authorities: Option<&'a HashMap<Pubkey, Pubkey>>,
@@ -135,13 +135,13 @@ impl AssetIndexReader for MockAssetIndexStorage {
             .await
     }
 
-    async fn get_asset_indexes<'a>(
+    async fn get_non_fungible_asset_indexes<'a>(
         &self,
         keys: &[Pubkey],
         collection_authorities: Option<&'a HashMap<Pubkey, Pubkey>>,
     ) -> Result<HashMap<Pubkey, AssetIndex>> {
         self.mock_asset_index_reader
-            .get_asset_indexes(keys, collection_authorities)
+            .get_non_fungible_asset_indexes(keys, collection_authorities)
             .await
     }
 }

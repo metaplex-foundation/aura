@@ -259,7 +259,7 @@ impl AssetIndexStorage for PgClient {
             .await
     }
 
-    async fn update_asset_indexes_batch(
+    async fn update_non_fungible_asset_indexes_batch(
         &self,
         asset_indexes: &[AssetIndex],
     ) -> Result<(), IndexDbError> {
