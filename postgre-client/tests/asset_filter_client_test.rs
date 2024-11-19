@@ -77,7 +77,7 @@ mod tests {
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_filter_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice())
+            .update_non_fungible_asset_indexes_batch(asset_indexes.as_slice())
             .await
             .unwrap();
         asset_filter_storage
@@ -281,7 +281,7 @@ mod tests {
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_filter_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice())
+            .update_non_fungible_asset_indexes_batch(asset_indexes.as_slice())
             .await
             .unwrap();
         asset_filter_storage
@@ -293,7 +293,7 @@ mod tests {
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_filter_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice())
+            .update_non_fungible_asset_indexes_batch(asset_indexes.as_slice())
             .await
             .unwrap();
         asset_filter_storage
