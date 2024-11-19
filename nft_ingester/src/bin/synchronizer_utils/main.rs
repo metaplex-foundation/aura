@@ -27,7 +27,7 @@ struct Args {
 
     /// List of Pubkeys to fetch from the RPC and ingest into the RocksDB
     #[arg(short, long, value_delimiter = ',', num_args = 0..)]
-    pubkeys_to_parse: Option<Vec<String>>,
+    pubkeys_to_index: Option<Vec<String>>,
 
     #[arg(short, long)]
     index_after: Option<String>,
@@ -87,7 +87,8 @@ pub async fn main() -> Result<(), IngesterError> {
         while it.valid() {
             total_assets_processed += 1;
             if let Some(value_bytes) = it.value() {
-                let data = fb::root_as_asset_complete_details(&value_bytes).expect("Failed to deserialize asset");
+                let data = fb::root_as_asset_complete_details(&value_bytes)
+                    .expect("Failed to deserialize asset");
 
                 // Check if owner matches
                 if data
@@ -110,11 +111,22 @@ pub async fn main() -> Result<(), IngesterError> {
             total_assets_processed,
             matching_pubkeys.len()
         );
-    
+
         println!("Matching public keys:");
         for pubkey in &matching_pubkeys {
             println!("{}", pubkey);
         }
+    }
+    if let Some(pubkeys_to_index) = args.pubkeys_to_index {
+        let keys = pubkeys_to_index
+            .iter()
+            .map(|pk| Pubkey::from_str(pk).expect("invalid pubkey"))
+            .collect_vec();
+        let index = storage
+            .get_asset_indexes(keys.as_slice())
+            .await
+            .expect("Failed to get indexes");
+        println!("{:?}", index);
     }
     Ok(())
 }
