@@ -369,55 +369,69 @@ impl AssetIndexStorage for PgClient {
         last_key: &[u8],
         asset_type: AssetType,
     ) -> Result<(), IndexDbError> {
-        let Some(metadata_path) = base_path.join("metadata.csv").to_str().map(str::to_owned) else {
-            return Err(IndexDbError::BadArgument(format!(
-                "invalid path '{:?}'",
-                base_path
-            )));
-        };
-        let Some(creators_path) = base_path.join("creators.csv").to_str().map(str::to_owned) else {
-            return Err(IndexDbError::BadArgument(format!(
-                "invalid path '{:?}'",
-                base_path
-            )));
-        };
-        let Some(assets_authorities_path) = base_path
-            .join("assets_authorities.csv")
-            .to_str()
-            .map(str::to_owned)
-        else {
-            return Err(IndexDbError::BadArgument(format!(
-                "invalid path '{:?}'",
-                base_path
-            )));
-        };
-        let Some(assets_path) = base_path.join("assets.csv").to_str().map(str::to_owned) else {
-            return Err(IndexDbError::BadArgument(format!(
-                "invalid path '{:?}'",
-                base_path
-            )));
-        };
-        let Some(fungible_tokens_path) = base_path
-            .join("fungible_tokens.csv")
-            .to_str()
-            .map(str::to_owned)
-        else {
-            return Err(IndexDbError::BadArgument(format!(
-                "invalid path '{:?}'",
-                base_path
-            )));
-        };
         let mut transaction = self.start_transaction().await?;
+        match asset_type {
+            AssetType::NonFungible => {
+                let Some(metadata_path) =
+                    base_path.join("metadata.csv").to_str().map(str::to_owned)
+                else {
+                    return Err(IndexDbError::BadArgument(format!(
+                        "invalid path '{:?}'",
+                        base_path
+                    )));
+                };
+                let Some(creators_path) =
+                    base_path.join("creators.csv").to_str().map(str::to_owned)
+                else {
+                    return Err(IndexDbError::BadArgument(format!(
+                        "invalid path '{:?}'",
+                        base_path
+                    )));
+                };
+                let Some(assets_authorities_path) = base_path
+                    .join("assets_authorities.csv")
+                    .to_str()
+                    .map(str::to_owned)
+                else {
+                    return Err(IndexDbError::BadArgument(format!(
+                        "invalid path '{:?}'",
+                        base_path
+                    )));
+                };
+                let Some(assets_path) = base_path.join("assets.csv").to_str().map(str::to_owned)
+                else {
+                    return Err(IndexDbError::BadArgument(format!(
+                        "invalid path '{:?}'",
+                        base_path
+                    )));
+                };
 
-        self.copy_all(
-            metadata_path,
-            creators_path,
-            assets_path,
-            assets_authorities_path,
-            fungible_tokens_path,
-            &mut transaction,
-        )
-        .await?;
+                self.copy_non_fungibles(
+                    metadata_path,
+                    creators_path,
+                    assets_path,
+                    assets_authorities_path,
+                    &mut transaction,
+                )
+                .await?;
+            }
+            AssetType::Fungible => {
+                let Some(fungible_tokens_path) = base_path
+                    .join("fungible_tokens.csv")
+                    .to_str()
+                    .map(str::to_owned)
+                else {
+                    return Err(IndexDbError::BadArgument(format!(
+                        "invalid path '{:?}'",
+                        base_path
+                    )));
+                };
+
+                self.copy_fungibles(fungible_tokens_path, &mut transaction)
+                    .await?;
+            }
+        }
+
         self.update_last_synced_key(last_key, &mut transaction, "last_synced_key", asset_type)
             .await?;
         self.commit_transaction(transaction).await?;

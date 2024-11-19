@@ -304,12 +304,15 @@ where
                 self.metrics.clone(),
             )
             .await?;
-        tracing::info!("Dump is complete. Loading the dump into the index storage");
+        tracing::info!(
+            "{:?} Dump is complete. Loading the dump into the index storage",
+            asset_type
+        );
 
         self.index_storage
             .load_from_dump(path, last_included_rocks_key, asset_type)
             .await?;
-        tracing::info!("Dump is loaded into the index storage");
+        tracing::info!("{:?} Dump is loaded into the index storage", asset_type);
         Ok(())
     }
 
