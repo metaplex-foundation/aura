@@ -13,13 +13,10 @@ impl PgClient {
         table: &str,
         columns: &str,
     ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("COPY ");
-        query_builder.push(table);
-        query_builder.push(" (");
-        query_builder.push(columns);
-        query_builder.push(") FROM '");
-        query_builder.push(path);
-        query_builder.push("' WITH (FORMAT csv);");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
+            "COPY {} ({}) FROM '{}' WITH (FORMAT csv);",
+            table, columns, path,
+        ));
         self.execute_query_with_metrics(transaction, &mut query_builder, COPY_ACTION, table)
             .await?;
         Ok(())
@@ -30,12 +27,10 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
     ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
-        query_builder.push(table);
-        query_builder.push(" SELECT * FROM ");
-        query_builder.push(TEMP_TABLE_PREFIX);
-        query_builder.push(table);
-        query_builder.push(" ON CONFLICT DO NOTHING;");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
+            "INSERT INTO {} SELECT * FROM {}{} ON CONFLICT DO NOTHING;",
+            table, TEMP_TABLE_PREFIX, table
+        ));
         self.execute_query_with_metrics(transaction, &mut query_builder, INSERT_ACTION, table)
             .await?;
 
@@ -47,9 +42,8 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
     ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("TRUNCATE ");
-        query_builder.push(table);
-        query_builder.push(";");
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new(format!("TRUNCATE {};", table));
         self.execute_query_with_metrics(transaction, &mut query_builder, TRUNCATE_ACTION, table)
             .await
     }
@@ -82,9 +76,8 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         index: &str,
     ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("DROP INDEX ");
-        query_builder.push(index);
-        query_builder.push(";");
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new(format!("DROP INDEX {};", index));
         self.execute_query_with_metrics(transaction, &mut query_builder, DROP_ACTION, index)
             .await
     }
@@ -147,11 +140,10 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
         for (table, constraint) in [("assets_v3", "assets_v3_authority_fk_constraint")] {
-            let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("ALTER TABLE ");
-            query_builder.push(table);
-            query_builder.push(" DROP CONSTRAINT ");
-            query_builder.push(constraint);
-            query_builder.push(";");
+            let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
+                "ALTER TABLE {} DROP CONSTRAINT {};",
+                table, constraint
+            ));
             self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, table)
                 .await?;
         }
