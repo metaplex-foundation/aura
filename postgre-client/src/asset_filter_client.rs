@@ -378,11 +378,9 @@ fn push_asset_class_filter(
 ) {
     if !classes.is_empty() {
         query_builder.push(" AND assets_v3.ast_specification_asset_class IN (");
-        for (i, class) in classes.iter().enumerate() {
-            if i > 0 {
-                query_builder.push(", ");
-            }
-            query_builder.push_bind(*class);
+        let mut qb = query_builder.separated(", ");
+        for cl in classes.iter() {
+            qb.push_bind(*cl);
         }
         query_builder.push(") ");
     }
