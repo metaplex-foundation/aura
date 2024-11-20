@@ -12,7 +12,7 @@ use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage, BATCH_GET_ACTION, ROCKS_COMPONENT};
 use entities::api_req_params::Options;
-use entities::enums::TokenMetadataEdition;
+use entities::enums::{SpecificationAssetClass, TokenMetadataEdition};
 use entities::models::{EditionData, PubkeyWithSlot};
 use futures_util::FutureExt;
 use std::collections::HashMap;
@@ -193,7 +193,29 @@ impl Storage {
             (HashMap::new(), HashMap::new())
         };
         let token_accounts = token_accounts.map_err(|e| StorageError::Common(e.to_string()))?;
+        let spl_mints = to_map!(spl_mints);
 
+        // As we can not rely on the asset class from the database, we need to check the mint
+        assets_data
+            .iter_mut()
+            .filter(|(_, asset)| {
+                asset.static_details.as_ref().is_some_and(|sd| {
+                    sd.specification_asset_class == SpecificationAssetClass::FungibleAsset
+                        || sd.specification_asset_class == SpecificationAssetClass::FungibleToken
+                })
+            })
+            .for_each(|(_, ref mut asset)| {
+                if spl_mints
+                    .get(&asset.pubkey)
+                    .map(|spl_mint| spl_mint.is_nft())
+                    .unwrap_or(false)
+                {
+                    asset
+                        .static_details
+                        .as_mut()
+                        .map(|sd| sd.specification_asset_class = SpecificationAssetClass::Nft);
+                }
+            });
         Ok(AssetSelectedMaps {
             editions: self
                 .get_editions(
@@ -213,7 +235,7 @@ impl Storage {
             urls,
             inscriptions,
             inscriptions_data,
-            spl_mints: to_map!(spl_mints),
+            spl_mints,
             token_accounts: token_accounts
                 .into_iter()
                 .flat_map(|ta| ta.map(|ta| (ta.mint, ta)))
