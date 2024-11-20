@@ -200,7 +200,11 @@ where
             SyncStatus::NoSyncRequired => {}
         }
 
-        self.clean_syncronized_idxs(asset_type)
+        if let Some(encoded_key) = self.index_storage.fetch_last_synced_id(asset_type).await? {
+            self.clean_syncronized_idxs(asset_type, encoded_key)?;
+        }
+
+        Ok(())
     }
 
     pub async fn synchronize_fungible_asset_indexes(
@@ -226,12 +230,20 @@ where
             }
             SyncStatus::NoSyncRequired => {}
         }
+        if let Some(encoded_key) = self.index_storage.fetch_last_synced_id(asset_type).await? {
+            self.clean_syncronized_idxs(asset_type, encoded_key)?;
+        }
 
-        self.clean_syncronized_idxs(asset_type)
+        Ok(())
     }
 
-    pub fn clean_syncronized_idxs(&self, asset_type: AssetType) -> Result<(), IngesterError> {
-        self.primary_storage.clean_syncronized_idxs(asset_type)?;
+    pub fn clean_syncronized_idxs(
+        &self,
+        asset_type: AssetType,
+        last_synced_key: Vec<u8>,
+    ) -> Result<(), IngesterError> {
+        self.primary_storage
+            .clean_syncronized_idxs(asset_type, last_synced_key)?;
 
         Ok(())
     }

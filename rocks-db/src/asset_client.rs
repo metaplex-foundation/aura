@@ -114,19 +114,23 @@ impl Storage {
         Ok(())
     }
 
-    pub fn clean_syncronized_idxs_with_batch(&self, asset_type: AssetType) -> Result<()> {
+    pub fn clean_syncronized_idxs_with_batch(
+        &self,
+        asset_type: AssetType,
+        last_synced_key: Vec<u8>,
+    ) -> Result<()> {
         let (mut iter, cf) = match asset_type {
             AssetType::Fungible => {
                 let cf = self.fungible_assets_update_idx.handle();
-                // TODO: use regular iter to avoid data inconcistency
-                let iter = self.fungible_assets_update_idx.iter_end();
+                let iter = self
+                    .fungible_assets_update_idx
+                    .iter_reverse(last_synced_key);
 
                 (iter, cf)
             }
             AssetType::NonFungible => {
                 let cf = self.assets_update_idx.handle();
-                // TODO: use regular iter to avoid data inconcistency
-                let iter = self.assets_update_idx.iter_end();
+                let iter = self.assets_update_idx.iter_reverse(last_synced_key);
 
                 (iter, cf)
             }

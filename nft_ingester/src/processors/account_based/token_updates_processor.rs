@@ -188,10 +188,13 @@ impl TokenAccountsProcessor {
         &self,
         storage: &mut BatchSaveStorage,
         asset_type: AssetType,
+        last_synced_key: Vec<u8>,
     ) -> Result<(), StorageError> {
         self.finalize_processing(
             storage,
-            |storage: &mut BatchSaveStorage| storage.clean_syncronized_idxs(asset_type),
+            |storage: &mut BatchSaveStorage| {
+                storage.clean_syncronized_idxs(asset_type, last_synced_key.clone())
+            },
             "clean_syncronized_idxs",
         )
     }

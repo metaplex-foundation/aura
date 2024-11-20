@@ -184,8 +184,12 @@ impl AssetUpdateIndexStorage for Storage {
         Ok((unique_pubkeys, last_key))
     }
 
-    fn clean_syncronized_idxs(&self, asset_type: AssetType) -> Result<()> {
-        self.clean_syncronized_idxs_with_batch(asset_type)
+    fn clean_syncronized_idxs(
+        &self,
+        asset_type: AssetType,
+        last_synced_key: Vec<u8>,
+    ) -> Result<()> {
+        self.clean_syncronized_idxs_with_batch(asset_type, last_synced_key)
     }
 }
 

@@ -212,8 +212,13 @@ impl BatchSaveStorage {
         )
     }
 
-    pub fn clean_syncronized_idxs(&self, asset_type: AssetType) -> Result<()> {
-        self.storage.clean_syncronized_idxs_with_batch(asset_type)
+    pub fn clean_syncronized_idxs(
+        &self,
+        asset_type: AssetType,
+        last_synced_key: Vec<u8>,
+    ) -> Result<()> {
+        self.storage
+            .clean_syncronized_idxs_with_batch(asset_type, last_synced_key)
     }
 
     pub fn get_authority(&self, address: Pubkey) -> Pubkey {
