@@ -388,9 +388,9 @@ impl Storage {
 
         for (_, token) in storage.pairs_iterator(storage.iter_start()) {
             batch.push((
-                token.pubkey.to_string(),
-                token.owner.to_string(),
-                token.mint.to_string(),
+                Self::encode(token.pubkey),
+                Self::encode(token.owner),
+                Self::encode(token.mint),
                 token.amount,
                 token.slot_updated,
             ));
