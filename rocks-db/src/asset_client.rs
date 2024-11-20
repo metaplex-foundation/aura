@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 impl Storage {
     fn get_next_fungible_asset_update_seq(&self) -> Result<u64> {
-        if self.fungible_assets_update_last_seq.load(Ordering::SeqCst) == 0 {
+        if self.fungible_assets_update_last_seq.load(Ordering::Relaxed) == 0 {
             // If fungible_assets_update_next_seq is zero, fetch the last key from fungible_assets_update_idx
             let mut iter = self.fungible_assets_update_idx.iter_end(); // Assuming iter_end method fetches the last item
 
@@ -27,13 +27,13 @@ impl Storage {
 
                 let seq = u64::from_be_bytes(last_key[..std::mem::size_of::<u64>()].try_into()?);
                 self.fungible_assets_update_last_seq
-                    .store(seq, Ordering::SeqCst);
+                    .store(seq, Ordering::Relaxed);
             }
         }
         // Increment and return the sequence number
         let seq = self
             .fungible_assets_update_last_seq
-            .fetch_add(1, Ordering::SeqCst)
+            .fetch_add(1, Ordering::Relaxed)
             + 1;
         Ok(seq)
     }
