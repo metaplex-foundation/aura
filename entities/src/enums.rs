@@ -33,9 +33,13 @@ pub enum SpecificationAssetClass {
     Nft,
     PrintableNft,
     ProgrammableNft,
+    // legacy, doesn't exist
     Print,
+    // legacy, doesn't exist
     TransferRestrictedNft,
+    // legacy, doesn't exist
     NonTransferableNft,
+    // legacy, doesn't exist
     IdentityNft,
     MplCoreAsset,
     MplCoreCollection,

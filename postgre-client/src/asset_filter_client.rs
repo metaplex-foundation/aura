@@ -12,7 +12,7 @@ use crate::{
     error::IndexDbError,
     model::{
         AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, AssetSupply,
-        SearchAssetsFilter,
+        SearchAssetsFilter, SpecificationAssetClass,
     },
     storage_traits::AssetPubkeyFilteredFetcher,
     PgClient, COUNT_ACTION, SELECT_ACTION, SQL_COMPONENT,
@@ -147,7 +147,7 @@ impl PgClient {
 }
 
 fn add_filter_clause<'a>(
-    query_builder: &mut QueryBuilder<'a, Postgres>,
+    mut query_builder: &mut QueryBuilder<'a, Postgres>,
     filter: &'a SearchAssetsFilter,
     options: &'a GetByMethodsOptions,
 ) -> bool {
@@ -181,6 +181,41 @@ fn add_filter_clause<'a>(
                 " INNER JOIN fungible_tokens ON assets_v3.ast_pubkey = fungible_tokens.fbt_asset ",
             );
             group_clause_required = true;
+        }
+        match token_type {
+            TokenType::Fungible => {
+                let classes = vec![
+                    SpecificationAssetClass::FungibleToken,
+                    SpecificationAssetClass::FungibleAsset,
+                ];
+                push_asset_class_filter(&mut query_builder, &classes, None);
+            }
+            TokenType::NonFungible => {
+                let classes = vec![
+                    SpecificationAssetClass::MplCoreAsset,
+                    SpecificationAssetClass::MplCoreCollection,
+                    SpecificationAssetClass::Nft,
+                    SpecificationAssetClass::ProgrammableNft,
+                ];
+                push_asset_class_filter(&mut query_builder, &classes, None);
+            }
+            TokenType::RegularNFT => {
+                let classes = vec![
+                    SpecificationAssetClass::MplCoreAsset,
+                    SpecificationAssetClass::MplCoreCollection,
+                    SpecificationAssetClass::Nft,
+                    SpecificationAssetClass::ProgrammableNft,
+                ];
+                push_asset_class_filter(&mut query_builder, &classes, Some(false));
+            }
+            TokenType::CompressedNFT => {
+                let classes = vec![
+                    SpecificationAssetClass::Nft,
+                    SpecificationAssetClass::ProgrammableNft,
+                ];
+                push_asset_class_filter(&mut query_builder, &classes, Some(true));
+            }
+            TokenType::All => {}
         }
     }
 
@@ -334,6 +369,26 @@ fn add_filter_clause<'a>(
         query_builder.push_bind(json_uri);
     }
     group_clause_required
+}
+
+fn push_asset_class_filter(
+    query_builder: &mut QueryBuilder<Postgres>,
+    classes: &[SpecificationAssetClass],
+    compressed: Option<bool>,
+) {
+    if !classes.is_empty() {
+        query_builder.push(" AND assets_v3.ast_specification_asset_class IN (");
+        let mut qb = query_builder.separated(", ");
+        for cl in classes.iter() {
+            qb.push_bind(*cl);
+        }
+        query_builder.push(") ");
+    }
+    if let Some(is_compressed) = compressed {
+        query_builder.push(" AND assets_v3.ast_is_compressed = ");
+        query_builder.push_bind(is_compressed);
+        query_builder.push(" ");
+    }
 }
 
 fn add_slot_and_key_comparison(
