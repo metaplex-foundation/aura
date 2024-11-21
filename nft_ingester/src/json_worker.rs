@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use entities::enums::TaskStatus;
 use entities::models::{JsonDownloadTask, OffChainData};
 use interface::error::JsonDownloaderError;
-use interface::json::{JsonDownloader, JsonPersister};
+use interface::json::{JsonDownloadResult, JsonDownloader, JsonPersister};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::tasks::UpdatedTask;
@@ -112,13 +112,17 @@ impl TasksStreamer {
 
 pub struct TasksPersister<T: JsonPersister + Send + Sync + 'static> {
     pub persister: Arc<T>,
-    pub receiver: tokio::sync::mpsc::Receiver<(String, Result<String, JsonDownloaderError>)>,
+    pub receiver:
+        tokio::sync::mpsc::Receiver<(String, Result<JsonDownloadResult, JsonDownloaderError>)>,
 }
 
 impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
     pub fn new(
         persister: Arc<T>,
-        receiver: tokio::sync::mpsc::Receiver<(String, Result<String, JsonDownloaderError>)>,
+        receiver: tokio::sync::mpsc::Receiver<(
+            String,
+            Result<JsonDownloadResult, JsonDownloaderError>,
+        )>,
     ) -> Self {
         Self {
             persister,
@@ -262,7 +266,7 @@ pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
 
 #[async_trait]
 impl JsonDownloader for JsonWorker {
-    async fn download_file(&self, url: String) -> Result<String, JsonDownloaderError> {
+    async fn download_file(&self, url: String) -> Result<JsonDownloadResult, JsonDownloaderError> {
         let start_time = chrono::Utc::now();
         let client = ClientBuilder::new()
             .timeout(time::Duration::from_secs(CLIENT_TIMEOUT))
@@ -288,42 +292,46 @@ impl JsonDownloader for JsonWorker {
                     host,
                     start_time,
                 );
-                if let Some(content_header) = response.headers().get("Content-Type") {
-                    match content_header.to_str() {
-                        Ok(header) => {
-                            // Exclude certain content types that are definitely not JSON
-                            let excluded_types = [
-                                "image/",
-                                "audio/",
-                                "video/",
-                                "application/octet-stream",
-                            ];
-                            if excluded_types.iter().any(|&t| header.starts_with(t)) {
-                                return Err(JsonDownloaderError::GotNotJsonFile);
-                            }
-                        }
-                        Err(_) => {
-                            return Err(JsonDownloaderError::CouldNotReadHeader);
-                        }
-                    }
-                }
-
                 if response.status() != reqwest::StatusCode::OK {
                     return Err(JsonDownloaderError::ErrorStatusCode(
                         response.status().as_str().to_string(),
                     ));
-                } else {
-                    let metadata_body = response.text().await;
-                    if let Ok(metadata) = metadata_body {
-                        // Attempt to parse the response as JSON
-                        if serde_json::from_str::<Value>(&metadata).is_ok() {
-                            return Ok(metadata.trim().replace('\0', ""));
-                        } else {
-                            return Err(JsonDownloaderError::CouldNotDeserialize);
-                        }
+                }
+
+                // Get the Content-Type header
+                let content_type = response
+                    .headers()
+                    .get("Content-Type")
+                    .and_then(|ct| ct.to_str().ok())
+                    .unwrap_or("");
+
+                // Excluded content types that are definitely not JSON
+                let excluded_types = ["audio/", "application/octet-stream"];
+                if excluded_types.iter().any(|&t| content_type.starts_with(t)) {
+                    return Err(JsonDownloaderError::GotNotJsonFile);
+                }
+
+                // Check if the content type is image or video
+                if content_type.starts_with("image/") || content_type.starts_with("video/") {
+                    // Return the URL and MIME type
+                    return Ok(JsonDownloadResult::MediaUrlAndMimeType {
+                        url: url.clone(),
+                        mime_type: content_type.to_string(),
+                    });
+                }
+
+                let metadata_body = response.text().await;
+                if let Ok(metadata) = metadata_body {
+                    // Attempt to parse the response as JSON
+                    if serde_json::from_str::<Value>(&metadata).is_ok() {
+                        return Ok(JsonDownloadResult::JsonContent(
+                            metadata.trim().replace('\0', ""),
+                        ));
                     } else {
-                        Err(JsonDownloaderError::CouldNotDeserialize)
+                        return Err(JsonDownloaderError::CouldNotDeserialize);
                     }
+                } else {
+                    Err(JsonDownloaderError::CouldNotDeserialize)
                 }
             }
             Err(e) => {
@@ -339,14 +347,14 @@ impl JsonDownloader for JsonWorker {
 impl JsonPersister for JsonWorker {
     async fn persist_response(
         &self,
-        results: Vec<(String, Result<String, JsonDownloaderError>)>,
+        results: Vec<(String, Result<JsonDownloadResult, JsonDownloaderError>)>,
     ) -> Result<(), JsonDownloaderError> {
         let mut pg_updates = Vec::new();
         let mut rocks_updates = HashMap::new();
 
         for (metadata_url, result) in results.iter() {
-            match &result {
-                Ok(json_file) => {
+            match result {
+                Ok(JsonDownloadResult::JsonContent(json_file)) => {
                     rocks_updates.insert(
                         metadata_url.clone(),
                         OffChainData {
@@ -362,7 +370,25 @@ impl JsonPersister for JsonWorker {
 
                     self.metrics.inc_tasks("json", MetricStatus::SUCCESS);
                 }
+                Ok(JsonDownloadResult::MediaUrlAndMimeType { url, mime_type }) => {
+                    // TODO: this is bullshit, we should handle this in a different way
+                    pg_updates.push(UpdatedTask {
+                        status: TaskStatus::Success,
+                        metadata_url: metadata_url.clone(),
+                        error: "".to_string(),
+                    });
+                    rocks_updates.insert(
+                        metadata_url.clone(),
+                        OffChainData {
+                            url: metadata_url.clone(),
+                            metadata: "".to_string(),
+                        },
+                    );
+
+                    self.metrics.inc_tasks("media", MetricStatus::SUCCESS);
+                }
                 Err(json_err) => match json_err {
+                    // TODO: this is the same bullshit as above
                     JsonDownloaderError::GotNotJsonFile => {
                         pg_updates.push(UpdatedTask {
                             status: TaskStatus::Success,
@@ -406,15 +432,14 @@ impl JsonPersister for JsonWorker {
                     }
                     JsonDownloaderError::ErrorDownloading(err) => {
                         self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
-                        // back to pending status to try again
-                        // until attempts reach its maximum
+                        // Revert to pending status to retry until max attempts
                         pg_updates.push(UpdatedTask {
                             status: TaskStatus::Pending,
                             metadata_url: metadata_url.clone(),
                             error: err.clone(),
                         });
                     }
-                    _ => {} // intentionally empty because nothing to process
+                    _ => {} // No additional processing needed
                 },
             }
         }
