@@ -1,0 +1,63 @@
+@startuml
+scale 1.5
+queue "Solana\ndata" as SolanaTransactions
+box ingester
+    control "Solana\nService" as SolanaService
+    participant "Fork\nCleaner" as ForkCleaner
+    participant "Bubblegum\nProcessor" as BubblegumProcessor
+    queue "mpsc" as mpsc
+    participant "Checksum\nCalculator" as ChecksumCalc
+end box
+box DB layer
+    participant "Transaction\nclient" as BubblegumDao
+end box
+box RocksDB
+    database "Assets\nStorage" as AssetsStorage
+    database "Bubblegum\nchanges" as BubblegumChanges
+    database "Bubblegum\nepochs" as BubblegumEpochs
+end box
+
+== Process bubblegum instruction ==
+
+SolanaTransactions -> BubblegumProcessor : process next bubblegum instruction
+BubblegumProcessor -> BubblegumDao : call save
+BubblegumDao -> AssetsStorage : save bubblegum\nasset change\nin Rocks
+group if epoch(msg.slot) < current_epoch()
+    BubblegumDao -> BubblegumEpochs : mark the epoch INVALIDATED
+end group
+
+== Triggering calculation ==
+
+loop
+SolanaTransactions -> SolanaService : get last\nslot num
+group if epoch(slot) > current_epoch()
+    SolanaService -> SolanaService : increment\ncurrent epoch
+    SolanaService -> ChecksumCalc : Calc(epoch)
+end group
+end loop
+
+== Forks cleaning ==
+
+ForkCleaner <- AssetsStorage : assets data
+ForkCleaner -> ForkCleaner : find forks
+ForkCleaner -> AssetsStorage : drop forks
+ForkCleaner -> BubblegumChanges : remove bubble change records for forked assets instructions
+
+group if epoch(forked_ix.slot) < current_epoch()
+    ForkCleaner -> mpsc : Calc(Tree,epoch)
+end group
+
+== Calculation of an epoch checksum ==
+
+mpsc -> ChecksumCalc : read next cmd
+
+ChecksumCalc -> BubblegumEpochs : mark CALCULATING
+ChecksumCalc <- BubblegumChanges : fetch changes in the epoch
+ChecksumCalc -> ChecksumCalc : calculate checksum
+alt if checksum == CALCULATING
+    ChecksumCalc -> BubblegumEpochs : merge: write checksum if it was CALCULATING
+else checksum == INVALIDATED (another change appeared)
+    ChecksumCalc -> BubblegumEpochs : mark CALCULATING and re-calculate
+end
+
+@enduml
