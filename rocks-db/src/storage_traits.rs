@@ -62,7 +62,15 @@ pub trait AssetIndexReader {
 #[automock]
 #[async_trait]
 pub trait Dumper {
-    async fn dump_db(
+    async fn dump_nft_db(
+        &self,
+        base_path: &std::path::Path,
+        batch_size: usize,
+        rx: &tokio::sync::broadcast::Receiver<()>,
+        synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
+    ) -> core::result::Result<(), String>;
+
+    async fn dump_fungible_db(
         &self,
         base_path: &std::path::Path,
         batch_size: usize,
@@ -148,7 +156,7 @@ impl AssetIndexReader for MockAssetIndexStorage {
 
 #[async_trait]
 impl Dumper for MockAssetIndexStorage {
-    async fn dump_db(
+    async fn dump_nft_db(
         &self,
         base_path: &std::path::Path,
         batch_size: usize,
@@ -156,7 +164,19 @@ impl Dumper for MockAssetIndexStorage {
         synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
     ) -> core::result::Result<(), String> {
         self.mock_dumper
-            .dump_db(base_path, batch_size, rx, synchronizer_metrics)
+            .dump_nft_db(base_path, batch_size, rx, synchronizer_metrics)
+            .await
+    }
+
+    async fn dump_fungible_db(
+        &self,
+        base_path: &std::path::Path,
+        batch_size: usize,
+        rx: &tokio::sync::broadcast::Receiver<()>,
+        synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
+    ) -> core::result::Result<(), String> {
+        self.mock_dumper
+            .dump_fungible_db(base_path, batch_size, rx, synchronizer_metrics)
             .await
     }
 }

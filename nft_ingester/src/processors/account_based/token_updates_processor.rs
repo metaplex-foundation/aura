@@ -95,8 +95,10 @@ impl TokenAccountsProcessor {
             "token_accounts_asset_components_merge_with_batch",
         )?;
 
-        storage
-            .asset_updated_with_batch(token_account.slot_updated as u64, token_account.pubkey)?;
+        storage.fungible_asset_updated_with_batch(
+            token_account.slot_updated as u64,
+            token_account.pubkey,
+        )?;
         storage.asset_updated_with_batch(token_account.slot_updated as u64, token_account.mint)
     }
 

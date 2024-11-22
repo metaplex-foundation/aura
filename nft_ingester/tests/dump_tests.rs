@@ -88,7 +88,7 @@ mod tests {
         );
         assert_eq!(
             pg_env.count_rows_in_fungible_tokens().await.unwrap(),
-            0 as i64
+            1000 as i64
         );
         let metadata_key_set = client.get_existing_metadata_keys().await.unwrap();
         assert_eq!(metadata_key_set.len(), 1);

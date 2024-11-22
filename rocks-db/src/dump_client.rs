@@ -93,13 +93,12 @@ impl Storage {
     /// `batch_size` - Batch size.
     /// `rx` - Channel for graceful shutdown.
     #[allow(clippy::too_many_arguments)]
-    pub async fn dump_csv(
+    pub async fn dump_nft_csv(
         &self,
         metadata_file_and_path: (File, String),
         assets_file_and_path: (File, String),
         creators_file_and_path: (File, String),
         authority_file_and_path: (File, String),
-        fungible_tokens_file_and_path: (File, String),
         batch_size: usize,
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
@@ -170,18 +169,6 @@ impl Storage {
                 rx_cloned,
                 shutdown_cloned,
                 rx_authority,
-                cloned_metrics,
-            )
-        });
-
-        // dump fungible assets in separate blocking thread
-        let column: Column<TokenAccount> = Self::column(self.db.clone(), self.red_metrics.clone());
-        let cloned_metrics = synchronizer_metrics.clone();
-        let fungible_assets_join = tokio::task::spawn_blocking(move || {
-            Self::dump_fungible_assets(
-                column,
-                fungible_tokens_file_and_path,
-                batch_size,
                 cloned_metrics,
             )
         });
@@ -275,14 +262,6 @@ impl Storage {
                 .map_err(|e| format!("Error sending asset indexes to channel: {}", e))?;
         }
 
-        if let Err(e) = fungible_assets_join.await {
-            error!(
-                "Error happened during fungible assets dumping: {}",
-                e.to_string()
-            );
-        }
-        info!("Finish dumping fungible assets.");
-
         // Once we iterate through all the assets in RocksDB we have to send stop signal
         //     to iterators and wait until they finish its job.
         // Because that workers populate channel for writers.
@@ -304,13 +283,24 @@ impl Storage {
         Ok(())
     }
 
-    fn dump_fungible_assets(
-        storage: Column<TokenAccount>,
-        file_and_path: (File, String),
+    /// Dumps data into several into `CSV file` dedicated for fungible tokens,
+    ///     which corresponds to a separate table in the index database (`Postgres`).
+    ///
+    /// # Args:
+    /// `fungible_tokens_file_and_path` - The file and path whose data will be written to the corresponding `fungible_tokens` table.
+    /// `batch_size` - Batch size.
+    /// `rx` - Channel for graceful shutdown.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn dump_fungible_csv(
+        &self,
+        fungible_tokens_file_and_path: (File, String),
         batch_size: usize,
+        rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
-    ) {
-        let buf_writer = BufWriter::with_capacity(ONE_G, file_and_path.0);
+    ) -> Result<(), String> {
+        let column: Column<TokenAccount> = Self::column(self.db.clone(), self.red_metrics.clone());
+
+        let buf_writer = BufWriter::with_capacity(ONE_G, fungible_tokens_file_and_path.0);
         let mut writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
@@ -318,11 +308,15 @@ impl Storage {
         // token_acc_key, owner, mint, balance, slot updated
         let mut batch: Vec<(String, String, String, i64, i64)> = Vec::new();
 
-        for token in storage
+        for token in column
             .iter_start()
             .filter_map(|k| k.ok())
             .filter_map(|(_, value)| deserialize::<TokenAccount>(value.to_vec().as_ref()).ok())
         {
+            if !rx.is_empty() {
+                info!("Shutdown signal received...");
+                return Ok(());
+            }
             batch.push((
                 token.pubkey.to_string(),
                 token.owner.to_string(),
@@ -336,15 +330,17 @@ impl Storage {
                 let start = Instant::now();
                 for rec in &batch {
                     if let Err(e) = writer.serialize(rec).map_err(|e| e.to_string()) {
-                        error!(
+                        let msg = format!(
                             "Error while writing data into {:?}. Err: {:?}",
-                            file_and_path.1, e
+                            fungible_tokens_file_and_path.1, e
                         );
+                        error!("{}", msg);
+                        return Err(msg);
                     }
                 }
                 batch.clear();
                 synchronizer_metrics.set_file_write_time(
-                    file_and_path.1.as_ref(),
+                    fungible_tokens_file_and_path.1.as_ref(),
                     start.elapsed().as_millis() as f64,
                 );
             }
@@ -352,22 +348,33 @@ impl Storage {
 
         if !batch.is_empty() {
             for rec in &batch {
+                if !rx.is_empty() {
+                    info!("Shutdown signal received...");
+                    return Ok(());
+                }
                 if let Err(e) = writer.serialize(rec).map_err(|e| e.to_string()) {
-                    error!(
+                    let msg = format!(
                         "Error while writing data into {:?}. Err: {:?}",
-                        file_and_path.1, e
+                        fungible_tokens_file_and_path.1, e
                     );
+                    error!("{}", msg);
+                    return Err(msg);
                 }
             }
             batch.clear();
         }
 
         if let Err(e) = writer.flush().map_err(|e| e.to_string()) {
-            error!(
+            let msg = format!(
                 "Error happened during flushing data to {:?}. Err: {:?}",
-                file_and_path.1, e
+                fungible_tokens_file_and_path.1, e
             );
+            error!("{}", msg);
+            return Err(msg);
         }
+
+        info!("Finish dumping fungible assets.");
+        Ok(())
     }
 
     /// The `iterate_over_indexes` function is an asynchronous method responsible for iterating over a stream of asset indexes and processing them.
@@ -589,6 +596,40 @@ impl Storage {
 
 #[async_trait]
 impl Dumper for Storage {
+    /// The `dump_db` function is an asynchronous method responsible for dumping fungible database content into a dedicated `CSV file`.
+    /// The function supports batch processing and listens to a signal using a `tokio::sync::broadcast::Receiver` to handle cancellation
+    ///     or control flow.
+    /// # Args:
+    /// * `base_path` - A reference to a Path that specifies the base directory where the `CSV files` will be created.
+    ///     The function will append filenames (`metadata.csv, creators.csv, assets.csv, assets_authorities.csv`) to this path.
+    /// * `batch_size` - The size of the data batches to be processed and written to the files.
+    /// * `rx` - A receiver that listens for cancellation signals.
+    async fn dump_fungible_db(
+        &self,
+        base_path: &std::path::Path,
+        batch_size: usize,
+        rx: &tokio::sync::broadcast::Receiver<()>,
+        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
+    ) -> Result<(), String> {
+        let fungible_tokens_path = base_path
+            .join("fungible_tokens.csv")
+            .to_str()
+            .map(str::to_owned);
+        tracing::info!("Dumping to fungible_tokens: {:?}", fungible_tokens_path);
+
+        let fungible_tokens_file = File::create(fungible_tokens_path.clone().unwrap())
+            .map_err(|e| format!("Could not create file for fungible tokens dump: {}", e))?;
+
+        self.dump_fungible_csv(
+            (fungible_tokens_file, fungible_tokens_path.unwrap()),
+            batch_size,
+            rx,
+            synchronizer_metrics,
+        )
+        .await?;
+        Ok(())
+    }
+
     /// The `dump_db` function is an asynchronous method responsible for dumping database content into multiple `CSV files`.
     /// It writes metadata, asset information, creator details, and asset authorities to separate `CSV files` in the provided directory.
     /// The function supports batch processing and listens to a signal using a `tokio::sync::broadcast::Receiver` to handle cancellation
@@ -598,7 +639,7 @@ impl Dumper for Storage {
     ///     The function will append filenames (`metadata.csv, creators.csv, assets.csv, assets_authorities.csv`) to this path.
     /// * `batch_size` - The size of the data batches to be processed and written to the files.
     /// * `rx` - A receiver that listens for cancellation signals.
-    async fn dump_db(
+    async fn dump_nft_db(
         &self,
         base_path: &std::path::Path,
         batch_size: usize,
@@ -624,20 +665,15 @@ impl Dumper for Storage {
         if authorities_path.is_none() {
             return Err("invalid path".to_string());
         }
-        let fungible_tokens_path = base_path
-            .join("fungible_tokens.csv")
-            .to_str()
-            .map(str::to_owned);
         if authorities_path.is_none() {
             return Err("invalid path".to_string());
         }
         tracing::info!(
-            "Dumping to metadata: {:?}, creators: {:?}, assets: {:?}, authorities: {:?}, fungible_tokens: {:?}",
+            "Dumping to metadata: {:?}, creators: {:?}, assets: {:?}, authorities: {:?}",
             metadata_path,
             creators_path,
             assets_path,
             authorities_path,
-            fungible_tokens_path
         );
 
         let metadata_file = File::create(metadata_path.clone().unwrap())
@@ -648,15 +684,12 @@ impl Dumper for Storage {
             .map_err(|e| format!("Could not create file for creators dump: {}", e))?;
         let authority_file = File::create(authorities_path.clone().unwrap())
             .map_err(|e| format!("Could not create file for authority dump: {}", e))?;
-        let fungible_tokens_file = File::create(fungible_tokens_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for fungible tokens dump: {}", e))?;
 
-        self.dump_csv(
+        self.dump_nft_csv(
             (metadata_file, metadata_path.unwrap()),
             (assets_file, assets_path.unwrap()),
             (creators_file, creators_path.unwrap()),
             (authority_file, authorities_path.unwrap()),
-            (fungible_tokens_file, fungible_tokens_path.unwrap()),
             batch_size,
             rx,
             synchronizer_metrics,

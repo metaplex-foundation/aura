@@ -370,7 +370,7 @@ impl AssetIndexStorage for PgClient {
         asset_type: AssetType,
     ) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
-        match asset_type {
+        let dump_result = match asset_type {
             AssetType::NonFungible => {
                 let Some(metadata_path) =
                     base_path.join("metadata.csv").to_str().map(str::to_owned)
@@ -414,6 +414,14 @@ impl AssetIndexStorage for PgClient {
                     &mut transaction,
                 )
                 .await?;
+
+                self.update_last_synced_key(
+                    last_key,
+                    &mut transaction,
+                    "last_synced_key",
+                    asset_type,
+                )
+                .await
             }
             AssetType::Fungible => {
                 let Some(fungible_tokens_path) = base_path
@@ -429,13 +437,27 @@ impl AssetIndexStorage for PgClient {
 
                 self.copy_fungibles(fungible_tokens_path, &mut transaction)
                     .await?;
+
+                self.update_last_synced_key(
+                    last_key,
+                    &mut transaction,
+                    "last_synced_key",
+                    asset_type,
+                )
+                .await
+            }
+        };
+
+        match dump_result {
+            Ok(_) => {
+                self.commit_transaction(transaction).await?;
+                Ok(())
+            }
+            Err(e) => {
+                self.rollback_transaction(transaction).await?;
+                Err(e)
             }
         }
-
-        self.update_last_synced_key(last_key, &mut transaction, "last_synced_key", asset_type)
-            .await?;
-        self.commit_transaction(transaction).await?;
-        Ok(())
     }
 
     async fn update_last_synced_key(
