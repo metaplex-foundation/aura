@@ -1930,14 +1930,36 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
     let mut collection_authority = existing_val
         .and_then(|a| a.collection())
         .and_then(|d| d.authority());
+    let mut specification_asset_class = existing_val
+        .and_then(|a| a.static_details())
+        .map(|d| d.specification_asset_class());
+
     for op in operands {
         if let Ok(new_val) = fb::root_as_asset_complete_details(op) {
             if pk.is_none() {
                 pk = new_val.pubkey();
             }
-            // Keep existing static_details if present
-            if static_details.is_none() {
-                static_details = new_val.static_details();
+            // Keep existing static_details if present, but if the exising asset class was fungible and the new asset class is one of the NFT types, update the asset class as it's a known case for TokenMetadata
+            match static_details {
+                Some(existing_static_details) => {
+                    if let Some(new_static_details) = new_val.static_details() {
+                        if (existing_static_details.specification_asset_class()
+                            == fb::SpecificationAssetClass::FungibleToken
+                            || existing_static_details.specification_asset_class()
+                                == fb::SpecificationAssetClass::FungibleAsset)
+                            && (new_static_details.specification_asset_class()
+                                == fb::SpecificationAssetClass::Nft
+                                || new_static_details.specification_asset_class()
+                                    == fb::SpecificationAssetClass::ProgrammableNft)
+                        {
+                            specification_asset_class =
+                                Some(new_static_details.specification_asset_class());
+                        }
+                    }
+                }
+                None => {
+                    static_details = new_val.static_details();
+                }
             }
             // Merge dynamic_details
             if let Some(new_dynamic_details) = new_val.dynamic_details() {
@@ -2080,7 +2102,8 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
     let static_details = static_details.map(|s| {
         let args = fb::AssetStaticDetailsArgs {
             pubkey: s.pubkey().map(|k| builder.create_vector(k.bytes())),
-            specification_asset_class: s.specification_asset_class(),
+            specification_asset_class: specification_asset_class
+                .unwrap_or(s.specification_asset_class()),
             royalty_target_type: s.royalty_target_type(),
             created_at: s.created_at(),
             edition_address: s
