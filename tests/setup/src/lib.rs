@@ -89,7 +89,7 @@ impl<'a> TestEnvironment<'a> {
             tasks.spawn(async move {
                 match asset_type {
                     AssetType::NonFungible => synchronizer
-                        .synchronize_non_fungible_asset_indexes(&rx, 0)
+                        .synchronize_nft_asset_indexes(&rx, 0)
                         .await
                         .unwrap(),
                     AssetType::Fungible => synchronizer

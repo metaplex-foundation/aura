@@ -45,9 +45,8 @@ mod tests {
                 amount: 1000,
                 write_version: 10,
             };
-            // TODO: is it really fungible?
             token_accounts_processor
-                .transform_and_save_fungible_token_account(&mut batch_storage, key, &token_account)
+                .transform_and_save_token_account(&mut batch_storage, key, &token_account)
                 .unwrap();
         }
         batch_storage.flush().unwrap();

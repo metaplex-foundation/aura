@@ -32,7 +32,7 @@ mod tests {
         let last_known_key = generate_random_vec(8 + 8 + 32);
         // Insert assets and last key using update_asset_indexes_batch
         asset_index_storage
-            .update_non_fungible_asset_indexes_batch(asset_indexes.as_slice())
+            .update_nft_asset_indexes_batch(asset_indexes.as_slice())
             .await
             .unwrap();
 
@@ -65,7 +65,7 @@ mod tests {
             })
             .collect::<Vec<AssetIndex>>();
         asset_index_storage
-            .update_non_fungible_asset_indexes_batch(updated_asset_indexes.as_slice())
+            .update_nft_asset_indexes_batch(updated_asset_indexes.as_slice())
             .await
             .unwrap();
         asset_index_storage
@@ -114,7 +114,7 @@ mod tests {
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_index_storage
-            .update_non_fungible_asset_indexes_batch(asset_indexes.as_slice())
+            .update_nft_asset_indexes_batch(asset_indexes.as_slice())
             .await
             .unwrap();
         asset_index_storage
@@ -142,7 +142,7 @@ mod tests {
             .collect::<Vec<AssetIndex>>();
 
         asset_index_storage
-            .update_non_fungible_asset_indexes_batch(updated_asset_indexes.as_slice())
+            .update_nft_asset_indexes_batch(updated_asset_indexes.as_slice())
             .await
             .unwrap();
         asset_index_storage

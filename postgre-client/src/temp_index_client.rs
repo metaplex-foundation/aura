@@ -255,7 +255,7 @@ impl AssetIndexStorage for TempClient {
             .await
     }
 
-    async fn update_non_fungible_asset_indexes_batch(
+    async fn update_nft_asset_indexes_batch(
         &self,
         asset_indexes: &[AssetIndex],
     ) -> Result<(), IndexDbError> {
@@ -269,7 +269,7 @@ impl AssetIndexStorage for TempClient {
             authorities_table: format!("{}assets_authorities", TEMP_INDEXING_TABLE_PREFIX),
         };
         self.pg_client
-            .upsert_batched_non_fungible(&mut transaction, table_names, updated_components)
+            .upsert_batched_nft(&mut transaction, table_names, updated_components)
             .await?;
         self.pg_client.commit_transaction(transaction).await
     }

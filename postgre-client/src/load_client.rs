@@ -100,7 +100,7 @@ impl PgClient {
         Ok(())
     }
 
-    pub async fn drop_non_fungible_indexes(
+    pub async fn drop_nft_indexes(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
@@ -190,7 +190,7 @@ impl PgClient {
         Ok(())
     }
 
-    pub async fn recreate_non_fungible_indexes(
+    pub async fn recreate_nft_indexes(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
@@ -279,7 +279,7 @@ impl PgClient {
         Ok(())
     }
 
-    pub(crate) async fn copy_non_fungibles(
+    pub(crate) async fn copy_nfts(
         &self,
         matadata_copy_path: String,
         asset_creators_copy_path: String,
@@ -287,7 +287,7 @@ impl PgClient {
         assets_authorities_copy_path: String,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
-        self.drop_non_fungible_indexes(transaction).await?;
+        self.drop_nft_indexes(transaction).await?;
         self.drop_constraints(transaction).await?;
         for table in ["assets_v3", "asset_creators_v3", "assets_authorities"] {
             self.truncate_table(transaction, table).await?;
@@ -323,7 +323,7 @@ impl PgClient {
         ] {
             self.copy_table_from(transaction, path, table, columns).await?;
         }
-        self.recreate_non_fungible_indexes(transaction).await?;
+        self.recreate_nft_indexes(transaction).await?;
         self.recreate_constraints(transaction).await?;
         Ok(())
     }

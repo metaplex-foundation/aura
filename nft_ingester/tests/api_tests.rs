@@ -3156,11 +3156,9 @@ mod tests {
                     });
                 }
                 AssetType::NonFungible => {
-                    tasks.spawn(async move {
-                        synchronizer
-                            .synchronize_non_fungible_asset_indexes(&rx, 0)
-                            .await
-                    });
+                    tasks.spawn(
+                        async move { synchronizer.synchronize_nft_asset_indexes(&rx, 0).await },
+                    );
                 }
             }
         }
@@ -3637,11 +3635,9 @@ mod tests {
                     });
                 }
                 AssetType::NonFungible => {
-                    tasks.spawn(async move {
-                        synchronizer
-                            .synchronize_non_fungible_asset_indexes(&rx, 0)
-                            .await
-                    });
+                    tasks.spawn(
+                        async move { synchronizer.synchronize_nft_asset_indexes(&rx, 0).await },
+                    );
                 }
             }
         }

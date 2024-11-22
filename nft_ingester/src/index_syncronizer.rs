@@ -72,7 +72,7 @@ where
         }
     }
 
-    pub async fn non_fungible_run(
+    pub async fn nft_run(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
@@ -80,7 +80,7 @@ where
     ) {
         while rx.is_empty() {
             if let Err(e) = self
-                .synchronize_non_fungible_asset_indexes(rx, run_full_sync_threshold)
+                .synchronize_nft_asset_indexes(rx, run_full_sync_threshold)
                 .await
             {
                 tracing::error!("Non fungible synchronization failed: {:?}", e);
@@ -129,9 +129,7 @@ where
         };
         // Fetch the last known key from the primary storage
         let last_key = match asset_type {
-            AssetType::NonFungible => self
-                .primary_storage
-                .last_known_non_fungible_asset_updated_key()?,
+            AssetType::NonFungible => self.primary_storage.last_known_nft_asset_updated_key()?,
             AssetType::Fungible => self
                 .primary_storage
                 .last_known_fungible_asset_updated_key()?,
@@ -169,7 +167,7 @@ where
         }))
     }
 
-    pub async fn synchronize_non_fungible_asset_indexes(
+    pub async fn synchronize_nft_asset_indexes(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
@@ -180,20 +178,12 @@ where
         match state {
             SyncStatus::FullSyncRequired(state) => {
                 tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
-                self.regular_non_fungible_syncronize(
-                    rx,
-                    state.last_indexed_key,
-                    state.last_known_key,
-                )
-                .await
+                self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key)
+                    .await
             }
             SyncStatus::RegularSyncRequired(state) => {
-                self.regular_non_fungible_syncronize(
-                    rx,
-                    state.last_indexed_key,
-                    state.last_known_key,
-                )
-                .await
+                self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key)
+                    .await
             }
             SyncStatus::NoSyncRequired => Ok(()),
         }
@@ -228,9 +218,7 @@ where
         asset_type: AssetType,
     ) -> Result<(), IngesterError> {
         let last_known_key = match asset_type {
-            AssetType::NonFungible => self
-                .primary_storage
-                .last_known_non_fungible_asset_updated_key()?,
+            AssetType::NonFungible => self.primary_storage.last_known_nft_asset_updated_key()?,
             AssetType::Fungible => self
                 .primary_storage
                 .last_known_fungible_asset_updated_key()?,
@@ -268,7 +256,7 @@ where
         match asset_type {
             AssetType::NonFungible => {
                 temp_syncronizer
-                    .non_fungible_run(&local_rx, -1, tokio::time::Duration::from_millis(100))
+                    .nft_run(&local_rx, -1, tokio::time::Duration::from_millis(100))
                     .await
             }
             AssetType::Fungible => {
@@ -407,7 +395,7 @@ where
         Ok(())
     }
 
-    async fn regular_non_fungible_syncronize(
+    async fn regular_nft_syncronize(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
         last_indexed_key: Option<AssetUpdatedKey>,
@@ -425,7 +413,7 @@ where
                     break;
                 }
                 let (updated_keys, last_included_key) =
-                    self.primary_storage.fetch_non_fungible_asset_updated_keys(
+                    self.primary_storage.fetch_nft_asset_updated_keys(
                         starting_key.clone(),
                         Some(last_key.clone()),
                         self.dump_synchronizer_batch_size,
@@ -450,7 +438,7 @@ where
                 let index_storage = self.index_storage.clone();
                 let metrics = self.metrics.clone();
                 tasks.spawn(async move {
-                    Self::syncronize_non_fungible_batch(
+                    Self::syncronize_nft_batch(
                         primary_storage.clone(),
                         index_storage.clone(),
                         updated_keys_refs.as_slice(),
@@ -498,14 +486,14 @@ where
         Ok(())
     }
 
-    pub async fn syncronize_non_fungible_batch(
+    pub async fn syncronize_nft_batch(
         primary_storage: Arc<T>,
         index_storage: Arc<U>,
         updated_keys_refs: &[Pubkey],
         metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), IngesterError> {
         let asset_indexes = primary_storage
-            .get_non_fungible_asset_indexes(updated_keys_refs, None)
+            .get_nft_asset_indexes(updated_keys_refs, None)
             .await?;
 
         if asset_indexes.is_empty() {
@@ -514,7 +502,7 @@ where
         }
 
         index_storage
-            .update_non_fungible_asset_indexes_batch(
+            .update_nft_asset_indexes_batch(
                 asset_indexes
                     .values()
                     .cloned()
@@ -658,7 +646,7 @@ mod tests {
                 AssetType::NonFungible => {
                     tokio::spawn(async move {
                         synchronizer
-                            .synchronize_non_fungible_asset_indexes(&rx, 0)
+                            .synchronize_nft_asset_indexes(&rx, 0)
                             .await
                             .unwrap();
                     });
@@ -689,7 +677,7 @@ mod tests {
         let index_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_last_known_non_fungible_asset_updated_key()
+            .expect_last_known_nft_asset_updated_key()
             .once()
             .return_once(move || Ok(Some(index_clone)));
 
@@ -697,7 +685,7 @@ mod tests {
         let index_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_fetch_non_fungible_asset_updated_keys()
+            .expect_fetch_nft_asset_updated_keys()
             .once()
             .return_once(move |_, _, _, _| Ok((updated_keys.clone(), Some(index_clone))));
 
@@ -706,12 +694,12 @@ mod tests {
         let expected_indexes: Vec<AssetIndex> = map_of_asset_indexes.values().cloned().collect();
         primary_storage
             .mock_asset_index_reader
-            .expect_get_non_fungible_asset_indexes()
+            .expect_get_nft_asset_indexes()
             .once()
             .return_once(move |_, _| Ok(map_of_asset_indexes));
 
         index_storage
-            .expect_update_non_fungible_asset_indexes_batch()
+            .expect_update_nft_asset_indexes_batch()
             .with(mockall::predicate::eq(expected_indexes.clone()))
             .once()
             .return_once(|_| Ok(()));
@@ -751,7 +739,7 @@ mod tests {
                 AssetType::NonFungible => {
                     tokio::spawn(async move {
                         synchronizer
-                            .synchronize_non_fungible_asset_indexes(&rx, 0)
+                            .synchronize_nft_asset_indexes(&rx, 0)
                             .await
                             .unwrap();
                     });
@@ -783,7 +771,7 @@ mod tests {
         let index_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_last_known_non_fungible_asset_updated_key()
+            .expect_last_known_nft_asset_updated_key()
             .once()
             .return_once(move || Ok(Some(index_clone)));
 
@@ -791,7 +779,7 @@ mod tests {
         let index_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_fetch_non_fungible_asset_updated_keys()
+            .expect_fetch_nft_asset_updated_keys()
             .times(2)
             .returning(move |_, _, _, _| {
                 static mut CALL_COUNT: usize = 0;
@@ -810,12 +798,12 @@ mod tests {
         let expected_indexes: Vec<AssetIndex> = map_of_asset_indexes.values().cloned().collect();
         primary_storage
             .mock_asset_index_reader
-            .expect_get_non_fungible_asset_indexes()
+            .expect_get_nft_asset_indexes()
             .once()
             .return_once(move |_, _| Ok(map_of_asset_indexes));
 
         index_storage
-            .expect_update_non_fungible_asset_indexes_batch()
+            .expect_update_nft_asset_indexes_batch()
             .with(mockall::predicate::eq(expected_indexes.clone()))
             .once()
             .return_once(|_| Ok(()));
@@ -856,7 +844,7 @@ mod tests {
                 AssetType::NonFungible => {
                     tokio::spawn(async move {
                         synchronizer
-                            .synchronize_non_fungible_asset_indexes(&rx, 0)
+                            .synchronize_nft_asset_indexes(&rx, 0)
                             .await
                             .unwrap();
                     });
@@ -901,7 +889,7 @@ mod tests {
         let index_key_second_batch_clone = index_key_second_batch.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_last_known_non_fungible_asset_updated_key()
+            .expect_last_known_nft_asset_updated_key()
             .once()
             .return_once(move || Ok(Some(index_key_second_batch_clone)));
 
@@ -911,7 +899,7 @@ mod tests {
         let index_key_second_batch_clone = index_key_second_batch.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_fetch_non_fungible_asset_updated_keys()
+            .expect_fetch_nft_asset_updated_keys()
             .times(2)
             .returning(move |_, _, _, _| {
                 call_count += 1;
@@ -939,7 +927,7 @@ mod tests {
         let mut call_count2 = 0;
         primary_storage
             .mock_asset_index_reader
-            .expect_get_non_fungible_asset_indexes()
+            .expect_get_nft_asset_indexes()
             .times(2)
             .returning(move |_, _| {
                 call_count2 += 1;
@@ -951,7 +939,7 @@ mod tests {
             });
 
         index_storage
-            .expect_update_non_fungible_asset_indexes_batch()
+            .expect_update_nft_asset_indexes_batch()
             .with(mockall::predicate::eq(expected_indexes_first_batch.clone()))
             .once()
             .return_once(|_| Ok(()));
@@ -965,7 +953,7 @@ mod tests {
             .return_once(|_, _| Ok(()));
 
         index_storage
-            .expect_update_non_fungible_asset_indexes_batch()
+            .expect_update_nft_asset_indexes_batch()
             .with(mockall::predicate::eq(
                 expected_indexes_second_batch.clone(),
             ))
@@ -1008,7 +996,7 @@ mod tests {
                 AssetType::NonFungible => {
                     tokio::spawn(async move {
                         synchronizer
-                            .synchronize_non_fungible_asset_indexes(&rx, 0)
+                            .synchronize_nft_asset_indexes(&rx, 0)
                             .await
                             .unwrap();
                     });
@@ -1030,7 +1018,7 @@ mod tests {
         let index_key_clone = index_key.clone();
         primary_storage
             .mock_update_index_storage
-            .expect_last_known_non_fungible_asset_updated_key()
+            .expect_last_known_nft_asset_updated_key()
             .once()
             .return_once(move || Ok(Some(index_key_clone)));
 
@@ -1051,7 +1039,7 @@ mod tests {
         // Expect no calls to fetch_asset_updated_keys since databases are synced
         primary_storage
             .mock_update_index_storage
-            .expect_fetch_non_fungible_asset_updated_keys()
+            .expect_fetch_nft_asset_updated_keys()
             .never();
 
         let synchronizer = Synchronizer::new(
@@ -1082,7 +1070,7 @@ mod tests {
                 AssetType::NonFungible => {
                     tokio::spawn(async move {
                         synchronizer
-                            .synchronize_non_fungible_asset_indexes(&rx, 0)
+                            .synchronize_nft_asset_indexes(&rx, 0)
                             .await
                             .unwrap();
                     });

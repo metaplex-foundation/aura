@@ -13,7 +13,7 @@ pub trait AssetIndexStorage {
         &self,
         asset_type: AssetType,
     ) -> Result<Option<Vec<u8>>, IndexDbError>;
-    async fn update_non_fungible_asset_indexes_batch(
+    async fn update_nft_asset_indexes_batch(
         &self,
         asset_indexes: &[AssetIndex],
     ) -> Result<(), IndexDbError>;
@@ -39,7 +39,7 @@ mock!(
     #[async_trait]
     impl AssetIndexStorage for AssetIndexStorageMock {
         async fn fetch_last_synced_id(&self, asset_type: AssetType) -> Result<Option<Vec<u8>>, IndexDbError>;
-        async fn update_non_fungible_asset_indexes_batch(
+        async fn update_nft_asset_indexes_batch(
             &self,
             asset_indexes: &[AssetIndex],
         ) -> Result<(), IndexDbError>;

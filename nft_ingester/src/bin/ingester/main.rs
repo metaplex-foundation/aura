@@ -614,7 +614,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 match asset_type {
                     AssetType::NonFungible => {
                         synchronizer
-                            .non_fungible_run(&rx, config.dump_sync_threshold, Duration::from_secs(5))
+                            .nft_run(&rx, config.dump_sync_threshold, Duration::from_secs(5))
                             .await
                     }
                     AssetType::Fungible => {

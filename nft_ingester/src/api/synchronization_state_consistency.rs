@@ -30,14 +30,14 @@ const INDEX_STORAGE_DEPENDS_METHODS: &[&str] = &[
 ];
 
 pub struct SynchronizationStateConsistencyChecker {
-    overwhelm_non_fungible_seq_gap: Arc<AtomicBool>,
+    overwhelm_nft_seq_gap: Arc<AtomicBool>,
     overwhelm_fungible_seq_gap: Arc<AtomicBool>,
 }
 
 impl SynchronizationStateConsistencyChecker {
     pub(crate) fn new() -> Self {
         Self {
-            overwhelm_non_fungible_seq_gap: Arc::new(AtomicBool::new(false)),
+            overwhelm_nft_seq_gap: Arc::new(AtomicBool::new(false)),
             overwhelm_fungible_seq_gap: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -52,7 +52,7 @@ impl SynchronizationStateConsistencyChecker {
     ) {
         for asset_type in ASSET_TYPES {
             let overwhelm_seq_gap = match asset_type {
-                AssetType::NonFungible => self.overwhelm_non_fungible_seq_gap.clone(),
+                AssetType::NonFungible => self.overwhelm_nft_seq_gap.clone(),
                 AssetType::Fungible => self.overwhelm_fungible_seq_gap.clone(),
             };
             let pg_client = pg_client.clone();
@@ -68,7 +68,7 @@ impl SynchronizationStateConsistencyChecker {
                     };
 
                     let last_known_updated_asset = match asset_type {
-                        AssetType::NonFungible => rocks_db.last_known_non_fungible_asset_updated_key(),
+                        AssetType::NonFungible => rocks_db.last_known_nft_asset_updated_key(),
                         AssetType::Fungible => rocks_db.last_known_fungible_asset_updated_key(),
                     };
                     let Ok(Some(primary_update_key)) = last_known_updated_asset else {
@@ -98,7 +98,7 @@ impl SynchronizationStateConsistencyChecker {
 
 impl ConsistencyChecker for SynchronizationStateConsistencyChecker {
     fn should_cancel_request(&self, call: &Call) -> bool {
-        if !&self.overwhelm_non_fungible_seq_gap.load(Ordering::Relaxed)
+        if !&self.overwhelm_nft_seq_gap.load(Ordering::Relaxed)
             || !&self.overwhelm_fungible_seq_gap.load(Ordering::Relaxed)
         {
             return false;

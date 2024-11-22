@@ -232,7 +232,7 @@ impl Storage {
             if batch.len() >= batch_size {
                 let start = chrono::Utc::now();
                 let indexes = self
-                    .get_non_fungible_asset_indexes(batch.as_ref(), Some(&collections))
+                    .get_nft_asset_indexes(batch.as_ref(), Some(&collections))
                     .await
                     .map_err(|e| e.to_string())?;
                 self.red_metrics.observe_request(
@@ -259,7 +259,7 @@ impl Storage {
         if !batch.is_empty() {
             let start = chrono::Utc::now();
             let indexes = self
-                .get_non_fungible_asset_indexes(batch.as_ref(), Some(&collections))
+                .get_nft_asset_indexes(batch.as_ref(), Some(&collections))
                 .await
                 .map_err(|e| e.to_string())?;
             self.red_metrics.observe_request(

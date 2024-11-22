@@ -45,7 +45,7 @@ impl AssetUpdateIndexStorage for Storage {
         }
     }
 
-    fn last_known_non_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
+    fn last_known_nft_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         _ = self.db.try_catch_up_with_primary();
         let start_time = chrono::Utc::now();
         let mut iter = self.assets_update_idx.iter_end();
@@ -124,7 +124,7 @@ impl AssetUpdateIndexStorage for Storage {
         Ok((unique_pubkeys, last_key))
     }
 
-    fn fetch_non_fungible_asset_updated_keys(
+    fn fetch_nft_asset_updated_keys(
         &self,
         from: Option<AssetUpdatedKey>,
         up_to: Option<AssetUpdatedKey>,
@@ -218,7 +218,7 @@ impl AssetIndexReader for Storage {
         Ok(fungible_assets_indexes)
     }
 
-    async fn get_non_fungible_asset_indexes<'a>(
+    async fn get_nft_asset_indexes<'a>(
         &self,
         keys: &[Pubkey],
         collection_authorities: Option<&'a HashMap<Pubkey, Pubkey>>,

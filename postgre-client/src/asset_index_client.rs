@@ -65,7 +65,7 @@ impl PgClient {
         Ok(())
     }
 
-    pub(crate) async fn upsert_batched_non_fungible(
+    pub(crate) async fn upsert_batched_nft(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         table_names: TableNames,
@@ -277,7 +277,7 @@ impl AssetIndexStorage for PgClient {
             .await
     }
 
-    async fn update_non_fungible_asset_indexes_batch(
+    async fn update_nft_asset_indexes_batch(
         &self,
         asset_indexes: &[AssetIndex],
     ) -> Result<(), IndexDbError> {
@@ -293,7 +293,7 @@ impl AssetIndexStorage for PgClient {
 
         // Perform transactional operations
         let result = self
-            .upsert_batched_non_fungible(&mut transaction, table_names, updated_components)
+            .upsert_batched_nft(&mut transaction, table_names, updated_components)
             .await;
 
         match result {
@@ -406,7 +406,7 @@ impl AssetIndexStorage for PgClient {
                     )));
                 };
 
-                self.copy_non_fungibles(
+                self.copy_nfts(
                     metadata_path,
                     creators_path,
                     assets_path,

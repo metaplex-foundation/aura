@@ -23,11 +23,11 @@ impl AssetUpdatedKey {
 
 #[automock]
 pub trait AssetUpdateIndexStorage {
-    fn last_known_non_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>>;
+    fn last_known_nft_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>>;
     fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>>;
 
     #[allow(clippy::type_complexity)]
-    fn fetch_non_fungible_asset_updated_keys(
+    fn fetch_nft_asset_updated_keys(
         &self,
         from: Option<AssetUpdatedKey>,
         up_to: Option<AssetUpdatedKey>,
@@ -52,7 +52,7 @@ pub trait AssetIndexReader {
         keys: &[Pubkey],
     ) -> Result<HashMap<Pubkey, FungibleAssetIndex>>;
 
-    async fn get_non_fungible_asset_indexes<'a>(
+    async fn get_nft_asset_indexes<'a>(
         &self,
         keys: &[Pubkey],
         collection_authorities: Option<&'a HashMap<Pubkey, Pubkey>>,
@@ -91,9 +91,9 @@ impl MockAssetIndexStorage {
 }
 
 impl AssetUpdateIndexStorage for MockAssetIndexStorage {
-    fn last_known_non_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
+    fn last_known_nft_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         self.mock_update_index_storage
-            .last_known_non_fungible_asset_updated_key()
+            .last_known_nft_asset_updated_key()
     }
 
     fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
@@ -101,7 +101,7 @@ impl AssetUpdateIndexStorage for MockAssetIndexStorage {
             .last_known_fungible_asset_updated_key()
     }
 
-    fn fetch_non_fungible_asset_updated_keys(
+    fn fetch_nft_asset_updated_keys(
         &self,
         from: Option<AssetUpdatedKey>,
         up_to: Option<AssetUpdatedKey>,
@@ -109,7 +109,7 @@ impl AssetUpdateIndexStorage for MockAssetIndexStorage {
         skip_keys: Option<HashSet<Pubkey>>,
     ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)> {
         self.mock_update_index_storage
-            .fetch_non_fungible_asset_updated_keys(from, up_to, limit, skip_keys)
+            .fetch_nft_asset_updated_keys(from, up_to, limit, skip_keys)
     }
 
     fn fetch_fungible_asset_updated_keys(
@@ -135,13 +135,13 @@ impl AssetIndexReader for MockAssetIndexStorage {
             .await
     }
 
-    async fn get_non_fungible_asset_indexes<'a>(
+    async fn get_nft_asset_indexes<'a>(
         &self,
         keys: &[Pubkey],
         collection_authorities: Option<&'a HashMap<Pubkey, Pubkey>>,
     ) -> Result<HashMap<Pubkey, AssetIndex>> {
         self.mock_asset_index_reader
-            .get_non_fungible_asset_indexes(keys, collection_authorities)
+            .get_nft_asset_indexes(keys, collection_authorities)
             .await
     }
 }

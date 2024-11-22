@@ -158,7 +158,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let synchronizer = synchronizer_clone.clone();
         while shutdown_rx.is_empty() {
             let result = synchronizer
-                .synchronize_non_fungible_asset_indexes(&shutdown_rx, config.dump_sync_threshold)
+                .synchronize_nft_asset_indexes(&shutdown_rx, config.dump_sync_threshold)
                 .await;
 
             match result {
@@ -182,7 +182,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let synchronizer = synchronizer.clone();
         while shutdown_rx.is_empty() {
             let result = synchronizer
-                .synchronize_non_fungible_asset_indexes(&shutdown_rx, config.dump_sync_threshold)
+                .synchronize_fungible_asset_indexes(&shutdown_rx, config.dump_sync_threshold)
                 .await;
 
             match result {
