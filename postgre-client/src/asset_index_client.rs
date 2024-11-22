@@ -309,7 +309,7 @@ impl AssetIndexStorage for PgClient {
                 Ok(())
             }
             Err(e) => {
-                // Transaction will be rolled back automatically when `transaction` goes out of scope
+                self.rollback_transaction(transaction).await?;
                 self.metrics.observe_request(
                     SQL_COMPONENT,
                     TRANSACTION_ACTION,
@@ -351,7 +351,7 @@ impl AssetIndexStorage for PgClient {
                 Ok(())
             }
             Err(e) => {
-                // Transaction will be rolled back automatically when `transaction` goes out of scope
+                self.rollback_transaction(transaction).await?;
                 self.metrics.observe_request(
                     SQL_COMPONENT,
                     TRANSACTION_ACTION,
