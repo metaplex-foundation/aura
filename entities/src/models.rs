@@ -617,6 +617,11 @@ pub struct SplMint {
     pub slot_updated: i64,
     pub write_version: u64,
 }
+impl SplMint {
+    pub fn is_nft(&self) -> bool {
+        self.supply == 1 && self.decimals == 0
+    }
+}
 
 impl From<&Mint> for SplMint {
     fn from(value: &Mint) -> Self {

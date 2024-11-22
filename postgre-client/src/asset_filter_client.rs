@@ -182,6 +182,20 @@ fn add_filter_clause<'a>(
             );
             group_clause_required = true;
         }
+    }
+
+    // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
+    query_builder.push(" WHERE TRUE ");
+    if let Some(spec_version) = &filter.specification_version {
+        query_builder.push(" AND assets_v3.ast_specification_version = ");
+        query_builder.push_bind(spec_version);
+    }
+
+    if let Some(asset_class) = &filter.specification_asset_class {
+        query_builder.push(" AND assets_v3.ast_specification_asset_class = ");
+        query_builder.push_bind(asset_class);
+    }
+    if let Some(ref token_type) = filter.token_type {
         match token_type {
             TokenType::Fungible => {
                 let classes = vec![
@@ -218,19 +232,6 @@ fn add_filter_clause<'a>(
             TokenType::All => {}
         }
     }
-
-    // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
-    query_builder.push(" WHERE TRUE ");
-    if let Some(spec_version) = &filter.specification_version {
-        query_builder.push(" AND assets_v3.ast_specification_version = ");
-        query_builder.push_bind(spec_version);
-    }
-
-    if let Some(asset_class) = &filter.specification_asset_class {
-        query_builder.push(" AND assets_v3.ast_specification_asset_class = ");
-        query_builder.push_bind(asset_class);
-    }
-
     if let Some(owner_address) = &filter.owner_address {
         if let Some(ref token_type) = filter.token_type {
             match *token_type {

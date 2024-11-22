@@ -1,8 +1,10 @@
 use crate::asset::MplCoreCollectionAuthority;
 use crate::asset_generated::asset as fb;
+use crate::column::TypedColumn;
 use crate::{column::Column, storage_traits::Dumper, Storage};
 use async_trait::async_trait;
 use csv::WriterBuilder;
+use entities::models::SplMint;
 use entities::{
     enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
     models::{TokenAccount, UrlWithStatus},
@@ -162,6 +164,29 @@ impl Storage {
                 iter.next();
                 continue;
             }
+            // this will slow down the sync, but it is necessary to determine if the asset is an NFT
+            // TODO: optimize this
+            let mut sac: SpecificationAssetClass = asset
+                .static_details()
+                .map(|static_details| static_details.specification_asset_class().into())
+                .unwrap_or_default();
+            if sac == SpecificationAssetClass::Unknown
+                || sac == SpecificationAssetClass::FungibleToken
+                || sac == SpecificationAssetClass::FungibleAsset
+            {
+                // get the spl token account and check its supply and decimals
+                // if those are 1 and 0, then it is not a fungible asset, but an NFT
+                let ta = self
+                    .db
+                    .get_cf(&self.db.cf_handle(SplMint::NAME).unwrap(), key);
+                if let Ok(Some(ta)) = ta {
+                    if let Ok(ta) = bincode::deserialize::<SplMint>(&ta) {
+                        if ta.is_nft() {
+                            sac = SpecificationAssetClass::Nft;
+                        }
+                    }
+                }
+            }
             let metadata_url = asset
                 .dynamic_details()
                 .and_then(|dd| dd.url())
@@ -183,6 +208,7 @@ impl Storage {
                     }
                 }
             }
+
             let slot_updated = asset.get_slot_updated() as i64;
             if let Some(cc) = asset
                 .dynamic_details()
@@ -220,10 +246,7 @@ impl Storage {
             let record = AssetRecord {
                 ast_pubkey: encoded_key.clone(),
                 ast_specification_version: SpecificationVersions::V1,
-                ast_specification_asset_class: asset
-                    .static_details()
-                    .map(|static_details| static_details.specification_asset_class().into())
-                    .unwrap_or_default(),
+                ast_specification_asset_class: sac,
                 ast_royalty_target_type: asset
                     .static_details()
                     .map(|static_details| static_details.royalty_target_type().into())
@@ -365,9 +388,9 @@ impl Storage {
 
         for (_, token) in storage.pairs_iterator(storage.iter_start()) {
             batch.push((
-                token.pubkey.to_string(),
-                token.owner.to_string(),
-                token.mint.to_string(),
+                Self::encode(token.pubkey),
+                Self::encode(token.owner),
+                Self::encode(token.mint),
                 token.amount,
                 token.slot_updated,
             ));

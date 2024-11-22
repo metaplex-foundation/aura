@@ -214,6 +214,7 @@ impl AssetIndexReader for Storage {
 
         let asset_index_collection_url_fut =
             self.get_asset_indexes_with_collections_and_urls(keys.to_vec());
+        let spl_mints_fut = self.spl_mints.batch_get(keys.to_vec());
         // these data will be used only during live synchronization
         // during full sync will be passed mint keys meaning response will be always empty
         let token_accounts_fut = self.token_accounts.batch_get(keys.to_vec());
@@ -221,6 +222,12 @@ impl AssetIndexReader for Storage {
         let (mut asset_indexes, assets_collection_pks, urls) =
             asset_index_collection_url_fut.await?;
 
+        let spl_mints = spl_mints_fut.await?;
+        let is_nft_map = spl_mints
+            .into_iter()
+            .flatten()
+            .map(|spl_mint| (spl_mint.pubkey, spl_mint.is_nft()))
+            .collect::<HashMap<_, _>>();
         let offchain_data_downloaded_map_fut = self
             .asset_offchain_data
             .batch_get(urls.values().map(|u| u.to_string()).collect());
@@ -270,7 +277,18 @@ impl AssetIndexReader for Storage {
                     .copied()
                     .unwrap_or_default();
             }
+            // We can not trust this field and have to double check it
+            if (asset_index.specification_asset_class == SpecificationAssetClass::FungibleToken
+                || asset_index.specification_asset_class == SpecificationAssetClass::FungibleAsset)
+                && is_nft_map
+                    .get(&asset_index.pubkey)
+                    .map(|v| *v)
+                    .unwrap_or_default()
+            {
+                asset_index.specification_asset_class = SpecificationAssetClass::Nft;
+            }
         });
+
         let token_accounts_details = token_accounts_fut.await?;
 
         // compare to other data this data is saved in HashMap by token account keys, not mints

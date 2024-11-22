@@ -5,7 +5,7 @@ use std::sync::Arc;
 use entities::api_req_params::{AssetSortDirection, Options};
 use entities::models::{AssetSignatureWithPagination, OffChainData};
 use interface::asset_sigratures::AssetSignaturesGetter;
-use interface::json::{JsonDownloader, JsonPersister};
+use interface::json::{JsonDownloadResult, JsonDownloader, JsonPersister};
 use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use tracing::error;
@@ -243,9 +243,7 @@ pub async fn get_by_ids<
             if url.is_empty() {
                 continue;
             }
-            let offchain_data = asset_selected_maps
-                .offchain_data
-                .get(url);
+            let offchain_data = asset_selected_maps.offchain_data.get(url);
             if offchain_data.is_none() || offchain_data.unwrap().metadata.is_empty() {
                 urls_to_download.push(url.clone());
             }
@@ -271,14 +269,30 @@ pub async fn get_by_ids<
                 .await;
 
             for (json_url, res) in download_results.iter() {
-                if let Ok(metadata) = res {
-                    asset_selected_maps.offchain_data.insert(
-                        json_url.clone(),
-                        OffChainData {
-                            url: json_url.clone(),
-                            metadata: metadata.clone(),
-                        },
-                    );
+                match res {
+                    Ok(JsonDownloadResult::JsonContent(metadata)) => {
+                        asset_selected_maps.offchain_data.insert(
+                            json_url.clone(),
+                            OffChainData {
+                                url: json_url.clone(),
+                                metadata: metadata.clone(),
+                            },
+                        );
+                    }
+                    Ok(JsonDownloadResult::MediaUrlAndMimeType { url, mime_type }) => {
+                        asset_selected_maps.offchain_data.insert(
+                            json_url.clone(),
+                            OffChainData {
+                                url: json_url.clone(),
+                                metadata: format!(
+                                    "{{\"image\":\"{}\",\"type\":\"{}\"}}",
+                                    url, mime_type
+                                )
+                                .to_string(),
+                            },
+                        );
+                    }
+                    Err(e) => {}
                 }
             }
 
