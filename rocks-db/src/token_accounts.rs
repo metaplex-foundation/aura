@@ -115,7 +115,7 @@ macro_rules! impl_merge_values {
                 for op in operands {
                     match deserialize::<Self>(op) {
                         Ok(new_val) => {
-                            if new_val.write_version > write_version {
+                            if new_val.write_version > write_version || write_version == 0 {
                                 write_version = new_val.write_version;
                                 result = op.to_vec();
                             }
@@ -154,7 +154,7 @@ pub fn merge_token_accounts(
     for op in operands {
         match deserialize::<TokenAccount>(op) {
             Ok(new_val) => {
-                if new_val.write_version > write_version {
+                if new_val.write_version > write_version || write_version == 0 {
                     write_version = new_val.write_version;
                     result = op.to_vec();
                 }
@@ -352,7 +352,7 @@ pub fn merge_mints(
     for op in operands {
         match deserialize::<SplMint>(op) {
             Ok(new_val) => {
-                if new_val.write_version > write_version {
+                if new_val.write_version > write_version || write_version == 0 {
                     write_version = new_val.write_version;
                     result = op.to_vec();
                 }
