@@ -389,7 +389,6 @@ impl JsonPersister for JsonWorker {
                     self.metrics.inc_tasks("json", MetricStatus::SUCCESS);
                 }
                 Ok(JsonDownloadResult::MediaUrlAndMimeType { url, mime_type }) => {
-                    // TODO: this is bullshit, we should handle this in a different way
                     pg_updates.push(UpdatedTask {
                         status: TaskStatus::Success,
                         metadata_url: metadata_url.clone(),
@@ -399,14 +398,17 @@ impl JsonPersister for JsonWorker {
                         metadata_url.clone(),
                         OffChainData {
                             url: metadata_url.clone(),
-                            metadata: "".to_string(),
+                            metadata: format!(
+                                "{{\"image\":\"{}\",\"type\":\"{}\"}}",
+                                url, mime_type
+                            )
+                            .to_string(),
                         },
                     );
-
                     self.metrics.inc_tasks("media", MetricStatus::SUCCESS);
                 }
                 Err(json_err) => match json_err {
-                    // TODO: this is the same bullshit as above
+                    // TODO: this is bullshit, we should handle this in a different way - it's not success
                     JsonDownloaderError::GotNotJsonFile => {
                         pg_updates.push(UpdatedTask {
                             status: TaskStatus::Success,
