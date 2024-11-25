@@ -105,10 +105,6 @@ table Creator {
   creator_share: uint;       // Use uint to represent u8
 }
 
-table Pubkey {
-  data: [ubyte];  // 32 bytes
-}
-
 table AssetStaticDetails {
   pubkey: [ubyte];                         // Pubkey (32 bytes)
   specification_asset_class: SpecificationAssetClass;
@@ -159,6 +155,7 @@ table AssetOwner {
   delegate: UpdatedOptionalPubkey;
   owner_type: UpdatedOwnerType;
   owner_delegate_seq: UpdatedU64;
+  is_current_owner: UpdatedBool;
 }
 
 table AssetCollection {
@@ -175,6 +172,7 @@ table AssetCompleteDetails {
   authority: AssetAuthority;
   owner: AssetOwner;
   collection: AssetCollection;
+  other_known_owners: [AssetOwner];
 }
 
 root_type AssetCompleteDetails;

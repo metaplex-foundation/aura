@@ -43,6 +43,7 @@ impl From<&MetadataModels> for AssetCompleteDetails {
                 .map(|s| s.pubkey)
                 .or_else(|| value.asset_dynamic.as_ref().map(|d| d.pubkey))
                 .or_else(|| value.asset_authority.as_ref().map(|a| a.pubkey))
+                // this might be wrong for token accounts, where the owner is the token account pubkey, rather than the NFT mint pubkey, but in 2 cases where it's used - it's ok, as static data is passed along with the owner, so that one is used.
                 .or_else(|| value.asset_owner.as_ref().map(|o| o.pubkey))
                 .or_else(|| value.asset_collection.as_ref().map(|c| c.pubkey))
                 .unwrap_or_default(),
@@ -54,6 +55,7 @@ impl From<&MetadataModels> for AssetCompleteDetails {
         }
     }
 }
+
 #[macro_export]
 macro_rules! store_assets {
     ($self:expr, $asset:expr, $db_field:ident, $metric_name:expr) => {{

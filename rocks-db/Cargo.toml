@@ -50,6 +50,7 @@ rand = { workspace = true }
 setup = { path = "../tests/setup" }
 criterion = { workspace = true }
 tracing-test = { workspace = true }
+itertools = { workspace = true }
 
 [features]
 integration_tests = []

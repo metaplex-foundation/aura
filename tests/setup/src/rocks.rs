@@ -236,6 +236,7 @@ impl RocksTestEnvironmentSetup {
                     rand::thread_rng().gen_range(0..100),
                 )),
                 delegate: generate_test_updated(Some(Pubkey::new_unique())),
+                is_current_owner: generate_test_updated(true),
             })
             .collect()
     }

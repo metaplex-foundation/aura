@@ -11,13 +11,16 @@ use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
-use std::cmp::Ordering;
+use std::cmp::{max, Ordering};
 use tracing::{error, warn};
 
 use crate::asset_generated::asset as fb;
 use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
 use crate::Result;
 use crate::TypedColumn;
+
+const MAX_OTHER_OWNERS: usize = 10;
+
 #[derive(Debug)]
 pub struct AssetSelectedMaps {
     pub asset_complete_details: HashMap<Pubkey, AssetCompleteDetails>,
@@ -94,6 +97,7 @@ impl AssetCompleteDetails {
                 authority,
                 owner,
                 collection,
+                other_known_owners: None,
             },
         )
     }
@@ -229,12 +233,17 @@ impl<'a> From<fb::AssetOwner<'a>> for AssetOwner {
             .owner_delegate_seq()
             .map(updated_optional_u64_from_fb)
             .unwrap();
+        let is_current_owner = value
+            .is_current_owner()
+            .map(updated_bool_from_fb)
+            .unwrap_or_default();
         AssetOwner {
             pubkey,
             owner,
             delegate,
             owner_type,
             owner_delegate_seq,
+            is_current_owner,
         }
     }
 }
@@ -276,6 +285,7 @@ impl AssetStaticDetails {
                 authority: None,
                 owner: None,
                 collection: None,
+                other_known_owners: None,
             },
         )
     }
@@ -297,6 +307,7 @@ impl AssetDynamicDetails {
                 authority: None,
                 owner: None,
                 collection: None,
+                other_known_owners: None,
             },
         )
     }
@@ -318,6 +329,7 @@ impl AssetAuthority {
                 authority,
                 owner: None,
                 collection: None,
+                other_known_owners: None,
             },
         )
     }
@@ -339,6 +351,7 @@ impl AssetOwner {
                 authority: None,
                 owner,
                 collection: None,
+                other_known_owners: None,
             },
         )
     }
@@ -360,6 +373,7 @@ impl AssetCollection {
                 authority: None,
                 owner: None,
                 collection,
+                other_known_owners: None,
             },
         )
     }
@@ -541,6 +555,7 @@ fn asset_owner_to_fb<'a>(
     let delegate_fb = updated_optional_pubkey_to_fb(builder, &owner.delegate);
     let owner_type_fb = updated_owner_type_to_fb(builder, &owner.owner_type);
     let owner_delegate_seq_fb = updated_optional_u64_to_fb(builder, &owner.owner_delegate_seq);
+    let is_current_owner = updated_bool_to_fb(builder, &owner.is_current_owner);
 
     fb::AssetOwner::create(
         builder,
@@ -550,6 +565,7 @@ fn asset_owner_to_fb<'a>(
             delegate: Some(delegate_fb),
             owner_type: Some(owner_type_fb),
             owner_delegate_seq: Some(owner_delegate_seq_fb),
+            is_current_owner: Some(is_current_owner),
         },
     )
 }
@@ -971,18 +987,18 @@ impl From<AssetAuthority> for AssetCompleteDetails {
     }
 }
 
-impl From<AssetOwner> for AssetCompleteDetails {
-    fn from(value: AssetOwner) -> Self {
-        Self {
-            pubkey: value.pubkey,
-            static_details: None,
-            dynamic_details: None,
-            authority: None,
-            owner: Some(value.clone()),
-            collection: None,
-        }
-    }
-}
+// impl From<AssetOwner> for AssetCompleteDetails {
+//     fn from(value: AssetOwner) -> Self {
+//         Self {
+//             pubkey: value.pubkey, // todo: what do I do with this? For token accounts it's wrong
+//             static_details: None,
+//             dynamic_details: None,
+//             authority: None,
+//             owner: Some(value.clone()),
+//             collection: None,
+//         }
+//     }
+// }
 
 impl From<AssetCollection> for AssetCompleteDetails {
     fn from(value: AssetCollection) -> Self {
@@ -1195,6 +1211,7 @@ pub struct AssetOwner {
     pub delegate: Updated<Option<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
     pub owner_delegate_seq: Updated<Option<u64>>,
+    pub is_current_owner: Updated<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1808,6 +1825,29 @@ pub fn merge_complete_details_fb_simplified(
     merge_complete_details_fb_simple_raw(new_key, existing_val, operands.iter())
 }
 
+#[derive(Clone)]
+struct FbOwnerContainer<'a> {
+    pubkey: Option<flatbuffers::Vector<'a, u8>>,
+    owner: Option<fb::UpdatedOptionalPubkey<'a>>,
+    delegate: Option<fb::UpdatedOptionalPubkey<'a>>,
+    owner_type: Option<fb::UpdatedOwnerType<'a>>,
+    owner_delegate_seq: Option<fb::UpdatedU64<'a>>,
+    is_current_owner: Option<fb::UpdatedBool<'a>>,
+}
+
+impl<'a> From<fb::AssetOwner<'a>> for FbOwnerContainer<'a> {
+    fn from(value: fb::AssetOwner<'a>) -> Self {
+        Self {
+            pubkey: value.pubkey(),
+            owner: value.owner(),
+            delegate: value.delegate(),
+            owner_type: value.owner_type(),
+            owner_delegate_seq: value.owner_delegate_seq(),
+            is_current_owner: value.is_current_owner(),
+        }
+    }
+}
+
 pub fn merge_complete_details_fb_simple_raw<'a>(
     _new_key: &[u8],
     existing_val: Option<&[u8]>,
@@ -1918,6 +1958,9 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
     let mut owner_owner_delegate_seq = existing_val
         .and_then(|a| a.owner())
         .and_then(|d| d.owner_delegate_seq());
+    let mut owner_is_current_owner = existing_val
+        .and_then(|a| a.owner())
+        .and_then(|d| d.is_current_owner());
     let mut collection_pubkey = existing_val
         .and_then(|a| a.collection())
         .and_then(|d| d.pubkey());
@@ -1934,6 +1977,27 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
         .and_then(|a| a.static_details())
         .map(|d| d.specification_asset_class());
 
+    // With the owner the merge is a bit more complex because we need to check if the owner is a new owner or an existing one
+    // The following cases are possible:
+    // 1. The owner in operand is None, in this case we don't need to update the owner
+    // 2. The owner in operand is Some, but the existing owner is None, in this case we set the new owner
+    // 3. Both the owner in operand and the existing owner are Some, in this case we have several subcases:
+    //    3.1. The owner in operand has the same pubkey as the existing owner, in this case we need to merge the owner fields and no updates to the other known owners is needed (TODO: alternative is to update the owner with the latest fields and merge the new/old owner with the other known owners based on the owner value)
+    //    3.2. The owner in operand has a different pubkey than the existing owner, in this case we need to check if the new owner is newer than the existing owner and update the owner fields accordingly. The newer owner should be set as the owner and the other known owners should be merged with the older owner fields
+    // The same owner pubkey in both the main owner field, or in the other known owners should be merged based on those: first we do compare the update_version and if the update_version is the same we compare the slot_updated
+    // For different pubkeys we first merge the owners with matching record in the other known owners field. If there is no match we add the new owner to the other known owners field and compare the slot updated to determine the latest owner with the is_current_owner set to true. If the slot_updated is the same we declare the owner with the is_current_owner = true. If both have the same slot_updated and is_current_owner we keep the existing owner, putting the other on top of the other known owners.
+    // If after appending to the other known owners the vector is bigger than 10, we remove the oldest elements from the vector to keep it at 10 elements, unless the oldest element has the same slot_updated as the current owner, in this case we keep everything as is.
+
+    // Collect existing owner and other known owners
+    // let mut owner = existing_val.and_then(|a| a.owner());
+    let mut other_known_owners = existing_val
+        .and_then(|a| a.other_known_owners())
+        .map(|vec| {
+            vec.iter()
+                .map(|v| (v.pubkey().map(|k| k.bytes()).unwrap_or_default(), v.into()))
+                .collect::<HashMap<_, FbOwnerContainer>>()
+        })
+        .unwrap_or_else(HashMap::new);
     for op in operands {
         if let Ok(new_val) = fb::root_as_asset_complete_details(op) {
             if pk.is_none() {
@@ -2068,16 +2132,128 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
             }
             // Merge owner
             if let Some(new_owner) = new_val.owner() {
-                if owner_pubkey.is_none() {
-                    owner_pubkey = new_owner.pubkey();
+                if let Some(new_owner_pubkey) = new_owner.pubkey() {
+                    // handle the case when the existing owner is missing
+                    if owner_pubkey.is_none() {
+                        owner_pubkey = new_owner.pubkey();
+                        owner_owner = new_owner.owner();
+                        owner_delegate = new_owner.delegate();
+                        owner_owner_type = new_owner.owner_type();
+                        owner_owner_delegate_seq = new_owner.owner_delegate_seq();
+                        owner_is_current_owner = new_owner.is_current_owner();
+                    } else {
+                        // if the owner pubkey is the same we merge the owner fields
+                        if owner_pubkey.map(|k| k.bytes()) == new_owner.pubkey().map(|k| k.bytes())
+                        {
+                            merge_field(&mut owner_owner, new_owner.owner());
+                            merge_field(&mut owner_delegate, new_owner.delegate());
+                            merge_field(&mut owner_owner_type, new_owner.owner_type());
+                            merge_field(
+                                &mut owner_owner_delegate_seq,
+                                new_owner.owner_delegate_seq(),
+                            );
+                            merge_field(&mut owner_is_current_owner, new_owner.is_current_owner());
+                            // after merging the owner fields we may end up with an account that has the is_current_owner set to false, in this case we need to check for an account with is_current_owner set to true inside the other known owners and set it as the owner. We select the account with the highest slot_updated. The previous owner should be moved to the other known owners
+                            if !owner_is_current_owner.map(|u| u.value()).unwrap_or(false) {
+                                let best_current_owner_option = {
+                                    other_known_owners
+                                        .iter()
+                                        .filter_map(|(k, v)| {
+                                            v.is_current_owner.as_ref().filter(|u| u.value()).map(
+                                                |is_owner| {
+                                                    (is_owner.slot_updated(), k.clone(), v.clone())
+                                                },
+                                            )
+                                        })
+                                        .max_by_key(|(slot, _, _)| *slot)
+                                };
+                                if let Some((_, new_owner_key, new_current_owner)) =
+                                    best_current_owner_option
+                                {
+                                    let previous_owner = FbOwnerContainer {
+                                        pubkey: owner_pubkey,
+                                        owner: owner_owner,
+                                        delegate: owner_delegate,
+                                        owner_type: owner_owner_type,
+                                        owner_delegate_seq: owner_owner_delegate_seq,
+                                        is_current_owner: owner_is_current_owner,
+                                    };
+                                    other_known_owners
+                                        .insert(owner_pubkey.unwrap().bytes(), previous_owner);
+                                    owner_pubkey = new_current_owner.pubkey;
+                                    owner_owner = new_current_owner.owner;
+                                    owner_delegate = new_current_owner.delegate;
+                                    owner_owner_type = new_current_owner.owner_type;
+                                    owner_owner_delegate_seq = new_current_owner.owner_delegate_seq;
+                                    owner_is_current_owner = new_current_owner.is_current_owner;
+                                    other_known_owners.remove(new_owner_key);
+                                }
+                            }
+                        } else {
+                            // if the owner pubkey is different it might already be in the other known owners, first we merge it with the one from the other known owners
+                            // then we check which one is newer and put the other one in the other known owners
+
+                            let mut merged_owner = FbOwnerContainer::from(new_owner);
+                            if let Some(oldish_owner) =
+                                other_known_owners.get(new_owner_pubkey.bytes())
+                            {
+                                let mut oldish_owner = oldish_owner.clone();
+                                merge_field(&mut oldish_owner.owner, new_owner.owner());
+                                merge_field(&mut oldish_owner.delegate, new_owner.delegate());
+                                merge_field(&mut oldish_owner.owner_type, new_owner.owner_type());
+                                merge_field(
+                                    &mut oldish_owner.owner_delegate_seq,
+                                    new_owner.owner_delegate_seq(),
+                                );
+                                merge_field(
+                                    &mut oldish_owner.is_current_owner,
+                                    new_owner.is_current_owner(),
+                                );
+
+                                merged_owner = oldish_owner;
+                            }
+                            other_known_owners
+                                .insert(new_owner_pubkey.bytes(), merged_owner.clone());
+
+                            // now the merged owner holds the merged data. We need to check if it's marked as the current owner and if it's newer than the current owner
+                            // if it doesn't have the is current owner set to true we don't need to do anything
+                            if merged_owner
+                                .is_current_owner
+                                .map(|u| u.value())
+                                .unwrap_or(false)
+                            {
+                                if !owner_is_current_owner.map(|u| u.value()).unwrap_or(false)
+                                    || merged_owner
+                                        .is_current_owner
+                                        .map(|u| u.slot_updated())
+                                        .unwrap_or_default()
+                                        > owner_is_current_owner
+                                            .map(|u| u.slot_updated())
+                                            .unwrap_or_default()
+                                {
+                                    // if the merged owner is newer we set it as the owner and move the old owner into the other known owners
+                                    let previous_owner = FbOwnerContainer {
+                                        pubkey: owner_pubkey,
+                                        owner: owner_owner,
+                                        delegate: owner_delegate,
+                                        owner_type: owner_owner_type,
+                                        owner_delegate_seq: owner_owner_delegate_seq,
+                                        is_current_owner: owner_is_current_owner,
+                                    };
+                                    other_known_owners
+                                        .insert(owner_pubkey.unwrap().bytes(), previous_owner);
+                                    owner_pubkey = merged_owner.pubkey;
+                                    owner_owner = merged_owner.owner;
+                                    owner_delegate = merged_owner.delegate;
+                                    owner_owner_type = merged_owner.owner_type;
+                                    owner_owner_delegate_seq = merged_owner.owner_delegate_seq;
+                                    owner_is_current_owner = merged_owner.is_current_owner;
+                                    other_known_owners.remove(new_owner_pubkey.bytes());
+                                }
+                            }
+                        }
+                    }
                 }
-                merge_field(&mut owner_owner, new_owner.owner());
-                merge_field(&mut owner_delegate, new_owner.delegate());
-                merge_field(&mut owner_owner_type, new_owner.owner_type());
-                merge_field(
-                    &mut owner_owner_delegate_seq,
-                    new_owner.owner_delegate_seq(),
-                );
             }
 
             // Merge collection
@@ -2196,6 +2372,8 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                 .map(|u| create_updated_owner_type_offset(&mut builder, &u)),
             owner_delegate_seq: owner_owner_delegate_seq
                 .map(|u| create_updated_u64_offset(&mut builder, &u)),
+            is_current_owner: owner_is_current_owner
+                .map(|u| create_updated_bool_offset(&mut builder, &u)),
         };
         fb::AssetOwner::create(&mut builder, &args)
     });
@@ -2211,6 +2389,56 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
         };
         fb::AssetCollection::create(&mut builder, &args)
     });
+    //
+
+    // Create other_known_owners offset
+    let other_known_owners_offset = if !other_known_owners.is_empty() {
+        // Get the updated_slot of the main owner
+        let owner_owner_updated_slot = owner_owner.as_ref().map(|u| u.slot_updated()).unwrap_or(0);
+
+        // Collect and sort the other known owners
+        let mut owners_vec: Vec<_> = other_known_owners.values().collect();
+
+        // Sort the owners by `owner.slot_updated()` descending
+        owners_vec.sort_by(|a, b| {
+            let a_slot = a.owner.as_ref().map(|u| u.slot_updated()).unwrap_or(0);
+            let b_slot = b.owner.as_ref().map(|u| u.slot_updated()).unwrap_or(0);
+
+            // Compare slots in descending order
+            b_slot.cmp(&a_slot).then_with(|| {
+                // If slots are equal, compare pubkeys in ascending order
+                let a_pubkey = a.pubkey.as_ref().map(|k| k.bytes());
+                let b_pubkey = b.pubkey.as_ref().map(|k| k.bytes());
+
+                a_pubkey.cmp(&b_pubkey)
+            })
+        });
+
+        // Initialize a vector to hold the selected owners
+        let mut offsets = Vec::new();
+
+        let top_slot_to_keep = max(
+            owner_owner_updated_slot,
+            owners_vec
+                .first()
+                .and_then(|o| o.owner)
+                .map(|o| o.slot_updated())
+                .unwrap_or(0),
+        );
+        // Iterate through the sorted owners
+        for owner in owners_vec {
+            let owner_slot = owner.owner.as_ref().map(|u| u.slot_updated()).unwrap_or(0);
+            if (owner_slot < top_slot_to_keep) && (offsets.len() >= MAX_OTHER_OWNERS) {
+                // Reached MAX_OTHER_OWNERS limit
+                break;
+            }
+            offsets.push(create_owner_offset(&mut builder, owner));
+        }
+        Some(builder.create_vector(&offsets))
+    } else {
+        None
+    };
+
     let res = fb::AssetCompleteDetails::create(
         &mut builder,
         &fb::AssetCompleteDetailsArgs {
@@ -2220,10 +2448,51 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
             authority,
             owner,
             collection,
+            other_known_owners: other_known_owners_offset,
+            //todo: merge and set other_known_owners
         },
     );
     builder.finish_minimal(res);
     Some(builder.finished_data().to_vec())
+}
+
+fn create_owner_offset<'a>(
+    builder: &mut FlatBufferBuilder<'a>,
+    owner: &FbOwnerContainer<'a>,
+) -> WIPOffset<fb::AssetOwner<'a>> {
+    let pubkey_offset = owner.pubkey.map(|k| builder.create_vector(k.bytes()));
+
+    let owner_field = owner
+        .owner
+        .map(|o| create_updated_optional_pubkey_offset(builder, &o));
+
+    let delegate_field = owner
+        .delegate
+        .map(|d| create_updated_optional_pubkey_offset(builder, &d));
+
+    let owner_type_field = owner
+        .owner_type
+        .map(|ot| create_updated_owner_type_offset(builder, &ot));
+
+    let owner_delegate_seq_field = owner
+        .owner_delegate_seq
+        .map(|seq| create_updated_u64_offset(builder, &seq));
+
+    let is_current_owner_field = owner
+        .is_current_owner
+        .map(|ico| create_updated_bool_offset(builder, &ico));
+
+    fb::AssetOwner::create(
+        builder,
+        &fb::AssetOwnerArgs {
+            pubkey: pubkey_offset,
+            owner: owner_field,
+            delegate: delegate_field,
+            owner_type: owner_type_field,
+            owner_delegate_seq: owner_delegate_seq_field,
+            is_current_owner: is_current_owner_field,
+        },
+    )
 }
 
 fn merge_field<'a, T>(existing_field: &mut Option<T>, new_field: Option<T>)
@@ -2312,6 +2581,7 @@ pub fn merge_complete_details_fb_raw<'a>(
             authority,
             owner,
             collection,
+            other_known_owners: None, // todo: if this ever used, we need to implement it
         },
     );
     builder.finish_minimal(res);
@@ -2701,6 +2971,9 @@ fn merge_owner<'a>(
     let owner_delegate_seq = merge_updated_u64(builder, iter.iter().cloned(), |owner| {
         owner.owner_delegate_seq()
     });
+    let is_current_owner = merge_updated_bool(builder, iter.iter().cloned(), |owner| {
+        owner.is_current_owner()
+    });
 
     Some(fb::AssetOwner::create(
         builder,
@@ -2710,6 +2983,7 @@ fn merge_owner<'a>(
             delegate,
             owner_type,
             owner_delegate_seq,
+            is_current_owner,
         },
     ))
 }
@@ -3236,9 +3510,13 @@ impl SlotAssetIdxKey {
 #[cfg(test)]
 mod tests {
 
-    use entities::models::Creator;
-
     use super::*;
+    use entities::models::Creator;
+    use itertools::Itertools;
+    use std::{io::Read, str::FromStr};
+
+    const TEST_DATA:&str = "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";
+    const EXISTING_OWNER: &str = "4ja2N12Zczh9K25zGFTfao6yPdTZSfA5Bw4QueSmQCYJ";
 
     fn create_full_complete_asset() -> AssetCompleteDetails {
         let pubkey = Pubkey::new_unique();
@@ -3327,6 +3605,7 @@ mod tests {
                 Some(Pubkey::new_unique()),
             ),
             owner_delegate_seq: Updated::new(58, None, None),
+            is_current_owner: Updated::new(50, None, true),
         };
 
         let collection = AssetCollection {
@@ -3463,5 +3742,300 @@ mod tests {
         let result_asset = fb::root_as_asset_complete_details(&result).expect("should decode");
         assert_eq!(AssetCompleteDetails::from(result_asset), expected_asset);
         assert_eq!(result, expected_bytes);
+    }
+
+    #[test]
+    fn test_verify_backward_compatibility_decoding() {
+        let data_bytes = solana_sdk::bs58::decode(TEST_DATA).into_vec().unwrap();
+
+        let asset;
+        unsafe {
+            asset = crate::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                data_bytes.as_slice(),
+            );
+        }
+        let asset_mapped = AssetCompleteDetails::from(asset);
+        println!("STATIC: {:#?}", asset.static_details().is_some());
+        println!("DYNAMIC: {:#?}", asset.dynamic_details().is_some());
+        println!("OWNER: {:#?}", asset.owner().is_some());
+        println!("AUTHORITY: {:#?}", asset.authority().is_some());
+        println!("COLLECTION: {:#?}", asset.collection().is_some());
+        println!("SERIALIZED: {:#?}", asset_mapped);
+    }
+
+    #[test]
+    fn test_merge_with_same_pubkey_higher_write_version() {
+        let data_bytes = solana_sdk::bs58::decode(TEST_DATA).into_vec().unwrap();
+        let new_owner = Pubkey::from_str("2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m").unwrap();
+        let owner = AssetOwner {
+            pubkey: Pubkey::from_str("DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ").unwrap(),
+            // a new owner with smaller slot and higher write version
+            owner: Updated {
+                value: Some(new_owner.clone()),
+                slot_updated: 1,
+                update_version: Some(UpdateVersion::WriteVersion(388329656)),
+            },
+            is_current_owner: Updated {
+                value: true,
+                slot_updated: 1,
+                update_version: Some(UpdateVersion::WriteVersion(388329656)),
+            },
+            ..Default::default()
+        };
+        let mut builder = FlatBufferBuilder::new();
+        let asset_complete_details = owner.convert_to_fb(&mut builder);
+        builder.finish_minimal(asset_complete_details);
+        let operand_bytes = builder.finished_data();
+
+        let merge_result = merge_complete_details_fb_simple_raw(
+            &[],
+            Some(&data_bytes.as_slice()),
+            vec![operand_bytes].into_iter(),
+        )
+        .expect("expected merge to return some value");
+
+        let asset;
+        unsafe {
+            asset = crate::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                merge_result.as_slice(),
+            );
+        }
+        assert!(asset.other_known_owners().is_none());
+        let asset_mapped = AssetCompleteDetails::from(asset);
+        assert_eq!(asset_mapped.owner.unwrap().owner.value.unwrap(), new_owner);
+    }
+
+    #[test]
+    fn test_merge_with_same_pubkey_higher_slot_smaller_write_version() {
+        let data_bytes = solana_sdk::bs58::decode(TEST_DATA).into_vec().unwrap();
+        let new_owner = Pubkey::from_str("2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m").unwrap();
+        let owner = AssetOwner {
+            pubkey: Pubkey::from_str("DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ").unwrap(),
+            // a new owner with higher slot and smaller write version
+            owner: Updated {
+                value: Some(new_owner.clone()),
+                slot_updated: u64::MAX,
+                update_version: Some(UpdateVersion::WriteVersion(388329654)),
+            },
+            is_current_owner: Updated {
+                value: true,
+                slot_updated: u64::MAX,
+                update_version: Some(UpdateVersion::WriteVersion(388329654)),
+            },
+            ..Default::default()
+        };
+        let mut builder = FlatBufferBuilder::new();
+        let asset_complete_details = owner.convert_to_fb(&mut builder);
+        builder.finish_minimal(asset_complete_details);
+        let operand_bytes = builder.finished_data();
+
+        let merge_result = merge_complete_details_fb_simple_raw(
+            &[],
+            Some(&data_bytes.as_slice()),
+            vec![operand_bytes].into_iter(),
+        )
+        .expect("expected merge to return some value");
+
+        let asset;
+        unsafe {
+            asset = crate::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                merge_result.as_slice(),
+            );
+        }
+        assert!(asset.other_known_owners().is_none());
+        let asset_mapped = AssetCompleteDetails::from(asset);
+        assert_eq!(
+            asset_mapped.owner.as_ref().unwrap().owner.value.unwrap(),
+            Pubkey::from_str(EXISTING_OWNER).unwrap()
+        );
+        // This is ther case, when the is current owner was not ever set and now it's updated by some old update.
+        // This update shouldn't have happened as usually the vesioning of owner, delegate and is_current_owner is done together.
+        // For the case of empty data after the migration this is acceptable imho.
+        assert!(asset_mapped.owner.unwrap().is_current_owner.value);
+    }
+
+    #[test]
+    fn test_merge_with_different_pubkeys_same_slot_3_owners_changed() {
+        // The asset is transferred from owner A to owner B and then to owner C
+        // This means the following updates will happen: owner A(is current owner = false), owner B(is current owner = true), owner B(is current owner = false), owner C(is current owner = true)
+        // the final state should be owner C as the current owner and owner A and B in the other known owners
+        // this should happen without any regards to the order of updates
+        let original_data_bytes = solana_sdk::bs58::decode(TEST_DATA).into_vec().unwrap();
+        let owner_a = Pubkey::from_str(EXISTING_OWNER).unwrap();
+        let _owner_a_token_account_pubkey =
+            Pubkey::from_str("DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ").unwrap();
+
+        let owner_b = Pubkey::from_str("2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m").unwrap();
+        let owner_b_token_account_pubkey = Pubkey::new_unique();
+
+        let owner_c = Pubkey::from_str("9Rfs2otkZpsLPomKUGku7DaFv9YvtkV9a87nqTUgMBhC").unwrap();
+        let owner_c_token_account_pubkey = Pubkey::new_unique();
+
+        let slot = 26979338;
+
+        let mut builder = FlatBufferBuilder::new();
+
+        let owner_a_not_an_owner_data = AssetOwner {
+            pubkey: Pubkey::from_str("DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ").unwrap(),
+            owner: Updated {
+                value: Some(owner_a.clone()),
+                slot_updated: slot,
+                update_version: Some(UpdateVersion::WriteVersion(388329657)),
+            },
+            is_current_owner: Updated {
+                value: false,
+                slot_updated: slot,
+                update_version: Some(UpdateVersion::WriteVersion(388329657)),
+            },
+            ..Default::default()
+        }
+        .convert_to_fb(&mut builder);
+        builder.finish_minimal(owner_a_not_an_owner_data);
+        let owner_a_not_an_owner_data = builder.finished_data().to_vec();
+        builder.reset();
+
+        let owner_b_is_owner_data = AssetOwner {
+            pubkey: owner_b_token_account_pubkey,
+            owner: Updated {
+                value: Some(owner_b.clone()),
+                slot_updated: slot,
+                update_version: Some(UpdateVersion::WriteVersion(10)),
+            },
+            is_current_owner: Updated {
+                value: true,
+                slot_updated: slot,
+                update_version: Some(UpdateVersion::WriteVersion(10)),
+            },
+            ..Default::default()
+        }
+        .convert_to_fb(&mut builder);
+        builder.finish_minimal(owner_b_is_owner_data);
+        let owner_b_is_owner_data = builder.finished_data().to_vec();
+        builder.reset();
+
+        let owner_b_not_owner_data = AssetOwner {
+            pubkey: owner_b_token_account_pubkey,
+            owner: Updated {
+                value: Some(owner_b.clone()),
+                slot_updated: slot,
+                update_version: Some(UpdateVersion::WriteVersion(11)),
+            },
+            is_current_owner: Updated {
+                value: false,
+                slot_updated: slot,
+                update_version: Some(UpdateVersion::WriteVersion(11)),
+            },
+            ..Default::default()
+        }
+        .convert_to_fb(&mut builder);
+        builder.finish_minimal(owner_b_not_owner_data);
+        let owner_b_not_owner_data = builder.finished_data().to_vec();
+        builder.reset();
+
+        let owner_c_is_owner_data = AssetOwner {
+            pubkey: owner_c_token_account_pubkey,
+            owner: Updated {
+                value: Some(owner_c.clone()),
+                slot_updated: slot,
+                update_version: Some(UpdateVersion::WriteVersion(12)),
+            },
+            is_current_owner: Updated {
+                value: true,
+                slot_updated: slot,
+                update_version: Some(UpdateVersion::WriteVersion(12)),
+            },
+            ..Default::default()
+        }
+        .convert_to_fb(&mut builder);
+        builder.finish_minimal(owner_c_is_owner_data);
+        let owner_c_is_owner_data = builder.finished_data().to_vec();
+        builder.reset();
+
+        // collect all the possible combinations of the updates, as the order of the updates should not matter
+        // first using a single call with multiple operands, then using multiple calls with a single operand
+        // all the combinations should result in the same final bytes
+
+        // Collect all the updates into a vector
+        let updates = vec![
+            ("A", owner_a_not_an_owner_data.as_slice().clone()),
+            ("B1", owner_b_is_owner_data.as_slice().clone()),
+            ("B2", owner_b_not_owner_data.as_slice().clone()),
+            ("C", owner_c_is_owner_data.as_slice().clone()),
+        ];
+
+        // Generate all permutations of the updates
+        let permutations = updates.iter().permutations(updates.len());
+        let mut expected_result: Option<Vec<u8>> = None;
+
+        let merge_result = merge_complete_details_fb_simple_raw(
+            &[],
+            Some(&original_data_bytes.as_slice()),
+            vec![
+                owner_a_not_an_owner_data.as_slice().clone(),
+                owner_b_is_owner_data.as_slice().clone(),
+                owner_b_not_owner_data.as_slice().clone(),
+                owner_c_is_owner_data.as_slice().clone(),
+            ]
+            .into_iter(), //perm.into_iter().map(|d| *d),
+        )
+        .expect("expected merge to return some value");
+        expected_result = Some(merge_result);
+
+        for perm in permutations {
+            let merge_result = merge_complete_details_fb_simple_raw(
+                &[],
+                Some(&original_data_bytes.as_slice()),
+                perm.clone().into_iter().map(|(_, d)| *d),
+            )
+            .expect("expected merge to return some value");
+            let perm_name = perm.iter().map(|(k, _)| k).join(", ");
+            let asset;
+            unsafe {
+                asset = crate::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                    merge_result.as_slice(),
+                );
+            }
+            let asset_mapped = AssetCompleteDetails::from(asset);
+            assert!(
+                asset_mapped.owner.as_ref().unwrap().is_current_owner.value,
+                "owner should be current for one permutation {}",
+                perm_name
+            );
+            assert_eq!(
+                asset_mapped.owner.as_ref().unwrap().owner.value.unwrap(),
+                owner_c,
+                "Owner should be C for one permutation {}",
+                perm_name,
+            );
+            assert!(asset.other_known_owners().is_some());
+            assert_eq!(asset.other_known_owners().unwrap().len(), 2);
+            assert_eq!(
+                asset
+                    .other_known_owners()
+                    .unwrap()
+                    .get(0)
+                    .is_current_owner()
+                    .unwrap()
+                    .value(),
+                false
+            );
+            assert_eq!(
+                asset
+                    .other_known_owners()
+                    .unwrap()
+                    .get(1)
+                    .is_current_owner()
+                    .unwrap()
+                    .value(),
+                false
+            );
+            if let Some(expected) = &expected_result {
+                assert_eq!(
+                    &merge_result, expected,
+                    "Merge result differs for one permutation {}",
+                    perm_name,
+                );
+            }
+        }
     }
 }

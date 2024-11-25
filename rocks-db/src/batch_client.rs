@@ -390,11 +390,12 @@ impl Storage {
                 write_version,
             }),
             owner: Some(AssetOwner {
-                pubkey: data.pubkey,
+                pubkey: data.owner_record_pubkey,
                 owner: data.owner,
                 delegate: data.delegate,
                 owner_type: data.owner_type,
                 owner_delegate_seq: data.owner_delegate_seq,
+                is_current_owner: data.is_current_owner,
             }),
             collection: data.collection.map(|collection| AssetCollection {
                 pubkey: data.pubkey,

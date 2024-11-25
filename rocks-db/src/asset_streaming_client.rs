@@ -232,10 +232,12 @@ async fn get_complete_asset_details(
         current_size: dynamic_data.current_size,
         plugins_json_version: dynamic_data.plugins_json_version,
         authority: Updated::new(authority.slot_updated, None, authority.authority),
+        owner_record_pubkey: owner.pubkey,
         owner: owner.owner,
         delegate: owner.delegate,
         owner_type: owner.owner_type,
         owner_delegate_seq: owner.owner_delegate_seq,
+        is_current_owner: owner.is_current_owner,
         collection: collection.map(|collection| entities::models::AssetCollection {
             collection: collection.collection,
             is_collection_verified: collection.is_collection_verified,

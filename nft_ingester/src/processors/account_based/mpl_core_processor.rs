@@ -278,6 +278,11 @@ impl MplCoreProcessor {
                 Some(UpdateVersion::WriteVersion(account_data.write_version)),
                 ownership_type,
             ),
+            is_current_owner: Updated::new(
+                account_data.slot_updated,
+                Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                true,
+            ),
             ..Default::default()
         });
         models.asset_dynamic = Some(AssetDynamicDetails {

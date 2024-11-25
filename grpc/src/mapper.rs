@@ -191,6 +191,8 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 .transpose()?
                 .ok_or(GrpcError::MissingField("owner_type".to_string()))?,
             owner_delegate_seq,
+            is_current_owner: todo!(),
+            owner_record_pubkey: todo!(),
             asset_leaf: value.asset_leaf.map(TryInto::try_into).transpose()?,
             collection: value.collection.map(TryInto::try_into).transpose()?,
             onchain_data: value.chain_data.map(TryInto::try_into).transpose()?,

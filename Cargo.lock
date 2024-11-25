@@ -6273,6 +6273,7 @@ dependencies = [
  "hex",
  "indicatif",
  "interface",
+ "itertools 0.12.1",
  "lz4",
  "metrics-utils",
  "mockall",

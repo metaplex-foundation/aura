@@ -146,6 +146,8 @@ pub struct CompleteAssetDetails {
     pub delegate: Updated<Option<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
     pub owner_delegate_seq: Updated<Option<u64>>,
+    pub is_current_owner: Updated<bool>,
+    pub owner_record_pubkey: Pubkey,
 
     // Separate fields
     pub asset_leaf: Option<Updated<AssetLeaf>>,
