@@ -50,13 +50,13 @@ pub fn merge_token_metadata_edition(
     for op in operands {
         match serde_cbor::from_slice(op) {
             Ok(TokenMetadataEdition::MasterEdition(new_val)) => {
-                if new_val.write_version > write_version {
+                if new_val.write_version > write_version || result.is_empty() {
                     write_version = new_val.write_version;
                     result = op.to_vec();
                 }
             }
             Ok(TokenMetadataEdition::EditionV1(new_val)) => {
-                if new_val.write_version > write_version {
+                if new_val.write_version > write_version || result.is_empty() {
                     write_version = new_val.write_version;
                     result = op.to_vec();
                 }
