@@ -1,0 +1,180 @@
+// asset.fbs
+namespace Asset;
+
+enum SpecificationAssetClass : byte {
+  Unknown = 0,
+  FungibleToken,
+  FungibleAsset,
+  Nft,
+  PrintableNft,
+  ProgrammableNft,
+  Print,
+  TransferRestrictedNft,
+  NonTransferableNft,
+  IdentityNft,
+  MplCoreAsset,
+  MplCoreCollection
+}
+
+enum RoyaltyTargetType : byte {
+  Unknown = 0,
+  Creators,
+  Fanout,
+  Single
+}
+
+enum OwnerType : byte {
+  Unknown = 0,
+  Token,
+  Single
+}
+
+enum ChainMutability : byte {
+  Immutable = 0,
+  Mutable
+}
+
+enum UpdateVersionType : byte {
+  None = 0,
+  Sequence,
+  WriteVersion
+}
+
+table UpdateVersion {
+  version_type: UpdateVersionType;
+  version_value: ulong;
+}
+
+table UpdatedBool {
+  slot_updated: ulong;
+  update_version: UpdateVersion;
+  value: bool;
+}
+
+table UpdatedU64 {
+  slot_updated: ulong;
+  update_version: UpdateVersion;
+  value: ulong;
+}
+
+table UpdatedU32 {
+  slot_updated: ulong;
+  update_version: UpdateVersion;
+  value: uint;
+}
+
+table UpdatedString {
+  slot_updated: ulong;
+  update_version: UpdateVersion;
+  value: string;
+}
+
+table UpdatedPubkey {
+  slot_updated: ulong;
+  update_version: UpdateVersion;
+  value: [ubyte];  // 32 bytes
+}
+
+table UpdatedOptionalPubkey {
+  slot_updated: ulong;
+  update_version: UpdateVersion;
+  value: [ubyte];  // 32 bytes, optional
+}
+
+table UpdatedCreators {
+  slot_updated: ulong;
+  update_version: UpdateVersion;
+  value: [Creator];
+}
+
+table UpdatedChainMutability {
+  slot_updated: ulong;
+  update_version: UpdateVersion;
+  value: ChainMutability;
+}
+
+table UpdatedOwnerType {
+  slot_updated: ulong;
+  update_version: UpdateVersion;
+  value: OwnerType;
+}
+
+table Creator {
+  creator: [ubyte];          // Pubkey (32 bytes)
+  creator_verified: bool;
+  creator_share: uint;       // Use uint to represent u8
+}
+
+table Pubkey {
+  data: [ubyte];  // 32 bytes
+}
+
+table AssetStaticDetails {
+  pubkey: [ubyte];                         // Pubkey (32 bytes)
+  specification_asset_class: SpecificationAssetClass;
+  royalty_target_type: RoyaltyTargetType;
+  created_at: long;
+  edition_address: [ubyte];                // Optional Pubkey (32 bytes)
+}
+
+table AssetDynamicDetails {
+  pubkey: [ubyte];                         // Pubkey (32 bytes)
+  is_compressible: UpdatedBool;
+  is_compressed: UpdatedBool;
+  is_frozen: UpdatedBool;
+  supply: UpdatedU64;
+  seq: UpdatedU64;
+  is_burnt: UpdatedBool;
+  was_decompressed: UpdatedBool;
+  onchain_data: UpdatedString;
+  creators: UpdatedCreators;
+  royalty_amount: UpdatedU32;
+  url: UpdatedString;
+  chain_mutability: UpdatedChainMutability;
+  lamports: UpdatedU64;
+  executable: UpdatedBool;
+  metadata_owner: UpdatedString;
+  raw_name: UpdatedString;
+  mpl_core_plugins: UpdatedString;
+  mpl_core_unknown_plugins: UpdatedString;
+  rent_epoch: UpdatedU64;
+  num_minted: UpdatedU32;
+  current_size: UpdatedU32;
+  plugins_json_version: UpdatedU32;
+  mpl_core_external_plugins: UpdatedString;
+  mpl_core_unknown_external_plugins: UpdatedString;
+  mint_extensions: UpdatedString;
+}
+
+table AssetAuthority {
+  pubkey: [ubyte];                         // Pubkey (32 bytes)
+  authority: [ubyte];                      // Pubkey (32 bytes)
+  slot_updated: ulong;
+  write_version: ulong;
+}
+
+table AssetOwner {
+  pubkey: [ubyte];                         // Pubkey (32 bytes)
+  owner: UpdatedOptionalPubkey;
+  delegate: UpdatedOptionalPubkey;
+  owner_type: UpdatedOwnerType;
+  owner_delegate_seq: UpdatedU64;
+}
+
+table AssetCollection {
+  pubkey: [ubyte];                         // Pubkey (32 bytes)
+  collection: UpdatedPubkey;
+  is_collection_verified: UpdatedBool;
+  authority: UpdatedOptionalPubkey;
+}
+
+table AssetCompleteDetails {
+  pubkey: [ubyte];                         // Pubkey (32 bytes)
+  static_details: AssetStaticDetails;
+  dynamic_details: AssetDynamicDetails;
+  authority: AssetAuthority;
+  owner: AssetOwner;
+  collection: AssetCollection;
+}
+
+root_type AssetCompleteDetails;

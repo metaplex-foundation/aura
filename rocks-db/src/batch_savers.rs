@@ -1,4 +1,6 @@
-use crate::asset::{AssetCollection, MetadataMintMap};
+use crate::asset::{AssetCollection, AssetCompleteDetails, MetadataMintMap};
+use crate::asset_generated::asset as fb;
+use crate::column::TypedColumn;
 use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::Result;
 use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
@@ -32,6 +34,26 @@ pub struct MetadataModels {
     pub metadata_mint: Option<MetadataMintMap>,
 }
 
+impl From<&MetadataModels> for AssetCompleteDetails {
+    fn from(value: &MetadataModels) -> Self {
+        Self {
+            pubkey: value
+                .asset_static
+                .as_ref()
+                .map(|s| s.pubkey)
+                .or_else(|| value.asset_dynamic.as_ref().map(|d| d.pubkey))
+                .or_else(|| value.asset_authority.as_ref().map(|a| a.pubkey))
+                .or_else(|| value.asset_owner.as_ref().map(|o| o.pubkey))
+                .or_else(|| value.asset_collection.as_ref().map(|c| c.pubkey))
+                .unwrap_or_default(),
+            static_details: value.asset_static.clone(),
+            dynamic_details: value.asset_dynamic.clone(),
+            authority: value.asset_authority.clone(),
+            owner: value.asset_owner.clone(),
+            collection: value.asset_collection.clone(),
+        }
+    }
+}
 #[macro_export]
 macro_rules! store_assets {
     ($self:expr, $asset:expr, $db_field:ident, $metric_name:expr) => {{
@@ -80,46 +102,46 @@ impl BatchSaveStorage {
         self.batch.len() >= self.batch_size
     }
 
-    fn store_static(&mut self, asset_static: &AssetStaticDetails) -> Result<()> {
-        store_assets!(
-            self,
-            asset_static,
-            asset_static_data,
-            "accounts_static_merge_with_batch"
-        )
+    fn store_complete(&mut self, data: &AssetCompleteDetails) -> Result<()> {
+        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
+        let acd = data.convert_to_fb(&mut builder);
+        builder.finish_minimal(acd);
+        self.batch.merge_cf(
+            &self
+                .storage
+                .db
+                .cf_handle(AssetCompleteDetails::NAME)
+                .unwrap(),
+            data.pubkey,
+            builder.finished_data(),
+        );
+        let res = Ok(());
+        result_to_metrics(
+            self.metrics.clone(),
+            &res,
+            "accounts_complete_data_merge_with_batch",
+        );
+        res
     }
+
     pub fn store_owner(&mut self, asset_owner: &AssetOwner) -> Result<()> {
-        store_assets!(
-            self,
-            asset_owner,
-            asset_owner_data,
-            "accounts_owner_merge_with_batch"
-        )
+        let asset = &AssetCompleteDetails {
+            pubkey: asset_owner.pubkey,
+            owner: Some(asset_owner.clone()),
+            ..Default::default()
+        };
+        self.store_complete(asset)
     }
+
     pub fn store_dynamic(&mut self, asset_dynamic: &AssetDynamicDetails) -> Result<()> {
-        store_assets!(
-            self,
-            asset_dynamic,
-            asset_dynamic_data,
-            "accounts_dynamic_merge_with_batch"
-        )
+        let asset = &AssetCompleteDetails {
+            pubkey: asset_dynamic.pubkey,
+            dynamic_details: Some(asset_dynamic.clone()),
+            ..Default::default()
+        };
+        self.store_complete(asset)
     }
-    fn store_authority(&mut self, asset_authority: &AssetAuthority) -> Result<()> {
-        store_assets!(
-            self,
-            asset_authority,
-            asset_authority_data,
-            "accounts_authority_merge_with_batch"
-        )
-    }
-    fn store_collection(&mut self, asset_collection: &AssetCollection) -> Result<()> {
-        store_assets!(
-            self,
-            asset_collection,
-            asset_collection_data,
-            "accounts_collection_merge_with_batch"
-        )
-    }
+
     fn store_metadata_mint(&mut self, metadata_mint_map: &MetadataMintMap) -> Result<()> {
         store_assets!(
             self,
@@ -207,58 +229,44 @@ impl BatchSaveStorage {
     }
 
     pub fn get_authority(&self, address: Pubkey) -> Pubkey {
-        self.storage
-            .asset_authority_data
-            .get(address)
-            .unwrap_or(None)
-            .map(|authority| authority.authority)
-            .unwrap_or_default()
+        if let Ok(Some(data)) = self.storage.db.get_pinned_cf(
+            &self
+                .storage
+                .db
+                .cf_handle(AssetCompleteDetails::NAME)
+                .unwrap(),
+            address,
+        ) {
+            let asset = fb::root_as_asset_complete_details(&data);
+            return asset
+                .ok()
+                .and_then(|a| a.authority())
+                .and_then(|auth| auth.authority())
+                .map(|k| Pubkey::try_from(k.bytes()).unwrap())
+                .unwrap_or_default();
+        }
+        Pubkey::default()
     }
+
     pub fn get_mint_map(&self, key: Pubkey) -> Result<Option<MetadataMintMap>> {
         self.storage.metadata_mint_map.get(key)
     }
 
-    pub fn store_metadata_models(&mut self, metadata_models: &MetadataModels) -> Result<()> {
-        let mut slot_updated = 0;
-        let mut key = None;
-        if let Some(asset_static) = &metadata_models.asset_static {
-            self.store_static(asset_static)?;
-            key = Some(asset_static.pubkey);
-        }
-        if let Some(asset_dynamic) = &metadata_models.asset_dynamic {
-            self.store_dynamic(asset_dynamic)?;
-            key = Some(asset_dynamic.pubkey);
-            if asset_dynamic.get_slot_updated() > slot_updated {
-                slot_updated = asset_dynamic.get_slot_updated()
-            }
-        }
-        if let Some(asset_authority) = &metadata_models.asset_authority {
-            self.store_authority(asset_authority)?;
-            key = Some(asset_authority.pubkey);
-        }
-        if let Some(asset_collection) = &metadata_models.asset_collection {
-            self.store_collection(asset_collection)?;
-            key = Some(asset_collection.pubkey);
-            if asset_collection.get_slot_updated() > slot_updated {
-                slot_updated = asset_collection.get_slot_updated()
-            }
-        }
-        if let Some(metadata_mint) = &metadata_models.metadata_mint {
+    pub fn store_metadata_models(
+        &mut self,
+        asset: &AssetCompleteDetails,
+        metadata_mint: Option<MetadataMintMap>,
+    ) -> Result<()> {
+        if let Some(metadata_mint) = &metadata_mint {
             self.store_metadata_mint(metadata_mint)?;
         }
-        if let Some(asset_owner) = &metadata_models.asset_owner {
-            self.store_owner(asset_owner)?;
-            key = Some(asset_owner.pubkey);
-            if asset_owner.get_slot_updated() > slot_updated {
-                slot_updated = asset_owner.get_slot_updated()
-            }
-        }
-
-        if let Some(key) = key {
+        if asset.any_field_is_set() {
+            self.store_complete(asset)?;
+            let slot_updated = asset.get_slot_updated();
             if slot_updated == 0 {
                 return Ok(());
             }
-            if let Err(e) = self.asset_updated_with_batch(slot_updated, key) {
+            if let Err(e) = self.asset_updated_with_batch(slot_updated, asset.pubkey) {
                 error!("Error while updating assets update idx: {}", e);
             }
         }

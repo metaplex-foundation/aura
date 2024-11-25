@@ -7,7 +7,7 @@ use entities::models::{
 };
 use heck::ToSnakeCase;
 use metrics_utils::IngesterMetricsConfig;
-use rocks_db::asset::AssetCollection;
+use rocks_db::asset::{AssetCollection, AssetCompleteDetails};
 use rocks_db::batch_savers::{BatchSaveStorage, MetadataModels};
 use rocks_db::errors::StorageError;
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
@@ -41,7 +41,8 @@ impl MplCoreProcessor {
         };
 
         let begin_processing = Instant::now();
-        let res = storage.store_metadata_models(&metadata_models);
+        let asset = AssetCompleteDetails::from(&metadata_models);
+        let res = storage.store_metadata_models(&asset, metadata_models.metadata_mint);
         result_to_metrics(
             self.metrics.clone(),
             &res,

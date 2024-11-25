@@ -1,11 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
-use async_trait::async_trait;
-use entities::enums::{SpecificationAssetClass, SpecificationVersions, TokenMetadataEdition};
-use serde_json::json;
-use solana_sdk::pubkey::Pubkey;
-
-use crate::asset::{AssetCollection, AssetLeaf, AssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey};
+use crate::asset::{
+    AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, SlotAssetIdx,
+    SlotAssetIdxKey,
+};
+use crate::asset_generated::asset as fb;
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
 use crate::column::TypedColumn;
 use crate::errors::StorageError;
@@ -17,8 +16,11 @@ use crate::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
     BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
-use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, UrlWithStatus};
-
+use async_trait::async_trait;
+use entities::enums::{SpecificationAssetClass, TokenMetadataEdition};
+use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated};
+use serde_json::json;
+use solana_sdk::pubkey::Pubkey;
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         _ = self.db.try_catch_up_with_primary();
@@ -101,199 +103,179 @@ impl AssetUpdateIndexStorage for Storage {
     }
 }
 
+impl Storage {
+    pub async fn get_asset_indexes_with_collections_and_urls(
+        &self,
+        asset_ids: Vec<Pubkey>,
+    ) -> Result<(Vec<AssetIndex>, HashSet<Pubkey>, HashMap<Pubkey, String>)> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let d = db.batched_multi_get_cf(
+                &db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                asset_ids,
+                false, //sorting the input and using true here slows down the method by 5% for batches or 15% for an indiviual asset
+            );
+            let mut asset_indexes = Vec::new();
+            let mut assets_collection_pks = HashSet::new();
+            let mut urls = HashMap::new();
+
+            for asset in d {
+                let asset = asset?;
+                if let Some(asset) = asset {
+                    let asset = fb::root_as_asset_complete_details(asset.as_ref())
+                        .map_err(|e| StorageError::Common(e.to_string()))?;
+                    let key =
+                        Pubkey::new_from_array(asset.pubkey().unwrap().bytes().try_into().unwrap());
+                    asset
+                        .collection()
+                        .and_then(|c| c.collection())
+                        .and_then(|c| c.value())
+                        .map(|c| {
+                            assets_collection_pks.insert(Pubkey::try_from(c.bytes()).unwrap())
+                        });
+                    asset
+                        .dynamic_details()
+                        .and_then(|d| d.url())
+                        .and_then(|u| u.value())
+                        .map(|u| urls.insert(key, u.to_string()));
+                    asset_indexes.push(asset.into());
+                }
+            }
+            Ok::<(_, _, _), StorageError>((asset_indexes, assets_collection_pks, urls))
+        })
+        .await
+        .map_err(|e| StorageError::Common(e.to_string()))?
+    }
+
+    pub async fn get_assets_with_collections_and_urls(
+        &self,
+        asset_ids: Vec<Pubkey>,
+    ) -> Result<(
+        HashMap<Pubkey, AssetCompleteDetails>,
+        HashSet<Pubkey>,
+        HashMap<Pubkey, String>,
+    )> {
+        let db = self.db.clone();
+        tokio::task::spawn_blocking(move || {
+            let d = db.batched_multi_get_cf(
+                &db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                asset_ids,
+                false, //sorting the input and using true here slows down the method by 5% for batches or 15% for an indiviual asset
+            );
+            let mut assets_data = HashMap::new();
+            let mut assets_collection_pks = HashSet::new();
+            let mut urls = HashMap::new();
+
+            for asset in d {
+                let asset = asset?;
+                if let Some(asset) = asset {
+                    let asset = fb::root_as_asset_complete_details(asset.as_ref())
+                        .map_err(|e| StorageError::Common(e.to_string()))?;
+                    let key =
+                        Pubkey::new_from_array(asset.pubkey().unwrap().bytes().try_into().unwrap());
+                    asset
+                        .collection()
+                        .and_then(|c| c.collection())
+                        .and_then(|c| c.value())
+                        .map(|c| {
+                            assets_collection_pks.insert(Pubkey::try_from(c.bytes()).unwrap())
+                        });
+                    asset
+                        .dynamic_details()
+                        .and_then(|d| d.url())
+                        .and_then(|u| u.value())
+                        .map(|u| urls.insert(key, u.to_string()));
+                    assets_data.insert(key, asset.into());
+                }
+            }
+            Ok::<(_, _, _), StorageError>((assets_data, assets_collection_pks, urls))
+        })
+        .await
+        .map_err(|e| StorageError::Common(e.to_string()))?
+    }
+}
+
 #[async_trait]
 impl AssetIndexReader for Storage {
-    async fn get_asset_indexes<'a>(
-        &self,
-        keys: &[Pubkey],
-        collection_authorities: Option<&'a HashMap<Pubkey, Pubkey>>,
-    ) -> Result<HashMap<Pubkey, AssetIndex>> {
-        let mut asset_indexes = HashMap::new();
-        let start_time = chrono::Utc::now();
-        let assets_static_fut = self.asset_static_data.batch_get(keys.to_vec());
-        let assets_dynamic_fut = self.asset_dynamic_data.batch_get(keys.to_vec());
-        let assets_authority_fut = self.asset_authority_data.batch_get(keys.to_vec());
-        let assets_owner_fut = self.asset_owner_data.batch_get(keys.to_vec());
-        let assets_collection_fut = self.asset_collection_data.batch_get(keys.to_vec());
+    async fn get_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>> {
+        let start_time: chrono::DateTime<chrono::Utc> = chrono::Utc::now();
+
+        let asset_index_collection_url_fut =
+            self.get_asset_indexes_with_collections_and_urls(keys.to_vec());
         // these data will be used only during live synchronization
         // during full sync will be passed mint keys meaning response will be always empty
         let token_accounts_fut = self.token_accounts.batch_get(keys.to_vec());
 
-        let (
-            asset_static_details,
-            asset_dynamic_details,
-            asset_authority_details,
-            asset_owner_details,
-            asset_collection_details,
-            token_accounts_details,
-        ) = tokio::join!(
-            assets_static_fut,
-            assets_dynamic_fut,
-            assets_authority_fut,
-            assets_owner_fut,
-            assets_collection_fut,
-            token_accounts_fut
+        let (mut asset_indexes, assets_collection_pks, urls) =
+            asset_index_collection_url_fut.await?;
+
+        let offchain_data_downloaded_map_fut = self
+            .asset_offchain_data
+            .batch_get(urls.values().map(|u| u.to_string()).collect());
+
+        let mut mpl_core_collections = HashMap::new();
+        let core_collections_iterator = self.db.batched_multi_get_cf(
+            &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+            assets_collection_pks,
+            false,
         );
-
-        let asset_static_details = asset_static_details?;
-        let asset_dynamic_details = asset_dynamic_details?;
-        let asset_authority_details = asset_authority_details?;
-        let asset_owner_details = asset_owner_details?;
-        let asset_collection_details = asset_collection_details?;
-        let token_accounts_details = token_accounts_details?;
-
-        let mpl_core_map = {
-            // during dump creation hashmap with collection authorities will be passed
-            // and during regular synchronization we should make additional select from DB
-            if collection_authorities.is_some() {
-                HashMap::new()
-            } else {
-                let assets_collection_pks = asset_collection_details
-                    .iter()
-                    .flat_map(|c| c.as_ref().map(|c| c.collection.value))
-                    .collect::<Vec<_>>();
-
-                self.asset_collection_data
-                    .batch_get(assets_collection_pks)
-                    .await?
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|asset| asset.authority.value.map(|v| (asset.pubkey, v)))
-                    .collect::<HashMap<_, _>>()
-            }
-        };
-
-        // mpl_core_map.is_empty() && collection_authorities.is_some() check covers case when DB is empty
-        let mpl_core_collections = if mpl_core_map.is_empty() && collection_authorities.is_some() {
-            collection_authorities.unwrap()
-        } else {
-            &mpl_core_map
-        };
-
-        for static_info in asset_static_details.iter().flatten() {
-            let asset_index = AssetIndex {
-                pubkey: static_info.pubkey,
-                specification_version: SpecificationVersions::V1,
-                specification_asset_class: static_info.specification_asset_class,
-                royalty_target_type: static_info.royalty_target_type,
-                slot_created: static_info.created_at,
-                ..Default::default()
-            };
-
-            asset_indexes.insert(asset_index.pubkey, asset_index);
-        }
-
-        for dynamic_info in asset_dynamic_details.iter().flatten() {
-            if let Some(existed_index) = asset_indexes.get_mut(&dynamic_info.pubkey) {
-                existed_index.pubkey = dynamic_info.pubkey;
-                existed_index.is_compressible = dynamic_info.is_compressible.value;
-                existed_index.is_compressed = dynamic_info.is_compressed.value;
-                existed_index.is_frozen = dynamic_info.is_frozen.value;
-                existed_index.supply = dynamic_info.supply.clone().map(|s| s.value as i64);
-                existed_index.is_burnt = dynamic_info.is_burnt.value;
-                existed_index.creators = dynamic_info.creators.clone().value;
-                existed_index.royalty_amount = dynamic_info.royalty_amount.value as i64;
-                existed_index.slot_updated = dynamic_info.get_slot_updated() as i64;
-                existed_index.metadata_url = self.url_with_status_for(dynamic_info);
-            } else {
-                let asset_index = AssetIndex {
-                    pubkey: dynamic_info.pubkey,
-                    is_compressible: dynamic_info.is_compressible.value,
-                    is_compressed: dynamic_info.is_compressed.value,
-                    is_frozen: dynamic_info.is_frozen.value,
-                    supply: dynamic_info.supply.clone().map(|s| s.value as i64),
-                    is_burnt: dynamic_info.is_burnt.value,
-                    creators: dynamic_info.creators.clone().value,
-                    royalty_amount: dynamic_info.royalty_amount.value as i64,
-                    slot_updated: dynamic_info.get_slot_updated() as i64,
-                    metadata_url: self.url_with_status_for(dynamic_info),
-                    ..Default::default()
+        for asset in core_collections_iterator {
+            let asset = asset?;
+            if let Some(asset) = asset {
+                let asset = fb::root_as_asset_complete_details(asset.as_ref())
+                    .map_err(|e| StorageError::Common(e.to_string()))?;
+                if let Some(auth) = asset
+                    .collection()
+                    .and_then(|collection| collection.authority())
+                    .and_then(|auth| auth.value())
+                {
+                    let key =
+                        Pubkey::new_from_array(asset.pubkey().unwrap().bytes().try_into().unwrap());
+                    let auth_value = Pubkey::new_from_array(auth.bytes().try_into().unwrap());
+                    mpl_core_collections.insert(key, auth_value);
                 };
-
-                asset_indexes.insert(asset_index.pubkey, asset_index);
             }
         }
+        let offchain_data_downloaded_map: HashMap<String, bool> = offchain_data_downloaded_map_fut
+            .await?
+            .into_iter()
+            .flatten()
+            .map(|offchain_data| {
+                (
+                    offchain_data.url.clone(),
+                    !offchain_data.metadata.is_empty(),
+                )
+            })
+            .collect::<HashMap<_, _>>();
 
-        for data in asset_authority_details.iter().flatten() {
-            if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
-                existed_index.pubkey = data.pubkey;
-                existed_index.authority = Some(data.authority);
-                if data.slot_updated as i64 > existed_index.slot_updated {
-                    existed_index.slot_updated = data.slot_updated as i64;
-                }
-            } else {
-                let asset_index = AssetIndex {
-                    pubkey: data.pubkey,
-                    authority: Some(data.authority),
-                    slot_updated: data.slot_updated as i64,
-                    ..Default::default()
-                };
-
-                asset_indexes.insert(asset_index.pubkey, asset_index);
+        asset_indexes.iter_mut().for_each(|ref mut asset_index| {
+            if let Some(coll) = asset_index.collection {
+                asset_index.update_authority = mpl_core_collections.get(&coll).copied();
             }
-        }
-
-        for data in asset_owner_details.iter().flatten() {
-            if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
-                existed_index.pubkey = data.pubkey;
-                existed_index.owner = data.owner.value;
-                existed_index.delegate = data.delegate.value;
-                existed_index.owner_type = Some(data.owner_type.value);
-                if data.get_slot_updated() as i64 > existed_index.slot_updated {
-                    existed_index.slot_updated = data.get_slot_updated() as i64;
-                }
-            } else {
-                let asset_index = AssetIndex {
-                    pubkey: data.pubkey,
-                    owner: data.owner.value,
-                    delegate: data.delegate.value,
-                    owner_type: Some(data.owner_type.value),
-                    slot_updated: data.get_slot_updated() as i64,
-                    ..Default::default()
-                };
-
-                asset_indexes.insert(asset_index.pubkey, asset_index);
+            if let Some(ref mut mut_val) = asset_index.metadata_url {
+                mut_val.is_downloaded = offchain_data_downloaded_map
+                    .get(&mut_val.metadata_url)
+                    .copied()
+                    .unwrap_or_default();
             }
-        }
-
-        for data in asset_collection_details.iter().flatten() {
-            if let Some(existed_index) = asset_indexes.get_mut(&data.pubkey) {
-                existed_index.pubkey = data.pubkey;
-                existed_index.collection = Some(data.collection.value);
-                existed_index.is_collection_verified = Some(data.is_collection_verified.value);
-                existed_index.update_authority =
-                    mpl_core_collections.get(&data.collection.value).copied();
-                if data.get_slot_updated() as i64 > existed_index.slot_updated {
-                    existed_index.slot_updated = data.get_slot_updated() as i64;
-                }
-            } else {
-                let asset_index = AssetIndex {
-                    pubkey: data.pubkey,
-                    collection: Some(data.collection.value),
-                    is_collection_verified: Some(data.is_collection_verified.value),
-                    update_authority: mpl_core_collections.get(&data.collection.value).copied(),
-                    slot_updated: data.get_slot_updated() as i64,
-                    ..Default::default()
-                };
-
-                asset_indexes.insert(asset_index.pubkey, asset_index);
-            }
-        }
+        });
+        let token_accounts_details = token_accounts_fut.await?;
 
         // compare to other data this data is saved in HashMap by token account keys, not mints
-        for token_acc in token_accounts_details.iter().flatten() {
-            let asset_index = AssetIndex {
-                pubkey: token_acc.pubkey,
-                specification_asset_class: SpecificationAssetClass::FungibleToken,
-                owner: Some(token_acc.owner),
-                fungible_asset_mint: Some(token_acc.mint),
-                fungible_asset_balance: Some(token_acc.amount as u64),
-                slot_updated: token_acc.slot_updated,
-                ..Default::default()
-            };
-
-            asset_indexes.insert(token_acc.pubkey, asset_index);
-        }
+        asset_indexes.extend(
+            token_accounts_details
+                .iter()
+                .flatten()
+                .map(|token_acc| AssetIndex {
+                    pubkey: token_acc.pubkey,
+                    specification_asset_class: SpecificationAssetClass::FungibleToken,
+                    owner: Some(token_acc.owner),
+                    fungible_asset_mint: Some(token_acc.mint),
+                    fungible_asset_balance: Some(token_acc.amount as u64),
+                    slot_updated: token_acc.slot_updated,
+                    ..Default::default()
+                }),
+        );
 
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
@@ -320,23 +302,25 @@ impl AssetSlotStorage for Storage {
 
 impl Storage {
     pub async fn insert_gaped_data(&self, data: CompleteAssetDetails) -> Result<()> {
-        let mut batch = rocksdb::WriteBatch::default();
-        self.asset_static_data.merge_with_batch(
-            &mut batch,
-            data.pubkey,
-            &AssetStaticDetails {
+        let write_version = if let Some(write_v) = data.authority.update_version {
+            match write_v {
+                UpdateVersion::WriteVersion(v) => Some(v),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
+        let acd = AssetCompleteDetails {
+            pubkey: data.pubkey,
+            static_details: Some(AssetStaticDetails {
                 pubkey: data.pubkey,
                 specification_asset_class: data.specification_asset_class,
                 royalty_target_type: data.royalty_target_type,
                 created_at: data.slot_created as i64,
                 edition_address: data.edition_address,
-            },
-        )?;
-
-        self.asset_dynamic_data.merge_with_batch(
-            &mut batch,
-            data.pubkey,
-            &AssetDynamicDetails {
+            }),
+            dynamic_details: Some(AssetDynamicDetails {
                 pubkey: data.pubkey,
                 is_compressible: data.is_compressible,
                 is_compressed: data.is_compressed,
@@ -369,41 +353,36 @@ impl Storage {
                 mpl_core_external_plugins: data.mpl_core_external_plugins,
                 mpl_core_unknown_external_plugins: data.mpl_core_unknown_external_plugins,
                 mint_extensions: data.mint_extensions,
-            },
-        )?;
-
-        let write_version = if let Some(write_v) = data.authority.update_version {
-            match write_v {
-                UpdateVersion::WriteVersion(v) => Some(v),
-                _ => None,
-            }
-        } else {
-            None
-        };
-
-        self.asset_authority_data.merge_with_batch(
-            &mut batch,
-            data.pubkey,
-            &AssetAuthority {
+            }),
+            authority: Some(AssetAuthority {
                 pubkey: data.pubkey,
                 authority: data.authority.value,
                 slot_updated: data.authority.slot_updated,
                 write_version,
-            },
-        )?;
-
-        if let Some(collection) = data.collection {
-            self.asset_collection_data.merge_with_batch(
-                &mut batch,
-                data.pubkey,
-                &AssetCollection {
-                    pubkey: data.pubkey,
-                    collection: collection.collection,
-                    is_collection_verified: collection.is_collection_verified,
-                    authority: collection.authority,
-                },
-            )?;
+            }),
+            owner: Some(AssetOwner {
+                pubkey: data.pubkey,
+                owner: data.owner,
+                delegate: data.delegate,
+                owner_type: data.owner_type,
+                owner_delegate_seq: data.owner_delegate_seq,
+            }),
+            collection: data.collection.map(|collection| AssetCollection {
+                pubkey: data.pubkey,
+                collection: collection.collection,
+                is_collection_verified: collection.is_collection_verified,
+                authority: collection.authority,
+            }),
         }
+        .convert_to_fb(&mut builder);
+
+        let mut batch = rocksdb::WriteBatch::default();
+        builder.finish_minimal(acd);
+        batch.merge_cf(
+            &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+            data.pubkey,
+            builder.finished_data(),
+        );
 
         if let Some(leaf) = data.asset_leaf {
             self.asset_leaf_data.merge_with_batch(
@@ -421,18 +400,6 @@ impl Storage {
                 },
             )?
         }
-
-        self.asset_owner_data.merge_with_batch(
-            &mut batch,
-            data.pubkey,
-            &AssetOwner {
-                pubkey: data.pubkey,
-                owner: data.owner,
-                delegate: data.delegate,
-                owner_type: data.owner_type,
-                owner_delegate_seq: data.owner_delegate_seq,
-            },
-        )?;
 
         if let Some(leaf) = data.cl_leaf {
             self.cl_leafs.put_with_batch(
@@ -496,23 +463,5 @@ impl Storage {
             .map_err(|e| StorageError::Common(e.to_string()))?
             .map_err(|e| StorageError::Common(e.to_string()))?;
         Ok(())
-    }
-
-    fn url_with_status_for(&self, dynamic_info: &AssetDynamicDetails) -> Option<UrlWithStatus> {
-        if dynamic_info.url.value.trim().is_empty() {
-            None
-        } else {
-            // doing this check because there may be saved empty strings for some urls
-            // because of bug in previous code
-            let is_downloaded = self
-                .asset_offchain_data
-                .get(dynamic_info.url.value.clone())
-                .ok()
-                .flatten()
-                .map(|a| !a.metadata.is_empty())
-                .unwrap_or(false);
-
-            Some(UrlWithStatus::new(&dynamic_info.url.value, is_downloaded))
-        }
     }
 }

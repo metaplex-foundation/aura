@@ -355,7 +355,10 @@ mod tests {
     async fn test_multiple_slot_updates() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let pk = Pubkey::new_unique();
-        let dynamic_data = create_test_dynamic_data(pk, 0, "http://example.com".to_string());
+        let mut dynamic_data = create_test_dynamic_data(pk, 0, "http://example.com".to_string());
+        dynamic_data.is_compressible = Updated::new(0, None, false);
+        dynamic_data.is_compressed = Updated::new(0, None, false);
+        dynamic_data.supply = Some(Updated::new(0, None, 1));
 
         storage
             .asset_dynamic_data

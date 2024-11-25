@@ -3,6 +3,8 @@ use entities::models::SignatureWithSlot;
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
+use crate::asset::AssetCompleteDetails;
+use crate::column::TypedColumn;
 use crate::parameters::Parameter;
 use crate::{
     parameters,
@@ -76,51 +78,36 @@ impl Storage {
         ix: &InstructionResult,
     ) -> Result<(), StorageError> {
         if let Some(ref update) = ix.update {
-            if let Some(ref dyn_data) = update.update {
-                if let Err(e) = self.save_tx_data_and_asset_updated_with_batch(
-                    batch,
-                    dyn_data.pk,
-                    dyn_data.slot,
-                    &dyn_data.leaf,
-                    &dyn_data.dynamic_data,
-                ) {
-                    tracing::error!("Failed to save tx data and asset updated: {}", e);
-                }
-            }
-            if let Some(ref static_update) = update.static_update {
-                if let Err(e) = self.asset_static_data.merge_with_batch(
-                    batch,
-                    static_update.pk,
-                    &static_update.details,
-                ) {
-                    tracing::error!("Failed to merge asset static data: {}", e);
-                }
-            }
-            if let Some(ref owner_update) = update.owner_update {
-                if let Err(e) = self.asset_owner_data.merge_with_batch(
-                    batch,
-                    owner_update.pk,
-                    &owner_update.details,
-                ) {
-                    tracing::error!("Failed to merge asset owner data: {}", e);
-                }
-            }
-            if let Some(ref authority_update) = update.authority_update {
-                if let Err(e) = self.asset_authority_data.merge_with_batch(
-                    batch,
-                    authority_update.pk,
-                    &authority_update.details,
-                ) {
-                    tracing::error!("Failed to merge asset authority data: {}", e);
-                }
-            }
-            if let Some(ref collection_update) = update.collection_update {
-                if let Err(e) = self.asset_collection_data.merge_with_batch(
-                    batch,
-                    collection_update.pk,
-                    &collection_update.details,
-                ) {
-                    tracing::error!("Failed to merge asset collection data: {}", e);
+            let pk = update
+                .static_update
+                .as_ref()
+                .map(|s| s.pk)
+                .or(update.update.as_ref().map(|u| u.pk))
+                .or(update.owner_update.as_ref().map(|o| o.pk))
+                .or(update.authority_update.as_ref().map(|a| a.pk))
+                .or(update.collection_update.as_ref().map(|c| c.pk));
+            if let Some(pk) = pk {
+                let acd = AssetCompleteDetails {
+                    pubkey: pk,
+                    static_details: update.static_update.as_ref().map(|s| s.details.clone()),
+                    dynamic_details: update.update.as_ref().and_then(|u| u.dynamic_data.clone()),
+                    owner: update.owner_update.as_ref().map(|o| o.details.clone()),
+                    authority: update.authority_update.as_ref().map(|a| a.details.clone()),
+                    collection: update.collection_update.as_ref().map(|c| c.details.clone()),
+                };
+                let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
+                let acd = acd.convert_to_fb(&mut builder);
+                builder.finish_minimal(acd);
+                batch.merge_cf(
+                    &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                    pk,
+                    builder.finished_data(),
+                );
+                if let Some(leaf) = update.update.as_ref().and_then(|u| u.leaf.as_ref()) {
+                    self.asset_leaf_data.merge_with_batch(batch, pk, leaf)?
+                };
+                if let Some(slot) = update.update.as_ref().map(|u| u.slot) {
+                    self.asset_updated_with_batch(batch, slot, pk)?;
                 }
             }
 
@@ -148,13 +135,14 @@ impl Storage {
         if let Some(ref decompressed) = ix.decompressed {
             self.asset_leaf_data
                 .delete_with_batch(batch, decompressed.pk);
-            if let Err(e) = self.asset_dynamic_data.merge_with_batch(
-                batch,
+            let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
+            let acd = decompressed.details.convert_to_fb(&mut builder);
+            builder.finish_minimal(acd);
+            batch.merge_cf(
+                &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
                 decompressed.pk,
-                &decompressed.details,
-            ) {
-                tracing::error!("Failed to save tx data and asset updated: {}", e);
-            }
+                builder.finished_data(),
+            );
         }
         if let Some(ref tree_update) = ix.tree_update {
             self.save_changelog_with_batch(batch, &tree_update.event, tree_update.slot);

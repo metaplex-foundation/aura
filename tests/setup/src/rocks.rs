@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use entities::models::{OffChainData, Updated};
 use rand::{random, Rng};
+use rocks_db::asset::AssetCompleteDetails;
+use rocks_db::column::TypedColumn;
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 
@@ -141,50 +143,42 @@ impl RocksTestEnvironment {
             },
         )?;
 
-        let static_data_batch = self.storage.asset_static_data.put_batch(
-            generated_assets
-                .static_details
-                .iter()
-                .map(|value| (value.pubkey, value.clone()))
-                .collect(),
-        );
-        let authority_batch = self.storage.asset_authority_data.put_batch(
-            generated_assets
-                .authorities
-                .iter()
-                .map(|value| (value.pubkey, value.clone()))
-                .collect(),
-        );
-        let owners_batch = self.storage.asset_owner_data.put_batch(
-            generated_assets
-                .owners
-                .iter()
-                .map(|value| (value.pubkey, value.clone()))
-                .collect(),
-        );
-        let dynamic_details_batch = self.storage.asset_dynamic_data.put_batch(
-            generated_assets
-                .dynamic_details
-                .iter()
-                .map(|value| (value.pubkey, value.clone()))
-                .collect(),
-        );
-        let collections_batch = self.storage.asset_collection_data.put_batch(
-            generated_assets
-                .collections
-                .iter()
-                .map(|value| (value.pubkey, value.clone()))
-                .collect(),
-        );
-
-        tokio::try_join!(
-            static_data_batch,
-            authority_batch,
-            owners_batch,
-            dynamic_details_batch,
-            collections_batch
-        )?;
-
+        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        generated_assets
+            .pubkeys
+            .iter()
+            .zip(generated_assets.static_details.iter())
+            .zip(generated_assets.dynamic_details.iter())
+            .zip(generated_assets.collections.iter())
+            .zip(generated_assets.owners.iter())
+            .enumerate()
+            .for_each(
+                |(index, ((((pubkey, static_details), dynamic_details), collection), owner))| {
+                    let authority = generated_assets.authorities.get(index);
+                    let complete_asset = AssetCompleteDetails {
+                        pubkey: *pubkey,
+                        static_details: Some(static_details.clone()),
+                        dynamic_details: Some(dynamic_details.clone()),
+                        authority: authority.cloned(),
+                        collection: Some(collection.clone()),
+                        owner: Some(owner.clone()),
+                    };
+                    let asset_data = complete_asset.convert_to_fb(&mut builder);
+                    builder.finish_minimal(asset_data);
+                    batch.put_cf(
+                        &self
+                            .storage
+                            .db
+                            .cf_handle(AssetCompleteDetails::NAME)
+                            .unwrap(),
+                        *pubkey,
+                        builder.finished_data(),
+                    );
+                    builder.reset();
+                },
+            );
+        self.storage.db.write(batch)?;
         Ok(())
     }
 }

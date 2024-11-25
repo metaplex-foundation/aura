@@ -7,6 +7,7 @@ mod tests {
         ShadowInterestBearingConfig, ShadowTransferFee, ShadowTransferFeeConfig, UnixTimestamp,
     };
     use blockbuster::programs::token_extensions::MintAccountExtensions;
+    use rocks_db::column::TypedColumn;
     use std::str::FromStr;
     use std::{collections::HashMap, sync::Arc};
 
@@ -49,7 +50,7 @@ mod tests {
         config::JsonMiddlewareConfig, json_worker::JsonWorker,
         processors::account_based::token_updates_processor::TokenAccountsProcessor,
     };
-    use rocks_db::asset::AssetLeaf;
+    use rocks_db::asset::{AssetCompleteDetails, AssetLeaf};
     use rocks_db::batch_savers::BatchSaveStorage;
     use rocks_db::inscriptions::{Inscription, InscriptionData};
     use rocks_db::tree_seq::TreesGaps;
@@ -603,25 +604,26 @@ mod tests {
             .put(metadata.url.clone(), metadata)
             .unwrap();
 
+        let asset_complete_details = AssetCompleteDetails {
+            pubkey: pb,
+            static_details: Some(asset_static_details),
+            dynamic_details: Some(dynamic_details),
+            authority: Some(asset_authority),
+            owner: Some(owner),
+            ..Default::default()
+        };
         env.rocks_env
             .storage
-            .asset_static_data
-            .put(pb, asset_static_details)
-            .unwrap();
-        env.rocks_env
-            .storage
-            .asset_dynamic_data
-            .put(pb, dynamic_details)
-            .unwrap();
-        env.rocks_env
-            .storage
-            .asset_authority_data
-            .put(pb, asset_authority)
-            .unwrap();
-        env.rocks_env
-            .storage
-            .asset_owner_data
-            .put(pb, owner)
+            .db
+            .put_cf(
+                &env.rocks_env
+                    .storage
+                    .db
+                    .cf_handle(AssetCompleteDetails::NAME)
+                    .unwrap(),
+                pb,
+                asset_complete_details.convert_to_fb_bytes(),
+            )
             .unwrap();
 
         let payload = GetAsset {
@@ -727,26 +729,26 @@ mod tests {
             owner_type: Updated::new(12, Some(UpdateVersion::Sequence(12)), OwnerType::Single),
             owner_delegate_seq: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(12)),
         };
-
+        let asset_complete_details = AssetCompleteDetails {
+            pubkey: pb,
+            static_details: Some(asset_static_details),
+            dynamic_details: Some(dynamic_details),
+            authority: Some(asset_authority),
+            owner: Some(owner),
+            ..Default::default()
+        };
         env.rocks_env
             .storage
-            .asset_static_data
-            .put(pb, asset_static_details)
-            .unwrap();
-        env.rocks_env
-            .storage
-            .asset_dynamic_data
-            .put(pb, dynamic_details)
-            .unwrap();
-        env.rocks_env
-            .storage
-            .asset_authority_data
-            .put(pb, asset_authority)
-            .unwrap();
-        env.rocks_env
-            .storage
-            .asset_owner_data
-            .put(pb, owner)
+            .db
+            .put_cf(
+                &env.rocks_env
+                    .storage
+                    .db
+                    .cf_handle(AssetCompleteDetails::NAME)
+                    .unwrap(),
+                pb,
+                asset_complete_details.convert_to_fb_bytes(),
+            )
             .unwrap();
 
         let payload = GetAsset {
@@ -2350,26 +2352,26 @@ mod tests {
             owner_type: Updated::new(12, Some(UpdateVersion::Sequence(12)), OwnerType::Single),
             owner_delegate_seq: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(12)),
         };
-
+        let asset_complete_details = AssetCompleteDetails {
+            pubkey: pb,
+            static_details: Some(asset_static_details),
+            dynamic_details: Some(dynamic_details),
+            authority: Some(asset_authority),
+            owner: Some(owner),
+            ..Default::default()
+        };
         env.rocks_env
             .storage
-            .asset_static_data
-            .put(pb, asset_static_details)
-            .unwrap();
-        env.rocks_env
-            .storage
-            .asset_dynamic_data
-            .put(pb, dynamic_details)
-            .unwrap();
-        env.rocks_env
-            .storage
-            .asset_authority_data
-            .put(pb, asset_authority)
-            .unwrap();
-        env.rocks_env
-            .storage
-            .asset_owner_data
-            .put(pb, owner)
+            .db
+            .put_cf(
+                &env.rocks_env
+                    .storage
+                    .db
+                    .cf_handle(AssetCompleteDetails::NAME)
+                    .unwrap(),
+                pb,
+                asset_complete_details.convert_to_fb_bytes(),
+            )
             .unwrap();
 
         let payload = GetAsset {
@@ -2718,36 +2720,35 @@ mod tests {
         generated_assets.collections.iter().for_each(|collection| {
             collection_dynamic_details.insert(
                 collection.collection.value,
-                AssetDynamicDetails {
+                AssetCompleteDetails {
                     pubkey: collection.collection.value,
-                    url: Updated::new(
-                        100,
-                        Some(UpdateVersion::Sequence(100)),
-                        "http://example.com".to_string(),
-                    ),
-                    onchain_data: Some(Updated::new(
-                        100,
-                        Some(UpdateVersion::Sequence(100)),
-                        "{
+                    dynamic_details: Some(AssetDynamicDetails {
+                        pubkey: collection.collection.value,
+                        url: Updated::new(
+                            100,
+                            Some(UpdateVersion::Sequence(100)),
+                            "http://example.com".to_string(),
+                        ),
+                        onchain_data: Some(Updated::new(
+                            100,
+                            Some(UpdateVersion::Sequence(100)),
+                            "{
                             \"name\": \"WIF Drop\",
                             \"symbol\": \"6WIF\"\
                          }"
-                        .to_string(),
-                    )),
+                            .to_string(),
+                        )),
+                        ..Default::default()
+                    }),
                     ..Default::default()
                 },
             );
         });
-        let (d, o) = tokio::join!(
-            env.rocks_env
-                .storage
-                .asset_dynamic_data
-                .put_batch(collection_dynamic_details),
-            env.rocks_env.storage.asset_offchain_data.put_async(
-                "http://example.com".to_string(),
-                OffChainData {
-                    url: "http://example.com".to_string(),
-                    metadata: "{
+        let o = env.rocks_env.storage.asset_offchain_data.put_async(
+            "http://example.com".to_string(),
+            OffChainData {
+                url: "http://example.com".to_string(),
+                metadata: "{
                       \"name\": \"WIF Drop\",
                       \"symbol\": \"6WIF\",
                       \"description\": \"Random Drop event! https://3000wif.com\",
@@ -2781,12 +2782,14 @@ mod tests {
                         ]
                       }
                     }"
-                    .to_string(),
-                }
-            )
+                .to_string(),
+            },
         );
-        d.unwrap();
-        o.unwrap();
+        env.rocks_env
+            .storage
+            .put_complete_asset_details_batch(collection_dynamic_details)
+            .unwrap();
+        o.await.unwrap();
 
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
@@ -3082,6 +3085,39 @@ mod tests {
             amount: 30000,
             write_version: 10,
         };
+
+        let ftm_complete = AssetCompleteDetails {
+            pubkey: fungible_token_mint2,
+            static_details: Some(AssetStaticDetails {
+                pubkey: fungible_token_mint2,
+                specification_asset_class: SpecificationAssetClass::FungibleAsset,
+                royalty_target_type: RoyaltyTargetType::Single,
+                created_at: 10,
+                edition_address: None,
+            }),
+            owner: Some(AssetOwner {
+                pubkey: fungible_token_mint2,
+                owner: Updated::new(10, Some(UpdateVersion::WriteVersion(10)), None),
+                delegate: Default::default(),
+                owner_type: Default::default(),
+                owner_delegate_seq: Default::default(),
+            }),
+            ..Default::default()
+        };
+
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env
+                    .storage
+                    .db
+                    .cf_handle(AssetCompleteDetails::NAME)
+                    .unwrap(),
+                fungible_token_mint2,
+                ftm_complete.convert_to_fb_bytes(),
+            )
+            .unwrap();
         let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),
             10,
@@ -3110,35 +3146,6 @@ mod tests {
             .transform_and_save_mint_account(&mut batch_storage, &mint2)
             .unwrap();
         batch_storage.flush().unwrap();
-        env.rocks_env
-            .storage
-            .asset_static_data
-            .put(
-                fungible_token_mint2,
-                AssetStaticDetails {
-                    pubkey: fungible_token_mint2,
-                    specification_asset_class: SpecificationAssetClass::FungibleAsset,
-                    royalty_target_type: RoyaltyTargetType::Single,
-                    created_at: 10,
-                    edition_address: None,
-                },
-            )
-            .unwrap();
-        env.rocks_env
-            .storage
-            .asset_owner_data
-            .put(
-                fungible_token_mint2,
-                AssetOwner {
-                    pubkey: fungible_token_mint2,
-                    owner: Updated::new(10, Some(UpdateVersion::WriteVersion(10)), None),
-                    delegate: Default::default(),
-                    owner_type: Default::default(),
-                    owner_delegate_seq: Default::default(),
-                },
-            )
-            .unwrap();
-
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         synchronizer
             .synchronize_asset_indexes(&rx, 0)

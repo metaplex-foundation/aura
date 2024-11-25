@@ -110,7 +110,7 @@ impl From<blockbuster::token_metadata::types::UseMethod> for UseMethod {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy, PartialEq)]
 pub enum ChainMutability {
     // Original implementation also contain "Unknown"
     // enum variant, which is default. But we do not saved any

@@ -6,6 +6,8 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait};
 use postgre_client::PgClient;
+use rocks_db::asset::AssetCompleteDetails;
+use rocks_db::column::TypedColumn;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::{JoinError, JoinSet};
@@ -16,8 +18,9 @@ use nft_ingester::config::{
 };
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
+use rocks_db::asset_generated::asset as fb;
 use rocks_db::migrator::MigrationState;
-use rocks_db::{AssetDynamicDetails, Storage};
+use rocks_db::Storage;
 
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
@@ -206,7 +209,13 @@ impl JsonMigrator {
         rx: Receiver<()>,
         tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
     ) {
-        let dynamic_asset_details = self.target_rocks_db.asset_dynamic_data.iter_end();
+        let mut assets_iter = self.target_rocks_db.db.raw_iterator_cf(
+            &self
+                .target_rocks_db
+                .db
+                .cf_handle(AssetCompleteDetails::NAME)
+                .unwrap(),
+        );
 
         let tasks_buffer = Arc::new(Mutex::new(Vec::new()));
 
@@ -270,22 +279,23 @@ impl JsonMigrator {
             Ok(())
         });
 
-        for dynamic_details in dynamic_asset_details {
+        assets_iter.seek_to_first();
+        while assets_iter.valid() {
             if !rx.is_empty() {
                 info!("Setting tasks for JSONs is stopped");
                 break;
             }
-
-            match dynamic_details {
-                Ok((_key, value)) => {
-                    let dynamic_details = bincode::deserialize::<AssetDynamicDetails>(&value);
-
-                    match dynamic_details {
-                        Ok(data) => {
-                            let downloaded_json = self
-                                .target_rocks_db
-                                .asset_offchain_data
-                                .get(data.url.value.clone());
+            if let Some(value) = assets_iter.value() {
+                match fb::root_as_asset_complete_details(value) {
+                    Ok(asset) => {
+                        if let Some(url) = asset
+                            .dynamic_details()
+                            .and_then(|d| d.url())
+                            .and_then(|u| u.value())
+                        {
+                            let url = url.trim().replace('\0', "").clone();
+                            let downloaded_json =
+                                self.target_rocks_db.asset_offchain_data.get(url.clone());
 
                             if let Err(e) = downloaded_json {
                                 error!("asset_offchain_data.get: {}", e);
@@ -293,7 +303,7 @@ impl JsonMigrator {
                             }
 
                             let mut task = Task {
-                                ofd_metadata_url: data.url.value.trim().replace('\0', "").clone(),
+                                ofd_metadata_url: url,
                                 ofd_locked_until: None,
                                 ofd_attempts: 0,
                                 ofd_max_attempts: 10,
@@ -317,15 +327,13 @@ impl JsonMigrator {
                             self.metrics
                                 .set_tasks_buffer("tasks_buffer", buff.len() as i64);
                         }
-                        Err(e) => {
-                            error!("bincode::deserialize: {}", e)
-                        }
+                    }
+                    Err(e) => {
+                        error!("root_as_asset_complete_details: {}", e);
                     }
                 }
-                Err(e) => {
-                    error!("asset_dynamic_data.iter_end: {}", e)
-                }
             }
+            assets_iter.next();
         }
     }
 }
