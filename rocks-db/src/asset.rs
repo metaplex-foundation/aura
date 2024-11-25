@@ -2449,7 +2449,6 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
             owner,
             collection,
             other_known_owners: other_known_owners_offset,
-            //todo: merge and set other_known_owners
         },
     );
     builder.finish_minimal(res);
