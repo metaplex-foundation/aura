@@ -274,12 +274,30 @@ impl JsonDownloader for JsonWorker {
             .map_err(|e| {
                 JsonDownloaderError::ErrorDownloading(format!("Failed to create client: {:?}", e))
             })?;
-        let parsed_url = Url::parse(&url).map_err(|e| {
-            JsonDownloaderError::ErrorDownloading(format!("Failed to parse URL: {:?}", e))
-        })?;
+
+        // Detect if the URL is an IPFS link
+        let parsed_url = if url.starts_with("ipfs://") {
+            // Extract the IPFS hash or path
+            let ipfs_path = url.trim_start_matches("ipfs://");
+            // Choose an IPFS gateway (you can change this to your preferred gateway)
+            let gateway_url = format!("https://ipfs.io/ipfs/{}", ipfs_path);
+            // Parse the rewritten URL
+            let parsed_url = Url::parse(&gateway_url).map_err(|e| {
+                JsonDownloaderError::ErrorDownloading(format!("Failed to parse IPFS URL: {:?}", e))
+            })?;
+            parsed_url
+        } else {
+            // Parse the original URL
+            let parsed_url = Url::parse(&url).map_err(|e| {
+                JsonDownloaderError::ErrorDownloading(format!("Failed to parse URL: {:?}", e))
+            })?;
+            parsed_url
+        };
+
         let host = parsed_url.host_str().unwrap_or("no_host");
+
         let response = client
-            .get(&url)
+            .get(parsed_url.clone())
             .send()
             .await
             .map_err(|e| format!("Failed to make request: {:?}", e));
@@ -371,7 +389,6 @@ impl JsonPersister for JsonWorker {
                     self.metrics.inc_tasks("json", MetricStatus::SUCCESS);
                 }
                 Ok(JsonDownloadResult::MediaUrlAndMimeType { url, mime_type }) => {
-                    // TODO: this is bullshit, we should handle this in a different way
                     pg_updates.push(UpdatedTask {
                         status: TaskStatus::Success,
                         metadata_url: metadata_url.clone(),
@@ -381,14 +398,17 @@ impl JsonPersister for JsonWorker {
                         metadata_url.clone(),
                         OffChainData {
                             url: metadata_url.clone(),
-                            metadata: "".to_string(),
+                            metadata: format!(
+                                "{{\"image\":\"{}\",\"type\":\"{}\"}}",
+                                url, mime_type
+                            )
+                            .to_string(),
                         },
                     );
-
                     self.metrics.inc_tasks("media", MetricStatus::SUCCESS);
                 }
                 Err(json_err) => match json_err {
-                    // TODO: this is the same bullshit as above
+                    // TODO: this is bullshit, we should handle this in a different way - it's not success
                     JsonDownloaderError::GotNotJsonFile => {
                         pg_updates.push(UpdatedTask {
                             status: TaskStatus::Success,
