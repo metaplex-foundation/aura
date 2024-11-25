@@ -46,7 +46,7 @@ impl TokenAccountsProcessor {
     ) -> Result<(), StorageError> {
         self.save_token_account_with_idxs(storage, key, token_account)?;
         let asset_owner_details = AssetOwner {
-            pubkey: token_account.mint,
+            pubkey: token_account.pubkey,
             owner: Updated::new(
                 token_account.slot_updated as u64,
                 Some(UpdateVersion::WriteVersion(token_account.write_version)),
@@ -63,6 +63,11 @@ impl TokenAccountsProcessor {
                 Some(UpdateVersion::WriteVersion(token_account.write_version)),
                 None,
             ),
+            is_current_owner: Updated::new(
+                token_account.slot_updated as u64,
+                Some(UpdateVersion::WriteVersion(token_account.write_version)),
+                token_account.amount == 1,
+            ),
         };
         let asset_dynamic_details = AssetDynamicDetails {
             pubkey: token_account.mint,
@@ -78,7 +83,7 @@ impl TokenAccountsProcessor {
             storage,
             |storage: &mut BatchSaveStorage| {
                 let asset = &AssetCompleteDetails {
-                    pubkey: asset_owner_details.pubkey,
+                    pubkey: token_account.mint,
                     owner: Some(asset_owner_details.clone()),
                     dynamic_details: Some(asset_dynamic_details.clone()),
                     ..Default::default()
@@ -192,7 +197,7 @@ impl TokenAccountsProcessor {
             storage,
             |storage: &mut BatchSaveStorage| {
                 let asset = &AssetCompleteDetails {
-                    pubkey: asset_owner_details.pubkey,
+                    pubkey: mint.pubkey,
                     static_details: asset_static_details.clone(),
                     owner: Some(asset_owner_details.clone()),
                     dynamic_details: Some(asset_dynamic_details.clone()),

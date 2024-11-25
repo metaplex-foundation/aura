@@ -400,6 +400,11 @@ impl BubblegumTxProcessor {
                             Some(UpdateVersion::Sequence(cl.seq)),
                             Some(cl.seq),
                         ),
+                        is_current_owner: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            true,
+                        ),
                     };
                     let asset_update = AssetUpdateEvent {
                         update: Some(AssetDynamicUpdate {
@@ -643,6 +648,11 @@ impl BubblegumTxProcessor {
                             Some(UpdateVersion::Sequence(cl.seq)),
                             Some(cl.seq),
                         ),
+                        is_current_owner: Updated::new(
+                            slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            true,
+                        ),
                     };
                     asset_update.owner_update = Some(AssetUpdate {
                         pk: id,
@@ -846,6 +856,11 @@ impl BubblegumTxProcessor {
                             bundle.slot,
                             Some(UpdateVersion::Sequence(cl.seq)),
                             Some(cl.seq),
+                        ),
+                        is_current_owner: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            true,
                         ),
                     };
                     asset_update.owner_update = Some(AssetUpdate {

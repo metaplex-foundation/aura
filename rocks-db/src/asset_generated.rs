@@ -2384,123 +2384,6 @@ pub mod asset {
             ds.finish()
         }
     }
-    pub enum PubkeyOffset {}
-    #[derive(Copy, Clone, PartialEq)]
-
-    pub struct Pubkey<'a> {
-        pub _tab: flatbuffers::Table<'a>,
-    }
-
-    impl<'a> flatbuffers::Follow<'a> for Pubkey<'a> {
-        type Inner = Pubkey<'a>;
-        #[inline]
-        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
-        }
-    }
-
-    impl<'a> Pubkey<'a> {
-        pub const VT_DATA: flatbuffers::VOffsetT = 4;
-
-        #[inline]
-        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
-            Pubkey { _tab: table }
-        }
-        #[allow(unused_mut)]
-        pub fn create<
-            'bldr: 'args,
-            'args: 'mut_bldr,
-            'mut_bldr,
-            A: flatbuffers::Allocator + 'bldr,
-        >(
-            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
-            args: &'args PubkeyArgs<'args>,
-        ) -> flatbuffers::WIPOffset<Pubkey<'bldr>> {
-            let mut builder = PubkeyBuilder::new(_fbb);
-            if let Some(x) = args.data {
-                builder.add_data(x);
-            }
-            builder.finish()
-        }
-
-        #[inline]
-        pub fn data(&self) -> Option<flatbuffers::Vector<'a, u8>> {
-            // Safety:
-            // Created from valid Table for this object
-            // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        Pubkey::VT_DATA,
-                        None,
-                    )
-            }
-        }
-    }
-
-    impl flatbuffers::Verifiable for Pubkey<'_> {
-        #[inline]
-        fn run_verifier(
-            v: &mut flatbuffers::Verifier,
-            pos: usize,
-        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
-            use self::flatbuffers::Verifiable;
-            v.visit_table(pos)?
-                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
-                    "data",
-                    Self::VT_DATA,
-                    false,
-                )?
-                .finish();
-            Ok(())
-        }
-    }
-    pub struct PubkeyArgs<'a> {
-        pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
-    }
-    impl<'a> Default for PubkeyArgs<'a> {
-        #[inline]
-        fn default() -> Self {
-            PubkeyArgs { data: None }
-        }
-    }
-
-    pub struct PubkeyBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
-        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
-        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
-    }
-    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> PubkeyBuilder<'a, 'b, A> {
-        #[inline]
-        pub fn add_data(&mut self, data: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<_>>(Pubkey::VT_DATA, data);
-        }
-        #[inline]
-        pub fn new(
-            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
-        ) -> PubkeyBuilder<'a, 'b, A> {
-            let start = _fbb.start_table();
-            PubkeyBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
-        }
-        #[inline]
-        pub fn finish(self) -> flatbuffers::WIPOffset<Pubkey<'a>> {
-            let o = self.fbb_.end_table(self.start_);
-            flatbuffers::WIPOffset::new(o.value())
-        }
-    }
-
-    impl core::fmt::Debug for Pubkey<'_> {
-        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-            let mut ds = f.debug_struct("Pubkey");
-            ds.field("data", &self.data());
-            ds.finish()
-        }
-    }
     pub enum AssetStaticDetailsOffset {}
     #[derive(Copy, Clone, PartialEq)]
 
@@ -3947,6 +3830,7 @@ pub mod asset {
         pub const VT_DELEGATE: flatbuffers::VOffsetT = 8;
         pub const VT_OWNER_TYPE: flatbuffers::VOffsetT = 10;
         pub const VT_OWNER_DELEGATE_SEQ: flatbuffers::VOffsetT = 12;
+        pub const VT_IS_CURRENT_OWNER: flatbuffers::VOffsetT = 14;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -3963,6 +3847,9 @@ pub mod asset {
             args: &'args AssetOwnerArgs<'args>,
         ) -> flatbuffers::WIPOffset<AssetOwner<'bldr>> {
             let mut builder = AssetOwnerBuilder::new(_fbb);
+            if let Some(x) = args.is_current_owner {
+                builder.add_is_current_owner(x);
+            }
             if let Some(x) = args.owner_delegate_seq {
                 builder.add_owner_delegate_seq(x);
             }
@@ -4045,6 +3932,18 @@ pub mod asset {
                 )
             }
         }
+        #[inline]
+        pub fn is_current_owner(&self) -> Option<UpdatedBool<'a>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedBool>>(
+                    AssetOwner::VT_IS_CURRENT_OWNER,
+                    None,
+                )
+            }
+        }
     }
 
     impl flatbuffers::Verifiable for AssetOwner<'_> {
@@ -4080,6 +3979,11 @@ pub mod asset {
                     Self::VT_OWNER_DELEGATE_SEQ,
                     false,
                 )?
+                .visit_field::<flatbuffers::ForwardsUOffset<UpdatedBool>>(
+                    "is_current_owner",
+                    Self::VT_IS_CURRENT_OWNER,
+                    false,
+                )?
                 .finish();
             Ok(())
         }
@@ -4090,6 +3994,7 @@ pub mod asset {
         pub delegate: Option<flatbuffers::WIPOffset<UpdatedOptionalPubkey<'a>>>,
         pub owner_type: Option<flatbuffers::WIPOffset<UpdatedOwnerType<'a>>>,
         pub owner_delegate_seq: Option<flatbuffers::WIPOffset<UpdatedU64<'a>>>,
+        pub is_current_owner: Option<flatbuffers::WIPOffset<UpdatedBool<'a>>>,
     }
     impl<'a> Default for AssetOwnerArgs<'a> {
         #[inline]
@@ -4100,6 +4005,7 @@ pub mod asset {
                 delegate: None,
                 owner_type: None,
                 owner_delegate_seq: None,
+                is_current_owner: None,
             }
         }
     }
@@ -4153,6 +4059,17 @@ pub mod asset {
                 );
         }
         #[inline]
+        pub fn add_is_current_owner(
+            &mut self,
+            is_current_owner: flatbuffers::WIPOffset<UpdatedBool<'b>>,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
+                    AssetOwner::VT_IS_CURRENT_OWNER,
+                    is_current_owner,
+                );
+        }
+        #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> AssetOwnerBuilder<'a, 'b, A> {
@@ -4177,6 +4094,7 @@ pub mod asset {
             ds.field("delegate", &self.delegate());
             ds.field("owner_type", &self.owner_type());
             ds.field("owner_delegate_seq", &self.owner_delegate_seq());
+            ds.field("is_current_owner", &self.is_current_owner());
             ds.finish()
         }
     }
@@ -4427,6 +4345,7 @@ pub mod asset {
         pub const VT_AUTHORITY: flatbuffers::VOffsetT = 10;
         pub const VT_OWNER: flatbuffers::VOffsetT = 12;
         pub const VT_COLLECTION: flatbuffers::VOffsetT = 14;
+        pub const VT_OTHER_KNOWN_OWNERS: flatbuffers::VOffsetT = 16;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -4443,6 +4362,9 @@ pub mod asset {
             args: &'args AssetCompleteDetailsArgs<'args>,
         ) -> flatbuffers::WIPOffset<AssetCompleteDetails<'bldr>> {
             let mut builder = AssetCompleteDetailsBuilder::new(_fbb);
+            if let Some(x) = args.other_known_owners {
+                builder.add_other_known_owners(x);
+            }
             if let Some(x) = args.collection {
                 builder.add_collection(x);
             }
@@ -4541,6 +4463,19 @@ pub mod asset {
                     )
             }
         }
+        #[inline]
+        pub fn other_known_owners(
+            &self,
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<AssetOwner<'a>>>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<AssetOwner>>,
+                >>(AssetCompleteDetails::VT_OTHER_KNOWN_OWNERS, None)
+            }
+        }
     }
 
     impl flatbuffers::Verifiable for AssetCompleteDetails<'_> {
@@ -4581,6 +4516,9 @@ pub mod asset {
                     Self::VT_COLLECTION,
                     false,
                 )?
+                .visit_field::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<AssetOwner>>,
+                >>("other_known_owners", Self::VT_OTHER_KNOWN_OWNERS, false)?
                 .finish();
             Ok(())
         }
@@ -4592,6 +4530,11 @@ pub mod asset {
         pub authority: Option<flatbuffers::WIPOffset<AssetAuthority<'a>>>,
         pub owner: Option<flatbuffers::WIPOffset<AssetOwner<'a>>>,
         pub collection: Option<flatbuffers::WIPOffset<AssetCollection<'a>>>,
+        pub other_known_owners: Option<
+            flatbuffers::WIPOffset<
+                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<AssetOwner<'a>>>,
+            >,
+        >,
     }
     impl<'a> Default for AssetCompleteDetailsArgs<'a> {
         #[inline]
@@ -4603,6 +4546,7 @@ pub mod asset {
                 authority: None,
                 owner: None,
                 collection: None,
+                other_known_owners: None,
             }
         }
     }
@@ -4666,6 +4610,18 @@ pub mod asset {
                 );
         }
         #[inline]
+        pub fn add_other_known_owners(
+            &mut self,
+            other_known_owners: flatbuffers::WIPOffset<
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<AssetOwner<'b>>>,
+            >,
+        ) {
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
+                AssetCompleteDetails::VT_OTHER_KNOWN_OWNERS,
+                other_known_owners,
+            );
+        }
+        #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> AssetCompleteDetailsBuilder<'a, 'b, A> {
@@ -4691,6 +4647,7 @@ pub mod asset {
             ds.field("authority", &self.authority());
             ds.field("owner", &self.owner());
             ds.field("collection", &self.collection());
+            ds.field("other_known_owners", &self.other_known_owners());
             ds.finish()
         }
     }
