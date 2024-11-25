@@ -3,6 +3,7 @@ use std::string::ToString;
 use std::sync::Arc;
 
 use entities::api_req_params::{AssetSortDirection, Options};
+use entities::enums::SpecificationAssetClass;
 use entities::models::{AssetSignatureWithPagination, OffChainData};
 use interface::asset_sigratures::AssetSignaturesGetter;
 use interface::json::{JsonDownloader, JsonPersister};
@@ -73,7 +74,7 @@ fn convert_rocks_asset_model(
         asset_leaf: leaf,
         offchain_data,
         asset_collections: data.collection.clone(),
-        assets_authority: data.authority.clone().unwrap_or(AssetAuthority::default()),
+        assets_authority: data.authority.clone(),
         edition_data: static_data
             .edition_address
             .and_then(|e| asset_selected_maps.editions.get(&e).cloned()),
@@ -135,17 +136,18 @@ fn asset_selected_maps_into_full_asset(
     options: &Options,
 ) -> Option<FullAsset> {
     if !options.show_unverified_collections {
-        if let Some(collection_data) = asset_selected_maps
-            .asset_complete_details
-            .get(id)
-            .and_then(|a| a.collection.clone())
-        {
-            if !collection_data.is_collection_verified.value {
-                return None;
+        if let Some(asset_complete_details) = asset_selected_maps.asset_complete_details.get(id) {
+            if let Some(asset_static_details) = &asset_complete_details.static_details {
+                // collection itself cannot have a collection
+                // TODO!: should we also include in this check FungibleToken?
+                if &asset_static_details.specification_asset_class != &SpecificationAssetClass::MplCoreCollection {
+                    if let Some(collection_details) = &asset_complete_details.collection {
+                        if !collection_details.is_collection_verified.value {
+                            return None;
+                        }
+                    }
+                }
             }
-        } else {
-            // don't have collection data == collection unverified
-            return None;
         }
     }
 

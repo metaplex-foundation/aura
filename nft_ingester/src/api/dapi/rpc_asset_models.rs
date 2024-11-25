@@ -294,7 +294,7 @@ pub struct FullAsset {
     pub asset_leaf: AssetLeaf,
     pub offchain_data: OffChainData,
     pub asset_collections: Option<AssetCollection>,
-    pub assets_authority: AssetAuthority,
+    pub assets_authority: Option<AssetAuthority>,
     pub edition_data: Option<EditionData>,
     pub mpl_core_collections: Option<AssetCollection>,
     pub collection_dynamic_data: Option<AssetDynamicDetails>,

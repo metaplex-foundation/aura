@@ -209,7 +209,7 @@ impl BatchSaveStorage {
         )
     }
 
-    pub fn get_authority(&self, address: Pubkey) -> Pubkey {
+    pub fn get_authority(&self, address: Pubkey) -> Option<Pubkey> {
         if let Ok(Some(data)) = self.storage.db.get_pinned_cf(
             &self
                 .storage
@@ -223,10 +223,9 @@ impl BatchSaveStorage {
                 .ok()
                 .and_then(|a| a.authority())
                 .and_then(|auth| auth.authority())
-                .map(|k| Pubkey::try_from(k.bytes()).unwrap())
-                .unwrap_or_default();
+                .map(|k| Pubkey::try_from(k.bytes()).unwrap());
         }
-        Pubkey::default()
+        None
     }
 
     pub fn get_mint_map(&self, key: Pubkey) -> Result<Option<MetadataMintMap>> {
