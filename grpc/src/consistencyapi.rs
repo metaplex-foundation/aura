@@ -305,6 +305,7 @@ pub mod bbgm_consistency_service_client {
             ));
             self.inner.unary(req, path, codec).await
         }
+        /// Request all the bubblegum grand epochs checksums for the given tree
         pub async fn get_bbgm_grand_epochs_for_tree(
             &mut self,
             request: impl tonic::IntoRequest<super::GetBbgmGrandEpochsForTreeReq>,
@@ -604,6 +605,7 @@ pub mod bbgm_consistency_service_server {
             &self,
             request: tonic::Request<()>,
         ) -> std::result::Result<tonic::Response<super::BbgmEarlistGrandEpoch>, tonic::Status>;
+        /// Request all the bubblegum grand epochs checksums for the given tree
         async fn get_bbgm_grand_epochs_for_tree(
             &self,
             request: tonic::Request<super::GetBbgmGrandEpochsForTreeReq>,

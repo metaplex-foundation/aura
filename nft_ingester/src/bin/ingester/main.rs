@@ -214,6 +214,8 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rpc_client = Arc::new(RpcClient::new(config.rpc_host.clone()));
 
+    // Manages event related to epochs changes and notifications (new epoch started, late data - epoch invalidation).
+    // Producers are processors (bubblegum and account), consumer - consistency calculator.
     let (nft_change_snd, nft_change_rcv) = mpsc::channel(NTF_CHANGES_NOTIFICATION_QUEUE_SIZE);
     let changes_tracker = Arc::new(NftChangesTracker::new(Some(nft_change_snd.clone())));
 

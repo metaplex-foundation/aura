@@ -3575,6 +3575,7 @@ mod tests {
             slot_updated: 10,
             write_version: 10,
             extensions: None,
+            data_hash: 0,
         };
         let mint2 = Mint {
             pubkey: fungible_token_mint2,
@@ -3586,6 +3587,7 @@ mod tests {
             slot_updated: 7,
             write_version: 10,
             extensions: None,
+            data_hash: 0,
         };
 
         let owner = generated_assets.owners[50].owner.value.unwrap();
@@ -3602,6 +3604,7 @@ mod tests {
             slot_updated: 10,
             amount: 0,
             write_version: 10,
+            data_hash: 0,
         };
         let token_account2 = TokenAccount {
             pubkey: fungible_token_account2,
@@ -3614,6 +3617,7 @@ mod tests {
             slot_updated: 10,
             amount: 30000,
             write_version: 10,
+            data_hash: 0,
         };
         let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),

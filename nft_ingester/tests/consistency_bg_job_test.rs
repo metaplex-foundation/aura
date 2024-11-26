@@ -17,8 +17,6 @@ mod tests {
         // prepare
         let tree1 = Pubkey::new_unique();
 
-        // This change is for epoch we won't calculate in the test,
-        // adding it just to verify it is ignored
         let k0_1 = BubblegumChangeKey::new(tree1, 111, 1);
         let v0_1 = BubblegumChange {
             signature: "1".to_string(),
@@ -47,7 +45,6 @@ mod tests {
             .put(k1_2.clone(), v1_2.clone())
             .unwrap();
 
-        // This will be also ignored
         let k2_1 = BubblegumChangeKey::new(tree1, 20000, 4);
         let v2_1 = BubblegumChange {
             signature: "4".to_string(),
