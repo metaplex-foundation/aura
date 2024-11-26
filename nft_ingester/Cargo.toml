@@ -145,3 +145,6 @@ name = "explorer"
 
 [[bin]]
 name = "synchronizer_utils"
+
+[[bin]]
+name = "dumper"

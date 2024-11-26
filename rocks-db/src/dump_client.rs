@@ -94,6 +94,8 @@ impl Storage {
         creators_file_and_path: (File, String),
         authority_file_and_path: (File, String),
         batch_size: usize,
+        buf_capacity: usize,
+        asset_limit: Option<usize>,
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), String> {
@@ -116,22 +118,22 @@ impl Storage {
         let mut metadata_key_set = HashSet::new();
         let mut authorities_key_set = HashSet::new();
 
-        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, assets_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, assets_file_and_path.0);
 
         let mut asset_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
 
-        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, authority_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, authority_file_and_path.0);
         let mut authority_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
-        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, creators_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, creators_file_and_path.0);
         let mut creators_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
 
-        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, metadata_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, metadata_file_and_path.0);
         let mut metadata_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
@@ -139,6 +141,7 @@ impl Storage {
         // Iteration over `asset_data` column via CUSTOM iterator.
         let mut iter = self.db.raw_iterator_cf(&self.asset_data.handle());
         iter.seek_to_first();
+        let mut cnt = 0;
         while iter.valid() {
             let key = iter.key().unwrap();
             let encoded_key = Self::encode(key);
@@ -337,6 +340,12 @@ impl Storage {
                 return Err("dump cancelled".to_string());
             }
             iter.next();
+            cnt += 1;
+            if let Some(limit) = asset_limit {
+                if cnt >= limit {
+                    break;
+                }
+            }
             synchronizer_metrics.inc_num_of_assets_iter("asset", 1);
         }
         _ = tokio::try_join!(
@@ -552,6 +561,8 @@ impl Dumper for Storage {
             (creators_file, creators_path.unwrap()),
             (authority_file, authorities_path.unwrap()),
             batch_size,
+            BUF_CAPACITY,
+            None,
             rx,
             synchronizer_metrics,
         )
