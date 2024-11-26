@@ -1,0 +1,97 @@
+---
+source: integration_tests/src/mpl_core_tests.rs
+assertion_line: 840
+expression: response
+snapshot_kind: text
+---
+{
+  "interface": "MplCoreAsset",
+  "id": "9vqNxe6M6t7PYo1gXrY18hVgDvCpouHSZ6vdDEFbybeA",
+  "content": {
+    "$schema": "https://schema.metaplex.com/nft1.0.json",
+    "json_uri": "https://example.com/asset",
+    "files": [],
+    "metadata": {
+      "name": "Test Asset",
+      "symbol": ""
+    },
+    "links": {}
+  },
+  "authorities": [
+    {
+      "address": "",
+      "scopes": [
+        "full"
+      ]
+    }
+  ],
+  "compression": {
+    "eligible": false,
+    "compressed": false,
+    "data_hash": "",
+    "creator_hash": "",
+    "asset_hash": "",
+    "tree": "",
+    "seq": 0,
+    "leaf_id": 0
+  },
+  "grouping": [
+    {
+      "group_key": "collection",
+      "group_value": "2aUn89GKuSjfYTeCH6GL1Y6CiUYqjvcgZehFGDJbhNeW",
+      "verified": true
+    }
+  ],
+  "royalty": {
+    "royalty_model": "creators",
+    "target": null,
+    "percent": 0.0,
+    "basis_points": 0,
+    "primary_sale_happened": false,
+    "locked": false
+  },
+  "creators": [],
+  "ownership": {
+    "frozen": false,
+    "delegated": false,
+    "delegate": null,
+    "ownership_model": "single",
+    "owner": "HKwwF4sPVYFPgqEgxth4GZRZjJ9o4E3wA8eu2QM5Vt3H"
+  },
+  "supply": null,
+  "mutable": true,
+  "burnt": false,
+  "lamports": 3762000,
+  "executable": false,
+  "rent_epoch": 18446744073709551615,
+  "plugins": {},
+  "mpl_core_info": {
+    "plugins_json_version": 1
+  },
+  "external_plugins": [
+    {
+      "data_len": 36,
+      "index": 0,
+      "offset": 119,
+      "authority": {
+        "type": "None",
+        "address": null
+      },
+      "type": "DataSection",
+      "adapter_config": {
+        "parent_key": {
+          "linked_app_data": {
+            "type": "Owner",
+            "address": null
+          }
+        },
+        "schema": "Json"
+      },
+      "data_offset": 123,
+      "data": {
+        "message": "Hello",
+        "target": "world"
+      }
+    }
+  ]
+}

@@ -11,10 +11,12 @@ members = [
   "usecase",
   "tests/setup",
   "backfill_rpc",
-  "integrity_verification"
+  "integrity_verification",
+  "integration_tests"
 ]
 
 [workspace.dependencies]
+
 # Tokio ecosystem
 tokio = { version = "1.37.0", features = ["full", "tracing"] }
 tokio-stream = "0.1.11"
@@ -31,6 +33,8 @@ serde_with = "3.7.0"
 flatbuffers = "23.1.21"
 plerkle_serialization = "1.9.0"
 plerkle_messenger = { version = "1.9.0", features = ['redis'] }
+borsh = "~0.10.3"
+borsh-derive = "~0.10.3"
 
 
 # Database infrastructure
@@ -44,6 +48,7 @@ uuid = { version = "1.6.1", features = ["v4"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.16", features = ["json", "env-filter", "ansi"] }
 env_logger = "0.10.1"
+log = "0.4.17"
 
 
 # Testing and benchmarking
@@ -55,6 +60,9 @@ tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 criterion = "0.5.1"
 prometheus-client = "0.21.2"
 pprof = { version = "0.13.0", features = ["_protobuf", "protobuf-codec"] }
+function_name = "0.3.0"
+insta = "1.34.0"
+serial_test = "2.0.0"
 
 
 # HTTP, RPC and Schemas
@@ -84,6 +92,7 @@ indicatif = "0.17"
 # Errors, futures, helpers, tools, time, etc...
 # Errors
 thiserror = { version = "1"}
+anyhow = "1.0.75"
 # Clients
 arweave-rs = { version = "0.2.0", git = "https://github.com/RequescoS/arweave-rs.git", rev = "d8f5ef76f06c96afdf013fe5b62301790631b33f" }
 reqwest = { version = "0.11.23", features = ["json", "stream"] }
@@ -147,6 +156,7 @@ solana-bigtable-connection = "1.10.31"
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
 spl-token-2022 = { version = "1.0", features = ["no-entrypoint"] }
 spl-pod = "0.1.0"
+solana-account-decoder = "~1.18.15"
 
 # Anchor ecosystem
 anchor-lang = "=0.30.1"

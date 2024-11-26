@@ -1,0 +1,38 @@
+[package]
+edition = "2021"
+name = "integration_tests"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+borsh = { workspace = true }
+flatbuffers = { workspace = true }
+function_name = { workspace = true }
+futures = { workspace = true }
+insta = { workspace = true, features = ["json"] }
+itertools = { workspace = true }
+log = { workspace = true }
+mpl-token-metadata = { workspace = true }
+once_cell = { workspace = true }
+plerkle_serialization = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serial_test = { workspace = true }
+solana-account-decoder = { workspace = true }
+solana-client = { workspace = true }
+solana-sdk = { workspace = true }
+solana-transaction-status = { workspace = true }
+spl-token = { workspace = true, features = ["no-entrypoint"] }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+rocksdb = { workspace = true }
+tempfile = {workspace = true}
+
+nft_ingester = {path="../nft_ingester"}
+postgre-client = {path="../postgre-client"}
+metrics-utils = {path="../metrics_utils"}
+rocks-db = {path="../rocks-db"}
+usecase = {path="../usecase"}
+entities = {path="../entities"}

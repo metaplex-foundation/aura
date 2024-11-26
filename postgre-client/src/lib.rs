@@ -10,6 +10,7 @@ use sqlx::{
 };
 use std::{sync::Arc, time::Duration};
 use tracing::log::LevelFilter;
+use sqlx::Executor;
 
 pub mod asset_filter_client;
 pub mod asset_index_client;
@@ -185,6 +186,33 @@ impl PgClient {
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "rollback", start_time);
+        Ok(())
+    }
+
+    // at the moment used in integration tests only
+    pub async fn clean_db(&self) -> Result<(), IndexDbError> {
+        let mut transaction = self.pool.begin().await?;
+
+        self.drop_indexes(&mut transaction).await?;
+        self.drop_constraints(&mut transaction).await?;
+        for table in [
+            "assets_v3",
+            "assets_authorities",
+            "asset_creators_v3",
+            "batch_mints",
+            "core_fees",
+            "fungible_tokens",
+        ] {
+            self.truncate_table(&mut transaction, table).await?;
+        }
+
+        transaction.execute(sqlx::query("update last_synced_key set last_synced_asset_update_key = null where id = 1;")).await?;
+
+        self.recreate_indexes(&mut transaction).await?;
+        self.recreate_constraints(&mut transaction).await?;
+
+        transaction.commit().await.map_err(|e| e)?;
+
         Ok(())
     }
 }

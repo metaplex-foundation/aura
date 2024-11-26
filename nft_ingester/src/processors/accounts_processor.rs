@@ -160,7 +160,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             .await;
     }
 
-    async fn process_account(
+    pub async fn process_account(
         &self,
         batch_storage: &mut BatchSaveStorage,
         unprocessed_accounts: Vec<UnprocessedAccountMessage>,
