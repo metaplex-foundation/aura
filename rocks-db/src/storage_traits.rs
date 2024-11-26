@@ -6,7 +6,10 @@ use solana_sdk::pubkey::Pubkey;
 
 pub use crate::Result;
 use crate::Storage;
-use entities::models::{AssetIndex, FungibleAssetIndex};
+use entities::{
+    enums::AssetType,
+    models::{AssetIndex, FungibleAssetIndex},
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssetUpdatedKey {
@@ -42,6 +45,9 @@ pub trait AssetUpdateIndexStorage {
         limit: usize,
         skip_keys: Option<HashSet<Pubkey>>,
     ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)>;
+
+    fn clean_syncronized_idxs(&self, asset_type: AssetType, last_synced_key: Vec<u8>)
+        -> Result<()>;
 }
 
 #[automock]
@@ -129,6 +135,15 @@ impl AssetUpdateIndexStorage for MockAssetIndexStorage {
     ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)> {
         self.mock_update_index_storage
             .fetch_fungible_asset_updated_keys(from, up_to, limit, skip_keys)
+    }
+
+    fn clean_syncronized_idxs(
+        &self,
+        asset_type: AssetType,
+        last_synced_key: Vec<u8>,
+    ) -> Result<()> {
+        self.mock_update_index_storage
+            .clean_syncronized_idxs(asset_type, last_synced_key)
     }
 }
 

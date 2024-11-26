@@ -10,14 +10,14 @@ use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage};
 use entities::api_req_params::Options;
-use entities::enums::TokenMetadataEdition;
+use entities::enums::{AssetType, TokenMetadataEdition};
 use entities::models::{EditionData, PubkeyWithSlot};
 use futures_util::FutureExt;
 use std::collections::HashMap;
 
 impl Storage {
     fn get_next_fungible_asset_update_seq(&self) -> Result<u64> {
-        if self.fungible_assets_update_last_seq.load(Ordering::SeqCst) == 0 {
+        if self.fungible_assets_update_last_seq.load(Ordering::Relaxed) == 0 {
             // If fungible_assets_update_next_seq is zero, fetch the last key from fungible_assets_update_idx
             let mut iter = self.fungible_assets_update_idx.iter_end(); // Assuming iter_end method fetches the last item
 
@@ -27,13 +27,13 @@ impl Storage {
 
                 let seq = u64::from_be_bytes(last_key[..std::mem::size_of::<u64>()].try_into()?);
                 self.fungible_assets_update_last_seq
-                    .store(seq, Ordering::SeqCst);
+                    .store(seq, Ordering::Relaxed);
             }
         }
         // Increment and return the sequence number
         let seq = self
             .fungible_assets_update_last_seq
-            .fetch_add(1, Ordering::SeqCst)
+            .fetch_add(1, Ordering::Relaxed)
             + 1;
         Ok(seq)
     }
@@ -111,6 +111,45 @@ impl Storage {
             Column::<SlotAssetIdx>::encode_key(SlotAssetIdxKey::new(slot, pubkey)),
             serialized_value,
         );
+        Ok(())
+    }
+
+    pub fn clean_syncronized_idxs_with_batch(
+        &self,
+        asset_type: AssetType,
+        last_synced_key: Vec<u8>,
+    ) -> Result<()> {
+        let (from, cf) = match asset_type {
+            AssetType::Fungible => {
+                let cf = self.fungible_assets_update_idx.handle();
+                let key_type_pairs = self.fungible_assets_update_idx.get_from_start(1);
+
+                if key_type_pairs.is_empty() {
+                    return Ok(());
+                }
+                let from = key_type_pairs[0].0.clone();
+                (from, cf)
+            }
+            AssetType::NonFungible => {
+                let cf = self.assets_update_idx.handle();
+                let key_type_pairs = self.assets_update_idx.get_from_start(1);
+
+                if key_type_pairs.is_empty() {
+                    return Ok(());
+                }
+                let from = key_type_pairs[0].0.clone();
+                (from, cf)
+            }
+        };
+
+        if from == last_synced_key {
+            return Ok(());
+        }
+
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        batch.delete_range_cf(&cf, from, last_synced_key);
+        self.db.write(batch)?;
+
         Ok(())
     }
 }

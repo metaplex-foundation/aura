@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
-use entities::enums::{SpecificationVersions, TokenMetadataEdition};
+use entities::enums::{AssetType, SpecificationVersions, TokenMetadataEdition};
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 
@@ -183,6 +183,14 @@ impl AssetUpdateIndexStorage for Storage {
         );
         Ok((unique_pubkeys, last_key))
     }
+
+    fn clean_syncronized_idxs(
+        &self,
+        asset_type: AssetType,
+        last_synced_key: Vec<u8>,
+    ) -> Result<()> {
+        self.clean_syncronized_idxs_with_batch(asset_type, last_synced_key)
+    }
 }
 
 #[async_trait]
@@ -200,9 +208,9 @@ impl AssetIndexReader for Storage {
             let fungible_asset_index = FungibleAssetIndex {
                 pubkey: token_acc.pubkey,
                 owner: Some(token_acc.owner),
+                slot_updated: token_acc.slot_updated,
                 fungible_asset_mint: Some(token_acc.mint),
                 fungible_asset_balance: Some(token_acc.amount as u64),
-                slot_updated: token_acc.slot_updated,
             };
 
             fungible_assets_indexes.insert(token_acc.pubkey, fungible_asset_index);
