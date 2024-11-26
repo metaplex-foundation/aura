@@ -369,6 +369,7 @@ impl AssetIndexStorage for PgClient {
         last_key: &[u8],
         asset_type: AssetType,
     ) -> Result<(), IndexDbError> {
+        let operation_start_time = chrono::Utc::now();
         let mut transaction = self.start_transaction().await?;
         let dump_result = match asset_type {
             AssetType::NonFungible => {
@@ -406,22 +407,27 @@ impl AssetIndexStorage for PgClient {
                     )));
                 };
 
-                self.copy_nfts(
-                    metadata_path,
-                    creators_path,
-                    assets_path,
-                    assets_authorities_path,
-                    &mut transaction,
-                )
-                .await?;
+                let result_of_copy = self
+                    .copy_nfts(
+                        metadata_path,
+                        creators_path,
+                        assets_path,
+                        assets_authorities_path,
+                        &mut transaction,
+                    )
+                    .await;
 
-                self.update_last_synced_key(
-                    last_key,
-                    &mut transaction,
-                    "last_synced_key",
-                    asset_type,
-                )
-                .await
+                if result_of_copy.is_ok() {
+                    self.update_last_synced_key(
+                        last_key,
+                        &mut transaction,
+                        "last_synced_key",
+                        asset_type,
+                    )
+                    .await
+                } else {
+                    result_of_copy
+                }
             }
             AssetType::Fungible => {
                 let Some(fungible_tokens_path) = base_path
@@ -435,26 +441,43 @@ impl AssetIndexStorage for PgClient {
                     )));
                 };
 
-                self.copy_fungibles(fungible_tokens_path, &mut transaction)
-                    .await?;
+                let result_of_copy = self
+                    .copy_fungibles(fungible_tokens_path, &mut transaction)
+                    .await;
 
-                self.update_last_synced_key(
-                    last_key,
-                    &mut transaction,
-                    "last_synced_key",
-                    asset_type,
-                )
-                .await
+                if result_of_copy.is_ok() {
+                    self.update_last_synced_key(
+                        last_key,
+                        &mut transaction,
+                        "last_synced_key",
+                        asset_type,
+                    )
+                    .await
+                } else {
+                    result_of_copy
+                }
             }
         };
 
         match dump_result {
             Ok(_) => {
                 self.commit_transaction(transaction).await?;
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    TRANSACTION_ACTION,
+                    "transaction_failed_total",
+                    operation_start_time,
+                );
                 Ok(())
             }
             Err(e) => {
                 self.rollback_transaction(transaction).await?;
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    TRANSACTION_ACTION,
+                    "transaction_failed_total",
+                    operation_start_time,
+                );
                 Err(e)
             }
         }
