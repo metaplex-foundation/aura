@@ -30,9 +30,9 @@ tokio-stream = { workspace = true }
 rocksdb = { workspace = true }
 tempfile = {workspace = true}
 
-nft_ingester = {path="../nft_ingester"}
-postgre-client = {path="../postgre-client"}
-metrics-utils = {path="../metrics_utils"}
-rocks-db = {path="../rocks-db"}
-usecase = {path="../usecase"}
-entities = {path="../entities"}
+nft_ingester = { path = "../nft_ingester" }
+postgre-client = { path = "../postgre-client", features = ["integration_tests"] }
+metrics-utils = { path = "../metrics_utils" }
+rocks-db = { path = "../rocks-db" }
+usecase = { path = "../usecase" }
+entities = { path = "../entities" }

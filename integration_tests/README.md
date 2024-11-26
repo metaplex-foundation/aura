@@ -1,5 +1,8 @@
 # Integration Tests
 
+> [!NOTE]
+> These tests were taken from the original DAS API implementation, you can find original code in [this repository](https://github.com/metaplex-foundation/digital-asset-rpc-infrastructure).
+
 This Cargo package helps us run multi-package tests in our workspace. This setup is inspired by the tokio integration test setup.
 
 ## Setup
