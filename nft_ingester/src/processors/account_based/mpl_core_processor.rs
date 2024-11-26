@@ -79,7 +79,7 @@ impl MplCoreProcessor {
         let update_authority = match asset.update_authority {
             UpdateAuthority::Address(address) => Some(address),
             UpdateAuthority::Collection(address) => storage.get_authority(address),
-            UpdateAuthority::None => Some(Pubkey::default()),
+            UpdateAuthority::None => None,
         };
 
         let name = asset.name.clone();
