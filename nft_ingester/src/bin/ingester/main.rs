@@ -4,6 +4,7 @@ use entities::enums::{AssetType, ASSET_TYPES};
 use nft_ingester::batch_mint::batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister};
 use nft_ingester::scheduler::Scheduler;
 use postgre_client::PG_MIGRATIONS_PATH;
+use rocks_db::key_encoders::encode_u64x2_pubkey;
 use std::panic;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -59,7 +60,7 @@ use nft_ingester::transaction_ingester::BackfillTransactionIngester;
 use nft_ingester::{config::init_logger, error::IngesterError};
 use rocks_db::backup_service;
 use rocks_db::backup_service::BackupService;
-use rocks_db::storage_traits::AssetSlotStorage;
+use rocks_db::storage_traits::{AssetSlotStorage, AssetUpdateIndexStorage};
 use tonic::transport::Server;
 use usecase::asset_streamer::AssetStreamer;
 use usecase::proofs::MaybeProofChecker;
@@ -75,6 +76,7 @@ pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const ARWEAVE_WALLET_PATH: &str = "./arweave_wallet.json";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
+pub const SECONDS_TO_RETRY_IDXS_CLEANUP: u64 = 15;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -605,8 +607,6 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     if !config.disable_synchronizer {
-        let synchronizer = Arc::new(synchronizer);
-
         for asset_type in ASSET_TYPES {
             let rx = shutdown_rx.resubscribe();
             let synchronizer = synchronizer.clone();
@@ -799,6 +799,34 @@ pub async fn main() -> Result<(), IngesterError> {
         info!("Start batch_mint persister...");
         batch_mint_persister.persist_batch_mints(rx).await
     });
+
+    // clean indexes
+    for asset_type in ASSET_TYPES {
+        let primary_rocks_storage = primary_rocks_storage.clone();
+        let mut rx = shutdown_rx.resubscribe();
+        mutexed_tasks.lock().await.spawn(async move {
+            loop {
+                if rx.try_recv().is_ok() {
+                    break;
+                }
+                let optional_last_synced_key = match asset_type {
+                    AssetType::NonFungible => primary_rocks_storage.last_known_nft_asset_updated_key(),
+                    AssetType::Fungible => primary_rocks_storage.last_known_fungible_asset_updated_key(),
+                };
+
+                if let Ok(Some(last_synced_key)) = optional_last_synced_key {
+                    let last_synced_key =
+                        encode_u64x2_pubkey(last_synced_key.seq, last_synced_key.slot, last_synced_key.pubkey);
+                    primary_rocks_storage
+                        .clean_syncronized_idxs(asset_type, last_synced_key)
+                        .unwrap();
+                };
+                tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_IDXS_CLEANUP)).await;
+            }
+
+            Ok(())
+        });
+    }
 
     start_metrics(metrics_state.registry, config.metrics_port).await;
 

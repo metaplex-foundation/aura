@@ -181,20 +181,14 @@ where
             SyncStatus::FullSyncRequired(state) => {
                 tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
                 self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key)
-                    .await?;
+                    .await
             }
             SyncStatus::RegularSyncRequired(state) => {
                 self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key)
-                    .await?;
+                    .await
             }
-            SyncStatus::NoSyncRequired => {}
+            SyncStatus::NoSyncRequired => Ok(()),
         }
-
-        if let Some(encoded_key) = self.index_storage.fetch_last_synced_id(asset_type).await? {
-            self.clean_syncronized_idxs(asset_type, encoded_key)?;
-        }
-
-        Ok(())
     }
 
     pub async fn synchronize_fungible_asset_indexes(
@@ -212,31 +206,14 @@ where
             SyncStatus::FullSyncRequired(state) => {
                 tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
                 self.regular_fungible_syncronize(rx, state.last_indexed_key, state.last_known_key)
-                    .await?;
+                    .await
             }
             SyncStatus::RegularSyncRequired(state) => {
                 self.regular_fungible_syncronize(rx, state.last_indexed_key, state.last_known_key)
-                    .await?;
+                    .await
             }
-            SyncStatus::NoSyncRequired => {}
+            SyncStatus::NoSyncRequired => Ok(()),
         }
-
-        if let Some(encoded_key) = self.index_storage.fetch_last_synced_id(asset_type).await? {
-            self.clean_syncronized_idxs(asset_type, encoded_key)?;
-        }
-
-        Ok(())
-    }
-
-    pub fn clean_syncronized_idxs(
-        &self,
-        asset_type: AssetType,
-        last_synced_key: Vec<u8>,
-    ) -> Result<(), IngesterError> {
-        self.primary_storage
-            .clean_syncronized_idxs(asset_type, last_synced_key)?;
-
-        Ok(())
     }
 
     pub async fn full_syncronize(

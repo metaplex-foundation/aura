@@ -114,7 +114,7 @@ impl Storage {
         Ok(())
     }
 
-    pub fn clean_syncronized_idxs_with_batch(
+    pub fn clean_syncronized_idxs(
         &self,
         asset_type: AssetType,
         last_synced_key: Vec<u8>,
@@ -124,10 +124,8 @@ impl Storage {
             AssetType::NonFungible => self.assets_update_idx.handle(),
         };
 
-        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         let from = vec![];
-        batch.delete_range_cf(&cf, from, last_synced_key);
-        self.db.write(batch)?;
+        self.db.delete_range_cf(&cf, from, last_synced_key)?;
 
         Ok(())
     }

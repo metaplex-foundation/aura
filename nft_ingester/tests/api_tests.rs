@@ -7,6 +7,8 @@ mod tests {
         ShadowInterestBearingConfig, ShadowTransferFee, ShadowTransferFeeConfig, UnixTimestamp,
     };
     use blockbuster::programs::token_extensions::MintAccountExtensions;
+    use rocks_db::key_encoders::encode_u64x2_pubkey;
+    use rocks_db::storage_traits::AssetUpdateIndexStorage;
     use std::str::FromStr;
     use std::{collections::HashMap, sync::Arc};
 
@@ -3721,7 +3723,7 @@ mod tests {
         let cli = Cli::default();
 
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+        let _synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             env.pg_env.client.clone(),
@@ -3778,54 +3780,45 @@ mod tests {
         batch_storage.flush().unwrap();
 
         // one more idx shoul've been added
-        let mut number_of_fungible_idxs = 0;
-        let mut number_of_non_fungible_idxs = 0;
-        let mut idx_fungible_asset_iter = env
+        let idx_fungible_asset_iter = env
             .rocks_env
             .storage
             .fungible_assets_update_idx
             .iter_start();
-        let mut idx_non_fungible_asset_iter = env.rocks_env.storage.assets_update_idx.iter_start();
+        let idx_non_fungible_asset_iter = env.rocks_env.storage.assets_update_idx.iter_start();
+        assert_eq!(idx_fungible_asset_iter.count(), 1);
+        assert_eq!(idx_non_fungible_asset_iter.count(), cnt + 2);
 
-        while let Some(_) = idx_fungible_asset_iter.next() {
-            number_of_fungible_idxs += 1;
+        for asset_type in ASSET_TYPES {
+            let optional_last_synced_key = match asset_type {
+                AssetType::NonFungible => env.rocks_env.storage.last_known_nft_asset_updated_key(),
+                AssetType::Fungible => env
+                    .rocks_env
+                    .storage
+                    .last_known_fungible_asset_updated_key(),
+            };
+
+            let last_synced_key = optional_last_synced_key.unwrap().unwrap();
+            let last_synced_key = encode_u64x2_pubkey(
+                last_synced_key.seq,
+                last_synced_key.slot,
+                last_synced_key.pubkey,
+            );
+
+            env.rocks_env
+                .storage
+                .clean_syncronized_idxs(asset_type, last_synced_key)
+                .unwrap();
         }
-        assert_eq!(number_of_fungible_idxs, 1);
-
-        while let Some(_) = idx_non_fungible_asset_iter.next() {
-            number_of_non_fungible_idxs += 1;
-        }
-        assert_eq!(number_of_non_fungible_idxs, 3);
-
-        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-
-        synchronizer
-            .synchronize_nft_asset_indexes(&rx, 0)
-            .await
-            .unwrap();
-        synchronizer
-            .synchronize_fungible_asset_indexes(&rx, 0)
-            .await
-            .unwrap();
 
         // after sync idxs should be cleaned again
-        let mut number_of_fungible_idxs = 0;
-        let mut number_of_non_fungible_idxs = 0;
-        let mut idx_fungible_asset_iter = env
+        let idx_fungible_asset_iter = env
             .rocks_env
             .storage
             .fungible_assets_update_idx
             .iter_start();
-        let mut idx_non_fungible_asset_iter = env.rocks_env.storage.assets_update_idx.iter_start();
-
-        while let Some(_) = idx_fungible_asset_iter.next() {
-            number_of_fungible_idxs += 1;
-        }
-        assert_eq!(number_of_fungible_idxs, 1);
-
-        while let Some(_) = idx_non_fungible_asset_iter.next() {
-            number_of_non_fungible_idxs += 1;
-        }
-        assert_eq!(number_of_non_fungible_idxs, 1);
+        let idx_non_fungible_asset_iter = env.rocks_env.storage.assets_update_idx.iter_start();
+        assert_eq!(idx_fungible_asset_iter.count(), 1);
+        assert_eq!(idx_non_fungible_asset_iter.count(), 1);
     }
 }
