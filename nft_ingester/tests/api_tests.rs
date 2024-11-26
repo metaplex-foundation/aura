@@ -7,8 +7,8 @@ mod tests {
         ShadowInterestBearingConfig, ShadowTransferFee, ShadowTransferFeeConfig, UnixTimestamp,
     };
     use blockbuster::programs::token_extensions::MintAccountExtensions;
-    use rocks_db::key_encoders::encode_u64x2_pubkey;
-    use rocks_db::storage_traits::AssetUpdateIndexStorage;
+    use nft_ingester::cleaners::indexer_cleaner::clean_syncronized_idxs;
+
     use std::str::FromStr;
     use std::{collections::HashMap, sync::Arc};
 
@@ -3790,25 +3790,7 @@ mod tests {
         assert_eq!(idx_non_fungible_asset_iter.count(), cnt + 2);
 
         for asset_type in ASSET_TYPES {
-            let optional_last_synced_key = match asset_type {
-                AssetType::NonFungible => env.rocks_env.storage.last_known_nft_asset_updated_key(),
-                AssetType::Fungible => env
-                    .rocks_env
-                    .storage
-                    .last_known_fungible_asset_updated_key(),
-            };
-
-            let last_synced_key = optional_last_synced_key.unwrap().unwrap();
-            let last_synced_key = encode_u64x2_pubkey(
-                last_synced_key.seq,
-                last_synced_key.slot,
-                last_synced_key.pubkey,
-            );
-
-            env.rocks_env
-                .storage
-                .clean_syncronized_idxs(asset_type, last_synced_key)
-                .unwrap();
+            clean_syncronized_idxs(env.rocks_env.storage.clone(), asset_type).unwrap();
         }
 
         // after sync idxs should be cleaned again

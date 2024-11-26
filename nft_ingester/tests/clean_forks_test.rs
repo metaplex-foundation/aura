@@ -6,7 +6,7 @@ use metrics_utils::utils::start_metrics;
 use metrics_utils::{MetricState, MetricsTrait};
 use mpl_bubblegum::types::{BubblegumEventType, LeafSchema, Version};
 use mpl_bubblegum::{InstructionName, LeafSchemaEvent};
-use nft_ingester::fork_cleaner::ForkCleaner;
+use nft_ingester::cleaners::fork_cleaner::ForkCleaner;
 use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
 use rocks_db::cl_items::ClItem;
 use rocks_db::column::TypedColumn;
