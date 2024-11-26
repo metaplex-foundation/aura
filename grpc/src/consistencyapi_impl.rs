@@ -4,6 +4,7 @@ use std::sync::Arc;
 use interface::checksums_storage::{
     AccBucketCksm, AccChecksumServiceApi, AccGrandBucketCksm, AccLastChange, BbgmChangePos,
     BbgmChangeRecord, BbgmChecksumServiceApi, BbgmEpochCksm, BbgmGrandEpochCksm,
+    BbgmGrandEpochCksmWithNumber,
 };
 use metrics_utils::{
     AccoountConsistencyGrpcClientMetricsConfig, BubblegumConsistencyGrpcClientMetricsConfig,
@@ -20,8 +21,9 @@ use crate::consistencyapi::bbgm_consistency_service_server::BbgmConsistencyServi
 use crate::consistencyapi::{
     Acc, AccBucketChecksum, AccBucketChecksumsList, AccGrandBucketChecksum,
     AccGrandBucketChecksumsList, AccList, BbgmChange, BbgmChangeList, BbgmChangePosition,
-    BbgmEarlistGrandEpoch, BbgmEpoch, BbgmEpochList, BbgmGrandEpoch, BbgmGrandEpochList,
-    GetAccBucketsReq, GetAccReq, GetBbgmChangesReq, GetBbgmEpochsReq, GetBbgmGrandEpochsReq,
+    BbgmEarlistGrandEpoch, BbgmEpoch, BbgmEpochList, BbgmGrandEpoch, BbgmGrandEpochChecksumForTree,
+    BbgmGrandEpochForTreeList, BbgmGrandEpochList, GetAccBucketsReq, GetAccReq, GetBbgmChangesReq,
+    GetBbgmEpochsReq, GetBbgmGrandEpochsForTreeReq, GetBbgmGrandEpochsReq,
 };
 use crate::error::GrpcError;
 
@@ -42,6 +44,32 @@ impl BbgmConsistencyService for ConsistencyApiServerImpl {
         };
         let response = BbgmEarlistGrandEpoch {
             grand_epoch: earliest_grand_epoch.map(|v| v as u32),
+        };
+        Ok(tonic::Response::new(response))
+    }
+
+    async fn get_bbgm_grand_epochs_for_tree(
+        &self,
+        request: tonic::Request<GetBbgmGrandEpochsForTreeReq>,
+    ) -> std::result::Result<tonic::Response<BbgmGrandEpochForTreeList>, tonic::Status> {
+        let GetBbgmGrandEpochsForTreeReq { tree_pubkey } = request.into_inner();
+        let Ok(pk) = Pubkey::try_from(tree_pubkey.clone()) else {
+            return Err(tonic::Status::invalid_argument("Invalid tree pubkey"));
+        };
+        let grand_epochs_for_tree = match self.bbgm_service.list_bbgm_grand_epoch_for_tree(pk).await
+        {
+            Ok(v) => v,
+            Err(e) => return Err(tonic::Status::internal(e.to_string())),
+        };
+        let response_records = grand_epochs_for_tree
+            .into_iter()
+            .map(|rec| BbgmGrandEpochChecksumForTree {
+                grand_epoch: rec.grand_epoch as u32,
+                checksum: rec.checksum.map(|c| c.to_vec()),
+            })
+            .collect::<Vec<_>>();
+        let response = BbgmGrandEpochForTreeList {
+            list: response_records,
         };
         Ok(tonic::Response::new(response))
     }
@@ -398,6 +426,46 @@ impl BbgmChecksumServiceApi for BbgmConsistencyApiClientImpl {
         let mut client = self.client.lock().await;
         let grpc_response = client.get_bbgm_earliest_grand_epoch(grpc_request).await?;
         let result = grpc_response.into_inner().grand_epoch.map(|v| v as u16);
+        Ok(result)
+    }
+
+    async fn list_bbgm_grand_epoch_for_tree(
+        &self,
+        tree_pubkey: Pubkey,
+    ) -> anyhow::Result<Vec<BbgmGrandEpochCksmWithNumber>> {
+        let grpc_request = tonic::Request::new(GetBbgmGrandEpochsForTreeReq {
+            tree_pubkey: tree_pubkey.to_bytes().to_vec(),
+        });
+        let mut client = self.client.lock().await;
+        let start = Instant::now();
+        let call_result = client.get_bbgm_grand_epochs_for_tree(grpc_request).await;
+        if call_result.is_err() && self.metrics.is_some() {
+            self.metrics
+                .as_ref()
+                .unwrap()
+                .track_get_grand_epochs_for_tree_call_error(&self.peer);
+        }
+        let grpc_response = call_result?;
+        if let Some(m) = self.metrics.as_ref() {
+            m.peers_bubblegum_get_grand_epochs_for_tree_latency
+                .observe(start.elapsed().as_secs_f64());
+        }
+        let list = grpc_response.into_inner().list;
+        let mut result = Vec::with_capacity(list.len());
+        for BbgmGrandEpochChecksumForTree {
+            grand_epoch,
+            checksum,
+        } in list
+        {
+            let chksm: Option<[u8; 32]> =
+                checksum.map(|c| c.try_into()).transpose().map_err(|v| {
+                    anyhow::anyhow!("Invalid checksum for epoch tree {tree_pubkey}: {v:?}")
+                })?;
+            result.push(BbgmGrandEpochCksmWithNumber {
+                grand_epoch: grand_epoch as u16,
+                checksum: chksm,
+            });
+        }
         Ok(result)
     }
 

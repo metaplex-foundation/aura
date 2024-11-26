@@ -12,6 +12,14 @@ pub struct BbgmGrandEpochCksm {
     pub checksum: Option<[u8; 32]>,
 }
 
+/// Data transfer object for bubblegum grand epoch checksums
+/// for listing multiple grand epochs for a tree
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct BbgmGrandEpochCksmWithNumber {
+    pub grand_epoch: u16,
+    pub checksum: Option<[u8; 32]>,
+}
+
 /// Data transfer object for bubblegum epoch.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BbgmEpochCksm {
@@ -92,6 +100,11 @@ impl core::hash::Hash for AccLastChange {
 #[async_trait]
 pub trait BbgmChecksumServiceApi {
     async fn get_earliest_grand_epoch(&self) -> anyhow::Result<Option<u16>>;
+
+    async fn list_bbgm_grand_epoch_for_tree(
+        &self,
+        tree_pubkey: Pubkey,
+    ) -> anyhow::Result<Vec<BbgmGrandEpochCksmWithNumber>>;
 
     async fn list_grand_epoch_checksums(
         &self,

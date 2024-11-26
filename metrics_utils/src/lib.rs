@@ -334,10 +334,12 @@ impl Peer2PeerConsistencyMetricsConfig {
 
 #[derive(Debug, Clone)]
 pub struct BubblegumConsistencyGrpcClientMetricsConfig {
+    pub peers_bubblegum_get_grand_epochs_for_tree_latency: Histogram,
     pub peers_bubblegum_get_grand_epochs_latency: Histogram,
     pub peers_bubblegum_get_epochs_latency: Histogram,
     pub peers_bubblegum_get_changes_latency: Histogram,
 
+    pub peers_bubblegum_get_grand_epochs_for_tree_errors: Family<MetricLabel, Counter>,
     pub peers_bubblegum_get_grand_epochs_errors: Family<MetricLabel, Counter>,
     pub peers_bubblegum_get_epochs_errors: Family<MetricLabel, Counter>,
     pub peers_bubblegum_get_changes_errors: Family<MetricLabel, Counter>,
@@ -352,18 +354,30 @@ impl Default for BubblegumConsistencyGrpcClientMetricsConfig {
 impl BubblegumConsistencyGrpcClientMetricsConfig {
     pub fn new() -> BubblegumConsistencyGrpcClientMetricsConfig {
         BubblegumConsistencyGrpcClientMetricsConfig {
+            peers_bubblegum_get_grand_epochs_for_tree_latency: Histogram::new(exponential_buckets(
+                20.0, 1.8, 10,
+            )),
             peers_bubblegum_get_grand_epochs_latency: Histogram::new(exponential_buckets(
                 20.0, 1.8, 10,
             )),
             peers_bubblegum_get_epochs_latency: Histogram::new(exponential_buckets(20.0, 1.8, 10)),
             peers_bubblegum_get_changes_latency: Histogram::new(exponential_buckets(20.0, 1.8, 10)),
 
+            peers_bubblegum_get_grand_epochs_for_tree_errors:
+                Family::<MetricLabel, Counter>::default(),
             peers_bubblegum_get_grand_epochs_errors: Family::<MetricLabel, Counter>::default(),
             peers_bubblegum_get_epochs_errors: Family::<MetricLabel, Counter>::default(),
             peers_bubblegum_get_changes_errors: Family::<MetricLabel, Counter>::default(),
         }
     }
 
+    pub fn track_get_grand_epochs_for_tree_call_error(&self, peer: &str) {
+        self.peers_bubblegum_get_grand_epochs_for_tree_errors
+            .get_or_create(&MetricLabel {
+                name: peer.to_string(),
+            })
+            .inc();
+    }
     pub fn track_get_grand_epochs_call_error(&self, peer: &str) {
         self.peers_bubblegum_get_grand_epochs_errors
             .get_or_create(&MetricLabel {
@@ -387,6 +401,33 @@ impl BubblegumConsistencyGrpcClientMetricsConfig {
     }
 
     pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "peers_bubblegum_get_grand_epochs_for_tree_errors",
+            "Number of error while getting list of all grand epochs for a tree",
+            self.peers_bubblegum_get_grand_epochs_for_tree_errors
+                .clone(),
+        );
+        registry.register(
+            "peers_bubblegum_get_grand_epochs_errors",
+            "Number of error while getting list of all grand epochs checksums for given grand epoch",
+            self.peers_bubblegum_get_grand_epochs_errors.clone(),
+        );
+        registry.register(
+            "peers_bubblegum_get_epochs_errors",
+            "Number of error while getting list of epochs checksums for given tree and grand epoch",
+            self.peers_bubblegum_get_epochs_errors.clone(),
+        );
+        registry.register(
+            "peers_bubblegum_get_changes_errors",
+            "Number of error while getting list of bubblegum change for given tree and epoch",
+            self.peers_bubblegum_get_changes_errors.clone(),
+        );
+        registry.register(
+            "peers_bubblegum_get_grand_epochs_for_tree_latency",
+            "Time to fetch bubblegum grand epochs for tree",
+            self.peers_bubblegum_get_grand_epochs_for_tree_latency
+                .clone(),
+        );
         registry.register(
             "peers_bubblegum_get_grand_epochs_latency",
             "Time to fetch bubblegum grand epochs",
@@ -460,6 +501,21 @@ impl AccoountConsistencyGrpcClientMetricsConfig {
     }
 
     pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "peers_account_get_grand_buckets_errors",
+            "Number of error while getting list of grand bucket checksums",
+            self.peers_account_get_grand_buckets_errors.clone(),
+        );
+        registry.register(
+            "peers_account_get_buckets_errors",
+            "Number of error while getting list of buckets for grand bucket",
+            self.peers_account_get_buckets_errors.clone(),
+        );
+        registry.register(
+            "peers_account_get_latests_errors",
+            "Number of error while getting list of account for a bucket",
+            self.peers_account_get_latests_errors.clone(),
+        );
         registry.register(
             "peers_account_get_grand_buckets_latency",
             "Time to fetch account NFT grand buckets",

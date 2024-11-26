@@ -3,8 +3,9 @@ mod test {
 
     use interface::checksums_storage::{
         BbgmChangePos, BbgmChangeRecord, BbgmChecksumServiceApi, BbgmEpochCksm, BbgmGrandEpochCksm,
+        BbgmGrandEpochCksmWithNumber,
     };
-    use rocks_db::storage_consistency::Checksum;
+    use rocks_db::storage_consistency::{track_slot_counter, Checksum};
     use rocks_db::storage_consistency::{
         BubblegumChange, BubblegumChangeKey, BubblegumEpoch, BubblegumEpochKey,
         BubblegumGrandEpoch, BubblegumGrandEpochKey,
@@ -165,6 +166,80 @@ mod test {
                 seq: 3,
                 signature: "3".to_string()
             }]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_list_bbgm_grand_epoch_for_tree() {
+        let storage = RocksTestEnvironment::new(&[]).storage;
+
+        track_slot_counter(900_001); // max grand epoch is 9
+
+        let tree_1 = Pubkey::new_unique();
+        let tree_2 = Pubkey::new_unique();
+
+        {
+            let k = BubblegumGrandEpochKey {
+                grand_epoch_num: 5,
+                tree_pubkey: tree_1,
+            };
+            let v = BubblegumGrandEpoch {
+                checksum: Checksum::Value([5u8; 32]),
+            };
+            storage.bubblegum_grand_epochs.put(k, v).unwrap();
+        }
+        {
+            let k = BubblegumGrandEpochKey {
+                grand_epoch_num: 6,
+                tree_pubkey: tree_2,
+            };
+            let v = BubblegumGrandEpoch {
+                checksum: Checksum::Value([6u8; 32]),
+            };
+            storage.bubblegum_grand_epochs.put(k, v).unwrap();
+        }
+        {
+            let k = BubblegumGrandEpochKey {
+                grand_epoch_num: 7,
+                tree_pubkey: tree_1,
+            };
+            let v = BubblegumGrandEpoch {
+                checksum: Checksum::Value([7u8; 32]),
+            };
+            storage.bubblegum_grand_epochs.put(k, v).unwrap();
+        }
+        {
+            let k = BubblegumGrandEpochKey {
+                grand_epoch_num: 9,
+                tree_pubkey: tree_1,
+            };
+            let v = BubblegumGrandEpoch {
+                checksum: Checksum::Value([9u8; 32]),
+            };
+            storage.bubblegum_grand_epochs.put(k, v).unwrap();
+        }
+
+        let result = storage
+            .list_bbgm_grand_epoch_for_tree(tree_1)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            result,
+            vec![
+                BbgmGrandEpochCksmWithNumber {
+                    grand_epoch: 5,
+                    checksum: Some([5u8; 32])
+                },
+                BbgmGrandEpochCksmWithNumber {
+                    grand_epoch: 7,
+                    checksum: Some([7u8; 32])
+                },
+                BbgmGrandEpochCksmWithNumber {
+                    grand_epoch: 9,
+                    checksum: Some([9u8; 32])
+                },
+            ]
         );
     }
 }
