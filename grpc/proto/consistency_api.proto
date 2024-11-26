@@ -4,8 +4,19 @@ import "google/protobuf/empty.proto";
 
 package consistencyapi;
 
+// The very early grand epoch on a given peer
 message BbgmEarlistGrandEpoch {
     optional uint32 grand_epoch = 1;
+}
+
+// List of all grand epochs for a bubblegum tree
+message BbgmGrandEpochForTreeList {
+    repeated BbgmGrandEpochChecksumForTree list = 1;
+}
+
+message BbgmGrandEpochChecksumForTree {
+    uint32 grand_epoch = 1;
+    optional bytes checksum = 2;
 }
 
 message BbgmGrandEpochList {
@@ -47,6 +58,11 @@ message GetBbgmGrandEpochsReq {
     optional uint64 limit = 2;
     // Return trees checksums that are after given
     optional bytes after = 3;
+}
+
+// Request object for getting all grand epoch checksums for a given tree
+message GetBbgmGrandEpochsForTreeReq {
+    bytes tree_pubkey = 1;
 }
 
 // Request object for getting epoch tree checksums in the geven grand epoch
@@ -124,6 +140,9 @@ message GetAccReq {
 service BbgmConsistencyService {
     // Returns earliest grand epoch avaible on the peer.
     rpc GetBbgmEarliestGrandEpoch(google.protobuf.Empty) returns (BbgmEarlistGrandEpoch);
+
+    // Request all the bubblegum grand epochs checksums for the given tree
+    rpc GetBbgmGrandEpochsForTree(GetBbgmGrandEpochsForTreeReq) returns (BbgmGrandEpochForTreeList);
 
     // Request list of tree checksums in the given grand epoch
     // No need to use stream since in the worst case the response size

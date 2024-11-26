@@ -15,11 +15,11 @@
 //!                     V
 //! Bubblegum grand epoch: (tree, grand epoch) => (checksum)
 use async_trait::async_trait;
-use interface::checksums_storage::Chksm;
 use interface::checksums_storage::{
     AccBucketCksm, AccChecksumServiceApi, AccGrandBucketCksm, AccLastChange, BbgmChangePos,
     BbgmChangeRecord, BbgmChecksumServiceApi, BbgmEpochCksm, BbgmGrandEpochCksm,
 };
+use interface::checksums_storage::{BbgmGrandEpochCksmWithNumber, Chksm};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
@@ -688,6 +688,33 @@ impl BbgmChecksumServiceApi for Storage {
         let (k, _v) = first_record?;
         let first_key = BubblegumGrandEpoch::decode_key(k.to_vec())?;
         Ok(Some(first_key.grand_epoch_num))
+    }
+
+    async fn list_bbgm_grand_epoch_for_tree(
+        &self,
+        tree_pubkey: Pubkey,
+    ) -> anyhow::Result<Vec<BbgmGrandEpochCksmWithNumber>> {
+        let mut result: Vec<BbgmGrandEpochCksmWithNumber> = Vec::new();
+
+        let Some(earliest_grand_epoch) = self.get_earliest_grand_epoch().await? else {
+            return Ok(result);
+        };
+        let latest_grand_epoch = grand_epoch_of_epoch(current_estimated_epoch());
+
+        for i in earliest_grand_epoch..=latest_grand_epoch {
+            let pontial_key = BubblegumGrandEpochKey {
+                grand_epoch_num: i,
+                tree_pubkey,
+            };
+            if let Some(value) = self.bubblegum_grand_epochs.get_async(pontial_key).await? {
+                result.push(BbgmGrandEpochCksmWithNumber {
+                    grand_epoch: i,
+                    checksum: value.checksum.ok(),
+                });
+            };
+        }
+
+        Ok(result)
     }
 
     async fn list_grand_epoch_checksums(
