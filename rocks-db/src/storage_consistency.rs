@@ -28,19 +28,23 @@ use crate::{column::TypedColumn, transaction::TreeUpdate, Storage};
 
 use std::{collections::HashSet, sync::atomic::AtomicU64, u64};
 
+/// Last slot seen by any of solana blocks processors.
 static LAST_SLOT: AtomicU64 = AtomicU64::new(0);
 
+/// Returns current epoch based on the last seen solana slot
 pub fn current_estimated_epoch() -> u32 {
     epoch_of_slot(LAST_SLOT.load(std::sync::atomic::Ordering::Relaxed))
 }
 
 pub fn last_tracked_slot() -> u64 {
+    // Doesn't guarantee to be fully accurate, which is fine
     LAST_SLOT.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 pub fn track_slot_counter(slot: u64) -> u64 {
     let prev = LAST_SLOT.load(std::sync::atomic::Ordering::Relaxed);
     if slot > prev {
+        // This code does not guaranteed to store the top slot processed, rather one of the top slots.
         LAST_SLOT.store(slot, std::sync::atomic::Ordering::Relaxed);
     }
     prev
@@ -123,7 +127,7 @@ pub const ACC_BUCKET_INVALIDATE: AccountNftBucket = AccountNftBucket {
     checksum: Checksum::Invalidated,
 };
 
-pub const ACC_GRAND_BUCKET_INVALIDATE: AccountNftGrandBucket = AccountNftGrandBucket {
+pub const ACC_GRAND_BUCKET_INVALIDATED: AccountNftGrandBucket = AccountNftGrandBucket {
     checksum: Checksum::Invalidated,
 };
 

@@ -13,7 +13,7 @@ use rocks_db::{
         AccountNft, AccountNftBucket, AccountNftBucketKey, AccountNftChange, AccountNftChangeKey,
         AccountNftGrandBucket, AccountNftGrandBucketKey, AccountNftKey, BubblegumChange,
         BubblegumChangeKey, BubblegumEpoch, BubblegumEpochKey, BubblegumGrandEpoch,
-        BubblegumGrandEpochKey, ACC_BUCKET_INVALIDATE, ACC_GRAND_BUCKET_INVALIDATE,
+        BubblegumGrandEpochKey, ACC_BUCKET_INVALIDATE, ACC_GRAND_BUCKET_INVALIDATED,
         BUBBLEGUM_GRAND_EPOCH_INVALIDATED,
     },
     Storage,
@@ -103,7 +103,7 @@ impl NftChangesTracker {
         NftChangesTracker { sender }
     }
 
-    /// Persists given account NFT change into the sotrage, and, if the change is from the epoch
+    /// Persists given account NFT change into the storage, and, if the change is from the epoch
     /// that is previous to the current epoch, then also notifies checksums calculator
     /// about late data.
     ///
@@ -138,7 +138,7 @@ impl NftChangesTracker {
             let grand_bucket = grand_bucket_for_bucket(bucket);
             let _ = batch_storage.put_acc_grand_bucket(
                 AccountNftGrandBucketKey::new(grand_bucket),
-                ACC_GRAND_BUCKET_INVALIDATE,
+                ACC_GRAND_BUCKET_INVALIDATED,
             );
             let _ = batch_storage
                 .put_acc_bucket(AccountNftBucketKey::new(bucket), ACC_BUCKET_INVALIDATE);
@@ -420,6 +420,7 @@ async fn process_acc_tasks(
         };
         match maybe_task {
             Some(AccTask::CalcEpoch(epoch)) => {
+                tracing::info!("Calculating accounts changes checksums: {epoch}");
                 set_currently_calculated_acc_epoch(epoch);
                 let start = Instant::now();
                 calc_acc_nft_checksums(&storage, epoch).await;
@@ -427,6 +428,7 @@ async fn process_acc_tasks(
                     .account_epoch_calculation_seconds
                     .set(start.elapsed().as_secs() as i64);
                 finish_currently_calculated_acc_epoch();
+                tracing::info!("Finished calculating accounts ckecksum epoch: {epoch}");
             }
             Some(AccTask::Suspend) => is_suspended = true,
             Some(AccTask::Resume) => is_suspended = false,
@@ -752,7 +754,7 @@ async fn update_acc_if_needed(
                 .acc_nft_grand_buckets
                 .put_async(
                     AccountNftGrandBucketKey::new(grand_bucket),
-                    ACC_GRAND_BUCKET_INVALIDATE,
+                    ACC_GRAND_BUCKET_INVALIDATED,
                 )
                 .await;
             invalidated_grand_buckets.insert(grand_bucket);

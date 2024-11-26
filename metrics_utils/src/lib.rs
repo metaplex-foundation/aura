@@ -548,7 +548,7 @@ impl ChecksumCalculationMetricsConfig {
             self.bubblegum_epoch_calculation_seconds.clone(),
         );
         registry.register(
-            "Account_epoch_calculation_seconds",
+            "account_epoch_calculation_seconds",
             "Took time to calculate accounts checksums",
             self.account_epoch_calculation_seconds.clone(),
         );
