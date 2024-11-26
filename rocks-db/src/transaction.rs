@@ -84,6 +84,8 @@ pub struct AssetUpdate<T> {
     pub pk: Pubkey,
     pub details: T,
 }
+
+/// For Bubblegum instructions only
 #[derive(Clone, Default)]
 pub struct InstructionResult {
     pub update: Option<AssetUpdateEvent>,

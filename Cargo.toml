@@ -81,6 +81,7 @@ indicatif = "0.17"
 
 # Errors, futures, helpers, tools, time, etc...
 # Errors
+anyhow = "1"
 thiserror = { version = "1"}
 # Clients
 arweave-rs = { version = "0.2.0", git = "https://github.com/RequescoS/arweave-rs.git", rev = "d8f5ef76f06c96afdf013fe5b62301790631b33f" }

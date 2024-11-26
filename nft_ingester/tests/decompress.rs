@@ -72,6 +72,7 @@ mod tests {
             env_rocks,
             Arc::new(IngesterMetricsConfig::new()),
             buffer.json_tasks.clone(),
+            None,
         ));
 
         let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
@@ -128,6 +129,7 @@ mod tests {
             slot_updated: nft_created_slot,
             amount: 1,
             write_version: 1,
+            data_hash: 0,
         };
 
         let mint_acc = Mint {
@@ -142,6 +144,7 @@ mod tests {
             token_program: Default::default(),
             extensions: None,
             write_version: 1,
+            data_hash: 0,
         };
 
         spl_token_accs_parser
@@ -196,6 +199,7 @@ mod tests {
             metadata_owner: None,
             write_version: 1,
             rent_epoch: 0,
+            data_hash: 0,
         };
 
         mplx_accs_parser
