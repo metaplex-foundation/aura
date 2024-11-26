@@ -1,4 +1,5 @@
 use crate::api::synchronization_state_consistency::CATCH_UP_SEQUENCES_TIMEOUT_SEC;
+use entities::enums::{AssetType, ASSET_TYPES};
 use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::Call;
 use rocks_db::Storage;
@@ -10,27 +11,35 @@ use tokio::task::{JoinError, JoinSet};
 use tracing::info;
 
 pub struct BackfillingStateConsistencyChecker {
-    overwhelm_backfill_gap: Arc<AtomicBool>,
+    overwhelm_fungible_backfill_gap: Arc<AtomicBool>,
+    overwhelm_nft_backfill_gap: Arc<AtomicBool>,
 }
 
 impl BackfillingStateConsistencyChecker {
     pub(crate) fn new() -> Self {
         Self {
-            overwhelm_backfill_gap: Arc::new(AtomicBool::new(false)),
+            overwhelm_fungible_backfill_gap: Arc::new(AtomicBool::new(false)),
+            overwhelm_nft_backfill_gap: Arc::new(AtomicBool::new(false)),
         }
     }
 
     pub(crate) async fn run(
         &self,
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-        mut rx: tokio::sync::broadcast::Receiver<()>,
+        rx: tokio::sync::broadcast::Receiver<()>,
         rocks_db: Arc<Storage>,
         consistence_backfilling_slots_threshold: u64,
     ) {
-        let overwhelm_backfill_gap_clone = self.overwhelm_backfill_gap.clone();
-        tasks.lock().await.spawn(async move {
+        for asset_type in ASSET_TYPES {
+            let rocks_db = rocks_db.clone();
+            let mut rx = rx.resubscribe();
+            let overwhelm_backfill_gap = match asset_type {
+                AssetType::NonFungible => self.overwhelm_nft_backfill_gap.clone(),
+                AssetType::Fungible => self.overwhelm_fungible_backfill_gap.clone(),
+            };
+            tasks.lock().await.spawn(async move {
             while rx.is_empty() {
-                overwhelm_backfill_gap_clone.store(
+                overwhelm_backfill_gap.store(
                     rocks_db.bubblegum_slots.iter_start().count().saturating_add(rocks_db.ingestable_slots.iter_start().count())
                         >= consistence_backfilling_slots_threshold as usize,
                     Ordering::Relaxed,
@@ -45,11 +54,13 @@ impl BackfillingStateConsistencyChecker {
             }
             Ok(())
         });
+        }
     }
 }
 
 impl ConsistencyChecker for BackfillingStateConsistencyChecker {
     fn should_cancel_request(&self, _call: &Call) -> bool {
-        self.overwhelm_backfill_gap.load(Ordering::Relaxed)
+        self.overwhelm_nft_backfill_gap.load(Ordering::Relaxed)
+            && self.overwhelm_fungible_backfill_gap.load(Ordering::Relaxed)
     }
 }

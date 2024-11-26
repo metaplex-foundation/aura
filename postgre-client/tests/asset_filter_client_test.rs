@@ -2,6 +2,7 @@
 #[cfg(test)]
 mod tests {
     use entities::api_req_params::GetByMethodsOptions;
+    use entities::enums::AssetType;
     use postgre_client::model::*;
     use postgre_client::storage_traits::{AssetIndexStorage, AssetPubkeyFilteredFetcher};
     use setup::pg::*;
@@ -76,11 +77,11 @@ mod tests {
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_filter_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice())
+            .update_nft_asset_indexes_batch(asset_indexes.as_slice())
             .await
             .unwrap();
         asset_filter_storage
-            .update_last_synced_key(&last_known_key)
+            .update_last_synced_key(&last_known_key, AssetType::NonFungible)
             .await
             .unwrap();
         let ref_value = &asset_indexes[asset_indexes.len() - 1];
@@ -280,11 +281,11 @@ mod tests {
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_filter_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice())
+            .update_nft_asset_indexes_batch(asset_indexes.as_slice())
             .await
             .unwrap();
         asset_filter_storage
-            .update_last_synced_key(&last_known_key)
+            .update_last_synced_key(&last_known_key, AssetType::NonFungible)
             .await
             .unwrap();
         let asset_indexes = generate_asset_index_records(100);
@@ -292,11 +293,11 @@ mod tests {
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_filter_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice())
+            .update_nft_asset_indexes_batch(asset_indexes.as_slice())
             .await
             .unwrap();
         asset_filter_storage
-            .update_last_synced_key(&last_known_key)
+            .update_last_synced_key(&last_known_key, AssetType::NonFungible)
             .await
             .unwrap();
         let order = AssetSorting {

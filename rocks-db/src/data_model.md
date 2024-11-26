@@ -23,6 +23,7 @@ return assets
 ## Secondary DB syncronization
 The index database is updated in batches. To support this a secondary index is introduced in rocks:
 - ASSETS_UPDATED_IN_SLOT_IDX - keys of this table are constructed of slot and pubkey of the asset
+- FUNGIBLE_ASSETS_UPDATED_IN_SLOT_IDX - the same as above, the only difference is that the column only stores funglibe assets
 
 The batch update may be expressed as (pseudocode):
 

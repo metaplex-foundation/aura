@@ -3,21 +3,34 @@ use crate::model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter};
 use crate::temp_index_client::TempClient;
 use async_trait::async_trait;
 use entities::api_req_params::GetByMethodsOptions;
-use entities::models::AssetIndex;
+use entities::enums::AssetType;
+use entities::models::{AssetIndex, FungibleAssetIndex};
 use mockall::{automock, mock};
 
 #[async_trait]
 pub trait AssetIndexStorage {
-    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError>;
-    async fn update_asset_indexes_batch(
+    async fn fetch_last_synced_id(
+        &self,
+        asset_type: AssetType,
+    ) -> Result<Option<Vec<u8>>, IndexDbError>;
+    async fn update_nft_asset_indexes_batch(
         &self,
         asset_indexes: &[AssetIndex],
     ) -> Result<(), IndexDbError>;
-    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError>;
+    async fn update_fungible_asset_indexes_batch(
+        &self,
+        asset_indexes: &[FungibleAssetIndex],
+    ) -> Result<(), IndexDbError>;
+    async fn update_last_synced_key(
+        &self,
+        last_key: &[u8],
+        asset_type: AssetType,
+    ) -> Result<(), IndexDbError>;
     async fn load_from_dump(
         &self,
         base_path: &std::path::Path,
         last_key: &[u8],
+        asset_type: AssetType,
     ) -> Result<(), IndexDbError>;
 }
 
@@ -25,17 +38,22 @@ mock!(
     pub AssetIndexStorageMock {}
     #[async_trait]
     impl AssetIndexStorage for AssetIndexStorageMock {
-        async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError>;
-        async fn update_asset_indexes_batch(
+        async fn fetch_last_synced_id(&self, asset_type: AssetType) -> Result<Option<Vec<u8>>, IndexDbError>;
+        async fn update_nft_asset_indexes_batch(
             &self,
             asset_indexes: &[AssetIndex],
+        ) -> Result<(), IndexDbError>;
+        async fn update_fungible_asset_indexes_batch(
+            &self,
+            asset_indexes: &[FungibleAssetIndex],
         ) -> Result<(), IndexDbError>;
         async fn load_from_dump(
             &self,
             base_path: &std::path::Path,
             last_key: &[u8],
+            asset_type: AssetType,
         ) -> Result<(), IndexDbError>;
-        async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError>;
+        async fn update_last_synced_key(&self, last_key: &[u8], assset_type: AssetType) -> Result<(), IndexDbError>;
     }
 
     impl Clone for AssetIndexStorageMock {

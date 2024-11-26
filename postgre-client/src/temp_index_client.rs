@@ -5,12 +5,17 @@ use sqlx::{pool::PoolConnection, Connection, Postgres, QueryBuilder};
 use tokio::sync::Mutex;
 
 use crate::{
-    asset_index_client::{split_assets_into_components, TableNames},
+    asset_index_client::{
+        split_assets_into_components, split_into_fungible_tokens, FungibleTokenTable, TableNames,
+    },
     error::IndexDbError,
     storage_traits::{AssetIndexStorage, TempClientProvider},
     PgClient, BATCH_UPSERT_ACTION, CREATE_ACTION, DROP_ACTION, INSERT_ACTION, UPDATE_ACTION,
 };
-use entities::models::AssetIndex;
+use entities::{
+    enums::AssetType,
+    models::{AssetIndex, FungibleAssetIndex},
+};
 
 pub const TEMP_INDEXING_TABLE_PREFIX: &str = "indexing_temp_";
 #[derive(Clone)]
@@ -63,7 +68,20 @@ impl TempClient {
             )
             .await?;
         self.pg_client
-            .update_last_synced_key(initial_key, &mut tx, last_key_table_name.as_str())
+            .update_last_synced_key(
+                initial_key,
+                &mut tx,
+                last_key_table_name.as_str(),
+                AssetType::Fungible,
+            )
+            .await?;
+        self.pg_client
+            .update_last_synced_key(
+                initial_key,
+                &mut tx,
+                last_key_table_name.as_str(),
+                AssetType::NonFungible,
+            )
             .await?;
         self.pg_client
             .commit_transaction(tx)
@@ -119,8 +137,8 @@ impl TempClient {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("INSERT INTO assets_v3 SELECT * FROM ");
         query_builder.push(TEMP_INDEXING_TABLE_PREFIX);
-        query_builder.push("assets_v3 ON CONFLICT (ast_pubkey) 
-        DO UPDATE SET 
+        query_builder.push("assets_v3 ON CONFLICT (ast_pubkey)
+        DO UPDATE SET
             ast_specification_version = EXCLUDED.ast_specification_version,
             ast_specification_asset_class = EXCLUDED.ast_specification_asset_class,
             ast_royalty_target_type = EXCLUDED.ast_royalty_target_type,
@@ -222,18 +240,22 @@ impl TempClient {
 
 #[async_trait]
 impl AssetIndexStorage for TempClient {
-    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError> {
+    async fn fetch_last_synced_id(
+        &self,
+        asset_type: AssetType,
+    ) -> Result<Option<Vec<u8>>, IndexDbError> {
         let mut c = self.pooled_connection.lock().await;
         let mut tx = c.begin().await?;
         self.pg_client
             .fetch_last_synced_id_impl(
                 format!("{}last_synced_key", TEMP_INDEXING_TABLE_PREFIX).as_str(),
                 &mut tx,
+                asset_type,
             )
             .await
     }
 
-    async fn update_asset_indexes_batch(
+    async fn update_nft_asset_indexes_batch(
         &self,
         asset_indexes: &[AssetIndex],
     ) -> Result<(), IndexDbError> {
@@ -245,15 +267,38 @@ impl AssetIndexStorage for TempClient {
             assets_table: format!("{}assets_v3", TEMP_INDEXING_TABLE_PREFIX),
             creators_table: format!("{}asset_creators_v3", TEMP_INDEXING_TABLE_PREFIX),
             authorities_table: format!("{}assets_authorities", TEMP_INDEXING_TABLE_PREFIX),
-            fungible_tokens_table: format!("{}fungible_tokens", TEMP_INDEXING_TABLE_PREFIX),
         };
         self.pg_client
-            .upsert_batched(&mut transaction, table_names, updated_components)
+            .upsert_batched_nft(&mut transaction, table_names, updated_components)
             .await?;
         self.pg_client.commit_transaction(transaction).await
     }
 
-    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError> {
+    async fn update_fungible_asset_indexes_batch(
+        &self,
+        fungible_asset_indexes: &[FungibleAssetIndex],
+    ) -> Result<(), IndexDbError> {
+        let mut c = self.pooled_connection.lock().await;
+        let mut transaction = c.begin().await?;
+        let table_name = FungibleTokenTable::new(
+            format!("{}fungible_tokens", TEMP_INDEXING_TABLE_PREFIX).as_str(),
+        );
+
+        self.pg_client
+            .upsert_batched_fungible(
+                &mut transaction,
+                table_name,
+                split_into_fungible_tokens(fungible_asset_indexes),
+            )
+            .await?;
+        self.pg_client.commit_transaction(transaction).await
+    }
+
+    async fn update_last_synced_key(
+        &self,
+        last_key: &[u8],
+        asset_type: AssetType,
+    ) -> Result<(), IndexDbError> {
         let mut c = self.pooled_connection.lock().await;
         let mut transaction = c.begin().await?;
         self.pg_client
@@ -261,6 +306,7 @@ impl AssetIndexStorage for TempClient {
                 last_key,
                 &mut transaction,
                 format!("{}last_synced_key", TEMP_INDEXING_TABLE_PREFIX).as_str(),
+                asset_type,
             )
             .await?;
         self.pg_client.commit_transaction(transaction).await
@@ -270,6 +316,7 @@ impl AssetIndexStorage for TempClient {
         &self,
         _base_path: &std::path::Path,
         _last_key: &[u8],
+        _asset_type: AssetType,
     ) -> Result<(), IndexDbError> {
         Err(IndexDbError::NotImplemented(
             "Temporary client does not support batch load from file".to_string(),

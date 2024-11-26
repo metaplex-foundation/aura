@@ -6,8 +6,8 @@ use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
 use asset::{
-    AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetOwnerDeprecated, MetadataMintMap,
-    SlotAssetIdx,
+    AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetOwnerDeprecated,
+    FungibleAssetsUpdateIdx, MetadataMintMap, SlotAssetIdx,
 };
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
@@ -112,6 +112,7 @@ pub struct Storage {
     pub raw_blocks_cbor: Column<RawBlock>,
     pub db: Arc<DB>,
     pub assets_update_idx: Column<AssetsUpdateIdx>,
+    pub fungible_assets_update_idx: Column<FungibleAssetsUpdateIdx>,
     pub slot_asset_idx: Column<SlotAssetIdx>,
     pub tree_seq_idx: Column<TreeSeqIdx>,
     pub trees_gaps: Column<TreesGaps>,
@@ -133,6 +134,7 @@ pub struct Storage {
     pub leaf_signature: Column<LeafSignature>,
     pub spl_mints: Column<SplMint>,
     assets_update_last_seq: AtomicU64,
+    fungible_assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
 }
@@ -164,6 +166,7 @@ impl Storage {
         let force_reingestable_slots = Self::column(db.clone(), red_metrics.clone());
         let raw_blocks = Self::column(db.clone(), red_metrics.clone());
         let assets_update_idx = Self::column(db.clone(), red_metrics.clone());
+        let fungible_assets_update_idx = Self::column(db.clone(), red_metrics.clone());
         let slot_asset_idx = Self::column(db.clone(), red_metrics.clone());
         let tree_seq_idx = Self::column(db.clone(), red_metrics.clone());
         let trees_gaps = Self::column(db.clone(), red_metrics.clone());
@@ -207,8 +210,10 @@ impl Storage {
             raw_blocks_cbor: raw_blocks,
             db,
             assets_update_idx,
+            fungible_assets_update_idx,
             slot_asset_idx,
             assets_update_last_seq: AtomicU64::new(0),
+            fungible_assets_update_last_seq: AtomicU64::new(0),
             join_set,
             tree_seq_idx,
             trees_gaps,
@@ -283,6 +288,7 @@ impl Storage {
             Self::new_cf_descriptor::<cl_items::ClLeaf>(migration_state),
             Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(migration_state),
             Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(migration_state),
+            Self::new_cf_descriptor::<asset::FungibleAssetsUpdateIdx>(migration_state),
             Self::new_cf_descriptor::<asset::SlotAssetIdx>(migration_state),
             Self::new_cf_descriptor::<signature_client::SignatureIdx>(migration_state),
             Self::new_cf_descriptor::<RawBlock>(migration_state),
@@ -525,6 +531,12 @@ impl Storage {
             AssetsUpdateIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_assets_update_idx_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            FungibleAssetsUpdateIdx::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_fungible_assets_update_idx_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }

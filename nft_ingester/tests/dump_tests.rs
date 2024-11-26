@@ -3,6 +3,7 @@
 mod tests {
     use std::sync::Arc;
 
+    use entities::enums::ASSET_TYPES;
     use entities::models::TokenAccount;
     use entities::{api_req_params::GetByMethodsOptions, models::UrlWithStatus};
     use metrics_utils::{IngesterMetricsConfig, SynchronizerMetricsConfig};
@@ -58,7 +59,7 @@ mod tests {
         let cli: Cli = Cli::default();
         let pg_env = setup::pg::TestEnvironment::new_with_mount(&cli, temp_dir_path).await;
         let client = pg_env.client.clone();
-        let syncronizer = Synchronizer::new(
+        let syncronizer = Arc::new(Synchronizer::new(
             storage,
             client.clone(),
             client.clone(),
@@ -67,8 +68,11 @@ mod tests {
             Arc::new(SynchronizerMetricsConfig::new()),
             1,
             false,
-        );
-        syncronizer.full_syncronize(&rx).await.unwrap();
+        ));
+        for asset_type in ASSET_TYPES {
+            syncronizer.full_syncronize(&rx, asset_type).await.unwrap();
+        }
+
         assert_eq!(pg_env.count_rows_in_metadata().await.unwrap(), 1);
         assert_eq!(
             pg_env.count_rows_in_creators().await.unwrap(),
@@ -84,7 +88,7 @@ mod tests {
         );
         assert_eq!(
             pg_env.count_rows_in_fungible_tokens().await.unwrap(),
-            number_of_assets as i64
+            1000 as i64
         );
         let metadata_key_set = client.get_existing_metadata_keys().await.unwrap();
         assert_eq!(metadata_key_set.len(), 1);
