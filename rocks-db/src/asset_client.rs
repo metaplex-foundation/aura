@@ -119,34 +119,13 @@ impl Storage {
         asset_type: AssetType,
         last_synced_key: Vec<u8>,
     ) -> Result<()> {
-        let (from, cf) = match asset_type {
-            AssetType::Fungible => {
-                let cf = self.fungible_assets_update_idx.handle();
-                let key_type_pairs = self.fungible_assets_update_idx.get_from_start(1);
-
-                if key_type_pairs.is_empty() {
-                    return Ok(());
-                }
-                let from = key_type_pairs[0].0.clone();
-                (from, cf)
-            }
-            AssetType::NonFungible => {
-                let cf = self.assets_update_idx.handle();
-                let key_type_pairs = self.assets_update_idx.get_from_start(1);
-
-                if key_type_pairs.is_empty() {
-                    return Ok(());
-                }
-                let from = key_type_pairs[0].0.clone();
-                (from, cf)
-            }
+        let cf = match asset_type {
+            AssetType::Fungible => self.fungible_assets_update_idx.handle(),
+            AssetType::NonFungible => self.assets_update_idx.handle(),
         };
 
-        if from == last_synced_key {
-            return Ok(());
-        }
-
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        let from = vec![];
         batch.delete_range_cf(&cf, from, last_synced_key);
         self.db.write(batch)?;
 
