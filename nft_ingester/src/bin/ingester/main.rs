@@ -76,7 +76,7 @@ pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const ARWEAVE_WALLET_PATH: &str = "./arweave_wallet.json";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
-pub const SECONDS_TO_RETRY_IDXS_CLEANUP: u64 = 15;
+pub const SECONDS_TO_RETRY_IDXS_CLEANUP: u64 = 15 * 60; // 15 minutes
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -805,20 +805,22 @@ pub async fn main() -> Result<(), IngesterError> {
         let primary_rocks_storage = primary_rocks_storage.clone();
         let mut rx = shutdown_rx.resubscribe();
         mutexed_tasks.lock().await.spawn(async move {
-            loop {
-                if rx.try_recv().is_ok() {
-                    break;
-                }
-
-                match clean_syncronized_idxs(primary_rocks_storage.clone(), asset_type) {
-                    Ok(_) => {
-                        info!("Cleaned synchronized indexes for {:?}", asset_type);
+            tokio::select! {
+                _ = rx.recv() => {}
+                _ = async move {
+                    loop {
+                        match clean_syncronized_idxs(primary_rocks_storage.clone(), asset_type) {
+                            Ok(_) => {
+                                info!("Cleaned synchronized indexes for {:?}", asset_type);
+                            }
+                            Err(e) => {
+                                error!("Failed to clean synchronized indexes for {:?} with error {}", asset_type, e);
+                                break;
+                            }
+                        }
+                        tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_IDXS_CLEANUP)).await;
                     }
-                    Err(e) => {
-                        error!("Failed to clean synchronized indexes for {:?} with error {}", asset_type, e);
-                    }
-                }
-                tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_IDXS_CLEANUP)).await;
+                } => {}
             }
 
             Ok(())
