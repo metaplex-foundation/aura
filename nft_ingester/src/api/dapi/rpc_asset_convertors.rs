@@ -269,17 +269,20 @@ fn extract_collection_metadata(
 }
 
 pub fn to_authority(
-    authority: &AssetAuthority,
+    authority: &Option<AssetAuthority>,
     mpl_core_collection: &Option<AssetCollection>,
 ) -> Vec<Authority> {
     let update_authority = mpl_core_collection
         .clone()
         .and_then(|update_authority| update_authority.authority.value);
 
+    // even if there is no authority for asset we should not set Pubkey::default(), just empty string
+    let auth_key = update_authority
+        .map(|update_authority| update_authority.to_string())
+        .unwrap_or(authority.as_ref().map(|auth| auth.authority.to_string()).unwrap_or("".to_string()));
+
     vec![Authority {
-        address: update_authority
-            .map(|update_authority| update_authority.to_string())
-            .unwrap_or(authority.authority.to_string()),
+        address: auth_key,
         scopes: vec![Scope::Full],
     }]
 }
