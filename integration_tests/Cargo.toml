@@ -12,7 +12,7 @@ function_name = { workspace = true }
 futures = { workspace = true }
 insta = { workspace = true, features = ["json"] }
 itertools = { workspace = true }
-log = { workspace = true }
+tracing = { workspace = true }
 mpl-token-metadata = { workspace = true }
 once_cell = { workspace = true }
 plerkle_serialization = { workspace = true }

@@ -175,7 +175,7 @@ async fn test_account_updates() {
         if let AccountUpdate::None = named_update.update {
             continue;
         }
-        // apply_migrations_and_delete_data(setup.db.clone()).await;
+
         index_nft(&setup, mint).await;
 
         let response = setup
@@ -228,7 +228,6 @@ async fn test_account_updates() {
     // Test that the different metadata/mint/token updates use different slots and don't interfere
     // with each other
     for named_update in named_updates.clone() {
-        // apply_migrations_and_delete_data(setup.db.clone()).await;
         index_nft(&setup, mint).await;
 
         let other_named_updates = named_updates

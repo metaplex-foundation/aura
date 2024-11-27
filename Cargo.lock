@@ -3743,7 +3743,6 @@ dependencies = [
  "futures",
  "insta",
  "itertools 0.12.1",
- "log",
  "metrics-utils",
  "mpl-token-metadata",
  "nft_ingester",
@@ -3764,6 +3763,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-stream",
+ "tracing",
  "usecase",
 ]
 

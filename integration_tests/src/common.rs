@@ -35,7 +35,7 @@ use tokio::{
 };
 use usecase::proofs::MaybeProofChecker;
 
-use log::{error, info};
+use tracing::{error, info};
 use serde::de::DeserializeOwned;
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_client::{

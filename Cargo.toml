@@ -48,7 +48,6 @@ uuid = { version = "1.6.1", features = ["v4"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.16", features = ["json", "env-filter", "ansi"] }
 env_logger = "0.10.1"
-log = "0.4.17"
 
 
 # Testing and benchmarking
