@@ -815,7 +815,6 @@ pub async fn main() -> Result<(), IngesterError> {
                             }
                             Err(e) => {
                                 error!("Failed to clean synchronized indexes for {:?} with error {}", asset_type, e);
-                                break;
                             }
                         }
                         tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_IDXS_CLEANUP)).await;
