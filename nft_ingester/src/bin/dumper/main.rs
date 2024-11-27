@@ -15,6 +15,8 @@ use prometheus_client::registry::Registry;
 
 use metrics_utils::utils::setup_metrics;
 use metrics_utils::SynchronizerMetricsConfig;
+use num_bigint::BigUint;
+use num_traits::ToPrimitive;
 use rocks_db::key_encoders::encode_u64x2_pubkey;
 use rocks_db::migrator::MigrationState;
 use rocks_db::storage_traits::{AssetUpdateIndexStorage, Dumper};
@@ -22,9 +24,6 @@ use rocks_db::Storage;
 use solana_sdk::pubkey::Pubkey;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
-use num_bigint::BigUint;
-use num_traits::ToPrimitive;
-
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
@@ -118,9 +117,14 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let shards = shard_pubkeys(args.num_shards);
     let mut tasks = JoinSet::new();
-    
-    let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
-    let authorities_key_set= Arc::new(Mutex::new(HashSet::new()));
+
+    let metadata_path = base_path
+        .join("metadata.csv")
+        .to_str()
+        .map(str::to_owned)
+        .unwrap();
+    let metadata_file = File::create(metadata_path.clone())
+        .map_err(|e| format!("Could not create file for metadata dump: {}", e))?;
 
     for (i, (start, end)) in shards.iter().enumerate() {
         let name_postfix = if args.num_shards > 1 {
@@ -128,11 +132,6 @@ pub async fn main() -> Result<(), IngesterError> {
         } else {
             "".to_string()
         };
-        let metadata_path = base_path
-            .join(format!("metadata{}.csv", name_postfix))
-            .to_str()
-            .map(str::to_owned)
-            .unwrap();
         let creators_path = base_path
             .join(format!("creators{}.csv", name_postfix))
             .to_str()
@@ -154,16 +153,13 @@ pub async fn main() -> Result<(), IngesterError> {
             .map(str::to_owned)
             .unwrap();
         tracing::info!(
-            "Dumping to metadata: {:?}, creators: {:?}, assets: {:?}, authorities: {:?}, fungible_tokens: {:?}",
-            metadata_path,
+            "Dumping to creators: {:?}, assets: {:?}, authorities: {:?}, fungible_tokens: {:?}",
             creators_path,
             assets_path,
             authorities_path,
             fungible_tokens_path
         );
 
-        let metadata_file = File::create(metadata_path.clone())
-            .map_err(|e| format!("Could not create file for metadata dump: {}", e))?;
         let assets_file = File::create(assets_path.clone())
             .map_err(|e| format!("Could not create file for assets dump: {}", e))?;
         let creators_file = File::create(creators_path.clone())
@@ -177,12 +173,9 @@ pub async fn main() -> Result<(), IngesterError> {
         let shutdown_rx = shutdown_rx.resubscribe();
         let metrics = metrics.clone();
         let rocks_storage = rocks_storage.clone();
-        let metadata_key_set = metadata_key_set.clone();
-        let authorities_key_set = authorities_key_set.clone();
         tasks.spawn(async move {
             rocks_storage
                 .dump_csv(
-                    (metadata_file, metadata_path),
                     (assets_file, assets_path),
                     (creators_file, creators_path),
                     (authority_file, authorities_path),
@@ -192,19 +185,21 @@ pub async fn main() -> Result<(), IngesterError> {
                     args.limit,
                     Some(start),
                     Some(end),
-                    metadata_key_set,
-                    authorities_key_set,
                     &shutdown_rx,
                     metrics,
                 )
                 .await
         });
     }
+    let mut metadata_set = HashSet::new();
     while let Some(task) = tasks.join_next().await {
-        task.map_err(|e| e.to_string())?
+        let set = task
+            .map_err(|e| e.to_string())?
             .map_err(|e| e.to_string())?;
+        metadata_set.extend(set);
     }
-
+    let metadata_dump_start = std::time::Instant::now();
+    Storage::dump_metadata(metadata_file, args.buffer_capacity, metadata_set, metrics)?;
     let duration = start_time.elapsed();
     let total = args.limit.unwrap_or(0) * args.num_shards as usize;
     tracing::info!(
@@ -213,6 +208,10 @@ pub async fn main() -> Result<(), IngesterError> {
         duration,
         total as f64 / duration.as_secs_f64()
     );
+    tracing::info!(
+        "Dumping metadata took {:?}",
+        metadata_dump_start.elapsed()
+    );
     Ok(())
 }
 
@@ -220,7 +219,7 @@ pub async fn main() -> Result<(), IngesterError> {
 /// Returns a vector of tuples (start_pubkey, end_pubkey) for each shard.
 fn shard_pubkeys(num_shards: u64) -> Vec<(Pubkey, Pubkey)> {
     // Total keyspace as BigUint
-    let total_keyspace = BigUint::from_bytes_be(&[0xffu8;32].as_slice());
+    let total_keyspace = BigUint::from_bytes_be(&[0xffu8; 32].as_slice());
     let shard_size = &total_keyspace / num_shards;
 
     let mut shards = Vec::new();
@@ -241,7 +240,10 @@ fn shard_pubkeys(num_shards: u64) -> Vec<(Pubkey, Pubkey)> {
         let start_pubkey = pad_to_32_bytes(&shard_start_bytes);
         let end_pubkey = pad_to_32_bytes(&shard_end_bytes);
 
-        shards.push((Pubkey::new_from_array(start_pubkey), Pubkey::new_from_array(end_pubkey)));
+        shards.push((
+            Pubkey::new_from_array(start_pubkey),
+            Pubkey::new_from_array(end_pubkey),
+        ));
     }
 
     shards
@@ -289,5 +291,4 @@ mod tests {
         assert_eq!(shards[1].0.to_bytes(), first_key);
         assert_eq!(shards[1].1.to_bytes(), last_key);
     }
-    
 }

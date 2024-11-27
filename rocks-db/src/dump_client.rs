@@ -14,13 +14,13 @@ use inflector::Inflector;
 use metrics_utils::SynchronizerMetricsConfig;
 use serde::{Serialize, Serializer};
 use solana_sdk::pubkey::Pubkey;
-use tokio::sync::Mutex;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::BufWriter,
     sync::Arc,
 };
+use tokio::sync::Mutex;
 use tokio::time::Instant;
 use tracing::{error, info};
 
@@ -91,7 +91,6 @@ impl Storage {
     #[allow(clippy::too_many_arguments)]
     pub async fn dump_nft_csv(
         &self,
-        metadata_file_and_path: (File, String),
         assets_file_and_path: (File, String),
         creators_file_and_path: (File, String),
         authority_file_and_path: (File, String),
@@ -100,12 +99,12 @@ impl Storage {
         asset_limit: Option<usize>,
         start_pubkey: Option<Pubkey>,
         end_pubkey: Option<Pubkey>,
-        metadata_key_set: Arc<Mutex<HashSet<Vec<u8>>>>,
-        authorities_key_set: Arc<Mutex<HashSet<String>>>,
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
-    ) -> Result<(), String> {
-        let mut core_collections: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
+    ) -> Result<HashSet<String>, String> {
+        let mut metadata_key_set = HashSet::new();
+
+        let mut core_collection_authorities: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
         let mut core_collections_iter = self
             .db
             .raw_iterator_cf(&self.mpl_core_collection_authorities.handle());
@@ -115,7 +114,7 @@ impl Storage {
             let value = core_collections_iter.value().unwrap();
             if let Ok(value) = bincode::deserialize::<MplCoreCollectionAuthority>(value) {
                 if let Some(authority) = value.authority.value {
-                    core_collections.insert(key.to_vec(), authority.to_bytes().to_vec());
+                    core_collection_authorities.insert(key.to_vec(), authority.to_bytes().to_vec());
                 }
             }
             core_collections_iter.next();
@@ -133,11 +132,6 @@ impl Storage {
             .from_writer(buf_writer);
         let buf_writer = BufWriter::with_capacity(buf_capacity, creators_file_and_path.0);
         let mut creators_writer = WriterBuilder::new()
-            .has_headers(false)
-            .from_writer(buf_writer);
-
-        let buf_writer = BufWriter::with_capacity(buf_capacity, metadata_file_and_path.0);
-        let mut metadata_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
 
@@ -195,24 +189,10 @@ impl Storage {
                 .and_then(|dd| dd.url())
                 .and_then(|url| url.value())
                 .filter(|s| !s.is_empty())
-                .map(|s| (UrlWithStatus::get_metadata_id_for(s), s));
-            if let Some((ref metadata_key, ref url)) = metadata_url {
-                {
-                    let mut metadata_key_set = metadata_key_set.lock().await;
-                    if !metadata_key_set.contains(metadata_key) {
-                        metadata_key_set.insert(metadata_key.clone());
-                        drop(metadata_key_set); 
-                        if let Err(e) = metadata_writer.serialize((
-                            Self::encode(metadata_key),
-                            url.to_string(),
-                            "pending".to_string(),
-                        )) {
-                            error!("Error writing metadata to csv: {:?}", e);
-                        }
-                        synchronizer_metrics.inc_num_of_records_written("metadata", 1);
-                    }
-                }
-            }
+                .map(|s| {
+                    metadata_key_set.insert(s.to_string());
+                    UrlWithStatus::get_metadata_id_for(s)
+                });
 
             let slot_updated = asset.get_slot_updated() as i64;
             if let Some(cc) = asset
@@ -233,11 +213,11 @@ impl Storage {
                     synchronizer_metrics.inc_num_of_records_written("creators", 1);
                 }
             }
-            let update_authority = asset
+            let core_collection_update_authority = asset
                 .collection()
                 .and_then(|c| c.collection())
                 .and_then(|c| c.value())
-                .and_then(|c| core_collections.get(c.bytes()))
+                .and_then(|c| core_collection_authorities.get(c.bytes()))
                 .map(|b| b.to_owned());
             let authority = asset
                 .authority()
@@ -281,7 +261,7 @@ impl Storage {
                     .map(|v| v.bytes())
                     .map(Self::encode),
                 ast_authority_fk: if let Some(collection) = collection.as_ref() {
-                    if update_authority.is_some() {
+                    if core_collection_update_authority.is_some() {
                         Some(collection.to_owned())
                     } else if authority.is_some() {
                         Some(encoded_key.clone())
@@ -322,7 +302,7 @@ impl Storage {
                     .dynamic_details()
                     .and_then(|d| d.supply())
                     .map(|v| v.value() as i64),
-                ast_metadata_url_id: metadata_url.map(|(k, _)| k).map(Self::encode),
+                ast_metadata_url_id: metadata_url.map(Self::encode),
                 ast_slot_updated: slot_updated,
             };
 
@@ -330,27 +310,26 @@ impl Storage {
                 error!("Error writing asset to csv: {:?}", e);
             }
             synchronizer_metrics.inc_num_of_records_written("asset", 1);
-            let authority_key = if update_authority.is_some() {
-                collection
-            } else {
-                Some(encoded_key)
-            };
-            let authority = update_authority.or(authority);
-            if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
-                {
-                    let mut authorities_key_set = authorities_key_set.lock().await;
-                    if !authorities_key_set.contains(&authority_key) {
-                        authorities_key_set.insert(authority_key.clone());
-                        drop(authorities_key_set);
-                        if let Err(e) = authority_writer.serialize((
-                            authority_key,
-                            Self::encode(authority),
-                            slot_updated,
-                        )) {
-                            error!("Error writing authority to csv: {:?}", e);
-                        }
-                        synchronizer_metrics.inc_num_of_records_written("authority", 1);
+            // the authority key is the collection key if the core collection update authority is set, or the asset key itself
+            // for the asset keys, we could write those without the need to check if they are already written,
+            // and for the collection keys, we just skip as those will be written as part of the core collection account dump
+            // todo: this was refactored, need to be verified as part of https://linear.app/mplx/issue/MTG-979/fix-test-mpl-core-get-assets-by-authority
+            if core_collection_update_authority.is_none() {
+                let authority_key = if core_collection_update_authority.is_some() {
+                    collection
+                } else {
+                    Some(encoded_key)
+                };
+                let authority = core_collection_update_authority.or(authority);
+                if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
+                    if let Err(e) = authority_writer.serialize((
+                        authority_key,
+                        Self::encode(authority),
+                        slot_updated,
+                    )) {
+                        error!("Error writing authority to csv: {:?}", e);
                     }
+                    synchronizer_metrics.inc_num_of_records_written("authority", 1);
                 }
             }
             if !rx.is_empty() {
@@ -369,13 +348,12 @@ impl Storage {
             tokio::task::spawn_blocking(move || asset_writer.flush()),
             tokio::task::spawn_blocking(move || authority_writer.flush()),
             tokio::task::spawn_blocking(move || creators_writer.flush()),
-            tokio::task::spawn_blocking(move || metadata_writer.flush())
         )
         .map_err(|e| e.to_string())?;
 
         info!("asset writers are flushed.");
 
-        Ok(())
+        Ok(metadata_key_set)
     }
 
     /// Dumps data into several into `CSV file` dedicated for fungible tokens,
@@ -478,6 +456,32 @@ impl Storage {
 
     fn encode<T: AsRef<[u8]>>(v: T) -> String {
         format!("\\x{}", hex::encode(v))
+    }
+
+    pub fn dump_metadata(
+        file: File,
+        buf_capacity: usize,
+        metadata: HashSet<String>,
+        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
+    ) -> Result<(), String> {
+        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, file);
+        let mut metadata_writer = WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(buf_writer);
+
+        metadata.into_iter().for_each(|s| {
+            let url = s;
+            let metadata_key = UrlWithStatus::get_metadata_id_for(&url);
+            if let Err(e) = metadata_writer.serialize((
+                Self::encode(metadata_key),
+                url.to_string(),
+                "pending".to_string(),
+            )) {
+                error!("Error writing metadata to csv: {:?}", e);
+            }
+            synchronizer_metrics.inc_num_of_records_written("metadata", 1);
+        });
+        metadata_writer.flush().map_err(|e| e.to_string())
     }
 }
 
@@ -590,6 +594,10 @@ impl Dumper for Storage {
             synchronizer_metrics,
         )
         .await?;
+
+        info!("metadata dump started");
+        Self::dump_metadata(metadata_file, BUF_CAPACITY, metadata, synchronizer_metrics)?;
+        info!("metadata dump finished");
         Ok(())
     }
 }
