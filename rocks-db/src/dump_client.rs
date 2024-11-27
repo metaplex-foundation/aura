@@ -13,6 +13,7 @@ use hex;
 use inflector::Inflector;
 use metrics_utils::SynchronizerMetricsConfig;
 use serde::{Serialize, Serializer};
+use solana_sdk::pubkey::Pubkey;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
@@ -96,6 +97,8 @@ impl Storage {
         batch_size: usize,
         buf_capacity: usize,
         asset_limit: Option<usize>,
+        start_pubkey: Option<Pubkey>,
+        end_pubkey: Option<Pubkey>,
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), String> {
@@ -140,9 +143,19 @@ impl Storage {
 
         // Iteration over `asset_data` column via CUSTOM iterator.
         let mut iter = self.db.raw_iterator_cf(&self.asset_data.handle());
-        iter.seek_to_first();
+        if let Some(start_pubkey) = start_pubkey {
+            iter.seek(&start_pubkey.to_bytes());
+        } else {
+            iter.seek_to_first();
+        }
+        let end_pubkey = end_pubkey.map(|pk| pk.to_bytes());
         let mut cnt = 0;
         while iter.valid() {
+            if let Some(end_pubkey) = end_pubkey {
+                if iter.key().unwrap() >= end_pubkey.as_slice() {
+                    break;
+                }
+            }
             let key = iter.key().unwrap();
             let encoded_key = Self::encode(key);
             let value = iter.value().unwrap();
@@ -562,6 +575,8 @@ impl Dumper for Storage {
             (authority_file, authorities_path.unwrap()),
             batch_size,
             BUF_CAPACITY,
+            None,
+            None,
             None,
             rx,
             synchronizer_metrics,
