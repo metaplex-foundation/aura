@@ -2,6 +2,7 @@ use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
 use entities::enums::{AssetType, ASSET_TYPES};
 use nft_ingester::batch_mint::batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister};
+use nft_ingester::cleaners::indexer_cleaner::clean_syncronized_idxs;
 use nft_ingester::scheduler::Scheduler;
 use postgre_client::PG_MIGRATIONS_PATH;
 use std::panic;
@@ -40,10 +41,10 @@ use nft_ingester::backfiller::{
 };
 use nft_ingester::batch_mint::batch_mint_processor::{process_batch_mints, BatchMintProcessor, NoopBatchMintTxSender};
 use nft_ingester::buffer::{debug_buffer, Buffer};
+use nft_ingester::cleaners::fork_cleaner::{run_fork_cleaner, ForkCleaner};
 use nft_ingester::config::{
     setup_config, ApiConfig, BackfillerConfig, BackfillerMode, IngesterConfig, MessageSource, INGESTER_CONFIG_PREFIX,
 };
-use nft_ingester::fork_cleaner::{run_fork_cleaner, ForkCleaner};
 use nft_ingester::gapfiller::{process_asset_details_stream_wrapper, run_sequence_consistent_gapfiller};
 use nft_ingester::index_syncronizer::Synchronizer;
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration, init_primary_storage};
@@ -75,6 +76,7 @@ pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const ARWEAVE_WALLET_PATH: &str = "./arweave_wallet.json";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
+pub const SECONDS_TO_RETRY_IDXS_CLEANUP: u64 = 15 * 60; // 15 minutes
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -605,8 +607,6 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     if !config.disable_synchronizer {
-        let synchronizer = Arc::new(synchronizer);
-
         for asset_type in ASSET_TYPES {
             let rx = shutdown_rx.resubscribe();
             let synchronizer = synchronizer.clone();
@@ -799,6 +799,32 @@ pub async fn main() -> Result<(), IngesterError> {
         info!("Start batch_mint persister...");
         batch_mint_persister.persist_batch_mints(rx).await
     });
+
+    // clean indexes
+    for asset_type in ASSET_TYPES {
+        let primary_rocks_storage = primary_rocks_storage.clone();
+        let mut rx = shutdown_rx.resubscribe();
+        mutexed_tasks.lock().await.spawn(async move {
+            tokio::select! {
+                _ = rx.recv() => {}
+                _ = async move {
+                    loop {
+                        match clean_syncronized_idxs(primary_rocks_storage.clone(), asset_type) {
+                            Ok(_) => {
+                                info!("Cleaned synchronized indexes for {:?}", asset_type);
+                            }
+                            Err(e) => {
+                                error!("Failed to clean synchronized indexes for {:?} with error {}", asset_type, e);
+                            }
+                        }
+                        tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_IDXS_CLEANUP)).await;
+                    }
+                } => {}
+            }
+
+            Ok(())
+        });
+    }
 
     start_metrics(metrics_state.registry, config.metrics_port).await;
 

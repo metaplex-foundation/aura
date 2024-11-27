@@ -200,9 +200,9 @@ impl AssetIndexReader for Storage {
             let fungible_asset_index = FungibleAssetIndex {
                 pubkey: token_acc.pubkey,
                 owner: Some(token_acc.owner),
+                slot_updated: token_acc.slot_updated,
                 fungible_asset_mint: Some(token_acc.mint),
                 fungible_asset_balance: Some(token_acc.amount as u64),
-                slot_updated: token_acc.slot_updated,
             };
 
             fungible_assets_indexes.insert(token_acc.pubkey, fungible_asset_index);

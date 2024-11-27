@@ -7,6 +7,8 @@ mod tests {
         ShadowInterestBearingConfig, ShadowTransferFee, ShadowTransferFeeConfig, UnixTimestamp,
     };
     use blockbuster::programs::token_extensions::MintAccountExtensions;
+    use nft_ingester::cleaners::indexer_cleaner::clean_syncronized_idxs;
+
     use std::str::FromStr;
     use std::{collections::HashMap, sync::Arc};
 
@@ -3713,5 +3715,92 @@ mod tests {
                 .unwrap(),
             fungible_token_account1.to_string()
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_idx_cleaner() {
+        let cnt = 100;
+        let cli = Cli::default();
+
+        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let _synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
+            env.pg_env.client.clone(),
+            200_000,
+            "".to_string(),
+            Arc::new(SynchronizerMetricsConfig::new()),
+            1,
+            false,
+        );
+        let non_fungible_token_mint = generated_assets.pubkeys[1];
+        let mint = Mint {
+            pubkey: non_fungible_token_mint,
+            supply: 100000,
+            decimals: 0,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 10,
+            write_version: 10,
+            extensions: None,
+        };
+
+        let owner: Pubkey = generated_assets.owners[1].owner.value.unwrap();
+        let token_account_addr = Pubkey::new_unique();
+        let token_account = TokenAccount {
+            pubkey: token_account_addr,
+            mint: non_fungible_token_mint,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 100,
+            write_version: 10,
+        };
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        let token_accounts_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        token_accounts_processor
+            .transform_and_save_token_account(
+                &mut batch_storage,
+                token_account_addr,
+                &token_account,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint)
+            .unwrap();
+        batch_storage.flush().unwrap();
+
+        // one more idx shoul've been added
+        let idx_fungible_asset_iter = env
+            .rocks_env
+            .storage
+            .fungible_assets_update_idx
+            .iter_start();
+        let idx_non_fungible_asset_iter = env.rocks_env.storage.assets_update_idx.iter_start();
+        assert_eq!(idx_fungible_asset_iter.count(), 1);
+        assert_eq!(idx_non_fungible_asset_iter.count(), cnt + 2);
+
+        for asset_type in ASSET_TYPES {
+            clean_syncronized_idxs(env.rocks_env.storage.clone(), asset_type).unwrap();
+        }
+
+        // after sync idxs should be cleaned again
+        let idx_fungible_asset_iter = env
+            .rocks_env
+            .storage
+            .fungible_assets_update_idx
+            .iter_start();
+        let idx_non_fungible_asset_iter = env.rocks_env.storage.assets_update_idx.iter_start();
+        assert_eq!(idx_fungible_asset_iter.count(), 1);
+        assert_eq!(idx_non_fungible_asset_iter.count(), 1);
     }
 }

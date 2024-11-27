@@ -172,8 +172,10 @@ where
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
     ) -> Result<(), IngesterError> {
+        let asset_type = AssetType::NonFungible;
+
         let state = self
-            .get_sync_state(run_full_sync_threshold, AssetType::NonFungible)
+            .get_sync_state(run_full_sync_threshold, asset_type)
             .await?;
         match state {
             SyncStatus::FullSyncRequired(state) => {
@@ -194,8 +196,10 @@ where
         rx: &tokio::sync::broadcast::Receiver<()>,
         run_full_sync_threshold: i64,
     ) -> Result<(), IngesterError> {
+        let asset_type = AssetType::Fungible;
+
         let state = self
-            .get_sync_state(run_full_sync_threshold, AssetType::Fungible)
+            .get_sync_state(run_full_sync_threshold, asset_type)
             .await?;
 
         match state {
