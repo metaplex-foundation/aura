@@ -14,6 +14,7 @@ use inflector::Inflector;
 use metrics_utils::SynchronizerMetricsConfig;
 use serde::{Serialize, Serializer};
 use solana_sdk::pubkey::Pubkey;
+use tokio::sync::Mutex;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
@@ -99,6 +100,8 @@ impl Storage {
         asset_limit: Option<usize>,
         start_pubkey: Option<Pubkey>,
         end_pubkey: Option<Pubkey>,
+        metadata_key_set: Arc<Mutex<HashSet<Vec<u8>>>>,
+        authorities_key_set: Arc<Mutex<HashSet<String>>>,
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), String> {
@@ -117,9 +120,6 @@ impl Storage {
             }
             core_collections_iter.next();
         }
-
-        let mut metadata_key_set = HashSet::new();
-        let mut authorities_key_set = HashSet::new();
 
         let buf_writer = BufWriter::with_capacity(buf_capacity, assets_file_and_path.0);
 
@@ -198,8 +198,10 @@ impl Storage {
                 .map(|s| (UrlWithStatus::get_metadata_id_for(s), s));
             if let Some((ref metadata_key, ref url)) = metadata_url {
                 {
+                    let mut metadata_key_set = metadata_key_set.lock().await;
                     if !metadata_key_set.contains(metadata_key) {
                         metadata_key_set.insert(metadata_key.clone());
+                        drop(metadata_key_set); 
                         if let Err(e) = metadata_writer.serialize((
                             Self::encode(metadata_key),
                             url.to_string(),
@@ -336,8 +338,10 @@ impl Storage {
             let authority = update_authority.or(authority);
             if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
                 {
+                    let mut authorities_key_set = authorities_key_set.lock().await;
                     if !authorities_key_set.contains(&authority_key) {
                         authorities_key_set.insert(authority_key.clone());
+                        drop(authorities_key_set);
                         if let Err(e) = authority_writer.serialize((
                             authority_key,
                             Self::encode(authority),
@@ -567,6 +571,8 @@ impl Dumper for Storage {
             .map_err(|e| format!("Could not create file for creators dump: {}", e))?;
         let authority_file = File::create(authorities_path.clone().unwrap())
             .map_err(|e| format!("Could not create file for authority dump: {}", e))?;
+        let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
+        let authorities_key_set= Arc::new(Mutex::new(HashSet::new()));
 
         self.dump_nft_csv(
             (metadata_file, metadata_path.unwrap()),
@@ -578,6 +584,8 @@ impl Dumper for Storage {
             None,
             None,
             None,
+            metadata_key_set,
+            authorities_key_set,
             rx,
             synchronizer_metrics,
         )

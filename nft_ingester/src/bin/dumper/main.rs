@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -117,6 +118,9 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let shards = shard_pubkeys(args.num_shards);
     let mut tasks = JoinSet::new();
+    
+    let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
+    let authorities_key_set= Arc::new(Mutex::new(HashSet::new()));
 
     for (i, (start, end)) in shards.iter().enumerate() {
         let name_postfix = if args.num_shards > 1 {
@@ -173,6 +177,8 @@ pub async fn main() -> Result<(), IngesterError> {
         let shutdown_rx = shutdown_rx.resubscribe();
         let metrics = metrics.clone();
         let rocks_storage = rocks_storage.clone();
+        let metadata_key_set = metadata_key_set.clone();
+        let authorities_key_set = authorities_key_set.clone();
         tasks.spawn(async move {
             rocks_storage
                 .dump_csv(
@@ -186,6 +192,8 @@ pub async fn main() -> Result<(), IngesterError> {
                     args.limit,
                     Some(start),
                     Some(end),
+                    metadata_key_set,
+                    authorities_key_set,
                     &shutdown_rx,
                     metrics,
                 )
