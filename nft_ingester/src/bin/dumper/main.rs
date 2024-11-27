@@ -21,6 +21,9 @@ use rocks_db::Storage;
 use solana_sdk::pubkey::Pubkey;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
+use num_bigint::BigUint;
+use num_traits::ToPrimitive;
+
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
@@ -208,31 +211,75 @@ pub async fn main() -> Result<(), IngesterError> {
 /// Generate the first and last Pubkey for each shard.
 /// Returns a vector of tuples (start_pubkey, end_pubkey) for each shard.
 fn shard_pubkeys(num_shards: u64) -> Vec<(Pubkey, Pubkey)> {
-    // Total number of keys in the keyspace for [u8; 32] is 2^256.
-    let total_keyspace = Pubkey::new_from_array([0xff; 32]); // Represents the maximum value for [u8; 32].
+    // Total keyspace as BigUint
+    let total_keyspace = BigUint::from_bytes_be(&[0xffu8;32].as_slice());
+    let shard_size = &total_keyspace / num_shards;
 
     let mut shards = Vec::new();
-
     for i in 0..num_shards {
-        let start = calculate_key_start(i, num_shards);
-        let end = if i == num_shards - 1 {
-            total_keyspace // Last shard ends at the maximum value.
-        } else {
-            calculate_key_start(i + 1, num_shards)
-        };
+        // Calculate the start of the shard
+        let shard_start = &shard_size * i;
+        let shard_start_bytes = shard_start.to_bytes_be();
 
-        shards.push((start, end));
+        // Calculate the end of the shard
+        let shard_end = if i == num_shards - 1 {
+            total_keyspace.clone() // Last shard ends at the max value
+        } else {
+            &shard_size * (i + 1) - 1u64
+        };
+        let shard_end_bytes = shard_end.to_bytes_be();
+
+        // Pad the bytes to fit [u8; 32]
+        let start_pubkey = pad_to_32_bytes(&shard_start_bytes);
+        let end_pubkey = pad_to_32_bytes(&shard_end_bytes);
+
+        shards.push((Pubkey::new_from_array(start_pubkey), Pubkey::new_from_array(end_pubkey)));
     }
 
     shards
 }
 
-fn calculate_key_start(shard_index: u64, num_shards: u64) -> Pubkey {
-    let mut key = [0u8; 32];
-    let shard_size = (u128::MAX / num_shards as u128) * shard_index as u128;
+/// Pad a byte slice to fit into a [u8; 32] array.
+fn pad_to_32_bytes(bytes: &[u8]) -> [u8; 32] {
+    let mut array = [0u8; 32];
+    let offset = 32 - bytes.len();
+    array[offset..].copy_from_slice(bytes); // Copy the bytes into the rightmost part of the array
+    array
+}
 
-    // Fill the last 16 bytes with the shard size.
-    key[16..].copy_from_slice(&shard_size.to_be_bytes());
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    Pubkey::new_from_array(key)
+    #[test]
+    fn test_shard_pubkeys_1() {
+        let shards = shard_pubkeys(1);
+        assert_eq!(shards.len(), 1);
+        assert_eq!(
+            shards[0],
+            (
+                Pubkey::new_from_array([0; 32]),
+                Pubkey::new_from_array([0xff; 32])
+            )
+        );
+    }
+
+    #[test]
+    fn test_shard_pubkeys_2() {
+        let shards = shard_pubkeys(2);
+        assert_eq!(shards.len(), 2);
+        let first_key = [0x0; 32];
+        let mut last_key = [0xff; 32];
+        last_key[0] = 0x7f;
+        last_key[31] = 0xfe;
+        assert_eq!(shards[0].0.to_bytes(), first_key);
+        assert_eq!(shards[0].1.to_bytes(), last_key);
+
+        let mut first_key = last_key;
+        first_key[31] = 0xff;
+        let last_key = [0xff; 32];
+        assert_eq!(shards[1].0.to_bytes(), first_key);
+        assert_eq!(shards[1].1.to_bytes(), last_key);
+    }
+    
 }

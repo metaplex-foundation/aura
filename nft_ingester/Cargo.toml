@@ -84,6 +84,7 @@ indicatif = { workspace = true }
 tokio-retry = { workspace = true }
 axum = { workspace = true }
 rocksdb = { workspace = true }
+num-bigint = "0.4"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

@@ -152,7 +152,7 @@ impl Storage {
         let mut cnt = 0;
         while iter.valid() {
             if let Some(end_pubkey) = end_pubkey {
-                if iter.key().unwrap() >= end_pubkey.as_slice() {
+                if iter.key().unwrap() > end_pubkey.as_slice() {
                     break;
                 }
             }
