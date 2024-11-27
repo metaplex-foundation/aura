@@ -195,11 +195,12 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     let duration = start_time.elapsed();
+    let total = args.limit.unwrap_or(0) * args.num_shards as usize;
     tracing::info!(
         "Dumping of {} assets took {:?}, average rate: {:.2} assets/s",
-        args.limit.unwrap_or(0),
+        total,
         duration,
-        args.limit.unwrap_or(0) as f64 / duration.as_secs_f64()
+        total as f64 / duration.as_secs_f64()
     );
     Ok(())
 }
@@ -208,7 +209,7 @@ pub async fn main() -> Result<(), IngesterError> {
 /// Returns a vector of tuples (start_pubkey, end_pubkey) for each shard.
 fn shard_pubkeys(num_shards: u64) -> Vec<(Pubkey, Pubkey)> {
     // Total number of keys in the keyspace for [u8; 32] is 2^256.
-    let total_keyspace =  Pubkey::new_from_array([0xff; 32]); // Represents the maximum value for [u8; 32].
+    let total_keyspace = Pubkey::new_from_array([0xff; 32]); // Represents the maximum value for [u8; 32].
 
     let mut shards = Vec::new();
 
