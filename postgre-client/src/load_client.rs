@@ -13,13 +13,10 @@ impl PgClient {
         table: &str,
         columns: &str,
     ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("COPY ");
-        query_builder.push(table);
-        query_builder.push(" (");
-        query_builder.push(columns);
-        query_builder.push(") FROM '");
-        query_builder.push(path);
-        query_builder.push("' WITH (FORMAT csv);");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
+            "COPY {} ({}) FROM '{}' WITH (FORMAT csv);",
+            table, columns, path,
+        ));
         self.execute_query_with_metrics(transaction, &mut query_builder, COPY_ACTION, table)
             .await?;
         Ok(())
@@ -30,12 +27,10 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
     ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
-        query_builder.push(table);
-        query_builder.push(" SELECT * FROM ");
-        query_builder.push(TEMP_TABLE_PREFIX);
-        query_builder.push(table);
-        query_builder.push(" ON CONFLICT DO NOTHING;");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
+            "INSERT INTO {} SELECT * FROM {}{} ON CONFLICT DO NOTHING;",
+            table, TEMP_TABLE_PREFIX, table
+        ));
         self.execute_query_with_metrics(transaction, &mut query_builder, INSERT_ACTION, table)
             .await?;
 
@@ -47,9 +42,8 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
     ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("TRUNCATE ");
-        query_builder.push(table);
-        query_builder.push(";");
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new(format!("TRUNCATE {};", table));
         self.execute_query_with_metrics(transaction, &mut query_builder, TRUNCATE_ACTION, table)
             .await
     }
@@ -82,14 +76,31 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         index: &str,
     ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("DROP INDEX ");
-        query_builder.push(index);
-        query_builder.push(";");
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new(format!("DROP INDEX {};", index));
         self.execute_query_with_metrics(transaction, &mut query_builder, DROP_ACTION, index)
             .await
     }
 
-    pub async fn drop_indexes(
+    pub async fn drop_fungible_indexes(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("ALTER TABLE assets_v3 DISABLE TRIGGER ALL;");
+        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "assets_v3")
+            .await?;
+
+        for index in [
+            "fungible_tokens_fbt_owner_balance_idx",
+            "fungible_tokens_fbt_asset_idx",
+        ] {
+            self.drop_index(transaction, index).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn drop_nft_indexes(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
@@ -118,8 +129,6 @@ impl PgClient {
             "assets_v3_is_frozen",
             "assets_v3_supply",
             "assets_v3_slot_updated",
-            "fungible_tokens_fbt_owner_balance_idx",
-            "fungible_tokens_fbt_asset_idx",
         ] {
             self.drop_index(transaction, index).await?;
         }
@@ -131,11 +140,10 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
         for (table, constraint) in [("assets_v3", "assets_v3_authority_fk_constraint")] {
-            let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("ALTER TABLE ");
-            query_builder.push(table);
-            query_builder.push(" DROP CONSTRAINT ");
-            query_builder.push(constraint);
-            query_builder.push(";");
+            let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
+                "ALTER TABLE {} DROP CONSTRAINT {};",
+                table, constraint
+            ));
             self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, table)
                 .await?;
         }
@@ -156,7 +164,33 @@ impl PgClient {
         self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, name)
             .await
     }
-    pub async fn recreate_indexes(
+
+    pub async fn recreate_fungible_indexes(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("ALTER TABLE assets_v3 ENABLE TRIGGER ALL;");
+        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "assets_v3")
+            .await?;
+
+        for (index, on_query_string) in [
+            (
+                "fungible_tokens_fbt_owner_balance_idx",
+                "fungible_tokens(fbt_owner, fbt_balance)",
+            ),
+            (
+                "fungible_tokens_fbt_asset_idx",
+                "fungible_tokens(fbt_asset)",
+            ),
+        ] {
+            self.create_index(transaction, index, on_query_string)
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub async fn recreate_nft_indexes(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
@@ -185,8 +219,6 @@ impl PgClient {
                 ("assets_v3_is_frozen", "assets_v3(ast_is_frozen) WHERE ast_is_frozen IS TRUE"),
                 ("assets_v3_supply", "assets_v3(ast_supply) WHERE ast_supply IS NOT NULL"),
                 ("assets_v3_slot_updated", "assets_v3(ast_slot_updated)"),
-                ("fungible_tokens_fbt_owner_balance_idx", "fungible_tokens(fbt_owner, fbt_balance)"),
-                ("fungible_tokens_fbt_asset_idx", "fungible_tokens(fbt_asset)"),
             ]{
                 self.create_index(transaction, index, on_query_string).await?;
             }
@@ -226,23 +258,38 @@ impl PgClient {
         Ok(())
     }
 
-    pub(crate) async fn copy_all(
+    pub(crate) async fn copy_fungibles(
+        &self,
+        fungible_tokens_copy_path: String,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), IndexDbError> {
+        self.drop_fungible_indexes(transaction).await?;
+        self.drop_constraints(transaction).await?;
+        self.truncate_table(transaction, "fungible_tokens").await?;
+
+        self.copy_table_from(
+            transaction,
+            fungible_tokens_copy_path,
+            "fungible_tokens",
+            "fbt_pubkey, fbt_owner, fbt_asset, fbt_balance, fbt_slot_updated",
+        )
+        .await?;
+        self.recreate_fungible_indexes(transaction).await?;
+        self.recreate_constraints(transaction).await?;
+        Ok(())
+    }
+
+    pub(crate) async fn copy_nfts(
         &self,
         matadata_copy_path: String,
         asset_creators_copy_path: String,
         assets_copy_path: String,
         assets_authorities_copy_path: String,
-        fungible_tokens_copy_path: String,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
-        self.drop_indexes(transaction).await?;
+        self.drop_nft_indexes(transaction).await?;
         self.drop_constraints(transaction).await?;
-        for table in [
-            "assets_v3",
-            "asset_creators_v3",
-            "assets_authorities",
-            "fungible_tokens",
-        ] {
+        for table in ["assets_v3", "asset_creators_v3", "assets_authorities"] {
             self.truncate_table(transaction, table).await?;
         }
 
@@ -257,7 +304,6 @@ impl PgClient {
         )
         .await?;
         self.insert_from_temp_table(transaction, table).await?;
-
         for (table, path, columns) in [
             (
                 "asset_creators_v3",
@@ -274,15 +320,10 @@ impl PgClient {
                 assets_copy_path,
                 "ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_authority_fk, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated",
             ),
-            (
-                "fungible_tokens",
-                fungible_tokens_copy_path,
-                "fbt_pubkey, fbt_owner, fbt_asset, fbt_balance, fbt_slot_updated",
-            ),
         ] {
             self.copy_table_from(transaction, path, table, columns).await?;
         }
-        self.recreate_indexes(transaction).await?;
+        self.recreate_nft_indexes(transaction).await?;
         self.recreate_constraints(transaction).await?;
         Ok(())
     }

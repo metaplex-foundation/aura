@@ -2,12 +2,17 @@ pub mod awaitility;
 pub mod pg;
 pub mod rocks;
 
+use std::sync::Arc;
+
 use crate::rocks::RocksTestEnvironmentSetup;
+use entities::enums::{AssetType, ASSET_TYPES};
 use metrics_utils::MetricsTrait;
 use rocks_db::asset::AssetCollection;
 use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
 use solana_sdk::pubkey::Pubkey;
 use testcontainers::clients::Cli;
+
+use tokio::task::JoinSet;
 
 pub struct TestEnvironment<'a> {
     pub rocks_env: rocks::RocksTestEnvironment,
@@ -75,7 +80,32 @@ impl<'a> TestEnvironment<'a> {
             false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        syncronizer.synchronize_asset_indexes(&rx, 0).await.unwrap();
+        let synchronizer = Arc::new(syncronizer);
+
+        let mut tasks = JoinSet::new();
+        for asset_type in ASSET_TYPES {
+            let synchronizer = synchronizer.clone();
+            let rx = rx.resubscribe();
+            tasks.spawn(async move {
+                match asset_type {
+                    AssetType::NonFungible => synchronizer
+                        .synchronize_nft_asset_indexes(&rx, 0)
+                        .await
+                        .unwrap(),
+                    AssetType::Fungible => synchronizer
+                        .synchronize_fungible_asset_indexes(&rx, 0)
+                        .await
+                        .unwrap(),
+                }
+            });
+        }
+
+        while let Some(res) = tasks.join_next().await {
+            if let Err(err) = res {
+                panic!("{err}");
+            }
+        }
+
         (env, generated_data)
     }
 

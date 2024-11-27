@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    ops::Deref,
     vec,
 };
 
@@ -18,7 +19,8 @@ use crate::{
 };
 use entities::{
     enums::SpecificationAssetClass as AssetSpecClass,
-    models::{AssetIndex, Creator, FungibleToken, UrlWithStatus},
+    enums::AssetType,
+    models::{AssetIndex, Creator, FungibleAssetIndex, FungibleToken, UrlWithStatus},
 };
 
 pub const INSERT_ASSET_PARAMETERS_COUNT: usize = 19;
@@ -32,11 +34,12 @@ impl PgClient {
         &self,
         table_name: &str,
         executor: impl Executor<'_, Database = Postgres>,
+        asset_type: AssetType,
     ) -> Result<Option<Vec<u8>>, IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("SELECT last_synced_asset_update_key FROM ");
         query_builder.push(table_name);
-        query_builder.push(" WHERE id = 1");
+        query_builder.push(format!(" WHERE id = {}", asset_type as i32));
         let start_time = chrono::Utc::now();
         let query = query_builder.build_query_as::<(Option<Vec<u8>>,)>();
         let result = query.fetch_one(executor).await.map_err(|e| {
@@ -48,7 +51,23 @@ impl PgClient {
             .observe_request(SQL_COMPONENT, SELECT_ACTION, table_name, start_time);
         Ok(result.0)
     }
-    pub(crate) async fn upsert_batched(
+
+    pub(crate) async fn upsert_batched_fungible(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        table_name: FungibleTokenTable,
+        fungible_tokens: Vec<FungibleToken>,
+    ) -> Result<(), IndexDbError> {
+        for fungible_tokens_chunk in fungible_tokens
+            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT)
+        {
+            self.insert_fungible_tokens(transaction, fungible_tokens_chunk, &table_name)
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn upsert_batched_nft(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         table_names: TableNames,
@@ -75,17 +94,7 @@ impl PgClient {
             self.insert_assets(transaction, chunk, table_names.assets_table.as_str())
                 .await?;
         }
-        for chunk in updated_components
-            .fungible_tokens
-            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT)
-        {
-            self.insert_fungible_tokens(
-                transaction,
-                chunk,
-                table_names.fungible_tokens_table.as_str(),
-            )
-            .await?;
-        }
+
         let mut existing_creators: Vec<(Pubkey, Creator)> = vec![];
         for chunk in updated_components
             .updated_keys
@@ -142,14 +151,48 @@ pub(crate) struct AssetComponenents {
     pub all_creators: Vec<(Pubkey, Creator, i64)>,
     pub updated_keys: Vec<Vec<u8>>,
     pub authorities: Vec<Authority>,
-    pub fungible_tokens: Vec<FungibleToken>,
 }
+
 pub(crate) struct TableNames {
     pub metadata_table: String,
     pub assets_table: String,
     pub creators_table: String,
     pub authorities_table: String,
-    pub fungible_tokens_table: String,
+}
+
+pub(crate) struct FungibleTokenTable(String);
+
+impl FungibleTokenTable {
+    pub fn new(table_name: &str) -> Self {
+        Self(table_name.to_string())
+    }
+}
+
+impl Deref for FungibleTokenTable {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub(crate) fn split_into_fungible_tokens(
+    asset_indexes: &[FungibleAssetIndex],
+) -> Vec<FungibleToken> {
+    asset_indexes
+        .iter()
+        .map(|asset_index| {
+            FungibleToken {
+                key: asset_index.pubkey,
+                slot_updated: asset_index.slot_updated,
+                // it's unlikely that rows below will not be filled for fungible token
+                // but even if that happens we will save asset with default values
+                owner: asset_index.owner.unwrap_or_default(),
+                asset: asset_index.fungible_asset_mint.unwrap_or_default(),
+                balance: asset_index.fungible_asset_balance.unwrap_or_default() as i64,
+            }
+        })
+        .collect()
 }
 
 pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> AssetComponenents {
@@ -237,7 +280,6 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     authorities.sort_by(|a, b| a.key.cmp(&b.key));
 
     AssetComponenents {
-        fungible_tokens,
         metadata_urls,
         asset_indexes,
         all_creators,
@@ -248,12 +290,15 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
 
 #[async_trait]
 impl AssetIndexStorage for PgClient {
-    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError> {
-        self.fetch_last_synced_id_impl("last_synced_key", &self.pool)
+    async fn fetch_last_synced_id(
+        &self,
+        asset_type: AssetType,
+    ) -> Result<Option<Vec<u8>>, IndexDbError> {
+        self.fetch_last_synced_id_impl("last_synced_key", &self.pool, asset_type)
             .await
     }
 
-    async fn update_asset_indexes_batch(
+    async fn update_nft_asset_indexes_batch(
         &self,
         asset_indexes: &[AssetIndex],
     ) -> Result<(), IndexDbError> {
@@ -263,14 +308,13 @@ impl AssetIndexStorage for PgClient {
             assets_table: "assets_v3".to_string(),
             creators_table: "asset_creators_v3".to_string(),
             authorities_table: "assets_authorities".to_string(),
-            fungible_tokens_table: "fungible_tokens".to_string(),
         };
-        let mut transaction = self.start_transaction().await?;
         let operation_start_time = chrono::Utc::now();
+        let mut transaction = self.start_transaction().await?;
 
         // Perform transactional operations
         let result = self
-            .upsert_batched(&mut transaction, table_names, updated_components)
+            .upsert_batched_nft(&mut transaction, table_names, updated_components)
             .await;
 
         match result {
@@ -286,7 +330,49 @@ impl AssetIndexStorage for PgClient {
                 Ok(())
             }
             Err(e) => {
-                // Transaction will be rolled back automatically when `transaction` goes out of scope
+                self.rollback_transaction(transaction).await?;
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    TRANSACTION_ACTION,
+                    "transaction_failed_total",
+                    operation_start_time,
+                );
+                Err(e)
+            }
+        }
+    }
+
+    async fn update_fungible_asset_indexes_batch(
+        &self,
+        fungible_asset_indexes: &[FungibleAssetIndex],
+    ) -> Result<(), IndexDbError> {
+        let operation_start_time = chrono::Utc::now();
+        let mut transaction = self.start_transaction().await?;
+        let table_name = FungibleTokenTable::new("fungible_tokens");
+
+        // Perform transactional operations
+        let result = self
+            .upsert_batched_fungible(
+                &mut transaction,
+                table_name,
+                split_into_fungible_tokens(fungible_asset_indexes),
+            )
+            .await;
+
+        match result {
+            Ok(_) => {
+                // Commit the transaction and record the time taken
+                self.commit_transaction(transaction).await?;
+                self.metrics.observe_request(
+                    SQL_COMPONENT,
+                    TRANSACTION_ACTION,
+                    "transaction_total",
+                    operation_start_time,
+                );
+                Ok(())
+            }
+            Err(e) => {
+                self.rollback_transaction(transaction).await?;
                 self.metrics.observe_request(
                     SQL_COMPONENT,
                     TRANSACTION_ACTION,
@@ -302,81 +388,119 @@ impl AssetIndexStorage for PgClient {
         &self,
         base_path: &std::path::Path,
         last_key: &[u8],
+        asset_type: AssetType,
     ) -> Result<(), IndexDbError> {
-        let Some(metadata_path) = base_path.join("metadata.csv").to_str().map(str::to_owned) else {
-            return Err(IndexDbError::BadArgument(format!(
-                "invalid path '{:?}'",
-                base_path
-            )));
-        };
-        let Some(creators_path) = base_path.join("creators.csv").to_str().map(str::to_owned) else {
-            return Err(IndexDbError::BadArgument(format!(
-                "invalid path '{:?}'",
-                base_path
-            )));
-        };
-        let Some(assets_authorities_path) = base_path
-            .join("assets_authorities.csv")
-            .to_str()
-            .map(str::to_owned)
-        else {
-            return Err(IndexDbError::BadArgument(format!(
-                "invalid path '{:?}'",
-                base_path
-            )));
-        };
-        let Some(assets_path) = base_path.join("assets.csv").to_str().map(str::to_owned) else {
-            return Err(IndexDbError::BadArgument(format!(
-                "invalid path '{:?}'",
-                base_path
-            )));
-        };
-        let Some(fungible_tokens_path) = base_path
-            .join("fungible_tokens.csv")
-            .to_str()
-            .map(str::to_owned)
-        else {
-            return Err(IndexDbError::BadArgument(format!(
-                "invalid path '{:?}'",
-                base_path
-            )));
-        };
         let operation_start_time = chrono::Utc::now();
         let mut transaction = self.start_transaction().await?;
-        // Perform operations within the transaction
-        let result = (async {
-            self.copy_all(
-                metadata_path,
-                creators_path,
-                assets_path,
-                assets_authorities_path,
-                fungible_tokens_path,
-                &mut transaction,
-            )
-            .await?;
-            self.update_last_synced_key(last_key, &mut transaction, "last_synced_key")
-                .await?;
-            Ok(())
+        let dump_result = (async {
+            match asset_type {
+                AssetType::NonFungible => {
+                    let Some(metadata_path) =
+                        base_path.join("metadata.csv").to_str().map(str::to_owned)
+                    else {
+                        return Err(IndexDbError::BadArgument(format!(
+                            "invalid path '{:?}'",
+                            base_path
+                        )));
+                    };
+                    let Some(creators_path) =
+                        base_path.join("creators.csv").to_str().map(str::to_owned)
+                    else {
+                        return Err(IndexDbError::BadArgument(format!(
+                            "invalid path '{:?}'",
+                            base_path
+                        )));
+                    };
+                    let Some(assets_authorities_path) = base_path
+                        .join("assets_authorities.csv")
+                        .to_str()
+                        .map(str::to_owned)
+                    else {
+                        return Err(IndexDbError::BadArgument(format!(
+                            "invalid path '{:?}'",
+                            base_path
+                        )));
+                    };
+                    let Some(assets_path) =
+                        base_path.join("assets.csv").to_str().map(str::to_owned)
+                    else {
+                        return Err(IndexDbError::BadArgument(format!(
+                            "invalid path '{:?}'",
+                            base_path
+                        )));
+                    };
+
+                    let result_of_copy = self
+                        .copy_nfts(
+                            metadata_path,
+                            creators_path,
+                            assets_path,
+                            assets_authorities_path,
+                            &mut transaction,
+                        )
+                        .await;
+
+                    if result_of_copy.is_ok() {
+                        self.update_last_synced_key(
+                            last_key,
+                            &mut transaction,
+                            "last_synced_key",
+                            asset_type,
+                        )
+                        .await
+                    } else {
+                        result_of_copy
+                    }
+                }
+                AssetType::Fungible => {
+                    let Some(fungible_tokens_path) = base_path
+                        .join("fungible_tokens.csv")
+                        .to_str()
+                        .map(str::to_owned)
+                    else {
+                        return Err(IndexDbError::BadArgument(format!(
+                            "invalid path '{:?}'",
+                            base_path
+                        )));
+                    };
+
+                    let result_of_copy = self
+                        .copy_fungibles(fungible_tokens_path, &mut transaction)
+                        .await;
+
+                    if result_of_copy.is_ok() {
+                        self.update_last_synced_key(
+                            last_key,
+                            &mut transaction,
+                            "last_synced_key",
+                            asset_type,
+                        )
+                        .await
+                    } else {
+                        result_of_copy
+                    }
+                }
+            }
         })
         .await;
-        match result {
+
+        match dump_result {
             Ok(_) => {
-                // Commit the transaction and record the time taken
                 self.commit_transaction(transaction).await?;
                 self.metrics.observe_request(
                     SQL_COMPONENT,
                     TRANSACTION_ACTION,
-                    "load_from_dump_total",
+                    "load_from_dump",
                     operation_start_time,
                 );
                 Ok(())
             }
             Err(e) => {
-                // Transaction will be rolled back automatically
+                self.rollback_transaction(transaction).await?;
                 self.metrics.observe_request(
                     SQL_COMPONENT,
                     TRANSACTION_ACTION,
-                    "load_from_dump_failed_total",
+                    "load_from_dump_failed",
                     operation_start_time,
                 );
                 Err(e)
@@ -384,10 +508,14 @@ impl AssetIndexStorage for PgClient {
         }
     }
 
-    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError> {
+    async fn update_last_synced_key(
+        &self,
+        last_key: &[u8],
+        asset_type: AssetType,
+    ) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
         match self
-            .update_last_synced_key(last_key, &mut transaction, "last_synced_key")
+            .update_last_synced_key(last_key, &mut transaction, "last_synced_key", asset_type)
             .await
         {
             Ok(_) => {
@@ -621,8 +749,8 @@ impl PgClient {
                 .push_bind(asset_index.slot_updated);
         });
         query_builder.push(
-            " ON CONFLICT (ast_pubkey) 
-        DO UPDATE SET 
+            " ON CONFLICT (ast_pubkey)
+        DO UPDATE SET
             ast_specification_version = EXCLUDED.ast_specification_version,
             ast_specification_asset_class = EXCLUDED.ast_specification_asset_class,
             ast_royalty_target_type = EXCLUDED.ast_royalty_target_type,
@@ -845,11 +973,14 @@ impl PgClient {
         last_key: &[u8],
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
+        asset_type: AssetType,
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("UPDATE ");
         query_builder.push(table);
         query_builder.push(" SET last_synced_asset_update_key = ");
-        query_builder.push_bind(last_key).push(" WHERE id = 1");
+        query_builder
+            .push_bind(last_key)
+            .push(format!(" WHERE id = {}", asset_type as i32));
         self.execute_query_with_metrics(transaction, &mut query_builder, UPDATE_ACTION, table)
             .await?;
         Ok(())

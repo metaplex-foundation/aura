@@ -74,6 +74,16 @@ pub struct AssetIndex {
     pub fungible_asset_balance: Option<u64>,
 }
 
+/// FungibleAssetIndex is the struct that is stored in the postgres, and is used to query the fungible asset pubkeys.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct FungibleAssetIndex {
+    pub pubkey: Pubkey,
+    pub owner: Option<Pubkey>,
+    pub slot_updated: i64,
+    pub fungible_asset_mint: Option<Pubkey>,
+    pub fungible_asset_balance: Option<u64>,
+}
+
 /// FungibleToken is associated token account
 /// owned by some user
 /// key - token account's pubkey

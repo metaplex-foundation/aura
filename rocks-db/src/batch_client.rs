@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::asset::{
     AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, MplCoreCollectionAuthority,
-    SlotAssetIdx, SlotAssetIdxKey,
+    SlotAssetIdx, SlotAssetIdxKey, FungibleAssetsUpdateIdx,
 };
 use crate::asset_generated::asset as fb;
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
@@ -17,12 +17,32 @@ use crate::{
     BATCH_GET_ACTION, BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
 use async_trait::async_trait;
-use entities::enums::{SpecificationAssetClass, TokenMetadataEdition};
-use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated};
+use entities::enums::{SpecificationAssetClass, SpecificationVersions, TokenMetadataEdition};
+use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, FungibleAssetIndex, UrlWithStatus};
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 impl AssetUpdateIndexStorage for Storage {
-    fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
+    fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
+        _ = self.db.try_catch_up_with_primary();
+        let start_time = chrono::Utc::now();
+        let mut iter = self.fungible_assets_update_idx.iter_end();
+        if let Some(pair) = iter.next() {
+            let (last_key, _) = pair?;
+            let key = FungibleAssetsUpdateIdx::decode_key(last_key.to_vec())?;
+            let decoded_key = decode_u64x2_pubkey(key).unwrap();
+            self.red_metrics.observe_request(
+                ROCKS_COMPONENT,
+                ITERATOR_TOP_ACTION,
+                FungibleAssetsUpdateIdx::NAME,
+                start_time,
+            );
+            Ok(Some(decoded_key))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn last_known_nft_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         _ = self.db.try_catch_up_with_primary();
         let start_time = chrono::Utc::now();
         let mut iter = self.assets_update_idx.iter_end();
@@ -42,7 +62,66 @@ impl AssetUpdateIndexStorage for Storage {
         }
     }
 
-    fn fetch_asset_updated_keys(
+    fn fetch_fungible_asset_updated_keys(
+        &self,
+        from: Option<AssetUpdatedKey>,
+        up_to: Option<AssetUpdatedKey>,
+        limit: usize,
+        skip_keys: Option<HashSet<Pubkey>>,
+    ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)> {
+        let mut unique_pubkeys = HashSet::new();
+        let mut last_key = from;
+
+        if limit == 0 {
+            return Ok((unique_pubkeys, last_key));
+        }
+        let start_time = chrono::Utc::now();
+        let iterator = match last_key.clone() {
+            Some(key) => {
+                let encoded = encode_u64x2_pubkey(key.seq, key.slot, key.pubkey);
+                let mut iter = self.fungible_assets_update_idx.iter(encoded);
+                iter.next(); // Skip the first key, as it is the `from`
+                iter
+            }
+            None => self.fungible_assets_update_idx.iter_start(),
+        };
+
+        let up_to = up_to
+            .map(|up_to_key| encode_u64x2_pubkey(up_to_key.seq, up_to_key.slot, up_to_key.pubkey));
+
+        for pair in iterator {
+            let (idx_key, _) = pair?;
+            let key = FungibleAssetsUpdateIdx::decode_key(idx_key.to_vec())?;
+            // Stop if the current key is greater than `up_to`
+            if up_to.is_some() && &key > up_to.as_ref().unwrap() {
+                break;
+            }
+            let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
+            last_key = Some(decoded_key.clone());
+            // Skip keys that are in the skip_keys set
+            if skip_keys
+                .as_ref()
+                .map_or(false, |sk| sk.contains(&decoded_key.pubkey))
+            {
+                continue;
+            }
+
+            unique_pubkeys.insert(decoded_key.pubkey);
+
+            if unique_pubkeys.len() >= limit {
+                break;
+            }
+        }
+        self.red_metrics.observe_request(
+            ROCKS_COMPONENT,
+            BATCH_ITERATION_ACTION,
+            FungibleAssetsUpdateIdx::NAME,
+            start_time,
+        );
+        Ok((unique_pubkeys, last_key))
+    }
+
+    fn fetch_nft_asset_updated_keys(
         &self,
         from: Option<AssetUpdatedKey>,
         up_to: Option<AssetUpdatedKey>,
@@ -67,15 +146,15 @@ impl AssetUpdateIndexStorage for Storage {
             None => self.assets_update_idx.iter_start(),
         };
 
+        let up_to = up_to
+            .map(|up_to_key| encode_u64x2_pubkey(up_to_key.seq, up_to_key.slot, up_to_key.pubkey));
+
         for pair in iterator {
             let (idx_key, _) = pair?;
             let key = AssetsUpdateIdx::decode_key(idx_key.to_vec())?;
             // Stop if the current key is greater than `up_to`
-            if let Some(ref up_to_key) = up_to {
-                let up_to = encode_u64x2_pubkey(up_to_key.seq, up_to_key.slot, up_to_key.pubkey);
-                if key > up_to {
-                    break;
-                }
+            if up_to.is_some() && &key > up_to.as_ref().unwrap() {
+                break;
             }
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
             last_key = Some(decoded_key.clone());
@@ -209,16 +288,47 @@ impl Storage {
 
 #[async_trait]
 impl AssetIndexReader for Storage {
-    async fn get_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>> {
-        let start_time: chrono::DateTime<chrono::Utc> = chrono::Utc::now();
+    async fn get_fungible_assets_indexes(
+        &self,
+        keys: &[Pubkey],
+    ) -> Result<Vec<FungibleAssetIndex>> {
+        let mut fungible_assets_indexes: Vec<FungibleAssetIndex> = Vec::new();
+        let start_time = chrono::Utc::now();
 
+        let token_accounts_details = self.token_accounts.batch_get(keys.to_vec()).await?;
+
+        for token_acc in token_accounts_details.iter().flatten() {
+            let fungible_asset_index = FungibleAssetIndex {
+                pubkey: token_acc.pubkey,
+                owner: Some(token_acc.owner),
+                slot_updated: token_acc.slot_updated,
+                fungible_asset_mint: Some(token_acc.mint),
+                fungible_asset_balance: Some(token_acc.amount as u64),
+            };
+
+            fungible_assets_indexes.push(fungible_asset_index);
+        }
+
+        self.red_metrics.observe_request(
+            ROCKS_COMPONENT,
+            BATCH_ITERATION_ACTION,
+            "collect_fungible_assets_indexes",
+            start_time,
+        );
+
+        Ok(fungible_assets_indexes)
+    }
+
+    async fn get_nft_asset_indexes<'a>(
+        &self,
+        keys: &[Pubkey],
+    ) ->  Result<Vec<AssetIndex>> {
+        let start_time = chrono::Utc::now();
+        
         let asset_index_collection_url_fut =
             self.get_asset_indexes_with_collections_and_urls(keys.to_vec());
         let spl_mints_fut = self.spl_mints.batch_get(keys.to_vec());
-        // these data will be used only during live synchronization
-        // during full sync will be passed mint keys meaning response will be always empty
-        let token_accounts_fut = self.token_accounts.batch_get(keys.to_vec());
-
+        
         let (mut asset_indexes, assets_collection_pks, urls) =
             asset_index_collection_url_fut.await?;
 
@@ -288,24 +398,6 @@ impl AssetIndexReader for Storage {
                 asset_index.specification_asset_class = SpecificationAssetClass::Nft;
             }
         });
-
-        let token_accounts_details = token_accounts_fut.await?;
-
-        // compare to other data this data is saved in HashMap by token account keys, not mints
-        asset_indexes.extend(
-            token_accounts_details
-                .iter()
-                .flatten()
-                .map(|token_acc| AssetIndex {
-                    pubkey: token_acc.pubkey,
-                    specification_asset_class: SpecificationAssetClass::FungibleToken,
-                    owner: Some(token_acc.owner),
-                    fungible_asset_mint: Some(token_acc.mint),
-                    fungible_asset_balance: Some(token_acc.amount as u64),
-                    slot_updated: token_acc.slot_updated,
-                    ..Default::default()
-                }),
-        );
 
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,

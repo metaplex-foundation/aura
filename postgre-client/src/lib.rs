@@ -193,7 +193,8 @@ impl PgClient {
     pub async fn clean_db(&self) -> Result<(), IndexDbError> {
         let mut transaction = self.pool.begin().await?;
 
-        self.drop_indexes(&mut transaction).await?;
+        self.drop_fungible_indexes(&mut transaction).await?;
+        self.drop_nft_indexes(&mut transaction).await?;
         self.drop_constraints(&mut transaction).await?;
         for table in [
             "assets_v3",
@@ -208,7 +209,8 @@ impl PgClient {
 
         transaction.execute(sqlx::query("update last_synced_key set last_synced_asset_update_key = null where id = 1;")).await?;
 
-        self.recreate_indexes(&mut transaction).await?;
+        self.recreate_fungible_indexes(&mut transaction).await?;
+        self.recreate_nft_indexes(&mut transaction).await?;
         self.recreate_constraints(&mut transaction).await?;
 
         transaction.commit().await.map_err(|e| e)?;

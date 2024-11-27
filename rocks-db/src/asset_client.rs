@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 
 use crate::asset::{
     AssetCollection, AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx,
-    SlotAssetIdxKey,
+    SlotAssetIdxKey,FungibleAssetsUpdateIdx,
 };
 use crate::asset_generated::asset as fb;
 use crate::column::{Column, TypedColumn};
@@ -12,14 +12,36 @@ use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage, BATCH_GET_ACTION, ROCKS_COMPONENT};
 use entities::api_req_params::Options;
-use entities::enums::{SpecificationAssetClass, TokenMetadataEdition};
+use entities::enums::{AssetType, SpecificationAssetClass, TokenMetadataEdition};
 use entities::models::{EditionData, PubkeyWithSlot};
 use futures_util::FutureExt;
 use std::collections::HashMap;
 
 impl Storage {
+    fn get_next_fungible_asset_update_seq(&self) -> Result<u64> {
+        if self.fungible_assets_update_last_seq.load(Ordering::Relaxed) == 0 {
+            // If fungible_assets_update_next_seq is zero, fetch the last key from fungible_assets_update_idx
+            let mut iter = self.fungible_assets_update_idx.iter_end(); // Assuming iter_end method fetches the last item
+
+            if let Some(pair) = iter.next() {
+                let (last_key, _) = pair?;
+                // Assuming the key is structured as (u64, ...)
+
+                let seq = u64::from_be_bytes(last_key[..std::mem::size_of::<u64>()].try_into()?);
+                self.fungible_assets_update_last_seq
+                    .store(seq, Ordering::Relaxed);
+            }
+        }
+        // Increment and return the sequence number
+        let seq = self
+            .fungible_assets_update_last_seq
+            .fetch_add(1, Ordering::Relaxed)
+            + 1;
+        Ok(seq)
+    }
+
     fn get_next_asset_update_seq(&self) -> Result<u64> {
-        if self.assets_update_last_seq.load(Ordering::SeqCst) == 0 {
+        if self.assets_update_last_seq.load(Ordering::Relaxed) == 0 {
             // If assets_update_next_seq is zero, fetch the last key from assets_update_idx
             let mut iter = self.assets_update_idx.iter_end(); // Assuming iter_end method fetches the last item
 
@@ -28,11 +50,11 @@ impl Storage {
                 // Assuming the key is structured as (u64, ...)
 
                 let seq = u64::from_be_bytes(last_key[..std::mem::size_of::<u64>()].try_into()?);
-                self.assets_update_last_seq.store(seq, Ordering::SeqCst);
+                self.assets_update_last_seq.store(seq, Ordering::Relaxed);
             }
         }
         // Increment and return the sequence number
-        let seq = self.assets_update_last_seq.fetch_add(1, Ordering::SeqCst) + 1;
+        let seq = self.assets_update_last_seq.fetch_add(1, Ordering::Relaxed) + 1;
         Ok(seq)
     }
 
@@ -51,6 +73,23 @@ impl Storage {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         self.asset_updated_with_batch(&mut batch, slot, pubkey)?;
         self.db.write(batch)?;
+        Ok(())
+    }
+
+    pub fn fungible_asset_updated_with_batch(
+        &self,
+        batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        slot: u64,
+        pubkey: Pubkey,
+    ) -> Result<()> {
+        let seq = self.get_next_fungible_asset_update_seq()?;
+        let value = encode_u64x2_pubkey(seq, slot, pubkey);
+        let serialized_value = serialize(&FungibleAssetsUpdateIdx {})?;
+        batch.put_cf(
+            &self.fungible_assets_update_idx.handle(),
+            Column::<FungibleAssetsUpdateIdx>::encode_key(value),
+            serialized_value,
+        );
         Ok(())
     }
 
@@ -74,6 +113,22 @@ impl Storage {
             Column::<SlotAssetIdx>::encode_key(SlotAssetIdxKey::new(slot, pubkey)),
             serialized_value,
         );
+        Ok(())
+    }
+
+    pub fn clean_syncronized_idxs(
+        &self,
+        asset_type: AssetType,
+        last_synced_key: Vec<u8>,
+    ) -> Result<()> {
+        let cf = match asset_type {
+            AssetType::Fungible => self.fungible_assets_update_idx.handle(),
+            AssetType::NonFungible => self.assets_update_idx.handle(),
+        };
+
+        let from = vec![];
+        self.db.delete_range_cf(&cf, from, last_synced_key)?;
+
         Ok(())
     }
 }

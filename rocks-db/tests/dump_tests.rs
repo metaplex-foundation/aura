@@ -25,11 +25,20 @@ async fn test_scv_export_from_rocks() {
     let fungible_tokens_file = File::create(fungible_tokens_path.to_string()).unwrap();
 
     storage
-        .dump_csv(
+        .dump_nft_csv(
             (tasks_file, tasks_path.clone()),
             (assets_file, assets_path.clone()),
             (creators_file, creators_path.clone()),
             (authority_file, authority_path.clone()),
+            155,
+            &rx,
+            Arc::new(SynchronizerMetricsConfig::new()),
+        )
+        .await
+        .unwrap();
+
+    storage
+        .dump_fungible_csv(
             (fungible_tokens_file, fungible_tokens_path.clone()),
             155,
             &rx,

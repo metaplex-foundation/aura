@@ -179,11 +179,13 @@ pub async fn setup_database<T: Image>(node: &Container<'_, T>) -> (Pool<Postgres
         .unwrap();
 
     // Verify initial fetch_last_synced_id returns None
-    assert!(asset_index_storage
-        .fetch_last_synced_id()
-        .await
-        .unwrap()
-        .is_none());
+    for asset_type in ASSET_TYPES {
+        assert!(asset_index_storage
+            .fetch_last_synced_id(asset_type)
+            .await
+            .unwrap()
+            .is_none());
+    }
 
     (test_db_pool, db_name)
 }

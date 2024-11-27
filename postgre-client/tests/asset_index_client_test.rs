@@ -3,7 +3,10 @@
 mod tests {
     use setup::pg::*;
 
-    use entities::models::{AssetIndex, Creator};
+    use entities::{
+        enums::{AssetType, ASSET_TYPES},
+        models::{AssetIndex, Creator},
+    };
     use postgre_client::storage_traits::AssetIndexStorage;
     use rand::Rng;
     use testcontainers::clients::Cli;
@@ -16,27 +19,32 @@ mod tests {
         let asset_index_storage = &env.client;
 
         // Verify initial fetch_last_synced_id returns None
-        assert!(asset_index_storage
-            .fetch_last_synced_id()
-            .await
-            .unwrap()
-            .is_none());
+        for asset_type in ASSET_TYPES {
+            assert!(asset_index_storage
+                .fetch_last_synced_id(asset_type)
+                .await
+                .unwrap()
+                .is_none());
+        }
 
         // Generate random asset indexes
         let asset_indexes = generate_asset_index_records(100);
         let last_known_key = generate_random_vec(8 + 8 + 32);
         // Insert assets and last key using update_asset_indexes_batch
         asset_index_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice())
+            .update_nft_asset_indexes_batch(asset_indexes.as_slice())
             .await
             .unwrap();
 
         asset_index_storage
-            .update_last_synced_key(&last_known_key)
+            .update_last_synced_key(&last_known_key, AssetType::NonFungible)
             .await
             .unwrap();
         // Check fetch_last_synced_id again
-        let last_synced_key = asset_index_storage.fetch_last_synced_id().await.unwrap();
+        let last_synced_key = asset_index_storage
+            .fetch_last_synced_id(AssetType::NonFungible)
+            .await
+            .unwrap();
         assert!(last_synced_key.is_some());
         assert_eq!(last_synced_key.unwrap().as_slice(), &last_known_key[..]);
 
@@ -57,14 +65,17 @@ mod tests {
             })
             .collect::<Vec<AssetIndex>>();
         asset_index_storage
-            .update_asset_indexes_batch(updated_asset_indexes.as_slice())
+            .update_nft_asset_indexes_batch(updated_asset_indexes.as_slice())
             .await
             .unwrap();
         asset_index_storage
-            .update_last_synced_key(&new_known_key)
+            .update_last_synced_key(&new_known_key, AssetType::NonFungible)
             .await
             .unwrap();
-        let last_synced_key = asset_index_storage.fetch_last_synced_id().await.unwrap();
+        let last_synced_key = asset_index_storage
+            .fetch_last_synced_id(AssetType::NonFungible)
+            .await
+            .unwrap();
         assert!(last_synced_key.is_some());
         assert_eq!(last_synced_key.unwrap().as_slice(), &new_known_key[..]);
 
@@ -103,11 +114,11 @@ mod tests {
 
         // Insert assets and last key using update_asset_indexes_batch
         asset_index_storage
-            .update_asset_indexes_batch(asset_indexes.as_slice())
+            .update_nft_asset_indexes_batch(asset_indexes.as_slice())
             .await
             .unwrap();
         asset_index_storage
-            .update_last_synced_key(&last_known_key)
+            .update_last_synced_key(&last_known_key, AssetType::NonFungible)
             .await
             .unwrap();
 
@@ -131,11 +142,11 @@ mod tests {
             .collect::<Vec<AssetIndex>>();
 
         asset_index_storage
-            .update_asset_indexes_batch(updated_asset_indexes.as_slice())
+            .update_nft_asset_indexes_batch(updated_asset_indexes.as_slice())
             .await
             .unwrap();
         asset_index_storage
-            .update_last_synced_key(&last_known_key)
+            .update_last_synced_key(&last_known_key, AssetType::NonFungible)
             .await
             .unwrap();
 
