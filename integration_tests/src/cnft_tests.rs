@@ -18,6 +18,7 @@ pub async fn run_get_asset_scenario_test(
     asset_id: &str,
     seeds: Vec<SeedEvent>,
     order: Order,
+    options: Options,
 ) {
     let seed_permutations: Vec<Vec<&SeedEvent>> = match order {
         Order::AllPermutations => seeds.iter().permutations(seeds.len()).collect::<Vec<_>>(),
@@ -30,7 +31,7 @@ pub async fn run_get_asset_scenario_test(
         index_seed_events(setup, events).await;
         let request = GetAsset {
             id: asset_id.to_string(),
-            options: Options::default(),
+            options: options.clone(),
         };
 
         let response = setup
@@ -70,7 +71,14 @@ async fn test_asset_decompress() {
         seed_nft("Az9QTysJj1LW1F7zkYF21HgBj3FRpq3zpxTFdPnAJYm8"),
     ];
 
-    run_get_asset_scenario_test(&setup, asset_id, seeds, Order::AllPermutations).await;
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options::default(),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -96,7 +104,14 @@ async fn test_cnft_scenario_mint_update_metadata() {
         seed_txn("3bsL5zmLKvhN9Je4snTKxjFSpmXEEg2cvMHm2rCNgaEYkNXBqJTA4N7QmvBSWPiNUQPtzJSYzpQYX92NowV3L7vN"),
     ];
 
-    run_get_asset_scenario_test(&setup, asset_id, seeds, Order::AllPermutations).await;
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options::default(),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -124,7 +139,14 @@ async fn test_cnft_scenario_mint_update_metadata_remove_creators() {
         seed_txn("41YW187sn6Z2dXfqz6zSbnPtQoE826cCSgTLnMLKa9rH1xrCqAXBQNwKnzjGc9wjU5RtMCqKhy2eMN2TjuYC8veB"),
     ];
 
-    run_get_asset_scenario_test(&setup, asset_id, seeds, Order::AllPermutations).await;
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options::default(),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -202,6 +224,7 @@ async fn test_mint_no_json_uri() {
         "DFRJ4PwAze1mMQccRmdyc46yQpEVd4FPiwtAVgzGCs7g",
         seeds,
         Order::Forward,
+        Options::default(),
     )
     .await;
 }
@@ -228,7 +251,14 @@ async fn test_mint_delegate_transfer() {
         "5Q8TAMMkMTHEM2BHyD2fp2sVdYKByFeATzM2mHF6Xbbar33WaeuygPKGYCWiDEt3MZU1mUrq1ePnT9o4Pa318p8w",
     ]);
 
-    run_get_asset_scenario_test(&setup, asset_id, seeds, Order::AllPermutations).await;
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options::default(),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -253,7 +283,14 @@ async fn test_mint_redeem_cancel_redeem() {
         "32FpSe6r9jnFNjjvbx2PPQdZqs5KpMoF6yawiRW1F6ctu1kmx2B4sLDBGjsthVQtmnhaJVrqdtmUP893FwXCbqY5",
     ]);
 
-    run_get_asset_scenario_test(&setup, asset_id, seeds, Order::AllPermutations).await;
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options::default(),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -283,7 +320,14 @@ async fn test_mint_redeem() {
         // "3Ct9n9hv5PWEYbsrgDdUDqegzsnX2n5jYRxkq5YafFAueup8mTYmN4nHhNCaEwVyVAVqNssr4fizdg9wRavT7ydE",
     ]);
 
-    run_get_asset_scenario_test(&setup, asset_id, seeds, Order::AllPermutations).await;
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options::default(),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -308,7 +352,14 @@ async fn test_mint_transfer_burn() {
         "KHNhLijkAMeKeKm6kpbk3go6q9uMF3zmfCoYSBgERe8qJDW8q5ANpnkyBuyVkychXCeWzRY8i5EtKfeGaDDU23w",
     ]);
 
-    run_get_asset_scenario_test(&setup, asset_id, seeds, Order::AllPermutations).await;
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options::default(),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -333,7 +384,14 @@ async fn test_mint_transfer_noop() {
         "5bNyZfmxLVP9cKc6GjvozExrSt4F1QFt4PP992pQwT8FFHdWsX3ZFNvwurfU2xpDYtQ7qAUxVahGCraXMevRH8p1",
     ]);
 
-    run_get_asset_scenario_test(&setup, asset_id, seeds, Order::AllPermutations).await;
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options::default(),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -358,7 +416,14 @@ async fn test_mint_transfer_transfer() {
         "34xjcNf3rZFKz381hKpFLqxpojaDgXEpCqH5qcpTXLaJnDbtqRz35wiuMF1cAgvJGLzYYrwaMvCK1D7LxYsdpMU1",
     ]);
 
-    run_get_asset_scenario_test(&setup, asset_id, seeds, Order::AllPermutations).await;
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options::default(),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -382,7 +447,14 @@ async fn test_mint_verify_creator() {
         "4xrw5UwQSxxPzVxge6fbtmgLNsT2amaGrwpZFE95peRbnHGpxWtS2fF7whXW2xma4i2KDXdneztJZCAtgGZKTw11",
     ]);
 
-    run_get_asset_scenario_test(&setup, asset_id, seeds, Order::AllPermutations).await;
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options::default(),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -406,7 +478,14 @@ async fn test_mint_verify_collection() {
         "5ZKjPxm3WAZzuqqkCDjgKpm9b5XjB9cuvv68JvXxWThvJaJxcMJgpSbYs4gDA9dGJyeLzsgNtnS6oubANF1KbBmt",
     ]);
 
-    run_get_asset_scenario_test(&setup, asset_id, seeds, Order::AllPermutations).await;
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options::default(),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -431,5 +510,85 @@ async fn test_mint_transfer_mpl_programs() {
         "T571TWE76frw6mWxYoHDrTdxYq7hJSyCtVEG4qmemPPtsc1CCKdknn9rTMAVcdeukLfwB1G97LZLH8eHLvuByoA",
     ]);
 
-    run_get_asset_scenario_test(&setup, asset_id, seeds, Order::AllPermutations).await;
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options::default(),
+    )
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_mint_to_collection_unverify_collection() {
+    let name = trim_test_name(function_name!());
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+        },
+    )
+    .await;
+
+    let asset_id = "2gEbvG3Cb6JRaGWAx5e85Bf5z4u37EURBeyPBqXDzZoY";
+
+    let seeds: Vec<SeedEvent> = seed_txns([
+        "tzXASugk8578bmtA3JAFQLEfcVQp3Np3rU9fyFas2Svk8nyBHXJnf7PdqebGNsSTwx6CEWpDCP5oLoCDcmbP35B",
+        "7nK9a2DSDZ4Gh6DatmxGJmuLiDEswaY9bYSSPTtQppk7PtLKXYE84jWzm7AC4G1fpa831GaXuXcn5n5ybWqB4e5",
+    ]);
+
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options {
+            show_unverified_collections: true,
+            show_collection_metadata: false,
+            show_inscription: false,
+            show_fungible: false,
+        },
+    )
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_mint_verify_collection_unverify_collection() {
+    let name = trim_test_name(function_name!());
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+        },
+    )
+    .await;
+
+    let asset_id = "BiHHJ1gKV4exTjPe7PE6aydgMVqRUzzz8aeWYCGhZJ4s";
+
+    let seeds: Vec<SeedEvent> = seed_txns([
+        "5uWXt8JAhuP2XQ2nYJTq8Ndp34fdG3vmJ7DJnb3bE6iyrZZ6jeuN9w5jZvKrduMDu4zKyQU7A3JtswhKxE3hjKBk",
+        "4hQQsDKgDx5PpZR7nGvxKsLSvX4J7voaiJC3ag7dPuu4HY5kbvaqD2gyeHbdja1f22ypmzouRNpuo6sbyGDSSgya",
+        "5k71fZRpRagY45ZYu13Q8C3Bmw6KFPBkRmbBx2NuYk7roVtvM8P16WouCZtnkhRCyKyQHSgHKyTY92t9aq2tyLdd",
+    ]);
+
+    run_get_asset_scenario_test(
+        &setup,
+        asset_id,
+        seeds,
+        Order::AllPermutations,
+        Options {
+            show_unverified_collections: true,
+            show_collection_metadata: false,
+            show_inscription: false,
+            show_fungible: false,
+        },
+    )
+    .await;
 }
