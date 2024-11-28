@@ -596,6 +596,7 @@ impl Storage {
                 batch,
                 data.pubkey,
                 &MplCoreCollectionAuthority {
+                    // total BS
                     authority: data.collection.as_ref().unwrap().authority.clone(),
                 },
             )?; //this will never error in fact

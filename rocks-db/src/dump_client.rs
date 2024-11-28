@@ -575,26 +575,21 @@ impl Dumper for Storage {
             .map_err(|e| format!("Could not create file for creators dump: {}", e))?;
         let authority_file = File::create(authorities_path.clone().unwrap())
             .map_err(|e| format!("Could not create file for authority dump: {}", e))?;
-        let metadata_key_set = Arc::new(Mutex::new(HashSet::new()));
-        let authorities_key_set= Arc::new(Mutex::new(HashSet::new()));
 
-        self.dump_nft_csv(
-            (metadata_file, metadata_path.unwrap()),
-            (assets_file, assets_path.unwrap()),
-            (creators_file, creators_path.unwrap()),
-            (authority_file, authorities_path.unwrap()),
-            batch_size,
-            BUF_CAPACITY,
-            None,
-            None,
-            None,
-            metadata_key_set,
-            authorities_key_set,
-            rx,
-            synchronizer_metrics,
-        )
-        .await?;
-
+        let metadata = self
+            .dump_nft_csv(
+                (assets_file, assets_path.unwrap()),
+                (creators_file, creators_path.unwrap()),
+                (authority_file, authorities_path.unwrap()),
+                batch_size,
+                BUF_CAPACITY,
+                None,
+                None,
+                None,
+                rx,
+                synchronizer_metrics.clone(),
+            )
+            .await?;
         info!("metadata dump started");
         Self::dump_metadata(metadata_file, BUF_CAPACITY, metadata, synchronizer_metrics)?;
         info!("metadata dump finished");
