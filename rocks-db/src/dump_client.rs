@@ -1,9 +1,13 @@
 use crate::asset::MplCoreCollectionAuthority;
 use crate::asset_generated::asset as fb;
 use crate::column::TypedColumn;
+use crate::key_encoders::encode_u64x2_pubkey;
+use crate::storage_traits::AssetUpdatedKey;
 use crate::{column::Column, storage_traits::Dumper, Storage};
 use async_trait::async_trait;
+use bincode::deserialize;
 use csv::WriterBuilder;
+use entities::enums::AssetType;
 use entities::models::SplMint;
 use entities::{
     enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
@@ -366,62 +370,48 @@ impl Storage {
     pub async fn dump_fungible_csv(
         &self,
         fungible_tokens_file_and_path: (File, String),
-        batch_size: usize,
+        buf_capacity: usize,
+        start_pubkey: Option<Pubkey>,
+        end_pubkey: Option<Pubkey>,
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), String> {
         let column: Column<TokenAccount> = Self::column(self.db.clone(), self.red_metrics.clone());
 
-        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, fungible_tokens_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, fungible_tokens_file_and_path.0);
+        let mut iter = self.db.raw_iterator_cf(&column.handle());
         let mut writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
 
-        // asset, owner, balance, slot updated
-        let mut batch: Vec<(String, String, String, i64, i64)> = Vec::new();
-
-        for (_, token) in column.pairs_iterator(column.iter_start()) {
+        if let Some(start_pubkey) = start_pubkey {
+            iter.seek(&start_pubkey.to_bytes());
+        } else {
+            iter.seek_to_first();
+        }
+        let end_pubkey = end_pubkey.map(|pk| pk.to_bytes());
+        let mut cnt = 0;
+        while iter.valid() {
+            if let Some(end_pubkey) = end_pubkey {
+                if iter.key().unwrap() > end_pubkey.as_slice() {
+                    break;
+                }
+            }
             if !rx.is_empty() {
                 info!("Shutdown signal received...");
                 return Ok(());
             }
-            batch.push((
-                Self::encode(token.pubkey),
-                Self::encode(token.owner),
-                Self::encode(token.mint),
-                token.amount,
-                token.slot_updated,
-            ));
-            synchronizer_metrics.inc_num_of_assets_iter("token_account", 1);
-
-            if batch.len() >= batch_size {
-                let start = Instant::now();
-                for rec in &batch {
-                    if let Err(e) = writer.serialize(rec).map_err(|e| e.to_string()) {
-                        let msg = format!(
-                            "Error while writing data into {:?}. Err: {:?}",
-                            fungible_tokens_file_and_path.1, e
-                        );
-                        error!("{}", msg);
-                        return Err(msg);
-                    }
-                }
-                batch.clear();
-                synchronizer_metrics.set_file_write_time(
-                    fungible_tokens_file_and_path.1.as_ref(),
-                    start.elapsed().as_millis() as f64,
-                );
-            }
-        }
-
-        if !batch.is_empty() {
-            let start = Instant::now();
-            for rec in &batch {
-                if !rx.is_empty() {
-                    info!("Shutdown signal received...");
-                    return Ok(());
-                }
-                if let Err(e) = writer.serialize(rec).map_err(|e| e.to_string()) {
+            if let Some(token) = iter.value().map(deserialize::<TokenAccount>).map(|v|v.ok()).flatten() {
+                if let Err(e) = writer
+                    .serialize((
+                        Self::encode(token.pubkey),
+                        Self::encode(token.owner),
+                        Self::encode(token.mint),
+                        token.amount,
+                        token.slot_updated,
+                    ))
+                    .map_err(|e| e.to_string())
+                {
                     let msg = format!(
                         "Error while writing data into {:?}. Err: {:?}",
                         fungible_tokens_file_and_path.1, e
@@ -429,15 +419,9 @@ impl Storage {
                     error!("{}", msg);
                     return Err(msg);
                 }
+                synchronizer_metrics.inc_num_of_assets_iter("token_account", 1);
             }
-
-            synchronizer_metrics.set_file_write_time(
-                fungible_tokens_file_and_path.1.as_ref(),
-                start.elapsed().as_millis() as f64,
-            );
-            synchronizer_metrics
-                .inc_num_of_records_written(&fungible_tokens_file_and_path.1, batch.len() as u64);
-            batch.clear();
+            iter.next();
         }
 
         if let Err(e) = writer.flush().map_err(|e| e.to_string()) {
@@ -463,7 +447,7 @@ impl Storage {
         metadata: HashSet<String>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), String> {
-        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, file);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, file);
         let mut metadata_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
@@ -481,6 +465,31 @@ impl Storage {
             synchronizer_metrics.inc_num_of_records_written("metadata", 1);
         });
         metadata_writer.flush().map_err(|e| e.to_string())
+    }
+
+    pub fn dump_last_keys(
+        file: File,
+        last_known_nft_key: AssetUpdatedKey,
+        last_known_fungible_key: AssetUpdatedKey,
+    ) -> Result<(), String> {
+        let mut writer = WriterBuilder::new().has_headers(false).from_writer(file);
+        let nft_key = encode_u64x2_pubkey(
+            last_known_nft_key.seq,
+            last_known_nft_key.slot,
+            last_known_nft_key.pubkey,
+        );
+        let fungible_key = encode_u64x2_pubkey(
+            last_known_fungible_key.seq,
+            last_known_fungible_key.slot,
+            last_known_fungible_key.pubkey,
+        );
+        writer
+            .serialize((AssetType::NonFungible as i32, Self::encode(nft_key)))
+            .map_err(|e| e.to_string())?;
+        writer
+            .serialize((AssetType::Fungible as i32, Self::encode(fungible_key)))
+            .map_err(|e| e.to_string())?;
+        writer.flush().map_err(|e| e.to_string())
     }
 }
 
@@ -512,7 +521,9 @@ impl Dumper for Storage {
 
         self.dump_fungible_csv(
             (fungible_tokens_file, fungible_tokens_path.unwrap()),
-            batch_size,
+            BUF_CAPACITY,
+            None,
+            None,
             rx,
             synchronizer_metrics,
         )

@@ -4,31 +4,16 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::{command, Parser};
-use nft_ingester::config::{
-    init_logger, setup_config, SynchronizerConfig, SYNCHRONIZER_CONFIG_PREFIX,
-};
-use nft_ingester::error::IngesterError;
-use nft_ingester::index_syncronizer::Synchronizer;
-use nft_ingester::init::{graceful_stop, init_index_storage_with_migration};
-use postgre_client::PG_MIGRATIONS_PATH;
-use prometheus_client::registry::Registry;
-
-use metrics_utils::utils::setup_metrics;
 use metrics_utils::SynchronizerMetricsConfig;
+use nft_ingester::error::IngesterError;
+use nft_ingester::init::graceful_stop;
 use num_bigint::BigUint;
-use num_traits::ToPrimitive;
-use rocks_db::key_encoders::encode_u64x2_pubkey;
 use rocks_db::migrator::MigrationState;
-use rocks_db::storage_traits::{AssetUpdateIndexStorage, Dumper};
+use rocks_db::storage_traits::AssetUpdateIndexStorage;
 use rocks_db::Storage;
 use solana_sdk::pubkey::Pubkey;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
-
-pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
-pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
-pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
-pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -106,17 +91,18 @@ pub async fn main() -> Result<(), IngesterError> {
     let Some(last_known_key) = rocks_storage.last_known_nft_asset_updated_key()? else {
         return Ok(());
     };
-    let last_included_rocks_key = encode_u64x2_pubkey(
-        last_known_key.seq,
-        last_known_key.slot,
-        last_known_key.pubkey,
-    );
+    let Some(last_known_fungible_key) = rocks_storage.last_known_fungible_asset_updated_key()?
+    else {
+        return Ok(());
+    };
+
     let base_path = args
         .dump_path
         .unwrap_or_else(|| tempfile::TempDir::new().unwrap().path().to_path_buf());
 
     let shards = shard_pubkeys(args.num_shards);
     let mut tasks = JoinSet::new();
+    let mut fungible_tasks = JoinSet::new();
 
     let metadata_path = base_path
         .join("metadata.csv")
@@ -147,11 +133,17 @@ pub async fn main() -> Result<(), IngesterError> {
             .to_str()
             .map(str::to_owned)
             .unwrap();
+        let fungible_tokens_path = base_path
+            .join(format!("fungible_tokens{}.csv", name_postfix))
+            .to_str()
+            .map(str::to_owned)
+            .unwrap();
         tracing::info!(
-            "Dumping to creators: {:?}, assets: {:?}, authorities: {:?}",
+            "Dumping to creators: {:?}, assets: {:?}, authorities: {:?}, fungible_tokens: {:?}",
             creators_path,
             assets_path,
             authorities_path,
+            fungible_tokens_path
         );
 
         let assets_file = File::create(assets_path.clone())
@@ -160,26 +152,49 @@ pub async fn main() -> Result<(), IngesterError> {
             .map_err(|e| format!("Could not create file for creators dump: {}", e))?;
         let authority_file = File::create(authorities_path.clone())
             .map_err(|e| format!("Could not create file for authority dump: {}", e))?;
-        let start = start.clone();
-        let end = end.clone();
-        let shutdown_rx = shutdown_rx.resubscribe();
-        let metrics = metrics.clone();
-        let rocks_storage = rocks_storage.clone();
-        tasks.spawn(async move {
-            rocks_storage
-                .dump_nft_csv(
-                    assets_file,
-                    creators_file,
-                    authority_file,
-                    args.buffer_capacity,
-                    args.limit,
-                    Some(start),
-                    Some(end),
-                    &shutdown_rx,
-                    metrics,
-                )
-                .await
-        });
+        let fungible_tokens_file = File::create(fungible_tokens_path.clone())
+            .map_err(|e| format!("Could not create file for fungible tokens dump: {}", e))?;
+        {
+            let start = start.clone();
+            let end = end.clone();
+            let shutdown_rx = shutdown_rx.resubscribe();
+            let metrics = metrics.clone();
+            let rocks_storage = rocks_storage.clone();
+            tasks.spawn(async move {
+                rocks_storage
+                    .dump_nft_csv(
+                        assets_file,
+                        creators_file,
+                        authority_file,
+                        args.buffer_capacity,
+                        args.limit,
+                        Some(start),
+                        Some(end),
+                        &shutdown_rx,
+                        metrics,
+                    )
+                    .await
+            });
+        }
+        {
+            let start = start.clone();
+            let end = end.clone();
+            let shutdown_rx = shutdown_rx.resubscribe();
+            let metrics = metrics.clone();
+            let rocks_storage = rocks_storage.clone();
+            fungible_tasks.spawn(async move {
+                rocks_storage
+                    .dump_fungible_csv(
+                        (fungible_tokens_file, fungible_tokens_path),
+                        args.buffer_capacity,
+                        Some(start),
+                        Some(end),
+                        &shutdown_rx,
+                        metrics,
+                    )
+                    .await
+            });
+        }
     }
     let mut metadata_set = HashSet::new();
     while let Some(task) = tasks.join_next().await {
@@ -198,10 +213,15 @@ pub async fn main() -> Result<(), IngesterError> {
         duration,
         total as f64 / duration.as_secs_f64()
     );
-    tracing::info!(
-        "Dumping metadata took {:?}",
-        metadata_dump_start.elapsed()
-    );
+    tracing::info!("Dumping metadata took {:?}", metadata_dump_start.elapsed());
+
+    while let Some(task) = fungible_tasks.join_next().await {
+        task.map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+    }
+    tracing::info!("Dumping fungible tokens done");
+    let keys_file = File::create(base_path.join("keys.csv")).expect("should create keys file");
+    Storage::dump_last_keys(keys_file, last_known_key, last_known_fungible_key)?;
     Ok(())
 }
 
