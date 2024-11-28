@@ -47,7 +47,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
             supply: value.supply.map(|v| v.into()),
             seq: value.seq.map(|v| v.into()),
             is_burnt: Some(value.is_burnt.into()),
-            was_decompressed: value.was_decompressed.map(|v| v.into()),
+            was_decompressed: value.was_decompressed.map(Into::into),
             creators: Some(value.creators.into()),
             royalty_amount: Some(value.royalty_amount.into()),
             authority: Some(value.authority.into()),

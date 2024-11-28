@@ -533,31 +533,22 @@ pub fn get_compression_info(full_asset: &FullAsset) -> Compression {
 
     if let Some(was_decompressed) = &full_asset.asset_dynamic.was_decompressed {
         if was_decompressed.value {
-            return Compression {
-                eligible: false,
-                compressed: false,
-                data_hash: "".to_string(),
-                creator_hash: "".to_string(),
-                asset_hash: "".to_string(),
-                tree: "".to_string(),
-                seq: 0,
-                leaf_id: 0,
-            };
+            return Compression::default();
         }
     }
 
     Compression {
         eligible: full_asset.asset_dynamic.is_compressible.value,
         compressed: full_asset.asset_dynamic.is_compressed.value,
-        leaf_id: full_asset.asset_leaf.nonce.unwrap_or(0) as i64,
+        leaf_id: full_asset.asset_leaf.nonce.unwrap_or(0),
         seq: std::cmp::max(
             full_asset
                 .asset_dynamic
                 .seq
                 .clone()
                 .and_then(|u| u.value.try_into().ok())
-                .unwrap_or(0) as i64,
-            full_asset.asset_leaf.leaf_seq.unwrap_or(0) as i64,
+                .unwrap_or(0),
+            full_asset.asset_leaf.leaf_seq.unwrap_or(0),
         ),
         tree: tree
             .map(|s| bs58::encode(s).into_string())

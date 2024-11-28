@@ -131,7 +131,7 @@ pub struct Authority {
     pub scopes: Vec<Scope>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
 pub struct Compression {
     pub eligible: bool,
     pub compressed: bool,
@@ -139,8 +139,8 @@ pub struct Compression {
     pub creator_hash: String,
     pub asset_hash: String,
     pub tree: String,
-    pub seq: i64,
-    pub leaf_id: i64,
+    pub seq: u64,
+    pub leaf_id: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

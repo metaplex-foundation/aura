@@ -3100,26 +3100,26 @@ impl AssetDynamicDetails {
             self.is_compressible.slot_updated,
             self.is_compressed.slot_updated,
             self.is_frozen.slot_updated,
-            self.supply.clone().map_or(0, |supply| supply.slot_updated),
-            self.seq.clone().map_or(0, |seq| seq.slot_updated),
+            self.supply.as_ref().map_or(0, |supply| supply.slot_updated),
+            self.seq.as_ref().map_or(0, |seq| seq.slot_updated),
             self.is_burnt.slot_updated,
-            self.was_decompressed.clone().map_or(0, |was_decompressed| was_decompressed.slot_updated),
+            self.was_decompressed.as_ref().map_or(0, |was_decompressed| was_decompressed.slot_updated),
             self.onchain_data
-                .clone()
+                .as_ref()
                 .map_or(0, |onchain_data| onchain_data.slot_updated),
             self.creators.slot_updated,
             self.royalty_amount.slot_updated,
             self.chain_mutability
-                .clone()
+                .as_ref()
                 .map_or(0, |onchain_data| onchain_data.slot_updated),
             self.lamports
-                .clone()
+                .as_ref()
                 .map_or(0, |onchain_data| onchain_data.slot_updated),
             self.executable
-                .clone()
+                .as_ref()
                 .map_or(0, |onchain_data| onchain_data.slot_updated),
             self.metadata_owner
-                .clone()
+                .as_ref()
                 .map_or(0, |onchain_data| onchain_data.slot_updated),
         ]
         .into_iter()
