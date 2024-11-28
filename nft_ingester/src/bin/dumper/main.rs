@@ -147,17 +147,11 @@ pub async fn main() -> Result<(), IngesterError> {
             .to_str()
             .map(str::to_owned)
             .unwrap();
-        let fungible_tokens_path = base_path
-            .join(format!("fungible_tokens{}.csv", name_postfix))
-            .to_str()
-            .map(str::to_owned)
-            .unwrap();
         tracing::info!(
-            "Dumping to creators: {:?}, assets: {:?}, authorities: {:?}, fungible_tokens: {:?}",
+            "Dumping to creators: {:?}, assets: {:?}, authorities: {:?}",
             creators_path,
             assets_path,
             authorities_path,
-            fungible_tokens_path
         );
 
         let assets_file = File::create(assets_path.clone())
@@ -166,8 +160,6 @@ pub async fn main() -> Result<(), IngesterError> {
             .map_err(|e| format!("Could not create file for creators dump: {}", e))?;
         let authority_file = File::create(authorities_path.clone())
             .map_err(|e| format!("Could not create file for authority dump: {}", e))?;
-        let fungible_tokens_file = File::create(fungible_tokens_path.clone())
-            .map_err(|e| format!("Could not create file for fungible tokens dump: {}", e))?;
         let start = start.clone();
         let end = end.clone();
         let shutdown_rx = shutdown_rx.resubscribe();
