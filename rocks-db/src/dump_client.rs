@@ -91,10 +91,9 @@ impl Storage {
     #[allow(clippy::too_many_arguments)]
     pub async fn dump_nft_csv(
         &self,
-        assets_file_and_path: (File, String),
-        creators_file_and_path: (File, String),
-        authority_file_and_path: (File, String),
-        batch_size: usize,
+        assets_file: File,
+        creators_file: File,
+        authority_file: File,
         buf_capacity: usize,
         asset_limit: Option<usize>,
         start_pubkey: Option<Pubkey>,
@@ -120,17 +119,17 @@ impl Storage {
             core_collections_iter.next();
         }
 
-        let buf_writer = BufWriter::with_capacity(buf_capacity, assets_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, assets_file);
 
         let mut asset_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
 
-        let buf_writer = BufWriter::with_capacity(buf_capacity, authority_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, authority_file);
         let mut authority_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
-        let buf_writer = BufWriter::with_capacity(buf_capacity, creators_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, creators_file);
         let mut creators_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
@@ -578,10 +577,9 @@ impl Dumper for Storage {
 
         let metadata = self
             .dump_nft_csv(
-                (assets_file, assets_path.unwrap()),
-                (creators_file, creators_path.unwrap()),
-                (authority_file, authorities_path.unwrap()),
-                batch_size,
+                assets_file,
+                creators_file,
+                authority_file,
                 BUF_CAPACITY,
                 None,
                 None,

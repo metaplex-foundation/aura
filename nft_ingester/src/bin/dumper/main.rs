@@ -103,7 +103,7 @@ pub async fn main() -> Result<(), IngesterError> {
     tracing::info!("Preparation took {:?}", start_time.elapsed());
     let start_time = std::time::Instant::now();
 
-    let Some(last_known_key) = rocks_storage.last_known_asset_updated_key()? else {
+    let Some(last_known_key) = rocks_storage.last_known_nft_asset_updated_key()? else {
         return Ok(());
     };
     let last_included_rocks_key = encode_u64x2_pubkey(
@@ -175,12 +175,10 @@ pub async fn main() -> Result<(), IngesterError> {
         let rocks_storage = rocks_storage.clone();
         tasks.spawn(async move {
             rocks_storage
-                .dump_csv(
-                    (assets_file, assets_path),
-                    (creators_file, creators_path),
-                    (authority_file, authorities_path),
-                    (fungible_tokens_file, fungible_tokens_path),
-                    0,
+                .dump_nft_csv(
+                    assets_file,
+                    creators_file,
+                    authority_file,
                     args.buffer_capacity,
                     args.limit,
                     Some(start),
