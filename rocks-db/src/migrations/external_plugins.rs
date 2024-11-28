@@ -18,7 +18,7 @@ pub struct AssetDynamicDetailsV0 {
     pub supply: Option<Updated<u64>>,
     pub seq: Option<Updated<u64>>,
     pub is_burnt: Updated<bool>,
-    pub was_decompressed: Updated<bool>,
+    pub was_decompressed: Option<Updated<bool>>,
     pub onchain_data: Option<Updated<String>>,
     pub creators: Updated<Vec<entities::models::Creator>>,
     pub royalty_amount: Updated<u16>,
@@ -101,7 +101,7 @@ impl AssetDynamicDetailsV0 {
                         update_field(&mut current_val.is_burnt, &new_val.is_burnt);
                         update_field(&mut current_val.creators, &new_val.creators);
                         update_field(&mut current_val.royalty_amount, &new_val.royalty_amount);
-                        update_field(&mut current_val.was_decompressed, &new_val.was_decompressed);
+                        update_optional_field(&mut current_val.was_decompressed, &new_val.was_decompressed);
                         update_optional_field(&mut current_val.onchain_data, &new_val.onchain_data);
                         update_field(&mut current_val.url, &new_val.url);
                         update_optional_field(

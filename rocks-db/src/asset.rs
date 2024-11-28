@@ -142,7 +142,7 @@ impl<'a> From<fb::AssetDynamicDetails<'a>> for AssetDynamicDetails {
         let supply = value.supply().map(updated_u64_from_fb);
         let seq = value.seq().map(updated_u64_from_fb);
         let is_burnt = value.is_burnt().map(updated_bool_from_fb).unwrap();
-        let was_decompressed = value.was_decompressed().map(updated_bool_from_fb).unwrap();
+        let was_decompressed = value.was_decompressed().map(updated_bool_from_fb);
         let onchain_data = value.onchain_data().and_then(updated_string_from_fb);
         let creators = value.creators().map(updated_creators_from_fb).unwrap();
         let royalty_amount = value.royalty_amount().map(updated_u16_from_fb).unwrap();
@@ -424,7 +424,7 @@ fn asset_dynamic_details_to_fb<'a>(
         .as_ref()
         .map(|seq| updated_u64_to_fb(builder, seq));
     let is_burnt_fb = updated_bool_to_fb(builder, &dynamic_details.is_burnt);
-    let was_decompressed_fb = updated_bool_to_fb(builder, &dynamic_details.was_decompressed);
+    let was_decompressed_fb = dynamic_details.was_decompressed.as_ref().map(|was_dec| updated_bool_to_fb(builder, was_dec));
     let onchain_data_fb = dynamic_details
         .onchain_data
         .as_ref()
@@ -502,7 +502,7 @@ fn asset_dynamic_details_to_fb<'a>(
             supply: supply_fb,
             seq: seq_fb,
             is_burnt: Some(is_burnt_fb),
-            was_decompressed: Some(was_decompressed_fb),
+            was_decompressed: was_decompressed_fb,
             onchain_data: onchain_data_fb,
             creators: Some(creators_fb),
             royalty_amount: Some(royalty_amount_fb),
@@ -1144,7 +1144,7 @@ pub struct AssetDynamicDetails {
     pub supply: Option<Updated<u64>>,
     pub seq: Option<Updated<u64>>,
     pub is_burnt: Updated<bool>,
-    pub was_decompressed: Updated<bool>,
+    pub was_decompressed: Option<Updated<bool>>,
     pub onchain_data: Option<Updated<String>>,
     pub creators: Updated<Vec<entities::models::Creator>>,
     pub royalty_amount: Updated<u16>,
@@ -3028,7 +3028,7 @@ impl AssetDynamicDetails {
         update_field(&mut self.is_burnt, &new_val.is_burnt);
         update_field(&mut self.creators, &new_val.creators);
         update_field(&mut self.royalty_amount, &new_val.royalty_amount);
-        update_field(&mut self.was_decompressed, &new_val.was_decompressed);
+        update_optional_field(&mut self.was_decompressed, &new_val.was_decompressed);
         update_optional_field(&mut self.onchain_data, &new_val.onchain_data);
         update_field(&mut self.url, &new_val.url);
         update_optional_field(&mut self.chain_mutability, &new_val.chain_mutability);
@@ -3103,7 +3103,7 @@ impl AssetDynamicDetails {
             self.supply.clone().map_or(0, |supply| supply.slot_updated),
             self.seq.clone().map_or(0, |seq| seq.slot_updated),
             self.is_burnt.slot_updated,
-            self.was_decompressed.slot_updated,
+            self.was_decompressed.clone().map_or(0, |was_decompressed| was_decompressed.slot_updated),
             self.onchain_data
                 .clone()
                 .map_or(0, |onchain_data| onchain_data.slot_updated),
@@ -3553,7 +3553,7 @@ mod tests {
             supply: Some(Updated::new(50, None, 1)),
             seq: Some(Updated::new(580, Some(UpdateVersion::Sequence(530)), 530)),
             is_burnt: Updated::new(50, None, false),
-            was_decompressed: Updated::new(50, None, false),
+            was_decompressed: Some(Updated::new(50, None, false)),
             onchain_data: Some(Updated::new(
                 50,
                 Some(UpdateVersion::Sequence(530)),

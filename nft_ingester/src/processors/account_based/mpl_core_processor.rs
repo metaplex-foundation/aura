@@ -330,11 +330,8 @@ impl MplCoreProcessor {
                 Some(UpdateVersion::WriteVersion(account_data.write_version)),
                 false,
             ),
-            was_decompressed: Updated::new(
-                account_data.slot_updated,
-                Some(UpdateVersion::WriteVersion(account_data.write_version)),
-                false,
-            ),
+            // should not set this value for Core assets
+            was_decompressed: None,
             onchain_data: Some(Updated::new(
                 account_data.slot_updated,
                 Some(UpdateVersion::WriteVersion(account_data.write_version)),

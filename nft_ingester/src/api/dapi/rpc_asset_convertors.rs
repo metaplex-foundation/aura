@@ -367,7 +367,8 @@ pub fn asset_to_rpc(
         &full_asset
             .asset_dynamic
             .onchain_data
-            .map(|onchain_data| onchain_data.value)
+            .as_ref()
+            .map(|onchain_data| onchain_data.value.clone())
             .unwrap_or_default(),
     )
     .unwrap_or(serde_json::Value::Null);
@@ -381,28 +382,35 @@ pub fn asset_to_rpc(
 
     let mpl_core_info = match interface {
         Interface::MplCoreAsset | Interface::MplCoreCollection => Some(MplCoreInfo {
-            num_minted: full_asset.asset_dynamic.num_minted.map(|u| u.value),
-            current_size: full_asset.asset_dynamic.current_size.map(|u| u.value),
+            num_minted: full_asset.asset_dynamic.num_minted.as_ref().map(|u| u.value),
+            current_size: full_asset.asset_dynamic.current_size.as_ref().map(|u| u.value),
             plugins_json_version: full_asset
                 .asset_dynamic
                 .plugins_json_version
+                .as_ref()
                 .map(|u| u.value),
         }),
         _ => None,
     };
     let supply = match interface {
-        Interface::V1NFT => full_asset.edition_data.map(|e| Supply {
-            edition_nonce,
-            print_current_supply: e.supply,
-            print_max_supply: e.max_supply,
-            edition_number: e.edition_number,
-        }),
+        Interface::V1NFT => {
+            if let Some(edition_info) = &full_asset.edition_data {
+                Some(Supply {
+                    edition_nonce,
+                    print_current_supply: edition_info.supply,
+                    print_max_supply: edition_info.max_supply,
+                    edition_number: edition_info.edition_number,
+                })
+            } else {
+                Some(Supply{
+                    edition_nonce,
+                    print_current_supply: 0,
+                    print_max_supply: Some(0),
+                    edition_number: None,
+                })
+            }
+        },
         _ => None,
-    };
-    let tree = if full_asset.asset_leaf.tree_id == Pubkey::default() {
-        None
-    } else {
-        Some(full_asset.asset_leaf.tree_id.to_bytes().to_vec())
     };
 
     Ok(Some(RpcAsset {
@@ -417,38 +425,7 @@ pub fn asset_to_rpc(
             .map(|m| m.value.into())
             .unwrap_or(ChainMutability::Unknown)
             .into(),
-        compression: Some(Compression {
-            eligible: full_asset.asset_dynamic.is_compressible.value,
-            compressed: full_asset.asset_dynamic.is_compressed.value,
-            leaf_id: full_asset.asset_leaf.nonce.unwrap_or(0) as i64,
-            seq: std::cmp::max(
-                full_asset
-                    .asset_dynamic
-                    .seq
-                    .clone()
-                    .and_then(|u| u.value.try_into().ok())
-                    .unwrap_or(0) as i64,
-                full_asset.asset_leaf.leaf_seq.unwrap_or(0) as i64,
-            ),
-            tree: tree
-                .map(|s| bs58::encode(s).into_string())
-                .unwrap_or_default(),
-            asset_hash: full_asset
-                .asset_leaf
-                .leaf
-                .map(|s| bs58::encode(s).into_string())
-                .unwrap_or_default(),
-            data_hash: full_asset
-                .asset_leaf
-                .data_hash
-                .map(|e| e.to_string())
-                .unwrap_or_default(),
-            creator_hash: full_asset
-                .asset_leaf
-                .creator_hash
-                .map(|e| e.to_string())
-                .unwrap_or_default(),
-        }),
+        compression: Some(get_compression_info(&full_asset)),
         grouping,
         royalty: Some(Royalty {
             royalty_model: full_asset.asset_static.royalty_target_type.into(),
@@ -545,6 +522,63 @@ pub fn asset_to_rpc(
             }),
         }),
     }))
+}
+
+pub fn get_compression_info(full_asset: &FullAsset) -> Compression {
+    let tree = if full_asset.asset_leaf.tree_id == Pubkey::default() {
+        None
+    } else {
+        Some(full_asset.asset_leaf.tree_id.to_bytes().to_vec())
+    };
+
+    if let Some(was_decompressed) = &full_asset.asset_dynamic.was_decompressed {
+        if was_decompressed.value {
+            return Compression {
+                eligible: false,
+                compressed: false,
+                data_hash: "".to_string(),
+                creator_hash: "".to_string(),
+                asset_hash: "".to_string(),
+                tree: "".to_string(),
+                seq: 0,
+                leaf_id: 0,
+            };
+        }
+    }
+
+    Compression {
+        eligible: full_asset.asset_dynamic.is_compressible.value,
+        compressed: full_asset.asset_dynamic.is_compressed.value,
+        leaf_id: full_asset.asset_leaf.nonce.unwrap_or(0) as i64,
+        seq: std::cmp::max(
+            full_asset
+                .asset_dynamic
+                .seq
+                .clone()
+                .and_then(|u| u.value.try_into().ok())
+                .unwrap_or(0) as i64,
+            full_asset.asset_leaf.leaf_seq.unwrap_or(0) as i64,
+        ),
+        tree: tree
+            .map(|s| bs58::encode(s).into_string())
+            .unwrap_or_default(),
+        asset_hash: full_asset
+            .asset_leaf
+            .leaf
+            .as_ref()
+            .map(|s| bs58::encode(s).into_string())
+            .unwrap_or_default(),
+        data_hash: full_asset
+            .asset_leaf
+            .data_hash
+            .map(|e| e.to_string())
+            .unwrap_or_default(),
+        creator_hash: full_asset
+            .asset_leaf
+            .creator_hash
+            .map(|e| e.to_string())
+            .unwrap_or_default(),
+    }
 }
 
 pub fn build_transaction_signatures_response(

@@ -1,6 +1,8 @@
 ---
-source: integration_tests/tests/integration_tests/cnft_tests.rs
+source: integration_tests/src/cnft_tests.rs
+assertion_line: 180
 expression: response
+snapshot_kind: text
 ---
 {
   "total": 1,
@@ -42,7 +44,8 @@ expression: response
       "grouping": [
         {
           "group_key": "collection",
-          "group_value": "STKM3PzeFc6kdJiMXyQ3pRDa3ERCEGgM9NbPPGb2Rft"
+          "group_value": "STKM3PzeFc6kdJiMXyQ3pRDa3ERCEGgM9NbPPGb2Rft",
+          "verified": true
         }
       ],
       "royalty": {

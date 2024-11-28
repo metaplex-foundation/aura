@@ -742,9 +742,10 @@ impl BubblegumTxProcessor {
             pk: *asset_id,
             details: AssetDynamicDetails {
                 pubkey: *asset_id,
-                was_decompressed: Updated::new(bundle.slot, None, true),
+                was_decompressed: Some(Updated::new(bundle.slot, None, true)),
                 is_compressible: Updated::new(bundle.slot, None, false),
                 supply: Some(Updated::new(bundle.slot, None, 1)),
+                seq: Some(Updated::new(bundle.slot, None, 0)),
                 ..Default::default()
             },
         }

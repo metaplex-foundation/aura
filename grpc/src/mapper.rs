@@ -47,7 +47,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
             supply: value.supply.map(|v| v.into()),
             seq: value.seq.map(|v| v.into()),
             is_burnt: Some(value.is_burnt.into()),
-            was_decompressed: Some(value.was_decompressed.into()),
+            was_decompressed: value.was_decompressed.map(|v| v.into()),
             creators: Some(value.creators.into()),
             royalty_amount: Some(value.royalty_amount.into()),
             authority: Some(value.authority.into()),
@@ -138,8 +138,7 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 .ok_or(GrpcError::MissingField("is_burnt".to_string()))?,
             was_decompressed: value
                 .was_decompressed
-                .map(Into::into)
-                .ok_or(GrpcError::MissingField("was_decompressed".to_string()))?,
+                .map(Into::into),
             creators: value
                 .creators
                 .map(TryInto::try_into)
