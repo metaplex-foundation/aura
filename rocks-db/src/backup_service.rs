@@ -73,45 +73,46 @@ impl BackupService {
         mut rx: Receiver<()>,
     ) {
         let mut last_backup_id = 1;
-        while rx.is_empty() {
-            let start_time = chrono::Utc::now();
-            last_backup_id = match self.backup_engine.get_backup_info().last() {
-                None => last_backup_id,
-                Some(backup_info) => {
-                    if (backup_info.timestamp + self.backup_config.rocks_interval_in_seconds)
-                        >= start_time.timestamp()
-                    {
-                        continue;
+        tokio::select! {
+            _ = async move {
+                loop {
+                    let start_time = chrono::Utc::now();
+                    last_backup_id = match self.backup_engine.get_backup_info().last() {
+                        None => last_backup_id,
+                        Some(backup_info) => {
+                            if (backup_info.timestamp + self.backup_config.rocks_interval_in_seconds)
+                                >= start_time.timestamp()
+                            {
+                                continue;
+                            }
+                            backup_info.backup_id + 1
+                        }
+                    };
+
+                    if let Err(err) = self.create_backup(last_backup_id) {
+                        error!("create_backup: {}", err);
                     }
-                    backup_info.backup_id + 1
+                    if let Err(err) = self.delete_old_backups() {
+                        error!("delete_old_backups: {}", err);
+                    }
+                    if let Err(err) = self.build_backup_archive(start_time.timestamp()) {
+                        error!("build_backup_archive: {}", err);
+                    }
+                    if let Err(err) = self.delete_old_archives() {
+                        error!("delete_old_archives: {}", err);
+                    }
+
+                    let duration = chrono::Utc::now().signed_duration_since(start_time);
+                    metrics.set_rocksdb_backup_latency(duration.num_milliseconds() as f64);
+
+                    info!("perform_backup {}", duration.num_seconds());
+
+                    tokio::time::sleep(Duration::from_secs(self.backup_config.rocks_interval_in_seconds as u64)).await
                 }
-            };
-
-            if let Err(err) = self.create_backup(last_backup_id) {
-                error!("create_backup: {}", err);
+            } => {}
+            _ = rx.recv() => {
+                info!("Received stop signal, stopping performing backup");
             }
-            if let Err(err) = self.delete_old_backups() {
-                error!("delete_old_backups: {}", err);
-            }
-            if let Err(err) = self.build_backup_archive(start_time.timestamp()) {
-                error!("build_backup_archive: {}", err);
-            }
-            if let Err(err) = self.delete_old_archives() {
-                error!("delete_old_archives: {}", err);
-            }
-
-            let duration = chrono::Utc::now().signed_duration_since(start_time);
-            metrics.set_rocksdb_backup_latency(duration.num_milliseconds() as f64);
-
-            info!("perform_backup {}", duration.num_seconds());
-
-            tokio::select! {
-                _ = tokio::time::sleep(Duration::from_secs(self.backup_config.rocks_interval_in_seconds as u64)) => {},
-                _ = rx.recv() => {
-                    info!("Received stop signal, stopping performing backup");
-                    break;
-                }
-            };
         }
     }
 

@@ -61,26 +61,28 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
     }
 
     pub async fn persist_batch_mints(&self, mut rx: Receiver<()>) -> Result<(), JoinError> {
-        while rx.is_empty() {
-            let (batch_mint_to_verify, batch_mint) = match self.get_batch_mint_to_verify().await {
-                Ok(res) => res,
-                Err(_) => {
-                    continue;
+        let receiver = rx.resubscribe();
+        tokio::select! {
+            _ = async move {
+                loop {
+                    let (batch_mint_to_verify, batch_mint) = match self.get_batch_mint_to_verify().await {
+                        Ok(res) => res,
+                        Err(_) => {
+                            continue;
+                        }
+                    };
+                    let Some(batch_mint_to_verify) = batch_mint_to_verify else {
+                        // no batch_mints to persist
+                        continue;
+                    };
+                    self.persist_batch_mint(&receiver, batch_mint_to_verify, batch_mint)
+                        .await;
+                    tokio::time::sleep(Duration::from_secs(5)).await;
                 }
-            };
-            let Some(batch_mint_to_verify) = batch_mint_to_verify else {
-                // no batch_mints to persist
-                continue;
-            };
-            self.persist_batch_mint(&rx, batch_mint_to_verify, batch_mint)
-                .await;
-            tokio::select! {
-                _ = tokio::time::sleep(Duration::from_secs(5)) => {},
-                _ = rx.recv() => {
-                    info!("Received stop signal, stopping ...");
-                    return Ok(());
-                },
-            }
+            } => {},
+            _ = rx.recv() => {
+                info!("Received stop signal, stopping ...");
+            },
         }
         Ok(())
     }

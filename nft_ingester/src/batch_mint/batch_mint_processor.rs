@@ -191,31 +191,34 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
     }
 
     pub async fn process_batch_mints(&self, mut rx: Receiver<()>) {
-        while rx.is_empty() {
-            let batch_mint_to_process = match self.pg_client.fetch_batch_mint_for_processing().await
-            {
-                Ok(Some(batch_mint)) => batch_mint,
-                Ok(None) => {
-                    continue;
+        let receiver = rx.resubscribe();
+        tokio::select! {
+            _ = async move {
+                loop {
+                    let batch_mint_to_process = match self.pg_client.fetch_batch_mint_for_processing().await
+                    {
+                        Ok(Some(batch_mint)) => batch_mint,
+                        Ok(None) => {
+                            continue;
+                        }
+                        Err(e) => {
+                            error!("Failed to fetch batch_mint for processing: {}", e);
+                            continue;
+                        }
+                    };
+                    if let Err(e) = self
+                        .process_batch_mint(receiver.resubscribe(), batch_mint_to_process)
+                        .await
+                    {
+                        error!("process_batch_mint: {}", e);
+                    };
+                    tokio::time::sleep(Duration::from_secs(5)).await
                 }
-                Err(e) => {
-                    error!("Failed to fetch batch_mint for processing: {}", e);
-                    continue;
-                }
-            };
-            if let Err(e) = self
-                .process_batch_mint(rx.resubscribe(), batch_mint_to_process)
-                .await
-            {
-                error!("process_batch_mint: {}", e);
-            }
-            tokio::select! {
-                _ = tokio::time::sleep(Duration::from_secs(5)) => {},
-                _ = rx.recv() => {
-                    info!("Received stop signal, stopping ...");
-                    return;
-                },
-            }
+            } => {},
+            _ = rx.recv() => {
+                info!("Received stop signal, stopping ...");
+                return;
+            },
         }
     }
 

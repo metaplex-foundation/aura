@@ -83,15 +83,14 @@ impl<P: PriceFetcher> SolanaPriceUpdater<P> {
     }
 
     pub async fn start_price_monitoring(&self, mut rx: Receiver<()>) {
-        while rx.is_empty() {
-            if let Err(e) = self.update_price().await {
-                error!("update_price: {e}");
-            }
-            tokio::select! {
-                _ = rx.recv() => {
-                    return;
-                }
-                _ = tokio::time::sleep(self.price_monitoring_interval) => {}
+        tokio::select! {
+            _ = async move {
+                if let Err(e) = self.update_price().await {
+                    error!("update_price: {e}");
+                };
+                tokio::time::sleep(self.price_monitoring_interval).await;
+            } => {}
+            _ = rx.recv() => {
             }
         }
     }

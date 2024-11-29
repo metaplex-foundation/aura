@@ -51,19 +51,23 @@ impl MplCoreFeeProcessor {
         let rpc_client = self.rpc_client.clone();
         let rent = self.rent.clone();
         self.join_set.lock().await.spawn(tokio::spawn(async move {
-            while rx.is_empty() {
-                if let Err(e) = Self::fetch_actual_rent(rpc_client.clone(), rent.clone()).await {
-                    error!("fetch_actual_rent: {}", e);
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                    continue;
+            tokio::select! {
+                _ = rx.recv() => {
+                    info!("Received stop signal, stopping update_rent...");
+                    return;
                 }
-                tokio::select! {
-                    _ = rx.recv() => {
-                        info!("Received stop signal, stopping update_rent...");
-                        return;
+                _ = async move {
+                    loop {
+                        if let Err(e) =
+                            Self::fetch_actual_rent(rpc_client.clone(), rent.clone()).await
+                        {
+                            error!("fetch_actual_rent: {}", e);
+                            tokio::time::sleep(Duration::from_secs(5)).await;
+                            continue;
+                        }
+                        tokio::time::sleep(FETCH_RENT_INTERVAL).await;
                     }
-                    _ = tokio::time::sleep(FETCH_RENT_INTERVAL) => {},
-                }
+                } => {}
             }
         }));
     }

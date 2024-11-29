@@ -22,20 +22,21 @@ pub async fn run_fork_cleaner(
     sequence_consistent_checker_wait_period_sec: u64,
 ) -> Result<(), JoinError> {
     info!("Start cleaning forks...");
-    loop {
-        let start = Instant::now();
-        fork_cleaner.clean_forks(rx.resubscribe()).await;
-        metrics.set_scans_latency(start.elapsed().as_secs_f64());
-        metrics.inc_total_scans();
-        tokio::select! {
-            _ = tokio_sleep(Duration::from_secs(sequence_consistent_checker_wait_period_sec)) => {},
+    let receiver = rx.resubscribe();
+    tokio::select! {
+            _ = async move {
+                loop {
+                    let start = Instant::now();
+                    fork_cleaner.clean_forks(receiver.resubscribe()).await;
+                    metrics.set_scans_latency(start.elapsed().as_secs_f64());
+                    metrics.inc_total_scans();
+                    tokio_sleep(Duration::from_secs(sequence_consistent_checker_wait_period_sec)).await;
+                }
+            } => {},
             _ = rx.recv() => {
                 info!("Received stop signal, stopping cleaning forks!");
-                break;
             }
-        }
     }
-
     Ok(())
 }
 

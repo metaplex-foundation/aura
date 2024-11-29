@@ -120,20 +120,18 @@ macro_rules! spawn_test {
         let metrics_clone = $metrics.clone();
         let cancel_token_clone = $cancel_token.clone();
         $tasks.spawn(tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = async {
+            tokio::select! {
+                _ = async {
+                    loop {
                         if let Err(e) = diff_checker_clone.$method().await {
                             error!("Fetch keys: {}", e);
                             metrics_clone.inc_fetch_keys_errors($metric_label);
                         }
                         tokio::time::sleep(Duration::from_secs(TESTS_INTERVAL_SEC)).await
-                    } => {},
-                    _ = cancel_token_clone.cancelled() => {
-                        break;
                     }
-                };
-            }
+                } => {},
+                _ = cancel_token_clone.cancelled() => {}
+            };
         }));
     }};
 }

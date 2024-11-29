@@ -70,35 +70,29 @@ pub async fn run_sequence_consistent_gapfiller<T, R>(
         sequence_consistent_gapfill_metrics.clone(),
         rpc_backfiller.clone(),
     );
-    let mut rx = rx.resubscribe();
     let metrics = sequence_consistent_gapfill_metrics.clone();
+    let mut receiver = rx.resubscribe();
 
-    let run_sequence_consistent_gapfiller = async move {
-        tracing::info!("Start collecting sequences gaps...");
-        loop {
-            let start = Instant::now();
-            sequence_consistent_gapfiller
-                .collect_sequences_gaps(rx.resubscribe())
-                .await;
-            metrics.set_scans_latency(start.elapsed().as_secs_f64());
-            metrics.inc_total_scans();
-
-            tokio::select! {
-                _ = tokio_sleep(Duration::from_secs(sequence_consistent_checker_wait_period_sec)) => {},
-                _ = rx.recv() => {
-                    info!("Received stop signal, stopping collecting sequences gaps");
-                    break;
+    mutexed_tasks.lock().await.spawn(async move {     
+        tokio::select! {
+            _ = async move {
+                loop {
+                    tracing::info!("Start collecting sequences gaps...");
+                    let start = Instant::now();
+                    sequence_consistent_gapfiller
+                        .collect_sequences_gaps(rx.resubscribe())
+                        .await;
+                    metrics.set_scans_latency(start.elapsed().as_secs_f64());
+                    metrics.inc_total_scans();
+                    tokio_sleep(Duration::from_secs(sequence_consistent_checker_wait_period_sec)).await;
                 }
+            } => {},
+            _ = receiver.recv() => {
+                info!("Received stop signal, stopping collecting sequences gaps");
             }
-        }
-
-        Ok(())
-    };
-
-    mutexed_tasks
-        .lock()
-        .await
-        .spawn(run_sequence_consistent_gapfiller);
+        }; 
+        Ok(()) 
+    });
 }
 
 /// Method returns the number of successfully processed assets
