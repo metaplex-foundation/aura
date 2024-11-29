@@ -20,6 +20,7 @@ chrono = { workspace = true }
 usecase = { path = "../usecase" }
 thiserror = { workspace = true }
 interface = { path = "../interface" }
+uuid = { workspace = true }
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

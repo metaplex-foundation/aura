@@ -128,6 +128,7 @@ pub async fn main() -> Result<(), IngesterError> {
             metrics_state.red_metrics.clone(),
             DEFAULT_MIN_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,
+            None,
         )
         .await?,
     );

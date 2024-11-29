@@ -6,14 +6,16 @@ use std::sync::Arc;
 use clap::{command, Parser};
 use metrics_utils::SynchronizerMetricsConfig;
 use nft_ingester::error::IngesterError;
+use nft_ingester::index_syncronizer::shard_pubkeys;
 use nft_ingester::init::graceful_stop;
 use num_bigint::BigUint;
 use rocks_db::migrator::MigrationState;
-use rocks_db::storage_traits::AssetUpdateIndexStorage;
+use rocks_db::storage_traits::{AssetUpdateIndexStorage, Dumper};
 use rocks_db::Storage;
 use solana_sdk::pubkey::Pubkey;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
+use tonic::metadata;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -45,6 +47,12 @@ struct Args {
     /// If set, the dump will be done in the specified number of shards
     #[arg(short, long, default_value = "1")]
     num_shards: u64,
+
+    /// Number of shards for fungible tokens
+    /// If not set, the dump will be done in a single shard
+    /// If set, the dump will be done in the specified number of shards
+    #[arg(short, long, default_value = "1")]
+    fungible_num_shards: u64,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -101,6 +109,8 @@ pub async fn main() -> Result<(), IngesterError> {
         .unwrap_or_else(|| tempfile::TempDir::new().unwrap().path().to_path_buf());
 
     let shards = shard_pubkeys(args.num_shards);
+    let fungible_shards = shard_pubkeys(args.fungible_num_shards);
+
     let mut tasks = JoinSet::new();
     let mut fungible_tasks = JoinSet::new();
 
@@ -133,17 +143,17 @@ pub async fn main() -> Result<(), IngesterError> {
             .to_str()
             .map(str::to_owned)
             .unwrap();
-        let fungible_tokens_path = base_path
-            .join(format!("fungible_tokens{}.csv", name_postfix))
+        let metadata_path = base_path
+            .join(format!("metadata{}.csv", name_postfix))
             .to_str()
             .map(str::to_owned)
             .unwrap();
         tracing::info!(
-            "Dumping to creators: {:?}, assets: {:?}, authorities: {:?}, fungible_tokens: {:?}",
+            "Dumping to creators: {:?}, assets: {:?}, authorities: {:?}, metadata: {:?}",
             creators_path,
             assets_path,
             authorities_path,
-            fungible_tokens_path
+            metadata_path,
         );
 
         let assets_file = File::create(assets_path.clone())
@@ -152,69 +162,77 @@ pub async fn main() -> Result<(), IngesterError> {
             .map_err(|e| format!("Could not create file for creators dump: {}", e))?;
         let authority_file = File::create(authorities_path.clone())
             .map_err(|e| format!("Could not create file for authority dump: {}", e))?;
+        let metadata_file = File::create(metadata_path.clone())
+            .map_err(|e| format!("Could not create file for metadata dump: {}", e))?;
+
+        let start = start.clone();
+        let end = end.clone();
+        let shutdown_rx = shutdown_rx.resubscribe();
+        let metrics = metrics.clone();
+        let rocks_storage = rocks_storage.clone();
+        tasks.spawn_blocking(move || {
+            rocks_storage.dump_nft_csv(
+                assets_file,
+                creators_file,
+                authority_file,
+                metadata_file,
+                args.buffer_capacity,
+                args.limit,
+                Some(start),
+                Some(end),
+                &shutdown_rx,
+                metrics,
+            )
+        });
+    }
+
+    for (i, (start, end)) in fungible_shards.iter().enumerate() {
+        let name_postfix = if args.fungible_num_shards > 1 {
+            format!("_shard_{}_{}", start, end)
+        } else {
+            "".to_string()
+        };
+        let fungible_tokens_path = base_path
+            .join(format!("fungible_tokens{}.csv", name_postfix))
+            .to_str()
+            .map(str::to_owned)
+            .unwrap();
+        tracing::info!("Dumping to fungible tokens: {:?}", fungible_tokens_path);
         let fungible_tokens_file = File::create(fungible_tokens_path.clone())
             .map_err(|e| format!("Could not create file for fungible tokens dump: {}", e))?;
-        {
-            let start = start.clone();
-            let end = end.clone();
-            let shutdown_rx = shutdown_rx.resubscribe();
-            let metrics = metrics.clone();
-            let rocks_storage = rocks_storage.clone();
-            tasks.spawn(async move {
-                rocks_storage
-                    .dump_nft_csv(
-                        assets_file,
-                        creators_file,
-                        authority_file,
-                        args.buffer_capacity,
-                        args.limit,
-                        Some(start),
-                        Some(end),
-                        &shutdown_rx,
-                        metrics,
-                    )
-                    .await
-            });
-        }
-        {
-            let start = start.clone();
-            let end = end.clone();
-            let shutdown_rx = shutdown_rx.resubscribe();
-            let metrics = metrics.clone();
-            let rocks_storage = rocks_storage.clone();
-            fungible_tasks.spawn(async move {
-                rocks_storage
-                    .dump_fungible_csv(
-                        (fungible_tokens_file, fungible_tokens_path),
-                        args.buffer_capacity,
-                        Some(start),
-                        Some(end),
-                        &shutdown_rx,
-                        metrics,
-                    )
-                    .await
-            });
-        }
+
+        let start = start.clone();
+        let end = end.clone();
+        let shutdown_rx = shutdown_rx.resubscribe();
+        let metrics = metrics.clone();
+        let rocks_storage = rocks_storage.clone();
+        fungible_tasks.spawn_blocking(move || {
+            rocks_storage.dump_fungible_csv(
+                (fungible_tokens_file, fungible_tokens_path),
+                args.buffer_capacity,
+                Some(start),
+                Some(end),
+                &shutdown_rx,
+                metrics,
+            )
+        });
     }
-    let mut metadata_set = HashSet::new();
+
+    let mut total_assets = 0;
     while let Some(task) = tasks.join_next().await {
-        let set = task
+        let cnt = task
             .map_err(|e| e.to_string())?
             .map_err(|e| e.to_string())?;
-        metadata_set.extend(set);
+        total_assets = total_assets + cnt;
     }
-    let metadata_dump_start = std::time::Instant::now();
-    Storage::dump_metadata(metadata_file, args.buffer_capacity, metadata_set, metrics)?;
     let duration = start_time.elapsed();
-    let total = args.limit.unwrap_or(0) * args.num_shards as usize;
     tracing::info!(
         "Dumping of {} assets took {:?}, average rate: {:.2} assets/s",
-        total,
+        total_assets,
         duration,
-        total as f64 / duration.as_secs_f64()
+        total_assets as f64 / duration.as_secs_f64()
     );
-    tracing::info!("Dumping metadata took {:?}", metadata_dump_start.elapsed());
-
+    
     while let Some(task) = fungible_tasks.join_next().await {
         task.map_err(|e| e.to_string())?
             .map_err(|e| e.to_string())?;
@@ -223,82 +241,4 @@ pub async fn main() -> Result<(), IngesterError> {
     let keys_file = File::create(base_path.join("keys.csv")).expect("should create keys file");
     Storage::dump_last_keys(keys_file, last_known_key, last_known_fungible_key)?;
     Ok(())
-}
-
-/// Generate the first and last Pubkey for each shard.
-/// Returns a vector of tuples (start_pubkey, end_pubkey) for each shard.
-fn shard_pubkeys(num_shards: u64) -> Vec<(Pubkey, Pubkey)> {
-    // Total keyspace as BigUint
-    let total_keyspace = BigUint::from_bytes_be(&[0xffu8; 32].as_slice());
-    let shard_size = &total_keyspace / num_shards;
-
-    let mut shards = Vec::new();
-    for i in 0..num_shards {
-        // Calculate the start of the shard
-        let shard_start = &shard_size * i;
-        let shard_start_bytes = shard_start.to_bytes_be();
-
-        // Calculate the end of the shard
-        let shard_end = if i == num_shards - 1 {
-            total_keyspace.clone() // Last shard ends at the max value
-        } else {
-            &shard_size * (i + 1) - 1u64
-        };
-        let shard_end_bytes = shard_end.to_bytes_be();
-
-        // Pad the bytes to fit [u8; 32]
-        let start_pubkey = pad_to_32_bytes(&shard_start_bytes);
-        let end_pubkey = pad_to_32_bytes(&shard_end_bytes);
-
-        shards.push((
-            Pubkey::new_from_array(start_pubkey),
-            Pubkey::new_from_array(end_pubkey),
-        ));
-    }
-
-    shards
-}
-
-/// Pad a byte slice to fit into a [u8; 32] array.
-fn pad_to_32_bytes(bytes: &[u8]) -> [u8; 32] {
-    let mut array = [0u8; 32];
-    let offset = 32 - bytes.len();
-    array[offset..].copy_from_slice(bytes); // Copy the bytes into the rightmost part of the array
-    array
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_shard_pubkeys_1() {
-        let shards = shard_pubkeys(1);
-        assert_eq!(shards.len(), 1);
-        assert_eq!(
-            shards[0],
-            (
-                Pubkey::new_from_array([0; 32]),
-                Pubkey::new_from_array([0xff; 32])
-            )
-        );
-    }
-
-    #[test]
-    fn test_shard_pubkeys_2() {
-        let shards = shard_pubkeys(2);
-        assert_eq!(shards.len(), 2);
-        let first_key = [0x0; 32];
-        let mut last_key = [0xff; 32];
-        last_key[0] = 0x7f;
-        last_key[31] = 0xfe;
-        assert_eq!(shards[0].0.to_bytes(), first_key);
-        assert_eq!(shards[0].1.to_bytes(), last_key);
-
-        let mut first_key = last_key;
-        first_key[31] = 0xff;
-        let last_key = [0xff; 32];
-        assert_eq!(shards[1].0.to_bytes(), first_key);
-        assert_eq!(shards[1].1.to_bytes(), last_key);
-    }
 }

@@ -7,6 +7,7 @@ use nft_ingester::index_syncronizer::{SyncStatus, Synchronizer};
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration};
 use postgre_client::PG_MIGRATIONS_PATH;
 use prometheus_client::registry::Registry;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use metrics_utils::utils::setup_metrics;
@@ -61,6 +62,7 @@ pub async fn main() -> Result<(), IngesterError> {
             red_metrics.clone(),
             DEFAULT_MAX_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,
+            Some(PathBuf::from(config.dump_path.clone())),
         )
         .await?,
     );
@@ -106,12 +108,10 @@ pub async fn main() -> Result<(), IngesterError> {
     let synchronizer = Arc::new(Synchronizer::new(
         rocks_storage.clone(),
         index_storage.clone(),
-        index_storage.clone(),
         config.dump_synchronizer_batch_size,
         config.dump_path.to_string(),
         metrics.clone(),
         config.parallel_tasks,
-        config.run_temp_sync_during_dump,
     ));
 
     if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {

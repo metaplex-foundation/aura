@@ -3,18 +3,20 @@ use entities::{
     models::{AssetIndex, FungibleAssetIndex},
 };
 use metrics_utils::SynchronizerMetricsConfig;
-use postgre_client::storage_traits::{AssetIndexStorage, TempClientProvider};
+use num_bigint::BigUint;
+use postgre_client::storage_traits::AssetIndexStorage;
 use rocks_db::{
     key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey},
     storage_traits::{AssetIndexStorage as AssetIndexSourceStorage, AssetUpdatedKey},
 };
 use solana_sdk::pubkey::Pubkey;
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, fs::File, sync::Arc};
 use tokio::task::JoinSet;
 use tracing::warn;
 
 use crate::error::IngesterError;
 
+const BUF_CAPACITY: usize = 1024 * 1024 * 32;
 #[derive(Debug)]
 pub struct SyncState {
     last_indexed_key: Option<AssetUpdatedKey>,
@@ -27,48 +29,40 @@ pub enum SyncStatus {
     NoSyncRequired,
 }
 
-pub struct Synchronizer<T, U, P>
+pub struct Synchronizer<T, U>
 where
     T: AssetIndexSourceStorage,
     U: AssetIndexStorage,
-    P: TempClientProvider + Send + Sync + 'static + Clone,
 {
     primary_storage: Arc<T>,
     index_storage: Arc<U>,
-    temp_client_provider: P,
     dump_synchronizer_batch_size: usize,
     dump_path: String,
     metrics: Arc<SynchronizerMetricsConfig>,
     parallel_tasks: usize,
-    run_temp_sync_during_dump: bool,
 }
 
-impl<T, U, P> Synchronizer<T, U, P>
+impl<T, U> Synchronizer<T, U>
 where
     T: AssetIndexSourceStorage + Send + Sync + 'static,
     U: AssetIndexStorage + Clone + Send + Sync + 'static,
-    P: TempClientProvider + Send + Sync + 'static + Clone,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         primary_storage: Arc<T>,
         index_storage: Arc<U>,
-        temp_client_provider: P,
         dump_synchronizer_batch_size: usize,
         dump_path: String,
         metrics: Arc<SynchronizerMetricsConfig>,
         parallel_tasks: usize,
-        run_temp_sync_during_dump: bool,
     ) -> Self {
         Synchronizer {
             primary_storage,
             index_storage,
-            temp_client_provider,
             dump_synchronizer_batch_size,
             dump_path,
             metrics,
             parallel_tasks,
-            run_temp_sync_during_dump,
         }
     }
 
@@ -244,49 +238,8 @@ where
             last_known_key.slot,
             last_known_key.pubkey,
         );
-        if !self.run_temp_sync_during_dump {
-            return self
-                .dump_sync(last_included_rocks_key.as_slice(), rx, asset_type)
-                .await;
-        }
-        // start a regular synchronization into a temporary storage to catch up on it while the dump is being created and loaded, as it takes a loooong time
-        let (tx, local_rx) = tokio::sync::broadcast::channel::<()>(1);
-        let temp_storage = Arc::new(self.temp_client_provider.create_temp_client().await?);
-        temp_storage
-            .initialize(last_included_rocks_key.as_slice())
-            .await?;
-        let temp_syncronizer = Arc::new(Synchronizer::new(
-            self.primary_storage.clone(),
-            temp_storage.clone(),
-            self.temp_client_provider.clone(),
-            self.dump_synchronizer_batch_size,
-            "not used".to_string(),
-            self.metrics.clone(),
-            1,
-            false,
-        ));
-
-        match asset_type {
-            AssetType::NonFungible => {
-                temp_syncronizer
-                    .nft_run(&local_rx, -1, tokio::time::Duration::from_millis(100))
-                    .await
-            }
-            AssetType::Fungible => {
-                temp_syncronizer
-                    .fungible_run(&local_rx, -1, tokio::time::Duration::from_millis(100))
-                    .await
-            }
-        }
         self.dump_sync(last_included_rocks_key.as_slice(), rx, asset_type)
-            .await?;
-
-        tx.send(()).map_err(|e| e.to_string())?;
-
-        // now we can copy temp storage to the main storage
-        temp_storage.copy_to_main().await?;
-
-        Ok(())
+            .await
     }
 
     async fn dump_sync(
@@ -295,44 +248,209 @@ where
         rx: &tokio::sync::broadcast::Receiver<()>,
         asset_type: AssetType,
     ) -> Result<(), IngesterError> {
-        let path = std::path::Path::new(self.dump_path.as_str());
-        tracing::info!("Dumping the primary storage to {}", self.dump_path);
+        tracing::info!(
+            "Dumping {:?} from the primary storage to {}",
+            asset_type,
+            self.dump_path
+        );
 
         match asset_type {
             AssetType::NonFungible => {
-                self.primary_storage
-                    .dump_nft_db(
-                        path,
-                        self.dump_synchronizer_batch_size,
-                        rx,
-                        self.metrics.clone(),
-                    )
-                    .await?
+                self.dump_sync_nft(rx, last_included_rocks_key, 64).await?;
             }
             AssetType::Fungible => {
-                self.primary_storage
-                    .dump_fungible_db(
-                        path,
-                        self.dump_synchronizer_batch_size,
-                        rx,
-                        self.metrics.clone(),
-                    )
-                    .await?
+                self.dump_sync_fungibles(rx, last_included_rocks_key, 8)
+                    .await?;
             }
         }
 
-        tracing::info!(
-            "{:?} Dump is complete. Loading the dump into the index storage",
-            asset_type
-        );
-
-        self.index_storage
-            .load_from_dump(path, last_included_rocks_key, asset_type)
-            .await?;
-        tracing::info!("{:?} Dump is loaded into the index storage", asset_type);
+        tracing::info!("{:?} Dump is complete and loaded", asset_type);
         Ok(())
     }
 
+    async fn dump_sync_nft(
+        &self,
+        rx: &tokio::sync::broadcast::Receiver<()>,
+        last_included_rocks_key: &[u8],
+        num_shards: u64,
+    ) -> Result<(), IngesterError> {
+        let base_path = std::path::Path::new(self.dump_path.as_str());
+        self.index_storage
+            .destructive_prep_to_batch_nft_load()
+            .await?;
+
+        let shards = shard_pubkeys(num_shards);
+        let mut tasks: JoinSet<Result<(usize, String, String, String, String), String>> = JoinSet::new();
+        for (i, (start, end)) in shards.iter().enumerate() {
+            let name_postfix = if num_shards > 1 {
+                format!("_shard_{}_{}", start, end)
+            } else {
+                "".to_string()
+            };
+            let creators_path = base_path
+                .join(format!("creators{}.csv", name_postfix))
+                .to_str()
+                .map(str::to_owned)
+                .unwrap();
+            let assets_path = base_path
+                .join(format!("assets{}.csv", name_postfix))
+                .to_str()
+                .map(str::to_owned)
+                .unwrap();
+            let authorities_path = base_path
+                .join(format!("assets_authorities{}.csv", name_postfix))
+                .to_str()
+                .map(str::to_owned)
+                .unwrap();
+            let metadata_path = base_path
+                .join(format!("metadata{}.csv", name_postfix))
+                .to_str()
+                .map(str::to_owned)
+                .unwrap();
+            tracing::info!(
+                "Dumping to creators: {:?}, assets: {:?}, authorities: {:?}, metadata: {:?}",
+                creators_path,
+                assets_path,
+                authorities_path,
+                metadata_path,
+            );
+
+            let assets_file = File::create(assets_path.clone())
+                .map_err(|e| format!("Could not create file for assets dump: {}", e))?;
+            let creators_file = File::create(creators_path.clone())
+                .map_err(|e| format!("Could not create file for creators dump: {}", e))?;
+            let authority_file = File::create(authorities_path.clone())
+                .map_err(|e| format!("Could not create file for authority dump: {}", e))?;
+            let metadata_file = File::create(metadata_path.clone())
+                .map_err(|e| format!("Could not create file for metadata dump: {}", e))?;
+
+            let start = start.clone();
+            let end = end.clone();
+            let shutdown_rx = rx.resubscribe();
+            let metrics = self.metrics.clone();
+            let rocks_storage = self.primary_storage.clone();
+            tasks.spawn_blocking(move || {
+                let res = rocks_storage.dump_nft_csv(
+                    assets_file,
+                    creators_file,
+                    authority_file,
+                    metadata_file,
+                    BUF_CAPACITY,
+                    None,
+                    Some(start),
+                    Some(end),
+                    &shutdown_rx,
+                    metrics,
+                )?;
+                Ok((
+                    res,
+                    assets_path.clone(),
+                    creators_path.clone(),
+                    authorities_path.clone(),
+                    metadata_path.clone(),
+                ))
+            });
+        }
+        let mut index_tasks = JoinSet::new();
+
+        while let Some(task) = tasks.join_next().await {
+            let (cnt, assets_path, creators_path, authorities_path, metadata_path) =
+                task.map_err(|e| e.to_string())??;
+            let index_storage = self.index_storage.clone();
+            index_tasks.spawn(async move {
+                index_storage
+                    .load_from_dump_nfts(
+                        assets_path.as_str(),
+                        creators_path.as_str(),
+                        authorities_path.as_str(),
+                        metadata_path.as_str(),
+                    )
+                    .await
+            });
+        }
+        while let Some(task) = index_tasks.join_next().await {
+            task.map_err(|e| e.to_string())?
+                .map_err(|e| e.to_string())?;
+        }
+        tracing::info!("All loads complete. Finalizing the batch load");
+        self.index_storage.finalize_batch_nft_load().await?;
+        tracing::info!("Batch load finalized");
+        self.index_storage
+            .update_last_synced_key(last_included_rocks_key, AssetType::NonFungible)
+            .await?;
+        Ok(())
+    }
+
+    async fn dump_sync_fungibles(
+        &self,
+        rx: &tokio::sync::broadcast::Receiver<()>,
+        last_included_rocks_key: &[u8],
+        num_shards: u64,
+    ) -> Result<(), IngesterError> {
+        let base_path = std::path::Path::new(self.dump_path.as_str());
+        self.index_storage
+            .destructive_prep_to_batch_fungible_load()
+            .await?;
+
+        let shards = shard_pubkeys(num_shards);
+        let mut tasks: JoinSet<Result<(usize, String), String>> = JoinSet::new();
+        for (i, (start, end)) in shards.iter().enumerate() {
+            let name_postfix = if num_shards > 1 {
+                format!("_shard_{}_{}", start, end)
+            } else {
+                "".to_string()
+            };
+
+            let fungible_tokens_path = base_path
+                .join(format!("fungible_tokens{}.csv", name_postfix))
+                .to_str()
+                .map(str::to_owned).unwrap();
+            tracing::info!("Dumping to fungible_tokens: {:?}", fungible_tokens_path);
+
+            let fungible_tokens_file = File::create(fungible_tokens_path.clone())
+                .map_err(|e| format!("Could not create file for fungible tokens dump: {}", e))?;
+
+            let start = start.clone();
+            let end = end.clone();
+            let shutdown_rx = rx.resubscribe();
+            let metrics = self.metrics.clone();
+            let rocks_storage = self.primary_storage.clone();
+
+            tasks.spawn_blocking(move || {
+                let res = rocks_storage.dump_fungible_csv(
+                    (fungible_tokens_file, fungible_tokens_path.clone()),
+                    BUF_CAPACITY,
+                    Some(start),
+                    Some(end),
+                    &shutdown_rx,
+                    metrics,
+                )?;
+                Ok((res, fungible_tokens_path))
+            });
+        }
+        let mut index_tasks = JoinSet::new();
+
+        while let Some(task) = tasks.join_next().await {
+            let (cnt, fungible_tokens_path) = task.map_err(|e| e.to_string())??;
+            let index_storage = self.index_storage.clone();
+            index_tasks.spawn(async move {
+                index_storage
+                    .load_from_dump_fungibles(fungible_tokens_path.as_str())
+                    .await
+            });
+        }
+        while let Some(task) = index_tasks.join_next().await {
+            task.map_err(|e| e.to_string())?
+                .map_err(|e| e.to_string())?;
+        }
+        tracing::info!("All loads complete. Finalizing the batch load");
+        self.index_storage.finalize_batch_fungible_load().await?;
+        tracing::info!("Batch load finalized");
+        self.index_storage
+            .update_last_synced_key(last_included_rocks_key, AssetType::Fungible)
+            .await?;
+        Ok(())
+    }
     async fn regular_fungible_syncronize(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
@@ -556,15 +674,91 @@ where
         }
 
         index_storage
-            .update_fungible_asset_indexes_batch(
-                asset_indexes.as_slice(),
-            )
+            .update_fungible_asset_indexes_batch(asset_indexes.as_slice())
             .await?;
         metrics.inc_number_of_records_synchronized(
             "synchronized_records",
             updated_keys_refs.len() as u64,
         );
         Ok(())
+    }
+}
+
+/// Generate the first and last Pubkey for each shard.
+/// Returns a vector of tuples (start_pubkey, end_pubkey) for each shard.
+pub fn shard_pubkeys(num_shards: u64) -> Vec<(Pubkey, Pubkey)> {
+    // Total keyspace as BigUint
+    let total_keyspace = BigUint::from_bytes_be(&[0xffu8; 32].as_slice());
+    let shard_size = &total_keyspace / num_shards;
+
+    let mut shards = Vec::new();
+    for i in 0..num_shards {
+        // Calculate the start of the shard
+        let shard_start = &shard_size * i;
+        let shard_start_bytes = shard_start.to_bytes_be();
+
+        // Calculate the end of the shard
+        let shard_end = if i == num_shards - 1 {
+            total_keyspace.clone() // Last shard ends at the max value
+        } else {
+            &shard_size * (i + 1) - 1u64
+        };
+        let shard_end_bytes = shard_end.to_bytes_be();
+
+        // Pad the bytes to fit [u8; 32]
+        let start_pubkey = pad_to_32_bytes(&shard_start_bytes);
+        let end_pubkey = pad_to_32_bytes(&shard_end_bytes);
+
+        shards.push((
+            Pubkey::new_from_array(start_pubkey),
+            Pubkey::new_from_array(end_pubkey),
+        ));
+    }
+
+    shards
+}
+
+/// Pad a byte slice to fit into a [u8; 32] array.
+fn pad_to_32_bytes(bytes: &[u8]) -> [u8; 32] {
+    let mut array = [0u8; 32];
+    let offset = 32 - bytes.len();
+    array[offset..].copy_from_slice(bytes); // Copy the bytes into the rightmost part of the array
+    array
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shard_pubkeys_1() {
+        let shards = shard_pubkeys(1);
+        assert_eq!(shards.len(), 1);
+        assert_eq!(
+            shards[0],
+            (
+                Pubkey::new_from_array([0; 32]),
+                Pubkey::new_from_array([0xff; 32])
+            )
+        );
+    }
+
+    #[test]
+    fn test_shard_pubkeys_2() {
+        let shards = shard_pubkeys(2);
+        assert_eq!(shards.len(), 2);
+        let first_key = [0x0; 32];
+        let mut last_key = [0xff; 32];
+        last_key[0] = 0x7f;
+        last_key[31] = 0xfe;
+        assert_eq!(shards[0].0.to_bytes(), first_key);
+        assert_eq!(shards[0].1.to_bytes(), last_key);
+
+        let mut first_key = last_key;
+        first_key[31] = 0xff;
+        let last_key = [0xff; 32];
+        assert_eq!(shards[1].0.to_bytes(), first_key);
+        assert_eq!(shards[1].1.to_bytes(), last_key);
     }
 }
 
@@ -577,7 +771,7 @@ mod tests {
     };
     use metrics_utils::{MetricState, MetricsTrait};
     use mockall;
-    use postgre_client::storage_traits::{MockAssetIndexStorageMock, MockTempClientProviderMock};
+    use postgre_client::storage_traits::MockAssetIndexStorageMock;
     use rocks_db::storage_traits::MockAssetIndexStorage as MockPrimaryStorage;
     use tokio;
 

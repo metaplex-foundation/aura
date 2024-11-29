@@ -8,6 +8,7 @@ use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
 };
+use std::path::{Path, PathBuf};
 use std::{sync::Arc, time::Duration};
 use tracing::log::LevelFilter;
 use sqlx::Executor;
@@ -23,7 +24,6 @@ pub mod load_client;
 pub mod model;
 pub mod storage_traits;
 pub mod tasks;
-pub mod temp_index_client;
 
 pub const SQL_COMPONENT: &str = "sql";
 pub const SELECT_ACTION: &str = "select";
@@ -48,6 +48,7 @@ pub const PG_MIGRATIONS_PATH: &str = "./migrations";
 #[derive(Clone)]
 pub struct PgClient {
     pub pool: PgPool,
+    pub base_dump_path: Option<PathBuf>,
     pub metrics: Arc<RequestErrorDurationMetrics>,
 }
 
@@ -56,6 +57,7 @@ impl PgClient {
         url: &str,
         min_connections: u32,
         max_connections: u32,
+        base_dump_path: Option<PathBuf>,
         metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self, Error> {
         let mut options: PgConnectOptions = url.parse().unwrap();
@@ -68,11 +70,11 @@ impl PgClient {
             .connect_with(options)
             .await?;
 
-        Ok(Self { pool, metrics })
+        Ok(Self { pool, base_dump_path, metrics })
     }
 
-    pub fn new_with_pool(pool: PgPool, metrics: Arc<RequestErrorDurationMetrics>) -> Self {
-        Self { pool, metrics }
+    pub fn new_with_pool(pool: PgPool, base_dump_path: Option<PathBuf>, metrics: Arc<RequestErrorDurationMetrics>) -> Self {
+        Self { pool, base_dump_path, metrics }
     }
 
     pub async fn check_health(&self) -> Result<(), String> {

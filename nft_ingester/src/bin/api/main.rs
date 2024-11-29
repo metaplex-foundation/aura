@@ -73,6 +73,7 @@ pub async fn main() -> Result<(), IngesterError> {
         config.database_config.get_database_url()?.as_str(),
         min_connections,
         max_connections,
+        None,
         red_metrics.clone(),
     )
     .await?;

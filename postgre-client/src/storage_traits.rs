@@ -1,6 +1,5 @@
 use crate::error::IndexDbError;
 use crate::model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter};
-use crate::temp_index_client::TempClient;
 use async_trait::async_trait;
 use entities::api_req_params::GetByMethodsOptions;
 use entities::enums::AssetType;
@@ -26,12 +25,23 @@ pub trait AssetIndexStorage {
         last_key: &[u8],
         asset_type: AssetType,
     ) -> Result<(), IndexDbError>;
-    async fn load_from_dump(
+    
+    async fn load_from_dump_nfts(
         &self,
-        base_path: &std::path::Path,
-        last_key: &[u8],
-        asset_type: AssetType,
+        assets_file_name: &str,
+        creators_file_name: &str,
+        authority_file_name: &str,
+        metadata_file_name: &str,
     ) -> Result<(), IndexDbError>;
+    async fn load_from_dump_fungibles(
+        &self,
+        fungible_tokens_path: &str,
+    ) -> Result<(), IndexDbError>;
+    async fn destructive_prep_to_batch_nft_load(&self) -> Result<(), IndexDbError>;
+    async fn finalize_batch_nft_load(&self) -> Result<(), IndexDbError>;
+
+    async fn destructive_prep_to_batch_fungible_load(&self) -> Result<(), IndexDbError>;
+    async fn finalize_batch_fungible_load(&self) -> Result<(), IndexDbError>;
 }
 
 mock!(
@@ -47,13 +57,23 @@ mock!(
             &self,
             asset_indexes: &[FungibleAssetIndex],
         ) -> Result<(), IndexDbError>;
-        async fn load_from_dump(
-            &self,
-            base_path: &std::path::Path,
-            last_key: &[u8],
-            asset_type: AssetType,
-        ) -> Result<(), IndexDbError>;
         async fn update_last_synced_key(&self, last_key: &[u8], assset_type: AssetType) -> Result<(), IndexDbError>;
+
+        async fn load_from_dump_nfts(
+            &self,
+            assets_file_name: &str,
+            creators_file_name: &str,
+            authority_file_name: &str,
+            metadata_file_name: &str,
+        ) -> Result<(), IndexDbError>;
+        async fn load_from_dump_fungibles(
+            &self,
+            fungible_tokens_path: &str,
+        ) -> Result<(), IndexDbError>;
+        async fn destructive_prep_to_batch_nft_load(&self) -> Result<(), IndexDbError>;
+        async fn finalize_batch_nft_load(&self) -> Result<(), IndexDbError>;
+        async fn destructive_prep_to_batch_fungible_load(&self) -> Result<(), IndexDbError>;
+        async fn finalize_batch_fungible_load(&self) -> Result<(), IndexDbError>;
     }
 
     impl Clone for AssetIndexStorageMock {
@@ -96,18 +116,3 @@ pub trait IntegrityVerificationKeysFetcher {
     ) -> Result<Vec<String>, IndexDbError>;
 }
 
-#[async_trait]
-pub trait TempClientProvider {
-    async fn create_temp_client(&self) -> Result<TempClient, IndexDbError>;
-}
-
-mockall::mock!(
-pub TempClientProviderMock {}
-impl Clone for TempClientProviderMock {
-    fn clone(&self) -> Self;
-}
-#[async_trait]
-impl TempClientProvider for TempClientProviderMock {
-    async fn create_temp_client(&self) -> Result<TempClient, IndexDbError>;
-}
-);

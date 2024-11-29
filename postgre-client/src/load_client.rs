@@ -2,7 +2,7 @@ use sqlx::{Execute, Postgres, QueryBuilder, Transaction};
 
 use crate::{
     error::IndexDbError, PgClient, ALTER_ACTION, COPY_ACTION, CREATE_ACTION, DROP_ACTION,
-    INSERT_ACTION, SQL_COMPONENT, TEMP_TABLE_PREFIX, TRUNCATE_ACTION,
+    INSERT_ACTION, SQL_COMPONENT, TRUNCATE_ACTION,
 };
 
 impl PgClient {
@@ -26,15 +26,99 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
+        temp_table: &str,
+        on_conflict_do_nothing: bool,
     ) -> Result<(), IndexDbError> {
+        let conflict_clause = if on_conflict_do_nothing {
+            " ON CONFLICT DO NOTHING"
+        } else {
+            ""
+        };
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
-            "INSERT INTO {} SELECT * FROM {}{} ON CONFLICT DO NOTHING;",
-            table, TEMP_TABLE_PREFIX, table
+            "INSERT INTO {} SELECT * FROM {} {};",
+            table, temp_table, conflict_clause
         ));
         self.execute_query_with_metrics(transaction, &mut query_builder, INSERT_ACTION, table)
             .await?;
 
         Ok(())
+    }
+
+    pub(crate) async fn disable_check_constraint_on(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        table: &str,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new(format!("ALTER TABLE {} NO CHECK CONSTRAINT ALL;", table));
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            "constraint_disable",
+            table,
+        )
+        .await
+    }
+
+    pub(crate) async fn enable_check_constraint_on(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        table: &str,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
+            "ALTER TABLE {} WITH CHECK CHECK CONSTRAINT ALL;",
+            table
+        ));
+        self.execute_query_with_metrics(transaction, &mut query_builder, "constraint_enable", table)
+            .await
+    }
+
+    pub(crate) async fn set_unlogged_on(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        table: &str,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new(format!("ALTER TABLE {} SET UNLOGGED;", table));
+        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, table)
+            .await
+    }
+
+    pub(crate) async fn set_logged_on(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        table: &str,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new(format!("ALTER TABLE {} SET LOGGED;", table));
+        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, table)
+            .await
+    }
+
+    pub(crate) async fn set_autovacuum_off_on(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        table: &str,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
+            "ALTER TABLE {} SET (autovacuum_enabled = false);",
+            table
+        ));
+        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, table)
+            .await
+    }
+
+    pub(crate) async fn reset_autovacuum_on(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        table: &str,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
+            "ALTER TABLE {} RESET (autovacuum_enabled); ",
+            table
+        ));
+        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, table)
+            .await
     }
 
     pub(crate) async fn truncate_table(
@@ -87,13 +171,18 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("ALTER TABLE assets_v3 DISABLE TRIGGER ALL;");
-        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "assets_v3")
-            .await?;
+            QueryBuilder::new("ALTER TABLE fungible_tokens DISABLE TRIGGER ALL;");
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            ALTER_ACTION,
+            "fungible_tokens",
+        )
+        .await?;
 
         for index in [
-            "fungible_tokens_fbt_owner_balance_idx",
             "fungible_tokens_fbt_asset_idx",
+            "fungible_tokens_fbt_owner_balance_idx",
         ] {
             self.drop_index(transaction, index).await?;
         }
@@ -109,29 +198,97 @@ impl PgClient {
         self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "assets_v3")
             .await?;
 
+        //alternative would be to use ALTER INDEX index_name ALTER INDEX SET DISABLED; but that might not work on all versions of postgres and might be slower
+
         for index in [
-            "assets_authority",
             "asset_creators_v3_creator",
-            "assets_v3_specification_version",
-            "assets_v3_specification_asset_class",
-            "assets_v3_royalty_target_type",
-            "assets_v3_royalty_amount",
-            "assets_v3_slot_created",
-            "assets_v3_owner_type",
-            "assets_v3_metadata_url",
-            "assets_v3_owner",
-            "assets_v3_delegate",
+            "assets_authority",
             "assets_v3_authority_fk",
             "assets_v3_collection_is_collection_verified",
+            "assets_v3_delegate",
             "assets_v3_is_burnt",
-            "assets_v3_is_compressible",
             "assets_v3_is_compressed",
+            "assets_v3_is_compressible",
             "assets_v3_is_frozen",
-            "assets_v3_supply",
+            "assets_v3_metadata_url",
+            "assets_v3_owner",
+            "assets_v3_owner_type",
+            "assets_v3_royalty_amount",
+            "assets_v3_royalty_target_type",
+            "assets_v3_slot_created",
             "assets_v3_slot_updated",
+            "assets_v3_specification_asset_class",
+            "assets_v3_specification_version",
+            "assets_v3_supply",
         ] {
             self.drop_index(transaction, index).await?;
         }
+        Ok(())
+    }
+
+    pub async fn recreate_nft_indexes(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("ALTER TABLE assets_v3 ENABLE TRIGGER ALL;");
+        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "assets_v3")
+            .await?;
+
+        for (index, on_query_string) in [
+            ("asset_creators_v3_creator", "asset_creators_v3(asc_creator, asc_verified)"),
+                ("assets_authority", "assets_authorities(auth_authority) WHERE auth_authority IS NOT NULL"),
+                ("assets_v3_authority_fk", "assets_v3(ast_authority_fk) WHERE ast_authority_fk IS NOT NULL"),
+                ("assets_v3_collection_is_collection_verified", "assets_v3(ast_collection, ast_is_collection_verified) WHERE ast_collection IS NOT NULL"),
+                ("assets_v3_delegate", "assets_v3(ast_delegate) WHERE ast_delegate IS NOT NULL"),
+                ("assets_v3_is_burnt", "assets_v3(ast_is_burnt) WHERE ast_is_burnt IS TRUE"),
+                ("assets_v3_is_compressed", "assets_v3(ast_is_compressed)"),
+                ("assets_v3_is_compressible", "assets_v3(ast_is_compressible) WHERE ast_is_compressible IS TRUE"),
+                ("assets_v3_is_frozen", "assets_v3(ast_is_frozen) WHERE ast_is_frozen IS TRUE"),
+                ("assets_v3_metadata_url", "assets_v3 (ast_metadata_url_id) WHERE ast_metadata_url_id IS NOT NULL"),
+                ("assets_v3_owner", "assets_v3(ast_owner) WHERE ast_owner IS NOT NULL"),
+                ("assets_v3_owner_type", "assets_v3 (ast_owner_type) WHERE ast_owner_type IS NOT NULL AND ast_owner_type <> 'unknown'::owner_type"),
+                ("assets_v3_royalty_amount", "assets_v3 (ast_royalty_amount)"),
+                ("assets_v3_royalty_target_type", "assets_v3 (ast_royalty_target_type) WHERE ast_royalty_target_type <> 'creators'::royalty_target_type"),
+                ("assets_v3_slot_created", "assets_v3 (ast_slot_created)"),
+                ("assets_v3_slot_updated", "assets_v3(ast_slot_updated)"),
+                ("assets_v3_specification_asset_class", "assets_v3 (ast_specification_asset_class) WHERE ast_specification_asset_class IS NOT NULL AND ast_specification_asset_class <> 'unknown'::specification_asset_class"),
+                ("assets_v3_specification_version", "assets_v3 (ast_specification_version) WHERE ast_specification_version <> 'v1'::specification_versions"),
+                ("assets_v3_supply", "assets_v3(ast_supply) WHERE ast_supply IS NOT NULL"),
+            ]{
+                self.create_index(transaction, index, on_query_string).await?;
+            }
+        Ok(())
+    }
+
+    pub async fn drop_fungible_constraints(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("ALTER TABLE fungible_tokens DROP CONSTRAINT fungible_tokens_pkey;");
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            ALTER_ACTION,
+            "fungible_tokens_pkey",
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn recreate_fungible_constraints(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("ALTER TABLE fungible_tokens ADD CONSTRAINT fungible_tokens_pkey PRIMARY KEY (fbt_pubkey);");
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            ALTER_ACTION,
+            "fungible_tokens_pkey",
+        )
+        .await?;
         Ok(())
     }
 
@@ -139,14 +296,74 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
-        for (table, constraint) in [("assets_v3", "assets_v3_authority_fk_constraint")] {
+        for (table, constraint) in [
+            ("assets_v3", "assets_v3_authority_fk_constraint"),
+            ("assets_v3", "assets_v3_ast_metadata_url_id_fkey"),
+            ("asset_creators_v3", "asset_creators_v3_pkey"),
+            ("assets_authorities", "assets_authorities_pkey"),
+            ("assets_v3", "assets_pkey"),
+        ] {
             let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
                 "ALTER TABLE {} DROP CONSTRAINT {};",
                 table, constraint
             ));
-            self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, table)
-                .await?;
+            self.execute_query_with_metrics(
+                transaction,
+                &mut query_builder,
+                ALTER_ACTION,
+                constraint,
+            )
+            .await?;
         }
+        Ok(())
+    }
+
+    pub async fn recreate_constraints(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("ALTER TABLE asset_creators_v3 ADD CONSTRAINT asset_creators_v3_pkey PRIMARY KEY (asc_pubkey, asc_creator);");
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            ALTER_ACTION,
+            "asset_creators_v3_pkey",
+        )
+        .await?;
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("ALTER TABLE assets_authorities ADD CONSTRAINT assets_authorities_pkey PRIMARY KEY (auth_pubkey);");
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            ALTER_ACTION,
+            "assets_authorities_pkey",
+        )
+        .await?;
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "ALTER TABLE assets_v3 ADD CONSTRAINT assets_pkey PRIMARY KEY (ast_pubkey);",
+        );
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            ALTER_ACTION,
+            "assets_pkey",
+        )
+        .await?;
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("ALTER TABLE assets_v3 ADD CONSTRAINT assets_v3_authority_fk_constraint FOREIGN KEY (ast_authority_fk) REFERENCES assets_authorities(auth_pubkey) ON DELETE SET NULL ON UPDATE CASCADE;");
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            ALTER_ACTION,
+            "assets_v3_authority_fk_constraint",
+        )
+        .await?;
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("ALTER TABLE assets_v3 ADD CONSTRAINT assets_v3_ast_metadata_url_id_fkey FOREIGN KEY (ast_metadata_url_id) REFERENCES tasks(tsk_id) ON DELETE RESTRICT ON UPDATE CASCADE;");
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            ALTER_ACTION,
+            "assets_v3_ast_metadata_url_id_fkey",
+        )
+        .await?;
         Ok(())
     }
 
@@ -170,8 +387,8 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("ALTER TABLE assets_v3 ENABLE TRIGGER ALL;");
-        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "assets_v3")
+            QueryBuilder::new("ALTER TABLE fungible_tokens ENABLE TRIGGER ALL;");
+        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "fungible_tokens")
             .await?;
 
         for (index, on_query_string) in [
@@ -190,63 +407,17 @@ impl PgClient {
         Ok(())
     }
 
-    pub async fn recreate_nft_indexes(
-        &self,
-        transaction: &mut Transaction<'_, Postgres>,
-    ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("ALTER TABLE assets_v3 ENABLE TRIGGER ALL;");
-        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "assets_v3")
-            .await?;
-
-        for (index, on_query_string) in [
-                ("assets_authority", "assets_authorities(auth_authority) WHERE auth_authority IS NOT NULL"),
-                ("asset_creators_v3_creator", "asset_creators_v3(asc_creator, asc_verified)"),
-                ("assets_v3_specification_version", "assets_v3 (ast_specification_version) WHERE ast_specification_version <> 'v1'::specification_versions"),
-                ("assets_v3_specification_asset_class", "assets_v3 (ast_specification_asset_class) WHERE ast_specification_asset_class IS NOT NULL AND ast_specification_asset_class <> 'unknown'::specification_asset_class"),
-                ("assets_v3_royalty_target_type", "assets_v3 (ast_royalty_target_type) WHERE ast_royalty_target_type <> 'creators'::royalty_target_type"),
-                ("assets_v3_royalty_amount", "assets_v3 (ast_royalty_amount)"),
-                ("assets_v3_slot_created", "assets_v3 (ast_slot_created)"),
-                ("assets_v3_owner_type", "assets_v3 (ast_owner_type) WHERE ast_owner_type IS NOT NULL AND ast_owner_type <> 'unknown'::owner_type"),
-                ("assets_v3_metadata_url", "assets_v3 (ast_metadata_url_id) WHERE ast_metadata_url_id IS NOT NULL"),
-                ("assets_v3_owner", "assets_v3(ast_owner) WHERE ast_owner IS NOT NULL"),
-                ("assets_v3_delegate", "assets_v3(ast_delegate) WHERE ast_delegate IS NOT NULL"),
-                ("assets_v3_authority_fk", "assets_v3(ast_authority_fk) WHERE ast_authority_fk IS NOT NULL"),
-                ("assets_v3_collection_is_collection_verified", "assets_v3(ast_collection, ast_is_collection_verified) WHERE ast_collection IS NOT NULL"),
-                ("assets_v3_is_burnt", "assets_v3(ast_is_burnt) WHERE ast_is_burnt IS TRUE"),
-                ("assets_v3_is_compressible", "assets_v3(ast_is_compressible) WHERE ast_is_compressible IS TRUE"),
-                ("assets_v3_is_compressed", "assets_v3(ast_is_compressed)"),
-                ("assets_v3_is_frozen", "assets_v3(ast_is_frozen) WHERE ast_is_frozen IS TRUE"),
-                ("assets_v3_supply", "assets_v3(ast_supply) WHERE ast_supply IS NOT NULL"),
-                ("assets_v3_slot_updated", "assets_v3(ast_slot_updated)"),
-            ]{
-                self.create_index(transaction, index, on_query_string).await?;
-            }
-        Ok(())
-    }
-
-    pub async fn recreate_constraints(
-        &self,
-        transaction: &mut Transaction<'_, Postgres>,
-    ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("ALTER TABLE assets_v3 ADD CONSTRAINT assets_v3_authority_fk_constraint FOREIGN KEY (ast_authority_fk) REFERENCES assets_authorities(auth_pubkey) ON DELETE SET NULL ON UPDATE CASCADE;");
-        self.execute_query_with_metrics(transaction, &mut query_builder, DROP_ACTION, "assets_v3")
-            .await
-    }
-
     pub async fn create_temp_tables(
         &self,
         main_table: &str,
+        temp_table: &str,
         transaction: &mut Transaction<'_, Postgres>,
         drop_on_commit: bool,
-        prefix: &str,
     ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("CREATE TEMP TABLE ");
-        query_builder.push(prefix);
-        query_builder.push(main_table);
-        query_builder.push(" (LIKE ");
-        query_builder.push(main_table);
-        query_builder.push(" INCLUDING ALL)");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
+            "CREATE TEMP TABLE {} (LIKE {} INCLUDING ALL)",
+            temp_table, main_table
+        ));
         if drop_on_commit {
             query_builder.push(" ON COMMIT DROP");
         }
@@ -279,52 +450,108 @@ impl PgClient {
         Ok(())
     }
 
-    pub(crate) async fn copy_nfts(
+    pub(crate) async fn load_through_temp_table(
         &self,
-        matadata_copy_path: String,
-        asset_creators_copy_path: String,
-        assets_copy_path: String,
-        assets_authorities_copy_path: String,
+        file_path: String,
+        table: &str,
+        temp_postfix: &str,
+        columns: &str,
+        on_conflict_do_nothing: bool,
+    ) -> Result<(), IndexDbError> {
+        let mut transaction = self.start_transaction().await?;
+        let temp_table = format!("{}_{}", table, temp_postfix);
+        match self
+            .copy_through_temp_table_tx(
+                &mut transaction,
+                table,
+                temp_table.as_str(),
+                file_path,
+                columns,
+                on_conflict_do_nothing,
+            )
+            .await
+        {
+            Ok(_) => {
+                transaction.commit().await?;
+                Ok(())
+            }
+            Err(e) => {
+                transaction.rollback().await?;
+                Err(e)
+            }
+        }
+    }
+
+    async fn copy_through_temp_table_tx(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+        table: &str,
+        temp_table: &str,
+        file_path: String,
+        columns: &str,
+        on_conflict_do_nothing: bool,
+    ) -> Result<(), IndexDbError> {
+        self.create_temp_tables(table, temp_table, transaction, true)
+            .await?;
+        self.copy_table_from(transaction, file_path, temp_table, columns)
+            .await?;
+        self.insert_from_temp_table(transaction, table, temp_table, on_conflict_do_nothing)
+            .await
+    }
+
+    pub(crate) async fn destructive_prep_to_batch_nft_load_tx(
+        &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
         self.drop_nft_indexes(transaction).await?;
         self.drop_constraints(transaction).await?;
         for table in ["assets_v3", "asset_creators_v3", "assets_authorities"] {
+            self.disable_check_constraint_on(transaction, table).await?;
             self.truncate_table(transaction, table).await?;
+            self.set_unlogged_on(transaction, table).await?;
+            self.set_autovacuum_off_on(transaction, table).await?;
         }
+        Ok(())
+    }
 
-        let table = "tasks";
-        self.create_temp_tables(table, transaction, true, TEMP_TABLE_PREFIX)
-            .await?;
-        self.copy_table_from(
-            transaction,
-            matadata_copy_path,
-            format!("{}{}", TEMP_TABLE_PREFIX, table).as_ref(),
-            "tsk_id, tsk_metadata_url, tsk_status",
-        )
-        .await?;
-        self.insert_from_temp_table(transaction, table).await?;
-        for (table, path, columns) in [
-            (
-                "asset_creators_v3",
-                asset_creators_copy_path,
-                "asc_pubkey, asc_creator, asc_verified, asc_slot_updated",
-            ),
-            (
-                "assets_authorities",
-                assets_authorities_copy_path,
-                "auth_pubkey, auth_authority, auth_slot_updated",
-            ),
-            (
-                "assets_v3",
-                assets_copy_path,
-                "ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_authority_fk, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated",
-            ),
-        ] {
-            self.copy_table_from(transaction, path, table, columns).await?;
+    pub(crate) async fn finalize_batch_nft_load_tx(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), IndexDbError> {
+        for table in ["assets_v3", "asset_creators_v3", "assets_authorities"] {
+            self.reset_autovacuum_on(transaction, table).await?;
+            self.set_logged_on(transaction, table).await?;
+            self.enable_check_constraint_on(transaction, table).await?;
         }
-        self.recreate_nft_indexes(transaction).await?;
         self.recreate_constraints(transaction).await?;
+        self.recreate_nft_indexes(transaction).await?;
+        Ok(())
+    }
+
+    pub(crate) async fn destructive_prep_to_batch_fungible_load_tx(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), IndexDbError> {
+        self.drop_fungible_indexes(transaction).await?;
+        self.drop_fungible_constraints(transaction).await?;
+        let table = "fungible_tokens";
+        self.disable_check_constraint_on(transaction, table).await?;
+        self.truncate_table(transaction, table).await?;
+        self.set_unlogged_on(transaction, table).await?;
+        self.set_autovacuum_off_on(transaction, table).await?;
+        Ok(())
+    }
+
+    pub(crate) async fn finalize_batch_fungible_load_tx(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<(), IndexDbError> {
+        let table = "fungible_tokens";
+        self.reset_autovacuum_on(transaction, table).await?;
+        self.set_logged_on(transaction, table).await?;
+        self.enable_check_constraint_on(transaction, table).await?;
+        self.recreate_fungible_constraints(transaction).await?;
+        self.recreate_fungible_indexes(transaction).await?;
         Ok(())
     }
 }

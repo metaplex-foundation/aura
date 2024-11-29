@@ -81,7 +81,7 @@ struct AssetRecord {
     ast_slot_updated: i64,
 }
 
-impl Storage {
+impl Dumper for Storage {
     /// Concurrently dumps data into several `CSV files`,
     ///     where each file corresponds to a separate table in the index database (`Postgres`).
     ///
@@ -93,18 +93,19 @@ impl Storage {
     /// `batch_size` - Batch size.
     /// `rx` - Channel for graceful shutdown.
     #[allow(clippy::too_many_arguments)]
-    pub async fn dump_nft_csv(
+    fn dump_nft_csv(
         &self,
         assets_file: File,
         creators_file: File,
         authority_file: File,
+        metadata_file: File,
         buf_capacity: usize,
         asset_limit: Option<usize>,
         start_pubkey: Option<Pubkey>,
         end_pubkey: Option<Pubkey>,
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
-    ) -> Result<HashSet<String>, String> {
+    ) -> Result<usize, String> {
         let mut metadata_key_set = HashSet::new();
 
         let mut core_collection_authorities: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
@@ -135,6 +136,10 @@ impl Storage {
             .from_writer(buf_writer);
         let buf_writer = BufWriter::with_capacity(buf_capacity, creators_file);
         let mut creators_writer = WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(buf_writer);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, metadata_file);
+        let mut metadata_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
 
@@ -187,14 +192,27 @@ impl Storage {
                     }
                 }
             }
-            let metadata_url = asset
+            let metadata_url_id = asset
                 .dynamic_details()
                 .and_then(|dd| dd.url())
                 .and_then(|url| url.value())
                 .filter(|s| !s.is_empty())
-                .map(|s| {
-                    metadata_key_set.insert(s.to_string());
-                    UrlWithStatus::get_metadata_id_for(s)
+                .map(|s| UrlWithStatus::new(s, false))
+                .filter(|uws| !uws.metadata_url.is_empty())
+                .map(|uws| {
+                    let metadata_key = uws.get_metadata_id();
+                    if !metadata_key_set.contains(&metadata_key) {
+                        metadata_key_set.insert(metadata_key.clone());
+                        if let Err(e) = metadata_writer.serialize((
+                            Self::encode(&metadata_key),
+                            uws.metadata_url.to_string(),
+                            "pending".to_string(),
+                        )) {
+                            error!("Error writing metadata to csv: {:?}", e);
+                        }
+                        synchronizer_metrics.inc_num_of_records_written("metadata", 1);
+                    }
+                    metadata_key
                 });
 
             let slot_updated = asset.get_slot_updated() as i64;
@@ -305,7 +323,7 @@ impl Storage {
                     .dynamic_details()
                     .and_then(|d| d.supply())
                     .map(|v| v.value() as i64),
-                ast_metadata_url_id: metadata_url.map(Self::encode),
+                ast_metadata_url_id: metadata_url_id.map(Self::encode),
                 ast_slot_updated: slot_updated,
             };
 
@@ -347,16 +365,12 @@ impl Storage {
             }
             synchronizer_metrics.inc_num_of_assets_iter("asset", 1);
         }
-        _ = tokio::try_join!(
-            tokio::task::spawn_blocking(move || asset_writer.flush()),
-            tokio::task::spawn_blocking(move || authority_writer.flush()),
-            tokio::task::spawn_blocking(move || creators_writer.flush()),
-        )
-        .map_err(|e| e.to_string())?;
-
+        asset_writer.flush().map_err(|e| e.to_string())?;
+        authority_writer.flush().map_err(|e| e.to_string())?;
+        creators_writer.flush().map_err(|e| e.to_string())?;
+        metadata_writer.flush().map_err(|e| e.to_string())?;
         info!("asset writers are flushed.");
-
-        Ok(metadata_key_set)
+        Ok(cnt)
     }
 
     /// Dumps data into several into `CSV file` dedicated for fungible tokens,
@@ -367,7 +381,7 @@ impl Storage {
     /// `batch_size` - Batch size.
     /// `rx` - Channel for graceful shutdown.
     #[allow(clippy::too_many_arguments)]
-    pub async fn dump_fungible_csv(
+    fn dump_fungible_csv(
         &self,
         fungible_tokens_file_and_path: (File, String),
         buf_capacity: usize,
@@ -375,7 +389,7 @@ impl Storage {
         end_pubkey: Option<Pubkey>,
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
-    ) -> Result<(), String> {
+    ) -> Result<usize, String> {
         let column: Column<TokenAccount> = Self::column(self.db.clone(), self.red_metrics.clone());
 
         let buf_writer = BufWriter::with_capacity(buf_capacity, fungible_tokens_file_and_path.0);
@@ -399,9 +413,14 @@ impl Storage {
             }
             if !rx.is_empty() {
                 info!("Shutdown signal received...");
-                return Ok(());
+                return Ok(cnt);
             }
-            if let Some(token) = iter.value().map(deserialize::<TokenAccount>).map(|v|v.ok()).flatten() {
+            if let Some(token) = iter
+                .value()
+                .map(deserialize::<TokenAccount>)
+                .map(|v| v.ok())
+                .flatten()
+            {
                 if let Err(e) = writer
                     .serialize((
                         Self::encode(token.pubkey),
@@ -434,9 +453,10 @@ impl Storage {
         }
 
         info!("Finish dumping fungible assets.");
-        Ok(())
+        Ok(cnt)
     }
-
+}
+impl Storage {
     fn encode<T: AsRef<[u8]>>(v: T) -> String {
         format!("\\x{}", hex::encode(v))
     }
@@ -493,8 +513,8 @@ impl Storage {
     }
 }
 
-#[async_trait]
-impl Dumper for Storage {
+// #[async_trait]
+impl Storage {
     /// The `dump_db` function is an asynchronous method responsible for dumping fungible database content into a dedicated `CSV file`.
     /// The function supports batch processing and listens to a signal using a `tokio::sync::broadcast::Receiver` to handle cancellation
     ///     or control flow.
@@ -526,8 +546,7 @@ impl Dumper for Storage {
             None,
             rx,
             synchronizer_metrics,
-        )
-        .await?;
+        )?;
         Ok(())
     }
 
@@ -586,22 +605,22 @@ impl Dumper for Storage {
         let authority_file = File::create(authorities_path.clone().unwrap())
             .map_err(|e| format!("Could not create file for authority dump: {}", e))?;
 
-        let metadata = self
+        let _cnt = self
             .dump_nft_csv(
                 assets_file,
                 creators_file,
                 authority_file,
+                metadata_file,
                 BUF_CAPACITY,
                 None,
                 None,
                 None,
                 rx,
                 synchronizer_metrics.clone(),
-            )
-            .await?;
-        info!("metadata dump started");
-        Self::dump_metadata(metadata_file, BUF_CAPACITY, metadata, synchronizer_metrics)?;
-        info!("metadata dump finished");
+            )?;
+        // info!("metadata dump started");
+        // Self::dump_metadata(metadata_file, BUF_CAPACITY, metadata, synchronizer_metrics)?;
+        // info!("metadata dump finished");
         Ok(())
     }
 }
