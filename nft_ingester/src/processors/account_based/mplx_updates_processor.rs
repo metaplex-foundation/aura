@@ -161,11 +161,8 @@ impl MplxAccountsProcessor {
                 false,
             ),
             seq: None,
-            was_decompressed: Updated::new(
-                metadata_info.slot_updated,
-                Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
-                false,
-            ),
+            // should not set this value for regular NFT updates
+            was_decompressed: None,
             onchain_data: Some(Updated::new(
                 metadata_info.slot_updated,
                 Some(UpdateVersion::WriteVersion(metadata_info.write_version)),

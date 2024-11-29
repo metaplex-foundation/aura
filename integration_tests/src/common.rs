@@ -35,7 +35,6 @@ use tokio::{
 };
 use usecase::proofs::MaybeProofChecker;
 
-use tracing::{error, info};
 use serde::de::DeserializeOwned;
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_client::{
@@ -51,6 +50,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::{fmt, time::Duration};
+use tracing::{error, info};
 
 use std::path::PathBuf;
 
@@ -442,7 +442,13 @@ pub async fn index_account_bytes(setup: &TestSetup, account_bytes: Vec<u8>) {
     let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     setup
         .synchronizer
-        .synchronize_asset_indexes(&shutdown_rx, 1000)
+        .synchronize_nft_asset_indexes(&shutdown_rx, 1000)
+        .await
+        .unwrap();
+
+    setup
+        .synchronizer
+        .synchronize_fungible_asset_indexes(&shutdown_rx, 1000)
         .await
         .unwrap();
 }
@@ -519,7 +525,13 @@ pub async fn index_transaction(setup: &TestSetup, sig: Signature) {
     let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     setup
         .synchronizer
-        .synchronize_asset_indexes(&shutdown_rx, 1000)
+        .synchronize_nft_asset_indexes(&shutdown_rx, 1000)
+        .await
+        .unwrap();
+
+    setup
+        .synchronizer
+        .synchronize_fungible_asset_indexes(&shutdown_rx, 1000)
         .await
         .unwrap();
 }

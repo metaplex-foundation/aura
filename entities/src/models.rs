@@ -128,7 +128,7 @@ pub struct CompleteAssetDetails {
     pub supply: Option<Updated<u64>>,
     pub seq: Option<Updated<u64>>,
     pub is_burnt: Updated<bool>,
-    pub was_decompressed: Updated<bool>,
+    pub was_decompressed: Option<Updated<bool>>,
     pub onchain_data: Option<Updated<ChainDataV1>>,
     pub creators: Updated<Vec<Creator>>,
     pub royalty_amount: Updated<u16>,
