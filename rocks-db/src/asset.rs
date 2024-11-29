@@ -2160,9 +2160,7 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                                         .iter()
                                         .filter_map(|(k, v)| {
                                             v.is_current_owner.as_ref().filter(|u| u.value()).map(
-                                                |is_owner| {
-                                                    (is_owner.slot_updated(), k.clone(), v.clone())
-                                                },
+                                                |is_owner| (is_owner.slot_updated(), *k, v.clone()),
                                             )
                                         })
                                         .max_by_key(|(slot, _, _)| *slot)

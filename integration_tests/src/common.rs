@@ -35,7 +35,6 @@ use tokio::{
 };
 use usecase::proofs::MaybeProofChecker;
 
-use tracing::{error, info};
 use serde::de::DeserializeOwned;
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_client::{
@@ -51,6 +50,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::{fmt, time::Duration};
+use tracing::{error, info};
 
 use std::path::PathBuf;
 

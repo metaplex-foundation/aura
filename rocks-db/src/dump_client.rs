@@ -4,7 +4,6 @@ use crate::column::TypedColumn;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::storage_traits::AssetUpdatedKey;
 use crate::{column::Column, storage_traits::Dumper, Storage};
-use async_trait::async_trait;
 use bincode::deserialize;
 use csv::WriterBuilder;
 use entities::enums::AssetType;
@@ -24,11 +23,7 @@ use std::{
     io::BufWriter,
     sync::Arc,
 };
-use tokio::sync::Mutex;
-use tokio::time::Instant;
 use tracing::{error, info};
-
-const BUF_CAPACITY: usize = 1024 * 1024 * 32;
 
 fn serialize_as_snake_case<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -441,6 +436,7 @@ impl Dumper for Storage {
                 synchronizer_metrics.inc_num_of_assets_iter("token_account", 1);
             }
             iter.next();
+            cnt += 1;
         }
 
         if let Err(e) = writer.flush().map_err(|e| e.to_string()) {
@@ -510,117 +506,5 @@ impl Storage {
             .serialize((AssetType::Fungible as i32, Self::encode(fungible_key)))
             .map_err(|e| e.to_string())?;
         writer.flush().map_err(|e| e.to_string())
-    }
-}
-
-// #[async_trait]
-impl Storage {
-    /// The `dump_db` function is an asynchronous method responsible for dumping fungible database content into a dedicated `CSV file`.
-    /// The function supports batch processing and listens to a signal using a `tokio::sync::broadcast::Receiver` to handle cancellation
-    ///     or control flow.
-    /// # Args:
-    /// * `base_path` - A reference to a Path that specifies the base directory where the `CSV files` will be created.
-    ///     The function will append filenames (`metadata.csv, creators.csv, assets.csv, assets_authorities.csv`) to this path.
-    /// * `batch_size` - The size of the data batches to be processed and written to the files.
-    /// * `rx` - A receiver that listens for cancellation signals.
-    async fn dump_fungible_db(
-        &self,
-        base_path: &std::path::Path,
-        batch_size: usize,
-        rx: &tokio::sync::broadcast::Receiver<()>,
-        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
-    ) -> Result<(), String> {
-        let fungible_tokens_path = base_path
-            .join("fungible_tokens.csv")
-            .to_str()
-            .map(str::to_owned);
-        tracing::info!("Dumping to fungible_tokens: {:?}", fungible_tokens_path);
-
-        let fungible_tokens_file = File::create(fungible_tokens_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for fungible tokens dump: {}", e))?;
-
-        self.dump_fungible_csv(
-            (fungible_tokens_file, fungible_tokens_path.unwrap()),
-            BUF_CAPACITY,
-            None,
-            None,
-            rx,
-            synchronizer_metrics,
-        )?;
-        Ok(())
-    }
-
-    /// The `dump_db` function is an asynchronous method responsible for dumping database content into multiple `CSV files`.
-    /// It writes metadata, asset information, creator details, and asset authorities to separate `CSV files` in the provided directory.
-    /// The function supports batch processing and listens to a signal using a `tokio::sync::broadcast::Receiver` to handle cancellation
-    ///     or control flow.
-    /// # Args:
-    /// * `base_path` - A reference to a Path that specifies the base directory where the `CSV files` will be created.
-    ///     The function will append filenames (`metadata.csv, creators.csv, assets.csv, assets_authorities.csv`) to this path.
-    /// * `batch_size` - The size of the data batches to be processed and written to the files.
-    /// * `rx` - A receiver that listens for cancellation signals.
-    async fn dump_nft_db(
-        &self,
-        base_path: &std::path::Path,
-        batch_size: usize,
-        rx: &tokio::sync::broadcast::Receiver<()>,
-        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
-    ) -> Result<(), String> {
-        let metadata_path = base_path.join("metadata.csv").to_str().map(str::to_owned);
-        if metadata_path.is_none() {
-            return Err("invalid path".to_string());
-        }
-        let creators_path = base_path.join("creators.csv").to_str().map(str::to_owned);
-        if creators_path.is_none() {
-            return Err("invalid path".to_string());
-        }
-        let assets_path = base_path.join("assets.csv").to_str().map(str::to_owned);
-        if assets_path.is_none() {
-            return Err("invalid path".to_string());
-        }
-        let authorities_path = base_path
-            .join("assets_authorities.csv")
-            .to_str()
-            .map(str::to_owned);
-        if authorities_path.is_none() {
-            return Err("invalid path".to_string());
-        }
-        if authorities_path.is_none() {
-            return Err("invalid path".to_string());
-        }
-        tracing::info!(
-            "Dumping to metadata: {:?}, creators: {:?}, assets: {:?}, authorities: {:?}",
-            metadata_path,
-            creators_path,
-            assets_path,
-            authorities_path,
-        );
-
-        let metadata_file = File::create(metadata_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for metadata dump: {}", e))?;
-        let assets_file = File::create(assets_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for assets dump: {}", e))?;
-        let creators_file = File::create(creators_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for creators dump: {}", e))?;
-        let authority_file = File::create(authorities_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for authority dump: {}", e))?;
-
-        let _cnt = self
-            .dump_nft_csv(
-                assets_file,
-                creators_file,
-                authority_file,
-                metadata_file,
-                BUF_CAPACITY,
-                None,
-                None,
-                None,
-                rx,
-                synchronizer_metrics.clone(),
-            )?;
-        // info!("metadata dump started");
-        // Self::dump_metadata(metadata_file, BUF_CAPACITY, metadata, synchronizer_metrics)?;
-        // info!("metadata dump finished");
-        Ok(())
     }
 }

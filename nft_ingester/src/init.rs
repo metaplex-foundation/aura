@@ -30,10 +30,16 @@ pub async fn init_index_storage_with_migration(
     pg_migrations_path: &str,
     base_dump_path: Option<PathBuf>,
 ) -> Result<PgClient, IngesterError> {
-    let pg_client = PgClient::new(url, min_pg_connections, max_pg_connections, base_dump_path, red_metrics)
-        .await
-        .map_err(|e| e.to_string())
-        .map_err(IngesterError::SqlxError)?;
+    let pg_client = PgClient::new(
+        url,
+        min_pg_connections,
+        max_pg_connections,
+        base_dump_path,
+        red_metrics,
+    )
+    .await
+    .map_err(|e| e.to_string())
+    .map_err(IngesterError::SqlxError)?;
 
     pg_client
         .run_migration(pg_migrations_path)

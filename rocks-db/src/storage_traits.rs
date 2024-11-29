@@ -165,19 +165,18 @@ impl Dumper for MockAssetIndexStorage {
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
     ) -> core::result::Result<usize, String> {
-        self.mock_dumper
-            .dump_nft_csv(
-                assets_file,
-                creators_file,
-                authority_file,
-                metadata_file,
-                buf_capacity,
-                asset_limit,
-                start_pubkey,
-                end_pubkey,
-                rx,
-                synchronizer_metrics,
-            )
+        self.mock_dumper.dump_nft_csv(
+            assets_file,
+            creators_file,
+            authority_file,
+            metadata_file,
+            buf_capacity,
+            asset_limit,
+            start_pubkey,
+            end_pubkey,
+            rx,
+            synchronizer_metrics,
+        )
     }
     fn dump_fungible_csv(
         &self,
@@ -188,15 +187,14 @@ impl Dumper for MockAssetIndexStorage {
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
     ) -> core::result::Result<usize, String> {
-        self.mock_dumper
-            .dump_fungible_csv(
-                fungible_tokens_file_and_path,
-                buf_capacity,
-                start_pubkey,
-                end_pubkey,
-                rx,
-                synchronizer_metrics,
-            )
+        self.mock_dumper.dump_fungible_csv(
+            fungible_tokens_file_and_path,
+            buf_capacity,
+            start_pubkey,
+            end_pubkey,
+            rx,
+            synchronizer_metrics,
+        )
     }
 }
 

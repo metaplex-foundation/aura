@@ -10,7 +10,6 @@ use prometheus_client::registry::Registry;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use metrics_utils::utils::setup_metrics;
 use metrics_utils::SynchronizerMetricsConfig;
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;

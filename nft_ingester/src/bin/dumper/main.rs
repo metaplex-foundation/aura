@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -8,14 +7,11 @@ use metrics_utils::SynchronizerMetricsConfig;
 use nft_ingester::error::IngesterError;
 use nft_ingester::index_syncronizer::shard_pubkeys;
 use nft_ingester::init::graceful_stop;
-use num_bigint::BigUint;
 use rocks_db::migrator::MigrationState;
 use rocks_db::storage_traits::{AssetUpdateIndexStorage, Dumper};
 use rocks_db::Storage;
-use solana_sdk::pubkey::Pubkey;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
-use tonic::metadata;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -114,15 +110,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let mut tasks = JoinSet::new();
     let mut fungible_tasks = JoinSet::new();
 
-    let metadata_path = base_path
-        .join("metadata.csv")
-        .to_str()
-        .map(str::to_owned)
-        .unwrap();
-    let metadata_file = File::create(metadata_path.clone())
-        .map_err(|e| format!("Could not create file for metadata dump: {}", e))?;
-
-    for (i, (start, end)) in shards.iter().enumerate() {
+    for (start, end) in shards.iter() {
         let name_postfix = if args.num_shards > 1 {
             format!("_shard_{}_{}", start, end)
         } else {
@@ -186,7 +174,7 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
 
-    for (i, (start, end)) in fungible_shards.iter().enumerate() {
+    for (start, end) in fungible_shards.iter() {
         let name_postfix = if args.fungible_num_shards > 1 {
             format!("_shard_{}_{}", start, end)
         } else {
@@ -232,7 +220,7 @@ pub async fn main() -> Result<(), IngesterError> {
         duration,
         total_assets as f64 / duration.as_secs_f64()
     );
-    
+
     while let Some(task) = fungible_tasks.join_next().await {
         task.map_err(|e| e.to_string())?
             .map_err(|e| e.to_string())?;

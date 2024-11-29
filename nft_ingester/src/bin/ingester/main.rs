@@ -1,6 +1,6 @@
 use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
-use entities::enums::{AssetType, ASSET_TYPES};
+use entities::enums::ASSET_TYPES;
 use nft_ingester::batch_mint::batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister};
 use nft_ingester::cleaners::indexer_cleaner::clean_syncronized_idxs;
 use nft_ingester::scheduler::Scheduler;
@@ -567,7 +567,6 @@ pub async fn main() -> Result<(), IngesterError> {
         metrics.register_with_prefix(&mut metrics_state.registry, "force_slot_persister_");
         if let Some(client) = grpc_client {
             let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
-                primary_rocks_storage.clone(),
                 force_reingestable_slot_processor.clone(),
                 force_reingestable_slot_processor.clone(),
                 Arc::new(client),
@@ -581,7 +580,6 @@ pub async fn main() -> Result<(), IngesterError> {
                 .spawn(run_slot_force_persister(force_reingestable_transactions_parser, rx));
         } else {
             let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
-                primary_rocks_storage.clone(),
                 force_reingestable_slot_processor.clone(),
                 force_reingestable_slot_processor.clone(),
                 producer.clone(),

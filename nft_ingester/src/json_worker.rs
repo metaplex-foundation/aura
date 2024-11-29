@@ -9,7 +9,7 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::tasks::UpdatedTask;
 use postgre_client::PgClient;
-use reqwest::{Client, ClientBuilder};
+use reqwest::ClientBuilder;
 use rocks_db::asset_previews::UrlToDownload;
 use rocks_db::Storage;
 use serde_json::Value;

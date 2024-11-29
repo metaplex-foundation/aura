@@ -2,16 +2,16 @@ use entities::enums::TaskStatus;
 use entities::models::UrlWithStatus;
 use error::IndexDbError;
 use metrics_utils::red::RequestErrorDurationMetrics;
+use sqlx::Executor;
 use sqlx::Row;
 use sqlx::{
     migrate::Migrator,
     postgres::{PgConnectOptions, PgPoolOptions},
     ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
 };
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::{sync::Arc, time::Duration};
 use tracing::log::LevelFilter;
-use sqlx::Executor;
 
 pub mod asset_filter_client;
 pub mod asset_index_client;
@@ -70,11 +70,23 @@ impl PgClient {
             .connect_with(options)
             .await?;
 
-        Ok(Self { pool, base_dump_path, metrics })
+        Ok(Self {
+            pool,
+            base_dump_path,
+            metrics,
+        })
     }
 
-    pub fn new_with_pool(pool: PgPool, base_dump_path: Option<PathBuf>, metrics: Arc<RequestErrorDurationMetrics>) -> Self {
-        Self { pool, base_dump_path, metrics }
+    pub fn new_with_pool(
+        pool: PgPool,
+        base_dump_path: Option<PathBuf>,
+        metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Self {
+        Self {
+            pool,
+            base_dump_path,
+            metrics,
+        }
     }
 
     pub async fn check_health(&self) -> Result<(), String> {
@@ -209,7 +221,11 @@ impl PgClient {
             self.truncate_table(&mut transaction, table).await?;
         }
 
-        transaction.execute(sqlx::query("update last_synced_key set last_synced_asset_update_key = null where id = 1;")).await?;
+        transaction
+            .execute(sqlx::query(
+                "update last_synced_key set last_synced_asset_update_key = null where id = 1;",
+            ))
+            .await?;
 
         self.recreate_fungible_indexes(&mut transaction).await?;
         self.recreate_nft_indexes(&mut transaction).await?;

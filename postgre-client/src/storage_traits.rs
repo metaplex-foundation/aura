@@ -25,7 +25,7 @@ pub trait AssetIndexStorage {
         last_key: &[u8],
         asset_type: AssetType,
     ) -> Result<(), IndexDbError>;
-    
+
     async fn load_from_dump_nfts(
         &self,
         assets_file_name: &str,
@@ -115,4 +115,3 @@ pub trait IntegrityVerificationKeysFetcher {
         &self,
     ) -> Result<Vec<String>, IndexDbError>;
 }
-

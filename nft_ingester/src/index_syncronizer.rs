@@ -1,7 +1,4 @@
-use entities::{
-    enums::AssetType,
-    models::{AssetIndex, FungibleAssetIndex},
-};
+use entities::enums::AssetType;
 use metrics_utils::SynchronizerMetricsConfig;
 use num_bigint::BigUint;
 use postgre_client::storage_traits::AssetIndexStorage;
@@ -280,8 +277,9 @@ where
             .await?;
 
         let shards = shard_pubkeys(num_shards);
-        let mut tasks: JoinSet<Result<(usize, String, String, String, String), String>> = JoinSet::new();
-        for (i, (start, end)) in shards.iter().enumerate() {
+        let mut tasks: JoinSet<Result<(usize, String, String, String, String), String>> =
+            JoinSet::new();
+        for (start, end) in shards.iter() {
             let name_postfix = if num_shards > 1 {
                 format!("_shard_{}_{}", start, end)
             } else {
@@ -354,7 +352,7 @@ where
         let mut index_tasks = JoinSet::new();
 
         while let Some(task) = tasks.join_next().await {
-            let (cnt, assets_path, creators_path, authorities_path, metadata_path) =
+            let (_cnt, assets_path, creators_path, authorities_path, metadata_path) =
                 task.map_err(|e| e.to_string())??;
             let index_storage = self.index_storage.clone();
             index_tasks.spawn(async move {
@@ -394,7 +392,7 @@ where
 
         let shards = shard_pubkeys(num_shards);
         let mut tasks: JoinSet<Result<(usize, String), String>> = JoinSet::new();
-        for (i, (start, end)) in shards.iter().enumerate() {
+        for (start, end) in shards.iter() {
             let name_postfix = if num_shards > 1 {
                 format!("_shard_{}_{}", start, end)
             } else {
@@ -404,7 +402,8 @@ where
             let fungible_tokens_path = base_path
                 .join(format!("fungible_tokens{}.csv", name_postfix))
                 .to_str()
-                .map(str::to_owned).unwrap();
+                .map(str::to_owned)
+                .unwrap();
             tracing::info!("Dumping to fungible_tokens: {:?}", fungible_tokens_path);
 
             let fungible_tokens_file = File::create(fungible_tokens_path.clone())
@@ -431,7 +430,7 @@ where
         let mut index_tasks = JoinSet::new();
 
         while let Some(task) = tasks.join_next().await {
-            let (cnt, fungible_tokens_path) = task.map_err(|e| e.to_string())??;
+            let (_cnt, fungible_tokens_path) = task.map_err(|e| e.to_string())??;
             let index_storage = self.index_storage.clone();
             index_tasks.spawn(async move {
                 index_storage

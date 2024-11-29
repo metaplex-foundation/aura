@@ -388,8 +388,13 @@ impl PgClient {
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("ALTER TABLE fungible_tokens ENABLE TRIGGER ALL;");
-        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, "fungible_tokens")
-            .await?;
+        self.execute_query_with_metrics(
+            transaction,
+            &mut query_builder,
+            ALTER_ACTION,
+            "fungible_tokens",
+        )
+        .await?;
 
         for (index, on_query_string) in [
             (
@@ -426,27 +431,6 @@ impl PgClient {
         self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, main_table)
             .await?;
 
-        Ok(())
-    }
-
-    pub(crate) async fn copy_fungibles(
-        &self,
-        fungible_tokens_copy_path: String,
-        transaction: &mut Transaction<'_, Postgres>,
-    ) -> Result<(), IndexDbError> {
-        self.drop_fungible_indexes(transaction).await?;
-        self.drop_constraints(transaction).await?;
-        self.truncate_table(transaction, "fungible_tokens").await?;
-
-        self.copy_table_from(
-            transaction,
-            fungible_tokens_copy_path,
-            "fungible_tokens",
-            "fbt_pubkey, fbt_owner, fbt_asset, fbt_balance, fbt_slot_updated",
-        )
-        .await?;
-        self.recreate_fungible_indexes(transaction).await?;
-        self.recreate_constraints(transaction).await?;
         Ok(())
     }
 

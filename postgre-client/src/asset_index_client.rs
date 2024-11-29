@@ -1,14 +1,12 @@
 use std::{
     collections::{HashMap, HashSet},
-    fs::File,
     ops::Deref,
     vec,
 };
 
 use async_trait::async_trait;
 use solana_sdk::pubkey::Pubkey;
-use sqlx::{Connection, Executor, Postgres, QueryBuilder, Transaction};
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use sqlx::{Executor, Postgres, QueryBuilder, Transaction};
 use tokio::task::JoinSet;
 use uuid::Uuid;
 
@@ -22,7 +20,6 @@ use crate::{
 };
 use entities::{
     enums::AssetType,
-    enums::SpecificationAssetClass as AssetSpecClass,
     models::{AssetIndex, Creator, FungibleAssetIndex, FungibleToken, UrlWithStatus},
 };
 
@@ -211,21 +208,7 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
 
     let mut asset_indexes = asset_indexes.to_vec();
     asset_indexes.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
-    let fungible_tokens = asset_indexes
-        .iter()
-        .filter(|asset| asset.specification_asset_class == AssetSpecClass::FungibleToken)
-        .map(|asset| {
-            FungibleToken {
-                key: asset.pubkey,
-                slot_updated: asset.slot_updated,
-                // it's unlikely that rows below will not be filled for fungible token
-                // but even if that happens we will save asset with default values
-                owner: asset.owner.unwrap_or_default(),
-                asset: asset.fungible_asset_mint.unwrap_or_default(),
-                balance: asset.fungible_asset_balance.unwrap_or_default() as i64,
-            }
-        })
-        .collect::<Vec<FungibleToken>>();
+
     let asset_indexes = asset_indexes
         .into_iter()
         .filter(|asset| asset.fungible_asset_mint.is_none())
