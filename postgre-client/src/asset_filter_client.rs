@@ -303,7 +303,8 @@ fn add_filter_clause<'a>(
     }
 
     if !options.show_unverified_collections {
-        query_builder.push(" AND assets_v3.ast_is_collection_verified = true");
+        // if there is no collection for asset it doesn't mean that it's unverified
+        query_builder.push(" AND (assets_v3.ast_is_collection_verified is null or assets_v3.ast_is_collection_verified = true)");
     }
 
     if let Some(delegate) = &filter.delegate {
