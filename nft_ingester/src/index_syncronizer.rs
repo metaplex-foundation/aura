@@ -370,9 +370,9 @@ where
             task.map_err(|e| e.to_string())?
                 .map_err(|e| e.to_string())?;
         }
-        tracing::info!("All loads complete. Finalizing the batch load");
+        tracing::info!("All NFT assets loads complete. Finalizing the batch load");
         self.index_storage.finalize_batch_nft_load().await?;
-        tracing::info!("Batch load finalized");
+        tracing::info!("Batch load finalized for NFTs");
         self.index_storage
             .update_last_synced_key(last_included_rocks_key, AssetType::NonFungible)
             .await?;
@@ -442,9 +442,9 @@ where
             task.map_err(|e| e.to_string())?
                 .map_err(|e| e.to_string())?;
         }
-        tracing::info!("All loads complete. Finalizing the batch load");
+        tracing::info!("All token accounts/fungibles loads complete. Finalizing the batch load");
         self.index_storage.finalize_batch_fungible_load().await?;
-        tracing::info!("Batch load finalized");
+        tracing::info!("Batch load finalized for fungibles");
         self.index_storage
             .update_last_synced_key(last_included_rocks_key, AssetType::Fungible)
             .await?;

@@ -67,6 +67,8 @@ impl PgClient {
         let pool = PgPoolOptions::new()
             .min_connections(min_connections)
             .max_connections(max_connections)
+            // 1 hour of a timeout, this is set specifically due to synchronizer needing up to 200 connections to do a full sync load
+            .acquire_timeout(Duration::from_secs(3600))
             .connect_with(options)
             .await?;
 

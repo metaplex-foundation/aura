@@ -23,7 +23,7 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
-pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
+pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 2;
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
@@ -59,7 +59,7 @@ pub async fn main() -> Result<(), IngesterError> {
             &config.database_config.get_database_url().unwrap(),
             max_postgre_connections,
             red_metrics.clone(),
-            DEFAULT_MAX_POSTGRES_CONNECTIONS,
+            DEFAULT_MIN_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,
             Some(PathBuf::from(config.dump_path.clone())),
         )
