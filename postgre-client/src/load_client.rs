@@ -44,35 +44,6 @@ impl PgClient {
         Ok(())
     }
 
-    pub(crate) async fn disable_check_constraint_on(
-        &self,
-        transaction: &mut Transaction<'_, Postgres>,
-        table: &str,
-    ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new(format!("ALTER TABLE {} NO CHECK CONSTRAINT ALL;", table));
-        self.execute_query_with_metrics(
-            transaction,
-            &mut query_builder,
-            "constraint_disable",
-            table,
-        )
-        .await
-    }
-
-    pub(crate) async fn enable_check_constraint_on(
-        &self,
-        transaction: &mut Transaction<'_, Postgres>,
-        table: &str,
-    ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
-            "ALTER TABLE {} WITH CHECK CHECK CONSTRAINT ALL;",
-            table
-        ));
-        self.execute_query_with_metrics(transaction, &mut query_builder, "constraint_enable", table)
-            .await
-    }
-
     pub(crate) async fn set_unlogged_on(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
@@ -489,8 +460,8 @@ impl PgClient {
     ) -> Result<(), IndexDbError> {
         self.drop_nft_indexes(transaction).await?;
         self.drop_constraints(transaction).await?;
+        // the only constraints left are the NOT NULL constraints, which are not dropped due to the performance impact
         for table in ["assets_v3", "asset_creators_v3", "assets_authorities"] {
-            self.disable_check_constraint_on(transaction, table).await?;
             self.truncate_table(transaction, table).await?;
             self.set_unlogged_on(transaction, table).await?;
             self.set_autovacuum_off_on(transaction, table).await?;
@@ -505,7 +476,6 @@ impl PgClient {
         for table in ["assets_v3", "asset_creators_v3", "assets_authorities"] {
             self.reset_autovacuum_on(transaction, table).await?;
             self.set_logged_on(transaction, table).await?;
-            self.enable_check_constraint_on(transaction, table).await?;
         }
         self.recreate_constraints(transaction).await?;
         self.recreate_nft_indexes(transaction).await?;
@@ -519,7 +489,6 @@ impl PgClient {
         self.drop_fungible_indexes(transaction).await?;
         self.drop_fungible_constraints(transaction).await?;
         let table = "fungible_tokens";
-        self.disable_check_constraint_on(transaction, table).await?;
         self.truncate_table(transaction, table).await?;
         self.set_unlogged_on(transaction, table).await?;
         self.set_autovacuum_off_on(transaction, table).await?;
@@ -533,7 +502,6 @@ impl PgClient {
         let table = "fungible_tokens";
         self.reset_autovacuum_on(transaction, table).await?;
         self.set_logged_on(transaction, table).await?;
-        self.enable_check_constraint_on(transaction, table).await?;
         self.recreate_fungible_constraints(transaction).await?;
         self.recreate_fungible_indexes(transaction).await?;
         Ok(())
