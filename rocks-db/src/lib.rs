@@ -11,7 +11,7 @@ use asset::{
     AssetDynamicDetailsDeprecated, AssetOwnerDeprecated, AssetStaticDetailsDeprecated,
     FungibleAssetsUpdateIdx, MetadataMintMap, MplCoreCollectionAuthority, SlotAssetIdx,
 };
-use rocksdb::{ColumnFamilyDescriptor, Options, DB};
+use rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, DB};
 
 use crate::migrator::{MigrationState, MigrationVersions, RocksMigration};
 pub use asset::{
@@ -788,5 +788,53 @@ impl Storage {
             _ => {}
         }
         cf_options
+    }
+
+    #[cfg(feature = "integration_tests")]
+    pub async fn clean_db(&self) {
+        let column_families_to_remove = [
+            MetadataMintMap::NAME,
+            asset::AssetLeaf::NAME,
+            OffChainData::NAME,
+            cl_items::ClItem::NAME,
+            cl_items::ClLeaf::NAME,
+            bubblegum_slots::ForceReingestableSlots::NAME,
+            AssetsUpdateIdx::NAME,
+            FungibleAssetsUpdateIdx::NAME,
+            SlotAssetIdx::NAME,
+            TreeSeqIdx::NAME,
+            TreesGaps::NAME,
+            TokenMetadataEdition::NAME,
+            TokenAccount::NAME,
+            TokenAccountOwnerIdx::NAME,
+            TokenAccountMintOwnerIdx::NAME,
+            AssetSignature::NAME,
+            BatchMintToVerify::NAME,
+            FailedBatchMint::NAME,
+            BatchMintWithStaker::NAME,
+            MigrationVersions::NAME,
+            TokenPrice::NAME,
+            AssetPreviews::NAME,
+            UrlToDownload::NAME,
+            ScheduledJob::NAME,
+            Inscription::NAME,
+            InscriptionData::NAME,
+            LeafSignature::NAME,
+            SplMint::NAME,
+            AssetCompleteDetails::NAME,
+            MplCoreCollectionAuthority::NAME,
+        ];
+
+        for cf in column_families_to_remove {
+            let cf_handler = self.db.cf_handle(cf).unwrap();
+            for res in self.db.full_iterator_cf(
+                &cf_handler,
+                IteratorMode::Start,
+            ) {
+                if let Ok((key, _value)) = res {
+                    self.db.delete_cf(&cf_handler, key).unwrap();
+                }
+            }
+        }
     }
 }

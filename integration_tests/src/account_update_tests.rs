@@ -121,7 +121,14 @@ async fn index_account_update(setup: &TestSetup, pubkey: Pubkey, update: Account
 #[named]
 async fn test_account_updates() {
     let name = trim_test_name(function_name!());
-    let setup = TestSetup::new(name.clone()).await;
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: None,
+            clear_db: true,
+        },
+    )
+    .await;
     let mint = Pubkey::try_from("843gdpsTE4DoJz3ZoBsEjAqT8UgAcyF5YojygGgGZE1f").unwrap();
 
     let nft_accounts = get_nft_accounts(&setup, mint).await;
@@ -176,6 +183,8 @@ async fn test_account_updates() {
             continue;
         }
 
+        setup.clean_up_data_bases().await;
+
         index_nft(&setup, mint).await;
 
         let response = setup
@@ -228,6 +237,8 @@ async fn test_account_updates() {
     // Test that the different metadata/mint/token updates use different slots and don't interfere
     // with each other
     for named_update in named_updates.clone() {
+        setup.clean_up_data_bases().await;
+
         index_nft(&setup, mint).await;
 
         let other_named_updates = named_updates
