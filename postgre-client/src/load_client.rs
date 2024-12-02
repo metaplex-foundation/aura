@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use sqlx::{Execute, Postgres, QueryBuilder, Transaction};
 
 use crate::{
@@ -236,8 +238,9 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("ALTER TABLE fungible_tokens DROP CONSTRAINT IF EXISTS fungible_tokens_pkey;");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "ALTER TABLE fungible_tokens DROP CONSTRAINT IF EXISTS fungible_tokens_pkey;",
+        );
         self.execute_query_with_metrics(
             transaction,
             &mut query_builder,
@@ -412,7 +415,15 @@ impl PgClient {
         temp_postfix: &str,
         columns: &str,
         on_conflict_do_nothing: bool,
+        semaphore: Option<Arc<tokio::sync::Semaphore>>,
     ) -> Result<(), IndexDbError> {
+        let guard = if let Some(ref s) = semaphore {
+            Some(s.acquire().await.map_err(|e| {
+                IndexDbError::BadArgument(format!("Failed to acquire semaphore: {}", e))
+            })?)
+        } else {
+            None
+        };
         let mut transaction = self.start_transaction().await?;
         let temp_table = format!("{}_{}", table, temp_postfix);
         match self
@@ -428,10 +439,12 @@ impl PgClient {
         {
             Ok(_) => {
                 transaction.commit().await?;
+                guard.map(|g| drop(g));
                 Ok(())
             }
             Err(e) => {
                 transaction.rollback().await?;
+                guard.map(|g| drop(g));
                 Err(e)
             }
         }

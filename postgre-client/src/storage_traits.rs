@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::error::IndexDbError;
 use crate::model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter};
 use async_trait::async_trait;
@@ -32,6 +34,7 @@ pub trait AssetIndexStorage {
         creators_file_name: &str,
         authority_file_name: &str,
         metadata_file_name: &str,
+        semaphore: Arc<tokio::sync::Semaphore>,
     ) -> Result<(), IndexDbError>;
     async fn load_from_dump_fungibles(
         &self,
@@ -65,7 +68,8 @@ mock!(
             creators_file_name: &str,
             authority_file_name: &str,
             metadata_file_name: &str,
-        ) -> Result<(), IndexDbError>;
+            semaphore: Arc<tokio::sync::Semaphore>,
+    ) -> Result<(), IndexDbError>;
         async fn load_from_dump_fungibles(
             &self,
             fungible_tokens_path: &str,

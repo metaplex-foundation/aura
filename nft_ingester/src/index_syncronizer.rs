@@ -350,11 +350,12 @@ where
             });
         }
         let mut index_tasks = JoinSet::new();
-
+        let metadata_semaphore = Arc::new(tokio::sync::Semaphore::new(1));
         while let Some(task) = tasks.join_next().await {
             let (_cnt, assets_path, creators_path, authorities_path, metadata_path) =
                 task.map_err(|e| e.to_string())??;
             let index_storage = self.index_storage.clone();
+            let metadata_semaphore = metadata_semaphore.clone();
             index_tasks.spawn(async move {
                 index_storage
                     .load_from_dump_nfts(
@@ -362,6 +363,7 @@ where
                         creators_path.as_str(),
                         authorities_path.as_str(),
                         metadata_path.as_str(),
+                        metadata_semaphore,
                     )
                     .await
             });
