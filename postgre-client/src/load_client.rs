@@ -132,7 +132,7 @@ impl PgClient {
         index: &str,
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new(format!("DROP INDEX {};", index));
+            QueryBuilder::new(format!("DROP INDEX IF EXISTS {};", index));
         self.execute_query_with_metrics(transaction, &mut query_builder, DROP_ACTION, index)
             .await
     }
@@ -237,7 +237,7 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("ALTER TABLE fungible_tokens DROP CONSTRAINT fungible_tokens_pkey;");
+            QueryBuilder::new("ALTER TABLE fungible_tokens DROP CONSTRAINT IF EXISTS fungible_tokens_pkey;");
         self.execute_query_with_metrics(
             transaction,
             &mut query_builder,
@@ -275,7 +275,7 @@ impl PgClient {
             ("assets_v3", "assets_pkey"),
         ] {
             let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
-                "ALTER TABLE {} DROP CONSTRAINT {};",
+                "ALTER TABLE {} DROP CONSTRAINT IF EXISTS {};",
                 table, constraint
             ));
             self.execute_query_with_metrics(
