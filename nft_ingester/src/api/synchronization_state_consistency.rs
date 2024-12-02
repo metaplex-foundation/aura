@@ -59,35 +59,37 @@ impl SynchronizationStateConsistencyChecker {
             let rocks_db = rocks_db.clone();
             let mut rx = rx.resubscribe();
             tasks.lock().await.spawn(async move {
-                while rx.is_empty() {
-                    let Ok(Some(index_seq)) = pg_client.fetch_last_synced_id(asset_type).await else {
-                        continue;
-                    };
-                    let Ok(decoded_index_update_key) = decode_u64x2_pubkey(index_seq) else {
-                        continue;
-                    };
-
-                    let last_known_updated_asset = match asset_type {
-                        AssetType::NonFungible => rocks_db.last_known_nft_asset_updated_key(),
-                        AssetType::Fungible => rocks_db.last_known_fungible_asset_updated_key(),
-                    };
-                    let Ok(Some(primary_update_key)) = last_known_updated_asset else {
-                        continue;
-                    };
-
-                    overwhelm_seq_gap.store(
-                        primary_update_key
-                            .seq
-                            .saturating_sub(decoded_index_update_key.seq)
-                            >= synchronization_api_threshold,
-                        Ordering::Relaxed,
-                    );
-                    tokio::select! {
-                        _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC))=> {},
-                        _ = rx.recv() => {
-                            info!("Received stop signal, stopping SynchronizationStateConsistencyChecker...");
-                            return Ok(());
+                tokio::select! {
+                    _ = async move { 
+                        loop {
+                            let Ok(Some(index_seq)) = pg_client.fetch_last_synced_id(asset_type).await else {
+                                continue;
+                            };
+                            let Ok(decoded_index_update_key) = decode_u64x2_pubkey(index_seq) else {
+                                continue;
+                            };
+        
+                            let last_known_updated_asset = match asset_type {
+                                AssetType::NonFungible => rocks_db.last_known_nft_asset_updated_key(),
+                                AssetType::Fungible => rocks_db.last_known_fungible_asset_updated_key(),
+                            };
+                            let Ok(Some(primary_update_key)) = last_known_updated_asset else {
+                                continue;
+                            };
+        
+                            overwhelm_seq_gap.store(
+                                primary_update_key
+                                    .seq
+                                    .saturating_sub(decoded_index_update_key.seq)
+                                    >= synchronization_api_threshold,
+                                Ordering::Relaxed,
+                            );
+                            tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)).await;
                         }
+                    } => {},
+                    _ = rx.recv() => {
+                        info!("Received stop signal, stopping SynchronizationStateConsistencyChecker...");
+                        return Ok(());
                     }
                 }
                 Ok(())

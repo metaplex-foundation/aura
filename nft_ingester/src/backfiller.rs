@@ -224,42 +224,44 @@ impl<T: SlotsGetter + Send + Sync + 'static> Backfiller<T> {
         if let Some(slot) = top_collected_slot {
             parse_until = slot;
         }
-        loop {
-            match finalized_slot_getter.get_finalized_slot().await {
-                Ok(finalized_slot) => {
-                    let top_collected_slot = slots_collector
-                        .collect_slots(
-                            &blockbuster::programs::bubblegum::ID,
-                            finalized_slot,
-                            parse_until,
-                            &rx,
-                        )
-                        .await;
-                    if let Some(slot) = top_collected_slot {
-                        parse_until = slot;
-                        if let Err(e) = self
-                            .rocks_client
-                            .put_parameter(rocks_db::parameters::Parameter::LastFetchedSlot, slot)
-                            .await
-                        {
-                            error!("Error while updating last fetched slot: {}", e);
+
+        let receiver = rx.resubscribe();
+        tokio::select! {
+            _ = async move {
+                loop {
+                    match finalized_slot_getter.get_finalized_slot().await {
+                        Ok(finalized_slot) => {
+                            let top_collected_slot = slots_collector
+                                .collect_slots(
+                                    &blockbuster::programs::bubblegum::ID,
+                                    finalized_slot,
+                                    parse_until,
+                                    &receiver,
+                                )
+                                .await;
+                            if let Some(slot) = top_collected_slot {
+                                parse_until = slot;
+                                if let Err(e) = self
+                                    .rocks_client
+                                    .put_parameter(rocks_db::parameters::Parameter::LastFetchedSlot, slot)
+                                    .await
+                                {
+                                    error!("Error while updating last fetched slot: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("Error getting finalized slot: {}", e);
                         }
                     }
+                    tokio::time::sleep(wait_period).await;
                 }
-                Err(e) => {
-                    error!("Error getting finalized slot: {}", e);
-                }
-            }
-
-            let sleep = tokio::time::sleep(wait_period);
-            tokio::select! {
-            _ = sleep => {},
+            } => {},
             _ = rx.recv() => {
                 info!("Received stop signal, stopping perpetual slot parser");
-                return Ok(());
             },
-            }
         }
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -288,17 +290,19 @@ impl<T: SlotsGetter + Send + Sync + 'static> Backfiller<T> {
             self.chunk_size,
         ));
 
-        let mut rx = rx.resubscribe();
-        while rx.is_empty() {
-            transactions_parser
-                .process_all_slots(rx.resubscribe(), backup_provider.clone())
-                .await;
-            tokio::select! {
-            _ = tokio::time::sleep(wait_period) => {},
-            _ = rx.recv() => {
+        let mut receiver = rx.resubscribe();
+        tokio::select! {
+            _ = async move {
+                loop {
+                    transactions_parser
+                        .process_all_slots(rx.resubscribe(), backup_provider.clone())
+                        .await;
+                    tokio::time::sleep(wait_period).await;
+                }
+            } => {},
+            _ = receiver.recv() => {
                 info!("Received stop signal, returning from run_perpetual_slot_fetching");
                 return Ok(());
-            }
             }
         }
         Ok(())
