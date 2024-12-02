@@ -381,7 +381,7 @@ impl AssetIndexStorage for PgClient {
                 "base_dump_path is not set".to_string(),
             ));
         };
-        let temp_postfix = Uuid::new_v4().to_string();
+        let temp_postfix = Uuid::new_v4().to_string().replace("-", "");
         let mut copy_tasks: JoinSet<Result<(), IndexDbError>> = JoinSet::new();
         for (file_path, table, columns, on_conflict_do_nothing) in [
             ( base_path.join(creators_file_name),
@@ -418,7 +418,7 @@ impl AssetIndexStorage for PgClient {
         &self,
         fungible_tokens_path: &str,
     ) -> Result<(), IndexDbError> {
-        let temp_postfix = Uuid::new_v4().to_string();
+        let temp_postfix = Uuid::new_v4().to_string().replace("-", "");
 
         self.load_through_temp_table(
             fungible_tokens_path.to_string(),
