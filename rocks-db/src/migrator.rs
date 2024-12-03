@@ -1,8 +1,9 @@
+use crate::asset::{AssetCollection, AssetCompleteDetails};
 use crate::column::{Column, TypedColumn};
 use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64, encode_u64};
-use crate::Result;
 use crate::Storage;
+use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result};
 use bincode::deserialize;
 use interface::migration_version_manager::PrimaryStorageMigrationVersionManager;
 use metrics_utils::red::RequestErrorDurationMetrics;
@@ -40,38 +41,100 @@ pub trait RocksMigration {
         + Into<<Self::NewDataType as TypedColumn>::ValueType>;
 }
 
+#[macro_export]
+macro_rules! convert_and_merge {
+    ($column:expr, $builder:expr, $handle: expr, $db:expr) => {{
+        let iter = $column.pairs_iterator($column.iter_start());
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        for (k, v) in iter {
+            let asset_data = v.convert_to_fb(&mut $builder);
+            $builder.finish_minimal(asset_data);
+            batch.put_cf(
+                $handle,
+                Column::<AssetCompleteDetails>::encode_key(k),
+                $builder.finished_data(),
+            );
+            $builder.reset();
+        }
+        $db.write(batch)?;
+    }};
+}
+
 impl Storage {
     pub async fn apply_all_migrations(
         db_path: &str,
         migration_storage_path: &str,
         migration_version_manager: Arc<impl PrimaryStorageMigrationVersionManager>,
     ) -> Result<()> {
-        let applied_migrations = migration_version_manager
-            .get_all_applied_migrations()
-            .map_err(StorageError::Common)?;
-        let migration_applier =
-            MigrationApplier::new(db_path, migration_storage_path, applied_migrations);
+        // TODO: how do I fix this for a brand new DB?
+        // let applied_migrations = migration_version_manager
+        //     .get_all_applied_migrations()
+        //     .map_err(StorageError::Common)?;
+        // let migration_applier =
+        //     MigrationApplier::new(db_path, migration_storage_path, applied_migrations);
 
-        // apply all migrations
-        migration_applier
-            .apply_migration(crate::migrations::collection_authority::CollectionAuthorityMigration)
-            .await?;
-        migration_applier
-            .apply_migration(crate::migrations::external_plugins::ExternalPluginsMigration)
-            .await?;
-        migration_applier
-            .apply_migration(
-                crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration,
-            )
-            .await?;
-        migration_applier
-            .apply_migration(crate::migrations::spl2022::TokenAccounts2022ExtentionsMigration)
-            .await?;
-        migration_applier
-            .apply_migration(
-                crate::migrations::spl2022::DynamicDataToken2022MintExtentionsMigration,
-            )
-            .await?;
+        // // apply all migrations
+        // migration_applier
+        //     .apply_migration(crate::migrations::collection_authority::CollectionAuthorityMigration)
+        //     .await?;
+        // migration_applier
+        //     .apply_migration(crate::migrations::external_plugins::ExternalPluginsMigration)
+        //     .await?;
+        // migration_applier
+        //     .apply_migration(
+        //         crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration,
+        //     )
+        //     .await?;
+        // migration_applier
+        //     .apply_migration(crate::migrations::spl2022::TokenAccounts2022ExtentionsMigration)
+        //     .await?;
+        // migration_applier
+        //     .apply_migration(
+        //         crate::migrations::spl2022::DynamicDataToken2022MintExtentionsMigration,
+        //     )
+        //     .await?;
+        Ok(())
+    }
+
+    pub async fn apply_migration_merge(&self) -> Result<()> {
+        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
+        convert_and_merge!(
+            self.asset_static_data,
+            builder,
+            &self.asset_data.handle(),
+            self.db
+        );
+        convert_and_merge!(
+            self.asset_dynamic_data,
+            builder,
+            &self.asset_data.handle(),
+            self.db
+        );
+        convert_and_merge!(
+            self.asset_authority_data,
+            builder,
+            &self.asset_data.handle(),
+            self.db
+        );
+        convert_and_merge!(
+            self.asset_owner_data,
+            builder,
+            &self.asset_data.handle(),
+            self.db
+        );
+        convert_and_merge!(
+            self.asset_collection_data,
+            builder,
+            &self.asset_data.handle(),
+            self.db
+        );
+
+        self.db.drop_cf(AssetStaticDetails::NAME)?;
+        self.db.drop_cf(AssetDynamicDetails::NAME)?;
+        self.db.drop_cf(AssetAuthority::NAME)?;
+        self.db.drop_cf(AssetOwner::NAME)?;
+        self.db.drop_cf(AssetCollection::NAME)?;
+
         Ok(())
     }
 }

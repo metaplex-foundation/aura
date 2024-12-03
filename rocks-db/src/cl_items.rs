@@ -8,13 +8,11 @@ use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
 use tracing::{debug, error};
 
-use crate::asset::AssetLeaf;
 use crate::column::TypedColumn;
-use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64_pubkey, encode_u64_pubkey};
 use crate::transaction::{CopyableChangeLogEventV1, TreeUpdate};
 use crate::tree_seq::TreeSeqIdx;
-use crate::{AssetDynamicDetails, Result, Storage};
+use crate::{Result, Storage};
 
 /// This column family stores change log items for asset proof construction.
 /// Basically, it stores all nodes of the tree.
@@ -273,44 +271,6 @@ impl Storage {
         ) {
             error!("Error while saving tree update: {}", e);
         };
-    }
-
-    pub(crate) fn save_tx_data_and_asset_updated_with_batch(
-        &self,
-        batch: &mut rocksdb::WriteBatch,
-        pk: Pubkey,
-        slot: u64,
-        leaf: &Option<AssetLeaf>,
-        dynamic_data: &Option<AssetDynamicDetails>,
-    ) -> Result<()> {
-        if let Some(leaf) = leaf {
-            self.asset_leaf_data.merge_with_batch(batch, pk, leaf)?
-        };
-        if let Some(dynamic_data) = dynamic_data {
-            self.asset_dynamic_data
-                .merge_with_batch(batch, pk, dynamic_data)?;
-        }
-        self.asset_updated_with_batch(batch, slot, pk)?;
-        Ok(())
-    }
-
-    pub async fn save_tx_data_and_asset_updated(
-        &self,
-        pk: Pubkey,
-        slot: u64,
-        leaf: &Option<AssetLeaf>,
-        dynamic_data: &Option<AssetDynamicDetails>,
-    ) -> Result<()> {
-        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
-        self.save_tx_data_and_asset_updated_with_batch(&mut batch, pk, slot, leaf, dynamic_data)?;
-        let backend = self.db.clone();
-        tokio::task::spawn_blocking(move || {
-            backend
-                .write(batch)
-                .map_err(|e| StorageError::Common(e.to_string()))
-        })
-        .await
-        .map_err(|e| StorageError::Common(e.to_string()))?
     }
 }
 

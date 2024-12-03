@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use async_trait::async_trait;
 use mockall::automock;
@@ -50,13 +50,12 @@ pub trait AssetIndexReader {
     async fn get_fungible_assets_indexes(
         &self,
         keys: &[Pubkey],
-    ) -> Result<HashMap<Pubkey, FungibleAssetIndex>>;
+    ) -> Result<Vec<FungibleAssetIndex>>;
 
     async fn get_nft_asset_indexes<'a>(
         &self,
         keys: &[Pubkey],
-        collection_authorities: Option<&'a HashMap<Pubkey, Pubkey>>,
-    ) -> Result<HashMap<Pubkey, AssetIndex>>;
+    ) -> Result<Vec<AssetIndex>>;
 }
 
 #[automock]
@@ -137,7 +136,7 @@ impl AssetIndexReader for MockAssetIndexStorage {
     async fn get_fungible_assets_indexes(
         &self,
         keys: &[Pubkey],
-    ) -> Result<HashMap<Pubkey, FungibleAssetIndex>> {
+    ) -> Result<Vec<FungibleAssetIndex>> {
         self.mock_asset_index_reader
             .get_fungible_assets_indexes(keys)
             .await
@@ -146,10 +145,9 @@ impl AssetIndexReader for MockAssetIndexStorage {
     async fn get_nft_asset_indexes<'a>(
         &self,
         keys: &[Pubkey],
-        collection_authorities: Option<&'a HashMap<Pubkey, Pubkey>>,
-    ) -> Result<HashMap<Pubkey, AssetIndex>> {
+    ) -> Result<Vec<AssetIndex>> {
         self.mock_asset_index_reader
-            .get_nft_asset_indexes(keys, collection_authorities)
+            .get_nft_asset_indexes(keys)
             .await
     }
 }

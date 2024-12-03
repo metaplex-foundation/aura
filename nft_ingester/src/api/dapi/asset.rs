@@ -3,9 +3,10 @@ use std::string::ToString;
 use std::sync::Arc;
 
 use entities::api_req_params::{AssetSortDirection, Options};
+use entities::enums::SpecificationAssetClass;
 use entities::models::{AssetSignatureWithPagination, OffChainData};
 use interface::asset_sigratures::AssetSignaturesGetter;
-use interface::json::{JsonDownloader, JsonPersister};
+use interface::json::{JsonDownloadResult, JsonDownloader, JsonPersister};
 use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use tracing::error;
@@ -14,6 +15,7 @@ use crate::api::dapi::rpc_asset_models::FullAsset;
 use futures::{stream, StreamExt};
 use interface::price_fetcher::TokenPriceFetcher;
 use interface::processing_possibility::ProcessingPossibilityChecker;
+use itertools::Itertools;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::asset::{AssetLeaf, AssetSelectedMaps};
 use rocks_db::{AssetAuthority, Storage};
@@ -29,26 +31,21 @@ fn convert_rocks_asset_model(
     token_symbols: &HashMap<String, String>,
     offchain_data: OffChainData,
 ) -> Result<FullAsset, StorageError> {
-    let static_data =
-        asset_selected_maps
-            .assets_static
-            .get(asset_pubkey)
-            .ok_or(StorageError::Common(
-                "No relevant assets_static_data".to_string(),
-            ))?;
-    let dynamic_data =
-        asset_selected_maps
-            .assets_dynamic
-            .get(asset_pubkey)
-            .ok_or(StorageError::Common(
-                "No relevant asset_dynamic_data".to_string(),
-            ))?;
-    let owner = asset_selected_maps
-        .assets_owner
+    let data = asset_selected_maps
+        .asset_complete_details
         .get(asset_pubkey)
         .ok_or(StorageError::Common(
-            "No relevant assets_owners".to_string(),
+            "No relevant asset_complete_details".to_string(),
         ))?;
+    let static_data = data.static_details.as_ref().ok_or(StorageError::Common(
+        "No relevant assets_static_data".to_string(),
+    ))?;
+    let dynamic_data = data.dynamic_details.as_ref().ok_or(StorageError::Common(
+        "No relevant asset_dynamic_data".to_string(),
+    ))?;
+    let owner = data.owner.as_ref().ok_or(StorageError::Common(
+        "No relevant assets_owners".to_string(),
+    ))?;
 
     let leaf = asset_selected_maps
         .assets_leaf
@@ -56,15 +53,18 @@ fn convert_rocks_asset_model(
         .cloned()
         .unwrap_or(AssetLeaf::default()); // Asset may not have a leaf but we still can make the conversion
 
-    let collection_dynamic_data = asset_selected_maps
-        .assets_collection
-        .get(asset_pubkey)
+    let collection_data = data
+        .collection
+        .as_ref()
         .and_then(|collection| {
             asset_selected_maps
-                .assets_dynamic
+                .asset_complete_details
                 .get(&collection.collection.value)
         })
         .cloned();
+    let collection_dynamic_data = collection_data
+        .as_ref()
+        .and_then(|c| c.dynamic_details.clone());
 
     let inscription = asset_selected_maps.inscriptions.get(asset_pubkey).cloned();
     Ok(FullAsset {
@@ -73,29 +73,17 @@ fn convert_rocks_asset_model(
         asset_dynamic: dynamic_data.clone(),
         asset_leaf: leaf,
         offchain_data,
-        asset_collections: asset_selected_maps
-            .assets_collection
-            .get(asset_pubkey)
-            .cloned(),
-        assets_authority: asset_selected_maps
-            .assets_authority
-            .get(asset_pubkey)
-            .cloned()
-            .unwrap_or(AssetAuthority::default()),
-        edition_data: asset_selected_maps
-            .assets_static
-            .get(asset_pubkey)
-            .and_then(|static_details| {
-                static_details
-                    .edition_address
-                    .and_then(|e| asset_selected_maps.editions.get(&e).cloned())
-            }),
-        mpl_core_collections: asset_selected_maps
-            .assets_collection
-            .get(asset_pubkey)
+        asset_collections: data.collection.clone(),
+        assets_authority: data.authority.clone(),
+        edition_data: static_data
+            .edition_address
+            .and_then(|e| asset_selected_maps.editions.get(&e).cloned()),
+        mpl_core_collections: data
+            .collection
+            .as_ref()
             .and_then(|collection| {
                 asset_selected_maps
-                    .assets_collection
+                    .mpl_core_collections
                     .get(&collection.collection.value)
             })
             .cloned(),
@@ -148,19 +136,24 @@ fn asset_selected_maps_into_full_asset(
     options: &Options,
 ) -> Option<FullAsset> {
     if !options.show_unverified_collections {
-        if let Some(collection_data) = asset_selected_maps.assets_collection.get(id) {
-            if !collection_data.is_collection_verified.value {
-                return None;
+        if let Some(asset_complete_details) = asset_selected_maps.asset_complete_details.get(id) {
+            if let Some(asset_static_details) = &asset_complete_details.static_details {
+                // collection itself cannot have a collection
+                // TODO!: should we also include in this check FungibleToken?
+                if &asset_static_details.specification_asset_class != &SpecificationAssetClass::MplCoreCollection {
+                    if let Some(collection_details) = &asset_complete_details.collection {
+                        if !collection_details.is_collection_verified.value {
+                            return None;
+                        }
+                    }
+                }
             }
-        } else {
-            // don't have collection data == collection unverified
-            return None;
         }
     }
 
     let offchain_data = asset_selected_maps
         .urls
-        .get(&id.to_string())
+        .get(id)
         .and_then(|url| asset_selected_maps.offchain_data.get(url).cloned())
         .unwrap_or_default();
 
@@ -217,14 +210,23 @@ pub async fn get_by_ids<
     }
 
     let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
-    let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids.as_slice());
-    let token_symbols_fut = token_price_fetcher.fetch_token_symbols(asset_ids.as_slice());
+    // request prices and symbols only for fungibles when the option is set. This will prolong the request at least an order of magnitude
     let asset_selected_maps_fut =
         rocks_db.get_asset_selected_maps_async(unique_asset_ids.clone(), owner_address, &options);
-
-    let (token_prices, token_symbols, asset_selected_maps) =
-        tokio::join!(token_prices_fut, token_symbols_fut, asset_selected_maps_fut);
-    let mut asset_selected_maps = asset_selected_maps?;
+    let asset_ids_string = asset_ids
+        .clone()
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect_vec();
+    let (token_prices, token_symbols) = if options.show_fungible {
+        let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids_string.as_slice());
+        let token_symbols_fut =
+            token_price_fetcher.fetch_token_symbols(asset_ids_string.as_slice());
+        tokio::join!(token_prices_fut, token_symbols_fut)
+    } else {
+        (Ok(HashMap::new()), Ok(HashMap::new()))
+    };
+    let mut asset_selected_maps = asset_selected_maps_fut.await?;
     let token_prices = token_prices.unwrap_or_else(|e| {
         error!("Fetch token prices: {}", e);
         metrics.inc_token_info_fetch_errors("prices");
@@ -240,11 +242,15 @@ pub async fn get_by_ids<
         let mut urls_to_download = Vec::new();
 
         for (_, url) in asset_selected_maps.urls.iter() {
+            if url.is_empty() {
+                continue;
+            }
+            let offchain_data = asset_selected_maps.offchain_data.get(url);
+            if offchain_data.is_none() || offchain_data.unwrap().metadata.is_empty() {
+                urls_to_download.push(url.clone());
+            }
             if urls_to_download.len() >= max_json_to_download {
                 break;
-            }
-            if !asset_selected_maps.offchain_data.contains_key(url) && !url.is_empty() {
-                urls_to_download.push(url.clone());
             }
         }
 
@@ -265,14 +271,30 @@ pub async fn get_by_ids<
                 .await;
 
             for (json_url, res) in download_results.iter() {
-                if let Ok(metadata) = res {
-                    asset_selected_maps.offchain_data.insert(
-                        json_url.clone(),
-                        OffChainData {
-                            url: json_url.clone(),
-                            metadata: metadata.clone(),
-                        },
-                    );
+                match res {
+                    Ok(JsonDownloadResult::JsonContent(metadata)) => {
+                        asset_selected_maps.offchain_data.insert(
+                            json_url.clone(),
+                            OffChainData {
+                                url: json_url.clone(),
+                                metadata: metadata.clone(),
+                            },
+                        );
+                    }
+                    Ok(JsonDownloadResult::MediaUrlAndMimeType { url, mime_type }) => {
+                        asset_selected_maps.offchain_data.insert(
+                            json_url.clone(),
+                            OffChainData {
+                                url: json_url.clone(),
+                                metadata: format!(
+                                    "{{\"image\":\"{}\",\"type\":\"{}\"}}",
+                                    url, mime_type
+                                )
+                                .to_string(),
+                            },
+                        );
+                    }
+                    Err(e) => {}
                 }
             }
 

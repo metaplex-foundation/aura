@@ -3,14 +3,16 @@ use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::Ordering;
 
 use crate::asset::{
-    AssetSelectedMaps, AssetsUpdateIdx, FungibleAssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey,
+    AssetCollection, AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx,
+    SlotAssetIdxKey,FungibleAssetsUpdateIdx,
 };
-use crate::column::Column;
+use crate::asset_generated::asset as fb;
+use crate::column::{Column, TypedColumn};
 use crate::errors::StorageError;
 use crate::key_encoders::encode_u64x2_pubkey;
-use crate::{Result, Storage};
+use crate::{Result, Storage, BATCH_GET_ACTION, ROCKS_COMPONENT};
 use entities::api_req_params::Options;
-use entities::enums::{AssetType, TokenMetadataEdition};
+use entities::enums::{AssetType, SpecificationAssetClass, TokenMetadataEdition};
 use entities::models::{EditionData, PubkeyWithSlot};
 use futures_util::FutureExt;
 use std::collections::HashMap;
@@ -148,11 +150,8 @@ impl Storage {
         owner_address: &Option<Pubkey>,
         options: &Options,
     ) -> Result<AssetSelectedMaps> {
-        let assets_dynamic_fut = self.asset_dynamic_data.batch_get(asset_ids.clone());
-        let assets_static_fut = self.asset_static_data.batch_get(asset_ids.clone());
-        let assets_authority_fut = self.asset_authority_data.batch_get(asset_ids.clone());
-        let assets_collection_fut = self.asset_collection_data.batch_get(asset_ids.clone());
-        let assets_owner_fut = self.asset_owner_data.batch_get(asset_ids.clone());
+        let assets_with_collections_and_urls_fut =
+            self.get_assets_with_collections_and_urls(asset_ids.clone());
         let assets_leaf_fut = self.asset_leaf_data.batch_get(asset_ids.clone());
         let token_accounts_fut = if let Some(owner_address) = owner_address {
             self.get_raw_token_accounts(Some(*owner_address), None, None, None, None, None, true)
@@ -162,80 +161,73 @@ impl Storage {
         };
         let spl_mints_fut = self.spl_mints.batch_get(asset_ids.clone());
 
-        let mut assets_dynamic = to_map!(assets_dynamic_fut.await);
-        let mut urls: HashMap<_, _> = assets_dynamic
-            .iter()
-            .map(|(key, asset)| (key.to_string(), asset.url.value.clone()))
-            .collect();
+        let inscriptions_fut = if options.show_inscription {
+            self.inscriptions.batch_get(asset_ids.clone()).boxed()
+        } else {
+            async { Ok(Vec::new()) }.boxed()
+        };
+        let (mut assets_data, assets_collection_pks, mut urls) =
+            assets_with_collections_and_urls_fut.await?;
+        let mut mpl_core_collections = HashMap::new();
+        // todo: consider async/future here, but not likely as the very next call depends on urls from this one
+        if !assets_collection_pks.is_empty() {
+            let assets_collection_pks = assets_collection_pks.into_iter().collect::<Vec<_>>();
+            let start_time = chrono::Utc::now();
+            let collection_d = self.db.batched_multi_get_cf(
+                &self.asset_data.handle(),
+                assets_collection_pks.clone(),
+                false,
+            );
+            for asset in collection_d {
+                let asset = asset?;
+                if let Some(asset) = asset {
+                    let asset = fb::root_as_asset_complete_details(asset.as_ref())
+                        .map_err(|e| StorageError::Common(e.to_string()))?;
+                    let key =
+                        Pubkey::new_from_array(asset.pubkey().unwrap().bytes().try_into().unwrap());
+                    if options.show_collection_metadata {
+                        asset
+                            .dynamic_details()
+                            .and_then(|d| d.url())
+                            .and_then(|u| u.value())
+                            .map(|u| urls.insert(key, u.to_string()));
+                        assets_data.insert(key, asset.into());
+                    }
+                    if let Some(collection) = asset.collection() {
+                        mpl_core_collections.insert(key, AssetCollection::from(collection));
+                    }
+                }
+            }
+            self.red_metrics.observe_request(
+                ROCKS_COMPONENT,
+                BATCH_GET_ACTION,
+                "get_asset_collection",
+                start_time,
+            );
+        }
+
         let offchain_data_fut = self
             .asset_offchain_data
             .batch_get(urls.clone().into_values().collect::<Vec<_>>());
 
-        let (
-            assets_static,
-            assets_authority,
-            assets_collection,
-            assets_owner,
-            assets_leaf,
-            offchain_data,
-            token_accounts,
-            spl_mints,
-        ) = tokio::join!(
-            assets_static_fut,
-            assets_authority_fut,
-            assets_collection_fut,
-            assets_owner_fut,
+        let (assets_leaf, offchain_data, token_accounts, spl_mints) = tokio::join!(
             assets_leaf_fut,
             offchain_data_fut,
             token_accounts_fut,
             spl_mints_fut
         );
-        let mut offchain_data = offchain_data
+        let offchain_data = offchain_data
             .map_err(|e| StorageError::Common(e.to_string()))?
             .into_iter()
-            .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
+            .filter_map(|asset| {
+                asset
+                    .filter(|a| !a.metadata.is_empty())
+                    .map(|a| (a.url.clone(), a))
+            })
             .collect::<HashMap<_, _>>();
-        let assets_static = to_map!(assets_static);
-        let assets_collection_pks = assets_collection
-            .as_ref()
-            .map_err(|e| StorageError::Common(e.to_string()))?
-            .iter()
-            .flat_map(|c| c.as_ref().map(|c| c.collection.value))
-            .collect::<Vec<_>>();
-        if options.show_collection_metadata {
-            let collection_dynamic_data = to_map!(
-                self.asset_dynamic_data
-                    .batch_get(assets_collection_pks.clone())
-                    .await
-            );
-            assets_dynamic.extend(collection_dynamic_data.clone());
-            let collection_urls: HashMap<_, _> = collection_dynamic_data
-                .iter()
-                .map(|(key, asset)| (key.to_string(), asset.url.value.clone()))
-                .collect();
-            urls.extend(collection_urls.clone());
-            let collection_offchain_data = self
-                .asset_offchain_data
-                .batch_get(collection_urls.clone().into_values().collect::<Vec<_>>())
-                .await
-                .map_err(|e| StorageError::Common(e.to_string()))?
-                .into_iter()
-                .filter_map(|asset| asset.map(|a| (a.url.clone(), a)))
-                .collect::<HashMap<_, _>>();
-            offchain_data.extend(collection_offchain_data)
-        };
-        let mpl_core_collections = to_map!(
-            self.asset_collection_data
-                .batch_get(assets_collection_pks)
-                .await
-        );
-        let mut assets_collection = to_map!(assets_collection);
-        assets_collection.extend(mpl_core_collections);
 
         let (inscriptions, inscriptions_data) = if options.show_inscription {
-            let inscriptions = self
-                .inscriptions
-                .batch_get(asset_ids.clone())
+            let inscriptions = inscriptions_fut
                 .await
                 .map_err(|e| StorageError::Common(e.to_string()))?
                 .into_iter()
@@ -256,27 +248,49 @@ impl Storage {
             (HashMap::new(), HashMap::new())
         };
         let token_accounts = token_accounts.map_err(|e| StorageError::Common(e.to_string()))?;
+        let spl_mints = to_map!(spl_mints);
 
+        // As we can not rely on the asset class from the database, we need to check the mint
+        assets_data
+            .iter_mut()
+            .filter(|(_, asset)| {
+                asset.static_details.as_ref().is_some_and(|sd| {
+                    sd.specification_asset_class == SpecificationAssetClass::FungibleAsset
+                        || sd.specification_asset_class == SpecificationAssetClass::FungibleToken
+                })
+            })
+            .for_each(|(_, ref mut asset)| {
+                if spl_mints
+                    .get(&asset.pubkey)
+                    .map(|spl_mint| spl_mint.is_nft())
+                    .unwrap_or(false)
+                {
+                    asset
+                        .static_details
+                        .as_mut()
+                        .map(|sd| sd.specification_asset_class = SpecificationAssetClass::Nft);
+                }
+            });
         Ok(AssetSelectedMaps {
             editions: self
                 .get_editions(
-                    assets_static
+                    assets_data
                         .values()
-                        .filter_map(|s| s.edition_address)
+                        .filter_map(|a: &crate::asset::AssetCompleteDetails| {
+                            a.static_details.as_ref().map(|s| s.edition_address)
+                        })
+                        .flatten()
                         .collect::<Vec<_>>(),
                 )
                 .await?,
-            assets_static,
-            assets_dynamic,
-            assets_authority: to_map!(assets_authority),
-            assets_collection,
-            assets_owner: to_map!(assets_owner),
+            mpl_core_collections,
+            asset_complete_details: assets_data,
             assets_leaf: to_map!(assets_leaf),
             offchain_data,
             urls,
             inscriptions,
             inscriptions_data,
-            spl_mints: to_map!(spl_mints),
+            spl_mints,
             token_accounts: token_accounts
                 .into_iter()
                 .flat_map(|ta| ta.map(|ta| (ta.mint, ta)))
@@ -284,6 +298,7 @@ impl Storage {
         })
     }
 
+    // todo: review this method as it has 2 more awaits
     async fn get_editions(
         &self,
         edition_keys: Vec<Pubkey>,
@@ -345,5 +360,39 @@ impl Storage {
             .into_iter()
             .map(|edition| (edition.key, edition))
             .collect::<HashMap<_, _>>())
+    }
+
+    pub fn get_complete_asset_details(
+        &self,
+        pubkey: Pubkey,
+    ) -> Result<Option<AssetCompleteDetails>> {
+        let data = self.db.get_pinned_cf(
+            &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+            pubkey,
+        )?;
+        match data {
+            Some(data) => {
+                let asset = fb::root_as_asset_complete_details(&data)
+                    .map_err(|e| StorageError::Common(e.to_string()))?;
+                Ok(Some(AssetCompleteDetails::from(asset)))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn put_complete_asset_details_batch(
+        &self,
+        assets: HashMap<Pubkey, AssetCompleteDetails>,
+    ) -> Result<()> {
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        for (pubkey, asset) in assets {
+            batch.put_cf(
+                &self.asset_data.handle(),
+                pubkey,
+                asset.convert_to_fb_bytes(),
+            );
+        }
+        self.db.write(batch).map_err(StorageError::RocksDb)
     }
 }

@@ -37,7 +37,7 @@ impl PgClient {
         Ok(())
     }
 
-    async fn truncate_table(
+    pub(crate) async fn truncate_table(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,

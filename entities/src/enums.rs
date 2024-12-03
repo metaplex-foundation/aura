@@ -33,9 +33,13 @@ pub enum SpecificationAssetClass {
     Nft,
     PrintableNft,
     ProgrammableNft,
+    // legacy, doesn't exist
     Print,
+    // legacy, doesn't exist
     TransferRestrictedNft,
+    // legacy, doesn't exist
     NonTransferableNft,
+    // legacy, doesn't exist
     IdentityNft,
     MplCoreAsset,
     MplCoreCollection,
@@ -110,7 +114,7 @@ impl From<blockbuster::token_metadata::types::UseMethod> for UseMethod {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy, PartialEq)]
 pub enum ChainMutability {
     // Original implementation also contain "Unknown"
     // enum variant, which is default. But we do not saved any

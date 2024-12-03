@@ -6,7 +6,8 @@ use std::{
 
 use async_trait::async_trait;
 use solana_sdk::pubkey::Pubkey;
-use sqlx::{Executor, Postgres, QueryBuilder, Transaction};
+use sqlx::{Connection, Executor, Postgres, QueryBuilder, Transaction};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use crate::{
     error::IndexDbError,
@@ -17,6 +18,7 @@ use crate::{
     SQL_COMPONENT, TRANSACTION_ACTION, UPDATE_ACTION,
 };
 use entities::{
+    enums::SpecificationAssetClass as AssetSpecClass,
     enums::AssetType,
     models::{AssetIndex, Creator, FungibleAssetIndex, FungibleToken, UrlWithStatus},
 };
@@ -206,6 +208,25 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
 
     let mut asset_indexes = asset_indexes.to_vec();
     asset_indexes.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
+    let fungible_tokens = asset_indexes
+        .iter()
+        .filter(|asset| asset.specification_asset_class == AssetSpecClass::FungibleToken)
+        .map(|asset| {
+            FungibleToken {
+                key: asset.pubkey,
+                slot_updated: asset.slot_updated,
+                // it's unlikely that rows below will not be filled for fungible token
+                // but even if that happens we will save asset with default values
+                owner: asset.owner.unwrap_or_default(),
+                asset: asset.fungible_asset_mint.unwrap_or_default(),
+                balance: asset.fungible_asset_balance.unwrap_or_default() as i64,
+            }
+        })
+        .collect::<Vec<FungibleToken>>();
+    let asset_indexes = asset_indexes
+        .into_iter()
+        .filter(|asset| asset.fungible_asset_mint.is_none())
+        .collect::<Vec<AssetIndex>>();
 
     // Collect all creators from all assets
     let mut all_creators: Vec<(Pubkey, Creator, i64)> = asset_indexes
@@ -371,93 +392,97 @@ impl AssetIndexStorage for PgClient {
     ) -> Result<(), IndexDbError> {
         let operation_start_time = chrono::Utc::now();
         let mut transaction = self.start_transaction().await?;
-        let dump_result = match asset_type {
-            AssetType::NonFungible => {
-                let Some(metadata_path) =
-                    base_path.join("metadata.csv").to_str().map(str::to_owned)
-                else {
-                    return Err(IndexDbError::BadArgument(format!(
-                        "invalid path '{:?}'",
-                        base_path
-                    )));
-                };
-                let Some(creators_path) =
-                    base_path.join("creators.csv").to_str().map(str::to_owned)
-                else {
-                    return Err(IndexDbError::BadArgument(format!(
-                        "invalid path '{:?}'",
-                        base_path
-                    )));
-                };
-                let Some(assets_authorities_path) = base_path
-                    .join("assets_authorities.csv")
-                    .to_str()
-                    .map(str::to_owned)
-                else {
-                    return Err(IndexDbError::BadArgument(format!(
-                        "invalid path '{:?}'",
-                        base_path
-                    )));
-                };
-                let Some(assets_path) = base_path.join("assets.csv").to_str().map(str::to_owned)
-                else {
-                    return Err(IndexDbError::BadArgument(format!(
-                        "invalid path '{:?}'",
-                        base_path
-                    )));
-                };
+        let dump_result = (async {
+            match asset_type {
+                AssetType::NonFungible => {
+                    let Some(metadata_path) =
+                        base_path.join("metadata.csv").to_str().map(str::to_owned)
+                    else {
+                        return Err(IndexDbError::BadArgument(format!(
+                            "invalid path '{:?}'",
+                            base_path
+                        )));
+                    };
+                    let Some(creators_path) =
+                        base_path.join("creators.csv").to_str().map(str::to_owned)
+                    else {
+                        return Err(IndexDbError::BadArgument(format!(
+                            "invalid path '{:?}'",
+                            base_path
+                        )));
+                    };
+                    let Some(assets_authorities_path) = base_path
+                        .join("assets_authorities.csv")
+                        .to_str()
+                        .map(str::to_owned)
+                    else {
+                        return Err(IndexDbError::BadArgument(format!(
+                            "invalid path '{:?}'",
+                            base_path
+                        )));
+                    };
+                    let Some(assets_path) =
+                        base_path.join("assets.csv").to_str().map(str::to_owned)
+                    else {
+                        return Err(IndexDbError::BadArgument(format!(
+                            "invalid path '{:?}'",
+                            base_path
+                        )));
+                    };
 
-                let result_of_copy = self
-                    .copy_nfts(
-                        metadata_path,
-                        creators_path,
-                        assets_path,
-                        assets_authorities_path,
-                        &mut transaction,
-                    )
-                    .await;
+                    let result_of_copy = self
+                        .copy_nfts(
+                            metadata_path,
+                            creators_path,
+                            assets_path,
+                            assets_authorities_path,
+                            &mut transaction,
+                        )
+                        .await;
 
-                if result_of_copy.is_ok() {
-                    self.update_last_synced_key(
-                        last_key,
-                        &mut transaction,
-                        "last_synced_key",
-                        asset_type,
-                    )
-                    .await
-                } else {
-                    result_of_copy
+                    if result_of_copy.is_ok() {
+                        self.update_last_synced_key(
+                            last_key,
+                            &mut transaction,
+                            "last_synced_key",
+                            asset_type,
+                        )
+                        .await
+                    } else {
+                        result_of_copy
+                    }
+                }
+                AssetType::Fungible => {
+                    let Some(fungible_tokens_path) = base_path
+                        .join("fungible_tokens.csv")
+                        .to_str()
+                        .map(str::to_owned)
+                    else {
+                        return Err(IndexDbError::BadArgument(format!(
+                            "invalid path '{:?}'",
+                            base_path
+                        )));
+                    };
+
+                    let result_of_copy = self
+                        .copy_fungibles(fungible_tokens_path, &mut transaction)
+                        .await;
+
+                    if result_of_copy.is_ok() {
+                        self.update_last_synced_key(
+                            last_key,
+                            &mut transaction,
+                            "last_synced_key",
+                            asset_type,
+                        )
+                        .await
+                    } else {
+                        result_of_copy
+                    }
                 }
             }
-            AssetType::Fungible => {
-                let Some(fungible_tokens_path) = base_path
-                    .join("fungible_tokens.csv")
-                    .to_str()
-                    .map(str::to_owned)
-                else {
-                    return Err(IndexDbError::BadArgument(format!(
-                        "invalid path '{:?}'",
-                        base_path
-                    )));
-                };
-
-                let result_of_copy = self
-                    .copy_fungibles(fungible_tokens_path, &mut transaction)
-                    .await;
-
-                if result_of_copy.is_ok() {
-                    self.update_last_synced_key(
-                        last_key,
-                        &mut transaction,
-                        "last_synced_key",
-                        asset_type,
-                    )
-                    .await
-                } else {
-                    result_of_copy
-                }
-            }
-        };
+        })
+        .await;
 
         match dump_result {
             Ok(_) => {
@@ -465,7 +490,7 @@ impl AssetIndexStorage for PgClient {
                 self.metrics.observe_request(
                     SQL_COMPONENT,
                     TRANSACTION_ACTION,
-                    "transaction_failed_total",
+                    "load_from_dump",
                     operation_start_time,
                 );
                 Ok(())
@@ -475,7 +500,7 @@ impl AssetIndexStorage for PgClient {
                 self.metrics.observe_request(
                     SQL_COMPONENT,
                     TRANSACTION_ACTION,
-                    "transaction_failed_total",
+                    "load_from_dump_failed",
                     operation_start_time,
                 );
                 Err(e)
@@ -489,9 +514,19 @@ impl AssetIndexStorage for PgClient {
         asset_type: AssetType,
     ) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
-        self.update_last_synced_key(last_key, &mut transaction, "last_synced_key", asset_type)
-            .await?;
-        self.commit_transaction(transaction).await
+        match self
+            .update_last_synced_key(last_key, &mut transaction, "last_synced_key", asset_type)
+            .await
+        {
+            Ok(_) => {
+                self.commit_transaction(transaction).await?;
+                Ok(())
+            }
+            Err(e) => {
+                self.rollback_transaction(transaction).await?;
+                Err(e)
+            }
+        }
     }
 }
 
@@ -513,20 +548,51 @@ pub struct CreatorsUpdates {
 }
 
 impl PgClient {
-    pub async fn get_existing_metadata_keys(&self) -> Result<HashSet<Vec<u8>>, String> {
+    pub async fn get_existing_metadata_keys(&self) -> Result<HashSet<Vec<u8>>, IndexDbError> {
+        let operation_start_time = chrono::Utc::now();
+
+        // Start the transaction
+        let mut transaction = self.start_transaction().await?;
+
+        // Call the transactional logic method
+        let result = self
+            .get_existing_metadata_keys_logic(&mut transaction)
+            .await;
+        // Roll back the transaction (since we only used it for the cursor)
+        self.rollback_transaction(transaction).await?;
+        self.metrics.observe_request(
+            SQL_COMPONENT,
+            TRANSACTION_ACTION,
+            "transaction_total",
+            operation_start_time,
+        );
+        result
+    }
+
+    // The transactional logic is encapsulated here
+    async fn get_existing_metadata_keys_logic(
+        &self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<HashSet<Vec<u8>>, IndexDbError> {
         let mut set = HashSet::new();
-        let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
+
+        // Declare the cursor
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
             "DECLARE all_tasks CURSOR FOR SELECT tsk_id FROM tasks WHERE tsk_id IS NOT NULL",
         );
-        self.execute_query_with_metrics(&mut tx, &mut query_builder, CREATE_ACTION, "cursor")
+        self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, "cursor")
             .await?;
+
+        // Fetch rows in a loop
         loop {
             let mut query_builder: QueryBuilder<'_, Postgres> =
                 QueryBuilder::new("FETCH 10000 FROM all_tasks");
-            // Fetch a batch of rows from the cursor
             let query = query_builder.build_query_as::<TaskIdRawResponse>();
-            let rows = query.fetch_all(&mut tx).await.map_err(|e| e.to_string())?;
+            let rows = query.fetch_all(&mut *transaction).await.map_err(|e| {
+                self.metrics
+                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "FETCH_CURSOR");
+                IndexDbError::QueryExecErr(e)
+            })?;
 
             // If no rows were fetched, we are done
             if rows.is_empty() {
@@ -537,10 +603,12 @@ impl PgClient {
                 set.insert(row.tsk_id);
             }
         }
+
+        // Close the cursor
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("CLOSE all_tasks");
-        self.execute_query_with_metrics(&mut tx, &mut query_builder, DROP_ACTION, "cursor")
+        self.execute_query_with_metrics(transaction, &mut query_builder, DROP_ACTION, "cursor")
             .await?;
-        self.rollback_transaction(tx).await?;
+
         Ok(set)
     }
 

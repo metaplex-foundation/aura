@@ -45,6 +45,7 @@ pub async fn search_assets<
     token_price_fetcher: Arc<TPF>,
     metrics: Arc<ApiMetricsConfig>,
     tree_gaps_checker: &Option<Arc<PPC>>,
+    native_mint_pubkey: &str,
 ) -> Result<AssetList, StorageError> {
     if options.show_fungible {
         filter.token_type = Some(TokenType::All)
@@ -75,6 +76,7 @@ pub async fn search_assets<
             filter.owner_address,
             account_balance_getter,
             token_price_fetcher.clone(),
+            native_mint_pubkey
         )
     );
     let native_balance = native_balance.unwrap_or_else(|e| {
@@ -231,6 +233,7 @@ async fn fetch_native_balance<TPF: TokenPriceFetcher>(
     owner_address: Option<Vec<u8>>,
     account_balance_getter: Arc<impl AccountBalanceGetter>,
     token_price_fetcher: Arc<TPF>,
+    native_mint_pubkey: &str,
 ) -> Result<Option<NativeBalance>, StorageError> {
     if !show_native_balance {
         return Ok(None);
@@ -246,7 +249,7 @@ async fn fetch_native_balance<TPF: TokenPriceFetcher>(
             .await
             .map_err(|e| StorageError::Common(format!("Account balance getter: {}", e)))?;
     let token_price = *token_price_fetcher
-        .fetch_token_prices(&[spl_token::native_mint::id()])
+        .fetch_token_prices(&[native_mint_pubkey.to_string()])
         .await
         .map_err(|e| StorageError::Common(e.to_string()))?
         .get(&spl_token::native_mint::id().to_string())

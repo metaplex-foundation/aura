@@ -120,13 +120,8 @@ where
         asset_type: AssetType,
     ) -> Result<SyncStatus, IngesterError> {
         let last_indexed_key = self.index_storage.fetch_last_synced_id(asset_type).await?;
-        let last_indexed_key = match last_indexed_key {
-            Some(bytes) => {
-                let decoded_key = decode_u64x2_pubkey(bytes)?;
-                Some(decoded_key)
-            }
-            None => None,
-        };
+        let last_indexed_key = last_indexed_key.map(decode_u64x2_pubkey).transpose()?;
+
         // Fetch the last known key from the primary storage
         let last_key = match asset_type {
             AssetType::NonFungible => self.primary_storage.last_known_nft_asset_updated_key()?,
@@ -147,6 +142,20 @@ where
         let last_known_seq = last_key.seq as i64;
         self.metrics
             .set_last_synchronized_slot("last_known_updated_seq", last_known_seq);
+        self.metrics
+            .set_last_synchronized_slot("last_known_updated_slot", last_key.slot as i64);
+
+        self.metrics.set_last_synchronized_slot(
+            "last_synchronized_slot",
+            last_indexed_key
+                .as_ref()
+                .map(|k| k.slot)
+                .unwrap_or_default() as i64,
+        );
+        self.metrics.set_last_synchronized_slot(
+            "last_synchronized_seq",
+            last_indexed_key.as_ref().map(|k| k.seq).unwrap_or_default() as i64,
+        );
         if let Some(last_indexed_key) = &last_indexed_key {
             if last_indexed_key.seq >= last_key.seq {
                 return Ok(SyncStatus::NoSyncRequired);
@@ -513,7 +522,7 @@ where
         metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), IngesterError> {
         let asset_indexes = primary_storage
-            .get_nft_asset_indexes(updated_keys_refs, None)
+            .get_nft_asset_indexes(updated_keys_refs)
             .await?;
 
         if asset_indexes.is_empty() {
@@ -522,13 +531,7 @@ where
         }
 
         index_storage
-            .update_nft_asset_indexes_batch(
-                asset_indexes
-                    .values()
-                    .cloned()
-                    .collect::<Vec<AssetIndex>>()
-                    .as_slice(),
-            )
+            .update_nft_asset_indexes_batch(asset_indexes.as_slice())
             .await?;
         metrics.inc_number_of_records_synchronized(
             "synchronized_records",
@@ -554,11 +557,7 @@ where
 
         index_storage
             .update_fungible_asset_indexes_batch(
-                asset_indexes
-                    .values()
-                    .cloned()
-                    .collect::<Vec<FungibleAssetIndex>>()
-                    .as_slice(),
+                asset_indexes.as_slice(),
             )
             .await?;
         metrics.inc_number_of_records_synchronized(
@@ -580,7 +579,6 @@ mod tests {
     use mockall;
     use postgre_client::storage_traits::{MockAssetIndexStorageMock, MockTempClientProviderMock};
     use rocks_db::storage_traits::MockAssetIndexStorage as MockPrimaryStorage;
-    use std::collections::HashMap;
     use tokio;
 
     fn create_test_asset_index(pubkey: &Pubkey) -> AssetIndex {
@@ -709,18 +707,18 @@ mod tests {
             .once()
             .return_once(move |_, _, _, _| Ok((updated_keys.clone(), Some(index_clone))));
 
-        let mut map_of_asset_indexes = HashMap::<Pubkey, AssetIndex>::new();
-        map_of_asset_indexes.insert(key.clone(), create_test_asset_index(&key));
-        let expected_indexes: Vec<AssetIndex> = map_of_asset_indexes.values().cloned().collect();
+        let mut expected_indexes = Vec::<AssetIndex>::new();
+        expected_indexes.push(create_test_asset_index(&key));
+        let indexes_vec = expected_indexes.clone();
         primary_storage
             .mock_asset_index_reader
             .expect_get_nft_asset_indexes()
             .once()
-            .return_once(move |_, _| Ok(map_of_asset_indexes));
-
+            .return_once(move |_| Ok(indexes_vec));
+        let indexes_vec = expected_indexes.clone();
         index_storage
             .expect_update_nft_asset_indexes_batch()
-            .with(mockall::predicate::eq(expected_indexes.clone()))
+            .with(mockall::predicate::eq(indexes_vec))
             .once()
             .return_once(|_| Ok(()));
         index_storage
@@ -813,14 +811,14 @@ mod tests {
                 }
             });
 
-        let mut map_of_asset_indexes = HashMap::<Pubkey, AssetIndex>::new();
-        map_of_asset_indexes.insert(key.clone(), create_test_asset_index(&key));
-        let expected_indexes: Vec<AssetIndex> = map_of_asset_indexes.values().cloned().collect();
+        let mut expected_indexes = Vec::<AssetIndex>::new();
+        expected_indexes.push(create_test_asset_index(&key));
+        let indexes_vec = expected_indexes.clone();
         primary_storage
             .mock_asset_index_reader
             .expect_get_nft_asset_indexes()
             .once()
-            .return_once(move |_, _| Ok(map_of_asset_indexes));
+            .return_once(move |_| Ok(indexes_vec));
 
         index_storage
             .expect_update_nft_asset_indexes_batch()
@@ -936,25 +934,22 @@ mod tests {
                 }
             });
 
-        let mut map_of_asset_indexes = HashMap::<Pubkey, AssetIndex>::new();
-        map_of_asset_indexes.insert(key.clone(), create_test_asset_index(&key));
-        let expected_indexes_first_batch: Vec<AssetIndex> =
-            map_of_asset_indexes.values().cloned().collect();
-
-        let expected_indexes_second_batch: Vec<AssetIndex> =
-            map_of_asset_indexes.values().cloned().collect();
-        let second_call_map = map_of_asset_indexes.clone();
+        let mut expected_indexes_first_batch = Vec::<AssetIndex>::new();
+        expected_indexes_first_batch.push(create_test_asset_index(&key));
+        let indexes_first_batch_vec = expected_indexes_first_batch.clone();
+        let indexes_second_batch_vec = expected_indexes_first_batch.clone();
+        let expected_indexes_second_batch: Vec<AssetIndex> = expected_indexes_first_batch.clone();
         let mut call_count2 = 0;
         primary_storage
             .mock_asset_index_reader
             .expect_get_nft_asset_indexes()
             .times(2)
-            .returning(move |_, _| {
+            .returning(move |_| {
                 call_count2 += 1;
                 if call_count2 == 1 {
-                    Ok(map_of_asset_indexes.clone())
+                    Ok(indexes_first_batch_vec.clone())
                 } else {
-                    Ok(second_call_map.clone())
+                    Ok(indexes_second_batch_vec.clone())
                 }
             });
 

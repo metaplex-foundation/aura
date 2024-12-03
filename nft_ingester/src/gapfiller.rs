@@ -109,39 +109,40 @@ pub async fn process_raw_blocks_stream(
     end_slot: u64,
     mut raw_blocks_consumer: impl RawBlocksConsumer,
 ) -> u64 {
-    let mut raw_blocks_streamer = match raw_blocks_consumer
-        .get_raw_blocks_consumable_stream_in_range(start_slot, end_slot)
-        .await
-    {
-        Ok(stream) => stream,
-        Err(e) => {
-            error!("Error consume raw blocks stream in range: {e}");
-            return 0;
-        }
-    };
+    // TODO: move to slot persister
+    // let mut raw_blocks_streamer = match raw_blocks_consumer
+    //     .get_raw_blocks_consumable_stream_in_range(start_slot, end_slot)
+    //     .await
+    // {
+    //     Ok(stream) => stream,
+    //     Err(e) => {
+    //         error!("Error consume raw blocks stream in range: {e}");
+    //         return 0;
+    //     }
+    // };
 
     let mut processed_slots = 0;
 
-    while rx.is_empty() {
-        match raw_blocks_streamer.next().await {
-            Some(Ok(block)) => {
-                if let Some(e) = storage
-                    .raw_blocks_cbor
-                    .put_cbor_encoded(block.slot, block)
-                    .await
-                    .err()
-                {
-                    error!("Error processing raw block: {e}")
-                } else {
-                    processed_slots += 1;
-                }
-            }
-            Some(Err(e)) => {
-                error!("Error processing raw block stream item: {e}");
-            }
-            None => return processed_slots,
-        }
-    }
+    // while rx.is_empty() {
+    //     match raw_blocks_streamer.next().await {
+    //         Some(Ok(block)) => {
+    //             if let Some(e) = storage
+    //                 .raw_blocks_cbor
+    //                 .put_cbor_encoded(block.slot, block)
+    //                 .await
+    //                 .err()
+    //             {
+    //                 error!("Error processing raw block: {e}")
+    //             } else {
+    //                 processed_slots += 1;
+    //             }
+    //         }
+    //         Some(Err(e)) => {
+    //             error!("Error processing raw block stream item: {e}");
+    //         }
+    //         None => return processed_slots,
+    //     }
+    // }
 
     processed_slots
 }
