@@ -225,13 +225,17 @@ impl PgClient {
 
         transaction
             .execute(sqlx::query(
-                "update last_synced_key set last_synced_asset_update_key = null where id = 1;",
+                "update last_synced_key set last_synced_asset_update_key = null where id = 1 or id = 2;",
             ))
             .await?;
 
         self.recreate_fungible_indexes(&mut transaction).await?;
-        self.recreate_nft_indexes(&mut transaction).await?;
-        self.recreate_constraints(&mut transaction).await?;
+        self.recreate_asset_indexes(&mut transaction).await?;
+        self.recreate_authorities_indexes(&mut transaction).await?;
+        self.recreate_creators_indexes(&mut transaction).await?;
+        self.recreate_asset_authorities_constraints(&mut transaction).await?;
+        self.recreate_asset_creators_constraints(&mut transaction).await?;   
+        self.recreate_asset_constraints(&mut transaction).await?;
 
         transaction.commit().await.map_err(|e| e)?;
         // those await above will not always rollback the tx

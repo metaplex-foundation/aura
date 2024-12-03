@@ -453,15 +453,21 @@ impl AssetIndexStorage for PgClient {
         Ok(())
     }
     async fn finalize_batch_nft_load(&self) -> Result<(), IndexDbError> {
-        let mut transaction = self.start_transaction().await?;
-        match self.finalize_batch_nft_load_tx(&mut transaction).await {
-            Ok(_) => {
-                self.commit_transaction(transaction).await?;
-            }
-            Err(e) => {
-                self.rollback_transaction(transaction).await?;
-                return Err(e);
-            }
+        let mut wg = JoinSet::new();
+        let v = self.clone();
+        wg.spawn(async move {
+            v.finalize_assets_load().await
+        });
+        let v = self.clone();
+        wg.spawn(async move {
+            v.finalize_creators_load().await
+        });
+        let v = self.clone();
+        wg.spawn(async move {
+            v.finalize_authorities_load().await
+        });
+        while let Some(task) = wg.join_next().await {
+            task??;
         }
         Ok(())
     }
