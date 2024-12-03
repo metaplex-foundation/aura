@@ -121,6 +121,7 @@ pub async fn main() -> Result<(), IngesterError> {
                         rocks_storage.clone(),
                         json_downloader_metrics.clone(),
                         red_metrics.clone(),
+                        nft_ingester::config::default_parallel_json_downloaders(),
                     )
                     .await,
                 ))

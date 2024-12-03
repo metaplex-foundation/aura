@@ -299,6 +299,7 @@ pub async fn main() -> Result<(), IngesterError> {
             primary_rocks_storage.clone(),
             metrics_state.json_downloader_metrics.clone(),
             metrics_state.red_metrics.clone(),
+            config.parallel_json_downloaders,
         )
         .await,
     );
