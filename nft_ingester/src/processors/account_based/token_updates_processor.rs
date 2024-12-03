@@ -170,11 +170,6 @@ impl TokenAccountsProcessor {
                     )
                 })
                 .unwrap_or_default(),
-            chain_mutability: Some(Updated::new(
-                mint.slot_updated as u64,
-                Some(UpdateVersion::WriteVersion(mint.write_version)),
-                entities::enums::ChainMutability::Mutable,
-            )),
             onchain_data: metadata_json.map(|metadata_json| {
                 Updated::new(
                     mint.slot_updated as u64,

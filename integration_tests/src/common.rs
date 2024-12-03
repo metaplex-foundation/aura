@@ -206,6 +206,11 @@ impl TestSetup {
             das_api,
         }
     }
+
+    pub async fn clean_up_data_bases(&self) {
+        self.db.clean_db().await.unwrap();
+        self.rocks_db.clean_db().await;
+    }
 }
 
 #[derive(Clone, Copy, Default)]

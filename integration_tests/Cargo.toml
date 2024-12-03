@@ -33,6 +33,6 @@ tempfile = {workspace = true}
 nft_ingester = { path = "../nft_ingester" }
 postgre-client = { path = "../postgre-client", features = ["integration_tests"] }
 metrics-utils = { path = "../metrics_utils" }
-rocks-db = { path = "../rocks-db" }
+rocks-db = { path = "../rocks-db", features = ["integration_tests"] }
 usecase = { path = "../usecase" }
 entities = { path = "../entities" }
