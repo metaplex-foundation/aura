@@ -30,6 +30,7 @@ pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
+    tracing_subscriber::fmt::init();
     info!("Starting API server...");
 
     let config: ApiConfig = setup_config("API_");
