@@ -117,11 +117,12 @@ pub async fn main() -> Result<(), IngesterError> {
         tracing::error!("Sync rocksdb error: {}", e);
     }
 
+    let mut full_sync_tasks = JoinSet::new();
     for asset_type in ASSET_TYPES {
         let synchronizer = synchronizer.clone();
         let shutdown_rx = shutdown_rx.resubscribe();
 
-        mutexed_tasks.lock().await.spawn(async move {
+        full_sync_tasks.spawn(async move {
             if let Ok(SyncStatus::FullSyncRequired(_)) = synchronizer
                 .get_sync_state(config.dump_sync_threshold, asset_type)
                 .await
@@ -130,18 +131,20 @@ pub async fn main() -> Result<(), IngesterError> {
                 match res {
                     Ok(_) => {
                         tracing::info!("Full synchronization finished successfully");
+                        return Ok(());
                     }
                     Err(e) => {
                         tracing::error!("Full synchronization failed: {:?}", e);
+                        return Err(e);
                     }
                 }
             }
-
             Ok(())
         });
     }
-    while (mutexed_tasks.lock().await.join_next().await).is_some() {}
-
+    while let Some(task) = full_sync_tasks.join_next().await {
+        task.map_err(|e|IngesterError::UnrecoverableTaskError(format!("joining task failed: {}", e.to_string())))??;
+    }
     let shutdown_rx_clone = shutdown_rx.resubscribe();
     let synchronizer_clone = synchronizer.clone();
     mutexed_tasks.lock().await.spawn(async move {
