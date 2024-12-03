@@ -114,11 +114,16 @@ where
         let last_indexed_key = last_indexed_key.map(decode_u64x2_pubkey).transpose()?;
 
         // Fetch the last known key from the primary storage
-        let last_key = match asset_type {
-            AssetType::NonFungible => self.primary_storage.last_known_nft_asset_updated_key()?,
-            AssetType::Fungible => self
-                .primary_storage
-                .last_known_fungible_asset_updated_key()?,
+        let (last_key, prefix) = match asset_type {
+            AssetType::NonFungible => (
+                self.primary_storage.last_known_nft_asset_updated_key()?,
+                "nft",
+            ),
+            AssetType::Fungible => (
+                self.primary_storage
+                    .last_known_fungible_asset_updated_key()?,
+                "fungible",
+            ),
         };
         let Some(last_key) = last_key else {
             return Ok(SyncStatus::NoSyncRequired);
@@ -131,20 +136,24 @@ where
             }));
         }
         let last_known_seq = last_key.seq as i64;
-        self.metrics
-            .set_last_synchronized_slot("last_known_updated_seq", last_known_seq);
-        self.metrics
-            .set_last_synchronized_slot("last_known_updated_slot", last_key.slot as i64);
+        self.metrics.set_last_synchronized_slot(
+            &format!("last_known_updated_{}_seq", prefix),
+            last_known_seq,
+        );
+        self.metrics.set_last_synchronized_slot(
+            &format!("last_known_updated_{}_slot", prefix),
+            last_key.slot as i64,
+        );
 
         self.metrics.set_last_synchronized_slot(
-            "last_synchronized_slot",
+            &format!("last_synchronized_{}_slot", prefix),
             last_indexed_key
                 .as_ref()
                 .map(|k| k.slot)
                 .unwrap_or_default() as i64,
         );
         self.metrics.set_last_synchronized_slot(
-            "last_synchronized_seq",
+            &format!("last_synchronized_{}_seq", prefix),
             last_indexed_key.as_ref().map(|k| k.seq).unwrap_or_default() as i64,
         );
         if let Some(last_indexed_key) = &last_indexed_key {
@@ -452,6 +461,7 @@ where
             .await?;
         Ok(())
     }
+
     async fn regular_fungible_syncronize(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
@@ -515,11 +525,11 @@ where
             }
             if let Some(last_included_rocks_key) = last_included_rocks_key {
                 self.metrics.set_last_synchronized_slot(
-                    "last_synchronized_slot",
+                    "last_synchronized_fungible_slot",
                     last_included_rocks_key.slot as i64,
                 );
                 self.metrics.set_last_synchronized_slot(
-                    "last_synchronized_seq",
+                    "last_synchronized_fungible_seq",
                     last_included_rocks_key.seq as i64,
                 );
 
@@ -606,11 +616,11 @@ where
             }
             if let Some(last_included_rocks_key) = last_included_rocks_key {
                 self.metrics.set_last_synchronized_slot(
-                    "last_synchronized_slot",
+                    "last_synchronized_nft_slot",
                     last_included_rocks_key.slot as i64,
                 );
                 self.metrics.set_last_synchronized_slot(
-                    "last_synchronized_seq",
+                    "last_synchronized_nft_seq",
                     last_included_rocks_key.seq as i64,
                 );
 
