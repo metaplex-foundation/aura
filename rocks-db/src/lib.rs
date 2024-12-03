@@ -34,11 +34,8 @@ use crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigra
 use crate::migrations::collection_authority::{
     AssetCollectionVersion0, CollectionAuthorityMigration,
 };
-use crate::migrations::external_plugins::{AssetDynamicDetailsV0, ExternalPluginsMigration};
-use crate::migrations::spl2022::{
-    AssetDynamicDetailsWithoutExtentions, DynamicDataToken2022MintExtentionsMigration,
-    TokenAccounts2022ExtentionsMigration,
-};
+use crate::migrations::external_plugins::AssetDynamicDetailsV0;
+use crate::migrations::spl2022::TokenAccounts2022ExtentionsMigration;
 use crate::parameters::ParameterColumn;
 use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::token_prices::TokenPrice;
@@ -549,13 +546,8 @@ impl Storage {
             asset::AssetDynamicDetails::NAME => {
                 let mf = match migration_state {
                     MigrationState::Version(version) => match *version {
-                        CollectionAuthorityMigration::VERSION
-                            ..=ExternalPluginsMigration::VERSION => {
+                        CollectionAuthorityMigration::VERSION => {
                             AssetDynamicDetailsV0::merge_dynamic_details
-                        }
-                        CleanCollectionAuthoritiesMigration::VERSION
-                            ..=DynamicDataToken2022MintExtentionsMigration::VERSION => {
-                            AssetDynamicDetailsWithoutExtentions::merge_dynamic_details
                         }
                         _ => asset::AssetDynamicDetails::merge_dynamic_details,
                     },
