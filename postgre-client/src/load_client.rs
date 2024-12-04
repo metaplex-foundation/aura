@@ -438,6 +438,27 @@ impl PgClient {
         Ok(())
     }
 
+    pub(crate) async fn load_from(
+        &self,
+        file_path: String,
+        table: &str,
+        columns: &str,
+    ) -> Result<(), IndexDbError> {
+        let mut transaction = self.start_transaction().await?;
+        match self
+            .copy_table_from(&mut transaction, file_path, table, columns)
+            .await
+        {
+            Ok(_) => {
+                transaction.commit().await?;
+                Ok(())
+            }
+            Err(e) => {
+                transaction.rollback().await?;
+                Err(e)
+            }
+        }
+    }
     pub(crate) async fn load_through_temp_table(
         &self,
         file_path: String,

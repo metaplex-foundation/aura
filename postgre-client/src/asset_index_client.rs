@@ -385,34 +385,45 @@ impl AssetIndexStorage for PgClient {
         };
         let temp_postfix = Uuid::new_v4().to_string().replace("-", "");
         let mut copy_tasks: JoinSet<Result<(), IndexDbError>> = JoinSet::new();
-        for (file_path, table, columns, on_conflict_do_nothing, semaphore) in [
+        for (file_path, table, columns) in [
             ( base_path.join(creators_file_name),
                 "asset_creators_v3",
                 "asc_pubkey, asc_creator, asc_verified, asc_slot_updated",
-                false,
-                None,
             ),
             (
                 base_path.join(authority_file_name),
                 "assets_authorities",
                 "auth_pubkey, auth_authority, auth_slot_updated",
-                false,
-                None,
             ),
             (base_path.join(assets_file_name),
                 "assets_v3",
                 "ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_authority_fk, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated",
-                false,
-                None,
             ),
-            (base_path.join(metadata_file_name), "tasks", "tsk_id, tsk_metadata_url, tsk_status", true, Some(semaphore)),
         ]{
-            let file_path = file_path.to_str().unwrap_or_default().to_string();
-            let temp_postfix = temp_postfix.clone();
             let cl = self.clone();
             copy_tasks.spawn(async move {
-            cl.load_through_temp_table(file_path, table, temp_postfix.as_str(), columns, on_conflict_do_nothing, semaphore.clone()).await});
+                cl.load_from(file_path.to_str().unwrap_or_default().to_string(), table, columns).await
+            });
         }
+
+        let file_path = base_path
+            .join(metadata_file_name)
+            .to_str()
+            .unwrap_or_default()
+            .to_string();
+        let temp_postfix = temp_postfix.clone();
+        let cl = self.clone();
+        copy_tasks.spawn(async move {
+            cl.load_through_temp_table(
+                file_path,
+                "tasks",
+                temp_postfix.as_str(),
+                "tsk_id, tsk_metadata_url, tsk_status",
+                true,
+                Some(semaphore).clone(),
+            )
+            .await
+        });
         while let Some(task) = copy_tasks.join_next().await {
             task??;
         }
@@ -423,15 +434,10 @@ impl AssetIndexStorage for PgClient {
         &self,
         fungible_tokens_path: &str,
     ) -> Result<(), IndexDbError> {
-        let temp_postfix = Uuid::new_v4().to_string().replace("-", "");
-
-        self.load_through_temp_table(
+        self.load_from(
             fungible_tokens_path.to_string(),
             "fungible_tokens",
-            temp_postfix.as_str(),
             "fbt_pubkey, fbt_owner, fbt_asset, fbt_balance, fbt_slot_updated",
-            false,
-            None,
         )
         .await
     }
@@ -455,17 +461,11 @@ impl AssetIndexStorage for PgClient {
     async fn finalize_batch_nft_load(&self) -> Result<(), IndexDbError> {
         let mut wg = JoinSet::new();
         let v = self.clone();
-        wg.spawn(async move {
-            v.finalize_assets_load().await
-        });
+        wg.spawn(async move { v.finalize_assets_load().await });
         let v = self.clone();
-        wg.spawn(async move {
-            v.finalize_creators_load().await
-        });
+        wg.spawn(async move { v.finalize_creators_load().await });
         let v = self.clone();
-        wg.spawn(async move {
-            v.finalize_authorities_load().await
-        });
+        wg.spawn(async move { v.finalize_authorities_load().await });
         while let Some(task) = wg.join_next().await {
             task??;
         }
