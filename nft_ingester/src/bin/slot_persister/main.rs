@@ -41,11 +41,11 @@ const SLOT_COLLECTION_OFFSET: u64 = 300;
 )]
 struct Args {
     /// Path to the target RocksDB instance with slots
-    #[arg(short, long)]
+    #[arg(short, long, env = "SLOTS_DB_PRIMARY_PATH")]
     target_db_path: PathBuf,
 
     /// RPC host
-    #[arg(short, long)]
+    #[arg(short, long, env = "RPC_HOST")]
     rpc_host: String,
 
     /// Optional starting slot number, this will override the last saved slot in the RocksDB
@@ -53,7 +53,7 @@ struct Args {
     start_slot: Option<u64>,
 
     /// Big table credentials file path
-    #[arg(short, long)]
+    #[arg(short, long, env = "BIG_TABLE_CREDENTIALS")]
     big_table_credentials: Option<String>,
 
     /// Optional big table timeout (default: 1000)
@@ -62,7 +62,7 @@ struct Args {
 
     /// Metrics port
     /// Default: 9090
-    #[arg(short, long, default_value = "9090")]
+    #[arg(short, long, default_value = "9090", env = "METRICS_PORT")]
     metrics_port: u16,
 
     /// Number of slots to process in each batch

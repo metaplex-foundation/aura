@@ -33,7 +33,7 @@ stretto = { workspace = true }
 async-channel = { workspace = true }
 tokio-util = { workspace = true }
 tracing-subscriber = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, features = ["env"] }
 bincode = { workspace = true }
 metrics-utils = { path = "../metrics_utils" }
 rocks-db = { path = "../rocks-db" }

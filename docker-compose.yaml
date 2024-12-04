@@ -3,7 +3,7 @@ services:
   ingester:
     container_name: ingester
     restart: always
-    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then exec ./ingester --slots-db-path $$INGESTER_SLOTS_DB_PATH --secondary-slots-db-path $$INGESTER_SECONDARY_SLOTS_DB_PATH; else exec ./profiling_ingester --slots-db-path $$INGESTER_SLOTS_DB_PATH --secondary-slots-db-path $$INGESTER_SECONDARY_SLOTS_DB_PATH; fi"
+    entrypoint: sh -c "if [ -z '${MALLOC_CONF}' ]; then exec ./ingester --slots-db-path $$INGESTER_SLOTS_DB_PATH --secondary-slots-db-path $$INGESTER_SECONDARY_SLOTS_DB_PATH; else exec ./profiling_ingester --slots-db-path $$INGESTER_SLOTS_DB_PATH --secondary-slots-db-path $$INGESTER_SECONDARY_SLOTS_DB_PATH; fi"
     env_file:
       - .env
     network_mode: host
@@ -34,7 +34,7 @@ services:
   das-api:
     container_name: das-api
     restart: always
-    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then exec ./api; else exec ./profiling_api; fi"
+    entrypoint: sh -c "if [ -z '${MALLOC_CONF}' ]; then exec ./api; else exec ./profiling_api; fi"
     env_file:
       - .env
     network_mode: host
@@ -57,7 +57,7 @@ services:
   synchronizer:
     container_name: synchronizer
     restart: always
-    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then exec ./synchronizer; else exec ./profiling_synchronizer; fi"
+    entrypoint: sh -c "if [ -z '${MALLOC_CONF}' ]; then exec ./synchronizer; else exec ./profiling_synchronizer; fi"
     env_file:
       - .env
     network_mode: host
@@ -97,53 +97,46 @@ services:
       options:
         max-size: "2048m"
 
-  raw-backfiller:
-    container_name: raw-backfiller
-    restart: always
-    entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then exec ./raw_backfiller; else exec ./profiling_raw_backfiller; fi"
-    env_file:
-      - .env
-    network_mode: host
-    volumes:
-      - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
-      - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
-      - ./creds.json:/usr/src/app/creds.json
-      - ./heaps:/usr/src/app/heaps:rw
-    stop_grace_period: 5m
-    build:
-      context: .
-      dockerfile: ingester.Dockerfile
-    logging:
-      options:
-        max-size: "2048m"
+  # TODO: pass the arguments to the container, check the mounts as we have 2 dbs - slots and the main one
+  # backfill:
+  #   container_name: backfill
+  #   restart: always
+  #   entrypoint: sh -c "if [ -z '$$MALLOC_CONF' ]; then exec ./backfill; else exec ./profiling_backfill; fi"
+  #   env_file:
+  #     - .env
+  #   network_mode: host
+  #   volumes:
+  #     - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
+  #     - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
+  #     - ./creds.json:/usr/src/app/creds.json
+  #     - ./heaps:/usr/src/app/heaps:rw
+  #   stop_grace_period: 5m
+  #   build:
+  #     context: .
+  #     dockerfile: ingester.Dockerfile
+  #   logging:
+  #     options:
+  #       max-size: "2048m"
 
   slot-persister:
     container_name: slot-persister
     restart: always
-    entrypoint: |
-      sh -c "
-      ARGS=\"--target-db-path $target_db_path\"
-      ARGS=\"$$ARGS --rpc-host $rpc_host\"
-      [ -n \"$start_slot\" ] && ARGS=\"$$ARGS --start-slot $start_slot\"
-      [ -n \"$big_table_credentials\" ] && ARGS=\"$$ARGS --big-table-credentials $big_table_credentials\"
-      [ -n \"$big_table_timeout\" ] && ARGS=\"$$ARGS --big-table-timeout $big_table_timeout\"
-      [ -n \"$metrics_port\" ] && ARGS=\"$$ARGS --metrics-port $metrics_port\"
-      [ -n \"$chunk_size\" ] && ARGS=\"$$ARGS --chunk-size $chunk_size\"
-      [ -n \"$max_concurrency\" ] && ARGS=\"$$ARGS --max-concurrency $max_concurrency\"
-
-      if [ -z \"$MALLOC_CONF\" ]; then
-        exec ./slot_persister $$ARGS
-      else
-        exec ./profiling_slot_persister $$ARGS
-      fi"
+    entrypoint: >
+      sh -c "if [ -f /usr/src/app/creds.json ]; then
+        export BIG_TABLE_CREDENTIALS=/usr/src/app/creds.json;
+      fi;
+      exec ./slot_persister"
     env_file:
       - .env
+    environment:
+      SLOTS_DB_PRIMARY_PATH: ${INGESTER_SLOTS_DB_PATH}
+      RPC_HOST: ${INGESTER_RPC_HOST}
+      # BIG_TABLE_CREDENTIALS: /usr/src/app/creds.json # refactored this to account for the file doesn't exist case
+      METRICS_PORT: 9090
     network_mode: host
     volumes:
-      - ${target_db_path}:${target_db_path}:rw
-      - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
-      - ${big_table_credentials:-/tmp/creds.json}:${big_table_credentials:-/tmp/creds.json}
-      - ./heaps:/usr/src/app/heaps:rw
+      - ${INGESTER_SLOTS_DB_PATH}:${INGESTER_SLOTS_DB_PATH}:rw
+      - ./creds.json:/usr/src/app/creds.json
     stop_grace_period: 5m
     build:
       context: .
