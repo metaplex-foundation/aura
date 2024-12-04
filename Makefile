@@ -1,9 +1,10 @@
-.PHONY: build start build-integrity-verification start-integrity-verification start-backfiller start-core-indexing dev stop clippy test
-
+.PHONY: build start build-integrity-verification start-integrity-verification start-core-indexing dev stop clippy test
+#  start-backfiller
 SHELL := /bin/bash
 
 build:
-	@docker compose -f docker-compose.yaml build ingester backfiller das-api synchronizer core-indexing slot-persister
+	@docker compose -f docker-compose.yaml build ingester das-api synchronizer core-indexing slot-persister
+	# backfiller
 
 start:
 	@docker compose -f docker-compose.yaml up -d ingester
@@ -26,8 +27,8 @@ build-integrity-verification:
 start-integrity-verification:
 	@docker compose -f docker-compose.yaml up -d integrity-verification
 
-start-backfiller:
-	@docker compose -f docker-compose.yaml up -d backfiller
+# start-backfiller:
+# 	@docker compose -f docker-compose.yaml up -d backfiller
 
 start-core-indexing:
 	@docker compose -f docker-compose.yaml up -d core-indexing
