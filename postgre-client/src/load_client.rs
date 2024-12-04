@@ -506,7 +506,7 @@ impl PgClient {
         // the only constraints left are the NOT NULL constraints, which are not dropped due to the performance impact
         for table in ["assets_v3", "asset_creators_v3", "assets_authorities"] {
             self.truncate_table(transaction, table).await?;
-            self.set_unlogged_on(transaction, table).await?;
+            // self.set_unlogged_on(transaction, table).await?;
             self.set_autovacuum_off_on(transaction, table).await?;
         }
         Ok(())
@@ -567,7 +567,7 @@ impl PgClient {
         self.recreate_asset_constraints(transaction).await?;
         self.recreate_asset_indexes(transaction).await?;
         self.reset_autovacuum_on(transaction, "assets_v3").await?;
-        self.set_logged_on(transaction, "assets_v3").await?;
+        // self.set_logged_on(transaction, "assets_v3").await?;
         Ok(())
     }
 
@@ -578,7 +578,7 @@ impl PgClient {
         self.recreate_asset_creators_constraints(transaction).await?;
         self.recreate_creators_indexes(transaction).await?;
         self.reset_autovacuum_on(transaction, "asset_creators_v3").await?;
-        self.set_logged_on(transaction, "asset_creators_v3").await?;
+        // self.set_logged_on(transaction, "asset_creators_v3").await?;
         Ok(())
     }
 
@@ -589,7 +589,7 @@ impl PgClient {
         self.recreate_asset_authorities_constraints(transaction).await?;
         self.recreate_authorities_indexes(transaction).await?;
         self.reset_autovacuum_on(transaction, "assets_authorities").await?;
-        self.set_logged_on(transaction, "assets_authorities").await?;
+        // self.set_logged_on(transaction, "assets_authorities").await?;
         Ok(())
     }
 
@@ -601,7 +601,7 @@ impl PgClient {
         self.drop_fungible_constraints(transaction).await?;
         let table = "fungible_tokens";
         self.truncate_table(transaction, table).await?;
-        self.set_unlogged_on(transaction, table).await?;
+        // self.set_unlogged_on(transaction, table).await?;
         self.set_autovacuum_off_on(transaction, table).await?;
         Ok(())
     }
@@ -614,7 +614,7 @@ impl PgClient {
         self.recreate_fungible_constraints(transaction).await?;
         self.recreate_fungible_indexes(transaction).await?;
         self.reset_autovacuum_on(transaction, table).await?;
-        self.set_logged_on(transaction, table).await?;
+        // self.set_logged_on(transaction, table).await?;
         Ok(())
     }
 }

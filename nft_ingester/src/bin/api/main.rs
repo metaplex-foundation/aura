@@ -32,10 +32,7 @@ pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
 pub async fn main() -> Result<(), IngesterError> {
     tracing_subscriber::fmt::init();
     info!("Starting API server...");
-    tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
-    info!("reading config after 15 seconds");
     let config: ApiConfig = setup_config("API_");
-    info!("config read successfully");
     // init_logger(&config.get_log_level());
 
     let guard = if config.run_profiling {
