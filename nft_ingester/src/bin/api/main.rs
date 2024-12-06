@@ -30,10 +30,10 @@ pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
+    tracing_subscriber::fmt::init();
     info!("Starting API server...");
-
     let config: ApiConfig = setup_config("API_");
-    init_logger(&config.get_log_level());
+    // init_logger(&config.get_log_level());
 
     let guard = if config.run_profiling {
         Some(
@@ -73,6 +73,7 @@ pub async fn main() -> Result<(), IngesterError> {
         config.database_config.get_database_url()?.as_str(),
         min_connections,
         max_connections,
+        None,
         red_metrics.clone(),
     )
     .await?;
@@ -120,6 +121,7 @@ pub async fn main() -> Result<(), IngesterError> {
                         rocks_storage.clone(),
                         json_downloader_metrics.clone(),
                         red_metrics.clone(),
+                        nft_ingester::config::default_parallel_json_downloaders(),
                     )
                     .await,
                 ))

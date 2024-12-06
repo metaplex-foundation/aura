@@ -192,7 +192,7 @@ pub struct IngesterConfig {
     pub price_monitoring_interval_sec: u64,
 }
 
-const fn default_parallel_json_downloaders() -> i32 {
+pub const fn default_parallel_json_downloaders() -> i32 {
     100
 }
 

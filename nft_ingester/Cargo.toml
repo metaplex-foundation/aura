@@ -33,7 +33,7 @@ stretto = { workspace = true }
 async-channel = { workspace = true }
 tokio-util = { workspace = true }
 tracing-subscriber = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, features = ["env"] }
 bincode = { workspace = true }
 metrics-utils = { path = "../metrics_utils" }
 rocks-db = { path = "../rocks-db" }
@@ -84,6 +84,7 @@ indicatif = { workspace = true }
 tokio-retry = { workspace = true }
 axum = { workspace = true }
 rocksdb = { workspace = true }
+num-bigint = "0.4"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }
@@ -145,3 +146,6 @@ name = "explorer"
 
 [[bin]]
 name = "synchronizer_utils"
+
+[[bin]]
+name = "dumper"

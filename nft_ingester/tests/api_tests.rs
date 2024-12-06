@@ -7,8 +7,8 @@ mod tests {
         ShadowInterestBearingConfig, ShadowTransferFee, ShadowTransferFeeConfig, UnixTimestamp,
     };
     use blockbuster::programs::token_extensions::MintAccountExtensions;
-    use rocks_db::column::TypedColumn;
     use nft_ingester::cleaners::indexer_cleaner::clean_syncronized_idxs;
+    use rocks_db::column::TypedColumn;
 
     use std::str::FromStr;
     use std::{collections::HashMap, sync::Arc};

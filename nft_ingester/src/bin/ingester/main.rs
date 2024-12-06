@@ -1,6 +1,6 @@
 use arweave_rs::consts::ARWEAVE_BASE_URL;
 use arweave_rs::Arweave;
-use entities::enums::{AssetType, ASSET_TYPES};
+use entities::enums::ASSET_TYPES;
 use nft_ingester::batch_mint::batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister};
 use nft_ingester::cleaners::indexer_cleaner::clean_syncronized_idxs;
 use nft_ingester::scheduler::Scheduler;
@@ -72,7 +72,7 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const ARWEAVE_WALLET_PATH: &str = "./arweave_wallet.json";
-pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
+pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 8;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 pub const SECONDS_TO_RETRY_IDXS_CLEANUP: u64 = 15 * 60; // 15 minutes
 
@@ -128,6 +128,7 @@ pub async fn main() -> Result<(), IngesterError> {
             metrics_state.red_metrics.clone(),
             DEFAULT_MIN_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,
+            None,
         )
         .await?,
     );
@@ -298,6 +299,7 @@ pub async fn main() -> Result<(), IngesterError> {
             primary_rocks_storage.clone(),
             metrics_state.json_downloader_metrics.clone(),
             metrics_state.red_metrics.clone(),
+            config.parallel_json_downloaders,
         )
         .await,
     );
@@ -566,7 +568,6 @@ pub async fn main() -> Result<(), IngesterError> {
         metrics.register_with_prefix(&mut metrics_state.registry, "force_slot_persister_");
         if let Some(client) = grpc_client {
             let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
-                primary_rocks_storage.clone(),
                 force_reingestable_slot_processor.clone(),
                 force_reingestable_slot_processor.clone(),
                 Arc::new(client),
@@ -580,7 +581,6 @@ pub async fn main() -> Result<(), IngesterError> {
                 .spawn(run_slot_force_persister(force_reingestable_transactions_parser, rx));
         } else {
             let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
-                primary_rocks_storage.clone(),
                 force_reingestable_slot_processor.clone(),
                 force_reingestable_slot_processor.clone(),
                 producer.clone(),
@@ -645,12 +645,14 @@ pub async fn main() -> Result<(), IngesterError> {
     for asset_type in ASSET_TYPES {
         let primary_rocks_storage = primary_rocks_storage.clone();
         let mut rx = shutdown_rx.resubscribe();
+        let index_pg_storage = index_pg_storage.clone();
         mutexed_tasks.lock().await.spawn(async move {
+            let index_pg_storage = index_pg_storage.clone();
             tokio::select! {
                 _ = rx.recv() => {}
                 _ = async move {
                     loop {
-                        match clean_syncronized_idxs(primary_rocks_storage.clone(), asset_type) {
+                        match clean_syncronized_idxs(index_pg_storage.clone(), primary_rocks_storage.clone(), asset_type).await {
                             Ok(_) => {
                                 info!("Cleaned synchronized indexes for {:?}", asset_type);
                             }

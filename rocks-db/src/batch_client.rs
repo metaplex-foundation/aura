@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::asset::{
-    AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, MplCoreCollectionAuthority,
-    SlotAssetIdx, SlotAssetIdxKey, FungibleAssetsUpdateIdx,
+    AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, FungibleAssetsUpdateIdx,
+    MplCoreCollectionAuthority, SlotAssetIdx, SlotAssetIdxKey,
 };
 use crate::asset_generated::asset as fb;
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
@@ -17,10 +17,13 @@ use crate::{
     BATCH_GET_ACTION, BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
 use async_trait::async_trait;
-use entities::enums::{SpecificationAssetClass, SpecificationVersions, TokenMetadataEdition};
-use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, FungibleAssetIndex, UrlWithStatus};
+use entities::enums::{SpecificationAssetClass, TokenMetadataEdition};
+use entities::models::{
+    AssetIndex, CompleteAssetDetails, FungibleAssetIndex, UpdateVersion, Updated,
+};
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
+use tracing::info;
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         _ = self.db.try_catch_up_with_primary();
@@ -97,6 +100,12 @@ impl AssetUpdateIndexStorage for Storage {
                 break;
             }
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
+            if let Some(ref last_key) = last_key {
+                if decoded_key.seq != last_key.seq + 1{
+                    info!("Breaking the fungibles sync loop at seq {} as the sequence is not consecutive to the previously handled {}", decoded_key.seq, last_key.seq);
+                    break;
+                }
+            }
             last_key = Some(decoded_key.clone());
             // Skip keys that are in the skip_keys set
             if skip_keys
@@ -157,6 +166,12 @@ impl AssetUpdateIndexStorage for Storage {
                 break;
             }
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
+            if let Some(ref last_key) = last_key {
+                if decoded_key.seq != last_key.seq + 1{
+                    info!("Breaking the NFT sync loop at seq {} as the sequence is not consecutive to the previously handled {}", decoded_key.seq, last_key.seq);
+                    break;
+                }
+            }
             last_key = Some(decoded_key.clone());
             // Skip keys that are in the skip_keys set
             if skip_keys
@@ -319,16 +334,13 @@ impl AssetIndexReader for Storage {
         Ok(fungible_assets_indexes)
     }
 
-    async fn get_nft_asset_indexes<'a>(
-        &self,
-        keys: &[Pubkey],
-    ) ->  Result<Vec<AssetIndex>> {
+    async fn get_nft_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>> {
         let start_time = chrono::Utc::now();
-        
+
         let asset_index_collection_url_fut =
             self.get_asset_indexes_with_collections_and_urls(keys.to_vec());
         let spl_mints_fut = self.spl_mints.batch_get(keys.to_vec());
-        
+
         let (mut asset_indexes, assets_collection_pks, urls) =
             asset_index_collection_url_fut.await?;
 
@@ -596,6 +608,7 @@ impl Storage {
                 batch,
                 data.pubkey,
                 &MplCoreCollectionAuthority {
+                    // total BS
                     authority: data.collection.as_ref().unwrap().authority.clone(),
                 },
             )?; //this will never error in fact

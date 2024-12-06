@@ -279,7 +279,12 @@ pub fn to_authority(
     // even if there is no authority for asset we should not set Pubkey::default(), just empty string
     let auth_key = update_authority
         .map(|update_authority| update_authority.to_string())
-        .unwrap_or(authority.as_ref().map(|auth| auth.authority.to_string()).unwrap_or("".to_string()));
+        .unwrap_or(
+            authority
+                .as_ref()
+                .map(|auth| auth.authority.to_string())
+                .unwrap_or("".to_string()),
+        );
 
     vec![Authority {
         address: auth_key,
