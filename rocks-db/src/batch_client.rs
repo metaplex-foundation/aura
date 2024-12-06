@@ -23,6 +23,7 @@ use entities::models::{
 };
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
+use tracing::info;
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         _ = self.db.try_catch_up_with_primary();
@@ -99,6 +100,12 @@ impl AssetUpdateIndexStorage for Storage {
                 break;
             }
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
+            if let Some(ref last_key) = last_key {
+                if decoded_key.seq != last_key.seq + 1{
+                    info!("Breaking the fungibles sync loop at seq {} as the sequence is not consecutive to the previously handled {}", decoded_key.seq, last_key.seq);
+                    break;
+                }
+            }
             last_key = Some(decoded_key.clone());
             // Skip keys that are in the skip_keys set
             if skip_keys
@@ -159,6 +166,12 @@ impl AssetUpdateIndexStorage for Storage {
                 break;
             }
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
+            if let Some(ref last_key) = last_key {
+                if decoded_key.seq != last_key.seq + 1{
+                    info!("Breaking the NFT sync loop at seq {} as the sequence is not consecutive to the previously handled {}", decoded_key.seq, last_key.seq);
+                    break;
+                }
+            }
             last_key = Some(decoded_key.clone());
             // Skip keys that are in the skip_keys set
             if skip_keys
