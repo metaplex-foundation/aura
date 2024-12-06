@@ -645,12 +645,14 @@ pub async fn main() -> Result<(), IngesterError> {
     for asset_type in ASSET_TYPES {
         let primary_rocks_storage = primary_rocks_storage.clone();
         let mut rx = shutdown_rx.resubscribe();
+        let index_pg_storage = index_pg_storage.clone();
         mutexed_tasks.lock().await.spawn(async move {
+            let index_pg_storage = index_pg_storage.clone();
             tokio::select! {
                 _ = rx.recv() => {}
                 _ = async move {
                     loop {
-                        match clean_syncronized_idxs(primary_rocks_storage.clone(), asset_type) {
+                        match clean_syncronized_idxs(index_pg_storage.clone(), primary_rocks_storage.clone(), asset_type).await {
                             Ok(_) => {
                                 info!("Cleaned synchronized indexes for {:?}", asset_type);
                             }
