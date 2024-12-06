@@ -26,7 +26,7 @@ start-integrity-verification:
 	@docker compose -f docker-compose.yaml up -d integrity-verification
 
 start-backfiller:
- 	@docker compose -f docker-compose.yaml up -d backfiller
+	@docker compose -f docker-compose.yaml up -d backfiller
 
 start-core-indexing:
 	@docker compose -f docker-compose.yaml up -d core-indexing
