@@ -149,11 +149,11 @@ pub const ACC_GRAND_BUCKET_INVALIDATED: AccountNftGrandBucket = AccountNftGrandB
 /// To prevent such inconsistency of a checksum, roght before the calulating,
 /// we mark the epoch checksum to be calculated is "Calculating",
 /// and after the checksum is calculated, we write this value only in case
-/// if the previous value is still in "Calculated" state.
+/// if the previous value is still in the same "Calculating" state.
 ///
 /// At the same time, when the Bubblegum updated processor receives
-/// a new update with slot that epoch is from the previous epoch perioud,
-/// it not only writed the bubblegum change, but also updated
+/// a new update with slot that epoch is from the previous epoch period,
+/// it not only writed the bubblegum change, but also updates
 /// corresponding epoch state to "Invalidated", which prevents
 /// the checksum that might be in the process of calculation
 /// to be written.
@@ -655,7 +655,7 @@ pub(crate) fn merge_bubblgum_epoch_checksum(
 ) -> Option<Vec<u8>> {
     if let Some(v) = existing_val {
         if v == BUBBLEGUM_EPOCH_CALCULATING_BYTES.as_slice() {
-            if let Some(op) = operands.into_iter().next() {
+            if let Some(op) = operands.into_iter().last() {
                 return Some(op.to_vec());
             }
         }
@@ -672,7 +672,7 @@ pub(crate) fn merge_bubblgum_grand_epoch_checksum(
 ) -> Option<Vec<u8>> {
     if let Some(v) = existing_val {
         if v == BUBBLEGUM_GRAND_EPOCH_CALCULATING_BYTES.as_slice() {
-            if let Some(op) = operands.into_iter().next() {
+            if let Some(op) = operands.into_iter().last() {
                 return Some(op.to_vec());
             }
         }
@@ -822,7 +822,7 @@ impl BbgmChecksumServiceApi for Storage {
     }
 
     async fn propose_missing_changes(&self, _changes: &[BbgmChangeRecord]) {
-        // TODO: how handle?
+        // TODO: [MTG-1039]
     }
 }
 
@@ -904,6 +904,6 @@ impl AccChecksumServiceApi for Storage {
         &self,
         _changes: Vec<interface::checksums_storage::AccLastChange>,
     ) {
-        // Do nothing
+        // TODO: [MTG-1039]
     }
 }

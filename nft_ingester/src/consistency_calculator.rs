@@ -19,7 +19,7 @@ use rocks_db::{
     Storage,
 };
 use solana_sdk::{hash::Hasher, pubkey::Pubkey};
-use std::sync::atomic::AtomicI32;
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::{
     collections::{BTreeSet, HashSet},
     sync::Arc,
@@ -36,27 +36,34 @@ use crate::fork_cleaner::last_fork_cleaned_slot;
 
 /// This flag is set to true before bubblegum epoch calculation is started,
 /// and set to false after the calculation is finished.
-static IS_CALCULATING_BBGM_EPOCH: AtomicI32 = AtomicI32::new(-1);
-static IS_CALCULATING_ACC_EPOCH: AtomicI32 = AtomicI32::new(-1);
+static CURRENTLY_CALCULATING_BBGM_EPOCH: AtomicI32 = AtomicI32::new(-1);
+static CURRENTLY_CALCULATING_ACC_EPOCH: AtomicI32 = AtomicI32::new(-1);
+
+static LAST_CALCULATED_BBGM_EPOCH: AtomicI32 = AtomicI32::new(-1);
+static LAST_CALCULATED_ACC_EPOCH: AtomicI32 = AtomicI32::new(-1);
 
 fn set_currently_calculated_bbgm_epoch(epoch: u32) {
-    IS_CALCULATING_BBGM_EPOCH.store(epoch as i32, std::sync::atomic::Ordering::Relaxed);
+    CURRENTLY_CALCULATING_BBGM_EPOCH.store(epoch as i32, Ordering::Relaxed);
 }
 
 fn finish_currently_calculated_bbgm_epoch() {
-    IS_CALCULATING_BBGM_EPOCH.store(-1, std::sync::atomic::Ordering::Relaxed);
+    let current_calculating = CURRENTLY_CALCULATING_BBGM_EPOCH.load(Ordering::Acquire);
+    LAST_CALCULATED_BBGM_EPOCH.store(current_calculating, Ordering::Release);
+    CURRENTLY_CALCULATING_BBGM_EPOCH.store(-1, Ordering::Relaxed);
 }
 
 fn set_currently_calculated_acc_epoch(epoch: u32) {
-    IS_CALCULATING_ACC_EPOCH.store(epoch as i32, std::sync::atomic::Ordering::Relaxed);
+    CURRENTLY_CALCULATING_ACC_EPOCH.store(epoch as i32, Ordering::Relaxed);
 }
 
 fn finish_currently_calculated_acc_epoch() {
-    IS_CALCULATING_ACC_EPOCH.store(-1, std::sync::atomic::Ordering::Relaxed);
+    let current_calculating = CURRENTLY_CALCULATING_ACC_EPOCH.load(Ordering::Acquire);
+    LAST_CALCULATED_ACC_EPOCH.store(current_calculating, Ordering::Release);
+    CURRENTLY_CALCULATING_ACC_EPOCH.store(-1, Ordering::Relaxed);
 }
 
 pub fn get_calculating_bbgm_epoch() -> Option<u32> {
-    let epoch = IS_CALCULATING_BBGM_EPOCH.load(std::sync::atomic::Ordering::Relaxed);
+    let epoch = CURRENTLY_CALCULATING_BBGM_EPOCH.load(Ordering::Relaxed);
     if epoch > -1 {
         Some(epoch as u32)
     } else {
@@ -65,7 +72,25 @@ pub fn get_calculating_bbgm_epoch() -> Option<u32> {
 }
 
 pub fn get_calculating_acc_epoch() -> Option<u32> {
-    let epoch = IS_CALCULATING_ACC_EPOCH.load(std::sync::atomic::Ordering::Relaxed);
+    let epoch = CURRENTLY_CALCULATING_ACC_EPOCH.load(std::sync::atomic::Ordering::Relaxed);
+    if epoch > -1 {
+        Some(epoch as u32)
+    } else {
+        None
+    }
+}
+
+pub fn get_last_calculated_bbgm_epoch() -> Option<u32> {
+    let epoch = LAST_CALCULATED_BBGM_EPOCH.load(Ordering::Relaxed);
+    if epoch > -1 {
+        Some(epoch as u32)
+    } else {
+        None
+    }
+}
+
+pub fn get_last_calculated_acc_epoch() -> Option<u32> {
+    let epoch = LAST_CALCULATED_ACC_EPOCH.load(std::sync::atomic::Ordering::Relaxed);
     if epoch > -1 {
         Some(epoch as u32)
     } else {
