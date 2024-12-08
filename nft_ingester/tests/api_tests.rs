@@ -3772,6 +3772,7 @@ mod tests {
             slot_updated: 10,
             write_version: 10,
             extensions: None,
+            data_hash: 0,
         };
 
         let owner: Pubkey = generated_assets.owners[1].owner.value.unwrap();
@@ -3787,6 +3788,7 @@ mod tests {
             slot_updated: 10,
             amount: 100,
             write_version: 10,
+            data_hash: 0,
         };
         let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),

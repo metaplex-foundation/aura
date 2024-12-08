@@ -32,7 +32,7 @@ use tokio::sync::{
 };
 use tokio::time::Instant;
 
-use crate::fork_cleaner::last_fork_cleaned_slot;
+use crate::cleaners::fork_cleaner::last_fork_cleaned_slot;
 
 /// This flag is set to true before bubblegum epoch calculation is started,
 /// and set to false after the calculation is finished.
