@@ -32,7 +32,7 @@ use tokio::time::Instant;
 use url::Url;
 
 use crate::{
-    consistency_calculator::{get_calculating_acc_epoch, get_calculating_bbgm_epoch},
+    consistency_calculator::{get_calculating_acc_epoch, get_last_calculated_bbgm_epoch},
     gapfiller::process_asset_details_stream,
 };
 
@@ -164,8 +164,8 @@ async fn exchange_bbgms_with_peers(
     metrics: Arc<Peer2PeerConsistencyMetricsConfig>,
 ) {
     tracing::info!("Starting bubblegum changes peer-to-peer exchange for epoch={epoch}");
-    while get_calculating_bbgm_epoch()
-        .map(|e| e == epoch)
+    while get_last_calculated_bbgm_epoch()
+        .map(|e| e <= epoch)
         .unwrap_or(false)
     {
         tokio::time::sleep(Duration::from_secs(10)).await;
@@ -198,7 +198,7 @@ async fn exchange_bbgms_with_peers(
 
         metrics
             .found_missing_bubblegums
-            .set(changes_we_miss.len() as i64);
+            .inc_by(changes_we_miss.len() as i64);
 
         for change in changes_we_miss {
             match missing_bbgm_changes.get_mut(&change) {
