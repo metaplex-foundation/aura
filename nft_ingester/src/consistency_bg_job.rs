@@ -180,7 +180,7 @@ async fn exchange_bbgms_with_peers(
         tracing::info!("Exchanging bubblegum changes for epoch={epoch} with peer={trusted_peer}");
         let Ok(client) = BbgmConsistencyApiClientImpl::new(
             trusted_peer,
-            Some(metrics.bbgm_consistency_grpc_client.clone()),
+            Some(metrics.bubblegum_grpc_client_metrics()),
         )
         .await
         .map(Arc::new) else {
@@ -196,9 +196,7 @@ async fn exchange_bbgms_with_peers(
         )
         .await;
 
-        metrics
-            .found_missing_bubblegums
-            .inc_by(changes_we_miss.len() as i64);
+        metrics.track_found_missing_bubblegums(changes_we_miss.len());
 
         for change in changes_we_miss {
             match missing_bbgm_changes.get_mut(&change) {
@@ -250,9 +248,7 @@ pub async fn compare_bbgm_with_peer(
             return Vec::new();
         }
     };
-    metrics
-        .db_bubblegum_get_grand_epochs_latency
-        .observe(start.elapsed().as_secs_f64());
+    metrics.track_bubblegum_get_grand_epochs_latency(start.elapsed().as_secs_f64());
 
     let ge_cmp_res = cmp(&my_ge_chksms, &peer_ge_chksms);
     let ge_trees_to_check = ge_cmp_res
@@ -274,9 +270,7 @@ pub async fn compare_bbgm_with_peer(
                 return result;
             }
         };
-        metrics
-            .db_bubblegum_get_epochs_latency
-            .observe(start.elapsed().as_secs_f64());
+        metrics.track_bubblegum_get_epochs_latency(start.elapsed().as_secs_f64());
 
         let e_cmp_res = cmp(&my_e_chksms, &peer_e_chksms);
         let epochs_to_check = e_cmp_res
@@ -301,13 +295,10 @@ pub async fn compare_bbgm_with_peer(
                     return result;
                 }
             };
-            metrics
-                .db_bubblegum_get_changes_latency
-                .observe(start.elapsed().as_secs_f64());
+            metrics.track_bubblegum_get_changes_latency(start.elapsed().as_secs_f64());
 
             let changes_cmp_res = cmp(&my_changes, &peer_changes);
             result.extend(changes_cmp_res.we_miss.into_iter().map(|a| a.to_owned()));
-            // TODO: track different
         }
     }
 
@@ -377,7 +368,7 @@ async fn exchange_account_with_peers(
         tracing::info!("Exchanging account NFT with peer={trusted_peer}");
         let Ok(client) = AccConsistencyApiClientImpl::new(
             trusted_peer,
-            Some(metrics.acc_consistency_grpc_client.clone()),
+            Some(metrics.account_grpc_client_metrics()),
         )
         .await
         .map(Arc::new) else {
@@ -388,9 +379,7 @@ async fn exchange_account_with_peers(
         let accs_we_miss: Vec<AccLastChange> =
             compare_acc_with_peer(storage.as_ref(), client.as_ref(), metrics).await;
 
-        metrics
-            .found_missing_accounts
-            .set(accs_we_miss.len() as i64);
+        metrics.track_found_missing_accounts(accs_we_miss.len());
 
         for change in accs_we_miss {
             match missing_accounts.get_mut(&change) {
@@ -431,9 +420,7 @@ pub async fn compare_acc_with_peer(
             return result;
         }
     };
-    metrics
-        .db_account_get_grand_buckets_latency
-        .observe(start.elapsed().as_secs_f64());
+    metrics.track_account_get_grand_buckets_latency(start.elapsed().as_secs_f64());
 
     let gb_cmp_res = cmp(&peer_grand_buckets, &my_grand_buckets);
 
@@ -457,9 +444,7 @@ pub async fn compare_acc_with_peer(
                 return result;
             }
         };
-        metrics
-            .db_account_get_buckets_latency
-            .observe(start.elapsed().as_secs_f64());
+        metrics.track_account_get_buckets_latency(start.elapsed().as_secs_f64());
 
         let b_cmp_res = cmp(&peer_buckets, &my_buckets);
 
@@ -483,9 +468,7 @@ pub async fn compare_acc_with_peer(
                     return result;
                 }
             };
-            metrics
-                .db_account_get_latests_latency
-                .observe(start.elapsed().as_secs_f64());
+            metrics.track_account_get_latests_latency(start.elapsed().as_secs_f64());
 
             let acc_cmp_res = cmp(&peer_accounts, &my_accounts);
             result.extend(acc_cmp_res.we_miss.into_iter().map(|a| a.to_owned()));

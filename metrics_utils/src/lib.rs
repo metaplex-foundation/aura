@@ -92,6 +92,48 @@ pub trait MetricsTrait {
     fn register_metrics(&mut self);
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelValue)]
+pub enum NftProtocol {
+    BUBBLEGUM,
+    ACCOUNT,
+}
+impl fmt::Display for NftProtocol {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NftProtocol::BUBBLEGUM => write!(f, "bubblegum"),
+            NftProtocol::ACCOUNT => write!(f, "account"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelValue)]
+pub enum GrpcCallStatus {
+    SUCCESS,
+    FAILURE,
+}
+
+impl fmt::Display for GrpcCallStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GrpcCallStatus::SUCCESS => write!(f, "success"),
+            GrpcCallStatus::FAILURE => write!(f, "failure"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub struct ProtoclMethodLable {
+    pub protocol: NftProtocol,
+    pub method: String,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub struct ProtoclMethodStatusLable {
+    pub protocol: NftProtocol,
+    pub method: String,
+    pub status: GrpcCallStatus,
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct MethodLabel {
     pub method_name: String,
@@ -244,18 +286,9 @@ impl BackfillerMetricsConfig {
 
 #[derive(Debug, Clone)]
 pub struct Peer2PeerConsistencyMetricsConfig {
-    pub db_bubblegum_get_grand_epochs_latency: Histogram,
-    pub db_bubblegum_get_epochs_latency: Histogram,
-    pub db_bubblegum_get_changes_latency: Histogram,
-    pub db_account_get_grand_buckets_latency: Histogram,
-    pub db_account_get_buckets_latency: Histogram,
-    pub db_account_get_latests_latency: Histogram,
-
-    pub bbgm_consistency_grpc_client: Arc<BubblegumConsistencyGrpcClientMetricsConfig>,
-    pub acc_consistency_grpc_client: Arc<AccoountConsistencyGrpcClientMetricsConfig>,
-
-    pub found_missing_bubblegums: Gauge,
-    pub found_missing_accounts: Gauge,
+    db_latency: Family<ProtoclMethodLable, Histogram>,
+    consistency_grpc_client: Arc<ConsistencyGrpcClientMetricsConfig>,
+    found_missing: Family<MetricLabel, Gauge>,
 }
 
 impl Default for Peer2PeerConsistencyMetricsConfig {
@@ -266,271 +299,314 @@ impl Default for Peer2PeerConsistencyMetricsConfig {
 
 impl Peer2PeerConsistencyMetricsConfig {
     pub fn new() -> Peer2PeerConsistencyMetricsConfig {
-        let mk_histogram = || Histogram::new(exponential_buckets(20.0, 1.8, 10));
         Peer2PeerConsistencyMetricsConfig {
-            db_bubblegum_get_grand_epochs_latency: mk_histogram(),
-            db_bubblegum_get_epochs_latency: mk_histogram(),
-            db_bubblegum_get_changes_latency: mk_histogram(),
-            db_account_get_grand_buckets_latency: mk_histogram(),
-            db_account_get_buckets_latency: mk_histogram(),
-            db_account_get_latests_latency: mk_histogram(),
-
-            bbgm_consistency_grpc_client: Arc::new(
-                BubblegumConsistencyGrpcClientMetricsConfig::new(),
-            ),
-            acc_consistency_grpc_client: Arc::new(AccoountConsistencyGrpcClientMetricsConfig::new()),
-
-            found_missing_bubblegums: Gauge::default(),
-            found_missing_accounts: Gauge::default(),
+            db_latency: Family::<ProtoclMethodLable, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(1.0, 1.8, 10))
+            }),
+            consistency_grpc_client: Arc::new(ConsistencyGrpcClientMetricsConfig::new()),
+            found_missing: Family::<MetricLabel, Gauge>::default(),
         }
     }
 
+    pub fn bubblegum_grpc_client_metrics(
+        &self,
+    ) -> Arc<dyn BubblegumConsistencyGrpcClientMetrics + Send + Sync> {
+        self.consistency_grpc_client.clone()
+    }
+
+    pub fn account_grpc_client_metrics(
+        &self,
+    ) -> Arc<dyn AccoountConsistencyGrpcClientMetrics + Send + Sync> {
+        self.consistency_grpc_client.clone()
+    }
+
     pub fn register(&self, registry: &mut Registry) {
-        self.bbgm_consistency_grpc_client.register(registry);
-        self.acc_consistency_grpc_client.register(registry);
-        registry.register(
-            "db_bubblegum_get_grand_epochs_latency",
-            "Time to query bubblegum grand epochs",
-            self.db_bubblegum_get_grand_epochs_latency.clone(),
-        );
-        registry.register(
-            "db_bubblegum_get_epochs_latency",
-            "Time to query bubblegum epochs",
-            self.db_bubblegum_get_epochs_latency.clone(),
-        );
-        registry.register(
-            "db_bubblegum_get_changes_latency",
-            "Time to query bubblegum changes",
-            self.db_bubblegum_get_changes_latency.clone(),
-        );
-        registry.register(
-            "db_account_get_grand_buckets_latency",
-            "Time to query account NFT grand buckets",
-            self.db_account_get_grand_buckets_latency.clone(),
-        );
-        registry.register(
-            "db_account_get_buckets_latency",
-            "Time to query account NFT buckets",
-            self.db_account_get_buckets_latency.clone(),
-        );
-        registry.register(
-            "db_account_get_latests_latency",
-            "Time to query account NFT last states",
-            self.db_account_get_latests_latency.clone(),
-        );
+        self.consistency_grpc_client.register(registry);
 
         registry.register(
-            "found_missing_bubblegums",
-            "Number of identified missing bubblegum changes",
-            self.found_missing_bubblegums.clone(),
+            "consistency_db_latency",
+            "Time to query consistency data from local database",
+            self.db_latency.clone(),
         );
         registry.register(
-            "found_missing_accounts",
-            "Number of identified missing account NFT last states",
-            self.found_missing_accounts.clone(),
+            "found_missing",
+            "Number of missing entities found during p2p exchange",
+            self.found_missing.clone(),
         );
+    }
+
+    pub fn track_bubblegum_get_grand_epochs_latency(&self, seconds: f64) {
+        self.db_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::BUBBLEGUM,
+                method: "get_grand_epochs".to_string(),
+            })
+            .observe(seconds)
+    }
+    pub fn track_bubblegum_get_epochs_latency(&self, seconds: f64) {
+        self.db_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::BUBBLEGUM,
+                method: "get_epochs".to_string(),
+            })
+            .observe(seconds)
+    }
+    pub fn track_bubblegum_get_changes_latency(&self, seconds: f64) {
+        self.db_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::BUBBLEGUM,
+                method: "get_changes".to_string(),
+            })
+            .observe(seconds)
+    }
+    pub fn track_account_get_grand_buckets_latency(&self, seconds: f64) {
+        self.db_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::ACCOUNT,
+                method: "get_grand_buckets".to_string(),
+            })
+            .observe(seconds)
+    }
+    pub fn track_account_get_buckets_latency(&self, seconds: f64) {
+        self.db_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::ACCOUNT,
+                method: "get_buckets".to_string(),
+            })
+            .observe(seconds)
+    }
+    pub fn track_account_get_latests_latency(&self, seconds: f64) {
+        self.db_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::ACCOUNT,
+                method: "get_latests".to_string(),
+            })
+            .observe(seconds)
+    }
+
+    pub fn track_found_missing_bubblegums(&self, count: usize) {
+        self.found_missing
+            .get_or_create(&MetricLabel {
+                name: "bubblegum_change".to_string(),
+            })
+            .inc_by(count as i64);
+    }
+    pub fn track_found_missing_accounts(&self, count: usize) {
+        self.found_missing
+            .get_or_create(&MetricLabel {
+                name: "account_change".to_string(),
+            })
+            .inc_by(count as i64);
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct BubblegumConsistencyGrpcClientMetricsConfig {
-    pub peers_bubblegum_get_grand_epochs_for_tree_latency: Histogram,
-    pub peers_bubblegum_get_grand_epochs_latency: Histogram,
-    pub peers_bubblegum_get_epochs_latency: Histogram,
-    pub peers_bubblegum_get_changes_latency: Histogram,
-
-    pub peers_bubblegum_get_grand_epochs_for_tree_errors: Family<MetricLabel, Counter>,
-    pub peers_bubblegum_get_grand_epochs_errors: Family<MetricLabel, Counter>,
-    pub peers_bubblegum_get_epochs_errors: Family<MetricLabel, Counter>,
-    pub peers_bubblegum_get_changes_errors: Family<MetricLabel, Counter>,
+pub struct ConsistencyGrpcClientMetricsConfig {
+    peers_latency: Family<ProtoclMethodLable, Histogram>,
+    peer_call_results: Family<ProtoclMethodStatusLable, Counter>,
 }
 
-impl Default for BubblegumConsistencyGrpcClientMetricsConfig {
+impl Default for ConsistencyGrpcClientMetricsConfig {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl BubblegumConsistencyGrpcClientMetricsConfig {
-    pub fn new() -> BubblegumConsistencyGrpcClientMetricsConfig {
-        BubblegumConsistencyGrpcClientMetricsConfig {
-            peers_bubblegum_get_grand_epochs_for_tree_latency: Histogram::new(exponential_buckets(
-                20.0, 1.8, 10,
-            )),
-            peers_bubblegum_get_grand_epochs_latency: Histogram::new(exponential_buckets(
-                20.0, 1.8, 10,
-            )),
-            peers_bubblegum_get_epochs_latency: Histogram::new(exponential_buckets(20.0, 1.8, 10)),
-            peers_bubblegum_get_changes_latency: Histogram::new(exponential_buckets(20.0, 1.8, 10)),
+pub trait BubblegumConsistencyGrpcClientMetrics {
+    fn track_peers_bubblegum_get_grand_epochs_for_tree_latency(&self, seconds: f64);
+    fn track_peers_bubblegum_get_grand_epochs_latency(&self, seconds: f64);
+    fn track_peers_bubblegum_get_epochs_latency(&self, seconds: f64);
+    fn track_peers_bubblegum_get_changes_latency(&self, seconds: f64);
 
-            peers_bubblegum_get_grand_epochs_for_tree_errors:
-                Family::<MetricLabel, Counter>::default(),
-            peers_bubblegum_get_grand_epochs_errors: Family::<MetricLabel, Counter>::default(),
-            peers_bubblegum_get_epochs_errors: Family::<MetricLabel, Counter>::default(),
-            peers_bubblegum_get_changes_errors: Family::<MetricLabel, Counter>::default(),
+    fn track_get_grand_epochs_for_tree_call(&self, is_success: bool);
+    fn track_get_grand_epochs_call(&self, is_success: bool);
+    fn track_get_epochs_call(&self, is_success: bool);
+    fn track_get_changes_call_error(&self, is_success: bool);
+}
+
+pub trait AccoountConsistencyGrpcClientMetrics {
+    fn track_peers_account_get_grand_buckets_latency(&self, seconds: f64);
+    fn track_peers_account_get_buckets_latency(&self, seconds: f64);
+    fn track_peers_account_get_latests_latency(&self, seconds: f64);
+
+    fn track_get_grand_buckets_call(&self, is_success: bool);
+    fn track_get_buckets_call(&self, is_success: bool);
+    fn track_get_latests_call(&self, is_success: bool);
+}
+
+impl ConsistencyGrpcClientMetricsConfig {
+    pub fn new() -> ConsistencyGrpcClientMetricsConfig {
+        ConsistencyGrpcClientMetricsConfig {
+            peers_latency: Family::<ProtoclMethodLable, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(1.0, 2.4, 10))
+            }),
+            peer_call_results: Family::<ProtoclMethodStatusLable, Counter>::default(),
         }
     }
-
-    pub fn track_get_grand_epochs_for_tree_call_error(&self, peer: &str) {
-        self.peers_bubblegum_get_grand_epochs_for_tree_errors
-            .get_or_create(&MetricLabel {
-                name: peer.to_string(),
-            })
-            .inc();
-    }
-    pub fn track_get_grand_epochs_call_error(&self, peer: &str) {
-        self.peers_bubblegum_get_grand_epochs_errors
-            .get_or_create(&MetricLabel {
-                name: peer.to_string(),
-            })
-            .inc();
-    }
-    pub fn track_get_epochs_call_error(&self, peer: &str) {
-        self.peers_bubblegum_get_epochs_errors
-            .get_or_create(&MetricLabel {
-                name: peer.to_string(),
-            })
-            .inc();
-    }
-    pub fn track_get_changes_call_error(&self, peer: &str) {
-        self.peers_bubblegum_get_changes_errors
-            .get_or_create(&MetricLabel {
-                name: peer.to_string(),
-            })
-            .inc();
-    }
-
     pub fn register(&self, registry: &mut Registry) {
         registry.register(
-            "peers_bubblegum_get_grand_epochs_for_tree_errors",
-            "Number of error while getting list of all grand epochs for a tree",
-            self.peers_bubblegum_get_grand_epochs_for_tree_errors
-                .clone(),
+            "peers_latency",
+            "Peer consistency GRPC call latency",
+            self.peers_latency.clone(),
         );
         registry.register(
-            "peers_bubblegum_get_grand_epochs_errors",
-            "Number of error while getting list of all grand epochs checksums for given grand epoch",
-            self.peers_bubblegum_get_grand_epochs_errors.clone(),
-        );
-        registry.register(
-            "peers_bubblegum_get_epochs_errors",
-            "Number of error while getting list of epochs checksums for given tree and grand epoch",
-            self.peers_bubblegum_get_epochs_errors.clone(),
-        );
-        registry.register(
-            "peers_bubblegum_get_changes_errors",
-            "Number of error while getting list of bubblegum change for given tree and epoch",
-            self.peers_bubblegum_get_changes_errors.clone(),
-        );
-        registry.register(
-            "peers_bubblegum_get_grand_epochs_for_tree_latency",
-            "Time to fetch bubblegum grand epochs for tree",
-            self.peers_bubblegum_get_grand_epochs_for_tree_latency
-                .clone(),
-        );
-        registry.register(
-            "peers_bubblegum_get_grand_epochs_latency",
-            "Time to fetch bubblegum grand epochs",
-            self.peers_bubblegum_get_grand_epochs_latency.clone(),
-        );
-        registry.register(
-            "peers_bubblegum_get_epochs_latency",
-            "Time to fetch bubblegum epochs",
-            self.peers_bubblegum_get_epochs_latency.clone(),
-        );
-        registry.register(
-            "peers_bubblegum_get_changes_latency",
-            "Time to fetch bubblegum changes",
-            self.peers_bubblegum_get_changes_latency.clone(),
+            "peer_call_results",
+            "Amount of calls to peers by protocol and result",
+            self.peer_call_results.clone(),
         );
     }
 }
+impl BubblegumConsistencyGrpcClientMetrics for ConsistencyGrpcClientMetricsConfig {
+    fn track_peers_bubblegum_get_grand_epochs_for_tree_latency(&self, seconds: f64) {
+        self.peers_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::BUBBLEGUM,
+                method: "get_bubblegum_grand_epochs".to_string(),
+            })
+            .observe(seconds)
+    }
+    fn track_peers_bubblegum_get_grand_epochs_latency(&self, seconds: f64) {
+        self.peers_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::BUBBLEGUM,
+                method: "get_bubblegum_grand_epochs".to_string(),
+            })
+            .observe(seconds)
+    }
+    fn track_peers_bubblegum_get_epochs_latency(&self, seconds: f64) {
+        self.peers_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::BUBBLEGUM,
+                method: "get_bubblegum_epochs".to_string(),
+            })
+            .observe(seconds)
+    }
+    fn track_peers_bubblegum_get_changes_latency(&self, seconds: f64) {
+        self.peers_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::BUBBLEGUM,
+                method: "get_bubblegum_changes".to_string(),
+            })
+            .observe(seconds)
+    }
 
-#[derive(Debug, Clone)]
-pub struct AccoountConsistencyGrpcClientMetricsConfig {
-    pub peers_account_get_grand_buckets_latency: Histogram,
-    pub peers_account_get_buckets_latency: Histogram,
-    pub peers_account_get_latests_latency: Histogram,
-
-    pub peers_account_get_grand_buckets_errors: Family<MetricLabel, Counter>,
-    pub peers_account_get_buckets_errors: Family<MetricLabel, Counter>,
-    pub peers_account_get_latests_errors: Family<MetricLabel, Counter>,
+    fn track_get_grand_epochs_for_tree_call(&self, is_success: bool) {
+        let status = match is_success {
+            true => GrpcCallStatus::SUCCESS,
+            false => GrpcCallStatus::FAILURE,
+        };
+        self.peer_call_results
+            .get_or_create(&ProtoclMethodStatusLable {
+                protocol: NftProtocol::BUBBLEGUM,
+                method: "get_bubblegum_grand_epochs_for_tree".to_string(),
+                status,
+            })
+            .inc();
+    }
+    fn track_get_grand_epochs_call(&self, is_success: bool) {
+        let status = match is_success {
+            true => GrpcCallStatus::SUCCESS,
+            false => GrpcCallStatus::FAILURE,
+        };
+        self.peer_call_results
+            .get_or_create(&ProtoclMethodStatusLable {
+                protocol: NftProtocol::BUBBLEGUM,
+                method: "get_bubblegum_grand_epochs".to_string(),
+                status,
+            })
+            .inc();
+    }
+    fn track_get_epochs_call(&self, is_success: bool) {
+        let status = match is_success {
+            true => GrpcCallStatus::SUCCESS,
+            false => GrpcCallStatus::FAILURE,
+        };
+        self.peer_call_results
+            .get_or_create(&ProtoclMethodStatusLable {
+                protocol: NftProtocol::BUBBLEGUM,
+                method: "get_bubblegum_epochs".to_string(),
+                status,
+            })
+            .inc();
+    }
+    fn track_get_changes_call_error(&self, is_success: bool) {
+        let status = match is_success {
+            true => GrpcCallStatus::SUCCESS,
+            false => GrpcCallStatus::FAILURE,
+        };
+        self.peer_call_results
+            .get_or_create(&ProtoclMethodStatusLable {
+                protocol: NftProtocol::BUBBLEGUM,
+                method: "get_bubblegum_changes".to_string(),
+                status,
+            })
+            .inc();
+    }
 }
-
-impl Default for AccoountConsistencyGrpcClientMetricsConfig {
-    fn default() -> Self {
-        Self::new()
+impl AccoountConsistencyGrpcClientMetrics for ConsistencyGrpcClientMetricsConfig {
+    fn track_peers_account_get_grand_buckets_latency(&self, seconds: f64) {
+        self.peers_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::ACCOUNT,
+                method: "get_grand_buckets".to_string(),
+            })
+            .observe(seconds)
     }
-}
-
-impl AccoountConsistencyGrpcClientMetricsConfig {
-    pub fn new() -> AccoountConsistencyGrpcClientMetricsConfig {
-        AccoountConsistencyGrpcClientMetricsConfig {
-            peers_account_get_grand_buckets_latency: Histogram::new(exponential_buckets(
-                20.0, 1.8, 10,
-            )),
-            peers_account_get_buckets_latency: Histogram::new(exponential_buckets(20.0, 1.8, 10)),
-            peers_account_get_latests_latency: Histogram::new(exponential_buckets(20.0, 1.8, 10)),
-
-            peers_account_get_grand_buckets_errors: Family::<MetricLabel, Counter>::default(),
-            peers_account_get_buckets_errors: Family::<MetricLabel, Counter>::default(),
-            peers_account_get_latests_errors: Family::<MetricLabel, Counter>::default(),
-        }
+    fn track_peers_account_get_buckets_latency(&self, seconds: f64) {
+        self.peers_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::ACCOUNT,
+                method: "get_buckets".to_string(),
+            })
+            .observe(seconds)
+    }
+    fn track_peers_account_get_latests_latency(&self, seconds: f64) {
+        self.peers_latency
+            .get_or_create(&ProtoclMethodLable {
+                protocol: NftProtocol::ACCOUNT,
+                method: "get_latests_accout".to_string(),
+            })
+            .observe(seconds)
     }
 
-    pub fn track_get_grand_buckets_call_error(&self, peer: &str) {
-        self.peers_account_get_grand_buckets_errors
-            .get_or_create(&MetricLabel {
-                name: peer.to_string(),
+    fn track_get_grand_buckets_call(&self, is_success: bool) {
+        let status = match is_success {
+            true => GrpcCallStatus::SUCCESS,
+            false => GrpcCallStatus::FAILURE,
+        };
+        self.peer_call_results
+            .get_or_create(&ProtoclMethodStatusLable {
+                protocol: NftProtocol::ACCOUNT,
+                method: "get_grand_buckets".to_string(),
+                status,
             })
             .inc();
     }
-    pub fn track_get_buckets_call_error(&self, peer: &str) {
-        self.peers_account_get_buckets_errors
-            .get_or_create(&MetricLabel {
-                name: peer.to_string(),
+    fn track_get_buckets_call(&self, is_success: bool) {
+        let status = match is_success {
+            true => GrpcCallStatus::SUCCESS,
+            false => GrpcCallStatus::FAILURE,
+        };
+        self.peer_call_results
+            .get_or_create(&ProtoclMethodStatusLable {
+                protocol: NftProtocol::ACCOUNT,
+                method: "get_buckets".to_string(),
+                status,
             })
             .inc();
     }
-    pub fn track_get_latests_call_error(&self, peer: &str) {
-        self.peers_account_get_latests_errors
-            .get_or_create(&MetricLabel {
-                name: peer.to_string(),
+    fn track_get_latests_call(&self, is_success: bool) {
+        let status = match is_success {
+            true => GrpcCallStatus::SUCCESS,
+            false => GrpcCallStatus::FAILURE,
+        };
+        self.peer_call_results
+            .get_or_create(&ProtoclMethodStatusLable {
+                protocol: NftProtocol::ACCOUNT,
+                method: "get_latests_accout".to_string(),
+                status,
             })
             .inc();
-    }
-
-    pub fn register(&self, registry: &mut Registry) {
-        registry.register(
-            "peers_account_get_grand_buckets_errors",
-            "Number of error while getting list of grand bucket checksums",
-            self.peers_account_get_grand_buckets_errors.clone(),
-        );
-        registry.register(
-            "peers_account_get_buckets_errors",
-            "Number of error while getting list of buckets for grand bucket",
-            self.peers_account_get_buckets_errors.clone(),
-        );
-        registry.register(
-            "peers_account_get_latests_errors",
-            "Number of error while getting list of account for a bucket",
-            self.peers_account_get_latests_errors.clone(),
-        );
-        registry.register(
-            "peers_account_get_grand_buckets_latency",
-            "Time to fetch account NFT grand buckets",
-            self.peers_account_get_grand_buckets_latency.clone(),
-        );
-        registry.register(
-            "peers_account_get_buckets_latency",
-            "Time to fetch account NFT buckets",
-            self.peers_account_get_buckets_latency.clone(),
-        );
-        registry.register(
-            "peers_account_get_latests_latency",
-            "Time to fetch account NFT last states",
-            self.peers_account_get_latests_latency.clone(),
-        );
     }
 }
 
