@@ -91,6 +91,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             buffer.json_tasks.clone(),
+            None,
         ));
 
         let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
@@ -219,6 +220,7 @@ mod tests {
             env.rocks_env.storage.clone(),
             Arc::new(IngesterMetricsConfig::new()),
             buffer.json_tasks.clone(),
+            None,
         ));
 
         let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(

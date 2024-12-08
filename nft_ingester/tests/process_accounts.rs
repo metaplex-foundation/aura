@@ -61,6 +61,7 @@ mod tests {
             rent_epoch: 0,
             executable: false,
             metadata_owner: None,
+            data_hash: 0,
         }
     }
 
@@ -83,6 +84,7 @@ mod tests {
             token_program: Default::default(),
             extensions: None,
             write_version: 1,
+            data_hash: 0,
         };
         let second_mint_to_save = Mint {
             pubkey: second_mint,
@@ -94,6 +96,7 @@ mod tests {
             token_program: Default::default(),
             extensions: None,
             write_version: 1,
+            data_hash: 0,
         };
         let first_token_account_to_save = TokenAccount {
             pubkey: first_token_account,
@@ -106,6 +109,7 @@ mod tests {
             slot_updated: 1,
             amount: 1,
             write_version: 1,
+            data_hash: 0,
         };
         let second_token_account_to_save = TokenAccount {
             pubkey: second_token_account,
@@ -118,6 +122,7 @@ mod tests {
             slot_updated: 1,
             amount: 1,
             write_version: 1,
+            data_hash: 0,
         };
 
         let cnt = 20;
@@ -210,6 +215,7 @@ mod tests {
             },
             write_version: 1,
             slot_updated: 1,
+            data_hash: 0,
         };
         let second_edition_to_save = EditionMetadata {
             edition: TokenMetadataEdition::MasterEdition {
@@ -222,6 +228,7 @@ mod tests {
             },
             write_version: 1,
             slot_updated: 1,
+            data_hash: 0,
         };
 
         let cnt = 20;
@@ -361,6 +368,7 @@ mod tests {
             slot_updated: 1,
             write_version: 1,
             rent_epoch: 0,
+            data_hash: 0,
         };
         let second_mpl_core_to_save = IndexableAssetWithAccountInfo {
             indexable_asset: MplCoreAccountData::Collection(IndexableAsset {
@@ -403,6 +411,7 @@ mod tests {
             slot_updated: 1,
             write_version: 1,
             rent_epoch: 0,
+            data_hash: 0,
         };
 
         let cnt = 20;

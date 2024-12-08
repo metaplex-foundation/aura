@@ -3,6 +3,8 @@ use arweave_rs::Arweave;
 use entities::enums::{AssetType, ASSET_TYPES};
 use nft_ingester::batch_mint::batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister};
 use nft_ingester::cleaners::indexer_cleaner::clean_syncronized_idxs;
+use nft_ingester::consistency_bg_job::FileSrcAuraPeersProvides;
+use nft_ingester::consistency_calculator::{self, NftChangesTracker, NTF_CHANGES_NOTIFICATION_QUEUE_SIZE};
 use nft_ingester::scheduler::Scheduler;
 use postgre_client::PG_MIGRATIONS_PATH;
 use std::panic;
@@ -21,7 +23,7 @@ use plerkle_messenger::ConsumptionType;
 use pprof::ProfilerGuardBuilder;
 use rocks_db::bubblegum_slots::{BubblegumSlotGetter, IngestableSlotGetter};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::sleep as tokio_sleep;
 use tracing::{error, info, warn};
@@ -214,6 +216,12 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     let rpc_client = Arc::new(RpcClient::new(config.rpc_host.clone()));
+
+    // Manages event related to epochs changes and notifications (new epoch started, late data - epoch invalidation).
+    // Producers are processors (bubblegum and account), consumer - consistency calculator.
+    let (nft_change_snd, nft_change_rcv) = mpsc::channel(NTF_CHANGES_NOTIFICATION_QUEUE_SIZE);
+    let changes_tracker = Arc::new(NftChangesTracker::new(Some(nft_change_snd.clone())));
+
     for _ in 0..config.accounts_parsing_workers {
         match config.message_source {
             MessageSource::Redis => {
@@ -236,6 +244,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     Some(metrics_state.message_process_metrics.clone()),
                     index_pg_storage.clone(),
                     rpc_client.clone(),
+                    changes_tracker.clone(),
                     mutexed_tasks.clone(),
                 )
                 .await;
@@ -253,6 +262,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     None,
                     index_pg_storage.clone(),
                     rpc_client.clone(),
+                    changes_tracker.clone(),
                     mutexed_tasks.clone(),
                 )
                 .await;
@@ -274,6 +284,7 @@ pub async fn main() -> Result<(), IngesterError> {
             None,
             index_pg_storage.clone(),
             rpc_client.clone(),
+            changes_tracker.clone(),
             mutexed_tasks.clone(),
         )
         .await;
@@ -408,6 +419,7 @@ pub async fn main() -> Result<(), IngesterError> {
         primary_rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
         buffer.json_tasks.clone(),
+        Some(changes_tracker.clone()),
     ));
 
     for _ in 0..config.transactions_parsing_workers {
@@ -455,6 +467,7 @@ pub async fn main() -> Result<(), IngesterError> {
         primary_rocks_storage.clone(),
         metrics_state.ingester_metrics.clone(),
         buffer.json_tasks.clone(),
+        Some(changes_tracker.clone()),
     ));
     let tx_ingester = Arc::new(BackfillTransactionIngester::new(backfill_bubblegum_updates_processor.clone()));
     let backfiller_config = setup_config::<BackfillerConfig>(INGESTER_CONFIG_PREFIX);
@@ -694,15 +707,34 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    if config.run_sequence_consistent_checker {
-        let force_reingestable_slot_processor = Arc::new(ForceReingestableSlotGetter::new(
+    let force_reingestable_slot_processor = Arc::new(ForceReingestableSlotGetter::new(
+        primary_rocks_storage.clone(),
+        Arc::new(DirectBlockParser::new(
+            tx_ingester.clone(),
             primary_rocks_storage.clone(),
-            Arc::new(DirectBlockParser::new(
-                tx_ingester.clone(),
-                primary_rocks_storage.clone(),
-                metrics_state.backfiller_metrics.clone(),
-            )),
-        ));
+            metrics_state.backfiller_metrics.clone(),
+        )),
+    ));
+
+    consistency_calculator::run_bg_consistency_calculator(
+        nft_change_rcv,
+        primary_rocks_storage.clone(),
+        force_reingestable_slot_processor.clone(),
+        shutdown_rx.resubscribe(),
+        metrics_state.checksum_calculation_metrics.clone(),
+    );
+
+    if let Some(peer_urls_file) = config.peer_urls_file.as_ref() {
+        let peers_provider = Arc::new(FileSrcAuraPeersProvides::new(peer_urls_file.clone()));
+        nft_ingester::consistency_bg_job::run_consistenct_bg_job(
+            primary_rocks_storage.clone(),
+            peers_provider,
+            force_reingestable_slot_processor.clone(),
+            metrics_state.peer2peer_consistency_metrics.clone(),
+        );
+    }
+
+    if config.run_sequence_consistent_checker {
         run_sequence_consistent_gapfiller(
             SlotsCollector::new(
                 force_reingestable_slot_processor.clone(),
@@ -757,6 +789,8 @@ pub async fn main() -> Result<(), IngesterError> {
             let fork_cleaner = ForkCleaner::new(
                 primary_rocks_storage.clone(),
                 primary_rocks_storage.clone(),
+                primary_rocks_storage.clone(),
+                Some(changes_tracker.clone()),
                 metrics_state.fork_cleaner_metrics.clone(),
             );
             let rx = shutdown_rx.resubscribe();

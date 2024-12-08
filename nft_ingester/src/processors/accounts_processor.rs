@@ -1,3 +1,4 @@
+use crate::consistency_calculator::NftChangesTracker;
 use crate::{error::IngesterError, redis_receiver::get_timestamp_from_id};
 
 use chrono::Utc;
@@ -62,6 +63,7 @@ pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send 
     message_process_metrics: Option<Arc<MessageProcessMetricsConfig>>,
     postgre_client: Arc<PgClient>,
     rpc_client: Arc<RpcClient>,
+    nft_changes_tracker: Arc<NftChangesTracker>,
     join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 ) {
     mutexed_tasks.lock().await.spawn(async move {
@@ -79,7 +81,7 @@ pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send 
         .expect("Failed to build 'AccountsProcessor'!");
 
         account_processor
-            .process_accounts(rx, rocks_storage, account_buffer_size)
+            .process_accounts(rx, rocks_storage, account_buffer_size, nft_changes_tracker)
             .await;
 
         Ok(())
@@ -142,6 +144,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         rx: Receiver<()>,
         storage: Arc<Storage>,
         accounts_batch_size: usize,
+        nft_changes_tracker: Arc<NftChangesTracker>,
     ) {
         let mut batch_storage =
             BatchSaveStorage::new(storage, accounts_batch_size, self.metrics.clone());
@@ -161,7 +164,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                                 continue;
                             }
                         };
-                        self.process_account(&mut batch_storage, unprocessed_accounts, &mut core_fees, &mut ack_ids, &mut interval, &mut batch_fill_instant).await;
+                        self.process_account(&mut batch_storage, unprocessed_accounts, &mut core_fees, &mut ack_ids, &mut interval, &mut batch_fill_instant, &nft_changes_tracker).await;
                     },
                 _ = interval.tick() => {
                     self.flush(&mut batch_storage, &mut ack_ids, &mut interval, &mut batch_fill_instant);
@@ -188,6 +191,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         ack_ids: &mut Vec<String>,
         interval: &mut tokio::time::Interval,
         batch_fill_instant: &mut Instant,
+        nft_changes_tracker: &NftChangesTracker,
     ) {
         for unprocessed_account in unprocessed_accounts {
             let processing_result = match &unprocessed_account.account {
@@ -264,6 +268,19 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             if let Err(err) = processing_result {
                 error!("Processing account {}: {}", unprocessed_account.key, err);
                 continue;
+            }
+            {
+                let (account_pubkey, slot, write_version, data_hash) =
+                    unprocessed_account.solana_change_info();
+                nft_changes_tracker
+                    .track_account_change(
+                        batch_storage,
+                        account_pubkey,
+                        slot,
+                        write_version,
+                        data_hash,
+                    )
+                    .await;
             }
             self.metrics
                 .inc_accounts(unprocessed_account.account.into());

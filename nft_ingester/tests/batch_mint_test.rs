@@ -195,6 +195,7 @@ async fn save_batch_mint_to_queue_test() {
         env.rocks_env.storage.clone(),
         Arc::new(IngesterMetricsConfig::new()),
         tasks.clone(),
+        None,
     );
 
     let metadata_url = "url".to_string();

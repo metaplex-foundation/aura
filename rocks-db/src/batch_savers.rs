@@ -1,4 +1,8 @@
 use crate::asset::{AssetCollection, MetadataMintMap};
+use crate::storage_consistency::{
+    AccountNftBucket, AccountNftBucketKey, AccountNftChange, AccountNftChangeKey,
+    AccountNftGrandBucket, AccountNftGrandBucketKey,
+};
 use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::Result;
 use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
@@ -168,10 +172,35 @@ impl BatchSaveStorage {
         )?;
         Ok(())
     }
+
     pub fn fungible_asset_updated_with_batch(&mut self, slot: u64, pubkey: Pubkey) -> Result<()> {
         self.storage
             .fungible_asset_updated_with_batch(&mut self.batch, slot, pubkey)?;
         Ok(())
+    }
+
+    pub fn put_account_change(
+        &mut self,
+        key: AccountNftChangeKey,
+        v: AccountNftChange,
+    ) -> Result<()> {
+        self.storage
+            .acc_nft_changes
+            .put_with_batch(&mut self.batch, key, &v)
+    }
+    pub fn put_acc_bucket(&mut self, key: AccountNftBucketKey, v: AccountNftBucket) -> Result<()> {
+        self.storage
+            .acc_nft_buckets
+            .put_with_batch(&mut self.batch, key, &v)
+    }
+    pub fn put_acc_grand_bucket(
+        &mut self,
+        key: AccountNftGrandBucketKey,
+        v: AccountNftGrandBucket,
+    ) -> Result<()> {
+        self.storage
+            .acc_nft_grand_buckets
+            .put_with_batch(&mut self.batch, key, &v)
     }
 
     pub fn asset_updated_with_batch(&mut self, slot: u64, pubkey: Pubkey) -> Result<()> {

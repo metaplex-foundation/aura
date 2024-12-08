@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = { workspace = true }
 rocksdb = { workspace = true }
 solana-sdk = { workspace = true }
 bincode = { workspace = true }
@@ -42,6 +43,7 @@ tempfile = { workspace = true }
 bubblegum-batch-sdk = { workspace = true }
 num-traits = { workspace = true }
 indicatif = { workspace = true }
+lazy_static = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }

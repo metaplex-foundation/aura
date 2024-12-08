@@ -43,6 +43,11 @@ use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::token_prices::TokenPrice;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
+use storage_consistency::{
+    AccountNft, AccountNftBucket, AccountNftChange, AccountNftGrandBucket, BubblegumChange,
+    BubblegumEpoch, BubblegumGrandEpoch,
+};
+
 pub mod asset;
 mod asset_client;
 pub mod asset_previews;
@@ -73,6 +78,7 @@ pub mod schedule;
 pub mod sequence_consistent;
 pub mod signature_client;
 pub mod slots_dumper;
+pub mod storage_consistency;
 pub mod storage_traits;
 pub mod token_accounts;
 pub mod token_prices;
@@ -133,6 +139,13 @@ pub struct Storage {
     pub inscription_data: Column<InscriptionData>,
     pub leaf_signature: Column<LeafSignature>,
     pub spl_mints: Column<SplMint>,
+    pub bubblegum_changes: Column<BubblegumChange>,
+    pub bubblegum_epochs: Column<BubblegumEpoch>,
+    pub bubblegum_grand_epochs: Column<BubblegumGrandEpoch>,
+    pub acc_nft_changes: Column<AccountNftChange>,
+    pub acc_nft_last: Column<AccountNft>,
+    pub acc_nft_buckets: Column<AccountNftBucket>,
+    pub acc_nft_grand_buckets: Column<AccountNftGrandBucket>,
     assets_update_last_seq: AtomicU64,
     fungible_assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
@@ -188,6 +201,13 @@ impl Storage {
         let inscription_data = Self::column(db.clone(), red_metrics.clone());
         let leaf_signature = Self::column(db.clone(), red_metrics.clone());
         let spl_mints = Self::column(db.clone(), red_metrics.clone());
+        let bubblegum_changes = Self::column(db.clone(), red_metrics.clone());
+        let bubblegum_epochs = Self::column(db.clone(), red_metrics.clone());
+        let bubblegum_grand_epochs = Self::column(db.clone(), red_metrics.clone());
+        let acc_nft_changes = Self::column(db.clone(), red_metrics.clone());
+        let acc_nft_last = Self::column(db.clone(), red_metrics.clone());
+        let acc_nft_buckets = Self::column(db.clone(), red_metrics.clone());
+        let acc_nft_grand_buckets = Self::column(db.clone(), red_metrics.clone());
 
         Self {
             asset_static_data,
@@ -236,6 +256,13 @@ impl Storage {
             inscription_data,
             leaf_signature,
             spl_mints,
+            bubblegum_changes,
+            bubblegum_epochs,
+            bubblegum_grand_epochs,
+            acc_nft_changes,
+            acc_nft_last,
+            acc_nft_buckets,
+            acc_nft_grand_buckets,
         }
     }
 
@@ -316,6 +343,13 @@ impl Storage {
             Self::new_cf_descriptor::<InscriptionData>(migration_state),
             Self::new_cf_descriptor::<LeafSignature>(migration_state),
             Self::new_cf_descriptor::<SplMint>(migration_state),
+            Self::new_cf_descriptor::<BubblegumChange>(migration_state),
+            Self::new_cf_descriptor::<BubblegumEpoch>(migration_state),
+            Self::new_cf_descriptor::<BubblegumGrandEpoch>(migration_state),
+            Self::new_cf_descriptor::<AccountNftChange>(migration_state),
+            Self::new_cf_descriptor::<AccountNft>(migration_state),
+            Self::new_cf_descriptor::<AccountNftBucket>(migration_state),
+            Self::new_cf_descriptor::<AccountNftGrandBucket>(migration_state),
         ]
     }
 
@@ -656,6 +690,18 @@ impl Storage {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_spl_mint",
                     token_accounts::merge_mints,
+                );
+            }
+            BubblegumEpoch::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_bubblegum_epoch",
+                    storage_consistency::merge_bubblgum_epoch_checksum,
+                );
+            }
+            BubblegumGrandEpoch::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_bubblegum_grand_epoch",
+                    storage_consistency::merge_bubblgum_grand_epoch_checksum,
                 );
             }
             _ => {}
