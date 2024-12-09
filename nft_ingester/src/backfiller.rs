@@ -1,4 +1,4 @@
-use crate::config::{BackfillerConfig, BackfillerSourceMode, BigTableConfig};
+use crate::config::{BackfillerSourceMode, BigTableConfig};
 use crate::error::IngesterError;
 use async_trait::async_trait;
 use backfill_rpc::rpc::BackfillRPC;
@@ -118,7 +118,6 @@ impl BlockProducer for BackfillSource {
 
 #[derive(Clone)]
 pub struct TransactionsParser<C: BlockConsumer, P: BlockProducer, S: SlotGetter> {
-    rocks_client: Arc<rocks_db::Storage>,
     slot_getter: Arc<S>,
     consumer: Arc<C>,
     producer: Arc<P>,
@@ -134,7 +133,6 @@ where
     S: SlotGetter,
 {
     pub fn new(
-        rocks_client: Arc<rocks_db::Storage>,
         slot_getter: Arc<S>,
         consumer: Arc<C>,
         producer: Arc<P>,
@@ -143,7 +141,6 @@ where
         chunk_size: usize,
     ) -> TransactionsParser<C, P, S> {
         TransactionsParser {
-            rocks_client,
             slot_getter,
             consumer,
             producer,

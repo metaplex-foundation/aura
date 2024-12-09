@@ -1,6 +1,5 @@
 use crate::error::UsecaseError;
 use async_trait::async_trait;
-use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 
 #[async_trait]

@@ -247,6 +247,7 @@ impl From<IndexDbError> for IngesterError {
             IndexDbError::PubkeyParsingError(s) => IngesterError::ParsePubkeyError(s),
             IndexDbError::NotImplemented(s) => IngesterError::DatabaseError(s),
             a @ IndexDbError::BadArgument(_) => IngesterError::DatabaseError(a.to_string()),
+            a @ IndexDbError::JoinError(_) => IngesterError::DatabaseError(a.to_string()),
         }
     }
 }
