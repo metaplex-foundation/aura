@@ -14,8 +14,8 @@ use tracing::warn;
 use crate::error::IngesterError;
 
 const BUF_CAPACITY: usize = 1024 * 1024 * 32;
-const NFT_SHARDS: u64 = 48;
-const FUNGIBLE_SHARDS: u64 = 8;
+const NFT_SHARDS: u64 = 32;
+const FUNGIBLE_SHARDS: u64 = 16;
 #[derive(Debug)]
 pub struct SyncState {
     last_indexed_key: Option<AssetUpdatedKey>,
