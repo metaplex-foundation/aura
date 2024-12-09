@@ -233,8 +233,10 @@ impl PgClient {
         self.recreate_asset_indexes(&mut transaction).await?;
         self.recreate_authorities_indexes(&mut transaction).await?;
         self.recreate_creators_indexes(&mut transaction).await?;
-        self.recreate_asset_authorities_constraints(&mut transaction).await?;
-        self.recreate_asset_creators_constraints(&mut transaction).await?;   
+        self.recreate_asset_authorities_constraints(&mut transaction)
+            .await?;
+        self.recreate_asset_creators_constraints(&mut transaction)
+            .await?;
         self.recreate_asset_constraints(&mut transaction).await?;
 
         transaction.commit().await.map_err(|e| e)?;

@@ -143,7 +143,9 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
     while let Some(task) = full_sync_tasks.join_next().await {
-        task.map_err(|e|IngesterError::UnrecoverableTaskError(format!("joining task failed: {}", e.to_string())))??;
+        task.map_err(|e| {
+            IngesterError::UnrecoverableTaskError(format!("joining task failed: {}", e.to_string()))
+        })??;
     }
     let shutdown_rx_clone = shutdown_rx.resubscribe();
     let synchronizer_clone = synchronizer.clone();

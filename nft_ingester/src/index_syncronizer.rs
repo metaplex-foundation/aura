@@ -1,7 +1,7 @@
 use entities::enums::AssetType;
 use metrics_utils::SynchronizerMetricsConfig;
 use num_bigint::BigUint;
-use postgre_client::storage_traits::AssetIndexStorage;
+use postgre_client::storage_traits::{AssetIndexStorage, NFTSemaphores};
 use rocks_db::{
     key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey},
     storage_traits::{AssetIndexStorage as AssetIndexSourceStorage, AssetUpdatedKey},
@@ -14,6 +14,8 @@ use tracing::warn;
 use crate::error::IngesterError;
 
 const BUF_CAPACITY: usize = 1024 * 1024 * 32;
+const NFT_SHARDS: u64 = 48;
+const FUNGIBLE_SHARDS: u64 = 8;
 #[derive(Debug)]
 pub struct SyncState {
     last_indexed_key: Option<AssetUpdatedKey>,
@@ -262,10 +264,11 @@ where
 
         match asset_type {
             AssetType::NonFungible => {
-                self.dump_sync_nft(rx, last_included_rocks_key, 64).await?;
+                self.dump_sync_nft(rx, last_included_rocks_key, NFT_SHARDS)
+                    .await?;
             }
             AssetType::Fungible => {
-                self.dump_sync_fungibles(rx, last_included_rocks_key, 8)
+                self.dump_sync_fungibles(rx, last_included_rocks_key, FUNGIBLE_SHARDS)
                     .await?;
             }
         }
@@ -359,12 +362,12 @@ where
             });
         }
         let mut index_tasks = JoinSet::new();
-        let metadata_semaphore = Arc::new(tokio::sync::Semaphore::new(1));
+        let semaphore = Arc::new(NFTSemaphores::new());
         while let Some(task) = tasks.join_next().await {
             let (_cnt, assets_path, creators_path, authorities_path, metadata_path) =
                 task.map_err(|e| e.to_string())??;
             let index_storage = self.index_storage.clone();
-            let metadata_semaphore = metadata_semaphore.clone();
+            let semaphore = semaphore.clone();
             index_tasks.spawn(async move {
                 index_storage
                     .load_from_dump_nfts(
@@ -372,7 +375,7 @@ where
                         creators_path.as_str(),
                         authorities_path.as_str(),
                         metadata_path.as_str(),
-                        metadata_semaphore,
+                        semaphore,
                     )
                     .await
             });
@@ -439,13 +442,14 @@ where
             });
         }
         let mut index_tasks = JoinSet::new();
-
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(1));
         while let Some(task) = tasks.join_next().await {
             let (_cnt, fungible_tokens_path) = task.map_err(|e| e.to_string())??;
             let index_storage = self.index_storage.clone();
+            let semaphore = semaphore.clone();
             index_tasks.spawn(async move {
                 index_storage
-                    .load_from_dump_fungibles(fungible_tokens_path.as_str())
+                    .load_from_dump_fungibles(fungible_tokens_path.as_str(), semaphore)
                     .await
             });
         }

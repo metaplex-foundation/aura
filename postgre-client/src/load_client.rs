@@ -199,7 +199,7 @@ impl PgClient {
         Ok(())
     }
 
-    pub (crate) async fn recreate_asset_indexes(
+    pub(crate) async fn recreate_asset_indexes(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
@@ -237,19 +237,28 @@ impl PgClient {
         Ok(())
     }
 
-
-    pub (crate) async fn recreate_creators_indexes(
+    pub(crate) async fn recreate_creators_indexes(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
-        self.create_index(transaction, "asset_creators_v3_creator", "asset_creators_v3(asc_creator, asc_verified)").await
+        self.create_index(
+            transaction,
+            "asset_creators_v3_creator",
+            "asset_creators_v3(asc_creator, asc_verified)",
+        )
+        .await
     }
 
-    pub (crate) async fn recreate_authorities_indexes(
+    pub(crate) async fn recreate_authorities_indexes(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
-        self.create_index(transaction, "assets_authority", "assets_authorities(auth_authority) WHERE auth_authority IS NOT NULL").await
+        self.create_index(
+            transaction,
+            "assets_authority",
+            "assets_authorities(auth_authority) WHERE auth_authority IS NOT NULL",
+        )
+        .await
     }
 
     pub async fn drop_fungible_constraints(
@@ -310,7 +319,7 @@ impl PgClient {
         Ok(())
     }
 
-    pub (crate) async fn recreate_asset_creators_constraints(
+    pub(crate) async fn recreate_asset_creators_constraints(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
@@ -324,7 +333,7 @@ impl PgClient {
         .await
     }
 
-    pub (crate) async fn recreate_asset_authorities_constraints(
+    pub(crate) async fn recreate_asset_authorities_constraints(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
@@ -338,7 +347,7 @@ impl PgClient {
         .await
     }
 
-    pub (crate) async fn recreate_asset_constraints(
+    pub(crate) async fn recreate_asset_constraints(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
@@ -443,7 +452,11 @@ impl PgClient {
         file_path: String,
         table: &str,
         columns: &str,
+        semaphore: Arc<tokio::sync::Semaphore>,
     ) -> Result<(), IndexDbError> {
+        let guard = semaphore.acquire().await.map_err(|e| {
+            IndexDbError::BadArgument(format!("Failed to acquire semaphore: {}", e))
+        })?;
         let mut transaction = self.start_transaction().await?;
         match self
             .copy_table_from(&mut transaction, file_path, table, columns)
@@ -451,10 +464,12 @@ impl PgClient {
         {
             Ok(_) => {
                 transaction.commit().await?;
+                drop(guard);
                 Ok(())
             }
             Err(e) => {
                 transaction.rollback().await?;
+                drop(guard);
                 Err(e)
             }
         }
@@ -533,9 +548,7 @@ impl PgClient {
         Ok(())
     }
 
-    pub(crate) async fn finalize_assets_load(
-        &self,
-    ) -> Result<(), IndexDbError> {
+    pub(crate) async fn finalize_assets_load(&self) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
         match self.finalize_assets_load_tx(&mut transaction).await {
             Ok(_) => {
@@ -549,9 +562,7 @@ impl PgClient {
         }
     }
 
-    pub(crate) async fn finalize_creators_load(
-        &self,
-    ) -> Result<(), IndexDbError> {
+    pub(crate) async fn finalize_creators_load(&self) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
         match self.finalize_creators_load_tx(&mut transaction).await {
             Ok(_) => {
@@ -565,9 +576,7 @@ impl PgClient {
         }
     }
 
-    pub(crate) async fn finalize_authorities_load(
-        &self,
-    ) -> Result<(), IndexDbError> {
+    pub(crate) async fn finalize_authorities_load(&self) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
         match self.finalize_authorities_load_tx(&mut transaction).await {
             Ok(_) => {
@@ -580,7 +589,7 @@ impl PgClient {
             }
         }
     }
-    
+
     async fn finalize_assets_load_tx(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
@@ -596,9 +605,11 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
-        self.recreate_asset_creators_constraints(transaction).await?;
+        self.recreate_asset_creators_constraints(transaction)
+            .await?;
         self.recreate_creators_indexes(transaction).await?;
-        self.reset_autovacuum_on(transaction, "asset_creators_v3").await?;
+        self.reset_autovacuum_on(transaction, "asset_creators_v3")
+            .await?;
         // self.set_logged_on(transaction, "asset_creators_v3").await?;
         Ok(())
     }
@@ -607,9 +618,11 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
-        self.recreate_asset_authorities_constraints(transaction).await?;
+        self.recreate_asset_authorities_constraints(transaction)
+            .await?;
         self.recreate_authorities_indexes(transaction).await?;
-        self.reset_autovacuum_on(transaction, "assets_authorities").await?;
+        self.reset_autovacuum_on(transaction, "assets_authorities")
+            .await?;
         // self.set_logged_on(transaction, "assets_authorities").await?;
         Ok(())
     }

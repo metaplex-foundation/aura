@@ -8,6 +8,23 @@ use entities::enums::AssetType;
 use entities::models::{AssetIndex, FungibleAssetIndex};
 use mockall::{automock, mock};
 
+pub struct NFTSemaphores {
+    pub assets: Arc<tokio::sync::Semaphore>,
+    pub creators: Arc<tokio::sync::Semaphore>,
+    pub authority: Arc<tokio::sync::Semaphore>,
+    pub metadata: Arc<tokio::sync::Semaphore>,
+}
+impl NFTSemaphores {
+    pub fn new() -> Self {
+        Self {
+            assets: Arc::new(tokio::sync::Semaphore::new(1)),
+            creators: Arc::new(tokio::sync::Semaphore::new(1)),
+            authority: Arc::new(tokio::sync::Semaphore::new(1)),
+            metadata: Arc::new(tokio::sync::Semaphore::new(1)),
+        }
+    }
+}
+
 #[async_trait]
 pub trait AssetIndexStorage {
     async fn fetch_last_synced_id(
@@ -34,11 +51,12 @@ pub trait AssetIndexStorage {
         creators_file_name: &str,
         authority_file_name: &str,
         metadata_file_name: &str,
-        semaphore: Arc<tokio::sync::Semaphore>,
+        semaphores: Arc<NFTSemaphores>,
     ) -> Result<(), IndexDbError>;
     async fn load_from_dump_fungibles(
         &self,
         fungible_tokens_path: &str,
+        semaphore: Arc<tokio::sync::Semaphore>,
     ) -> Result<(), IndexDbError>;
     async fn destructive_prep_to_batch_nft_load(&self) -> Result<(), IndexDbError>;
     async fn finalize_batch_nft_load(&self) -> Result<(), IndexDbError>;
@@ -68,11 +86,12 @@ mock!(
             creators_file_name: &str,
             authority_file_name: &str,
             metadata_file_name: &str,
-            semaphore: Arc<tokio::sync::Semaphore>,
-    ) -> Result<(), IndexDbError>;
+            semaphores: Arc<NFTSemaphores>,
+        ) -> Result<(), IndexDbError>;
         async fn load_from_dump_fungibles(
             &self,
             fungible_tokens_path: &str,
+            semaphore: Arc<tokio::sync::Semaphore>,
         ) -> Result<(), IndexDbError>;
         async fn destructive_prep_to_batch_nft_load(&self) -> Result<(), IndexDbError>;
         async fn finalize_batch_nft_load(&self) -> Result<(), IndexDbError>;
