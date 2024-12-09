@@ -41,6 +41,8 @@ usecase = { path = "../usecase" }
 tempfile = { workspace = true }
 bubblegum-batch-sdk = { workspace = true }
 num-traits = { workspace = true }
+# using a different version of flatbuffer compared to the rest of the project as this one is compatible with generator used for AssetCompleteDetails structures
+flatbuffers = { version="24.3.25", features = ["serialize"]} 
 indicatif = { workspace = true }
 
 [dev-dependencies]
@@ -48,6 +50,7 @@ rand = { workspace = true }
 setup = { path = "../tests/setup" }
 criterion = { workspace = true }
 tracing-test = { workspace = true }
+itertools = { workspace = true }
 
 [features]
 integration_tests = []

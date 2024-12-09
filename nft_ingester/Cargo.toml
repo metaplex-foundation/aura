@@ -80,6 +80,10 @@ coingecko = { workspace = true }
 libreplex_inscriptions = { workspace = true }
 spl-token-2022 = { workspace = true }
 moka = { workspace = true }
+indicatif = { workspace = true }
+tokio-retry = { workspace = true }
+axum = { workspace = true }
+rocksdb = { workspace = true }
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }
@@ -122,10 +126,22 @@ name = "ingester"
 name = "migrator"
 
 [[bin]]
-name = "raw_backfiller"
-
-[[bin]]
 name = "synchronizer"
 
 [[bin]]
 name = "raw_backup"
+
+[[bin]]
+name = "backfill"
+
+[[bin]]
+name = "slot_persister"
+
+[[bin]]
+name = "slot_checker"
+
+[[bin]]
+name = "explorer"
+
+[[bin]]
+name = "synchronizer_utils"

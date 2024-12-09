@@ -119,6 +119,7 @@ pub async fn main() -> Result<(), IngesterError> {
                         pg_client.clone(),
                         rocks_storage.clone(),
                         json_downloader_metrics.clone(),
+                        red_metrics.clone(),
                     )
                     .await,
                 ))
@@ -149,6 +150,7 @@ pub async fn main() -> Result<(), IngesterError> {
             cloned_rocks_storage.clone(),
             cloned_rx,
             metrics.clone(),
+            Some(red_metrics.clone()),
             config.server_port,
             proof_checker,
             tree_gaps_checker,
@@ -164,6 +166,7 @@ pub async fn main() -> Result<(), IngesterError> {
             config.file_storage_path_container.as_str(),
             account_balance_getter,
             config.storage_service_base_url,
+            config.native_mint_pubkey,
         )
         .await
         {
@@ -177,34 +180,35 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     // setup dependencies for grpc server
-    let uc = usecase::asset_streamer::AssetStreamer::new(
-        config.peer_grpc_max_gap_slots,
-        rocks_storage.clone(),
-    );
-    let bs = usecase::raw_blocks_streamer::BlocksStreamer::new(
-        config.peer_grpc_max_gap_slots,
-        rocks_storage.clone(),
-    );
-    let serv = grpc::service::PeerGapFillerServiceImpl::new(
-        Arc::new(uc),
-        Arc::new(bs),
-        rocks_storage.clone(),
-    );
-    let addr = format!("0.0.0.0:{}", config.peer_grpc_port).parse()?;
-    let mut cloned_rx = shutdown_rx.resubscribe();
-    // Spawn the gRPC server task and add to JoinSet
-    mutexed_tasks.lock().await.spawn(async move {
-        if let Err(e) = Server::builder()
-            .add_service(GapFillerServiceServer::new(serv))
-            .serve_with_shutdown(addr, async {
-                cloned_rx.recv().await.unwrap();
-            })
-            .await
-        {
-            eprintln!("GRPC Server error: {}", e);
-        }
-        Ok(())
-    });
+    // TODO: add slots db to API server configuration and use it here to create BlocksStreamer, enable the grpc again
+    // let uc = usecase::asset_streamer::AssetStreamer::new(
+    //     config.peer_grpc_max_gap_slots,
+    //     rocks_storage.clone(),
+    // );
+    // let bs = usecase::raw_blocks_streamer::BlocksStreamer::new(
+    //     config.peer_grpc_max_gap_slots,
+    //     rocks_storage.clone(),
+    // );
+    // let serv = grpc::service::PeerGapFillerServiceImpl::new(
+    //     Arc::new(uc),
+    //     Arc::new(bs),
+    //     rocks_storage.clone(),
+    // );
+    // let addr = format!("0.0.0.0:{}", config.peer_grpc_port).parse()?;
+    // let mut cloned_rx = shutdown_rx.resubscribe();
+    // // Spawn the gRPC server task and add to JoinSet
+    // mutexed_tasks.lock().await.spawn(async move {
+    //     if let Err(e) = Server::builder()
+    //         .add_service(GapFillerServiceServer::new(serv))
+    //         .serve_with_shutdown(addr, async {
+    //             cloned_rx.recv().await.unwrap();
+    //         })
+    //         .await
+    //     {
+    //         eprintln!("GRPC Server error: {}", e);
+    //     }
+    //     Ok(())
+    // });
 
     // try synchronizing secondary rocksdb instance every config.rocks_sync_interval_seconds
     let cloned_rx = shutdown_rx.resubscribe();
@@ -225,6 +229,7 @@ pub async fn main() -> Result<(), IngesterError> {
     graceful_stop(
         mutexed_tasks,
         shutdown_tx,
+        None,
         guard,
         config.profiling_file_path_container,
         &config.heap_path,

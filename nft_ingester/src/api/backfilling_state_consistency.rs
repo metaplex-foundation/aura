@@ -39,11 +39,12 @@ impl BackfillingStateConsistencyChecker {
             };
             tasks.lock().await.spawn(async move {
             while rx.is_empty() {
-                overwhelm_backfill_gap.store(
-                    rocks_db.bubblegum_slots.iter_start().count().saturating_add(rocks_db.ingestable_slots.iter_start().count())
-                        >= consistence_backfilling_slots_threshold as usize,
-                    Ordering::Relaxed,
-                );
+                // TODO: refactor this to use parameter from storage and last slot from slot storage
+                // overwhelm_backfill_gap.store(
+                //     rocks_db.bubblegum_slots.iter_start().count().saturating_add(rocks_db.ingestable_slots.iter_start().count())
+                //         >= consistence_backfilling_slots_threshold as usize,
+                //     Ordering::Relaxed,
+                // );
                 tokio::select! {
                     _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)) => {},
                     _ = rx.recv() => {

@@ -135,7 +135,8 @@ pub struct GetAssetsByGroup {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub options: Option<GetByMethodsOptions>,
+    #[serde(default)]
+    pub options: GetByMethodsOptions,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -148,21 +149,24 @@ pub struct GetAssetsByOwner {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub options: Option<GetByMethodsOptions>,
+    #[serde(default)]
+    pub options: GetByMethodsOptions,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetAsset {
     pub id: String,
-    pub options: Option<Options>,
+    #[serde(default)]
+    pub options: Options,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetAssetBatch {
     pub ids: Vec<String>,
-    pub options: Option<Options>,
+    #[serde(default)]
+    pub options: Options,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -188,7 +192,8 @@ pub struct GetAssetsByCreator {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub options: Option<GetByMethodsOptions>,
+    #[serde(default)]
+    pub options: GetByMethodsOptions,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -201,7 +206,8 @@ pub struct GetAssetsByAuthority {
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
-    pub options: Option<GetByMethodsOptions>,
+    #[serde(default)]
+    pub options: GetByMethodsOptions,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -287,7 +293,8 @@ pub struct SearchAssets {
     pub cursor: Option<String>,
     #[serde(default)]
     pub name: Option<String>,
-    pub options: Option<SearchAssetsOptions>,
+    #[serde(default)]
+    pub options: SearchAssetsOptions,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
@@ -412,10 +419,10 @@ impl From<SearchAssetsV0> for SearchAssets {
             json_uri: value.json_uri,
             cursor: None,
             name: None,
-            options: Some(SearchAssetsOptions {
+            options: SearchAssetsOptions {
                 show_unverified_collections: true,
                 ..Default::default()
-            }),
+            },
         }
     }
 }
@@ -430,12 +437,12 @@ impl From<GetAssetV0> for GetAsset {
     fn from(value: GetAssetV0) -> Self {
         Self {
             id: value.id,
-            options: Some(Options {
+            options: Options {
                 show_unverified_collections: true,
                 show_collection_metadata: false,
                 show_inscription: false,
                 show_fungible: false,
-            }),
+            },
         }
     }
 }
@@ -450,12 +457,12 @@ impl From<GetAssetBatchV0> for GetAssetBatch {
     fn from(value: GetAssetBatchV0) -> Self {
         Self {
             ids: value.ids,
-            options: Some(Options {
+            options: Options {
                 show_unverified_collections: true,
                 show_collection_metadata: false,
                 show_inscription: false,
                 show_fungible: false,
-            }),
+            },
         }
     }
 }
@@ -481,10 +488,10 @@ impl From<GetAssetsByAuthorityV0> for GetAssetsByAuthority {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: Some(GetByMethodsOptions {
+            options: GetByMethodsOptions {
                 show_unverified_collections: true,
                 ..Default::default()
-            }),
+            },
         }
     }
 }
@@ -512,10 +519,10 @@ impl From<GetAssetsByCreatorV0> for GetAssetsByCreator {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: Some(GetByMethodsOptions {
+            options: GetByMethodsOptions {
                 show_unverified_collections: true,
                 ..Default::default()
-            }),
+            },
         }
     }
 }
@@ -541,10 +548,10 @@ impl From<GetAssetsByOwnerV0> for GetAssetsByOwner {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: Some(GetByMethodsOptions {
+            options: GetByMethodsOptions {
                 show_unverified_collections: true,
                 ..Default::default()
-            }),
+            },
         }
     }
 }
@@ -572,7 +579,7 @@ impl From<GetAssetsByGroupV0> for GetAssetsByGroup {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: None,
+            options: Default::default(),
         }
     }
 }

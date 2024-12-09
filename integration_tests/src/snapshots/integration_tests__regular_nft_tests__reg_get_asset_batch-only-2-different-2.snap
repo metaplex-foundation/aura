@@ -1,0 +1,170 @@
+---
+source: integration_tests/src/regular_nft_tests.rs
+assertion_line: 92
+expression: response
+snapshot_kind: text
+---
+[
+  {
+    "interface": "ProgrammableNFT",
+    "id": "2NqdYX6kJmMUoChnDXU2UrP9BsoPZivRw3uJG8iDhRRd",
+    "content": {
+      "$schema": "https://schema.metaplex.com/nft1.0.json",
+      "json_uri": "https://madlads.s3.us-west-2.amazonaws.com/json/9959.json",
+      "files": [],
+      "metadata": {
+        "name": "Mad Lads #9959",
+        "symbol": "MAD",
+        "token_standard": "ProgrammableNonFungible"
+      },
+      "links": {}
+    },
+    "authorities": [
+      {
+        "address": "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW",
+        "scopes": [
+          "full"
+        ]
+      }
+    ],
+    "compression": {
+      "eligible": false,
+      "compressed": false,
+      "data_hash": "",
+      "creator_hash": "",
+      "asset_hash": "",
+      "tree": "",
+      "seq": 0,
+      "leaf_id": 0
+    },
+    "grouping": [
+      {
+        "group_key": "collection",
+        "group_value": "J1S9H3QjnRtBbbuD4HjPV6RpRhwuk4zKbxsnCHuTgh9w",
+        "verified": true
+      }
+    ],
+    "royalty": {
+      "royalty_model": "creators",
+      "target": null,
+      "percent": 0.042,
+      "basis_points": 420,
+      "primary_sale_happened": true,
+      "locked": false
+    },
+    "creators": [
+      {
+        "address": "5XvhfmRjwXkGp3jHGmaKpqeerNYjkuZZBYLVQYdeVcRv",
+        "share": 0,
+        "verified": true
+      },
+      {
+        "address": "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW",
+        "share": 100,
+        "verified": true
+      }
+    ],
+    "ownership": {
+      "frozen": true,
+      "delegated": true,
+      "delegate": "CimD28VvDSHcGdErmLbbPimnkfwrKHvstNiQUutZDxWS",
+      "ownership_model": "single",
+      "owner": "9PacVenjPyQYiWBha89UYRM1nn6mf9bGY7vi32zY6DLn"
+    },
+    "supply": null,
+    "mutable": true,
+    "burnt": false,
+    "lamports": 5616720,
+    "executable": false,
+    "metadata_owner": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+    "rent_epoch": 0,
+    "token_info": {
+      "supply": 1,
+      "decimals": 0,
+      "token_program": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "mint_authority": "6BiYUFJnBuHMuhNot6GvJi8gCNT3yqQqxxgV6rtnSK1c",
+      "freeze_authority": "6BiYUFJnBuHMuhNot6GvJi8gCNT3yqQqxxgV6rtnSK1c"
+    }
+  },
+  {
+    "interface": "ProgrammableNFT",
+    "id": "5rEeYv8R25b8j6YTHJvYuCKEzq44UCw1Wx1Wx2VPPLz1",
+    "content": {
+      "$schema": "https://schema.metaplex.com/nft1.0.json",
+      "json_uri": "https://madlads.s3.us-west-2.amazonaws.com/json/9963.json",
+      "files": [],
+      "metadata": {
+        "name": "Mad Lads #9963",
+        "symbol": "MAD",
+        "token_standard": "ProgrammableNonFungible"
+      },
+      "links": {}
+    },
+    "authorities": [
+      {
+        "address": "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW",
+        "scopes": [
+          "full"
+        ]
+      }
+    ],
+    "compression": {
+      "eligible": false,
+      "compressed": false,
+      "data_hash": "",
+      "creator_hash": "",
+      "asset_hash": "",
+      "tree": "",
+      "seq": 0,
+      "leaf_id": 0
+    },
+    "grouping": [
+      {
+        "group_key": "collection",
+        "group_value": "J1S9H3QjnRtBbbuD4HjPV6RpRhwuk4zKbxsnCHuTgh9w",
+        "verified": true
+      }
+    ],
+    "royalty": {
+      "royalty_model": "creators",
+      "target": null,
+      "percent": 0.042,
+      "basis_points": 420,
+      "primary_sale_happened": true,
+      "locked": false
+    },
+    "creators": [
+      {
+        "address": "5XvhfmRjwXkGp3jHGmaKpqeerNYjkuZZBYLVQYdeVcRv",
+        "share": 0,
+        "verified": true
+      },
+      {
+        "address": "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW",
+        "share": 100,
+        "verified": true
+      }
+    ],
+    "ownership": {
+      "frozen": true,
+      "delegated": true,
+      "delegate": "CcYTgeWQhsdyGYbJAzUuuPG6jvNhfyzXmNWVSrxbdC9a",
+      "ownership_model": "single",
+      "owner": "3H3d3hfpZVVdVwuFAxDtDSFN2AdR7kwiDA3ynbnbkhc9"
+    },
+    "supply": null,
+    "mutable": true,
+    "burnt": false,
+    "lamports": 5616720,
+    "executable": false,
+    "metadata_owner": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+    "rent_epoch": 0,
+    "token_info": {
+      "supply": 1,
+      "decimals": 0,
+      "token_program": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "mint_authority": "5WVxGy4xQ7Eujb1JCFMWCC4dg1LBo9RgzsfF3YLybgKR",
+      "freeze_authority": "5WVxGy4xQ7Eujb1JCFMWCC4dg1LBo9RgzsfF3YLybgKR"
+    }
+  }
+]

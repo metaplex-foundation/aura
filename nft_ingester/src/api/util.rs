@@ -6,7 +6,7 @@ use entities::api_req_params::{
 pub trait ApiRequest {
     fn get_all_pagination_parameters(&self) -> Pagination;
     fn get_sort_parameter(&self) -> Option<AssetSorting>;
-    fn get_options(&self) -> Option<GetByMethodsOptions>;
+    fn get_options(&self) -> GetByMethodsOptions;
 }
 
 macro_rules! impl_request_with_pagination {
@@ -26,8 +26,8 @@ macro_rules! impl_request_with_pagination {
                 self.sort_by.clone()
             }
 
-            fn get_options(&self) -> Option<GetByMethodsOptions> {
-                self.options.clone().map(Into::into)
+            fn get_options(&self) -> GetByMethodsOptions {
+                self.options.clone().into()
             }
         }
     };
