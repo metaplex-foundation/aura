@@ -4,6 +4,7 @@ use bincode::deserialize;
 use entities::models::{AssetSignature, AssetSignatureKey};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
+use solana_sdk::bs58;
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
 use tracing::{debug, error, warn};
@@ -83,7 +84,7 @@ impl ClItem {
                         || (new_val.slot_updated == slot && new_val.cli_seq as i64 > cli_seq)
                     {
                         if new_val.slot_updated > slot && (new_val.cli_seq as i64) < cli_seq {
-                            warn!("RocksDB: ClItem new_val slot {} is greater than existing slot {}, but seq {} is less than the exising {} for {}.", new_val.slot_updated, slot, new_val.cli_seq, cli_seq, bs58::encode(new_key));
+                            warn!("RocksDB: ClItem new_val slot {} is greater than existing slot {}, but seq {} is less than the exising {} for {}.", new_val.slot_updated, slot, new_val.cli_seq, cli_seq, bs58::encode(new_key).into_string());
                         }
                         cli_seq = new_val.cli_seq as i64;
                         slot = new_val.slot_updated;

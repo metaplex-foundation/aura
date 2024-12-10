@@ -3327,7 +3327,7 @@ impl AssetLeaf {
                             if new_seq < current_seq {
                                 warn!(
                                     "RocksDB: AssetLeaf: new_val.leaf_seq < current_seq: {} < {}, while new_val.slot_updated: {}, current_val.slot_updated: {} for {}",
-                                    new_seq, current_seq, new_val.slot_updated, slot, bs58::encode(new_key)
+                                    new_seq, current_seq, new_val.slot_updated, slot, bs58::encode(new_key).into_string()
                                 );
                             }
                         }
