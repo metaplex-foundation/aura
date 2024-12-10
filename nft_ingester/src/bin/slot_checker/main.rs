@@ -317,6 +317,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("Shutdown signal received, stopping...");
             break;
         }
+        if let Some(first_slot) = args.first_slot {
+            if slot < first_slot {
+                break;
+            }
+        }
 
         if let Some(db_slot) = current_db_slot {
             if slot == db_slot {
