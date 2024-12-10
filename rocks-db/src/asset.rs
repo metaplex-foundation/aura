@@ -10,6 +10,7 @@ use entities::models::{
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
+use solana_sdk::bs58;
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use std::cmp::{max, Ordering};
 use tracing::{error, warn};
@@ -3298,7 +3299,7 @@ impl TypedColumn for AssetLeaf {
 
 impl AssetLeaf {
     pub fn merge_asset_leaf(
-        _new_key: &[u8],
+        new_key: &[u8],
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
@@ -3325,8 +3326,8 @@ impl AssetLeaf {
                         if let (Some(current_seq), Some(new_seq)) = (leaf_seq, new_val.leaf_seq) {
                             if new_seq < current_seq {
                                 warn!(
-                                    "RocksDB: AssetLeaf: new_val.leaf_seq < current_seq: {} < {}, while new_val.slot_updated: {}, current_val.slot_updated: {}",
-                                    new_seq, current_seq, new_val.slot_updated, slot
+                                    "RocksDB: AssetLeaf: new_val.leaf_seq < current_seq: {} < {}, while new_val.slot_updated: {}, current_val.slot_updated: {} for {}",
+                                    new_seq, current_seq, new_val.slot_updated, slot, bs58::encode(new_key)
                                 );
                             }
                         }

@@ -101,7 +101,8 @@ impl AssetUpdateIndexStorage for Storage {
             }
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
             if let Some(ref last_key) = last_key {
-                if decoded_key.seq != last_key.seq + 1 {
+                if decoded_key.seq != last_key.seq + 1 && decoded_key.seq != last_key.seq {
+                    // we're allowing the same sequence as it's possible to get one on a start of a cycle
                     info!("Breaking the fungibles sync loop at seq {} as the sequence is not consecutive to the previously handled {}", decoded_key.seq, last_key.seq);
                     break;
                 }

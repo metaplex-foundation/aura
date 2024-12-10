@@ -54,7 +54,7 @@ impl TypedColumn for ClItem {
 
 impl ClItem {
     pub fn merge_cl_items(
-        _new_key: &[u8],
+        new_key: &[u8],
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
@@ -83,7 +83,7 @@ impl ClItem {
                         || (new_val.slot_updated == slot && new_val.cli_seq as i64 > cli_seq)
                     {
                         if new_val.slot_updated > slot && (new_val.cli_seq as i64) < cli_seq {
-                            warn!("RocksDB: ClItem new_val slot {} is greater than existing slot {}, but seq {} is less than the exising {}.", new_val.slot_updated, slot, new_val.cli_seq, cli_seq);
+                            warn!("RocksDB: ClItem new_val slot {} is greater than existing slot {}, but seq {} is less than the exising {} for {}.", new_val.slot_updated, slot, new_val.cli_seq, cli_seq, bs58::encode(new_key));
                         }
                         cli_seq = new_val.cli_seq as i64;
                         slot = new_val.slot_updated;
