@@ -35,7 +35,7 @@ struct Args {
     /// Optional big table credentials file path
     /// If not provided, the default credentials file path will be used
     /// Default: ./creds.json
-    #[arg(short, long, default_value = "./creds.json")]
+    #[arg(short('c'), long, default_value = "./creds.json")]
     big_table_credentials: String,
 
     /// Optional big table timeout (default: 1000)
@@ -45,6 +45,10 @@ struct Args {
     /// Optional comma-separated list of slot numbers to check
     #[arg(short = 's', long)]
     slots: Option<String>,
+
+    /// The first slot to ckeck from
+    #[arg(short, long)]
+    first_slot: Option<u64>,
 }
 
 pub struct InMemorySlotsDumper {
@@ -257,7 +261,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start slot collection
     let _ = slots_collector
-        .collect_slots(&BUBBLEGUM_PROGRAM_ID, last_persisted_slot, 0, &shutdown_rx)
+        .collect_slots(&BUBBLEGUM_PROGRAM_ID, last_persisted_slot, args.first_slot.unwrap_or_default(), &shutdown_rx)
         .await;
 
     // Collection done, stop the spinner
