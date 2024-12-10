@@ -424,7 +424,10 @@ fn asset_dynamic_details_to_fb<'a>(
         .as_ref()
         .map(|seq| updated_u64_to_fb(builder, seq));
     let is_burnt_fb = updated_bool_to_fb(builder, &dynamic_details.is_burnt);
-    let was_decompressed_fb = dynamic_details.was_decompressed.as_ref().map(|was_dec| updated_bool_to_fb(builder, was_dec));
+    let was_decompressed_fb = dynamic_details
+        .was_decompressed
+        .as_ref()
+        .map(|was_dec| updated_bool_to_fb(builder, was_dec));
     let onchain_data_fb = dynamic_details
         .onchain_data
         .as_ref()
@@ -3101,7 +3104,9 @@ impl AssetDynamicDetails {
             self.supply.as_ref().map_or(0, |supply| supply.slot_updated),
             self.seq.as_ref().map_or(0, |seq| seq.slot_updated),
             self.is_burnt.slot_updated,
-            self.was_decompressed.as_ref().map_or(0, |was_decompressed| was_decompressed.slot_updated),
+            self.was_decompressed
+                .as_ref()
+                .map_or(0, |was_decompressed| was_decompressed.slot_updated),
             self.onchain_data
                 .as_ref()
                 .map_or(0, |onchain_data| onchain_data.slot_updated),
@@ -3316,18 +3321,25 @@ impl AssetLeaf {
         for op in operands {
             match deserialize::<AssetLeaf>(op) {
                 Ok(new_val) => {
-                    if let Some(current_seq) = leaf_seq {
-                        if let Some(new_seq) = new_val.leaf_seq {
-                            if new_seq > current_seq {
-                                leaf_seq = new_val.leaf_seq;
-                                result = op.to_vec();
+                    if new_val.slot_updated > slot || slot == 0 {
+                        if let (Some(current_seq), Some(new_seq)) = (leaf_seq, new_val.leaf_seq) {
+                            if new_seq < current_seq {
+                                warn!(
+                                    "RocksDB: AssetLeaf: new_val.leaf_seq < current_seq: {} < {}, while new_val.slot_updated: {}, current_val.slot_updated: {}",
+                                    new_seq, current_seq, new_val.slot_updated, slot
+                                );
                             }
-                        } else {
-                            warn!("RocksDB: AssetLeaf deserialize new_val: new leaf_seq is None");
                         }
-                    } else if new_val.slot_updated > slot {
                         slot = new_val.slot_updated;
+                        leaf_seq = new_val.leaf_seq;
                         result = op.to_vec();
+                    } else if let (Some(current_seq), Some(new_seq)) = (leaf_seq, new_val.leaf_seq)
+                    {
+                        if new_val.slot_updated == slot && new_seq > current_seq {
+                            leaf_seq = new_val.leaf_seq;
+                            slot = new_val.slot_updated;
+                            result = op.to_vec();
+                        }
                     }
                 }
                 Err(e) => {

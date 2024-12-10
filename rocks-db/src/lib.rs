@@ -819,10 +819,7 @@ impl Storage {
 
         for cf in column_families_to_remove {
             let cf_handler = self.db.cf_handle(cf).unwrap();
-            for res in self.db.full_iterator_cf(
-                &cf_handler,
-                IteratorMode::Start,
-            ) {
+            for res in self.db.full_iterator_cf(&cf_handler, IteratorMode::Start) {
                 if let Ok((key, _value)) = res {
                     self.db.delete_cf(&cf_handler, key).unwrap();
                 }

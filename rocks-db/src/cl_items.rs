@@ -6,7 +6,7 @@ use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::events::ChangeLogEventV1;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::column::TypedColumn;
 use crate::key_encoders::{decode_u64_pubkey, encode_u64_pubkey};
@@ -60,10 +60,12 @@ impl ClItem {
     ) -> Option<Vec<u8>> {
         let mut result = vec![];
         let mut cli_seq = -1;
+        let mut slot = 0;
         if let Some(existing_val) = existing_val {
             match deserialize::<ClItem>(existing_val) {
                 Ok(value) => {
                     cli_seq = value.cli_seq as i64;
+                    slot = value.slot_updated;
                     result = existing_val.to_vec();
                 }
                 Err(e) => {
@@ -77,8 +79,14 @@ impl ClItem {
         for (i, op) in operands.iter().enumerate() {
             match deserialize::<ClItem>(op) {
                 Ok(new_val) => {
-                    if new_val.cli_seq as i64 > cli_seq {
+                    if new_val.slot_updated > slot
+                        || (new_val.slot_updated == slot && new_val.cli_seq as i64 > cli_seq)
+                    {
+                        if new_val.slot_updated > slot && (new_val.cli_seq as i64) < cli_seq {
+                            warn!("RocksDB: ClItem new_val slot {} is greater than existing slot {}, but seq {} is less than the exising {}.", new_val.slot_updated, slot, new_val.cli_seq, cli_seq);
+                        }
                         cli_seq = new_val.cli_seq as i64;
+                        slot = new_val.slot_updated;
                         result = op.to_vec();
                     }
                 }
