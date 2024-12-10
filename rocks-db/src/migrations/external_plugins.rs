@@ -1,5 +1,4 @@
 use crate::asset::{update_field, update_optional_field};
-use crate::migrations::spl2022::AssetDynamicDetailsWithoutExtentions;
 use crate::migrator::{RocksMigration, SerializationType};
 use bincode::{deserialize, serialize};
 use entities::enums::ChainMutability;
@@ -18,7 +17,7 @@ pub struct AssetDynamicDetailsV0 {
     pub supply: Option<Updated<u64>>,
     pub seq: Option<Updated<u64>>,
     pub is_burnt: Updated<bool>,
-    pub was_decompressed: Updated<bool>,
+    pub was_decompressed: Option<Updated<bool>>,
     pub onchain_data: Option<Updated<String>>,
     pub creators: Updated<Vec<entities::models::Creator>>,
     pub royalty_amount: Updated<u16>,
@@ -34,38 +33,6 @@ pub struct AssetDynamicDetailsV0 {
     pub num_minted: Option<Updated<u32>>,
     pub current_size: Option<Updated<u32>>,
     pub plugins_json_version: Option<Updated<u32>>,
-}
-
-impl From<AssetDynamicDetailsV0> for AssetDynamicDetailsWithoutExtentions {
-    fn from(value: AssetDynamicDetailsV0) -> Self {
-        Self {
-            pubkey: value.pubkey,
-            is_compressible: value.is_compressible,
-            is_compressed: value.is_compressed,
-            is_frozen: value.is_frozen,
-            supply: value.supply,
-            seq: value.seq,
-            is_burnt: value.is_burnt,
-            was_decompressed: value.was_decompressed,
-            onchain_data: value.onchain_data,
-            creators: value.creators,
-            royalty_amount: value.royalty_amount,
-            url: value.url,
-            chain_mutability: value.chain_mutability,
-            lamports: value.lamports,
-            executable: value.executable,
-            metadata_owner: value.metadata_owner,
-            raw_name: value.raw_name,
-            mpl_core_plugins: value.plugins,
-            mpl_core_unknown_plugins: value.unknown_plugins,
-            rent_epoch: value.rent_epoch,
-            num_minted: value.num_minted,
-            current_size: value.current_size,
-            plugins_json_version: value.plugins_json_version,
-            mpl_core_external_plugins: None,
-            mpl_core_unknown_external_plugins: None,
-        }
-    }
 }
 
 impl AssetDynamicDetailsV0 {
@@ -101,7 +68,7 @@ impl AssetDynamicDetailsV0 {
                         update_field(&mut current_val.is_burnt, &new_val.is_burnt);
                         update_field(&mut current_val.creators, &new_val.creators);
                         update_field(&mut current_val.royalty_amount, &new_val.royalty_amount);
-                        update_field(&mut current_val.was_decompressed, &new_val.was_decompressed);
+                        update_optional_field(&mut current_val.was_decompressed, &new_val.was_decompressed);
                         update_optional_field(&mut current_val.onchain_data, &new_val.onchain_data);
                         update_field(&mut current_val.url, &new_val.url);
                         update_optional_field(
@@ -141,12 +108,4 @@ impl AssetDynamicDetailsV0 {
 
         result.and_then(|result| serialize(&result).ok())
     }
-}
-
-pub(crate) struct ExternalPluginsMigration;
-impl RocksMigration for ExternalPluginsMigration {
-    const VERSION: u64 = 1;
-    const SERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
-    type NewDataType = AssetDynamicDetailsWithoutExtentions;
-    type OldDataType = AssetDynamicDetailsV0;
 }

@@ -1,6 +1,8 @@
 ---
-source: integration_tests/tests/integration_tests/cnft_tests.rs
+source: integration_tests/src/cnft_tests.rs
+assertion_line: 41
 expression: response
+snapshot_kind: text
 ---
 {
   "interface": "V1_NFT",
@@ -37,7 +39,8 @@ expression: response
   "grouping": [
     {
       "group_key": "collection",
-      "group_value": "4zapNXifB7Lz5XGUtsYQ3gsEujK2dqFw4mE9NY57NrtD"
+      "group_value": "4zapNXifB7Lz5XGUtsYQ3gsEujK2dqFw4mE9NY57NrtD",
+      "verified": true
     }
   ],
   "royalty": {

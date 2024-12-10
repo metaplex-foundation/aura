@@ -206,6 +206,11 @@ impl TestSetup {
             das_api,
         }
     }
+
+    pub async fn clean_up_data_bases(&self) {
+        self.db.clean_db().await.unwrap();
+        self.rocks_db.clean_db().await;
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -442,7 +447,13 @@ pub async fn index_account_bytes(setup: &TestSetup, account_bytes: Vec<u8>) {
     let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     setup
         .synchronizer
-        .synchronize_asset_indexes(&shutdown_rx, 1000)
+        .synchronize_nft_asset_indexes(&shutdown_rx, 1000)
+        .await
+        .unwrap();
+
+    setup
+        .synchronizer
+        .synchronize_fungible_asset_indexes(&shutdown_rx, 1000)
         .await
         .unwrap();
 }
@@ -519,7 +530,13 @@ pub async fn index_transaction(setup: &TestSetup, sig: Signature) {
     let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     setup
         .synchronizer
-        .synchronize_asset_indexes(&shutdown_rx, 1000)
+        .synchronize_nft_asset_indexes(&shutdown_rx, 1000)
+        .await
+        .unwrap();
+
+    setup
+        .synchronizer
+        .synchronize_fungible_asset_indexes(&shutdown_rx, 1000)
         .await
         .unwrap();
 }
