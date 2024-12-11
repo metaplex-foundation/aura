@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::asset::{
     AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, FungibleAssetsUpdateIdx,
-    MplCoreCollectionAuthority, SlotAssetIdx, SlotAssetIdxKey,
+    MplCoreCollectionAuthority, SlotAssetIdx, SlotAssetIdxKey, SourcedAssetLeaf,
 };
 use crate::asset_generated::asset as fb;
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey, SourcedClItem};
@@ -513,20 +513,25 @@ impl Storage {
         self.merge_compete_details_with_batch(&mut batch, &acd)?;
 
         if let Some(leaf) = data.asset_leaf {
-            self.asset_leaf_data.merge_with_batch(
+            self.asset_leaf_data.merge_with_batch_raw(
                 &mut batch,
                 data.pubkey,
-                &AssetLeaf {
-                    pubkey: data.pubkey,
-                    tree_id: leaf.value.tree_id,
-                    leaf: leaf.value.leaf.clone(),
-                    nonce: leaf.value.nonce,
-                    data_hash: leaf.value.data_hash,
-                    creator_hash: leaf.value.creator_hash,
-                    leaf_seq: leaf.value.leaf_seq,
-                    slot_updated: leaf.slot_updated,
-                },
-            )?
+                bincode::serialize(&SourcedAssetLeaf {
+                    leaf: AssetLeaf {
+                        pubkey: data.pubkey,
+                        tree_id: leaf.value.tree_id,
+                        leaf: leaf.value.leaf.clone(),
+                        nonce: leaf.value.nonce,
+                        data_hash: leaf.value.data_hash,
+                        creator_hash: leaf.value.creator_hash,
+                        leaf_seq: leaf.value.leaf_seq,
+                        slot_updated: leaf.slot_updated,
+                    },
+                    // todo: probably that's a finalized source, needs to be checked
+                    is_from_finalized_source: false,
+                })
+                .map_err(|e| StorageError::Common(e.to_string()))?,
+            )?;
         }
 
         if let Some(leaf) = data.cl_leaf {

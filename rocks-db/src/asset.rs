@@ -1242,6 +1242,11 @@ pub struct AssetLeaf {
     pub slot_updated: u64,
 }
 
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct SourcedAssetLeaf {
+    pub leaf: AssetLeaf,
+    pub is_from_finalized_source: bool,
+}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct AssetCollection {
     pub pubkey: Pubkey,
@@ -3304,8 +3309,10 @@ impl AssetLeaf {
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
         let mut result = vec![];
-        let mut slot = 0;
-        let mut leaf_seq = None;
+        let mut slot = 0u64;
+        let mut leaf_seq: Option<u64> = None;
+
+        // Decode existing value as AssetLeaf, since historically only AssetLeaf was stored.
         if let Some(existing_val) = existing_val {
             match deserialize::<AssetLeaf>(existing_val) {
                 Ok(value) => {
@@ -3314,37 +3321,84 @@ impl AssetLeaf {
                     result = existing_val.to_vec();
                 }
                 Err(e) => {
-                    error!("RocksDB: AssetLeaf deserialize existing_val: {}", e)
+                    error!("RocksDB: AssetLeaf deserialize existing_val: {}", e);
                 }
             }
         }
 
-        for op in operands {
-            match deserialize::<AssetLeaf>(op) {
-                Ok(new_val) => {
-                    if new_val.slot_updated > slot || slot == 0 {
-                        if let (Some(current_seq), Some(new_seq)) = (leaf_seq, new_val.leaf_seq) {
-                            if new_seq < current_seq {
-                                warn!(
-                                    "RocksDB: AssetLeaf: new_val.leaf_seq < current_seq: {} < {}, while new_val.slot_updated: {}, current_val.slot_updated: {} for {}",
-                                    new_seq, current_seq, new_val.slot_updated, slot, bs58::encode(new_key).into_string()
+        let len = operands.len();
+
+        for (i, op) in operands.iter().enumerate() {
+            // Try to decode operand as SourcedAssetLeaf first
+            let new_val = match deserialize::<SourcedAssetLeaf>(op) {
+                Ok(si) => si,
+                Err(_e_sourced) => {
+                    // If fails, try decoding as AssetLeaf
+                    match deserialize::<AssetLeaf>(op) {
+                        Ok(al) => SourcedAssetLeaf {
+                            leaf: al,
+                            is_from_finalized_source: false,
+                        },
+                        Err(e_leaf) => {
+                            // If last operand and still no result chosen, store empty if needed
+                            if i == len - 1 && result.is_empty() {
+                                error!(
+                                    "RocksDB: last operand in AssetLeaf new_val could not be \
+                                     deserialized as SourcedAssetLeaf or AssetLeaf. Empty array will be saved: {}",
+                                    e_leaf
                                 );
+                                return Some(vec![]);
+                            } else {
+                                error!("RocksDB: AssetLeaf deserialize new_val failed: {}", e_leaf);
                             }
-                        }
-                        slot = new_val.slot_updated;
-                        leaf_seq = new_val.leaf_seq;
-                        result = op.to_vec();
-                    } else if let (Some(current_seq), Some(new_seq)) = (leaf_seq, new_val.leaf_seq)
-                    {
-                        if new_val.slot_updated == slot && new_seq > current_seq {
-                            leaf_seq = new_val.leaf_seq;
-                            slot = new_val.slot_updated;
-                            result = op.to_vec();
+                            continue;
                         }
                     }
                 }
-                Err(e) => {
-                    error!("RocksDB: AssetLeaf deserialize new_val: {}", e)
+            };
+
+            let new_slot = new_val.leaf.slot_updated;
+            let new_seq = new_val.leaf.leaf_seq;
+
+            // Determine if this new value outranks the existing one
+            // Outranking conditions:
+            // 1. Higher slot than current.
+            // 2. If slot is equal, but leaf_seq is strictly greater.
+            // 3. If from a finalized source and has a strictly greater leaf_seq than current.
+            let newer = if new_slot > slot {
+                true
+            } else if new_slot == slot {
+                match (leaf_seq, new_seq) {
+                    (Some(current_seq), Some(candidate_seq)) => candidate_seq > current_seq,
+                    (None, Some(_)) => true, // previously no sequence, now we have one, lets use it
+                    _ => false, // either both none or candidate_seq is none and current_seq is some
+                }
+            } else {
+                false
+            };
+
+            let finalized_newer = new_val.is_from_finalized_source
+                && match (leaf_seq, new_seq) {
+                    (Some(current_seq), Some(candidate_seq)) => candidate_seq > current_seq,
+                    (None, Some(_)) => true, // previously no sequence, now we have one
+                    _ => false,              // same logic as above
+                };
+
+            if newer || finalized_newer {
+                // If this new_val outranks the existing value:
+                // store only the AssetLeaf portion
+                match bincode::serialize(&new_val.leaf) {
+                    Ok(serialized) => {
+                        result = serialized;
+                        slot = new_slot;
+                        leaf_seq = new_seq;
+                    }
+                    Err(e) => {
+                        error!(
+                            "RocksDB: Failed to serialize AssetLeaf from SourcedAssetLeaf: {}",
+                            e
+                        );
+                    }
                 }
             }
         }

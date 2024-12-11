@@ -3,7 +3,7 @@ use entities::models::SignatureWithSlot;
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::asset::AssetCompleteDetails;
+use crate::asset::{AssetCompleteDetails, SourcedAssetLeaf};
 use crate::column::TypedColumn;
 use crate::parameters::Parameter;
 use crate::{
@@ -110,7 +110,16 @@ impl Storage {
                     builder.finished_data(),
                 );
                 if let Some(leaf) = update.update.as_ref().and_then(|u| u.leaf.as_ref()) {
-                    self.asset_leaf_data.merge_with_batch(batch, pk, leaf)?
+                    let leaf = SourcedAssetLeaf {
+                        leaf: leaf.clone(),
+                        is_from_finalized_source,
+                    };
+                    self.asset_leaf_data.merge_with_batch_raw(
+                        batch,
+                        pk,
+                        bincode::serialize(&leaf)
+                            .map_err(|e| StorageError::Common(e.to_string()))?,
+                    )?;
                 };
                 if let Some(slot) = update.update.as_ref().map(|u| u.slot) {
                     self.asset_updated_with_batch(batch, slot, pk)?;
