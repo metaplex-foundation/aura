@@ -28,6 +28,12 @@ pub struct ClItem {
     pub slot_updated: u64,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct SourcedClItem {
+    pub item: ClItem,
+    pub is_from_finalized_source: bool,
+}
+
 /// This column family stores node ids of the leaf nodes.
 /// The key is the leaf index(also known as nonce) and tree id.
 /// NOTE: it stores only nodes with level 0 in tree.
@@ -55,22 +61,24 @@ impl TypedColumn for ClItem {
 
 impl ClItem {
     pub fn merge_cl_items(
-        new_key: &[u8],
+        _new_key: &[u8],
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
         let mut result = vec![];
-        let mut cli_seq = -1;
-        let mut slot = 0;
+        let mut cli_seq = -1i64;
+        let mut slot = 0u64;
+
+        // Decode existing value as ClItem, since historically only ClItem was stored.
         if let Some(existing_val) = existing_val {
-            match deserialize::<ClItem>(existing_val) {
+            match bincode::deserialize::<ClItem>(existing_val) {
                 Ok(value) => {
                     cli_seq = value.cli_seq as i64;
                     slot = value.slot_updated;
                     result = existing_val.to_vec();
                 }
                 Err(e) => {
-                    error!("RocksDB: ClItem deserialize existing_val: {}", e)
+                    error!("RocksDB: ClItem deserialize existing_val: {}", e);
                 }
             }
         }
@@ -78,24 +86,52 @@ impl ClItem {
         let len = operands.len();
 
         for (i, op) in operands.iter().enumerate() {
-            match deserialize::<ClItem>(op) {
-                Ok(new_val) => {
-                    if new_val.slot_updated > slot
-                        || (new_val.slot_updated == slot && new_val.cli_seq as i64 > cli_seq)
-                    {
-                        if new_val.slot_updated > slot && (new_val.cli_seq as i64) < cli_seq {
-                            warn!("RocksDB: ClItem new_val slot {} is greater than existing slot {}, but seq {} is less than the exising {} for {}.", new_val.slot_updated, slot, new_val.cli_seq, cli_seq, bs58::encode(new_key).into_string());
+            // Try to decode operand as SourcedClItem first
+            let new_val = match bincode::deserialize::<SourcedClItem>(op) {
+                Ok(si) => si,
+                Err(_e_sourced) => {
+                    // If fails, try decoding as ClItem
+                    match bincode::deserialize::<ClItem>(op) {
+                        Ok(ci) => SourcedClItem {
+                            item: ci,
+                            is_from_finalized_source: false,
+                        },
+                        Err(e_clitem) => {
+                            // If last operand and still no result chosen, store empty if needed
+                            if i == len - 1 && result.is_empty() {
+                                error!("RocksDB: last operand in ClItem new_val could not be deserialized as SourcedClItem or ClItem. Empty array will be saved: {}", e_clitem);
+                                // Return empty array
+                                return Some(vec![]);
+                            } else {
+                                debug!("RocksDB: ClItem deserialize new_val failed: {}", e_clitem);
+                            }
+                            continue;
                         }
-                        cli_seq = new_val.cli_seq as i64;
-                        slot = new_val.slot_updated;
-                        result = op.to_vec();
                     }
                 }
-                Err(e) => {
-                    if i == len - 1 && result.is_empty() {
-                        error!("RocksDB: last operand in ClItem new_val could not be deserialized. Empty array will be saved: {}", e)
-                    } else {
-                        debug!("RocksDB: ClItem deserialize new_val: {}", e);
+            };
+
+            let new_slot = new_val.item.slot_updated;
+            let new_seq = new_val.item.cli_seq as i64;
+
+            // Compare slots and seq to determine if we should update
+            // If the new_val is from a finalized source and outranks by any of slot/seq:
+            if new_slot > slot
+                || (new_slot == slot && new_seq > cli_seq)
+                || (new_val.is_from_finalized_source && new_seq > cli_seq)
+            {
+                // store only the ClItem portion
+                match bincode::serialize(&new_val.item) {
+                    Ok(serialized) => {
+                        result = serialized;
+                        cli_seq = new_seq;
+                        slot = new_slot;
+                    }
+                    Err(e) => {
+                        error!(
+                            "RocksDB: Failed to serialize ClItem from SourcedClItem: {}",
+                            e
+                        );
                     }
                 }
             }
@@ -139,57 +175,6 @@ impl ClLeafKey {
 }
 
 impl Storage {
-    pub async fn save_changelog(&self, change_log_event: &ChangeLogEventV1, slot: u64) {
-        let tree = change_log_event.id;
-
-        let mut i: u64 = 0;
-        let depth = change_log_event.path.len() - 1;
-        let mut items_map = HashMap::new();
-        let mut leaf_map = HashMap::new();
-        for p in change_log_event.path.iter() {
-            let node_idx = p.index as u64;
-
-            let leaf_idx = if i == 0 {
-                Some(node_idx_to_leaf_idx(node_idx, depth as u32))
-            } else {
-                None
-            };
-
-            i += 1;
-
-            let cl_item = ClItem {
-                cli_node_idx: node_idx,
-                cli_tree_key: tree,
-                cli_leaf_idx: leaf_idx,
-                cli_seq: change_log_event.seq,
-                cli_level: i,
-                cli_hash: p.node.to_vec(),
-                slot_updated: slot,
-            };
-
-            items_map.insert(ClItemKey::new(node_idx, tree), cl_item);
-            // save leaf's node id
-            if i == 1 {
-                if let Some(leaf_idx) = leaf_idx {
-                    let cl_leaf = ClLeaf {
-                        cli_leaf_idx: leaf_idx,
-                        cli_tree_key: tree,
-                        cli_node_idx: node_idx,
-                    };
-                    leaf_map.insert(ClLeafKey::new(leaf_idx, tree), cl_leaf);
-                }
-            }
-        }
-        let merge_res = self.cl_items.merge_batch(items_map);
-        let put_res = self.cl_leafs.put_batch(leaf_map);
-        if let Err(e) = merge_res.await {
-            error!("Error while saving change log for cNFT: {}", e);
-        };
-        if let Err(e) = put_res.await {
-            error!("Error while saving change log for cNFT: {}", e);
-        }
-    }
-
     pub(crate) fn save_tree_with_batch(&self, batch: &mut rocksdb::WriteBatch, tree: &TreeUpdate) {
         if let Err(e) = self.tree_seq_idx.put_with_batch(
             batch,
@@ -205,6 +190,7 @@ impl Storage {
         batch: &mut rocksdb::WriteBatch,
         change_log_event: &CopyableChangeLogEventV1,
         slot: u64,
+        is_from_finalized_source: bool,
     ) {
         let tree = change_log_event.id;
 
@@ -222,23 +208,32 @@ impl Storage {
 
             i += 1;
 
-            let cl_item = ClItem {
-                cli_node_idx: node_idx,
-                cli_tree_key: tree,
-                cli_leaf_idx: leaf_idx,
-                cli_seq: change_log_event.seq,
-                cli_level: i,
-                cli_hash: p.node.to_vec(),
-                slot_updated: slot,
+            let cl_item = SourcedClItem {
+                item: ClItem {
+                    cli_node_idx: node_idx,
+                    cli_tree_key: tree,
+                    cli_leaf_idx: leaf_idx,
+                    cli_seq: change_log_event.seq,
+                    cli_level: i,
+                    cli_hash: p.node.to_vec(),
+                    slot_updated: slot,
+                },
+                is_from_finalized_source,
             };
-
-            if let Err(e) =
-                self.cl_items
-                    .merge_with_batch(batch, ClItemKey::new(node_idx, tree), &cl_item)
-            {
-                error!("Error while saving change log for cNFT: {}", e);
-            };
-
+            match bincode::serialize(&cl_item) {
+                Ok(serialized) => {
+                    if let Err(e) = self.cl_items.merge_with_batch_raw(
+                        batch,
+                        ClItemKey::new(node_idx, tree),
+                        serialized,
+                    ) {
+                        error!("Error while saving change log for cNFT: {}", e);
+                    };
+                }
+                Err(e) => {
+                    error!("Error while serializing change log for cNFT: {}", e);
+                }
+            }
             // save leaf's node id
             if i == 1 {
                 if let Some(leaf_idx) = leaf_idx {

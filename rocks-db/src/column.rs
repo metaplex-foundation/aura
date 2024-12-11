@@ -130,6 +130,15 @@ where
             serialize(v).map_err(|e| StorageError::Common(e.to_string()))
         })
     }
+    pub(crate) fn merge_with_batch_raw(
+        &self,
+        batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        key: C::KeyType,
+        value: Vec<u8>,
+    ) -> Result<()> {
+        batch.merge_cf(&self.handle(), C::encode_key(key), value);
+        Ok(())
+    }
 
     pub fn merge_with_batch_cbor(
         &self,

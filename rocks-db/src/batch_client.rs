@@ -5,7 +5,7 @@ use crate::asset::{
     MplCoreCollectionAuthority, SlotAssetIdx, SlotAssetIdxKey,
 };
 use crate::asset_generated::asset as fb;
-use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
+use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey, SourcedClItem};
 use crate::column::TypedColumn;
 use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
@@ -541,18 +541,23 @@ impl Storage {
             )?
         }
         for item in data.cl_items {
-            self.cl_items.merge_with_batch(
+            self.cl_items.merge_with_batch_raw(
                 &mut batch,
                 ClItemKey::new(item.cli_node_idx, item.cli_tree_key),
-                &ClItem {
-                    cli_node_idx: item.cli_node_idx,
-                    cli_tree_key: item.cli_tree_key,
-                    cli_leaf_idx: item.cli_leaf_idx,
-                    cli_seq: item.cli_seq,
-                    cli_level: item.cli_level,
-                    cli_hash: item.cli_hash.clone(),
-                    slot_updated: item.slot_updated,
-                },
+                bincode::serialize(&SourcedClItem {
+                    // todo: probably that's a finalized source, needs to be checked
+                    is_from_finalized_source: false,
+                    item: ClItem {
+                        cli_node_idx: item.cli_node_idx,
+                        cli_tree_key: item.cli_tree_key,
+                        cli_leaf_idx: item.cli_leaf_idx,
+                        cli_seq: item.cli_seq,
+                        cli_level: item.cli_level,
+                        cli_hash: item.cli_hash.clone(),
+                        slot_updated: item.slot_updated,
+                    },
+                })
+                .map_err(|e| StorageError::Common(e.to_string()))?,
             )?;
         }
         if let Some(edition) = data.edition {
