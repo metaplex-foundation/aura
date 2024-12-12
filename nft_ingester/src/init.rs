@@ -10,6 +10,7 @@ use rocks_db::Storage;
 use std::fs::File;
 use std::io::Write;
 use std::ops::DerefMut;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
 use tokio::process::Command;
@@ -27,11 +28,18 @@ pub async fn init_index_storage_with_migration(
     red_metrics: Arc<RequestErrorDurationMetrics>,
     min_pg_connections: u32,
     pg_migrations_path: &str,
+    base_dump_path: Option<PathBuf>,
 ) -> Result<PgClient, IngesterError> {
-    let pg_client = PgClient::new(url, min_pg_connections, max_pg_connections, red_metrics)
-        .await
-        .map_err(|e| e.to_string())
-        .map_err(IngesterError::SqlxError)?;
+    let pg_client = PgClient::new(
+        url,
+        min_pg_connections,
+        max_pg_connections,
+        base_dump_path,
+        red_metrics,
+    )
+    .await
+    .map_err(|e| e.to_string())
+    .map_err(IngesterError::SqlxError)?;
 
     pg_client
         .run_migration(pg_migrations_path)

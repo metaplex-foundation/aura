@@ -1,9 +1,12 @@
 use crate::asset::MplCoreCollectionAuthority;
 use crate::asset_generated::asset as fb;
 use crate::column::TypedColumn;
+use crate::key_encoders::encode_u64x2_pubkey;
+use crate::storage_traits::AssetUpdatedKey;
 use crate::{column::Column, storage_traits::Dumper, Storage};
-use async_trait::async_trait;
+use bincode::deserialize;
 use csv::WriterBuilder;
+use entities::enums::AssetType;
 use entities::models::SplMint;
 use entities::{
     enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
@@ -13,16 +16,14 @@ use hex;
 use inflector::Inflector;
 use metrics_utils::SynchronizerMetricsConfig;
 use serde::{Serialize, Serializer};
+use solana_sdk::pubkey::Pubkey;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::BufWriter,
     sync::Arc,
 };
-use tokio::time::Instant;
 use tracing::{error, info};
-
-const BUF_CAPACITY: usize = 1024 * 1024 * 32;
 
 fn serialize_as_snake_case<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -75,7 +76,7 @@ struct AssetRecord {
     ast_slot_updated: i64,
 }
 
-impl Storage {
+impl Dumper for Storage {
     /// Concurrently dumps data into several `CSV files`,
     ///     where each file corresponds to a separate table in the index database (`Postgres`).
     ///
@@ -87,17 +88,22 @@ impl Storage {
     /// `batch_size` - Batch size.
     /// `rx` - Channel for graceful shutdown.
     #[allow(clippy::too_many_arguments)]
-    pub async fn dump_nft_csv(
+    fn dump_nft_csv(
         &self,
-        metadata_file_and_path: (File, String),
-        assets_file_and_path: (File, String),
-        creators_file_and_path: (File, String),
-        authority_file_and_path: (File, String),
-        batch_size: usize,
+        assets_file: File,
+        creators_file: File,
+        authority_file: File,
+        metadata_file: File,
+        buf_capacity: usize,
+        asset_limit: Option<usize>,
+        start_pubkey: Option<Pubkey>,
+        end_pubkey: Option<Pubkey>,
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
-    ) -> Result<(), String> {
-        let mut core_collections: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
+    ) -> Result<usize, String> {
+        let mut metadata_key_set = HashSet::new();
+
+        let mut core_collection_authorities: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
         let mut core_collections_iter = self
             .db
             .raw_iterator_cf(&self.mpl_core_collection_authorities.handle());
@@ -107,39 +113,46 @@ impl Storage {
             let value = core_collections_iter.value().unwrap();
             if let Ok(value) = bincode::deserialize::<MplCoreCollectionAuthority>(value) {
                 if let Some(authority) = value.authority.value {
-                    core_collections.insert(key.to_vec(), authority.to_bytes().to_vec());
+                    core_collection_authorities.insert(key.to_vec(), authority.to_bytes().to_vec());
                 }
             }
             core_collections_iter.next();
         }
 
-        let mut metadata_key_set = HashSet::new();
-        let mut authorities_key_set = HashSet::new();
-
-        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, assets_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, assets_file);
 
         let mut asset_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
 
-        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, authority_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, authority_file);
         let mut authority_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
-        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, creators_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, creators_file);
         let mut creators_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
-
-        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, metadata_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, metadata_file);
         let mut metadata_writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
 
         // Iteration over `asset_data` column via CUSTOM iterator.
         let mut iter = self.db.raw_iterator_cf(&self.asset_data.handle());
-        iter.seek_to_first();
+        if let Some(start_pubkey) = start_pubkey {
+            iter.seek(&start_pubkey.to_bytes());
+        } else {
+            iter.seek_to_first();
+        }
+        let end_pubkey = end_pubkey.map(|pk| pk.to_bytes());
+        let mut cnt = 0;
         while iter.valid() {
+            if let Some(end_pubkey) = end_pubkey {
+                if iter.key().unwrap() > end_pubkey.as_slice() {
+                    break;
+                }
+            }
             let key = iter.key().unwrap();
             let encoded_key = Self::encode(key);
             let value = iter.value().unwrap();
@@ -174,27 +187,28 @@ impl Storage {
                     }
                 }
             }
-            let metadata_url = asset
+            let metadata_url_id = asset
                 .dynamic_details()
                 .and_then(|dd| dd.url())
                 .and_then(|url| url.value())
                 .filter(|s| !s.is_empty())
-                .map(|s| (UrlWithStatus::get_metadata_id_for(s), s));
-            if let Some((ref metadata_key, ref url)) = metadata_url {
-                {
-                    if !metadata_key_set.contains(metadata_key) {
+                .map(|s| UrlWithStatus::new(s, false))
+                .filter(|uws| !uws.metadata_url.is_empty())
+                .map(|uws| {
+                    let metadata_key = uws.get_metadata_id();
+                    if !metadata_key_set.contains(&metadata_key) {
                         metadata_key_set.insert(metadata_key.clone());
                         if let Err(e) = metadata_writer.serialize((
-                            Self::encode(metadata_key),
-                            url.to_string(),
+                            Self::encode(&metadata_key),
+                            uws.metadata_url.to_string(),
                             "pending".to_string(),
                         )) {
                             error!("Error writing metadata to csv: {:?}", e);
                         }
                         synchronizer_metrics.inc_num_of_records_written("metadata", 1);
                     }
-                }
-            }
+                    metadata_key
+                });
 
             let slot_updated = asset.get_slot_updated() as i64;
             if let Some(cc) = asset
@@ -215,11 +229,11 @@ impl Storage {
                     synchronizer_metrics.inc_num_of_records_written("creators", 1);
                 }
             }
-            let update_authority = asset
+            let core_collection_update_authority = asset
                 .collection()
                 .and_then(|c| c.collection())
                 .and_then(|c| c.value())
-                .and_then(|c| core_collections.get(c.bytes()))
+                .and_then(|c| core_collection_authorities.get(c.bytes()))
                 .map(|b| b.to_owned());
             let authority = asset
                 .authority()
@@ -263,7 +277,7 @@ impl Storage {
                     .map(|v| v.bytes())
                     .map(Self::encode),
                 ast_authority_fk: if let Some(collection) = collection.as_ref() {
-                    if update_authority.is_some() {
+                    if core_collection_update_authority.is_some() {
                         Some(collection.to_owned())
                     } else if authority.is_some() {
                         Some(encoded_key.clone())
@@ -304,7 +318,7 @@ impl Storage {
                     .dynamic_details()
                     .and_then(|d| d.supply())
                     .map(|v| v.value() as i64),
-                ast_metadata_url_id: metadata_url.map(|(k, _)| k).map(Self::encode),
+                ast_metadata_url_id: metadata_url_id.map(Self::encode),
                 ast_slot_updated: slot_updated,
             };
 
@@ -312,44 +326,46 @@ impl Storage {
                 error!("Error writing asset to csv: {:?}", e);
             }
             synchronizer_metrics.inc_num_of_records_written("asset", 1);
-            let authority_key = if update_authority.is_some() {
-                collection
-            } else {
-                Some(encoded_key)
-            };
-            let authority = update_authority.or(authority);
-            if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
-                {
-                    if !authorities_key_set.contains(&authority_key) {
-                        authorities_key_set.insert(authority_key.clone());
-                        if let Err(e) = authority_writer.serialize((
-                            authority_key,
-                            Self::encode(authority),
-                            slot_updated,
-                        )) {
-                            error!("Error writing authority to csv: {:?}", e);
-                        }
-                        synchronizer_metrics.inc_num_of_records_written("authority", 1);
+            // the authority key is the collection key if the core collection update authority is set, or the asset key itself
+            // for the asset keys, we could write those without the need to check if they are already written,
+            // and for the collection keys, we just skip as those will be written as part of the core collection account dump
+            // todo: this was refactored, need to be verified as part of https://linear.app/mplx/issue/MTG-979/fix-test-mpl-core-get-assets-by-authority
+            if core_collection_update_authority.is_none() {
+                let authority_key = if core_collection_update_authority.is_some() {
+                    collection
+                } else {
+                    Some(encoded_key)
+                };
+                let authority = core_collection_update_authority.or(authority);
+                if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
+                    if let Err(e) = authority_writer.serialize((
+                        authority_key,
+                        Self::encode(authority),
+                        slot_updated,
+                    )) {
+                        error!("Error writing authority to csv: {:?}", e);
                     }
+                    synchronizer_metrics.inc_num_of_records_written("authority", 1);
                 }
             }
             if !rx.is_empty() {
                 return Err("dump cancelled".to_string());
             }
             iter.next();
+            cnt += 1;
+            if let Some(limit) = asset_limit {
+                if cnt >= limit {
+                    break;
+                }
+            }
             synchronizer_metrics.inc_num_of_assets_iter("asset", 1);
         }
-        _ = tokio::try_join!(
-            tokio::task::spawn_blocking(move || asset_writer.flush()),
-            tokio::task::spawn_blocking(move || authority_writer.flush()),
-            tokio::task::spawn_blocking(move || creators_writer.flush()),
-            tokio::task::spawn_blocking(move || metadata_writer.flush())
-        )
-        .map_err(|e| e.to_string())?;
-
+        asset_writer.flush().map_err(|e| e.to_string())?;
+        authority_writer.flush().map_err(|e| e.to_string())?;
+        creators_writer.flush().map_err(|e| e.to_string())?;
+        metadata_writer.flush().map_err(|e| e.to_string())?;
         info!("asset writers are flushed.");
-
-        Ok(())
+        Ok(cnt)
     }
 
     /// Dumps data into several into `CSV file` dedicated for fungible tokens,
@@ -360,65 +376,56 @@ impl Storage {
     /// `batch_size` - Batch size.
     /// `rx` - Channel for graceful shutdown.
     #[allow(clippy::too_many_arguments)]
-    pub async fn dump_fungible_csv(
+    fn dump_fungible_csv(
         &self,
         fungible_tokens_file_and_path: (File, String),
-        batch_size: usize,
+        buf_capacity: usize,
+        start_pubkey: Option<Pubkey>,
+        end_pubkey: Option<Pubkey>,
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
-    ) -> Result<(), String> {
+    ) -> Result<usize, String> {
         let column: Column<TokenAccount> = Self::column(self.db.clone(), self.red_metrics.clone());
 
-        let buf_writer = BufWriter::with_capacity(BUF_CAPACITY, fungible_tokens_file_and_path.0);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, fungible_tokens_file_and_path.0);
+        let mut iter = self.db.raw_iterator_cf(&column.handle());
         let mut writer = WriterBuilder::new()
             .has_headers(false)
             .from_writer(buf_writer);
 
-        // asset, owner, balance, slot updated
-        let mut batch: Vec<(String, String, String, i64, i64)> = Vec::new();
-
-        for (_, token) in column.pairs_iterator(column.iter_start()) {
+        if let Some(start_pubkey) = start_pubkey {
+            iter.seek(&start_pubkey.to_bytes());
+        } else {
+            iter.seek_to_first();
+        }
+        let end_pubkey = end_pubkey.map(|pk| pk.to_bytes());
+        let mut cnt = 0;
+        while iter.valid() {
+            if let Some(end_pubkey) = end_pubkey {
+                if iter.key().unwrap() > end_pubkey.as_slice() {
+                    break;
+                }
+            }
             if !rx.is_empty() {
                 info!("Shutdown signal received...");
-                return Ok(());
+                return Ok(cnt);
             }
-            batch.push((
-                Self::encode(token.pubkey),
-                Self::encode(token.owner),
-                Self::encode(token.mint),
-                token.amount,
-                token.slot_updated,
-            ));
-            synchronizer_metrics.inc_num_of_assets_iter("token_account", 1);
-
-            if batch.len() >= batch_size {
-                let start = Instant::now();
-                for rec in &batch {
-                    if let Err(e) = writer.serialize(rec).map_err(|e| e.to_string()) {
-                        let msg = format!(
-                            "Error while writing data into {:?}. Err: {:?}",
-                            fungible_tokens_file_and_path.1, e
-                        );
-                        error!("{}", msg);
-                        return Err(msg);
-                    }
-                }
-                batch.clear();
-                synchronizer_metrics.set_file_write_time(
-                    fungible_tokens_file_and_path.1.as_ref(),
-                    start.elapsed().as_millis() as f64,
-                );
-            }
-        }
-
-        if !batch.is_empty() {
-            let start = Instant::now();
-            for rec in &batch {
-                if !rx.is_empty() {
-                    info!("Shutdown signal received...");
-                    return Ok(());
-                }
-                if let Err(e) = writer.serialize(rec).map_err(|e| e.to_string()) {
+            if let Some(token) = iter
+                .value()
+                .map(deserialize::<TokenAccount>)
+                .map(|v| v.ok())
+                .flatten()
+            {
+                if let Err(e) = writer
+                    .serialize((
+                        Self::encode(token.pubkey),
+                        Self::encode(token.owner),
+                        Self::encode(token.mint),
+                        token.amount,
+                        token.slot_updated,
+                    ))
+                    .map_err(|e| e.to_string())
+                {
                     let msg = format!(
                         "Error while writing data into {:?}. Err: {:?}",
                         fungible_tokens_file_and_path.1, e
@@ -426,15 +433,10 @@ impl Storage {
                     error!("{}", msg);
                     return Err(msg);
                 }
+                synchronizer_metrics.inc_num_of_assets_iter("token_account", 1);
             }
-
-            synchronizer_metrics.set_file_write_time(
-                fungible_tokens_file_and_path.1.as_ref(),
-                start.elapsed().as_millis() as f64,
-            );
-            synchronizer_metrics
-                .inc_num_of_records_written(&fungible_tokens_file_and_path.1, batch.len() as u64);
-            batch.clear();
+            iter.next();
+            cnt += 1;
         }
 
         if let Err(e) = writer.flush().map_err(|e| e.to_string()) {
@@ -447,115 +449,62 @@ impl Storage {
         }
 
         info!("Finish dumping fungible assets.");
-        Ok(())
+        Ok(cnt)
     }
-
+}
+impl Storage {
     fn encode<T: AsRef<[u8]>>(v: T) -> String {
         format!("\\x{}", hex::encode(v))
     }
-}
 
-#[async_trait]
-impl Dumper for Storage {
-    /// The `dump_db` function is an asynchronous method responsible for dumping fungible database content into a dedicated `CSV file`.
-    /// The function supports batch processing and listens to a signal using a `tokio::sync::broadcast::Receiver` to handle cancellation
-    ///     or control flow.
-    /// # Args:
-    /// * `base_path` - A reference to a Path that specifies the base directory where the `CSV files` will be created.
-    ///     The function will append filenames (`metadata.csv, creators.csv, assets.csv, assets_authorities.csv`) to this path.
-    /// * `batch_size` - The size of the data batches to be processed and written to the files.
-    /// * `rx` - A receiver that listens for cancellation signals.
-    async fn dump_fungible_db(
-        &self,
-        base_path: &std::path::Path,
-        batch_size: usize,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+    pub fn dump_metadata(
+        file: File,
+        buf_capacity: usize,
+        metadata: HashSet<String>,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), String> {
-        let fungible_tokens_path = base_path
-            .join("fungible_tokens.csv")
-            .to_str()
-            .map(str::to_owned);
-        tracing::info!("Dumping to fungible_tokens: {:?}", fungible_tokens_path);
+        let buf_writer = BufWriter::with_capacity(buf_capacity, file);
+        let mut metadata_writer = WriterBuilder::new()
+            .has_headers(false)
+            .from_writer(buf_writer);
 
-        let fungible_tokens_file = File::create(fungible_tokens_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for fungible tokens dump: {}", e))?;
-
-        self.dump_fungible_csv(
-            (fungible_tokens_file, fungible_tokens_path.unwrap()),
-            batch_size,
-            rx,
-            synchronizer_metrics,
-        )
-        .await?;
-        Ok(())
+        metadata.into_iter().for_each(|s| {
+            let url = s;
+            let metadata_key = UrlWithStatus::get_metadata_id_for(&url);
+            if let Err(e) = metadata_writer.serialize((
+                Self::encode(metadata_key),
+                url.to_string(),
+                "pending".to_string(),
+            )) {
+                error!("Error writing metadata to csv: {:?}", e);
+            }
+            synchronizer_metrics.inc_num_of_records_written("metadata", 1);
+        });
+        metadata_writer.flush().map_err(|e| e.to_string())
     }
 
-    /// The `dump_db` function is an asynchronous method responsible for dumping database content into multiple `CSV files`.
-    /// It writes metadata, asset information, creator details, and asset authorities to separate `CSV files` in the provided directory.
-    /// The function supports batch processing and listens to a signal using a `tokio::sync::broadcast::Receiver` to handle cancellation
-    ///     or control flow.
-    /// # Args:
-    /// * `base_path` - A reference to a Path that specifies the base directory where the `CSV files` will be created.
-    ///     The function will append filenames (`metadata.csv, creators.csv, assets.csv, assets_authorities.csv`) to this path.
-    /// * `batch_size` - The size of the data batches to be processed and written to the files.
-    /// * `rx` - A receiver that listens for cancellation signals.
-    async fn dump_nft_db(
-        &self,
-        base_path: &std::path::Path,
-        batch_size: usize,
-        rx: &tokio::sync::broadcast::Receiver<()>,
-        synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
+    pub fn dump_last_keys(
+        file: File,
+        last_known_nft_key: AssetUpdatedKey,
+        last_known_fungible_key: AssetUpdatedKey,
     ) -> Result<(), String> {
-        let metadata_path = base_path.join("metadata.csv").to_str().map(str::to_owned);
-        if metadata_path.is_none() {
-            return Err("invalid path".to_string());
-        }
-        let creators_path = base_path.join("creators.csv").to_str().map(str::to_owned);
-        if creators_path.is_none() {
-            return Err("invalid path".to_string());
-        }
-        let assets_path = base_path.join("assets.csv").to_str().map(str::to_owned);
-        if assets_path.is_none() {
-            return Err("invalid path".to_string());
-        }
-        let authorities_path = base_path
-            .join("assets_authorities.csv")
-            .to_str()
-            .map(str::to_owned);
-        if authorities_path.is_none() {
-            return Err("invalid path".to_string());
-        }
-        if authorities_path.is_none() {
-            return Err("invalid path".to_string());
-        }
-        tracing::info!(
-            "Dumping to metadata: {:?}, creators: {:?}, assets: {:?}, authorities: {:?}",
-            metadata_path,
-            creators_path,
-            assets_path,
-            authorities_path,
+        let mut writer = WriterBuilder::new().has_headers(false).from_writer(file);
+        let nft_key = encode_u64x2_pubkey(
+            last_known_nft_key.seq,
+            last_known_nft_key.slot,
+            last_known_nft_key.pubkey,
         );
-
-        let metadata_file = File::create(metadata_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for metadata dump: {}", e))?;
-        let assets_file = File::create(assets_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for assets dump: {}", e))?;
-        let creators_file = File::create(creators_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for creators dump: {}", e))?;
-        let authority_file = File::create(authorities_path.clone().unwrap())
-            .map_err(|e| format!("Could not create file for authority dump: {}", e))?;
-
-        self.dump_nft_csv(
-            (metadata_file, metadata_path.unwrap()),
-            (assets_file, assets_path.unwrap()),
-            (creators_file, creators_path.unwrap()),
-            (authority_file, authorities_path.unwrap()),
-            batch_size,
-            rx,
-            synchronizer_metrics,
-        )
-        .await?;
-        Ok(())
+        let fungible_key = encode_u64x2_pubkey(
+            last_known_fungible_key.seq,
+            last_known_fungible_key.slot,
+            last_known_fungible_key.pubkey,
+        );
+        writer
+            .serialize((AssetType::NonFungible as i32, Self::encode(nft_key)))
+            .map_err(|e| e.to_string())?;
+        writer
+            .serialize((AssetType::Fungible as i32, Self::encode(fungible_key)))
+            .map_err(|e| e.to_string())?;
+        writer.flush().map_err(|e| e.to_string())
     }
 }

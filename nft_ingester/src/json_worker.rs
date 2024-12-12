@@ -9,7 +9,7 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::tasks::UpdatedTask;
 use postgre_client::PgClient;
-use reqwest::{Client, ClientBuilder};
+use reqwest::ClientBuilder;
 use rocks_db::asset_previews::UrlToDownload;
 use rocks_db::Storage;
 use serde_json::Value;
@@ -42,12 +42,11 @@ impl JsonWorker {
         rocks_db: Arc<Storage>,
         metrics: Arc<JsonDownloaderMetricsConfig>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
+        parallel_json_downloaders: i32,
     ) -> Self {
-        let config: IngesterConfig = setup_config(INGESTER_CONFIG_PREFIX);
-
         Self {
             db_client,
-            num_of_parallel_workers: config.parallel_json_downloaders,
+            num_of_parallel_workers: parallel_json_downloaders,
             metrics,
             red_metrics,
             rocks_db,

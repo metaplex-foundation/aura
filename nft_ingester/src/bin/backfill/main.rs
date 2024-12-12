@@ -24,11 +24,11 @@ use tracing::{error, info, warn};
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Path to the source RocksDB with slots (readonly)
-    #[arg(short, long)]
+    #[arg(short, long, env = "SOURCE_SLOTS_DB_PATH")]
     source_db_path: PathBuf,
 
     /// Path to the target RocksDB instance
-    #[arg(short, long)]
+    #[arg(short, long, env = "TARGET_MAIN_DB_PATH")]
     target_db_path: PathBuf,
 
     /// Optional starting slot number

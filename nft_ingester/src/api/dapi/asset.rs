@@ -18,7 +18,7 @@ use interface::processing_possibility::ProcessingPossibilityChecker;
 use itertools::Itertools;
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::asset::{AssetLeaf, AssetSelectedMaps};
-use rocks_db::{AssetAuthority, Storage};
+use rocks_db::Storage;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
@@ -140,7 +140,9 @@ fn asset_selected_maps_into_full_asset(
             if let Some(asset_static_details) = &asset_complete_details.static_details {
                 // collection itself cannot have a collection
                 // TODO!: should we also include in this check FungibleToken?
-                if &asset_static_details.specification_asset_class != &SpecificationAssetClass::MplCoreCollection {
+                if &asset_static_details.specification_asset_class
+                    != &SpecificationAssetClass::MplCoreCollection
+                {
                     if let Some(collection_details) = &asset_complete_details.collection {
                         if !collection_details.is_collection_verified.value {
                             return None;
@@ -294,7 +296,7 @@ pub async fn get_by_ids<
                             },
                         );
                     }
-                    Err(e) => {}
+                    Err(_) => {}
                 }
             }
 

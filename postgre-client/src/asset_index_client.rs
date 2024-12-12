@@ -1,24 +1,25 @@
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
+    sync::Arc,
     vec,
 };
 
 use async_trait::async_trait;
 use solana_sdk::pubkey::Pubkey;
-use sqlx::{Connection, Executor, Postgres, QueryBuilder, Transaction};
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use sqlx::{Executor, Postgres, QueryBuilder, Transaction};
+use tokio::task::JoinSet;
+use uuid::Uuid;
 
 use crate::{
     error::IndexDbError,
     model::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
-    storage_traits::AssetIndexStorage,
+    storage_traits::{AssetIndexStorage, NFTSemaphores},
     PgClient, BATCH_DELETE_ACTION, BATCH_SELECT_ACTION, BATCH_UPSERT_ACTION, CREATE_ACTION,
     DROP_ACTION, INSERT_TASK_PARAMETERS_COUNT, POSTGRES_PARAMETERS_COUNT_LIMIT, SELECT_ACTION,
     SQL_COMPONENT, TRANSACTION_ACTION, UPDATE_ACTION,
 };
 use entities::{
-    enums::SpecificationAssetClass as AssetSpecClass,
     enums::AssetType,
     models::{AssetIndex, Creator, FungibleAssetIndex, FungibleToken, UrlWithStatus},
 };
@@ -208,21 +209,7 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
 
     let mut asset_indexes = asset_indexes.to_vec();
     asset_indexes.sort_by(|a, b| a.pubkey.cmp(&b.pubkey));
-    let fungible_tokens = asset_indexes
-        .iter()
-        .filter(|asset| asset.specification_asset_class == AssetSpecClass::FungibleToken)
-        .map(|asset| {
-            FungibleToken {
-                key: asset.pubkey,
-                slot_updated: asset.slot_updated,
-                // it's unlikely that rows below will not be filled for fungible token
-                // but even if that happens we will save asset with default values
-                owner: asset.owner.unwrap_or_default(),
-                asset: asset.fungible_asset_mint.unwrap_or_default(),
-                balance: asset.fungible_asset_balance.unwrap_or_default() as i64,
-            }
-        })
-        .collect::<Vec<FungibleToken>>();
+
     let asset_indexes = asset_indexes
         .into_iter()
         .filter(|asset| asset.fungible_asset_mint.is_none())
@@ -383,129 +370,142 @@ impl AssetIndexStorage for PgClient {
             }
         }
     }
-
-    async fn load_from_dump(
+    async fn load_from_dump_nfts(
         &self,
-        base_path: &std::path::Path,
-        last_key: &[u8],
-        asset_type: AssetType,
+        assets_file_name: &str,
+        creators_file_name: &str,
+        authority_file_name: &str,
+        metadata_file_name: &str,
+        semaphore: Arc<NFTSemaphores>,
     ) -> Result<(), IndexDbError> {
-        let operation_start_time = chrono::Utc::now();
+        let Some(ref base_path) = self.base_dump_path else {
+            return Err(IndexDbError::BadArgument(
+                "base_dump_path is not set".to_string(),
+            ));
+        };
+        let temp_postfix = Uuid::new_v4().to_string().replace("-", "");
+        let mut copy_tasks: JoinSet<Result<(), IndexDbError>> = JoinSet::new();
+        for (file_path, table, columns, semaphore) in [
+            ( base_path.join(creators_file_name),
+                "asset_creators_v3",
+                "asc_pubkey, asc_creator, asc_verified, asc_slot_updated",
+                semaphore.creators.clone(),
+            ),
+            (
+                base_path.join(authority_file_name),
+                "assets_authorities",
+                "auth_pubkey, auth_authority, auth_slot_updated",
+                semaphore.authority.clone(),
+            ),
+            (base_path.join(assets_file_name),
+                "assets_v3",
+                "ast_pubkey, ast_specification_version, ast_specification_asset_class, ast_royalty_target_type, ast_royalty_amount, ast_slot_created, ast_owner_type, ast_owner, ast_delegate, ast_authority_fk, ast_collection, ast_is_collection_verified, ast_is_burnt, ast_is_compressible, ast_is_compressed, ast_is_frozen, ast_supply, ast_metadata_url_id, ast_slot_updated",
+                semaphore.assets.clone(),
+            ),
+        ]{
+            let cl = self.clone();
+            copy_tasks.spawn(async move {
+                cl.load_from(file_path.to_str().unwrap_or_default().to_string(), table, columns, semaphore).await
+            });
+        }
+
+        let file_path = base_path
+            .join(metadata_file_name)
+            .to_str()
+            .unwrap_or_default()
+            .to_string();
+        let temp_postfix = temp_postfix.clone();
+        let cl = self.clone();
+        let semaphore = semaphore.metadata.clone();
+        copy_tasks.spawn(async move {
+            cl.load_through_temp_table(
+                file_path,
+                "tasks",
+                temp_postfix.as_str(),
+                "tsk_id, tsk_metadata_url, tsk_status",
+                true,
+                Some(semaphore),
+            )
+            .await
+        });
+        while let Some(task) = copy_tasks.join_next().await {
+            task??;
+        }
+        Ok(())
+    }
+
+    async fn load_from_dump_fungibles(
+        &self,
+        fungible_tokens_path: &str,
+        semaphore: Arc<tokio::sync::Semaphore>,
+    ) -> Result<(), IndexDbError> {
+        self.load_from(
+            fungible_tokens_path.to_string(),
+            "fungible_tokens",
+            "fbt_pubkey, fbt_owner, fbt_asset, fbt_balance, fbt_slot_updated",
+            semaphore,
+        )
+        .await
+    }
+
+    async fn destructive_prep_to_batch_nft_load(&self) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
-        let dump_result = (async {
-            match asset_type {
-                AssetType::NonFungible => {
-                    let Some(metadata_path) =
-                        base_path.join("metadata.csv").to_str().map(str::to_owned)
-                    else {
-                        return Err(IndexDbError::BadArgument(format!(
-                            "invalid path '{:?}'",
-                            base_path
-                        )));
-                    };
-                    let Some(creators_path) =
-                        base_path.join("creators.csv").to_str().map(str::to_owned)
-                    else {
-                        return Err(IndexDbError::BadArgument(format!(
-                            "invalid path '{:?}'",
-                            base_path
-                        )));
-                    };
-                    let Some(assets_authorities_path) = base_path
-                        .join("assets_authorities.csv")
-                        .to_str()
-                        .map(str::to_owned)
-                    else {
-                        return Err(IndexDbError::BadArgument(format!(
-                            "invalid path '{:?}'",
-                            base_path
-                        )));
-                    };
-                    let Some(assets_path) =
-                        base_path.join("assets.csv").to_str().map(str::to_owned)
-                    else {
-                        return Err(IndexDbError::BadArgument(format!(
-                            "invalid path '{:?}'",
-                            base_path
-                        )));
-                    };
-
-                    let result_of_copy = self
-                        .copy_nfts(
-                            metadata_path,
-                            creators_path,
-                            assets_path,
-                            assets_authorities_path,
-                            &mut transaction,
-                        )
-                        .await;
-
-                    if result_of_copy.is_ok() {
-                        self.update_last_synced_key(
-                            last_key,
-                            &mut transaction,
-                            "last_synced_key",
-                            asset_type,
-                        )
-                        .await
-                    } else {
-                        result_of_copy
-                    }
-                }
-                AssetType::Fungible => {
-                    let Some(fungible_tokens_path) = base_path
-                        .join("fungible_tokens.csv")
-                        .to_str()
-                        .map(str::to_owned)
-                    else {
-                        return Err(IndexDbError::BadArgument(format!(
-                            "invalid path '{:?}'",
-                            base_path
-                        )));
-                    };
-
-                    let result_of_copy = self
-                        .copy_fungibles(fungible_tokens_path, &mut transaction)
-                        .await;
-
-                    if result_of_copy.is_ok() {
-                        self.update_last_synced_key(
-                            last_key,
-                            &mut transaction,
-                            "last_synced_key",
-                            asset_type,
-                        )
-                        .await
-                    } else {
-                        result_of_copy
-                    }
-                }
-            }
-        })
-        .await;
-
-        match dump_result {
+        match self
+            .destructive_prep_to_batch_nft_load_tx(&mut transaction)
+            .await
+        {
             Ok(_) => {
                 self.commit_transaction(transaction).await?;
-                self.metrics.observe_request(
-                    SQL_COMPONENT,
-                    TRANSACTION_ACTION,
-                    "load_from_dump",
-                    operation_start_time,
-                );
-                Ok(())
             }
             Err(e) => {
                 self.rollback_transaction(transaction).await?;
-                self.metrics.observe_request(
-                    SQL_COMPONENT,
-                    TRANSACTION_ACTION,
-                    "load_from_dump_failed",
-                    operation_start_time,
-                );
-                Err(e)
+                return Err(e);
             }
         }
+        Ok(())
+    }
+    async fn finalize_batch_nft_load(&self) -> Result<(), IndexDbError> {
+        let mut wg = JoinSet::new();
+        let v = self.clone();
+        wg.spawn(async move { v.finalize_assets_load().await });
+        let v = self.clone();
+        wg.spawn(async move { v.finalize_creators_load().await });
+        let v = self.clone();
+        wg.spawn(async move { v.finalize_authorities_load().await });
+        while let Some(task) = wg.join_next().await {
+            task??;
+        }
+        Ok(())
+    }
+
+    async fn destructive_prep_to_batch_fungible_load(&self) -> Result<(), IndexDbError> {
+        let mut transaction = self.start_transaction().await?;
+        match self
+            .destructive_prep_to_batch_fungible_load_tx(&mut transaction)
+            .await
+        {
+            Ok(_) => {
+                self.commit_transaction(transaction).await?;
+            }
+            Err(e) => {
+                self.rollback_transaction(transaction).await?;
+                return Err(e);
+            }
+        }
+        Ok(())
+    }
+    async fn finalize_batch_fungible_load(&self) -> Result<(), IndexDbError> {
+        let mut transaction = self.start_transaction().await?;
+        match self.finalize_batch_fungible_load_tx(&mut transaction).await {
+            Ok(_) => {
+                self.commit_transaction(transaction).await?;
+            }
+            Err(e) => {
+                self.rollback_transaction(transaction).await?;
+                return Err(e);
+            }
+        }
+        Ok(())
     }
 
     async fn update_last_synced_key(

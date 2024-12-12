@@ -3,8 +3,8 @@ use solana_sdk::pubkey::Pubkey;
 use std::sync::atomic::Ordering;
 
 use crate::asset::{
-    AssetCollection, AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx, SlotAssetIdx,
-    SlotAssetIdxKey,FungibleAssetsUpdateIdx,
+    AssetCollection, AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx,
+    FungibleAssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey,
 };
 use crate::asset_generated::asset as fb;
 use crate::column::{Column, TypedColumn};

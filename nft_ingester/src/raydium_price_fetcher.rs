@@ -4,7 +4,6 @@ use interface::error::UsecaseError;
 use interface::price_fetcher::TokenPriceFetcher;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use moka::future::Cache;
-use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::Arc;
 

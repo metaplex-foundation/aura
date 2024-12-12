@@ -113,10 +113,9 @@ impl MplCoreProcessor {
         let ownership_type = OwnerType::Single;
         let (owner, class) = match account_data.indexable_asset.clone() {
             MplCoreAccountData::Asset(_) => (asset.owner, SpecificationAssetClass::MplCoreAsset),
-            MplCoreAccountData::Collection(_) => (
-                update_authority,
-                SpecificationAssetClass::MplCoreCollection,
-            ),
+            MplCoreAccountData::Collection(_) => {
+                (update_authority, SpecificationAssetClass::MplCoreCollection)
+            }
             _ => return Ok(None),
         };
 
@@ -137,7 +136,8 @@ impl MplCoreProcessor {
         // convert HashMap plugins into BTreeMap to have always same plugins order
         // for example without ordering 2 assets with same plugins can have different order saved in DB
         // it affects only API response and tests
-        let ordered_plugins: BTreeMap<_, _> = asset.plugins
+        let ordered_plugins: BTreeMap<_, _> = asset
+            .plugins
             .iter()
             .map(|(key, value)| (format!("{:?}", key), value))
             .collect();

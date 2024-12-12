@@ -1,11 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::asset::{
-    AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, MplCoreCollectionAuthority,
-    SlotAssetIdx, SlotAssetIdxKey, FungibleAssetsUpdateIdx,
+    AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, FungibleAssetsUpdateIdx,
+    MplCoreCollectionAuthority, SlotAssetIdx, SlotAssetIdxKey, SourcedAssetLeaf,
 };
 use crate::asset_generated::asset as fb;
-use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
+use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey, SourcedClItem};
 use crate::column::TypedColumn;
 use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
@@ -17,10 +17,13 @@ use crate::{
     BATCH_GET_ACTION, BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
 };
 use async_trait::async_trait;
-use entities::enums::{SpecificationAssetClass, SpecificationVersions, TokenMetadataEdition};
-use entities::models::{AssetIndex, CompleteAssetDetails, UpdateVersion, Updated, FungibleAssetIndex, UrlWithStatus};
+use entities::enums::{SpecificationAssetClass, TokenMetadataEdition};
+use entities::models::{
+    AssetIndex, CompleteAssetDetails, FungibleAssetIndex, UpdateVersion, Updated,
+};
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
+use tracing::info;
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         _ = self.db.try_catch_up_with_primary();
@@ -97,6 +100,13 @@ impl AssetUpdateIndexStorage for Storage {
                 break;
             }
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
+            if let Some(ref last_key) = last_key {
+                if decoded_key.seq != last_key.seq + 1 && decoded_key.seq != last_key.seq {
+                    // we're allowing the same sequence as it's possible to get one on a start of a cycle
+                    info!("Breaking the fungibles sync loop at seq {} as the sequence is not consecutive to the previously handled {}", decoded_key.seq, last_key.seq);
+                    break;
+                }
+            }
             last_key = Some(decoded_key.clone());
             // Skip keys that are in the skip_keys set
             if skip_keys
@@ -157,6 +167,12 @@ impl AssetUpdateIndexStorage for Storage {
                 break;
             }
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
+            if let Some(ref last_key) = last_key {
+                if decoded_key.seq != last_key.seq + 1 {
+                    info!("Breaking the NFT sync loop at seq {} as the sequence is not consecutive to the previously handled {}", decoded_key.seq, last_key.seq);
+                    break;
+                }
+            }
             last_key = Some(decoded_key.clone());
             // Skip keys that are in the skip_keys set
             if skip_keys
@@ -319,16 +335,13 @@ impl AssetIndexReader for Storage {
         Ok(fungible_assets_indexes)
     }
 
-    async fn get_nft_asset_indexes<'a>(
-        &self,
-        keys: &[Pubkey],
-    ) ->  Result<Vec<AssetIndex>> {
+    async fn get_nft_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>> {
         let start_time = chrono::Utc::now();
-        
+
         let asset_index_collection_url_fut =
             self.get_asset_indexes_with_collections_and_urls(keys.to_vec());
         let spl_mints_fut = self.spl_mints.batch_get(keys.to_vec());
-        
+
         let (mut asset_indexes, assets_collection_pks, urls) =
             asset_index_collection_url_fut.await?;
 
@@ -500,20 +513,25 @@ impl Storage {
         self.merge_compete_details_with_batch(&mut batch, &acd)?;
 
         if let Some(leaf) = data.asset_leaf {
-            self.asset_leaf_data.merge_with_batch(
+            self.asset_leaf_data.merge_with_batch_raw(
                 &mut batch,
                 data.pubkey,
-                &AssetLeaf {
-                    pubkey: data.pubkey,
-                    tree_id: leaf.value.tree_id,
-                    leaf: leaf.value.leaf.clone(),
-                    nonce: leaf.value.nonce,
-                    data_hash: leaf.value.data_hash,
-                    creator_hash: leaf.value.creator_hash,
-                    leaf_seq: leaf.value.leaf_seq,
-                    slot_updated: leaf.slot_updated,
-                },
-            )?
+                bincode::serialize(&SourcedAssetLeaf {
+                    leaf: AssetLeaf {
+                        pubkey: data.pubkey,
+                        tree_id: leaf.value.tree_id,
+                        leaf: leaf.value.leaf.clone(),
+                        nonce: leaf.value.nonce,
+                        data_hash: leaf.value.data_hash,
+                        creator_hash: leaf.value.creator_hash,
+                        leaf_seq: leaf.value.leaf_seq,
+                        slot_updated: leaf.slot_updated,
+                    },
+                    // todo: probably that's a finalized source, needs to be checked
+                    is_from_finalized_source: false,
+                })
+                .map_err(|e| StorageError::Common(e.to_string()))?,
+            )?;
         }
 
         if let Some(leaf) = data.cl_leaf {
@@ -528,18 +546,23 @@ impl Storage {
             )?
         }
         for item in data.cl_items {
-            self.cl_items.merge_with_batch(
+            self.cl_items.merge_with_batch_raw(
                 &mut batch,
                 ClItemKey::new(item.cli_node_idx, item.cli_tree_key),
-                &ClItem {
-                    cli_node_idx: item.cli_node_idx,
-                    cli_tree_key: item.cli_tree_key,
-                    cli_leaf_idx: item.cli_leaf_idx,
-                    cli_seq: item.cli_seq,
-                    cli_level: item.cli_level,
-                    cli_hash: item.cli_hash.clone(),
-                    slot_updated: item.slot_updated,
-                },
+                bincode::serialize(&SourcedClItem {
+                    // todo: probably that's a finalized source, needs to be checked
+                    is_from_finalized_source: false,
+                    item: ClItem {
+                        cli_node_idx: item.cli_node_idx,
+                        cli_tree_key: item.cli_tree_key,
+                        cli_leaf_idx: item.cli_leaf_idx,
+                        cli_seq: item.cli_seq,
+                        cli_level: item.cli_level,
+                        cli_hash: item.cli_hash.clone(),
+                        slot_updated: item.slot_updated,
+                    },
+                })
+                .map_err(|e| StorageError::Common(e.to_string()))?,
             )?;
         }
         if let Some(edition) = data.edition {
@@ -596,6 +619,7 @@ impl Storage {
                 batch,
                 data.pubkey,
                 &MplCoreCollectionAuthority {
+                    // total BS
                     authority: data.collection.as_ref().unwrap().authority.clone(),
                 },
             )?; //this will never error in fact

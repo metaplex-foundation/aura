@@ -7,9 +7,9 @@ use nft_ingester::index_syncronizer::{SyncStatus, Synchronizer};
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration};
 use postgre_client::PG_MIGRATIONS_PATH;
 use prometheus_client::registry::Registry;
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use metrics_utils::utils::setup_metrics;
 use metrics_utils::SynchronizerMetricsConfig;
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
@@ -23,7 +23,7 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
 pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
-pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
+pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 2;
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
@@ -59,8 +59,9 @@ pub async fn main() -> Result<(), IngesterError> {
             &config.database_config.get_database_url().unwrap(),
             max_postgre_connections,
             red_metrics.clone(),
-            DEFAULT_MAX_POSTGRES_CONNECTIONS,
+            DEFAULT_MIN_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,
+            Some(PathBuf::from(config.dump_path.clone())),
         )
         .await?,
     );
@@ -106,23 +107,22 @@ pub async fn main() -> Result<(), IngesterError> {
     let synchronizer = Arc::new(Synchronizer::new(
         rocks_storage.clone(),
         index_storage.clone(),
-        index_storage.clone(),
         config.dump_synchronizer_batch_size,
         config.dump_path.to_string(),
         metrics.clone(),
         config.parallel_tasks,
-        config.run_temp_sync_during_dump,
     ));
 
     if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
         tracing::error!("Sync rocksdb error: {}", e);
     }
 
+    let mut full_sync_tasks = JoinSet::new();
     for asset_type in ASSET_TYPES {
         let synchronizer = synchronizer.clone();
         let shutdown_rx = shutdown_rx.resubscribe();
 
-        mutexed_tasks.lock().await.spawn(async move {
+        full_sync_tasks.spawn(async move {
             if let Ok(SyncStatus::FullSyncRequired(_)) = synchronizer
                 .get_sync_state(config.dump_sync_threshold, asset_type)
                 .await
@@ -131,18 +131,22 @@ pub async fn main() -> Result<(), IngesterError> {
                 match res {
                     Ok(_) => {
                         tracing::info!("Full synchronization finished successfully");
+                        return Ok(());
                     }
                     Err(e) => {
                         tracing::error!("Full synchronization failed: {:?}", e);
+                        return Err(e);
                     }
                 }
             }
-
             Ok(())
         });
     }
-    while (mutexed_tasks.lock().await.join_next().await).is_some() {}
-
+    while let Some(task) = full_sync_tasks.join_next().await {
+        task.map_err(|e| {
+            IngesterError::UnrecoverableTaskError(format!("joining task failed: {}", e.to_string()))
+        })??;
+    }
     let shutdown_rx_clone = shutdown_rx.resubscribe();
     let synchronizer_clone = synchronizer.clone();
     mutexed_tasks.lock().await.spawn(async move {
