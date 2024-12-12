@@ -1,6 +1,5 @@
 use std::{str::FromStr, sync::Arc};
 
-use async_recursion::async_recursion;
 use entities::models::{BufferedTransaction, SignatureWithSlot};
 use interface::{
     error::StorageError,
@@ -51,14 +50,14 @@ where
         program_id: Pubkey,
         rpc_retry_interval_millis: u64,
     ) -> Result<(), StorageError> {
-        let signature = self
+        let Some(signature) = self
             .data_layer
             .first_persisted_signature_for(program_id)
-            .await?;
-        if signature.is_none() {
+            .await?
+        else {
             return Ok(());
-        }
-        let signature = signature.unwrap();
+        };
+
         info!("Start fetching signatures...");
         let mut all_signatures = match self
             .rpc
@@ -118,7 +117,7 @@ where
 
             let counter = 0;
 
-            Self::process_transactions(
+            let (mut missed_tx_signatures, mut counter) = Self::process_transactions(
                 self.rpc.clone(),
                 self.ingester.clone(),
                 self.metrics.clone(),
@@ -127,6 +126,18 @@ where
                 counter,
             )
             .await?;
+
+            while !missed_tx_signatures.is_empty() {
+                (missed_tx_signatures, counter) = Self::process_transactions(
+                    self.rpc.clone(),
+                    self.ingester.clone(),
+                    self.metrics.clone(),
+                    missed_tx_signatures,
+                    rpc_retry_interval_millis,
+                    counter,
+                )
+                .await?;
+            }
 
             // now we may drop the old signatures before the last element of the batch
             // we do this by constructing a fake key at the start of the same slot
@@ -159,7 +170,6 @@ where
         Ok(())
     }
 
-    #[async_recursion]
     async fn process_transactions(
         rpc: Arc<T>,
         ingester: Arc<TI>,
@@ -167,7 +177,7 @@ where
         signatures: Vec<Signature>,
         rpc_retry_interval_millis: u64,
         counter: u32,
-    ) -> Result<(), StorageError> {
+    ) -> Result<(Vec<Signature>, u32), StorageError> {
         // we need to check recursion depth not to fall in infinite loop with failed transactions
         if counter > DOWNLOAD_TX_RETRY {
             return Err(StorageError::Common(
@@ -216,19 +226,7 @@ where
             };
         }
 
-        if !failed_tx_signatures.is_empty() {
-            Self::process_transactions(
-                rpc,
-                ingester,
-                metrics,
-                failed_tx_signatures,
-                rpc_retry_interval_millis,
-                counter + 1,
-            )
-            .await?;
-        }
-
-        Ok(())
+        Ok((failed_tx_signatures, counter + 1))
     }
 }
 
