@@ -35,11 +35,10 @@ impl Storage {
         &self,
         tx: &TransactionResult,
         with_signatures: bool,
+        is_from_finalized_source: bool,
     ) -> Result<(), StorageError> {
         let mut batch = rocksdb::WriteBatch::default();
-        // this method is currently used only for the geyser plugin handling with confirmed transactions and for signature fetching also with confirmed transactions,
-        // so we can assume that the transactions are from non finalized source
-        self.store_transaction_result_with_batch(&mut batch, tx, with_signatures, false)
+        self.store_transaction_result_with_batch(&mut batch, tx, with_signatures, is_from_finalized_source)
             .await?;
         self.write_batch(batch)
             .await

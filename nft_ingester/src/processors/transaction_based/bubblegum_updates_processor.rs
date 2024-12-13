@@ -86,6 +86,7 @@ impl BubblegumTxProcessor {
     pub async fn process_transaction(
         &self,
         data: BufferedTransaction,
+        is_from_finalized_source: bool,
     ) -> Result<(), IngesterError> {
         if data == BufferedTransaction::default() {
             return Ok(());
@@ -100,7 +101,7 @@ impl BubblegumTxProcessor {
 
         let res = self
             .rocks_client
-            .store_transaction_result(&result, true)
+            .store_transaction_result(&result, true, is_from_finalized_source)
             .await
             .map_err(|e| IngesterError::DatabaseError(e.to_string()));
 
@@ -1163,16 +1164,14 @@ impl BubblegumTxProcessor {
 
             transaction_result.instruction_results.push(ix);
             if transaction_result.instruction_results.len() >= BATCH_MINT_BATCH_FLUSH_SIZE {
-                // TODO: add retry
                 rocks_db
-                    .store_transaction_result(&transaction_result, false)
+                    .store_transaction_result(&transaction_result, false, false)
                     .await?;
                 transaction_result.instruction_results.clear();
             }
         }
-        // TODO: add retry
         rocks_db
-            .store_transaction_result(&transaction_result, true)
+            .store_transaction_result(&transaction_result, true, false)
             .await?;
 
         Ok(())
