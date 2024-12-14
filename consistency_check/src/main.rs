@@ -17,7 +17,7 @@ use solana_sdk::pubkey::Pubkey;
 use spl_concurrent_merkle_tree::hash::recompute;
 use tempfile::TempDir;
 use tokio::{
-    sync::Mutex,
+    sync::{Mutex, Semaphore},
     task::{JoinError, JoinSet},
 };
 use tokio_util::sync::CancellationToken;
@@ -206,25 +206,34 @@ async fn verify_tree_batch(
 
         if let Ok(tree_data) = rpc.get_account_data(&tree_config_key).await {
             if let Ok(des_data) = mpl_bubblegum::accounts::TreeConfig::from_bytes(&tree_data) {
-                
-                let mut batch = Vec::new();
+
+                // spawn not more then N threads
+                let semaphore = Arc::new(Semaphore::new(100));
+
                 for asset_index in 0..des_data.num_minted {
                     if shutdown_token.is_cancelled() {
                         println!("Received shutdown signal. Bye");
                         return Ok(());
                     }
 
-                    let asset_id = mpl_bubblegum::utils::get_asset_id(&t_key, asset_index);
+                    let permit = semaphore.clone().acquire_owned().await.unwrap();
 
-                    batch.push(asset_id);
+                    let rocks_cloned = rocks.clone();
+                    let api_metrics_cloned = api_metrics.clone();
+                    let failed_proofs_cloned = failed_proofs.clone();
+                    let tree_cloned = tree.clone();
+                    let assets_processed_cloned = assets_processed.clone();
+                    let rate_cloned = rate.clone();
+                    let progress_bar_cloned = progress_bar.clone();
+                    tokio::spawn(async move {
+                        let asset_id = mpl_bubblegum::utils::get_asset_id(&t_key, asset_index);
 
-                    if batch.len() >= 100 {
                         if let Ok(proofs) = get_proof_for_assets::<MaybeProofChecker, Storage>(
-                            rocks.clone(),
-                            batch.clone(),
+                            rocks_cloned,
+                            vec![asset_id],
                             None,
                             &None,
-                            api_metrics.clone(),
+                            api_metrics_cloned,
                         )
                         .await
                         {
@@ -240,12 +249,12 @@ async fn verify_tree_batch(
                                         ar_pr.as_ref(),
                                         pr.node_index as u32,
                                     );
-    
+
                                     if recomputed_root != Pubkey::from_str(&pr.root).unwrap().to_bytes()
                                     {
                                         write_asset_to_h_map(
-                                            failed_proofs.clone(),
-                                            tree.clone(),
+                                            failed_proofs_cloned.clone(),
+                                            tree_cloned.clone(),
                                             asset,
                                         )
                                         .await;
@@ -253,8 +262,8 @@ async fn verify_tree_batch(
                                 } else {
                                     println!("API did not return any proofs for asset: {:?}", asset);
                                     write_asset_to_h_map(
-                                        failed_proofs.clone(),
-                                        tree.clone(),
+                                        failed_proofs_cloned.clone(),
+                                        tree_cloned.clone(),
                                         asset,
                                     )
                                     .await;
@@ -262,97 +271,27 @@ async fn verify_tree_batch(
                             }
                         } else {
                             println!("Got an error during selecting data from the rocks");
-                            for a in batch.iter() {
-                                write_asset_to_h_map(
-                                    failed_proofs.clone(),
-                                    tree.clone(),
-                                    a.to_string(),
-                                )
-                                .await;
-                            }
+                            write_asset_to_h_map(
+                                failed_proofs_cloned.clone(),
+                                tree_cloned.clone(),
+                                asset_id.to_string(),
+                            )
+                            .await;
                         }
-    
+
                         let current_assets_processed =
-                            assets_processed.fetch_add(batch.len() as u64, Ordering::Relaxed) + (batch.len() as u64);
+                        assets_processed_cloned.fetch_add(1, Ordering::Relaxed) + 1;
                         let current_rate = {
-                            let rate_guard = rate.lock().await;
+                            let rate_guard = rate_cloned.lock().await;
                             *rate_guard
                         };
-                        progress_bar.set_message(format!(
+                        progress_bar_cloned.set_message(format!(
                             "Assets Processed: {} Rate: {:.2}/s",
                             current_assets_processed, current_rate
                         ));
 
-                        batch.clear();
-                    }
-                }
-
-                if !batch.is_empty() {
-                    if let Ok(proofs) = get_proof_for_assets::<MaybeProofChecker, Storage>(
-                        rocks.clone(),
-                        batch.clone(),
-                        None,
-                        &None,
-                        api_metrics.clone(),
-                    )
-                    .await
-                    {
-                        for (asset, pr) in proofs {
-                            if let Some(pr) = pr {
-                                let ar_pr: Vec<[u8; 32]> = pr
-                                    .proof
-                                    .iter()
-                                    .map(|p| Pubkey::from_str(p).unwrap().to_bytes())
-                                    .collect();
-                                let recomputed_root = recompute(
-                                    Pubkey::from_str(pr.leaf.as_ref()).unwrap().to_bytes(),
-                                    ar_pr.as_ref(),
-                                    pr.node_index as u32,
-                                );
-
-                                if recomputed_root != Pubkey::from_str(&pr.root).unwrap().to_bytes()
-                                {
-                                    write_asset_to_h_map(
-                                        failed_proofs.clone(),
-                                        tree.clone(),
-                                        asset,
-                                    )
-                                    .await;
-                                }
-                            } else {
-                                println!("API did not return any proofs for asset: {:?}", asset);
-                                write_asset_to_h_map(
-                                    failed_proofs.clone(),
-                                    tree.clone(),
-                                    asset,
-                                )
-                                .await;
-                            }
-                        }
-                    } else {
-                        println!("Got an error during selecting data from the rocks");
-                        for a in batch.iter() {
-                            write_asset_to_h_map(
-                                failed_proofs.clone(),
-                                tree.clone(),
-                                a.to_string(),
-                            )
-                            .await;
-                        }
-                    }
-
-                    let current_assets_processed =
-                        assets_processed.fetch_add(batch.len() as u64, Ordering::Relaxed) + (batch.len() as u64);
-                    let current_rate = {
-                        let rate_guard = rate.lock().await;
-                        *rate_guard
-                    };
-                    progress_bar.set_message(format!(
-                        "Assets Processed: {} Rate: {:.2}/s",
-                        current_assets_processed, current_rate
-                    ));
-
-                    batch.clear();
+                        drop(permit);
+                    });
                 }
             } else {
                 println!("Could not deserialise TreeConfig account");
