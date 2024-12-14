@@ -251,7 +251,7 @@ async fn verify_tree_batch(
                                         .await;
                                     }
                                 } else {
-                                    println!("API did not return any proofs for asset");
+                                    println!("API did not return any proofs for asset: {:?}", asset);
                                     write_asset_to_h_map(
                                         failed_proofs.clone(),
                                         tree.clone(),
@@ -320,7 +320,7 @@ async fn verify_tree_batch(
                                     .await;
                                 }
                             } else {
-                                println!("API did not return any proofs for asset");
+                                println!("API did not return any proofs for asset: {:?}", asset);
                                 write_asset_to_h_map(
                                     failed_proofs.clone(),
                                     tree.clone(),
