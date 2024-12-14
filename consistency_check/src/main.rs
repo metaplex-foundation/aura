@@ -90,13 +90,15 @@ pub async fn main() {
         Arc::new(Mutex::new(HashMap::new()));
     let failed_check: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
 
-    for _ in 0..config.workers {
+    let chunk_size = (keys.len() + config.workers - 1) / config.workers;
+
+    for chunk in keys.chunks(chunk_size) {
         tasks.spawn(verify_tree_batch(
             progress_bar.clone(),
             assets_processed.clone(),
             rate.clone(),
             shutdown_token.clone(),
-            keys.clone(),
+            chunk.to_vec(),
             rpc_client.clone(),
             db_client.clone(),
             failed_proofs.clone(),
