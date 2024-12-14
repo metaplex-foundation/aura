@@ -37,6 +37,9 @@ struct Args {
 
     #[arg(long)]
     workers: usize,
+
+    #[arg(long)]
+    inner_workers: usize,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -105,6 +108,7 @@ pub async fn main() {
             db_client.clone(),
             failed_proofs.clone(),
             failed_check.clone(),
+            config.inner_workers,
         ));
     }
 
@@ -194,6 +198,7 @@ async fn verify_tree_batch(
     rocks: Arc<Storage>,
     failed_proofs: Arc<Mutex<HashMap<String, Vec<String>>>>,
     failed_check: Arc<Mutex<HashSet<String>>>,
+    inner_workers: usize,
 ) -> Result<(), JoinError> {
     let api_metrics = Arc::new(metrics_utils::ApiMetricsConfig::new());
     for tree in trees {
@@ -208,7 +213,7 @@ async fn verify_tree_batch(
             if let Ok(des_data) = mpl_bubblegum::accounts::TreeConfig::from_bytes(&tree_data) {
 
                 // spawn not more then N threads
-                let semaphore = Arc::new(Semaphore::new(100));
+                let semaphore = Arc::new(Semaphore::new(inner_workers));
 
                 for asset_index in 0..des_data.num_minted {
                     if shutdown_token.is_cancelled() {
