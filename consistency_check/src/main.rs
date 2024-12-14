@@ -58,6 +58,7 @@ pub async fn main() {
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let temp_path = temp_dir.path().to_str().unwrap().to_string();
+    println!("Opening DB...");
     let db_client = Arc::new(
         Storage::open_secondary(
             config.db_path,
@@ -68,6 +69,7 @@ pub async fn main() {
         )
         .unwrap(),
     );
+    println!("DB opened");
 
     let progress_bar = Arc::new(ProgressBar::new(keys.len() as u64));
     progress_bar.set_style(
