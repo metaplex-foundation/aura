@@ -2058,6 +2058,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "consistency_check"
+version = "0.1.0"
+dependencies = [
+ "clap 4.5.4",
+ "csv",
+ "indicatif",
+ "metrics-utils",
+ "mpl-bubblegum",
+ "nft_ingester",
+ "rocks-db",
+ "solana-client",
+ "solana-sdk",
+ "spl-concurrent-merkle-tree 0.4.1",
+ "tempfile",
+ "tokio",
+ "tokio-util 0.7.11",
+ "usecase",
+]
+
+[[package]]
 name = "console"
 version = "0.15.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

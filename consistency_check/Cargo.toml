@@ -1,0 +1,22 @@
+[package]
+name = "consistency_check"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { workspace = true, features = ["env"] }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+solana-sdk = { workspace = true }
+solana-client = { workspace = true }
+mpl-bubblegum = { workspace = true }
+csv = { workspace = true}
+tempfile = { workspace = true }
+rocks-db = { path = "../rocks-db" }
+metrics-utils = { path = "../metrics_utils" }
+nft_ingester = { path = "../nft_ingester" }
+spl-concurrent-merkle-tree = { version = "0.4.0" }
+usecase = { path = "../usecase" }
+indicatif = { workspace = true }
