@@ -161,6 +161,24 @@ pub async fn main() {
         }
     }
 
+    let file = File::create("./failed_checks.csv").unwrap();
+    let mut wrt = csv::Writer::from_writer(file);
+    let f_ch = failed_check.lock().await;
+    for t in f_ch.iter() {
+        wrt.write_record(&[t]).unwrap();
+    }
+    wrt.flush().unwrap();
+
+    let file = File::create("./failed_proofs.csv").unwrap();
+    let mut wrt = csv::Writer::from_writer(file);
+    let f_ch = failed_proofs.lock().await;
+    for (t, assets) in f_ch.iter() {
+        for a in assets {
+            wrt.write_record(&[t, a]).unwrap();
+        }
+    }
+    wrt.flush().unwrap();
+
     progress_bar.finish_with_message("Processing complete");
 }
 
