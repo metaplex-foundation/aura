@@ -2,12 +2,13 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 
-use entities::models::{AssetSignatureWithPagination, OffChainData};
+use entities::models::AssetSignatureWithPagination;
 use entities::models::{CoreFeesAccountWithSortingID, TokenAccResponse};
 use jsonpath_lib::JsonPathError;
 use mime_guess::Mime;
 use num_traits::Pow;
 use rocks_db::errors::StorageError;
+use rocks_db::offchain_data::OffChainData;
 use serde_json::Value;
 use solana_program::pubkey::Pubkey;
 use tracing::error;
@@ -89,7 +90,8 @@ pub fn get_content(
     offchain_data: &OffChainData,
 ) -> Result<Content, StorageError> {
     let json_uri = asset_dynamic.url.value.clone();
-    let metadata: Value = serde_json::from_str(&offchain_data.metadata).unwrap_or(Value::Null);
+    let metadata = offchain_data.metadata.clone().unwrap_or_default();
+    let metadata: Value = serde_json::from_str(&metadata).unwrap_or(Value::Null);
     let chain_data: Value = serde_json::from_str(
         asset_dynamic
             .onchain_data
@@ -232,7 +234,8 @@ fn extract_collection_metadata(
     asset_dynamic: &AssetDynamicDetails,
     offchain_data: &OffChainData,
 ) -> MetadataMap {
-    let metadata: Value = serde_json::from_str(&offchain_data.metadata).unwrap_or(Value::Null);
+    let metadata = offchain_data.metadata.clone().unwrap_or_default();
+    let metadata: Value = serde_json::from_str(&metadata).unwrap_or(Value::Null);
     let chain_data: Value = serde_json::from_str(
         asset_dynamic
             .onchain_data
@@ -387,8 +390,16 @@ pub fn asset_to_rpc(
 
     let mpl_core_info = match interface {
         Interface::MplCoreAsset | Interface::MplCoreCollection => Some(MplCoreInfo {
-            num_minted: full_asset.asset_dynamic.num_minted.as_ref().map(|u| u.value),
-            current_size: full_asset.asset_dynamic.current_size.as_ref().map(|u| u.value),
+            num_minted: full_asset
+                .asset_dynamic
+                .num_minted
+                .as_ref()
+                .map(|u| u.value),
+            current_size: full_asset
+                .asset_dynamic
+                .current_size
+                .as_ref()
+                .map(|u| u.value),
             plugins_json_version: full_asset
                 .asset_dynamic
                 .plugins_json_version
@@ -407,14 +418,14 @@ pub fn asset_to_rpc(
                     edition_number: edition_info.edition_number,
                 })
             } else {
-                Some(Supply{
+                Some(Supply {
                     edition_nonce,
                     print_current_supply: 0,
                     print_max_supply: Some(0),
                     edition_number: None,
                 })
             }
-        },
+        }
         _ => None,
     };
 

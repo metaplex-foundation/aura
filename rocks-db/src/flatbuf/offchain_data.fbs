@@ -1,0 +1,16 @@
+// offchain_data.fbs
+namespace OffChainData;
+
+enum StorageMutability : byte {
+  Immutable = 0,
+  Mutable
+}
+
+table OffChainData {
+    storage_mutability: StorageMutability;
+    url: string;
+    metadata: string;
+    last_read_at: long  = 0;
+}
+
+root_type OffChainData;

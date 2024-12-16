@@ -6,12 +6,12 @@ use crate::gapfiller::{
     MasterEdition, OffchainData, OwnerType, RawBlock, RoyaltyTargetType, SpecificationAssetClass,
     SpecificationVersions, SplMint, TokenStandard, UpdateVersionValue, UseMethod, Uses,
 };
-use entities::models::{CompleteAssetDetails, OffChainData, UpdateVersion, Updated};
+use entities::models::{AssetCompleteDetailsGrpc, UpdateVersion, Updated};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 
-impl From<CompleteAssetDetails> for AssetDetails {
-    fn from(value: CompleteAssetDetails) -> Self {
+impl From<AssetCompleteDetailsGrpc> for AssetDetails {
+    fn from(value: AssetCompleteDetailsGrpc) -> Self {
         let delegate = value.delegate.value.map(|key| DynamicBytesField {
             value: key.to_bytes().to_vec(),
             slot_updated: value.delegate.slot_updated,
@@ -85,7 +85,7 @@ impl From<CompleteAssetDetails> for AssetDetails {
     }
 }
 
-impl TryFrom<AssetDetails> for CompleteAssetDetails {
+impl TryFrom<AssetDetails> for AssetCompleteDetailsGrpc {
     type Error = GrpcError;
 
     fn try_from(value: AssetDetails) -> Result<Self, Self::Error> {
@@ -136,9 +136,7 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 .is_burnt
                 .map(Into::into)
                 .ok_or(GrpcError::MissingField("is_burnt".to_string()))?,
-            was_decompressed: value
-                .was_decompressed
-                .map(Into::into),
+            was_decompressed: value.was_decompressed.map(Into::into),
             creators: value
                 .creators
                 .map(TryInto::try_into)
@@ -203,10 +201,12 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 .collect::<Result<Vec<_>, _>>()?,
             edition: value.edition.map(TryInto::try_into).transpose()?,
             master_edition: value.master_edition.map(TryInto::try_into).transpose()?,
-            offchain_data: value.offchain_data.map(|e| OffChainData {
-                url: e.url,
-                metadata: e.metadata,
-            }),
+            offchain_data: value
+                .offchain_data
+                .map(|e| entities::models::OffChainDataGrpc {
+                    url: e.url,
+                    metadata: e.metadata,
+                }),
             spl_mint: value.spl_mint.map(TryInto::try_into).transpose()?,
         })
     }
@@ -258,8 +258,8 @@ impl From<entities::models::SplMint> for SplMint {
     }
 }
 
-impl From<entities::models::OffChainData> for OffchainData {
-    fn from(value: OffChainData) -> Self {
+impl From<entities::models::OffChainDataGrpc> for OffchainData {
+    fn from(value: entities::models::OffChainDataGrpc) -> Self {
         Self {
             url: value.url,
             metadata: value.metadata,

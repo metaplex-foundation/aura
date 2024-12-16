@@ -1,7 +1,9 @@
 use asset_previews::{AssetPreviews, UrlToDownload};
 use entities::schedule::ScheduledJob;
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use inflector::Inflector;
 use leaf_signatures::LeafSignature;
+use offchain_data::{OffChainData, OffChainDataDeprecated};
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
@@ -20,8 +22,7 @@ pub use asset::{
 use column::{Column, TypedColumn};
 use entities::enums::TokenMetadataEdition;
 use entities::models::{
-    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock, SplMint,
-    TokenAccount,
+    AssetSignature, BatchMintToVerify, FailedBatchMint, RawBlock, SplMint, TokenAccount,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
@@ -78,12 +79,7 @@ pub mod transaction_client;
 pub mod tree_seq;
 // import the flatbuffers runtime library
 extern crate flatbuffers;
-#[allow(
-    clippy::missing_safety_doc,
-    unused_imports,
-    clippy::extra_unused_lifetimes
-)]
-pub mod asset_generated;
+pub mod generated;
 pub mod mappers;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
@@ -189,6 +185,7 @@ pub struct Storage {
     pub asset_owner_data: Column<AssetOwner>,
     pub asset_collection_data: Column<asset::AssetCollection>,
     pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
+    pub asset_offchain_data_deprecated: Column<OffChainDataDeprecated>,
     // Deprecated, remove end
     pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_leaf_data: Column<asset::AssetLeaf>,
@@ -244,6 +241,7 @@ impl Storage {
         let asset_leaf_data = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data_deprecated = Self::column(db.clone(), red_metrics.clone());
+        let asset_offchain_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_offchain_data = Self::column(db.clone(), red_metrics.clone());
 
         let cl_items = Self::column(db.clone(), red_metrics.clone());
@@ -275,6 +273,7 @@ impl Storage {
         let spl_mints = Self::column(db.clone(), red_metrics.clone());
 
         Self {
+            asset_offchain_data_deprecated,
             asset_data,
             mpl_core_collection_authorities,
 
@@ -826,4 +825,10 @@ impl Storage {
             }
         }
     }
+}
+
+pub trait ToFlatbuffersConverter<'a> {
+    type Target: 'a;
+    fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target>;
+    fn convert_to_fb_bytes(&self) -> Vec<u8>;
 }

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use entities::enums::TokenMetadataEdition;
-use entities::models::{CompleteAssetDetails, OffChainData, SplMint, Updated};
+use entities::models::{AssetCompleteDetailsGrpc, SplMint, Updated};
 use interface::asset_streaming_and_discovery::{
     AssetDetailsStream, AssetDetailsStreamer, AsyncError,
 };
@@ -12,8 +12,9 @@ use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::asset::{AssetCompleteDetails, SlotAssetIdxKey};
-use crate::asset_generated::asset as fb;
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
+use crate::generated::asset_generated::asset as fb;
+use crate::offchain_data::OffChainData;
 use crate::{
     asset::{AssetLeaf, SlotAssetIdx},
     column::TypedColumn,
@@ -51,7 +52,7 @@ async fn process_asset_details_range(
     start_slot: u64,
     end_slot: u64,
     metrics: Arc<RequestErrorDurationMetrics>,
-    tx: tokio::sync::mpsc::Sender<Result<CompleteAssetDetails, AsyncError>>,
+    tx: tokio::sync::mpsc::Sender<Result<AssetCompleteDetailsGrpc, AsyncError>>,
 ) -> Result<(), AsyncError> {
     let slot_asset_idx = Storage::column::<SlotAssetIdx>(backend.clone(), metrics.clone());
     let iterator = slot_asset_idx.iter(SlotAssetIdxKey::new(
@@ -89,7 +90,7 @@ async fn get_complete_asset_details(
     backend: Arc<DB>,
     pubkey: Pubkey,
     metrics: Arc<RequestErrorDurationMetrics>,
-) -> crate::Result<CompleteAssetDetails> {
+) -> crate::Result<AssetCompleteDetailsGrpc> {
     let data = backend.get_pinned_cf(
         &backend.cf_handle(AssetCompleteDetails::NAME).unwrap(),
         AssetCompleteDetails::encode_key(pubkey),
@@ -198,9 +199,13 @@ async fn get_complete_asset_details(
             (Some(edition), master_edition)
         }
     };
+
     let url = dynamic_data.url.clone();
     let spl_mint = Storage::column::<SplMint>(backend.clone(), metrics.clone()).get(pubkey)?;
-    Ok(CompleteAssetDetails {
+    let off_chain_data_grpc = Storage::column::<OffChainData>(backend.clone(), metrics.clone())
+        .get(url.clone().value)?
+        .map(Into::into);
+    Ok(AssetCompleteDetailsGrpc {
         pubkey: static_data.pubkey,
         specification_asset_class: static_data.specification_asset_class,
         royalty_target_type: static_data.royalty_target_type,
@@ -276,8 +281,7 @@ async fn get_complete_asset_details(
             .collect(),
         edition,
         master_edition,
-        offchain_data: Storage::column::<OffChainData>(backend.clone(), metrics.clone())
-            .get(url.value)?,
+        offchain_data: off_chain_data_grpc,
         spl_mint,
     })
 }

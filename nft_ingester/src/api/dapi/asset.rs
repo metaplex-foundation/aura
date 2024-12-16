@@ -4,10 +4,11 @@ use std::sync::Arc;
 
 use entities::api_req_params::{AssetSortDirection, Options};
 use entities::enums::SpecificationAssetClass;
-use entities::models::{AssetSignatureWithPagination, OffChainData};
+use entities::models::AssetSignatureWithPagination;
 use interface::asset_sigratures::AssetSignaturesGetter;
 use interface::json::{JsonDownloadResult, JsonDownloader, JsonPersister};
 use rocks_db::errors::StorageError;
+use rocks_db::offchain_data::{OffChainData, StorageMutability};
 use solana_sdk::pubkey::Pubkey;
 use tracing::error;
 
@@ -23,6 +24,7 @@ use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
 pub const COLLECTION_GROUP_KEY: &str = "collection";
+pub const METADATA_CACHE_TTL: i64 = 86400; // 1 day
 
 fn convert_rocks_asset_model(
     asset_pubkey: &Pubkey,
@@ -211,15 +213,13 @@ pub async fn get_by_ids<
             .push(index);
     }
 
-    let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
-    // request prices and symbols only for fungibles when the option is set. This will prolong the request at least an order of magnitude
-    let asset_selected_maps_fut =
-        rocks_db.get_asset_selected_maps_async(unique_asset_ids.clone(), owner_address, &options);
+    let unique_asset_ids: Vec<Pubkey> = unique_asset_ids_map.keys().cloned().collect();
     let asset_ids_string = asset_ids
         .clone()
         .into_iter()
         .map(|id| id.to_string())
         .collect_vec();
+    // request prices and symbols only for fungibles when the option is set. This will prolong the request at least an order of magnitude
     let (token_prices, token_symbols) = if options.show_fungible {
         let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids_string.as_slice());
         let token_symbols_fut =
@@ -228,7 +228,7 @@ pub async fn get_by_ids<
     } else {
         (Ok(HashMap::new()), Ok(HashMap::new()))
     };
-    let mut asset_selected_maps = asset_selected_maps_fut.await?;
+
     let token_prices = token_prices.unwrap_or_else(|e| {
         error!("Fetch token prices: {}", e);
         metrics.inc_token_info_fetch_errors("prices");
@@ -240,6 +240,9 @@ pub async fn get_by_ids<
         HashMap::new()
     });
 
+    let mut asset_selected_maps = rocks_db
+        .get_asset_selected_maps_async(unique_asset_ids.clone(), owner_address, &options)
+        .await?;
     if let Some(json_downloader) = json_downloader {
         let mut urls_to_download = Vec::new();
 
@@ -248,9 +251,47 @@ pub async fn get_by_ids<
                 continue;
             }
             let offchain_data = asset_selected_maps.offchain_data.get(url);
-            if offchain_data.is_none() || offchain_data.unwrap().metadata.is_empty() {
+            let mut download_needed = false;
+            match offchain_data {
+                Some(offchain_data) => {
+                    match &offchain_data.metadata {
+                        Some(metadata) => {
+                            if metadata.is_empty() {
+                                download_needed = true;
+                            }
+                        }
+                        None => {
+                            download_needed = true;
+                        }
+                    }
+
+                    match &offchain_data.url {
+                        Some(url) => {
+                            if url.is_empty() {
+                                download_needed = true;
+                            }
+                        }
+                        None => {
+                            download_needed = true;
+                        }
+                    }
+
+                    let curr_time = chrono::Utc::now().timestamp();
+                    if offchain_data.storage_mutability.is_mutable()
+                        && curr_time > offchain_data.last_read_at + METADATA_CACHE_TTL
+                    {
+                        download_needed = true;
+                    }
+                }
+                None => {
+                    download_needed = true;
+                }
+            }
+
+            if download_needed {
                 urls_to_download.push(url.clone());
             }
+
             if urls_to_download.len() >= max_json_to_download {
                 break;
             }
@@ -258,7 +299,7 @@ pub async fn get_by_ids<
 
         let num_of_tasks = urls_to_download.len();
 
-        if num_of_tasks != 0 {
+        if num_of_tasks > 0 {
             let download_results = stream::iter(urls_to_download)
                 .map(|url| {
                     let json_downloader = json_downloader.clone();
@@ -273,26 +314,33 @@ pub async fn get_by_ids<
                 .await;
 
             for (json_url, res) in download_results.iter() {
+                let last_read_at = chrono::Utc::now().timestamp();
                 match res {
                     Ok(JsonDownloadResult::JsonContent(metadata)) => {
+                        let storage_mutability = StorageMutability::from(json_url.as_str());
+
                         asset_selected_maps.offchain_data.insert(
                             json_url.clone(),
                             OffChainData {
-                                url: json_url.clone(),
-                                metadata: metadata.clone(),
+                                url: Some(json_url.clone()),
+                                metadata: Some(metadata.clone()),
+                                storage_mutability,
+                                last_read_at,
                             },
                         );
                     }
                     Ok(JsonDownloadResult::MediaUrlAndMimeType { url, mime_type }) => {
+                        let storage_mutability = StorageMutability::from(json_url.as_str());
                         asset_selected_maps.offchain_data.insert(
                             json_url.clone(),
                             OffChainData {
-                                url: json_url.clone(),
-                                metadata: format!(
-                                    "{{\"image\":\"{}\",\"type\":\"{}\"}}",
-                                    url, mime_type
-                                )
-                                .to_string(),
+                                url: Some(json_url.clone()),
+                                metadata: Some(
+                                    format!("{{\"image\":\"{}\",\"type\":\"{}\"}}", url, mime_type)
+                                        .to_string(),
+                                ),
+                                storage_mutability,
+                                last_read_at,
                             },
                         );
                     }
@@ -302,7 +350,6 @@ pub async fn get_by_ids<
 
             if let Some(json_persister) = json_persister {
                 if !download_results.is_empty() {
-                    let download_results = download_results.clone();
                     tasks.lock().await.spawn(async move {
                         if let Err(e) = json_persister.persist_response(download_results).await {
                             error!("Could not persist downloaded JSONs: {:?}", e);
