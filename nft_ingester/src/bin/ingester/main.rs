@@ -538,77 +538,24 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     if config.run_sequence_consistent_checker {
-        let force_reingestable_slot_processor = Arc::new(ForceReingestableSlotGetter::new(
+        let direct_block_parser = Arc::new(DirectBlockParser::new(
+            tx_ingester.clone(),
             primary_rocks_storage.clone(),
-            Arc::new(DirectBlockParser::new(
-                tx_ingester.clone(),
-                primary_rocks_storage.clone(),
-                metrics_state.backfiller_metrics.clone(),
-            )),
+            metrics_state.backfiller_metrics.clone(),
         ));
         run_sequence_consistent_gapfiller(
-            SlotsCollector::new(
-                force_reingestable_slot_processor.clone(),
-                backfiller_source.clone(),
-                metrics_state.backfiller_metrics.clone(),
-            ),
             primary_rocks_storage.clone(),
+            backfiller_source.clone(),
+            metrics_state.backfiller_metrics.clone(),
             metrics_state.sequence_consistent_gapfill_metrics.clone(),
+            backfiller_source.clone(),
+            direct_block_parser,
             shutdown_rx.resubscribe(),
             rpc_backfiller.clone(),
             mutexed_tasks.clone(),
             config.sequence_consistent_checker_wait_period_sec,
         )
         .await;
-
-        // run an additional direct slot persister
-        let rx = shutdown_rx.resubscribe();
-        let producer = backfiller_source.clone();
-        let metrics = Arc::new(BackfillerMetricsConfig::new());
-        metrics.register_with_prefix(&mut metrics_state.registry, "force_slot_persister_");
-        if let Some(client) = grpc_client {
-            let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
-                force_reingestable_slot_processor.clone(),
-                force_reingestable_slot_processor.clone(),
-                Arc::new(client),
-                metrics.clone(),
-                backfiller_config.workers_count,
-                backfiller_config.chunk_size,
-            ));
-            mutexed_tasks
-                .lock()
-                .await
-                .spawn(run_slot_force_persister(force_reingestable_transactions_parser, rx));
-        } else {
-            let force_reingestable_transactions_parser = Arc::new(TransactionsParser::new(
-                force_reingestable_slot_processor.clone(),
-                force_reingestable_slot_processor.clone(),
-                producer.clone(),
-                metrics.clone(),
-                backfiller_config.workers_count,
-                backfiller_config.chunk_size,
-            ));
-            mutexed_tasks
-                .lock()
-                .await
-                .spawn(run_slot_force_persister(force_reingestable_transactions_parser, rx));
-        }
-
-        if config.run_fork_cleaner {
-            let fork_cleaner = ForkCleaner::new(
-                primary_rocks_storage.clone(),
-                slot_db.clone(),
-                metrics_state.fork_cleaner_metrics.clone(),
-            );
-            let rx = shutdown_rx.resubscribe();
-            let metrics = metrics_state.fork_cleaner_metrics.clone();
-            mutexed_tasks.lock().await.spawn(run_fork_cleaner(
-                fork_cleaner,
-                metrics,
-                rx,
-                config.sequence_consistent_checker_wait_period_sec,
-            ));
-        }
     }
     if let Ok(arweave) =
         Arweave::from_keypair_path(PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(), ARWEAVE_BASE_URL.parse().unwrap())

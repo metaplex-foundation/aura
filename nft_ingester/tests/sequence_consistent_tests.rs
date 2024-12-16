@@ -1,19 +1,19 @@
 #[cfg(test)]
-#[cfg(feature = "integration_tests")]
 mod tests {
-    use interface::slot_getter::MockFinalizedSlotGetter;
-    use metrics_utils::utils::start_metrics;
-    use metrics_utils::{MetricState, MetricsTrait};
-    use nft_ingester::sequence_consistent::SequenceConsistentGapfiller;
-    use rocks_db::bubblegum_slots::bubblegum_slots_key_to_value;
-    use rocks_db::key_encoders::{decode_pubkey, decode_pubkey_u64, decode_string};
+    use backfill_rpc::rpc::BackfillRPC;
+    use metrics_utils::MetricState;
+    use nft_ingester::backfiller::DirectBlockParser;
+    use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
+    use nft_ingester::sequence_consistent::collect_sequences_gaps;
+    use nft_ingester::transaction_ingester::BackfillTransactionIngester;
     use rocks_db::tree_seq::TreeSeqIdx;
     use setup::rocks::RocksTestEnvironment;
     use std::str::FromStr;
     use std::sync::Arc;
     use tokio::sync::broadcast;
-    use usecase::slots_collector::{MockSlotsGetter, SlotsCollector};
+    use usecase::bigtable::BigTableClient;
 
+    #[cfg(feature = "integration_tests")]
     #[tracing_test::traced_test]
     #[tokio::test]
     async fn test_range_delete() {
@@ -64,130 +64,65 @@ mod tests {
         assert_eq!(tree_iterator.next(), None);
     }
 
+    #[cfg(feature = "rpc_tests")]
     #[tracing_test::traced_test]
     #[tokio::test]
-    async fn test_find_gap() {
+    async fn test_fill_gap() {
+        // Tests the following gap is filled: Gap found for MRKt4uPZY5ytQzxvAYEkeGAd3A8ir12khRUNfZvNb5U tree. Sequences: [39739, 39742], slots: [305441204, 305441218]
+        // slot 305441204 also contains seq 39738, which will be in the result set as well
+
         let storage = RocksTestEnvironment::new(&[]).storage;
-        let first_tree_key = solana_program::pubkey::Pubkey::from_str(
-            "5zYdh7eB538fv5Xnjbqg2rZfapY993vwwNYUoP59uz61",
-        )
-        .unwrap();
-        let second_tree_key = solana_program::pubkey::Pubkey::from_str(
-            "94ZDcq2epe5QqG1egicMXVYmsGkZKBYRmxTH5g4eZxVe",
-        )
-        .unwrap();
-
+        let tree_key =
+            solana_program::pubkey::Pubkey::from_str("MRKt4uPZY5ytQzxvAYEkeGAd3A8ir12khRUNfZvNb5U")
+                .unwrap();
         storage
             .tree_seq_idx
-            .put_async((first_tree_key, 100), TreeSeqIdx { slot: 200 })
-            .await
+            .put((tree_key, 39739), TreeSeqIdx { slot: 305441204 })
             .unwrap();
         storage
             .tree_seq_idx
-            .put_async((first_tree_key, 101), TreeSeqIdx { slot: 201 })
-            .await
-            .unwrap();
-        storage
-            .tree_seq_idx
-            .put_async((first_tree_key, 102), TreeSeqIdx { slot: 202 })
-            .await
-            .unwrap();
-        storage
-            .tree_seq_idx
-            .put_async((first_tree_key, 103), TreeSeqIdx { slot: 203 })
-            .await
-            .unwrap();
-        storage
-            .tree_seq_idx
-            .put_async((first_tree_key, 107), TreeSeqIdx { slot: 207 })
-            .await
-            .unwrap();
-        storage
-            .tree_seq_idx
-            .put_async((first_tree_key, 108), TreeSeqIdx { slot: 208 })
-            .await
-            .unwrap();
-        storage
-            .tree_seq_idx
-            .put_async((first_tree_key, 111), TreeSeqIdx { slot: 211 })
-            .await
-            .unwrap();
-        storage
-            .tree_seq_idx
-            .put_async((first_tree_key, 112), TreeSeqIdx { slot: 212 })
-            .await
-            .unwrap();
-        storage
-            .tree_seq_idx
-            .put_async((second_tree_key, 10), TreeSeqIdx { slot: 20 })
-            .await
-            .unwrap();
-        storage
-            .tree_seq_idx
-            .put_async((second_tree_key, 11), TreeSeqIdx { slot: 21 })
-            .await
+            .put((tree_key, 39742), TreeSeqIdx { slot: 305441218 })
             .unwrap();
 
-        let mut row_keys_getter = MockSlotsGetter::new();
-        row_keys_getter
-            .expect_get_slots()
-            .times(1)
-            .return_once(move |_, _, _| Ok(vec![206, 204, 203]));
-        row_keys_getter
-            .expect_get_slots()
-            .times(1)
-            .return_once(move |_, _, _| Ok(vec![209, 208]));
-        let row_keys_getter_arc = Arc::new(row_keys_getter);
-        let mut metrics_state = MetricState::new();
-        metrics_state.register_metrics();
-        start_metrics(metrics_state.registry, Some(4444)).await;
-
-        let slots_collector = SlotsCollector::new(
+        let metrics_state = MetricState::new();
+        let backfill_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
             storage.clone(),
-            row_keys_getter_arc.clone(),
+            metrics_state.ingester_metrics.clone(),
+        ));
+
+        let tx_ingester = Arc::new(BackfillTransactionIngester::new(
+            backfill_bubblegum_updates_processor.clone(),
+        ));
+        let direct_block_parser = Arc::new(DirectBlockParser::new(
+            tx_ingester.clone(),
+            storage.clone(),
             metrics_state.backfiller_metrics.clone(),
+        ));
+        let backfiller_source = Arc::new(
+            BigTableClient::connect_new_with("../creds.json".to_string(), 1000)
+                .await
+                .expect("should create bigtable client"),
         );
-
-        let mut finalized_slot_getter = MockFinalizedSlotGetter::new();
-        finalized_slot_getter
-            .expect_get_finalized_slot_no_error()
-            .times(1)
-            .return_once(move || 212);
-
-        let arc_finalized_slot_getter = Arc::new(finalized_slot_getter);
-
-        let sequence_consistent_gapfiller = SequenceConsistentGapfiller::new(
+        let rpc_backfiller = Arc::new(BackfillRPC::connect(
+            "https://api.mainnet-beta.solana.com".to_string(),
+        ));
+        let (_tx, rx) = broadcast::channel::<()>(1);
+        collect_sequences_gaps(
+            rpc_backfiller.clone(),
             storage.clone(),
-            slots_collector,
+            backfiller_source.big_table_inner_client.clone(),
+            metrics_state.backfiller_metrics.clone(),
             metrics_state.sequence_consistent_gapfill_metrics.clone(),
-            arc_finalized_slot_getter.clone(),
-        );
-        let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-        sequence_consistent_gapfiller
-            .collect_sequences_gaps(shutdown_rx.resubscribe())
-            .await;
+            backfiller_source.clone(),
+            direct_block_parser,
+            rx,
+        )
+        .await;
 
-        let mut gaps_iter = storage.trees_gaps.iter_start();
-        let (key, _) = gaps_iter.next().unwrap().unwrap();
-        let key = decode_pubkey(key.to_vec()).unwrap();
-
-        assert_eq!(first_tree_key, key);
-        assert_eq!(gaps_iter.next(), None);
-
-        let tree_iter = storage.tree_seq_idx.iter_start();
-        assert_eq!(10, tree_iter.count());
-
-        let mut tree_iter = storage.tree_seq_idx.iter_start();
-        let (key, _) = tree_iter.next().unwrap().unwrap();
-        let key = decode_pubkey_u64(key.to_vec()).unwrap();
-        assert_eq!((first_tree_key, 100), key);
-
-        let slot_iter = storage.bubblegum_slots.iter_start();
-        assert_eq!(5, slot_iter.count());
-
-        let mut slot_iter = storage.bubblegum_slots.iter_start();
-        let (key, _) = slot_iter.next().unwrap().unwrap();
-        let key = decode_string(key.to_vec()).unwrap();
-        assert_eq!(bubblegum_slots_key_to_value(key), 203);
+        let it = storage
+            .tree_seq_idx
+            .pairs_iterator(storage.tree_seq_idx.iter_start());
+        let slots: Vec<_> = it.filter(|((k, _), _)| *k == tree_key).map(|((_, seq), _)| seq).collect();
+        assert_eq!(slots, vec![39738, 39739, 39740, 39741, 39742]);
     }
 }

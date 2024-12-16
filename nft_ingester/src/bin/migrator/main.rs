@@ -46,6 +46,7 @@ pub async fn main() -> Result<(), IngesterError> {
             &config.database_config.get_database_url().unwrap(),
             DEFAULT_MIN_POSTGRES_CONNECTIONS,
             max_postgre_connections,
+            None,
             metrics_state.red_metrics.clone(),
         )
         .await
@@ -94,7 +95,7 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    graceful_stop(mutexed_tasks, shutdown_tx, None, None, "").await;
+    graceful_stop(mutexed_tasks, shutdown_tx, None, None, None, "").await;
 
     Ok(())
 }
