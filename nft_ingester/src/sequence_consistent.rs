@@ -13,40 +13,6 @@ use usecase::slots_collector::{SlotsCollector, SlotsGetter};
 
 use crate::inmemory_slots_dumper::InMemorySlotsDumper;
 
-pub struct SequenceConsistentGapfiller<T, R, S, F>
-where
-    T: SlotsDumper + Sync + Send + 'static,
-    R: SlotsGetter + Sync + Send + 'static,
-    S: SequenceConsistentManager,
-    F: FinalizedSlotGetter,
-{
-    sequence_consistent_manager: Arc<S>,
-    slots_collector: Arc<SlotsCollector<T, R>>,
-    metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
-    finalized_slot_getter: Arc<F>,
-}
-
-impl<T, R, S, F> SequenceConsistentGapfiller<T, R, S, F>
-where
-    T: SlotsDumper + Sync + Send + 'static,
-    R: SlotsGetter + Sync + Send + 'static,
-    S: SequenceConsistentManager,
-    F: FinalizedSlotGetter,
-{
-    pub fn new(
-        sequence_consistent_manager: Arc<S>,
-        slots_collector: SlotsCollector<T, R>,
-        metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
-        finalized_slot_getter: Arc<F>,
-    ) -> Self {
-        Self {
-            sequence_consistent_manager,
-            slots_collector: Arc::new(slots_collector),
-            metrics,
-            finalized_slot_getter,
-        }
-    }
-}
 pub async fn collect_sequences_gaps<R, S, F, BP, BC>(
     finalized_slot_getter: Arc<F>,
     sequence_consistent_manager: Arc<S>,

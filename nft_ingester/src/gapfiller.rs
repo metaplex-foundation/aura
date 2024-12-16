@@ -1,10 +1,8 @@
-use crate::sequence_consistent::SequenceConsistentGapfiller;
 use backfill_rpc::rpc::BackfillRPC;
 use futures::StreamExt;
 use grpc::client::Client;
 use interface::asset_streaming_and_discovery::{AssetDetailsConsumer, RawBlocksConsumer};
 use interface::signature_persistence::{BlockConsumer, BlockProducer};
-use interface::slots_dumper::SlotsDumper;
 use metrics_utils::{BackfillerMetricsConfig, SequenceConsistentGapfillMetricsConfig};
 use rocks_db::Storage;
 use std::sync::Arc;

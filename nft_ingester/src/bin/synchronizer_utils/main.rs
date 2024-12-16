@@ -69,10 +69,10 @@ pub async fn main() -> Result<(), IngesterError> {
             .expect("index after should be base58 encoded");
         let starting_key = decode_u64x2_pubkey(decoded_data).expect("Failed to decode index after");
         let (updated_keys, last_included_key) = storage
-            .fetch_asset_updated_keys(Some(starting_key), None, 500, None)
+            .fetch_nft_asset_updated_keys(Some(starting_key), None, 500, None)
             .unwrap();
         let index = storage
-            .get_asset_indexes(updated_keys.into_iter().collect_vec().as_slice())
+            .get_nft_asset_indexes(updated_keys.into_iter().collect_vec().as_slice())
             .await
             .expect("Failed to get indexes");
         println!("{:?}", index);
@@ -126,7 +126,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .map(|pk| Pubkey::from_str(pk).expect("invalid pubkey"))
             .collect_vec();
         let index = storage
-            .get_asset_indexes(keys.as_slice())
+            .get_nft_asset_indexes(keys.as_slice())
             .await
             .expect("Failed to get indexes");
         println!("{:?}", index);
