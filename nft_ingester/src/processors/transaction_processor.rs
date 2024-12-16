@@ -39,7 +39,7 @@ pub async fn run_transaction_processor<TG>(
 
             for tx in txs {
                 match geyser_bubblegum_updates_processor
-                    .process_transaction(tx.tx)
+                    .process_transaction(tx.tx, false)
                     .await
                 {
                     Ok(_) => {

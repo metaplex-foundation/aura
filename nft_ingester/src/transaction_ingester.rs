@@ -14,11 +14,13 @@ impl BackfillTransactionIngester {
         Self { tx_processor }
     }
 }
+
 #[async_trait]
 impl TransactionIngester for BackfillTransactionIngester {
+    // called only from the signatures fetcher at the moment, as it's switched to fetch finalized signatures only it's safe to assume the source is finalized 
     async fn ingest_transaction(&self, tx: BufferedTransaction) -> Result<(), StorageError> {
         self.tx_processor
-            .process_transaction(tx)
+            .process_transaction(tx, true)
             .await
             .map_err(|e| StorageError::Common(e.to_string()))
     }

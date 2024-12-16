@@ -93,6 +93,7 @@ where
         all_signatures.sort_by(|a, b| a.slot.cmp(&b.slot));
         // we need to split the list into batches of BATCH_SIZE
 
+        // todo: use Rust's chunks instead
         let mut batch_start = 0;
         while batch_start < all_signatures.len() {
             let batch_end = std::cmp::min(batch_start + BATCH_SIZE, all_signatures.len());
