@@ -4,8 +4,7 @@ use std::{
     rc::Rc,
     str::FromStr,
     sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
+        atomic::{AtomicU64, Ordering}, Arc
     },
 };
 
@@ -17,7 +16,7 @@ use snapshot_reader::{append_vec_iter, ArchiveSnapshotExtractor};
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 use tokio::{
-    sync::{mpsc::UnboundedReceiver, Mutex, Semaphore},
+    sync::{mpsc::Receiver, Mutex, Semaphore},
     task::{JoinError, JoinSet},
 };
 use tokio_util::sync::CancellationToken;
@@ -48,6 +47,8 @@ lazy_static! {
 
 const MINT_ACC_DATA_SIZE: usize = 82;
 
+const CHANNEL_SIZE: usize = 100_000_000;
+
 enum AccountType {
     Core,
     Mint,
@@ -77,7 +78,7 @@ pub async fn main() {
     let shutdown_token = CancellationToken::new();
 
     let spinner_style =
-        ProgressStyle::with_template("{prefix:>10.bold.dim} {spinner} total={human_pos}").unwrap();
+        ProgressStyle::with_template("{prefix:>10.bold.dim} {spinner} total={human_pos} {msg}").unwrap();
     let accounts_spinner = Arc::new(
         ProgressBar::new_spinner()
             .with_style(spinner_style)
@@ -95,9 +96,9 @@ pub async fn main() {
     let missed_token_acc: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
 
     let (nfts_channel_tx, nfts_channel_rx) =
-        tokio::sync::mpsc::unbounded_channel::<(AccountType, Pubkey)>();
+        tokio::sync::mpsc::channel::<(AccountType, Pubkey)>(CHANNEL_SIZE);
     let (fungibles_channel_tx, fungibles_channel_rx) =
-        tokio::sync::mpsc::unbounded_channel::<Pubkey>();
+        tokio::sync::mpsc::channel::<Pubkey>(CHANNEL_SIZE);
 
     let mut tasks = JoinSet::new();
 
@@ -185,7 +186,7 @@ pub async fn main() {
 
                     if account.account_meta.owner == *CORE_KEY {
                         if let Err(e) =
-                            nfts_channel_tx.send((AccountType::Core, account.meta.pubkey))
+                            nfts_channel_tx.send((AccountType::Core, account.meta.pubkey)).await
                         {
                             println!("Could not send core key to the channel: {}", e.to_string());
                         }
@@ -195,7 +196,7 @@ pub async fn main() {
                         // there only 2 types of accounts for that programs, so if it's not mint it's token account
                         if account.data.len() == MINT_ACC_DATA_SIZE {
                             if let Err(e) =
-                                nfts_channel_tx.send((AccountType::Mint, account.meta.pubkey))
+                                nfts_channel_tx.send((AccountType::Mint, account.meta.pubkey)).await
                             {
                                 println!(
                                     "Could not send mint key to the channel: {}",
@@ -203,7 +204,7 @@ pub async fn main() {
                                 );
                             }
                         } else {
-                            if let Err(e) = fungibles_channel_tx.send(account.meta.pubkey) {
+                            if let Err(e) = fungibles_channel_tx.send(account.meta.pubkey).await {
                                 println!(
                                     "Could not send token account to the channel: {}",
                                     e.to_string()
@@ -266,7 +267,7 @@ async fn process_nfts(
     inner_workers: usize,
     rocks_db: Arc<Storage>,
     shutdown_token: CancellationToken,
-    mut nfts_channel_rx: UnboundedReceiver<(AccountType, Pubkey)>,
+    mut nfts_channel_rx: Receiver<(AccountType, Pubkey)>,
     missed_asset_data: Arc<Mutex<HashSet<String>>>,
     missed_mint_info: Arc<Mutex<HashSet<String>>>,
     assets_processed: Arc<AtomicU64>,
@@ -374,7 +375,7 @@ async fn process_fungibles(
     inner_workers: usize,
     rocks_db: Arc<Storage>,
     shutdown_token: CancellationToken,
-    mut fungibles_channel_rx: UnboundedReceiver<Pubkey>,
+    mut fungibles_channel_rx: Receiver<Pubkey>,
     missed_token_acc: Arc<Mutex<HashSet<String>>>,
     assets_processed: Arc<AtomicU64>,
     rate: Arc<Mutex<f64>>,
