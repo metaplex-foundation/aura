@@ -3,8 +3,9 @@ use backfill_rpc::rpc::BackfillRPC;
 use futures::StreamExt;
 use grpc::client::Client;
 use interface::asset_streaming_and_discovery::{AssetDetailsConsumer, RawBlocksConsumer};
+use interface::signature_persistence::{BlockConsumer, BlockProducer};
 use interface::slots_dumper::SlotsDumper;
-use metrics_utils::SequenceConsistentGapfillMetricsConfig;
+use metrics_utils::{BackfillerMetricsConfig, SequenceConsistentGapfillMetricsConfig};
 use rocks_db::Storage;
 use std::sync::Arc;
 use std::time::Duration;
@@ -52,24 +53,22 @@ pub async fn process_asset_details_stream_wrapper(
     Ok(())
 }
 
-pub async fn run_sequence_consistent_gapfiller<T, R>(
-    slots_collector: SlotsCollector<T, R>,
+pub async fn run_sequence_consistent_gapfiller<R, BP, BC>(
     rocks_storage: Arc<Storage>,
+    backfiller_source: Arc<R>,
+    backfiller_metrics: Arc<BackfillerMetricsConfig>,
     sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
+    bp: Arc<BP>,
+    bc: Arc<BC>,
     rx: Receiver<()>,
     rpc_backfiller: Arc<BackfillRPC>,
     mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     sequence_consistent_checker_wait_period_sec: u64,
 ) where
-    T: SlotsDumper + Sync + Send + 'static,
     R: SlotsGetter + Sync + Send + 'static,
+    BP: BlockProducer,
+    BC: BlockConsumer,
 {
-    let sequence_consistent_gapfiller = SequenceConsistentGapfiller::new(
-        rocks_storage.clone(),
-        slots_collector,
-        sequence_consistent_gapfill_metrics.clone(),
-        rpc_backfiller.clone(),
-    );
     let mut rx = rx.resubscribe();
     let metrics = sequence_consistent_gapfill_metrics.clone();
 
@@ -77,9 +76,17 @@ pub async fn run_sequence_consistent_gapfiller<T, R>(
         tracing::info!("Start collecting sequences gaps...");
         loop {
             let start = Instant::now();
-            sequence_consistent_gapfiller
-                .collect_sequences_gaps(rx.resubscribe())
-                .await;
+            crate::sequence_consistent::collect_sequences_gaps(
+                rpc_backfiller.clone(),
+                rocks_storage.clone(),
+                backfiller_source.clone(),
+                backfiller_metrics.clone(),
+                sequence_consistent_gapfill_metrics.clone(),
+                bp.clone(),
+                bc.clone(),
+                rx.resubscribe(),
+            )
+            .await;
             metrics.set_scans_latency(start.elapsed().as_secs_f64());
             metrics.inc_total_scans();
 
