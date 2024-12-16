@@ -28,6 +28,7 @@ pub enum MigrationState {
 pub enum SerializationType {
     Bincode,
     Cbor,
+    Flatbuffers,
 }
 
 pub trait RocksMigration {
@@ -67,11 +68,11 @@ impl Storage {
         migration_version_manager: Arc<impl PrimaryStorageMigrationVersionManager>,
     ) -> Result<()> {
         // TODO: how do I fix this for a brand new DB?
-        // let applied_migrations = migration_version_manager
-        //     .get_all_applied_migrations()
-        //     .map_err(StorageError::Common)?;
-        // let migration_applier =
-        //     MigrationApplier::new(db_path, migration_storage_path, applied_migrations);
+        let applied_migrations = migration_version_manager
+            .get_all_applied_migrations()
+            .map_err(StorageError::Common)?;
+        let migration_applier =
+            MigrationApplier::new(db_path, migration_storage_path, applied_migrations);
 
         // // apply all migrations
         // migration_applier
@@ -93,6 +94,11 @@ impl Storage {
         //         crate::migrations::spl2022::DynamicDataToken2022MintExtentionsMigration,
         //     )
         //     .await?;
+
+        migration_applier
+            .apply_migration(crate::migrations::offchain_data::OffChainDataMigration)
+            .await?;
+
         Ok(())
     }
 
@@ -346,6 +352,9 @@ impl<'a> MigrationApplier<'a> {
                     StorageError::Common(e.to_string())
                 })
             }
+            SerializationType::Flatbuffers => {
+                todo!()
+            }
         }
     }
 
@@ -363,6 +372,7 @@ impl<'a> MigrationApplier<'a> {
         match M::SERIALIZATION_TYPE {
             SerializationType::Bincode => column.put_batch(std::mem::take(batch)).await,
             SerializationType::Cbor => column.put_batch_cbor(std::mem::take(batch)).await,
+            SerializationType::Flatbuffers => todo!(),
         }
     }
 }

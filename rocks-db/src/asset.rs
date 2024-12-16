@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use crate::inscriptions::{Inscription, InscriptionData};
+use crate::offchain_data::OffChainData;
 use bincode::{deserialize, serialize};
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::{
-    AssetIndex, EditionData, OffChainData, SplMint, TokenAccount, UpdateVersion, Updated,
-    UrlWithStatus,
+    AssetIndex, EditionData, SplMint, TokenAccount, UpdateVersion, Updated, UrlWithStatus,
 };
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use rocksdb::MergeOperands;
@@ -15,10 +15,10 @@ use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use std::cmp::{max, Ordering};
 use tracing::{error, warn};
 
-use crate::asset_generated::asset as fb;
+use crate::generated::asset_generated::asset as fb;
 use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
-use crate::Result;
 use crate::TypedColumn;
+use crate::{Result, ToFlatbuffersConverter};
 
 const MAX_OTHER_OWNERS: usize = 10;
 
@@ -59,18 +59,17 @@ impl From<AssetStaticDetails> for AssetCompleteDetails {
     }
 }
 
-impl AssetCompleteDetails {
-    pub fn convert_to_fb_bytes(&self) -> Vec<u8> {
+impl<'a> ToFlatbuffersConverter<'a> for AssetCompleteDetails {
+    type Target = fb::AssetCompleteDetails<'a>;
+
+    fn convert_to_fb_bytes(&self) -> Vec<u8> {
         let mut builder = FlatBufferBuilder::new();
         let asset_complete_details = self.convert_to_fb(&mut builder);
         builder.finish_minimal(asset_complete_details);
         builder.finished_data().to_vec()
     }
 
-    pub fn convert_to_fb<'a>(
-        &self,
-        builder: &mut FlatBufferBuilder<'a>,
-    ) -> WIPOffset<fb::AssetCompleteDetails<'a>> {
+    fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target> {
         let pk = Some(builder.create_vector(&self.pubkey.to_bytes()));
         let static_details = self
             .static_details
@@ -3832,9 +3831,10 @@ mod tests {
 
         let asset;
         unsafe {
-            asset = crate::asset_generated::asset::root_as_asset_complete_details_unchecked(
-                data_bytes.as_slice(),
-            );
+            asset =
+                create::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                    data_bytes.as_slice(),
+                );
         }
         let asset_mapped = AssetCompleteDetails::from(asset);
         println!("STATIC: {:#?}", asset.static_details().is_some());
@@ -3878,9 +3878,10 @@ mod tests {
 
         let asset;
         unsafe {
-            asset = crate::asset_generated::asset::root_as_asset_complete_details_unchecked(
-                merge_result.as_slice(),
-            );
+            asset =
+                create::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                    merge_result.as_slice(),
+                );
         }
         assert!(asset.other_known_owners().is_none());
         let asset_mapped = AssetCompleteDetails::from(asset);
@@ -3920,9 +3921,10 @@ mod tests {
 
         let asset;
         unsafe {
-            asset = crate::asset_generated::asset::root_as_asset_complete_details_unchecked(
-                merge_result.as_slice(),
-            );
+            asset =
+                create::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                    merge_result.as_slice(),
+                );
         }
         assert!(asset.other_known_owners().is_none());
         let asset_mapped = AssetCompleteDetails::from(asset);
@@ -4073,7 +4075,7 @@ mod tests {
             let perm_name = perm.iter().map(|(k, _)| k).join(", ");
             let asset;
             unsafe {
-                asset = crate::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                asset = create::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
                     merge_result.as_slice(),
                 );
             }

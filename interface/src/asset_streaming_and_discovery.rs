@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use entities::models::{CompleteAssetDetails, RawBlock};
+use entities::models::{AssetCompleteDetailsGrpc, RawBlock};
 use futures::stream::Stream;
 use mockall::automock;
 use std::pin::Pin;
 
 pub type AsyncError = Box<dyn std::error::Error + Send + Sync>;
-type AssetResult = Result<CompleteAssetDetails, AsyncError>;
+type AssetResult = Result<AssetCompleteDetailsGrpc, AsyncError>;
 pub type AssetDetailsStream = Pin<Box<dyn Stream<Item = AssetResult> + Send + Sync>>;
 pub type AssetDetailsStreamNonSync = Pin<Box<dyn Stream<Item = AssetResult> + Send>>;
 type RawBlocksResult = Result<RawBlock, AsyncError>;

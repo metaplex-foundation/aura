@@ -72,12 +72,10 @@ impl<'a> TestEnvironment<'a> {
         let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
-            env.pg_env.client.clone(),
             BATCH_SIZE,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
-            false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(syncronizer);

@@ -1,4 +1,4 @@
-use rocks_db::asset_generated::asset as fb;
+use rocks_db::generated::asset_generated::asset as fb;
 
 use bincode::{deserialize, serialize};
 use criterion::{criterion_group, criterion_main, Criterion};

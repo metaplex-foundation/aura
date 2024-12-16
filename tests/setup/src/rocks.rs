@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
-use entities::models::{OffChainData, Updated};
+use entities::models::Updated;
 use rand::{random, Rng};
 use rocks_db::asset::AssetCompleteDetails;
 use rocks_db::column::TypedColumn;
+use rocks_db::offchain_data::OffChainData;
+use rocks_db::ToFlatbuffersConverter;
 use solana_sdk::pubkey::Pubkey;
+use sqlx::types::chrono::Utc;
 use tempfile::TempDir;
 
 use entities::enums::SpecificationAssetClass;
@@ -138,8 +141,10 @@ impl RocksTestEnvironment {
         self.storage.asset_offchain_data.put(
             ToOwned::to_owned(DEFAULT_TEST_URL),
             OffChainData {
-                url: ToOwned::to_owned(DEFAULT_TEST_URL),
-                metadata: ToOwned::to_owned("{}"),
+                url: Some(ToOwned::to_owned(DEFAULT_TEST_URL)),
+                metadata: Some(ToOwned::to_owned("{}")),
+                last_read_at: Utc::now().timestamp(),
+                storage_mutability: DEFAULT_TEST_URL.into(),
             },
         )?;
 
@@ -281,7 +286,7 @@ pub fn create_test_dynamic_data(pubkey: Pubkey, slot: u64, url: String) -> Asset
         supply: Some(Updated::new(slot, None, 1)),
         seq: None,
         is_burnt: Updated::new(slot, None, false),
-        was_decompressed: Updated::new(slot, None, false),
+        was_decompressed: Some(Updated::new(slot, None, false)),
         onchain_data: None,
         creators: Updated::new(slot, None, vec![generate_test_creator()]),
         royalty_amount: Updated::new(slot, None, 0),

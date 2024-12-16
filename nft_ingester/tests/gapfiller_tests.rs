@@ -5,7 +5,7 @@ use interface::asset_streaming_and_discovery::{
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
-use rocks_db::asset_generated::asset as fb;
+use rocks_db::generated::asset_generated::asset as fb;
 use rocks_db::{asset::AssetCompleteDetails, column::TypedColumn, migrator::MigrationState};
 use solana_sdk::pubkey::Pubkey;
 use solana_transaction_status::UiConfirmedBlock;

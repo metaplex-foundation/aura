@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use clap::{arg, Parser};
-use entities::models::OffChainData;
 use entities::models::RawBlock;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::config::init_logger;
 use rocks_db::column::TypedColumn;
+use rocks_db::offchain_data::OffChainData;
 use tempfile::TempDir;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -37,7 +37,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let secondary_rocks_dir = TempDir::new().unwrap();
     let source_storage = Storage::open_secondary(
         &config.source_db,
-        secondary_rocks_dir.path().to_str().unwrap(),
+        &secondary_rocks_dir.path().to_str().unwrap().to_string(),
         mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
