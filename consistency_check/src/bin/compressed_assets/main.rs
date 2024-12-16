@@ -211,7 +211,6 @@ async fn verify_tree_batch(
 
         if let Ok(tree_data) = rpc.get_account_data(&tree_config_key).await {
             if let Ok(des_data) = mpl_bubblegum::accounts::TreeConfig::from_bytes(&tree_data) {
-
                 // spawn not more then N threads
                 let semaphore = Arc::new(Semaphore::new(inner_workers));
 
@@ -255,8 +254,10 @@ async fn verify_tree_batch(
                                         pr.node_index as u32,
                                     );
 
-                                    if recomputed_root != Pubkey::from_str(&pr.root).unwrap().to_bytes()
+                                    if recomputed_root
+                                        != Pubkey::from_str(&pr.root).unwrap().to_bytes()
                                     {
+                                        // TODO: add counter. So we could instantly see if some proofs are failed
                                         write_asset_to_h_map(
                                             failed_proofs_cloned.clone(),
                                             tree_cloned.clone(),
@@ -265,7 +266,10 @@ async fn verify_tree_batch(
                                         .await;
                                     }
                                 } else {
-                                    println!("API did not return any proofs for asset: {:?}", asset);
+                                    println!(
+                                        "API did not return any proofs for asset: {:?}",
+                                        asset
+                                    );
                                     write_asset_to_h_map(
                                         failed_proofs_cloned.clone(),
                                         tree_cloned.clone(),
@@ -285,7 +289,7 @@ async fn verify_tree_batch(
                         }
 
                         let current_assets_processed =
-                        assets_processed_cloned.fetch_add(1, Ordering::Relaxed) + 1;
+                            assets_processed_cloned.fetch_add(1, Ordering::Relaxed) + 1;
                         let current_rate = {
                             let rate_guard = rate_cloned.lock().await;
                             *rate_guard
