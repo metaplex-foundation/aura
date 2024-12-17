@@ -13,7 +13,7 @@ use mpl_bubblegum::types::{Creator, LeafSchema, MetadataArgs};
 use bubblegum_batch_sdk::batch_mint_client::BatchMintClient;
 use bubblegum_batch_sdk::batch_mint_validations::generate_batch_mint;
 use bubblegum_batch_sdk::model::BatchMint;
-use entities::api_req_params::GetAssetProof;
+use entities::api_req_params::{GetAssetProof, GetAssetProofBatch};
 use entities::enums::{BatchMintState, FailedBatchMintState, PersistingBatchMintState};
 use entities::models::BufferedTransaction;
 use entities::models::{BatchMintToVerify, BatchMintWithState};
@@ -189,12 +189,9 @@ async fn save_batch_mint_to_queue_test() {
     let cli = Cli::default();
     let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
 
-    let tasks = Arc::new(Mutex::new(VecDeque::new()));
-
     let bubblegum_updates_processor = BubblegumTxProcessor::new(
         env.rocks_env.storage.clone(),
         Arc::new(IngesterMetricsConfig::new()),
-        tasks.clone(),
     );
 
     let metadata_url = "url".to_string();
@@ -275,7 +272,7 @@ async fn save_batch_mint_to_queue_test() {
     };
 
     bubblegum_updates_processor
-        .process_transaction(buffered_transaction)
+        .process_transaction(buffered_transaction, true)
         .await
         .unwrap();
 
@@ -431,6 +428,7 @@ async fn batch_mint_with_verified_creators_test() {
         Arc::new(MockAccountBalanceGetter::new()),
         None,
         Arc::new(RaydiumTokenPriceFetcher::default()),
+        "".to_string(),
     );
 
     let payload = GetAssetProof {
@@ -586,6 +584,7 @@ async fn batch_mint_with_unverified_creators_test() {
         Arc::new(MockAccountBalanceGetter::new()),
         None,
         Arc::new(RaydiumTokenPriceFetcher::default()),
+        "".to_string(),
     );
 
     let payload = GetAssetProof {
@@ -684,6 +683,7 @@ async fn batch_mint_persister_test() {
         Arc::new(MockAccountBalanceGetter::new()),
         None,
         Arc::new(RaydiumTokenPriceFetcher::default()),
+        "".to_string(),
     );
 
     let leaf_index = 4u32;
@@ -746,6 +746,16 @@ async fn batch_mint_persister_test() {
             .is_some(),
         true
     );
+    // Test get asset proof batch
+    let payload = GetAssetProofBatch {
+        ids: test_batch_mint
+            .batch_mints.into_iter().map(|lu|lu.leaf_update.id().to_string()).take(10).collect(),
+    };
+    let proof_result = api.get_asset_proof_batch(payload).await.unwrap();
+    let asset_proofs: HashMap<String, Option<AssetProof>> = serde_json::from_value(proof_result).unwrap();
+    for (_key, proof) in asset_proofs{
+        assert!(proof.is_some())
+    }
 }
 
 #[tokio::test]
