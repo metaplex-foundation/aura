@@ -1,5 +1,6 @@
 use crate::asset::AssetCollection;
 use crate::migrator::{RocksMigration, SerializationType};
+use crate::ToFlatbuffersConverter;
 use bincode::deserialize;
 use entities::models::{UpdateVersion, Updated};
 use rocksdb::MergeOperands;
