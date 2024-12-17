@@ -136,7 +136,7 @@ impl MessageProcessMetricsConfig {
     pub fn new() -> Self {
         Self {
             data_read: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 2.4, 10))
+                Histogram::new(exponential_buckets(50.0, 2.0, 11))
             }),
         }
     }
