@@ -7,7 +7,7 @@ use spl_account_compression::state::PathNode;
 
 use crate::{
     asset::{AssetCollection, AssetLeaf},
-    offchain_data::OffChainData,
+    columns::offchain_data::OffChainData,
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
 };
 

@@ -1,8 +1,8 @@
 use clap::Parser;
 use itertools::Itertools;
 use nft_ingester::error::IngesterError;
-use rocks_db::asset::AssetCompleteDetails;
 use rocks_db::column::TypedColumn;
+use rocks_db::columns::asset::AssetCompleteDetails;
 use rocks_db::generated::asset_generated::asset as fb;
 use rocks_db::key_encoders::decode_u64x2_pubkey;
 use rocks_db::migrator::MigrationState;

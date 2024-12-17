@@ -353,7 +353,7 @@ impl<'a> MigrationApplier<'a> {
                 })
             }
             SerializationType::Flatbuffers => {
-                todo!()
+                todo!();
             }
         }
     }

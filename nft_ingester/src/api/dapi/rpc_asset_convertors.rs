@@ -7,8 +7,8 @@ use entities::models::{CoreFeesAccountWithSortingID, TokenAccResponse};
 use jsonpath_lib::JsonPathError;
 use mime_guess::Mime;
 use num_traits::Pow;
+use rocks_db::columns::offchain_data::OffChainData;
 use rocks_db::errors::StorageError;
-use rocks_db::offchain_data::OffChainData;
 use serde_json::Value;
 use solana_program::pubkey::Pubkey;
 use tracing::error;
@@ -29,8 +29,9 @@ use crate::api::dapi::response::InscriptionResponse;
 use crate::api::dapi::rpc_asset_models::{PriceInfo, TokenInfo};
 use entities::api_req_params::Pagination;
 use entities::enums::{Interface, SpecificationVersions};
-use rocks_db::asset::AssetCollection;
-use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetStaticDetails};
+use rocks_db::columns::asset::{
+    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails,
+};
 use usecase::response_prettier::filter_non_null_fields;
 
 pub fn to_uri(uri: String) -> Option<Url> {

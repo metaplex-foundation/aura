@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use rocks_db::asset_previews::UrlToDownload;
-use rocks_db::offchain_data::OffChainData;
+use rocks_db::columns::asset_previews::UrlToDownload;
+use rocks_db::columns::offchain_data::OffChainData;
 use tracing::log::error;
 
 use rocks_db::Storage;

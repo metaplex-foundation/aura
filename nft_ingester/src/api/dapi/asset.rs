@@ -7,8 +7,8 @@ use entities::enums::SpecificationAssetClass;
 use entities::models::AssetSignatureWithPagination;
 use interface::asset_sigratures::AssetSignaturesGetter;
 use interface::json::{JsonDownloadResult, JsonDownloader, JsonPersister};
+use rocks_db::columns::offchain_data::{OffChainData, StorageMutability};
 use rocks_db::errors::StorageError;
-use rocks_db::offchain_data::{OffChainData, StorageMutability};
 use solana_sdk::pubkey::Pubkey;
 use tracing::error;
 
@@ -18,7 +18,7 @@ use interface::price_fetcher::TokenPriceFetcher;
 use interface::processing_possibility::ProcessingPossibilityChecker;
 use itertools::Itertools;
 use metrics_utils::ApiMetricsConfig;
-use rocks_db::asset::{AssetLeaf, AssetSelectedMaps};
+use rocks_db::columns::asset::{AssetLeaf, AssetSelectedMaps};
 use rocks_db::Storage;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};

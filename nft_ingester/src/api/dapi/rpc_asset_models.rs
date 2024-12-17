@@ -10,12 +10,14 @@ use {
 use crate::api::dapi::response::InscriptionResponse;
 use entities::enums::{Interface, OwnershipModel, RoyaltyModel, UseMethod};
 use entities::models::{EditionData, SplMint, TokenAccount};
-use rocks_db::inscriptions::{Inscription, InscriptionData};
-use rocks_db::{
-    asset::{AssetCollection, AssetLeaf},
+use rocks_db::columns::{
+    asset::{
+        AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner,
+        AssetStaticDetails,
+    },
+    inscriptions::{Inscription, InscriptionData},
     offchain_data::OffChainData,
 };
-use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AssetProof {

@@ -7,8 +7,9 @@ use std::sync::Arc;
 use crate::rocks::RocksTestEnvironmentSetup;
 use entities::enums::{AssetType, ASSET_TYPES};
 use metrics_utils::MetricsTrait;
-use rocks_db::asset::AssetCollection;
-use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
+use rocks_db::columns::asset::{
+    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+};
 use solana_sdk::pubkey::Pubkey;
 use testcontainers::clients::Cli;
 

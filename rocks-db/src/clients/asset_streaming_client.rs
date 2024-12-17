@@ -13,8 +13,8 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::asset::{AssetCompleteDetails, SlotAssetIdxKey};
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
+use crate::columns::offchain_data::OffChainData;
 use crate::generated::asset_generated::asset as fb;
-use crate::offchain_data::OffChainData;
 use crate::{
     asset::{AssetLeaf, SlotAssetIdx},
     column::TypedColumn,

@@ -1,5 +1,5 @@
+use crate::columns::offchain_data::{OffChainData, OffChainDataDeprecated, StorageMutability};
 use crate::migrator::{RocksMigration, SerializationType};
-use crate::offchain_data::{OffChainData, OffChainDataDeprecated, StorageMutability};
 
 impl From<OffChainDataDeprecated> for OffChainData {
     fn from(value: OffChainDataDeprecated) -> Self {
@@ -16,7 +16,7 @@ impl From<OffChainDataDeprecated> for OffChainData {
 pub(crate) struct OffChainDataMigration;
 impl RocksMigration for OffChainDataMigration {
     const VERSION: u64 = 4;
-    const SERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
+    const SERIALIZATION_TYPE: SerializationType = SerializationType::Flatbuffers;
     type NewDataType = OffChainData;
     type OldDataType = OffChainDataDeprecated;
 }

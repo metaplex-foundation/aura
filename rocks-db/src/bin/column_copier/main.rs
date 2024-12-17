@@ -1,8 +1,8 @@
 use entities::models::RawBlock;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::column::TypedColumn;
+use rocks_db::columns::offchain_data::OffChainData;
 use rocks_db::migrator::MigrationState;
-use rocks_db::offchain_data::OffChainData;
 use rocks_db::Storage;
 
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};

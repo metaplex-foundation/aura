@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::inscriptions::{Inscription, InscriptionData};
-use crate::offchain_data::OffChainData;
+use crate::columns::inscriptions::{Inscription, InscriptionData};
+use crate::columns::offchain_data::OffChainData;
 use bincode::{deserialize, serialize};
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::{
@@ -3832,7 +3832,7 @@ mod tests {
         let asset;
         unsafe {
             asset =
-                create::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                crate::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
                     data_bytes.as_slice(),
                 );
         }
@@ -3879,7 +3879,7 @@ mod tests {
         let asset;
         unsafe {
             asset =
-                create::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                crate::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
                     merge_result.as_slice(),
                 );
         }
@@ -3922,7 +3922,7 @@ mod tests {
         let asset;
         unsafe {
             asset =
-                create::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                crate::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
                     merge_result.as_slice(),
                 );
         }
@@ -4075,7 +4075,7 @@ mod tests {
             let perm_name = perm.iter().map(|(k, _)| k).join(", ");
             let asset;
             unsafe {
-                asset = create::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                asset = crate::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
                     merge_result.as_slice(),
                 );
             }
