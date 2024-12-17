@@ -9,6 +9,7 @@ use postgre_client::PG_MIGRATIONS_PATH;
 use prometheus_client::registry::Registry;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
 use metrics_utils::SynchronizerMetricsConfig;
 use rocks_db::migrator::MigrationState;
@@ -89,12 +90,14 @@ pub async fn main() -> Result<(), IngesterError> {
     let rocks_storage = Arc::new(storage);
     let cloned_tasks = mutexed_tasks.clone();
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
+    let shutdown_token = CancellationToken::new();
+    let shutdown_token_clone = shutdown_token.clone();
     mutexed_tasks.lock().await.spawn(async move {
         // --stop
         graceful_stop(
             cloned_tasks,
             shutdown_tx,
-            None,
+            Some(shutdown_token_clone),
             guard,
             config.profiling_file_path_container,
             &config.heap_path,
@@ -117,16 +120,17 @@ pub async fn main() -> Result<(), IngesterError> {
         tracing::error!("Sync rocksdb error: {}", e);
     }
 
-    let mut full_sync_tasks = JoinSet::new();
+    let mut sync_tasks = JoinSet::new();
     for asset_type in ASSET_TYPES {
         let synchronizer = synchronizer.clone();
         let shutdown_rx = shutdown_rx.resubscribe();
-
-        full_sync_tasks.spawn(async move {
+        let shutdown_token = shutdown_token.clone();
+        sync_tasks.spawn(async move {
             if let Ok(SyncStatus::FullSyncRequired(_)) = synchronizer
                 .get_sync_state(config.dump_sync_threshold, asset_type)
                 .await
             {
+                tracing::info!("Starting full sync for {:?}", asset_type);
                 let res = synchronizer.full_syncronize(&shutdown_rx, asset_type).await;
                 match res {
                     Ok(_) => {
@@ -139,63 +143,36 @@ pub async fn main() -> Result<(), IngesterError> {
                     }
                 }
             }
+            while shutdown_rx.is_empty() {
+                let result = synchronizer
+                    .synchronize_asset_indexes(asset_type, &shutdown_rx, config.dump_sync_threshold)
+                    .await;
+
+                match result {
+                    Ok(_) => {
+                        tracing::info!("{:?} Synchronization finished successfully", asset_type)
+                    }
+                    Err(e) => tracing::error!("{:?} Synchronization failed: {:?}", asset_type, e),
+                }
+                tokio::select! {
+                    _ = tokio::time::sleep(tokio::time::Duration::from_secs(
+                        config.timeout_between_syncs_sec,
+                    )) => {}
+                    _ = shutdown_token.cancelled() => {
+                        tracing::info!("Shutdown signal received, stopping {:?} synchronizer", asset_type);
+                        break;
+                    }
+                }
+            }
+
             Ok(())
         });
     }
-    while let Some(task) = full_sync_tasks.join_next().await {
+    while let Some(task) = sync_tasks.join_next().await {
         task.map_err(|e| {
             IngesterError::UnrecoverableTaskError(format!("joining task failed: {}", e.to_string()))
         })??;
     }
-    let shutdown_rx_clone = shutdown_rx.resubscribe();
-    let synchronizer_clone = synchronizer.clone();
-    mutexed_tasks.lock().await.spawn(async move {
-        let shutdown_rx = shutdown_rx_clone.resubscribe();
-        let synchronizer = synchronizer_clone.clone();
-        while shutdown_rx.is_empty() {
-            let result = synchronizer
-                .synchronize_nft_asset_indexes(&shutdown_rx, config.dump_sync_threshold)
-                .await;
-
-            match result {
-                Ok(_) => {
-                    tracing::info!("Non Fungible Synchronization finished successfully",)
-                }
-                Err(e) => tracing::error!("Non Fungible Synchronization failed: {:?}", e),
-            }
-
-            tokio::time::sleep(tokio::time::Duration::from_secs(
-                config.timeout_between_syncs_sec,
-            ))
-            .await;
-        }
-
-        Ok(())
-    });
-
-    mutexed_tasks.lock().await.spawn(async move {
-        let shutdown_rx = shutdown_rx.resubscribe();
-        let synchronizer = synchronizer.clone();
-        while shutdown_rx.is_empty() {
-            let result = synchronizer
-                .synchronize_fungible_asset_indexes(&shutdown_rx, config.dump_sync_threshold)
-                .await;
-
-            match result {
-                Ok(_) => {
-                    tracing::info!("Fungible Synchronization finished successfully",)
-                }
-                Err(e) => tracing::error!("Fungible Synchronization failed: {:?}", e),
-            }
-
-            tokio::time::sleep(tokio::time::Duration::from_secs(
-                config.timeout_between_syncs_sec,
-            ))
-            .await;
-        }
-
-        Ok(())
-    });
 
     while (mutexed_tasks.lock().await.join_next().await).is_some() {}
 
