@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use entities::models::Updated;
 use rand::{random, Rng};
-use rocks_db::asset::AssetCompleteDetails;
 use rocks_db::column::TypedColumn;
-use rocks_db::offchain_data::OffChainData;
+use rocks_db::columns::asset::AssetCompleteDetails;
+use rocks_db::columns::offchain_data::OffChainData;
 use rocks_db::ToFlatbuffersConverter;
 use solana_sdk::pubkey::Pubkey;
 use sqlx::types::chrono::Utc;
@@ -15,7 +15,9 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::errors::StorageError;
 use rocks_db::migrator::MigrationState;
 use rocks_db::{
-    asset::AssetCollection, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+    columns::asset::{
+        AssetAuthority, AssetCollection, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+    },
     Storage,
 };
 use tokio::{sync::Mutex, task::JoinSet};

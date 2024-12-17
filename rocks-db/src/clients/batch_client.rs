@@ -6,10 +6,10 @@ use crate::asset::{
 };
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey, SourcedClItem};
 use crate::column::TypedColumn;
+use crate::columns::offchain_data::OffChainData;
 use crate::errors::StorageError;
 use crate::generated::asset_generated::asset as fb;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
-use crate::offchain_data::OffChainData;
 use crate::storage_traits::{
     AssetIndexReader, AssetSlotStorage, AssetUpdateIndexStorage, AssetUpdatedKey,
 };

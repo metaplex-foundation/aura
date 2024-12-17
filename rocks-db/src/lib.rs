@@ -1,9 +1,19 @@
-use asset_previews::{AssetPreviews, UrlToDownload};
+use clients::signature_client;
+use columns::asset::{
+    self, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
+};
+use columns::asset_previews::{AssetPreviews, UrlToDownload};
+use columns::batch_mint::{self, BatchMintWithStaker};
+use columns::inscriptions::{Inscription, InscriptionData};
+use columns::leaf_signatures::LeafSignature;
+use columns::offchain_data::{OffChainData, OffChainDataDeprecated};
+use columns::parameters::ParameterColumn;
+use columns::token_accounts::{self, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
+use columns::token_prices::TokenPrice;
+use columns::{bubblegum_slots, cl_items, parameters};
 use entities::schedule::ScheduledJob;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use inflector::Inflector;
-use leaf_signatures::LeafSignature;
-use offchain_data::{OffChainData, OffChainDataDeprecated};
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
@@ -16,9 +26,7 @@ use asset::{
 use rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, DB};
 
 use crate::migrator::{MigrationState, MigrationVersions, RocksMigration};
-pub use asset::{
-    AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
-};
+
 use column::{Column, TypedColumn};
 use entities::enums::TokenMetadataEdition;
 use entities::models::{
@@ -28,54 +36,29 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
-use crate::batch_mint::BatchMintWithStaker;
 use crate::errors::StorageError;
-use crate::inscriptions::{Inscription, InscriptionData};
-use crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration;
 use crate::migrations::collection_authority::{
     AssetCollectionVersion0, CollectionAuthorityMigration,
 };
 use crate::migrations::external_plugins::AssetDynamicDetailsV0;
 use crate::migrations::spl2022::TokenAccounts2022ExtentionsMigration;
-use crate::parameters::ParameterColumn;
-use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
-use crate::token_prices::TokenPrice;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
-pub mod asset;
-mod asset_client;
-pub mod asset_previews;
-pub mod asset_signatures;
-pub mod asset_streaming_client;
 pub mod backup_service;
-mod batch_client;
-pub mod batch_mint;
 pub mod batch_savers;
-pub mod bubblegum_slots;
-pub mod cl_items;
+pub mod clients;
 pub mod column;
-pub mod dump_client;
-pub mod editions;
+pub mod columns;
 pub mod errors;
 pub mod fork_cleaner;
-pub mod inscriptions;
 pub mod key_encoders;
-pub mod leaf_signatures;
 pub mod migrations;
 pub mod migrator;
-pub mod offchain_data;
-pub mod parameters;
 pub mod processing_possibility;
-pub mod raw_block;
-pub mod raw_blocks_streaming_client;
 pub mod schedule;
 pub mod sequence_consistent;
-pub mod signature_client;
 pub mod storage_traits;
-pub mod token_accounts;
-pub mod token_prices;
 pub mod transaction;
-pub mod transaction_client;
 pub mod tree_seq;
 // import the flatbuffers runtime library
 extern crate flatbuffers;
@@ -679,7 +662,7 @@ impl Storage {
             TokenMetadataEdition::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_metadata_edition_keep_existing",
-                    crate::editions::merge_token_metadata_edition,
+                    crate::columns::editions::merge_token_metadata_edition,
                 );
             }
             AssetStaticDetailsDeprecated::NAME => {
@@ -703,7 +686,7 @@ impl Storage {
                         }
                         _ => token_accounts::merge_token_accounts,
                     },
-                    MigrationState::Last => crate::token_accounts::merge_token_accounts,
+                    MigrationState::Last => token_accounts::merge_token_accounts,
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing
                     }

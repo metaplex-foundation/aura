@@ -23,11 +23,10 @@ use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
 use num_traits::FromPrimitive;
-use rocks_db::asset::AssetOwner;
-use rocks_db::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
+use rocks_db::columns::asset::{
+    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetStaticDetails,
 };
-use rocks_db::offchain_data::OffChainData;
+use rocks_db::columns::offchain_data::OffChainData;
 use rocks_db::transaction::{
     AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, TransactionResult,
     TreeUpdate,

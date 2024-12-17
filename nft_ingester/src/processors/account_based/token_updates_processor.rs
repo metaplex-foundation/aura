@@ -1,10 +1,11 @@
 use entities::enums::{OwnerType, SpecificationAssetClass};
 use entities::models::{Mint, TokenAccount, UpdateVersion, Updated};
 use metrics_utils::IngesterMetricsConfig;
-use rocks_db::asset::{AssetCompleteDetails, AssetDynamicDetails, AssetOwner};
 use rocks_db::batch_savers::BatchSaveStorage;
+use rocks_db::columns::asset::{
+    AssetCompleteDetails, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+};
 use rocks_db::errors::StorageError;
-use rocks_db::AssetStaticDetails;
 use solana_program::pubkey::Pubkey;
 use std::sync::Arc;
 use tokio::time::Instant;

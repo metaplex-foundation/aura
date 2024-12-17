@@ -382,6 +382,8 @@ impl Storage {
         &self,
         assets: HashMap<Pubkey, AssetCompleteDetails>,
     ) -> Result<()> {
+        use crate::ToFlatbuffersConverter;
+
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for (pubkey, asset) in assets {
             batch.put_cf(
