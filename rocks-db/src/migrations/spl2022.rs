@@ -2,7 +2,7 @@ use crate::asset::{update_field, update_optional_field};
 use crate::column::TypedColumn;
 use crate::key_encoders::{decode_pubkey, encode_pubkey};
 use crate::migrator::{RocksMigration, SerializationType};
-use crate::{impl_merge_values, AssetDynamicDetails};
+use crate::{impl_merge_values, AssetDynamicDetails, ToFlatbuffersConverter};
 use bincode::{deserialize, serialize};
 use entities::enums::ChainMutability;
 use entities::models::{TokenAccount, Updated};
@@ -40,6 +40,21 @@ impl From<TokenAccountWithoutExtentions> for TokenAccount {
             amount: value.amount,
             write_version: value.write_version,
         }
+    }
+}
+
+impl<'a> ToFlatbuffersConverter<'a> for TokenAccount {
+    type Target = TokenAccount;
+
+    fn convert_to_fb(
+        &self,
+        builder: &mut flatbuffers::FlatBufferBuilder<'a>,
+    ) -> flatbuffers::WIPOffset<Self::Target> {
+        todo!()
+    }
+
+    fn convert_to_fb_bytes(&self) -> Vec<u8> {
+        todo!()
     }
 }
 

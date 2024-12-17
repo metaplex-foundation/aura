@@ -2,8 +2,8 @@ use crate::asset::{AssetCollection, AssetCompleteDetails};
 use crate::column::{Column, TypedColumn};
 use crate::errors::StorageError;
 use crate::key_encoders::{decode_u64, encode_u64};
-use crate::Storage;
 use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result};
+use crate::{Storage, ToFlatbuffersConverter};
 use bincode::deserialize;
 use interface::migration_version_manager::PrimaryStorageMigrationVersionManager;
 use metrics_utils::red::RequestErrorDurationMetrics;
@@ -34,7 +34,14 @@ pub enum SerializationType {
 pub trait RocksMigration {
     const VERSION: u64;
     const SERIALIZATION_TYPE: SerializationType;
-    type NewDataType: Sync + Serialize + DeserializeOwned + Send + TypedColumn;
+    type NewDataType: Sync
+        + Serialize
+        + DeserializeOwned
+        + Send
+        + TypedColumn
+        // that restrictrion breaks the backward compatibility for the previous migrations
+        // however, it's the simplest way to provide the migration to flatbuffers
+        + ToFlatbuffersConverter<'static>;
     type OldDataType: Sync
         + Serialize
         + DeserializeOwned
@@ -197,7 +204,8 @@ impl<'a> MigrationApplier<'a> {
 
     async fn apply_migration<M: RocksMigration>(&self, _: M) -> Result<()>
     where
-        <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
+        for<'b> <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType:
+            'static + Clone + ToFlatbuffersConverter<'b>,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
         if self.applied_migration_versions.contains(&M::VERSION) {
@@ -289,7 +297,8 @@ impl<'a> MigrationApplier<'a> {
         column: &Column<M::NewDataType>,
     ) -> Result<()>
     where
-        <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
+        for<'b> <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType:
+            'static + Clone + ToFlatbuffersConverter<'b>,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
         let mut batch = HashMap::new();
@@ -353,7 +362,7 @@ impl<'a> MigrationApplier<'a> {
                 })
             }
             SerializationType::Flatbuffers => {
-                todo!();
+                unreachable!("Flatbuffers migration is not supported yet")
             }
         }
     }
@@ -366,13 +375,16 @@ impl<'a> MigrationApplier<'a> {
         column: &Column<M::NewDataType>,
     ) -> Result<()>
     where
-        <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
+        for<'b> <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType:
+            'static + Clone + ToFlatbuffersConverter<'b>,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
         match M::SERIALIZATION_TYPE {
             SerializationType::Bincode => column.put_batch(std::mem::take(batch)).await,
             SerializationType::Cbor => column.put_batch_cbor(std::mem::take(batch)).await,
-            SerializationType::Flatbuffers => todo!(),
+            SerializationType::Flatbuffers => {
+                column.put_batch_flatbuffers(std::mem::take(batch)).await
+            }
         }
     }
 }
