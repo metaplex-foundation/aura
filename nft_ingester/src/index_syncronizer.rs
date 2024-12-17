@@ -178,6 +178,24 @@ where
         }))
     }
 
+    pub async fn synchronize_asset_indexes(
+        &self,
+        asset_type: AssetType,
+        rx: &tokio::sync::broadcast::Receiver<()>,
+        run_full_sync_threshold: i64,
+    ) -> Result<(), IngesterError> {
+        match asset_type {
+            AssetType::NonFungible => {
+                self.synchronize_nft_asset_indexes(rx, run_full_sync_threshold)
+                    .await
+            }
+            AssetType::Fungible => {
+                self.synchronize_fungible_asset_indexes(rx, run_full_sync_threshold)
+                    .await
+            }
+        }
+    }
+
     pub async fn synchronize_nft_asset_indexes(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
