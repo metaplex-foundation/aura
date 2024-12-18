@@ -26,22 +26,12 @@ impl From<AssetCollectionBeforeCleanUp> for AssetCollection {
 
 impl<'a> ToFlatbuffersConverter<'a> for AssetCollection {
     type Target = AssetCollection;
-
-    fn convert_to_fb(
-        &self,
-        builder: &mut flatbuffers::FlatBufferBuilder<'a>,
-    ) -> flatbuffers::WIPOffset<Self::Target> {
-        todo!()
-    }
-
-    fn convert_to_fb_bytes(&self) -> Vec<u8> {
-        todo!()
-    }
 }
 
 pub(crate) struct CleanCollectionAuthoritiesMigration;
 impl RocksMigration for CleanCollectionAuthoritiesMigration {
     const VERSION: u64 = 2;
+    const DESERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
     const SERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
     type NewDataType = AssetCollection;
     type OldDataType = AssetCollectionBeforeCleanUp;

@@ -99,6 +99,7 @@ impl AssetCollectionVersion0 {
 pub(crate) struct CollectionAuthorityMigration;
 impl RocksMigration for CollectionAuthorityMigration {
     const VERSION: u64 = 0;
+    const DESERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
     const SERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
     type NewDataType = AssetCollection;
     type OldDataType = AssetCollectionVersion0;

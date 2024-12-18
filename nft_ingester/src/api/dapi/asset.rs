@@ -219,7 +219,6 @@ pub async fn get_by_ids<
         .into_iter()
         .map(|id| id.to_string())
         .collect_vec();
-    // request prices and symbols only for fungibles when the option is set. This will prolong the request at least an order of magnitude
     let (token_prices, token_symbols) = if options.show_fungible {
         let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids_string.as_slice());
         let token_symbols_fut =
@@ -240,6 +239,7 @@ pub async fn get_by_ids<
         HashMap::new()
     });
 
+    // request prices and symbols only for fungibles when the option is set. This will prolong the request at least an order of magnitude
     let mut asset_selected_maps = rocks_db
         .get_asset_selected_maps_async(unique_asset_ids.clone(), owner_address, &options)
         .await?;
@@ -254,6 +254,13 @@ pub async fn get_by_ids<
             let mut download_needed = false;
             match offchain_data {
                 Some(offchain_data) => {
+                    let curr_time = chrono::Utc::now().timestamp();
+                    if offchain_data.storage_mutability.is_mutable()
+                        && curr_time > offchain_data.last_read_at + METADATA_CACHE_TTL
+                    {
+                        download_needed = true;
+                    }
+
                     match &offchain_data.metadata {
                         Some(metadata) => {
                             if metadata.is_empty() {
@@ -263,24 +270,6 @@ pub async fn get_by_ids<
                         None => {
                             download_needed = true;
                         }
-                    }
-
-                    match &offchain_data.url {
-                        Some(url) => {
-                            if url.is_empty() {
-                                download_needed = true;
-                            }
-                        }
-                        None => {
-                            download_needed = true;
-                        }
-                    }
-
-                    let curr_time = chrono::Utc::now().timestamp();
-                    if offchain_data.storage_mutability.is_mutable()
-                        && curr_time > offchain_data.last_read_at + METADATA_CACHE_TTL
-                    {
-                        download_needed = true;
                     }
                 }
                 None => {
@@ -317,20 +306,17 @@ pub async fn get_by_ids<
                 let last_read_at = chrono::Utc::now().timestamp();
                 match res {
                     Ok(JsonDownloadResult::JsonContent(metadata)) => {
-                        let storage_mutability = StorageMutability::from(json_url.as_str());
-
                         asset_selected_maps.offchain_data.insert(
                             json_url.clone(),
                             OffChainData {
                                 url: Some(json_url.clone()),
                                 metadata: Some(metadata.clone()),
-                                storage_mutability,
+                                storage_mutability: StorageMutability::from(json_url.as_str()),
                                 last_read_at,
                             },
                         );
                     }
                     Ok(JsonDownloadResult::MediaUrlAndMimeType { url, mime_type }) => {
-                        let storage_mutability = StorageMutability::from(json_url.as_str());
                         asset_selected_maps.offchain_data.insert(
                             json_url.clone(),
                             OffChainData {
@@ -339,7 +325,7 @@ pub async fn get_by_ids<
                                     format!("{{\"image\":\"{}\",\"type\":\"{}\"}}", url, mime_type)
                                         .to_string(),
                                 ),
-                                storage_mutability,
+                                storage_mutability: StorageMutability::from(json_url.as_str()),
                                 last_read_at,
                             },
                         );

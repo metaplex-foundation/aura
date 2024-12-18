@@ -275,7 +275,6 @@ impl JsonDownloader for JsonWorker {
                 JsonDownloaderError::ErrorDownloading(format!("Failed to create client: {:?}", e))
             })?;
 
-        // TODO: maybe IPFS/Arweave stuff might be done here
         // Detect if the URL is an IPFS link
         let parsed_url = if url.starts_with("ipfs://") {
             // Extract the IPFS hash or path
@@ -369,7 +368,6 @@ impl JsonPersister for JsonWorker {
         results: Vec<(String, Result<JsonDownloadResult, JsonDownloaderError>)>,
     ) -> Result<(), JsonDownloaderError> {
         let mut pg_updates = Vec::new();
-        // TODO: store updates here
         let mut rocks_updates = HashMap::new();
         let curr_time = chrono::Utc::now().timestamp();
 
@@ -482,7 +480,9 @@ impl JsonPersister for JsonWorker {
         if !rocks_updates.is_empty() {
             let urls_to_download = rocks_updates
                 .values()
-                .filter(|data| data.metadata.is_some())
+                .filter(|data| {
+                    data.metadata.is_some() && !data.metadata.clone().unwrap().is_empty()
+                })
                 .filter_map(|data| parse_files(data.metadata.clone().unwrap().as_str()))
                 .flat_map(|files| files.into_iter())
                 .filter_map(|file| file.uri)
