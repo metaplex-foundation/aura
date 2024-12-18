@@ -134,12 +134,10 @@ pub async fn main() -> Result<(), IngesterError> {
                 let res = synchronizer.full_syncronize(&shutdown_rx, asset_type).await;
                 match res {
                     Ok(_) => {
-                        tracing::info!("Full synchronization finished successfully");
-                        return Ok(());
+                        tracing::info!("Full {:?} synchronization finished successfully", asset_type);
                     }
                     Err(e) => {
-                        tracing::error!("Full synchronization failed: {:?}", e);
-                        return Err(e);
+                        tracing::error!("Full {:?} synchronization failed: {:?}", asset_type, e);
                     }
                 }
             }
