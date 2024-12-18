@@ -86,6 +86,8 @@ pub async fn main() {
     );
     let assets_processed = Arc::new(AtomicU64::new(0));
     let rate = Arc::new(Mutex::new(0.0));
+    let assets_with_failed_proofs = Arc::new(AtomicU64::new(0));
+    let assets_with_missed_proofs = Arc::new(AtomicU64::new(0));
 
     let shutdown_token = CancellationToken::new();
 
@@ -101,6 +103,8 @@ pub async fn main() {
         tasks.spawn(verify_tree_batch(
             progress_bar.clone(),
             assets_processed.clone(),
+            assets_with_failed_proofs.clone(),
+            assets_with_missed_proofs.clone(),
             rate.clone(),
             shutdown_token.clone(),
             chunk.to_vec(),
@@ -191,6 +195,8 @@ pub async fn main() {
 async fn verify_tree_batch(
     progress_bar: Arc<ProgressBar>,
     assets_processed: Arc<AtomicU64>,
+    assets_with_failed_proofs: Arc<AtomicU64>,
+    assets_with_missed_proofs: Arc<AtomicU64>,
     rate: Arc<Mutex<f64>>,
     shutdown_token: CancellationToken,
     trees: Vec<String>,
@@ -227,6 +233,8 @@ async fn verify_tree_batch(
                     let failed_proofs_cloned = failed_proofs.clone();
                     let tree_cloned = tree.clone();
                     let assets_processed_cloned = assets_processed.clone();
+                    let assets_with_failed_proofs_cloned = assets_with_failed_proofs.clone();
+                    let assets_with_missed_proofs_cloned = assets_with_missed_proofs.clone();
                     let rate_cloned = rate.clone();
                     let progress_bar_cloned = progress_bar.clone();
                     tokio::spawn(async move {
@@ -257,7 +265,7 @@ async fn verify_tree_batch(
                                     if recomputed_root
                                         != Pubkey::from_str(&pr.root).unwrap().to_bytes()
                                     {
-                                        // TODO: add counter. So we could instantly see if some proofs are failed
+                                        let _ = assets_with_failed_proofs_cloned.fetch_add(1, Ordering::Relaxed);
                                         write_asset_to_h_map(
                                             failed_proofs_cloned.clone(),
                                             tree_cloned.clone(),
@@ -266,6 +274,7 @@ async fn verify_tree_batch(
                                         .await;
                                     }
                                 } else {
+                                    let _ = assets_with_missed_proofs_cloned.fetch_add(1, Ordering::Relaxed);
                                     println!(
                                         "API did not return any proofs for asset: {:?}",
                                         asset
@@ -279,6 +288,7 @@ async fn verify_tree_batch(
                                 }
                             }
                         } else {
+                            let _ = assets_with_missed_proofs_cloned.fetch_add(1, Ordering::Relaxed);
                             println!("Got an error during selecting data from the rocks");
                             write_asset_to_h_map(
                                 failed_proofs_cloned.clone(),
@@ -294,9 +304,11 @@ async fn verify_tree_batch(
                             let rate_guard = rate_cloned.lock().await;
                             *rate_guard
                         };
+                        let current_assets_with_failed_proofs = assets_with_failed_proofs_cloned.load(Ordering::Relaxed);
+                        let current_assets_with_missed_proofs = assets_with_missed_proofs_cloned.load(Ordering::Relaxed);
                         progress_bar_cloned.set_message(format!(
-                            "Assets Processed: {} Rate: {:.2}/s",
-                            current_assets_processed, current_rate
+                            "Assets with failed proofs: {} Assets with missed proofs: {} Assets Processed: {} Rate: {:.2}/s",
+                            current_assets_with_failed_proofs, current_assets_with_missed_proofs, current_assets_processed, current_rate
                         ));
 
                         drop(permit);
