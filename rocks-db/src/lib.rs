@@ -810,8 +810,13 @@ impl Storage {
     }
 }
 
+#[allow(unused_variables)]
 pub trait ToFlatbuffersConverter<'a> {
     type Target: 'a;
-    fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target>;
-    fn convert_to_fb_bytes(&self) -> Vec<u8>;
+    fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target> {
+        todo!()
+    }
+    fn convert_to_fb_bytes(&self) -> Vec<u8> {
+        todo!()
+    }
 }

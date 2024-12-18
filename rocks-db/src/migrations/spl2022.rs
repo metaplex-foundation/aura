@@ -45,22 +45,12 @@ impl From<TokenAccountWithoutExtentions> for TokenAccount {
 
 impl<'a> ToFlatbuffersConverter<'a> for TokenAccount {
     type Target = TokenAccount;
-
-    fn convert_to_fb(
-        &self,
-        builder: &mut flatbuffers::FlatBufferBuilder<'a>,
-    ) -> flatbuffers::WIPOffset<Self::Target> {
-        todo!()
-    }
-
-    fn convert_to_fb_bytes(&self) -> Vec<u8> {
-        todo!()
-    }
 }
 
 pub(crate) struct TokenAccounts2022ExtentionsMigration;
 impl RocksMigration for TokenAccounts2022ExtentionsMigration {
     const VERSION: u64 = 3;
+    const DESERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
     const SERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
     type NewDataType = TokenAccount;
     type OldDataType = TokenAccountWithoutExtentions;

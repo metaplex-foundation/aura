@@ -33,6 +33,7 @@ pub enum SerializationType {
 
 pub trait RocksMigration {
     const VERSION: u64;
+    const DESERIALIZATION_TYPE: SerializationType;
     const SERIALIZATION_TYPE: SerializationType;
     type NewDataType: Sync
         + Serialize
@@ -350,7 +351,7 @@ impl<'a> MigrationApplier<'a> {
         <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
-        match M::SERIALIZATION_TYPE {
+        match M::DESERIALIZATION_TYPE {
             SerializationType::Bincode => deserialize::<M::OldDataType>(value).map_err(|e| {
                 error!("migration data deserialize: {:?}, {}", key_decoded, e);
                 e.into()
@@ -362,7 +363,9 @@ impl<'a> MigrationApplier<'a> {
                 })
             }
             SerializationType::Flatbuffers => {
-                unreachable!("Flatbuffers migration is not supported yet")
+                unreachable!(
+                    "Deserialization from Flatbuffers in term of migration is not supported yet"
+                )
             }
         }
     }

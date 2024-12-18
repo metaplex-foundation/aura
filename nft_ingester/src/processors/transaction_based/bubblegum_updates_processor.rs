@@ -1143,15 +1143,13 @@ impl BubblegumTxProcessor {
             if let Some(dynamic_info) = &update.update {
                 if let Some(data) = &dynamic_info.dynamic_data {
                     let url = data.url.value.clone();
-                    let storage_mutability = url.as_str().into();
-                    let last_read_at = Utc::now().timestamp();
 
                     if let Some(metadata) = batch_mint.raw_metadata_map.get(&url) {
                         update.offchain_data_update = Some(OffChainData {
-                            url: Some(url),
+                            url: Some(url.clone()),
                             metadata: Some(metadata.to_string()),
-                            storage_mutability,
-                            last_read_at,
+                            storage_mutability: url.as_str().into(),
+                            last_read_at: Utc::now().timestamp(),
                         });
                     }
                 }

@@ -91,8 +91,8 @@ pub fn get_content(
     offchain_data: &OffChainData,
 ) -> Result<Content, StorageError> {
     let json_uri = asset_dynamic.url.value.clone();
-    let metadata = offchain_data.metadata.clone().unwrap_or_default();
-    let metadata: Value = serde_json::from_str(&metadata).unwrap_or(Value::Null);
+    let metadata = serde_json::from_str(&offchain_data.metadata.clone().unwrap_or_default())
+        .unwrap_or(Value::Null);
     let chain_data: Value = serde_json::from_str(
         asset_dynamic
             .onchain_data
@@ -235,8 +235,8 @@ fn extract_collection_metadata(
     asset_dynamic: &AssetDynamicDetails,
     offchain_data: &OffChainData,
 ) -> MetadataMap {
-    let metadata = offchain_data.metadata.clone().unwrap_or_default();
-    let metadata: Value = serde_json::from_str(&metadata).unwrap_or(Value::Null);
+    let metadata = serde_json::from_str(&offchain_data.metadata.clone().unwrap_or_default())
+        .unwrap_or(Value::Null);
     let chain_data: Value = serde_json::from_str(
         asset_dynamic
             .onchain_data

@@ -6,7 +6,7 @@ use crate::gapfiller::{
     MasterEdition, OffchainData, OwnerType, RawBlock, RoyaltyTargetType, SpecificationAssetClass,
     SpecificationVersions, SplMint, TokenStandard, UpdateVersionValue, UseMethod, Uses,
 };
-use entities::models::{AssetCompleteDetailsGrpc, UpdateVersion, Updated};
+use entities::models::{AssetCompleteDetailsGrpc, OffChainDataGrpc, UpdateVersion, Updated};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 
@@ -201,12 +201,10 @@ impl TryFrom<AssetDetails> for AssetCompleteDetailsGrpc {
                 .collect::<Result<Vec<_>, _>>()?,
             edition: value.edition.map(TryInto::try_into).transpose()?,
             master_edition: value.master_edition.map(TryInto::try_into).transpose()?,
-            offchain_data: value
-                .offchain_data
-                .map(|e| entities::models::OffChainDataGrpc {
-                    url: e.url,
-                    metadata: e.metadata,
-                }),
+            offchain_data: value.offchain_data.map(|e| OffChainDataGrpc {
+                url: e.url,
+                metadata: e.metadata,
+            }),
             spl_mint: value.spl_mint.map(TryInto::try_into).transpose()?,
         })
     }
@@ -258,8 +256,8 @@ impl From<entities::models::SplMint> for SplMint {
     }
 }
 
-impl From<entities::models::OffChainDataGrpc> for OffchainData {
-    fn from(value: entities::models::OffChainDataGrpc) -> Self {
+impl From<OffChainDataGrpc> for OffchainData {
+    fn from(value: OffChainDataGrpc) -> Self {
         Self {
             url: value.url,
             metadata: value.metadata,

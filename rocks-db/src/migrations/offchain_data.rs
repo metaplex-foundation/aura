@@ -16,6 +16,7 @@ impl From<OffChainDataDeprecated> for OffChainData {
 pub(crate) struct OffChainDataMigration;
 impl RocksMigration for OffChainDataMigration {
     const VERSION: u64 = 4;
+    const DESERIALIZATION_TYPE: SerializationType = SerializationType::Flatbuffers;
     const SERIALIZATION_TYPE: SerializationType = SerializationType::Flatbuffers;
     type NewDataType = OffChainData;
     type OldDataType = OffChainDataDeprecated;
