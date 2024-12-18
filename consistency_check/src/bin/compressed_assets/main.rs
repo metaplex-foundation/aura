@@ -6,18 +6,20 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
+    time::Duration,
 };
 
 use clap::{command, Parser};
 use indicatif::{ProgressBar, ProgressStyle};
 use nft_ingester::api::dapi::get_proof_for_assets;
 use rocks_db::{migrator::MigrationState, Storage};
+use serde::{Deserialize, Serialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use spl_concurrent_merkle_tree::hash::recompute;
 use tempfile::TempDir;
 use tokio::{
-    sync::{Mutex, Semaphore},
+    sync::{broadcast, Mutex, Semaphore},
     task::{JoinError, JoinSet},
 };
 use tokio_util::sync::CancellationToken;
@@ -41,6 +43,8 @@ struct Args {
     #[arg(long)]
     inner_workers: usize,
 }
+
+const WRITER_SLEEP_TIME: Duration = Duration::from_secs(30);
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() {
@@ -90,8 +94,10 @@ pub async fn main() {
     let assets_with_missed_proofs = Arc::new(AtomicU64::new(0));
 
     let shutdown_token = CancellationToken::new();
+    let (shutdown_for_file_writer_tx, shutdown_for_file_writer_rx) = broadcast::channel::<()>(1);
 
     let mut tasks = JoinSet::new();
+    let mut writers = JoinSet::new();
 
     let failed_proofs: Arc<Mutex<HashMap<String, Vec<String>>>> =
         Arc::new(Mutex::new(HashMap::new()));
@@ -155,6 +161,38 @@ pub async fn main() {
         }
     });
 
+    writers.spawn(async move {
+        let failed_checks_file = File::create("./failed_checks.csv").unwrap();
+        let failed_proofs_file = File::create("./failed_proofs.csv").unwrap();
+        let mut failed_checks_wrt = csv::Writer::from_writer(failed_checks_file);
+        let mut failed_proofs_wrt = csv::Writer::from_writer(failed_proofs_file);
+
+        loop {
+            let mut f_ch = failed_check.lock().await;
+            for t in f_ch.iter() {
+                failed_checks_wrt.write_record(&[t]).unwrap();
+            }
+            failed_checks_wrt.flush().unwrap();
+            f_ch.clear();
+            drop(f_ch);
+
+            let mut f_ch = failed_proofs.lock().await;
+            for (t, assets) in f_ch.iter() {
+                for a in assets {
+                    failed_proofs_wrt.write_record(&[t, a]).unwrap();
+                }
+            }
+            failed_proofs_wrt.flush().unwrap();
+            f_ch.clear();
+
+            if !shutdown_for_file_writer_rx.is_empty() {
+                break;
+            }
+
+            tokio::time::sleep(WRITER_SLEEP_TIME).await;
+        }
+    });
+
     while let Some(task) = tasks.join_next().await {
         match task {
             Ok(_) => {
@@ -171,23 +209,23 @@ pub async fn main() {
         }
     }
 
-    let file = File::create("./failed_checks.csv").unwrap();
-    let mut wrt = csv::Writer::from_writer(file);
-    let f_ch = failed_check.lock().await;
-    for t in f_ch.iter() {
-        wrt.write_record(&[t]).unwrap();
-    }
-    wrt.flush().unwrap();
+    shutdown_for_file_writer_tx.send(()).unwrap();
 
-    let file = File::create("./failed_proofs.csv").unwrap();
-    let mut wrt = csv::Writer::from_writer(file);
-    let f_ch = failed_proofs.lock().await;
-    for (t, assets) in f_ch.iter() {
-        for a in assets {
-            wrt.write_record(&[t, a]).unwrap();
+    while let Some(task) = writers.join_next().await {
+        match task {
+            Ok(_) => {
+                println!("Writer thread was stopped")
+            }
+            Err(err) if err.is_panic() => {
+                let err = err.into_panic();
+                println!("Writer panic: {:?}", err);
+            }
+            Err(err) => {
+                let err = err.to_string();
+                println!("Writer error: {}", err);
+            }
         }
     }
-    wrt.flush().unwrap();
 
     progress_bar.finish_with_message("Processing complete");
 }
@@ -265,7 +303,8 @@ async fn verify_tree_batch(
                                     if recomputed_root
                                         != Pubkey::from_str(&pr.root).unwrap().to_bytes()
                                     {
-                                        let _ = assets_with_failed_proofs_cloned.fetch_add(1, Ordering::Relaxed);
+                                        let _ = assets_with_failed_proofs_cloned
+                                            .fetch_add(1, Ordering::Relaxed);
                                         write_asset_to_h_map(
                                             failed_proofs_cloned.clone(),
                                             tree_cloned.clone(),
@@ -274,7 +313,8 @@ async fn verify_tree_batch(
                                         .await;
                                     }
                                 } else {
-                                    let _ = assets_with_missed_proofs_cloned.fetch_add(1, Ordering::Relaxed);
+                                    let _ = assets_with_missed_proofs_cloned
+                                        .fetch_add(1, Ordering::Relaxed);
                                     println!(
                                         "API did not return any proofs for asset: {:?}",
                                         asset
@@ -288,7 +328,8 @@ async fn verify_tree_batch(
                                 }
                             }
                         } else {
-                            let _ = assets_with_missed_proofs_cloned.fetch_add(1, Ordering::Relaxed);
+                            let _ =
+                                assets_with_missed_proofs_cloned.fetch_add(1, Ordering::Relaxed);
                             println!("Got an error during selecting data from the rocks");
                             write_asset_to_h_map(
                                 failed_proofs_cloned.clone(),
@@ -304,8 +345,10 @@ async fn verify_tree_batch(
                             let rate_guard = rate_cloned.lock().await;
                             *rate_guard
                         };
-                        let current_assets_with_failed_proofs = assets_with_failed_proofs_cloned.load(Ordering::Relaxed);
-                        let current_assets_with_missed_proofs = assets_with_missed_proofs_cloned.load(Ordering::Relaxed);
+                        let current_assets_with_failed_proofs =
+                            assets_with_failed_proofs_cloned.load(Ordering::Relaxed);
+                        let current_assets_with_missed_proofs =
+                            assets_with_missed_proofs_cloned.load(Ordering::Relaxed);
                         progress_bar_cloned.set_message(format!(
                             "Assets with failed proofs: {} Assets with missed proofs: {} Assets Processed: {} Rate: {:.2}/s",
                             current_assets_with_failed_proofs, current_assets_with_missed_proofs, current_assets_processed, current_rate
