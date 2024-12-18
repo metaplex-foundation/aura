@@ -163,13 +163,12 @@ pub async fn main() -> Result<(), IngesterError> {
                 }
             }
 
-            Ok(())
         });
     }
     while let Some(task) = sync_tasks.join_next().await {
         task.map_err(|e| {
             IngesterError::UnrecoverableTaskError(format!("joining task failed: {}", e.to_string()))
-        })??;
+        })?;
     }
 
     while (mutexed_tasks.lock().await.join_next().await).is_some() {}
