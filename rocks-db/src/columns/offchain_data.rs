@@ -6,7 +6,7 @@ use entities::models::OffChainDataGrpc;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
 pub enum StorageMutability {
     #[default]
     Immutable,
