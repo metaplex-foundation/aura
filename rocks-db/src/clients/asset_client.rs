@@ -218,7 +218,13 @@ impl Storage {
             .into_iter()
             .filter_map(|asset| {
                 asset
-                    .filter(|a| a.url.is_some() && !a.url.clone().unwrap().is_empty())
+                    .filter(|a| {
+                        if let Some(url) = a.url.as_ref() {
+                            !url.is_empty() && a.url.is_some()
+                        } else {
+                            false
+                        }
+                    })
                     .map(|a| (a.url.clone().unwrap(), a))
             })
             .collect::<HashMap<_, _>>();
