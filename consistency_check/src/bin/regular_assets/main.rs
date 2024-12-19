@@ -10,6 +10,7 @@ use std::{
 };
 
 use clap::Parser;
+use consistency_check::update_rate;
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use rocks_db::{migrator::MigrationState, Storage};
@@ -21,6 +22,8 @@ use tokio::{
     task::{JoinError, JoinSet},
 };
 use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
+use usecase::graceful_stop::graceful_stop;
 
 mod snapshot_reader;
 
@@ -50,6 +53,10 @@ const MINT_ACC_DATA_SIZE: usize = 82;
 
 const CHANNEL_SIZE: usize = 100_000_000;
 
+const MISSED_ASSET_FILE: &str = "./missed_asset_data.csv";
+const MISSED_MINT_FILE: &str = "./missed_mint_info.csv";
+const MISSED_TOKEN_FILE: &str = "./missed_token_acc.csv";
+
 enum AccountType {
     Core,
     Mint,
@@ -57,13 +64,15 @@ enum AccountType {
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() {
+    tracing_subscriber::fmt::init();
+
     // Parse command-line arguments
     let config = Args::parse();
 
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let temp_path = temp_dir.path().to_str().unwrap().to_string();
-    println!("Opening DB...");
+    info!("Opening DB...");
     let db_client = Arc::new(
         Storage::open_secondary(
             config.db_path,
@@ -74,7 +83,7 @@ pub async fn main() {
         )
         .unwrap(),
     );
-    println!("DB opened");
+    info!("DB opened");
 
     let shutdown_token = CancellationToken::new();
 
@@ -133,48 +142,19 @@ pub async fn main() {
         counter_missed_token.clone(),
     ));
 
-    println!("Opening snapshot file...");
+    info!("Opening snapshot file...");
     let source = File::open(config.snapshot_path).unwrap();
     let mut snapshot_loader = ArchiveSnapshotExtractor::open(source).unwrap();
-    println!("Snapshot file opened");
+    info!("Snapshot file opened");
 
     let assets_processed_clone = assets_processed.clone();
     let shutdown_token_clone = shutdown_token.clone();
     let rate_clone = rate.clone();
-    tokio::spawn(async move {
-        let mut last_time = std::time::Instant::now();
-        let mut last_count = assets_processed_clone.load(Ordering::Relaxed);
-
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-            if shutdown_token_clone.is_cancelled() {
-                break;
-            }
-
-            let current_time = std::time::Instant::now();
-            let current_count = assets_processed_clone.load(Ordering::Relaxed);
-
-            let elapsed = current_time.duration_since(last_time).as_secs_f64();
-            let count = current_count - last_count;
-
-            let current_rate = if elapsed > 0.0 {
-                (count as f64) / elapsed
-            } else {
-                0.0
-            };
-
-            // Update rate
-            {
-                let mut rate_guard = rate_clone.lock().await;
-                *rate_guard = current_rate;
-            }
-
-            // Update for next iteration
-            last_time = current_time;
-            last_count = current_count;
-        }
-    });
+    tokio::spawn(update_rate(
+        shutdown_token_clone,
+        assets_processed_clone,
+        rate_clone,
+    ));
 
     'outer: for append_vec in snapshot_loader.iter() {
         match append_vec {
@@ -191,7 +171,7 @@ pub async fn main() {
                             .send((AccountType::Core, account.meta.pubkey))
                             .await
                         {
-                            println!("Could not send core key to the channel: {}", e.to_string());
+                            error!("Could not send core key to the channel: {}", e.to_string());
                         }
                     } else if account.account_meta.owner == *SPL_KEY
                         || account.account_meta.owner == *SPL_2022_KEY
@@ -202,14 +182,11 @@ pub async fn main() {
                                 .send((AccountType::Mint, account.meta.pubkey))
                                 .await
                             {
-                                println!(
-                                    "Could not send mint key to the channel: {}",
-                                    e.to_string()
-                                );
+                                error!("Could not send mint key to the channel: {}", e.to_string());
                             }
                         } else {
                             if let Err(e) = fungibles_channel_tx.send(account.meta.pubkey).await {
-                                println!(
+                                error!(
                                     "Could not send token account to the channel: {}",
                                     e.to_string()
                                 );
@@ -218,7 +195,7 @@ pub async fn main() {
                     }
                 }
             }
-            Err(error) => println!("append_vec: {:?}", error),
+            Err(error) => error!("append_vec: {:?}", error),
         };
     }
 
@@ -226,45 +203,19 @@ pub async fn main() {
     drop(nfts_channel_tx);
     drop(fungibles_channel_tx);
 
-    while let Some(task) = tasks.join_next().await {
-        match task {
-            Ok(_) => {
-                println!("One of the tasks was finished")
-            }
-            Err(err) if err.is_panic() => {
-                let err = err.into_panic();
-                println!("Task panic: {:?}", err);
-            }
-            Err(err) => {
-                let err = err.to_string();
-                println!("Task error: {}", err);
-            }
-        }
+    graceful_stop(&mut tasks).await;
+
+    if let Err(e) = write_data_to_file(MISSED_ASSET_FILE, &missed_asset_data).await {
+        error!("Could not save keys with missed asset data: {}", e);
     }
 
-    let file = File::create("./missed_asset_data.csv").unwrap();
-    let mut wrt = csv::Writer::from_writer(file);
-    let f_ch = missed_asset_data.lock().await;
-    for t in f_ch.iter() {
-        wrt.write_record(&[t]).unwrap();
+    if let Err(e) = write_data_to_file(MISSED_MINT_FILE, &missed_mint_info).await {
+        error!("Could not save keys with missed mint data: {}", e);
     }
-    wrt.flush().unwrap();
 
-    let file = File::create("./missed_mint_info.csv").unwrap();
-    let mut wrt = csv::Writer::from_writer(file);
-    let f_ch = missed_mint_info.lock().await;
-    for t in f_ch.iter() {
-        wrt.write_record(&[t]).unwrap();
+    if let Err(e) = write_data_to_file(MISSED_TOKEN_FILE, &missed_token_acc).await {
+        error!("Could not save keys with missed token account data: {}", e);
     }
-    wrt.flush().unwrap();
-
-    let file = File::create("./missed_token_acc.csv").unwrap();
-    let mut wrt = csv::Writer::from_writer(file);
-    let f_ch = missed_token_acc.lock().await;
-    for t in f_ch.iter() {
-        wrt.write_record(&[t]).unwrap();
-    }
-    wrt.flush().unwrap();
 }
 
 async fn process_nfts(
@@ -315,7 +266,7 @@ async fn process_nfts(
                             }
                         }
                         Err(e) => {
-                            println!(
+                            error!(
                                 "Error during checking asset data key existence: {}",
                                 e.to_string()
                             );
@@ -335,7 +286,7 @@ async fn process_nfts(
                                 }
                             }
                             Err(e) => {
-                                println!(
+                                error!(
                                     "Error during checking mint key existence: {}",
                                     e.to_string()
                                 );
@@ -421,7 +372,7 @@ async fn process_fungibles(
                             }
                         }
                         Err(e) => {
-                            println!(
+                            error!(
                                 "Error during checking token accounts key existence: {}",
                                 e.to_string()
                             );
@@ -457,5 +408,20 @@ async fn process_fungibles(
             }
         }
     }
+    Ok(())
+}
+
+async fn write_data_to_file(
+    file_name: &str,
+    keys: &Arc<tokio::sync::Mutex<HashSet<String>>>,
+) -> Result<(), String> {
+    let file = File::create(file_name).map_err(|e| e.to_string())?;
+    let mut wrt = csv::Writer::from_writer(file);
+
+    let keys = keys.lock().await;
+    for key in keys.iter() {
+        wrt.write_record(&[key]).map_err(|e| e.to_string())?;
+    }
+    wrt.flush().map_err(|e| e.to_string())?;
     Ok(())
 }

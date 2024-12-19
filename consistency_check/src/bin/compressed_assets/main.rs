@@ -10,6 +10,7 @@ use std::{
 };
 
 use clap::{command, Parser};
+use consistency_check::update_rate;
 use indicatif::{ProgressBar, ProgressStyle};
 use nft_ingester::api::dapi::get_proof_for_assets;
 use rocks_db::{migrator::MigrationState, Storage};
@@ -131,40 +132,11 @@ pub async fn main() {
     let shutdown_token_clone = shutdown_token.clone();
 
     // update rate on the background
-    tokio::spawn(async move {
-        let mut last_time = std::time::Instant::now();
-        let mut last_count = assets_processed_clone.load(Ordering::Relaxed);
-
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-            if shutdown_token_clone.is_cancelled() {
-                break;
-            }
-
-            let current_time = std::time::Instant::now();
-            let current_count = assets_processed_clone.load(Ordering::Relaxed);
-
-            let elapsed = current_time.duration_since(last_time).as_secs_f64();
-            let count = current_count - last_count;
-
-            let current_rate = if elapsed > 0.0 {
-                (count as f64) / elapsed
-            } else {
-                0.0
-            };
-
-            // Update rate
-            {
-                let mut rate_guard = rate_clone.lock().await;
-                *rate_guard = current_rate;
-            }
-
-            // Update for next iteration
-            last_time = current_time;
-            last_count = current_count;
-        }
-    });
+    tokio::spawn(update_rate(
+        shutdown_token_clone,
+        assets_processed_clone,
+        rate_clone,
+    ));
 
     // write found problematic assets to the files
     writers.spawn(async move {

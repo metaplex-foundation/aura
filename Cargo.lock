@@ -2086,7 +2086,6 @@ dependencies = [
  "csv",
  "indicatif",
  "lazy_static",
- "log",
  "memmap2 0.9.4",
  "metrics-utils",
  "mpl-bubblegum",
@@ -2105,6 +2104,8 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.11",
+ "tracing",
+ "tracing-subscriber",
  "usecase",
  "zstd 0.12.4",
 ]
