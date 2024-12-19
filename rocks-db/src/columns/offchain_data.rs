@@ -25,7 +25,6 @@ impl StorageMutability {
 impl From<&str> for StorageMutability {
     fn from(storage_mutability: &str) -> Self {
         if storage_mutability.is_empty()
-            || storage_mutability.starts_with("")
             || storage_mutability.starts_with("ipfs://")
             || storage_mutability.starts_with("https://ipfs")
             || storage_mutability.starts_with("https://arweave")

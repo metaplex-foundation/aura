@@ -82,27 +82,6 @@ impl Storage {
         let migration_applier =
             MigrationApplier::new(db_path, migration_storage_path, applied_migrations);
 
-        // // apply all migrations
-        // migration_applier
-        //     .apply_migration(crate::migrations::collection_authority::CollectionAuthorityMigration)
-        //     .await?;
-        // migration_applier
-        //     .apply_migration(crate::migrations::external_plugins::ExternalPluginsMigration)
-        //     .await?;
-        // migration_applier
-        //     .apply_migration(
-        //         crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration,
-        //     )
-        //     .await?;
-        // migration_applier
-        //     .apply_migration(crate::migrations::spl2022::TokenAccounts2022ExtentionsMigration)
-        //     .await?;
-        // migration_applier
-        //     .apply_migration(
-        //         crate::migrations::spl2022::DynamicDataToken2022MintExtentionsMigration,
-        //     )
-        //     .await?;
-
         migration_applier
             .apply_migration(crate::migrations::offchain_data::OffChainDataMigration)
             .await?;

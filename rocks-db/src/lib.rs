@@ -597,17 +597,15 @@ impl Storage {
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
+            OffChainDataDeprecated::NAME => cf_options.set_merge_operator_associative(
+                "merge_fn_off_chain_data_keep_existing",
+                asset::AssetStaticDetails::merge_keep_existing,
+            ),
             OffChainData::NAME => {
-                let mf = match migration_state {
-                    MigrationState::Last | MigrationState::Version(_) => {
-                        OffChainData::merge_off_chain_data
-                    }
-                    MigrationState::CreateColumnFamilies => {
-                        asset::AssetStaticDetails::merge_keep_existing
-                    }
-                };
-                cf_options
-                    .set_merge_operator_associative("merge_fn_off_chain_data_keep_existing", mf);
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_off_chain_data_keep_existing",
+                    OffChainData::merge_off_chain_data,
+                );
             }
             cl_items::ClLeaf::NAME => {
                 cf_options.set_merge_operator_associative(
