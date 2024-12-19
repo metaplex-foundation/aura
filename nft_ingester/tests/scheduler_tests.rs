@@ -2,7 +2,7 @@ use assertables::assert_contains;
 use assertables::assert_contains_as_result;
 use entities::models::OffChainData;
 use nft_ingester::scheduler::Scheduler;
-use rocks_db::asset_previews::UrlToDownload;
+use rocks_db::columns::asset_previews::UrlToDownload;
 use setup::await_async_for;
 use setup::rocks::RocksTestEnvironment;
 

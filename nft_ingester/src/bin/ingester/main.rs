@@ -442,7 +442,7 @@ pub async fn main() -> Result<(), IngesterError> {
         if backfiller_config.should_reingest {
             warn!("'Reingest' flag is set, deleting last backfilled slot.");
             primary_rocks_storage
-                .delete_parameter::<u64>(rocks_db::parameters::Parameter::LastBackfilledSlot)
+                .delete_parameter::<u64>(rocks_db::columns::parameters::Parameter::LastBackfilledSlot)
                 .await?;
         }
 

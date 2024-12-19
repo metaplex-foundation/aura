@@ -3,7 +3,7 @@ use std::{collections::HashMap, str::FromStr};
 
 use interface::proofs::ProofChecker;
 use metrics_utils::ApiMetricsConfig;
-use rocks_db::cl_items::{ClItemKey, ClLeafKey};
+use rocks_db::columns::cl_items::{ClItemKey, ClLeafKey};
 use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use tracing::{debug, warn};
@@ -11,7 +11,7 @@ use tracing::{debug, warn};
 use crate::api::dapi::model;
 use crate::api::dapi::rpc_asset_models::AssetProof;
 use interface::processing_possibility::ProcessingPossibilityChecker;
-use rocks_db::asset_streaming_client::get_required_nodes_for_proof;
+use rocks_db::clients::asset_streaming_client::get_required_nodes_for_proof;
 use rocks_db::Storage;
 use spl_concurrent_merkle_tree::node::empty_node;
 

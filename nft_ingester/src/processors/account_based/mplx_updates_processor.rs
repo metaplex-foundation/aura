@@ -12,11 +12,11 @@ use entities::enums::{
 use entities::models::{BurntMetadataSlot, MetadataInfo, Updated};
 use entities::models::{ChainDataV1, Creator, UpdateVersion, Uses};
 use metrics_utils::IngesterMetricsConfig;
-use rocks_db::asset::{
+use rocks_db::batch_savers::{BatchSaveStorage, MetadataModels};
+use rocks_db::columns::asset::{
     AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails, AssetStaticDetails,
     MetadataMintMap,
 };
-use rocks_db::batch_savers::{BatchSaveStorage, MetadataModels};
 use rocks_db::errors::StorageError;
 use usecase::save_metrics::result_to_metrics;
 

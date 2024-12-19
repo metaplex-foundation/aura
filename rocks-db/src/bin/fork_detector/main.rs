@@ -1,7 +1,7 @@
 use entities::models::AssetSignature;
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::cl_items::{ClItemKey, ClLeafKey};
 use rocks_db::column::TypedColumn;
+use rocks_db::columns::cl_items::{ClItemKey, ClLeafKey};
 use rocks_db::migrator::MigrationState;
 use rocks_db::{SlotStorage, Storage};
 use solana_sdk::pubkey::Pubkey;
