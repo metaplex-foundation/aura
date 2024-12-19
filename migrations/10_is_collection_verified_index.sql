@@ -1,0 +1,1 @@
+CREATE INDEX assets_v3_is_collection_verified ON assets_v3 (ast_is_collection_verified) WHERE ast_is_collection_verified IS NULL OR ast_is_collection_verified = TRUE;

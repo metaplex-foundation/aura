@@ -193,6 +193,7 @@ impl PgClient {
             "assets_v3_specification_asset_class",
             "assets_v3_specification_version",
             "assets_v3_supply",
+            "assets_v3_is_collection_verified",
         ] {
             self.drop_index(transaction, index).await?;
         }
@@ -231,6 +232,7 @@ impl PgClient {
                 ("assets_v3_specification_asset_class", "assets_v3 (ast_specification_asset_class) WHERE ast_specification_asset_class IS NOT NULL AND ast_specification_asset_class <> 'unknown'::specification_asset_class"),
                 ("assets_v3_specification_version", "assets_v3 (ast_specification_version) WHERE ast_specification_version <> 'v1'::specification_versions"),
                 ("assets_v3_supply", "assets_v3(ast_supply) WHERE ast_supply IS NOT NULL"),
+                ("assets_v3_is_collection_verified", "assets_v3(ast_is_collection_verified) WHERE ast_is_collection_verified IS NULL OR ast_is_collection_verified = TRUE"),
             ]{
                 self.create_index(transaction, index, on_query_string).await?;
             }
