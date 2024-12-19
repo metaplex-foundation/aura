@@ -12,8 +12,8 @@ members = [
   "tests/setup",
   "backfill_rpc",
   "integrity_verification",
-  "integration_tests"
-]
+  "integration_tests",
+  "consistency_check"]
 
 [workspace.dependencies]
 
