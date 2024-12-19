@@ -3303,7 +3303,7 @@ impl TypedColumn for AssetLeaf {
 
 impl AssetLeaf {
     pub fn merge_asset_leaf(
-        new_key: &[u8],
+        _new_key: &[u8],
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {

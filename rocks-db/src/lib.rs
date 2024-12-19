@@ -388,6 +388,7 @@ impl Storage {
     fn create_cf_descriptors(migration_state: &MigrationState) -> Vec<ColumnFamilyDescriptor> {
         vec![
             Self::new_cf_descriptor::<OffChainData>(migration_state),
+            Self::new_cf_descriptor::<OffChainDataDeprecated>(migration_state),
             Self::new_cf_descriptor::<AssetCompleteDetails>(migration_state),
             Self::new_cf_descriptor::<MplCoreCollectionAuthority>(migration_state),
             Self::new_cf_descriptor::<MetadataMintMap>(migration_state),
@@ -598,7 +599,7 @@ impl Storage {
                 );
             }
             OffChainDataDeprecated::NAME => cf_options.set_merge_operator_associative(
-                "merge_fn_off_chain_data_keep_existing",
+                "merge_fn_off_chain_data_keep_existing_deprecated",
                 asset::AssetStaticDetails::merge_keep_existing,
             ),
             OffChainData::NAME => {

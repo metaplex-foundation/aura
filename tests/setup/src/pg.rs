@@ -7,6 +7,8 @@ use rand::Rng;
 use solana_sdk::pubkey::Pubkey;
 use sqlx::{Executor, Pool, Postgres};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use testcontainers::core::WaitFor;
 use testcontainers::{Container, Image};
@@ -75,7 +77,7 @@ impl<'a> TestEnvironment<'a> {
         let (pool, db_name) = setup_database(&node).await;
         let client = PgClient::new_with_pool(
             pool.clone(),
-            None,
+            Some(PathBuf::from_str(path).unwrap()),
             Arc::new(RequestErrorDurationMetrics::new()),
         );
 
