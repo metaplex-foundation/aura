@@ -7,7 +7,7 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, DB};
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{Result, StorageError, BATCH_GET_ACTION, ROCKS_COMPONENT};
+use crate::{Result, StorageError, ToFlatbuffersConverter, BATCH_GET_ACTION, ROCKS_COMPONENT};
 pub trait TypedColumn {
     type KeyType: Sync + Clone + Send + Debug;
     type ValueType: Sync + Serialize + DeserializeOwned + Send;
@@ -130,6 +130,21 @@ where
             serialize(v).map_err(|e| StorageError::Common(e.to_string()))
         })
     }
+
+    pub fn merge_with_batch_flatbuffers(
+        &self,
+        batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        key: C::KeyType,
+        value: &C::ValueType,
+    ) -> Result<()>
+    where
+        C::ValueType: for<'a> ToFlatbuffersConverter<'a>,
+    {
+        self.merge_with_batch_generic(batch, key, value, |v| {
+            Ok(ToFlatbuffersConverter::convert_to_fb_bytes(v))
+        })
+    }
+
     pub(crate) fn merge_with_batch_raw(
         &self,
         batch: &mut rocksdb::WriteBatchWithTransaction<false>,
@@ -262,6 +277,19 @@ where
     pub async fn put_batch_cbor(&self, values: HashMap<C::KeyType, C::ValueType>) -> Result<()> {
         self.put_batch_generic(values, |v| {
             serde_cbor::to_vec(v).map_err(|e| StorageError::Common(e.to_string()))
+        })
+        .await
+    }
+
+    pub async fn put_batch_flatbuffers(
+        &self,
+        values: HashMap<C::KeyType, C::ValueType>,
+    ) -> Result<()>
+    where
+        C::ValueType: for<'a> ToFlatbuffersConverter<'a>,
+    {
+        self.put_batch_generic(values, |v| {
+            Ok(ToFlatbuffersConverter::convert_to_fb_bytes(v))
         })
         .await
     }

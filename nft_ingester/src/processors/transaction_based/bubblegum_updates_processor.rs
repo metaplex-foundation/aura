@@ -15,7 +15,7 @@ use entities::enums::{
     SpecificationAssetClass, TokenStandard, UseMethod,
 };
 use entities::models::{
-    BatchMintToVerify, BufferedTransaction, OffChainData, SignatureWithSlot, UpdateVersion, Updated,
+    BatchMintToVerify, BufferedTransaction, SignatureWithSlot, UpdateVersion, Updated,
 };
 use entities::models::{ChainDataV1, Creator, Uses};
 use lazy_static::lazy_static;
@@ -23,10 +23,10 @@ use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
 use num_traits::FromPrimitive;
-use rocks_db::asset::AssetOwner;
-use rocks_db::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
+use rocks_db::columns::asset::{
+    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetStaticDetails,
 };
+use rocks_db::columns::offchain_data::OffChainData;
 use rocks_db::transaction::{
     AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, TransactionResult,
     TreeUpdate,
@@ -1143,10 +1143,13 @@ impl BubblegumTxProcessor {
             if let Some(dynamic_info) = &update.update {
                 if let Some(data) = &dynamic_info.dynamic_data {
                     let url = data.url.value.clone();
+
                     if let Some(metadata) = batch_mint.raw_metadata_map.get(&url) {
                         update.offchain_data_update = Some(OffChainData {
-                            url,
-                            metadata: metadata.to_string(),
+                            url: Some(url.clone()),
+                            metadata: Some(metadata.to_string()),
+                            storage_mutability: url.as_str().into(),
+                            last_read_at: Utc::now().timestamp(),
                         });
                     }
                 }

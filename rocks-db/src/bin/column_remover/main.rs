@@ -1,21 +1,19 @@
 use std::sync::Arc;
 
 use entities::schedule::ScheduledJob;
-use rocks_db::asset::{
-    self, AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetDynamicDetailsDeprecated,
-    AssetOwnerDeprecated, AssetStaticDetailsDeprecated, MetadataMintMap,
-};
-use rocks_db::asset_previews::{AssetPreviews, UrlToDownload};
-use rocks_db::batch_mint::BatchMintWithStaker;
 use rocks_db::column::TypedColumn;
-use rocks_db::inscriptions::{Inscription, InscriptionData};
-use rocks_db::leaf_signatures::LeafSignature;
-use rocks_db::token_prices::TokenPrice;
-use rocks_db::tree_seq::{TreeSeqIdx, TreesGaps};
-use rocks_db::{
-    bubblegum_slots, cl_items, parameters, signature_client, AssetAuthority, AssetDynamicDetails,
-    AssetOwner, AssetStaticDetails,
+use rocks_db::columns::asset::{
+    self, AssetAuthority, AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetDynamicDetails,
+    AssetDynamicDetailsDeprecated, AssetOwner, AssetOwnerDeprecated, AssetStaticDetails,
+    AssetStaticDetailsDeprecated, MetadataMintMap,
 };
+use rocks_db::columns::asset_previews::{AssetPreviews, UrlToDownload};
+use rocks_db::columns::batch_mint::BatchMintWithStaker;
+use rocks_db::columns::inscriptions::{Inscription, InscriptionData};
+use rocks_db::columns::leaf_signatures::LeafSignature;
+use rocks_db::columns::token_prices::TokenPrice;
+use rocks_db::columns::{bubblegum_slots, cl_items, parameters};
+use rocks_db::tree_seq::{TreeSeqIdx, TreesGaps};
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use tracing::info;
@@ -29,8 +27,8 @@ use entities::models::{
     AssetSignature, BatchMintToVerify, FailedBatchMint, RawBlock, SplMint, TokenAccount,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
+use rocks_db::columns::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use rocks_db::migrator::MigrationState;
-use rocks_db::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use std::{env, option};
 
 #[tokio::main(flavor = "multi_thread")]

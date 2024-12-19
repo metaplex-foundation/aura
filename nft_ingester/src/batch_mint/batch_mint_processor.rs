@@ -10,7 +10,7 @@ use interface::error::UsecaseError;
 use metrics_utils::BatchMintProcessorMetricsConfig;
 use postgre_client::model::BatchMintState;
 use postgre_client::PgClient;
-use rocks_db::batch_mint::BatchMintWithStaker;
+use rocks_db::columns::batch_mint::BatchMintWithStaker;
 use rocks_db::Storage;
 use solana_program::pubkey::Pubkey;
 use std::path::PathBuf;

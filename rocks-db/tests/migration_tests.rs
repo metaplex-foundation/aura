@@ -2,7 +2,7 @@
 mod tests {
     use bincode::serialize;
     use metrics_utils::red::RequestErrorDurationMetrics;
-    use rocks_db::asset::AssetCollection;
+    use rocks_db::columns::asset::AssetCollection;
     use rocks_db::column::TypedColumn;
     use rocks_db::migrations::collection_authority::AssetCollectionVersion0;
     use rocks_db::migrator::MigrationState;
