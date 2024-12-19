@@ -219,8 +219,8 @@ impl Storage {
             .filter_map(|asset| {
                 asset
                     .filter(|a| {
-                        if let Some(url) = a.url.as_ref() {
-                            !url.is_empty() && a.url.is_some()
+                        if let Some(metadata) = a.metadata.as_ref() {
+                            !metadata.is_empty() && a.url.is_some()
                         } else {
                             false
                         }
