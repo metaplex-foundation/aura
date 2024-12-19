@@ -37,11 +37,6 @@ use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 use crate::errors::StorageError;
-use crate::migrations::collection_authority::{
-    AssetCollectionVersion0, CollectionAuthorityMigration,
-};
-use crate::migrations::external_plugins::AssetDynamicDetailsV0;
-use crate::migrations::spl2022::TokenAccounts2022ExtentionsMigration;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
 pub mod backup_service;
@@ -527,13 +522,9 @@ impl Storage {
             }
             asset::AssetDynamicDetails::NAME => {
                 let mf = match migration_state {
-                    MigrationState::Version(version) => match *version {
-                        CollectionAuthorityMigration::VERSION => {
-                            AssetDynamicDetailsV0::merge_dynamic_details
-                        }
-                        _ => asset::AssetDynamicDetails::merge_dynamic_details,
-                    },
-                    MigrationState::Last => asset::AssetDynamicDetails::merge_dynamic_details,
+                    MigrationState::Last | MigrationState::Version(_) => {
+                        asset::AssetDynamicDetails::merge_dynamic_details
+                    }
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing
                     }
@@ -577,15 +568,10 @@ impl Storage {
                 );
             }
             asset::AssetCollection::NAME => {
-                let mf = if matches!(
-                    migration_state,
-                    &MigrationState::Version(CollectionAuthorityMigration::VERSION)
-                ) {
-                    AssetCollectionVersion0::merge_asset_collection
-                } else {
-                    asset::AssetCollection::merge_asset_collection
-                };
-                cf_options.set_merge_operator_associative("merge_fn_asset_collection", mf);
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_asset_collection",
+                    asset::AssetCollection::merge_asset_collection,
+                );
             }
             cl_items::ClItem::NAME => {
                 cf_options.set_merge_operator_associative(
@@ -612,10 +598,16 @@ impl Storage {
                 );
             }
             OffChainData::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_off_chain_data_keep_existing",
-                    asset::AssetStaticDetails::merge_keep_existing,
-                );
+                let mf = match migration_state {
+                    MigrationState::Last | MigrationState::Version(_) => {
+                        OffChainData::merge_off_chain_data
+                    }
+                    MigrationState::CreateColumnFamilies => {
+                        asset::AssetStaticDetails::merge_keep_existing
+                    }
+                };
+                cf_options
+                    .set_merge_operator_associative("merge_fn_off_chain_data_keep_existing", mf);
             }
             cl_items::ClLeaf::NAME => {
                 cf_options.set_merge_operator_associative(
@@ -679,14 +671,9 @@ impl Storage {
             }
             TokenAccount::NAME => {
                 let mf = match migration_state {
-                    MigrationState::Version(version) => match *version {
-                        CollectionAuthorityMigration::VERSION
-                            ..=TokenAccounts2022ExtentionsMigration::VERSION => {
-                            AssetDynamicDetailsV0::merge_dynamic_details
-                        }
-                        _ => token_accounts::merge_token_accounts,
-                    },
-                    MigrationState::Last => token_accounts::merge_token_accounts,
+                    MigrationState::Last | MigrationState::Version(_) => {
+                        token_accounts::merge_token_accounts
+                    }
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing
                     }
@@ -813,10 +800,6 @@ impl Storage {
 #[allow(unused_variables)]
 pub trait ToFlatbuffersConverter<'a> {
     type Target: 'a;
-    fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target> {
-        todo!()
-    }
-    fn convert_to_fb_bytes(&self) -> Vec<u8> {
-        todo!()
-    }
+    fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target>;
+    fn convert_to_fb_bytes(&self) -> Vec<u8>;
 }
