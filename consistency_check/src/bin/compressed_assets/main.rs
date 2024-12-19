@@ -13,9 +13,8 @@ use clap::{command, Parser};
 use indicatif::{ProgressBar, ProgressStyle};
 use nft_ingester::api::dapi::get_proof_for_assets;
 use rocks_db::{migrator::MigrationState, Storage};
-use serde::{Deserialize, Serialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::pubkey::{ParsePubkeyError, Pubkey};
 use spl_concurrent_merkle_tree::hash::recompute;
 use tempfile::TempDir;
 use tokio::{
@@ -23,7 +22,8 @@ use tokio::{
     task::{JoinError, JoinSet},
 };
 use tokio_util::sync::CancellationToken;
-use usecase::proofs::MaybeProofChecker;
+use tracing::{error, info};
+use usecase::{graceful_stop::graceful_stop, proofs::MaybeProofChecker};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -45,9 +45,13 @@ struct Args {
 }
 
 const WRITER_SLEEP_TIME: Duration = Duration::from_secs(30);
+const FAILED_CHECKS_FILE: &str = "./failed_checks.csv";
+const FAILED_PROOFS_FILE: &str = "./failed_proofs.csv";
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() {
+    tracing_subscriber::fmt::init();
+
     // Parse command-line arguments
     let config = Args::parse();
 
@@ -65,7 +69,7 @@ pub async fn main() {
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let temp_path = temp_dir.path().to_str().unwrap().to_string();
-    println!("Opening DB...");
+    info!("Opening DB...");
     let db_client = Arc::new(
         Storage::open_secondary(
             config.db_path,
@@ -76,7 +80,7 @@ pub async fn main() {
         )
         .unwrap(),
     );
-    println!("DB opened");
+    info!("DB opened");
 
     let progress_bar = Arc::new(ProgressBar::new(keys.len() as u64));
     progress_bar.set_style(
@@ -126,6 +130,7 @@ pub async fn main() {
     let rate_clone = rate.clone();
     let shutdown_token_clone = shutdown_token.clone();
 
+    // update rate on the background
     tokio::spawn(async move {
         let mut last_time = std::time::Instant::now();
         let mut last_count = assets_processed_clone.load(Ordering::Relaxed);
@@ -161,29 +166,24 @@ pub async fn main() {
         }
     });
 
+    // write found problematic assets to the files
     writers.spawn(async move {
-        let failed_checks_file = File::create("./failed_checks.csv").unwrap();
-        let failed_proofs_file = File::create("./failed_proofs.csv").unwrap();
+        let failed_checks_file =
+            File::create(FAILED_CHECKS_FILE).expect("Failed to create file for failed check trees");
+        let failed_proofs_file =
+            File::create(FAILED_PROOFS_FILE).expect("Failed to create file for failed proofs");
+
         let mut failed_checks_wrt = csv::Writer::from_writer(failed_checks_file);
         let mut failed_proofs_wrt = csv::Writer::from_writer(failed_proofs_file);
 
         loop {
-            let mut f_ch = failed_check.lock().await;
-            for t in f_ch.iter() {
-                failed_checks_wrt.write_record(&[t]).unwrap();
+            if let Err(e) = process_failed_checks(&mut failed_checks_wrt, &failed_check).await {
+                error!("Error writing failed checks: {}", e);
             }
-            failed_checks_wrt.flush().unwrap();
-            f_ch.clear();
-            drop(f_ch);
 
-            let mut f_ch = failed_proofs.lock().await;
-            for (t, assets) in f_ch.iter() {
-                for a in assets {
-                    failed_proofs_wrt.write_record(&[t, a]).unwrap();
-                }
+            if let Err(e) = process_failed_proofs(&mut failed_proofs_wrt, &failed_proofs).await {
+                error!("Error writing failed proofs: {}", e);
             }
-            failed_proofs_wrt.flush().unwrap();
-            f_ch.clear();
 
             if !shutdown_for_file_writer_rx.is_empty() {
                 break;
@@ -191,41 +191,15 @@ pub async fn main() {
 
             tokio::time::sleep(WRITER_SLEEP_TIME).await;
         }
+
+        Ok(())
     });
 
-    while let Some(task) = tasks.join_next().await {
-        match task {
-            Ok(_) => {
-                println!("One of the tasks was finished")
-            }
-            Err(err) if err.is_panic() => {
-                let err = err.into_panic();
-                println!("Task panic: {:?}", err);
-            }
-            Err(err) => {
-                let err = err.to_string();
-                println!("Task error: {}", err);
-            }
-        }
-    }
+    graceful_stop(&mut tasks).await;
 
     shutdown_for_file_writer_tx.send(()).unwrap();
 
-    while let Some(task) = writers.join_next().await {
-        match task {
-            Ok(_) => {
-                println!("Writer thread was stopped")
-            }
-            Err(err) if err.is_panic() => {
-                let err = err.into_panic();
-                println!("Writer panic: {:?}", err);
-            }
-            Err(err) => {
-                let err = err.to_string();
-                println!("Writer error: {}", err);
-            }
-        }
-    }
+    graceful_stop(&mut writers).await;
 
     progress_bar.finish_with_message("Processing complete");
 }
@@ -245,13 +219,19 @@ async fn verify_tree_batch(
     inner_workers: usize,
 ) -> Result<(), JoinError> {
     let api_metrics = Arc::new(metrics_utils::ApiMetricsConfig::new());
+
     for tree in trees {
-        let t_key = Pubkey::from_str(&tree).unwrap();
-        let tree_config_key = Pubkey::find_program_address(
-            &[t_key.as_ref()],
-            &Pubkey::from_str("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY").unwrap(),
-        )
-        .0;
+        let t_key = match Pubkey::from_str(&tree) {
+            Ok(t) => t,
+            Err(e) => {
+                error!("Could not convert tree string into Pubkey: {}", e);
+                let mut f_ch = failed_check.lock().await;
+                f_ch.insert(tree.clone());
+                continue;
+            }
+        };
+
+        let tree_config_key = Pubkey::find_program_address(&[t_key.as_ref()], &mpl_bubblegum::ID).0;
 
         if let Ok(tree_data) = rpc.get_account_data(&tree_config_key).await {
             if let Ok(des_data) = mpl_bubblegum::accounts::TreeConfig::from_bytes(&tree_data) {
@@ -260,7 +240,7 @@ async fn verify_tree_batch(
 
                 for asset_index in 0..des_data.num_minted {
                     if shutdown_token.is_cancelled() {
-                        println!("Received shutdown signal. Bye");
+                        info!("Received shutdown signal");
                         return Ok(());
                     }
 
@@ -287,54 +267,103 @@ async fn verify_tree_batch(
                         )
                         .await
                         {
-                            for (asset, pr) in proofs {
-                                if let Some(pr) = pr {
-                                    let ar_pr: Vec<[u8; 32]> = pr
-                                        .proof
-                                        .iter()
-                                        .map(|p| Pubkey::from_str(p).unwrap().to_bytes())
-                                        .collect();
-                                    let recomputed_root = recompute(
-                                        Pubkey::from_str(pr.leaf.as_ref()).unwrap().to_bytes(),
-                                        ar_pr.as_ref(),
-                                        pr.node_index as u32,
-                                    );
+                            for (asset, asset_proof_resp) in proofs {
+                                if let Some(asset_proof_resp) = asset_proof_resp {
+                                    let asset_proofs: Result<Vec<[u8; 32]>, ParsePubkeyError> =
+                                        asset_proof_resp
+                                            .proof
+                                            .iter()
+                                            .map(|p| {
+                                                Pubkey::from_str(p).map(|pubkey| pubkey.to_bytes())
+                                            })
+                                            .collect();
 
-                                    if recomputed_root
-                                        != Pubkey::from_str(&pr.root).unwrap().to_bytes()
-                                    {
-                                        let _ = assets_with_failed_proofs_cloned
-                                            .fetch_add(1, Ordering::Relaxed);
-                                        write_asset_to_h_map(
-                                            failed_proofs_cloned.clone(),
-                                            tree_cloned.clone(),
-                                            asset,
-                                        )
-                                        .await;
+                                    match asset_proofs {
+                                        Ok(asset_proofs) => {
+                                            let leaf_pubkey = match Pubkey::from_str(
+                                                asset_proof_resp.leaf.as_ref(),
+                                            ) {
+                                                Ok(l) => l.to_bytes(),
+                                                Err(e) => {
+                                                    save_asset_w_inv_proofs(
+                                                        assets_with_failed_proofs_cloned.clone(),
+                                                        failed_proofs_cloned.clone(),
+                                                        tree_cloned.clone(),
+                                                        asset.clone(),
+                                                        Some(e.to_string()),
+                                                    )
+                                                    .await;
+                                                    continue;
+                                                }
+                                            };
+
+                                            let root_from_api =
+                                                match Pubkey::from_str(&asset_proof_resp.root) {
+                                                    Ok(r) => r.to_bytes(),
+                                                    Err(e) => {
+                                                        save_asset_w_inv_proofs(
+                                                            assets_with_failed_proofs_cloned
+                                                                .clone(),
+                                                            failed_proofs_cloned.clone(),
+                                                            tree_cloned.clone(),
+                                                            asset.clone(),
+                                                            Some(e.to_string()),
+                                                        )
+                                                        .await;
+                                                        continue;
+                                                    }
+                                                };
+
+                                            let recomputed_root = recompute(
+                                                leaf_pubkey,
+                                                asset_proofs.as_ref(),
+                                                asset_proof_resp.node_index as u32,
+                                            );
+
+                                            if recomputed_root != root_from_api {
+                                                save_asset_w_inv_proofs(
+                                                    assets_with_failed_proofs_cloned.clone(),
+                                                    failed_proofs_cloned.clone(),
+                                                    tree_cloned.clone(),
+                                                    asset.clone(),
+                                                    None,
+                                                )
+                                                .await;
+                                            }
+                                        }
+                                        Err(_) => {
+                                            save_asset_w_inv_proofs(
+                                                assets_with_failed_proofs_cloned.clone(),
+                                                failed_proofs_cloned.clone(),
+                                                tree_cloned.clone(),
+                                                asset.clone(),
+                                                Some("Could not convert all the received proofs to the Pubkey".to_string()),
+                                            ).await;
+                                        }
                                     }
                                 } else {
-                                    let _ = assets_with_missed_proofs_cloned
-                                        .fetch_add(1, Ordering::Relaxed);
-                                    println!(
-                                        "API did not return any proofs for asset: {:?}",
-                                        asset
-                                    );
-                                    write_asset_to_h_map(
+                                    save_asset_w_inv_proofs(
+                                        assets_with_missed_proofs_cloned.clone(),
                                         failed_proofs_cloned.clone(),
                                         tree_cloned.clone(),
-                                        asset,
+                                        asset.clone(),
+                                        Some(format!(
+                                            "API did not return any proofs for asset: {:?}",
+                                            asset
+                                        )),
                                     )
                                     .await;
                                 }
                             }
                         } else {
-                            let _ =
-                                assets_with_missed_proofs_cloned.fetch_add(1, Ordering::Relaxed);
-                            println!("Got an error during selecting data from the rocks");
-                            write_asset_to_h_map(
+                            save_asset_w_inv_proofs(
+                                assets_with_missed_proofs_cloned.clone(),
                                 failed_proofs_cloned.clone(),
                                 tree_cloned.clone(),
                                 asset_id.to_string(),
+                                Some(
+                                    "Got an error during selecting data from the rocks".to_string(),
+                                ),
                             )
                             .await;
                         }
@@ -358,12 +387,12 @@ async fn verify_tree_batch(
                     });
                 }
             } else {
-                println!("Could not deserialise TreeConfig account");
+                error!("Could not deserialise TreeConfig account");
                 let mut f_ch = failed_check.lock().await;
                 f_ch.insert(tree.clone());
             }
         } else {
-            println!("Could not get account data from the RPC");
+            error!("Could not get account data from the RPC");
             let mut f_ch = failed_check.lock().await;
             f_ch.insert(tree.clone());
         }
@@ -385,4 +414,46 @@ async fn write_asset_to_h_map(
     } else {
         f_ch.insert(tree.clone(), vec![asset.to_string()]);
     }
+}
+
+async fn save_asset_w_inv_proofs(
+    counter: Arc<AtomicU64>,
+    failed_proofs: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    tree: String,
+    asset: String,
+    error: Option<String>,
+) {
+    if let Some(e) = error {
+        error!(e);
+    }
+    let _ = counter.fetch_add(1, Ordering::Relaxed);
+    write_asset_to_h_map(failed_proofs.clone(), tree.clone(), asset).await;
+}
+
+async fn process_failed_checks(
+    writer: &mut csv::Writer<File>,
+    failed_check: &Arc<tokio::sync::Mutex<HashSet<String>>>,
+) -> Result<(), csv::Error> {
+    let mut f_ch = failed_check.lock().await;
+    for t in f_ch.iter() {
+        writer.write_record(&[t])?;
+    }
+    writer.flush()?;
+    f_ch.clear();
+    Ok(())
+}
+
+async fn process_failed_proofs(
+    writer: &mut csv::Writer<File>,
+    failed_proofs: &Arc<tokio::sync::Mutex<std::collections::HashMap<String, Vec<String>>>>,
+) -> Result<(), csv::Error> {
+    let mut f_ch = failed_proofs.lock().await;
+    for (t, assets) in f_ch.iter() {
+        for a in assets {
+            writer.write_record(&[t, a])?;
+        }
+    }
+    writer.flush()?;
+    f_ch.clear();
+    Ok(())
 }

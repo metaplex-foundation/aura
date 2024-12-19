@@ -41,8 +41,8 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::{io, mem};
 use thiserror::Error;
+use tracing::info;
 
-use log::info;
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read};
