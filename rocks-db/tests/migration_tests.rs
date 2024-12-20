@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
     use metrics_utils::red::RequestErrorDurationMetrics;
-    use rocks_db::columns::offchain_data::OffChainDataDeprecated;
+    use rocks_db::column::TypedColumn;
+    use rocks_db::columns::offchain_data::{OffChainData, OffChainDataDeprecated};
     use rocks_db::migrator::MigrationState;
     use rocks_db::Storage;
     use std::sync::Arc;
@@ -63,7 +64,25 @@ mod tests {
             MigrationState::Last,
         )
         .unwrap();
+        let mut it = new_storage
+            .db
+            .raw_iterator_cf(&new_storage.db.cf_handle(OffChainData::NAME).unwrap());
+        it.seek_to_first();
+        assert!(it.valid(),"iterator should be valid on start");
+        while it.valid() {
+            println!("has key {:?} with value {:?}", it.key(), it.value());
+            it.next();
+        }
+        let migrated_v1 = new_storage
+            .db
+            .get_pinned_cf(
+                &new_storage.db.cf_handle(OffChainData::NAME).unwrap(),
+                OffChainData::encode_key(v1.url.clone()),
+            )
+            .expect("expect to get value successfully")
+            .expect("value to be present");
 
+        print!("migrated is {:?}", migrated_v1.to_vec());
         let migrated_v1 = new_storage
             .asset_offchain_data
             .get(v1.url.clone())
