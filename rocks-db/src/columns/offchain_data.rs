@@ -46,6 +46,28 @@ impl From<OffChainData> for OffChainDataGrpc {
     }
 }
 
+impl<'a> From<fb::OffChainData<'a>> for OffChainData {
+    fn from(value: fb::OffChainData<'a>) -> Self {
+        Self {
+            storage_mutability: value.storage_mutability().into(),
+            url: value.url().map(|url| url.to_string()),
+            metadata: value.metadata().map(|metadata| metadata.to_string()),
+            last_read_at: value.last_read_at(),
+        }
+    }
+}
+
+impl<'a> From<fb::StorageMutability> for StorageMutability {
+    fn from(storage_mutability: fb::StorageMutability) -> Self {
+        match storage_mutability.variant_name() {
+            Some("Immutable") => StorageMutability::Immutable,
+            Some("Mutable") => StorageMutability::Mutable,
+            Some(_) => unreachable!(),
+            None => unreachable!(),
+        }
+    }
+}
+
 impl From<OffChainDataGrpc> for OffChainData {
     fn from(off_chain_data: OffChainDataGrpc) -> Self {
         let storage_mutability = StorageMutability::from(off_chain_data.url.as_str());
