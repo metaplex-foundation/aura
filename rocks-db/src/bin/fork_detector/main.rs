@@ -55,7 +55,8 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
     println!("Opened in {:?}", start.elapsed());
 
     let slots_db = Arc::new(
-        SlotStorage::open_secondary(todo!(), todo!(), js.clone(), red_metrics.clone())
+        // where secondary path comes from?
+        SlotStorage::open_secondary(source_path, source_path, js.clone(), red_metrics.clone())
             .expect("should open slots db"),
     );
 

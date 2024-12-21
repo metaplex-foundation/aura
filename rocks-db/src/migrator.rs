@@ -47,6 +47,7 @@ pub trait RocksMigration {
         + Serialize
         + DeserializeOwned
         + Send
+        + TypedColumn
         + Into<<Self::NewDataType as TypedColumn>::ValueType>;
 }
 
@@ -249,10 +250,10 @@ impl<'a> MigrationApplier<'a> {
             batch.put_cf(
                 &temporary_migration_storage
                     .db
-                    .cf_handle(<<M as RocksMigration>::NewDataType as TypedColumn>::NAME)
+                    .cf_handle(<<M as RocksMigration>::OldDataType as TypedColumn>::NAME)
                     .ok_or(StorageError::Common(format!(
                         "Cannot get cf_handle for {}",
-                        <<M as RocksMigration>::NewDataType as TypedColumn>::NAME
+                        <<M as RocksMigration>::OldDataType as TypedColumn>::NAME
                     )))?,
                 key,
                 value,
@@ -312,10 +313,10 @@ impl<'a> MigrationApplier<'a> {
     ) -> Result<impl Iterator<Item = (Box<[u8]>, Box<[u8]>)> + '_> {
         Ok(db
             .iterator_cf(
-                &db.cf_handle(<<M as RocksMigration>::NewDataType as TypedColumn>::NAME)
+                &db.cf_handle(<<M as RocksMigration>::OldDataType as TypedColumn>::NAME)
                     .ok_or(StorageError::Common(format!(
                         "Cannot get cf_handle for {}",
-                        <<M as RocksMigration>::NewDataType as TypedColumn>::NAME
+                        <<M as RocksMigration>::OldDataType as TypedColumn>::NAME
                     )))?,
                 IteratorMode::Start,
             )

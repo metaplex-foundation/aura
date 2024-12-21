@@ -42,33 +42,35 @@ mod tests {
         drop(old_storage);
         let secondary_storage_dir = TempDir::new().unwrap();
         let migration_version_manager = Storage::open_secondary(
-            dir.path().to_str().unwrap(),
+            path,
             secondary_storage_dir.path().to_str().unwrap(),
             Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
-            MigrationState::Last,
+            MigrationState::Version(4),
         )
         .unwrap();
+        let binding = TempDir::new().unwrap();
+        let migration_storage_path = binding.path().to_str().unwrap();
         Storage::apply_all_migrations(
-            dir.path().to_str().unwrap(),
-            TempDir::new().unwrap().path().to_str().unwrap(),
+            path,
+            migration_storage_path,
             Arc::new(migration_version_manager),
         )
         .await
         .unwrap();
 
         let new_storage = Storage::open(
-            dir.path().to_str().unwrap(),
+            path,
             Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
-            MigrationState::Last,
+            MigrationState::Version(4),
         )
         .unwrap();
         let mut it = new_storage
             .db
             .raw_iterator_cf(&new_storage.db.cf_handle(OffChainData::NAME).unwrap());
         it.seek_to_first();
-        assert!(it.valid(),"iterator should be valid on start");
+        assert!(it.valid(), "iterator should be valid on start");
         while it.valid() {
             println!("has key {:?} with value {:?}", it.key(), it.value());
             it.next();
@@ -85,7 +87,7 @@ mod tests {
         print!("migrated is {:?}", migrated_v1.to_vec());
         let migrated_v1 = new_storage
             .asset_offchain_data
-            .get(v1.url.clone())
+            .get_flatbuffers_encoded(v1.url.clone())
             .expect("should get value successfully")
             .expect("the value should be not empty");
         assert_eq!(
@@ -97,7 +99,7 @@ mod tests {
         assert_eq!(migrated_v1.last_read_at, 0);
         let migrated_v2 = new_storage
             .asset_offchain_data
-            .get(v2.url.clone())
+            .get_flatbuffers_encoded(v2.url.clone())
             .expect("should get value successfully")
             .expect("the value should be not empty");
         assert_eq!(
