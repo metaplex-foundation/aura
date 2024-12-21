@@ -1,6 +1,7 @@
-use entities::models::{OffChainData, RawBlock};
+use entities::models::RawBlock;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::column::TypedColumn;
+use rocks_db::columns::offchain_data::OffChainData;
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
 

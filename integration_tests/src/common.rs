@@ -81,7 +81,7 @@ pub struct TestSetup {
     pub message_parser: MessageParser,
     pub acc_processor: Arc<AccountsProcessor<Buffer>>,
     pub tx_processor: BubblegumTxProcessor,
-    pub synchronizer: Synchronizer<Storage, PgClient, Arc<PgClient>>,
+    pub synchronizer: Synchronizer<Storage, PgClient>,
     pub das_api: DasApi<
         MaybeProofChecker,
         JsonWorker,
@@ -109,6 +109,7 @@ impl TestSetup {
                 red_metrics.clone(),
                 MIN_PG_CONNECTIONS,
                 POSTGRE_MIGRATIONS_PATH,
+                Some(PathBuf::from_str("./dump").unwrap()),
             )
             .await
             .unwrap(),
@@ -185,12 +186,10 @@ impl TestSetup {
         let synchronizer = Synchronizer::new(
             storage.clone(),
             index_storage.clone(),
-            index_storage.clone(),
             DUMP_SYNCHRONIZER_BATCH_SIZE,
             "./dump".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             SYNCHRONIZER_PARALLEL_TASKS,
-            false,
         );
 
         TestSetup {

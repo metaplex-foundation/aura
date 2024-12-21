@@ -82,6 +82,7 @@ async fn main() {
                     &config.database_url.clone().unwrap(),
                     100,
                     500,
+                    None,
                     metrics.red_metrics,
                 )
                 .await

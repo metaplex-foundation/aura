@@ -1,6 +1,7 @@
 use crate::asset::{AssetCollection, AssetCompleteDetails, MetadataMintMap};
-use crate::asset_generated::asset as fb;
 use crate::column::TypedColumn;
+use crate::columns::inscriptions::InscriptionData;
+use crate::generated::asset_generated::asset as fb;
 use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::Result;
 use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
@@ -165,7 +166,7 @@ impl BatchSaveStorage {
         self.storage.inscription_data.merge_with_batch(
             &mut self.batch,
             key,
-            &crate::inscriptions::InscriptionData {
+            &InscriptionData {
                 pubkey: key,
                 data: inscription_data.inscription_data.clone(),
                 write_version: inscription_data.write_version,

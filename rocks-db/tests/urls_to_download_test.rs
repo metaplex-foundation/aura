@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use interface::assert_urls::{DownloadOutcome, UrlDownloadNotification, UrlsToDownloadStore};
-    use rocks_db::asset_previews::{AssetPreviews, UrlToDownload, DL_MAX_ATTEMPTS};
+    use rocks_db::columns::asset_previews::{AssetPreviews, UrlToDownload, DL_MAX_ATTEMPTS};
     use setup::{await_async_for, rocks::*};
     use solana_sdk::keccak;
 

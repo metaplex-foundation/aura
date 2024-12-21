@@ -1,11 +1,8 @@
-use rocks_db::asset_generated::asset as fb;
+use rocks_db::generated::asset_generated::asset as fb;
 
 use bincode::{deserialize, serialize};
 use criterion::{criterion_group, criterion_main, Criterion};
-use rocks_db::{
-    asset::{self, AssetCompleteDetails},
-    AssetDynamicDetails,
-};
+use rocks_db::columns::asset::{self, AssetCompleteDetails, AssetDynamicDetails};
 use setup::rocks::RocksTestEnvironmentSetup;
 use solana_sdk::pubkey::Pubkey;
 

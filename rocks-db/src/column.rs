@@ -3,11 +3,12 @@ use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use bincode::{deserialize, serialize};
 
+use crate::columns::offchain_data::OffChainData;
+use crate::generated::offchain_data_generated::off_chain_data;
+use crate::{Result, StorageError, ToFlatbuffersConverter, BATCH_GET_ACTION, ROCKS_COMPONENT};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, DB};
 use serde::{de::DeserializeOwned, Serialize};
-
-use crate::{Result, StorageError, BATCH_GET_ACTION, ROCKS_COMPONENT};
 pub trait TypedColumn {
     type KeyType: Sync + Clone + Send + Debug;
     type ValueType: Sync + Serialize + DeserializeOwned + Send;
@@ -130,6 +131,21 @@ where
             serialize(v).map_err(|e| StorageError::Common(e.to_string()))
         })
     }
+
+    pub fn merge_with_batch_flatbuffers(
+        &self,
+        batch: &mut rocksdb::WriteBatchWithTransaction<false>,
+        key: C::KeyType,
+        value: &C::ValueType,
+    ) -> Result<()>
+    where
+        C::ValueType: for<'a> ToFlatbuffersConverter<'a>,
+    {
+        self.merge_with_batch_generic(batch, key, value, |v| {
+            Ok(ToFlatbuffersConverter::convert_to_fb_bytes(v))
+        })
+    }
+
     pub(crate) fn merge_with_batch_raw(
         &self,
         batch: &mut rocksdb::WriteBatchWithTransaction<false>,
@@ -266,6 +282,19 @@ where
         .await
     }
 
+    pub async fn put_batch_flatbuffers(
+        &self,
+        values: HashMap<C::KeyType, C::ValueType>,
+    ) -> Result<()>
+    where
+        C::ValueType: for<'a> ToFlatbuffersConverter<'a>,
+    {
+        self.put_batch_generic(values, |v| {
+            Ok(ToFlatbuffersConverter::convert_to_fb_bytes(v))
+        })
+        .await
+    }
+
     pub async fn get_cbor_encoded(&self, key: C::KeyType) -> Result<Option<C::ValueType>> {
         let mut result = Ok(None);
 
@@ -297,6 +326,38 @@ where
             result = Ok(Some(value))
         }
         result
+    }
+
+    pub fn get_flatbuffers_encoded(&self, key: C::KeyType) -> Result<Option<C::ValueType>> {
+        let type_name = std::any::type_name::<C>().split("::").last().unwrap();
+
+        let value = if let Some(serialized_value) =
+            self.backend.get_cf(&self.handle(), C::encode_key(key))?
+        {
+            // instead of this match macro probably may be used which will do the same thing
+            // without excessive hands waving
+            let deserialized_data = match type_name {
+                "OffChainData" => {
+                    let fb_structure = off_chain_data::root_as_off_chain_data(&serialized_value)
+                        .map_err(|e| StorageError::Common(e.to_string()))?;
+                    OffChainData::from(fb_structure)
+                }
+                _ => unreachable!(),
+            };
+
+            // Safety: we are sure that the deserialized_data is of the same type as C::ValueType
+            // because ValueType is usually Self, and type comes from C type name
+            unsafe {
+                // TODO: maybe, pointer cast maybe used instead of the Box
+                Some(std::mem::transmute::<_, Box<C::ValueType>>(Box::new(
+                    deserialized_data,
+                )))
+            }
+        } else {
+            None
+        };
+
+        Ok(value.map(|val| *val))
     }
 
     async fn batch_get_generic<F>(

@@ -4,7 +4,7 @@ mod tests {
     use itertools::Itertools;
     use nft_ingester::api::dapi::asset_preview::populate_previews_opt;
     use nft_ingester::api::dapi::rpc_asset_models::{Asset, Content, File, MetadataMap, Ownership};
-    use rocks_db::asset_previews::AssetPreviews;
+    use rocks_db::columns::asset_previews::AssetPreviews;
     use setup::rocks::RocksTestEnvironment;
     use solana_sdk::keccak::{self, HASH_BYTES};
 

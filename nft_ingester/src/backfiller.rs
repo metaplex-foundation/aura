@@ -9,8 +9,8 @@ use interface::signature_persistence::{BlockConsumer, BlockProducer};
 use interface::slots_dumper::{SlotGetter, SlotsDumper};
 use metrics_utils::BackfillerMetricsConfig;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
-use rocks_db::bubblegum_slots::ForceReingestableSlots;
 use rocks_db::column::TypedColumn;
+use rocks_db::columns::bubblegum_slots::ForceReingestableSlots;
 use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
 use rocks_db::{SlotStorage, Storage};
 use solana_program::pubkey::Pubkey;
@@ -385,7 +385,7 @@ where
     C: BlockConsumer,
 {
     let start_slot = db
-        .get_parameter::<u64>(rocks_db::parameters::Parameter::LastBackfilledSlot)
+        .get_parameter::<u64>(rocks_db::columns::parameters::Parameter::LastBackfilledSlot)
         .await?;
     slot_db
         .db

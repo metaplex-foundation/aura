@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use solana_sdk::pubkey::Pubkey;
 
-use crate::asset_generated::asset as fb;
+use crate::generated::asset_generated::asset as fb;
 use entities::enums::*;
 use entities::models::*;
 
