@@ -211,7 +211,7 @@ impl PgClient {
 
         query_builder.push(" order by tsk_id");
 
-        query_builder.push(" limit");
+        query_builder.push(" limit ");
 
         query_builder.push_bind(limit);
         
