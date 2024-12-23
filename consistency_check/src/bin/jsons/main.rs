@@ -145,6 +145,8 @@ pub async fn main() {
             .await
         {
             Ok(tasks) => {
+                progress_bar.inc(tasks.len() as u64);
+
                 last_key_in_batch = Some(tasks.last().unwrap().tsk_id.clone());
 
                 let keys_to_check: Vec<String> = tasks
@@ -214,6 +216,8 @@ pub async fn main() {
     }
 
     info!("Main loop finished its job");
+
+    shutdown_for_file_writer_tx.send(()).unwrap();
 
     graceful_stop(&mut writers).await;
 }
