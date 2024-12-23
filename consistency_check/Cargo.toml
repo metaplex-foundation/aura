@@ -32,10 +32,14 @@ memmap2 = "0.9.0"
 thiserror = { workspace = true }
 lazy_static = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true}
+tracing-subscriber = { workspace = true }
+entities = { path = "../entities" }
 
 [[bin]]
 name = "compressed_assets"
 
 [[bin]]
 name = "regular_assets"
+
+[[bin]]
+name = "jsons"
