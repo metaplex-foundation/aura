@@ -114,6 +114,8 @@ pub async fn main() {
             missed_jsons_wrt.flush().unwrap();
             f_ch.clear();
 
+            drop(f_ch);
+
             if !shutdown_for_file_writer_rx.is_empty() {
                 break;
             }
