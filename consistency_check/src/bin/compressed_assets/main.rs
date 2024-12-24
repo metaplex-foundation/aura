@@ -12,7 +12,7 @@ use std::{
 use clap::{command, Parser};
 use consistency_check::update_rate;
 use indicatif::{ProgressBar, ProgressStyle};
-use nft_ingester::api::dapi::get_proof_for_assets;
+use nft_ingester::api::dapi::{get_proof_for_assets, rpc_asset_models::AssetProof};
 use rocks_db::{migrator::MigrationState, Storage};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::{ParsePubkeyError, Pubkey};
@@ -241,58 +241,9 @@ async fn verify_tree_batch(
                         {
                             for (asset, asset_proof_resp) in proofs {
                                 if let Some(asset_proof_resp) = asset_proof_resp {
-                                    let asset_proofs: Result<Vec<[u8; 32]>, ParsePubkeyError> =
-                                        asset_proof_resp
-                                            .proof
-                                            .iter()
-                                            .map(|p| {
-                                                Pubkey::from_str(p).map(|pubkey| pubkey.to_bytes())
-                                            })
-                                            .collect();
-
-                                    match asset_proofs {
-                                        Ok(asset_proofs) => {
-                                            let leaf_pubkey = match Pubkey::from_str(
-                                                asset_proof_resp.leaf.as_ref(),
-                                            ) {
-                                                Ok(l) => l.to_bytes(),
-                                                Err(e) => {
-                                                    save_asset_w_inv_proofs(
-                                                        assets_with_failed_proofs_cloned.clone(),
-                                                        failed_proofs_cloned.clone(),
-                                                        tree_cloned.clone(),
-                                                        asset.clone(),
-                                                        Some(e.to_string()),
-                                                    )
-                                                    .await;
-                                                    continue;
-                                                }
-                                            };
-
-                                            let root_from_api =
-                                                match Pubkey::from_str(&asset_proof_resp.root) {
-                                                    Ok(r) => r.to_bytes(),
-                                                    Err(e) => {
-                                                        save_asset_w_inv_proofs(
-                                                            assets_with_failed_proofs_cloned
-                                                                .clone(),
-                                                            failed_proofs_cloned.clone(),
-                                                            tree_cloned.clone(),
-                                                            asset.clone(),
-                                                            Some(e.to_string()),
-                                                        )
-                                                        .await;
-                                                        continue;
-                                                    }
-                                                };
-
-                                            let recomputed_root = recompute(
-                                                leaf_pubkey,
-                                                asset_proofs.as_ref(),
-                                                asset_proof_resp.node_index as u32,
-                                            );
-
-                                            if recomputed_root != root_from_api {
+                                    match check_if_asset_proofs_valid(asset_proof_resp).await {
+                                        Ok(proofs_valid) => {
+                                            if !proofs_valid {
                                                 save_asset_w_inv_proofs(
                                                     assets_with_failed_proofs_cloned.clone(),
                                                     failed_proofs_cloned.clone(),
@@ -303,14 +254,15 @@ async fn verify_tree_batch(
                                                 .await;
                                             }
                                         }
-                                        Err(_) => {
+                                        Err(e) => {
                                             save_asset_w_inv_proofs(
                                                 assets_with_failed_proofs_cloned.clone(),
                                                 failed_proofs_cloned.clone(),
                                                 tree_cloned.clone(),
                                                 asset.clone(),
-                                                Some("Could not convert all the received proofs to the Pubkey".to_string()),
-                                            ).await;
+                                                Some(e),
+                                            )
+                                            .await;
                                         }
                                     }
                                 } else {
@@ -375,6 +327,31 @@ async fn verify_tree_batch(
     Ok(())
 }
 
+async fn check_if_asset_proofs_valid(asset_proofs_response: AssetProof) -> Result<bool, String> {
+    let asset_proofs = asset_proofs_response
+        .proof
+        .iter()
+        .map(|p| Pubkey::from_str(p).map(|pubkey| pubkey.to_bytes()))
+        .collect::<Result<Vec<[u8; 32]>, ParsePubkeyError>>()
+        .map_err(|_| "Could not convert all the received proofs to the Pubkey".to_string())?;
+
+    let leaf_key = Pubkey::from_str(asset_proofs_response.leaf.as_ref())
+        .map_err(|e| e.to_string())?
+        .to_bytes();
+
+    let root_key = Pubkey::from_str(asset_proofs_response.root.as_ref())
+        .map_err(|e| e.to_string())?
+        .to_bytes();
+
+    let recomputed_root = recompute(
+        leaf_key,
+        asset_proofs.as_ref(),
+        asset_proofs_response.node_index as u32,
+    );
+
+    Ok(recomputed_root == root_key)
+}
+
 async fn write_asset_to_h_map(
     h_map: Arc<Mutex<HashMap<String, Vec<String>>>>,
     tree: String,
@@ -428,4 +405,70 @@ async fn process_failed_proofs(
     writer.flush()?;
     f_ch.clear();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use nft_ingester::api::dapi::rpc_asset_models::AssetProof;
+
+    use crate::check_if_asset_proofs_valid;
+
+    #[tokio::test]
+    async fn test_check_asset_proofs() {
+        let correct_asset_proofs_response = AssetProof {
+            root: "9uTkEN1ENx2PkTThCmHRgxDuWyC2mY5iUfWE56Py4pVT".to_string(),
+            proof: vec![
+                "6y3Bfm1A45eiz6CrSUZ8zSLafDLAjqxCHQcnggBHhPKX".to_string(),
+                "DU4ehqaJPPzBvV3zrnMLJBPSnHbeZ4HJPW2ctNL3zLtr".to_string(),
+                "9qbsoVDbzsjHgYRVfeP7NScQUFA1a9cz2Dv2WjHxvKmc".to_string(),
+                "CVhb5Xq15koQPhVTcjMUi13vMZEvwHBeJS83jPz5UKZT".to_string(),
+                "GRGz8sPt1Acx4Kg5tahpo9xgXFTxRz3VM9cDMjnT7Ub9".to_string(),
+                "4q96PR5gYMjisG2CAiyJ31TTLa7b4ZJopigb8HBCaaia".to_string(),
+                "JmcVRsVGmp2ryJ6B4gfQkRYLimWn49DyXVBXhABSnBZ".to_string(),
+                "8VYXXbH9xuDE2sPHscPmLd7VY5mQHY8kfhMg8HTVmeww".to_string(),
+                "R67VWRhUFah3NtsiGjcGCUyTpiBC2RcxNoXYc5QBYSP".to_string(),
+                "5WK5WK5Wh2hADtDtfKJRphio4RTVp68guVh7oGzPBUzA".to_string(),
+                "83cpGHPEGs9zcinFrzr923U2AeeN8cnoHrmakBnjzeQh".to_string(),
+                "3jgDef37K6A92KQZc1yM83JAkaa8LDMeUqVNM23zfb7X".to_string(),
+                "3FTMdU2YS12o8wCneJKx3NR5z8fBr2ePSu2SvDH3ScUZ".to_string(),
+                "DetPa9RmCiyYFb3GrP2x56eci3AL2FURUnKgr9LPmd3R".to_string(),
+                "B8C2vz9hBcoVjZqc8bvDFKH4NZsxL58eSoKynZwAXSMe".to_string(),
+                "YVH7nciw8SoEohSqo4jgtnindSZrjBs8a9xzGekEApT".to_string(),
+                "3gmv89oKb2AFEuht4WEmN5fEkYHi4k36BtGGYVZGkRJ9".to_string(),
+                "FyfSyuB9KreW9S8WeDQZGZvQHCc4YjbDj351RAAwAPMA".to_string(),
+                "C3379KKG4cCNx56dKg2ApN2Zynw58CSyJycpuoirMJqz".to_string(),
+                "CXuGdfmM2j5cPKX1DmvhYjEK6L8C239SNQbehuQBBKaD".to_string(),
+            ],
+            node_index: 1124343,
+            leaf: "EKQvZvja5svkHUGAapyxj16jJtUJMLC7kXmqWheLptXu".to_string(),
+            tree_id: "AxM84SgtLjS51ffA9DucZpGZc3xKDF7H4zU7U6hJQYbR".to_string(),
+        };
+
+        let proofs_valid = check_if_asset_proofs_valid(correct_asset_proofs_response.clone())
+            .await
+            .unwrap();
+
+        assert!(proofs_valid);
+
+        let mut invalid_first_proof_hash = correct_asset_proofs_response.clone();
+        // change first hash in the vec to incorrect one
+        invalid_first_proof_hash.proof[0] =
+            "GuR1VgjoFvHU1vkh81LK1znDyWGjf1B2e4rQ4zQivAvT".to_string();
+
+        let proofs_valid = check_if_asset_proofs_valid(invalid_first_proof_hash)
+            .await
+            .unwrap();
+
+        assert_eq!(proofs_valid, false);
+
+        let mut invalid_leaf_hash = correct_asset_proofs_response.clone();
+        // change leaf hash to incorrect one
+        invalid_leaf_hash.leaf = "GuR1VgjoFvHU1vkh81LK1znDyWGjf1B2e4rQ4zQivAvT".to_string();
+
+        let proofs_valid = check_if_asset_proofs_valid(invalid_leaf_hash)
+            .await
+            .unwrap();
+
+        assert_eq!(proofs_valid, false);
+    }
 }
