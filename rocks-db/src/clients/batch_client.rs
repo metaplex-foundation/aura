@@ -571,14 +571,14 @@ impl Storage {
             )?;
         }
         if let Some(edition) = data.edition {
-            self.token_metadata_edition_cbor.merge_with_batch_cbor(
+            self.token_metadata_edition_cbor.merge_with_batch(
                 &mut batch,
                 edition.key,
                 &TokenMetadataEdition::EditionV1(edition),
             )?;
         }
         if let Some(master_edition) = data.master_edition {
-            self.token_metadata_edition_cbor.merge_with_batch_cbor(
+            self.token_metadata_edition_cbor.merge_with_batch(
                 &mut batch,
                 master_edition.key,
                 &TokenMetadataEdition::MasterEdition(master_edition),
@@ -587,11 +587,8 @@ impl Storage {
         if let Some(off_chain_data) = data.offchain_data {
             let url = off_chain_data.url.clone();
             let off_chain_data = OffChainData::from(off_chain_data);
-            self.asset_offchain_data.merge_with_batch_flatbuffers(
-                &mut batch,
-                url,
-                &off_chain_data,
-            )?;
+            self.asset_offchain_data
+                .merge_with_batch(&mut batch, url, &off_chain_data)?;
         }
         if let Some(spl_mint) = data.spl_mint {
             self.spl_mints

@@ -1,4 +1,5 @@
 use crate::column::TypedColumn;
+use crate::errors::StorageError;
 use crate::generated::offchain_data_generated::off_chain_data as fb;
 use crate::key_encoders::{decode_string, encode_string};
 use crate::{Result, ToFlatbuffersConverter};
@@ -158,5 +159,15 @@ impl TypedColumn for OffChainData {
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
         decode_string(bytes)
+    }
+
+    fn decode(bytes: &[u8]) -> Result<Self::ValueType> {
+        let fb_structure =
+            fb::root_as_off_chain_data(bytes).map_err(|e| StorageError::Common(e.to_string()))?;
+        Ok(OffChainData::from(fb_structure))
+    }
+
+    fn encode(v: &Self::ValueType) -> Result<Vec<u8>> {
+        Ok(ToFlatbuffersConverter::convert_to_fb_bytes(v))
     }
 }

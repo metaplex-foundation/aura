@@ -178,7 +178,7 @@ async fn get_complete_asset_details(
 
     let token_metadata_edition = if let Some(edition_address) = static_data.edition_address {
         Storage::column::<TokenMetadataEdition>(backend.clone(), metrics.clone())
-            .get_cbor_encoded(edition_address)
+            .get_async(edition_address)
             .await?
     } else {
         None
@@ -188,7 +188,7 @@ async fn get_complete_asset_details(
         Some(TokenMetadataEdition::MasterEdition(master_edition)) => (None, Some(master_edition)),
         Some(TokenMetadataEdition::EditionV1(edition)) => {
             let parent = Storage::column::<TokenMetadataEdition>(backend.clone(), metrics.clone())
-                .get_cbor_encoded(edition.parent)
+                .get_async(edition.parent)
                 .await?;
             let master_edition =
                 if let Some(TokenMetadataEdition::MasterEdition(master_edition)) = parent {

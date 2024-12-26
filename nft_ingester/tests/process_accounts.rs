@@ -274,7 +274,7 @@ mod tests {
             .rocks_env
             .storage
             .token_metadata_edition_cbor
-            .get_cbor_encoded(first_edition)
+            .get_async(first_edition)
             .await
             .unwrap()
             .unwrap();
@@ -282,7 +282,7 @@ mod tests {
             .rocks_env
             .storage
             .token_metadata_edition_cbor
-            .get_cbor_encoded(second_edition)
+            .get_async(second_edition)
             .await
             .unwrap()
             .unwrap();

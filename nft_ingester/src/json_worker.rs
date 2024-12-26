@@ -491,7 +491,7 @@ impl JsonPersister for JsonWorker {
 
             self.rocks_db
                 .asset_offchain_data
-                .put_batch_flatbuffers(rocks_updates)
+                .put_batch(rocks_updates)
                 .await
                 .map_err(|e| JsonDownloaderError::MainStorageError(e.to_string()))?;
 
