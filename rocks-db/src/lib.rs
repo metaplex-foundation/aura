@@ -25,7 +25,7 @@ use asset::{
 };
 use rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, DB};
 
-use crate::migrator::{MigrationState, MigrationVersions, RocksMigration};
+use crate::migrator::{MigrationState, MigrationVersions};
 
 use column::{Column, TypedColumn};
 use entities::enums::TokenMetadataEdition;

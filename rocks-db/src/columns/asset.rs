@@ -10,10 +10,9 @@ use entities::models::{
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
-use solana_sdk::bs58;
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use std::cmp::{max, Ordering};
-use tracing::{error, warn};
+use tracing::error;
 
 use crate::generated::asset_generated::asset as fb;
 use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
