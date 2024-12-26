@@ -122,7 +122,10 @@ mod tests {
         let it = storage
             .tree_seq_idx
             .pairs_iterator(storage.tree_seq_idx.iter_start());
-        let slots: Vec<_> = it.filter(|((k, _), _)| *k == tree_key).map(|((_, seq), _)| seq).collect();
+        let slots: Vec<_> = it
+            .filter(|((k, _), _)| *k == tree_key)
+            .map(|((_, seq), _)| seq)
+            .collect();
         assert_eq!(slots, vec![39738, 39739, 39740, 39741, 39742]);
     }
 }

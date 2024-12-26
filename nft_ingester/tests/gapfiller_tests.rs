@@ -123,7 +123,7 @@ async fn test_process_raw_blocks_stream() {
 
     let selected_data = storage
         .raw_blocks_cbor
-        .get_cbor_encoded(slot)
+        .get_async(slot)
         .await
         .unwrap()
         .unwrap();

@@ -87,7 +87,7 @@ mod tests {
         print!("migrated is {:?}", migrated_v1.to_vec());
         let migrated_v1 = new_storage
             .asset_offchain_data
-            .get_flatbuffers_encoded(v1.url.clone())
+            .get(v1.url.clone())
             .expect("should get value successfully")
             .expect("the value should be not empty");
         assert_eq!(
@@ -99,7 +99,7 @@ mod tests {
         assert_eq!(migrated_v1.last_read_at, 0);
         let migrated_v2 = new_storage
             .asset_offchain_data
-            .get_flatbuffers_encoded(v2.url.clone())
+            .get(v2.url.clone())
             .expect("should get value successfully")
             .expect("the value should be not empty");
         assert_eq!(

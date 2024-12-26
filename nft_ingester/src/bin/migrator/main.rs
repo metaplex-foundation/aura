@@ -170,7 +170,7 @@ impl JsonMigrator {
 
             match json {
                 Ok((_key, value)) => {
-                    let metadata = bincode::deserialize::<OffChainData>(&value);
+                    let metadata = OffChainData::decode(&value);
 
                     match metadata {
                         Ok(metadata) => {

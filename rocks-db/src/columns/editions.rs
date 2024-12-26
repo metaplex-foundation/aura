@@ -1,4 +1,5 @@
 use crate::column::TypedColumn;
+use crate::errors::StorageError;
 use crate::key_encoders::{decode_pubkey, encode_pubkey};
 use crate::Result;
 use entities::enums::TokenMetadataEdition;
@@ -18,6 +19,14 @@ impl TypedColumn for TokenMetadataEdition {
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
         decode_pubkey(bytes)
+    }
+
+    fn decode(bytes: &[u8]) -> Result<Self::ValueType> {
+        serde_cbor::from_slice(bytes).map_err(|e| StorageError::Common(e.to_string()))
+    }
+
+    fn encode(v: &Self::ValueType) -> Result<Vec<u8>> {
+        serde_cbor::to_vec(&v).map_err(|e| StorageError::Common(e.to_string()))
     }
 }
 

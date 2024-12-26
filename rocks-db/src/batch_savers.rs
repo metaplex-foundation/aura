@@ -147,7 +147,7 @@ impl BatchSaveStorage {
     pub fn store_edition(&mut self, key: Pubkey, edition: &TokenMetadataEdition) -> Result<()> {
         self.storage
             .token_metadata_edition_cbor
-            .merge_with_batch_cbor(&mut self.batch, key, edition)?;
+            .merge_with_batch(&mut self.batch, key, edition)?;
         Ok(())
     }
     pub fn store_inscription(&mut self, inscription: &InscriptionInfo) -> Result<()> {
