@@ -308,7 +308,7 @@ impl Storage {
     ) -> Result<HashMap<Pubkey, EditionData>> {
         let first_batch = self
             .token_metadata_edition_cbor
-            .batch_get_cbor(edition_keys)
+            .batch_get(edition_keys)
             .await?;
         let mut edition_data_list = Vec::new();
         let mut parent_keys = Vec::new();
@@ -333,7 +333,7 @@ impl Storage {
         if !parent_keys.is_empty() {
             let master_edition_map = self
                 .token_metadata_edition_cbor
-                .batch_get_cbor(parent_keys)
+                .batch_get(parent_keys)
                 .await?
                 .into_iter()
                 .filter_map(|e| {

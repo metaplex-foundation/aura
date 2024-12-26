@@ -362,12 +362,6 @@ impl<'a> MigrationApplier<'a> {
             'static + Clone + ToFlatbuffersConverter<'b>,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
-        match M::SERIALIZATION_TYPE {
-            SerializationType::Bincode => column.put_batch(std::mem::take(batch)).await,
-            SerializationType::Cbor => column.put_batch_cbor(std::mem::take(batch)).await,
-            SerializationType::Flatbuffers => {
-                column.put_batch_flatbuffers(std::mem::take(batch)).await
-            }
-        }
+        column.put_batch(std::mem::take(batch)).await
     }
 }

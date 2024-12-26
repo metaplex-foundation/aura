@@ -925,7 +925,7 @@ async fn test_process_forked_transaction() {
     // for this test all we need is key from Rocks raw_blocks_cbor column family, so RawBlock data could be arbitrary
     storage
         .raw_blocks_cbor
-        .put_cbor_encoded(
+        .put(
             slot_normal_tx,
             RawBlock {
                 slot: slot_normal_tx,
@@ -948,7 +948,7 @@ async fn test_process_forked_transaction() {
     // 16000 is arbitrary number
     storage
         .raw_blocks_cbor
-        .put_cbor_encoded(
+        .put(
             slot_normal_tx + 16000,
             RawBlock {
                 slot: slot_normal_tx + 16000,
