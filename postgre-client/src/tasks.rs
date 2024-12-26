@@ -18,6 +18,13 @@ pub struct UpdatedTask {
     pub error: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct JsonTask {
+    pub tsk_id: Vec<u8>,
+    pub metadata_url: String,
+    pub status: TaskStatus,
+}
+
 impl PgClient {
     async fn insert_new_tasks(&self, data: &mut Vec<Task>) -> Result<(), IndexDbError> {
         data.sort_by(|a, b| a.ofd_metadata_url.cmp(&b.ofd_metadata_url));
@@ -234,11 +241,22 @@ impl PgClient {
 
         Ok(tasks)
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct JsonTask {
-    pub tsk_id: Vec<u8>,
-    pub metadata_url: String,
-    pub status: TaskStatus,
+    pub async fn change_task_status(&self, tasks_urls: Vec<String>, status_to_set: TaskStatus) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new("update tasks SET tsk_status = ");
+        query_builder.push_bind(status_to_set);
+        query_builder.push(" WHERE tsk_metadata_url IN (");
+
+        let mut qb = query_builder.separated(", ");
+        for url in tasks_urls {
+            qb.push_bind(url);
+        }
+        query_builder.push(")");
+
+        let query = query_builder.build();
+        query.execute(&self.pool).await?;
+
+        Ok(())
+    }
 }

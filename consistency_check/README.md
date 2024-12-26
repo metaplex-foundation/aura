@@ -1,6 +1,6 @@
 # Consistency check tools
 
-This crate has two binaries to check data consistency in the DB.
+This crate has three binaries to check data consistency in the DB.
 
 ## Compressed assets
 
@@ -61,3 +61,27 @@ Missed asset data file contains NFTs for which we missed asset data. Asset data 
 Missed mint info file contains mint addresses which we missed.
 
 Missed token acc file contains token accounts addresses which we missed.
+
+## JSONs
+
+Binary `jsons` has two commands: check-consistency and change-status.
+
+### Check consistency
+
+This command will select all the JSON links from the Postgre with status success and check if that files really are in RocksDB. Links of all the missed files will be dumped into csv file.
+
+Launch command:
+
+```
+cargo r --bin jsons check-consistency --rocks_path /path/to/rocksdb --postgre-creds postgres://solana:solana@0.0.0.0:5432/solana --batch 1000
+```
+
+### Change status
+
+This command will change statuses for links from csv file to `pending`. Once it happened JSON downloader will download that files and as a result gap will be filled.
+
+Launch command:
+
+```
+cargo r --bin jsons change-status --postgre-creds postgres://solana:solana@0.0.0.0:5432/solana --file-path ./missed_links.csv
+```

@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use consistency_check::update_rate;
 use entities::enums::TaskStatus;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -24,34 +24,127 @@ use tracing::{error, info};
 use usecase::graceful_stop::graceful_stop;
 
 const WRITER_SLEEP_TIME: Duration = Duration::from_secs(30);
+const SLEEP_AFTER_ERROR: Duration = Duration::from_secs(3);
 
-#[derive(Parser, Debug)]
+const PG_MAX_CONNECTIONS: u32 = 10;
+const PG_MIN_CONNECTIONS: u32 = 1;
+const PG_MIGRATIONS_PATH: &str = "../migrations";
+
+const MISSED_JSONS_FILE: &str = "./missed_jsons.csv";
+
+const LINKS_BATCH: usize = 1;
+
+#[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(long)]
-    rocks_path: String,
+    #[command(subcommand)]
+    cmd: Commands,
+}
 
-    #[arg(long)]
-    postgre_creds: String,
-
-    #[arg(long)]
-    batch: usize,
+#[derive(Subcommand, Debug, Clone)]
+enum Commands {
+    CheckConsistency {
+        #[arg(long)]
+        rocks_path: String,
+        #[arg(long)]
+        postgre_creds: String,
+        #[arg(long)]
+        batch: usize,
+    },
+    ChangeStatus {
+        #[arg(long)]
+        postgre_creds: String,
+        #[arg(long)]
+        file_path: String,
+    },
 }
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() {
     tracing_subscriber::fmt::init();
 
-    // Parse command-line arguments
-    let config = Args::parse();
+    let args = Args::parse();
 
+    match args.cmd {
+        Commands::CheckConsistency {
+            rocks_path,
+            postgre_creds,
+            batch,
+        } => {
+            check_jsons_consistency(rocks_path, postgre_creds, batch).await;
+        }
+        Commands::ChangeStatus {
+            postgre_creds,
+            file_path,
+        } => {
+            change_jsons_status(postgre_creds, file_path).await;
+        }
+    }
+}
+
+async fn change_jsons_status(postgre_creds: String, file_path: String) {
+    let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
+
+    let index_pg_storage = Arc::new(
+        init_index_storage_with_migration(
+            &postgre_creds,
+            PG_MAX_CONNECTIONS,
+            red_metrics.clone(),
+            PG_MIN_CONNECTIONS,
+            PG_MIGRATIONS_PATH,
+            None,
+        )
+        .await
+        .unwrap(),
+    );
+
+    let spinner_style =
+        ProgressStyle::with_template("{prefix:>10.bold.dim} {spinner} total={human_pos} {msg}")
+            .unwrap();
+    let links_spinner = Arc::new(
+        ProgressBar::new_spinner()
+            .with_style(spinner_style)
+            .with_prefix("links"),
+    );
+    let mut links_processed = 0;
+
+    let mut missed_jsons = csv::Reader::from_path(file_path).unwrap();
+
+    let mut batch = Vec::new();
+
+    info!("Start changing link statuses...");
+
+    for l in missed_jsons.deserialize() {
+        let link: String = l.unwrap();
+
+        batch.push(link);
+
+        if batch.len() >= LINKS_BATCH {
+            let links_num = batch.len() as u64;
+            if let Err(e) = index_pg_storage
+                .change_task_status(std::mem::replace(&mut batch, vec![]), TaskStatus::Pending)
+                .await
+            {
+                error!("Could not change statuses for batch: {}", e.to_string());
+                tokio::time::sleep(SLEEP_AFTER_ERROR).await;
+            } else {
+                links_processed += links_num;
+                links_spinner.set_position(links_processed);
+            }
+        }
+    }
+
+    info!("All the links are processed");
+}
+
+async fn check_jsons_consistency(rocks_path: String, postgre_creds: String, batch: usize) {
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let temp_path = temp_dir.path().to_str().unwrap().to_string();
     info!("Opening DB...");
     let db_client = Arc::new(
         Storage::open_secondary(
-            config.rocks_path,
+            rocks_path,
             temp_path,
             Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
             red_metrics.clone(),
@@ -63,11 +156,11 @@ pub async fn main() {
 
     let index_pg_storage = Arc::new(
         init_index_storage_with_migration(
-            &config.postgre_creds,
-            10,
+            &postgre_creds,
+            PG_MAX_CONNECTIONS,
             red_metrics.clone(),
-            1,
-            "../migrations",
+            PG_MIN_CONNECTIONS,
+            PG_MIGRATIONS_PATH,
             None,
         )
         .await
@@ -102,7 +195,7 @@ pub async fn main() {
     let missed_jsons_cloned = missed_jsons.clone();
     writers.spawn(async move {
         let missed_jsons_file =
-            File::create("./missed_jsons.csv").expect("Failed to create file for missed jsons");
+            File::create(MISSED_JSONS_FILE).expect("Failed to create file for missed jsons");
 
         let mut missed_jsons_wrt = csv::Writer::from_writer(missed_jsons_file);
 
@@ -141,10 +234,18 @@ pub async fn main() {
     info!("Launching main loop...");
     loop {
         match index_pg_storage
-            .get_tasks(config.batch as i64, last_key_in_batch.clone())
+            .get_tasks(batch as i64, last_key_in_batch.clone())
             .await
         {
             Ok(tasks) => {
+                if tasks.is_empty() {
+                    info!(
+                        "Got empty list from the PG. Last key in the batch - {:?}",
+                        last_key_in_batch.clone()
+                    );
+                    break;
+                }
+
                 progress_bar.inc(tasks.len() as u64);
 
                 last_key_in_batch = Some(tasks.last().unwrap().tsk_id.clone());
@@ -189,7 +290,8 @@ pub async fn main() {
 
                 assets_processed.fetch_add(tasks.len() as u64, Ordering::Relaxed);
 
-                if tasks.len() < config.batch {
+                if tasks.len() < batch {
+                    assets_processed.fetch_add(tasks.len() as u64, Ordering::Relaxed);
                     info!("Selected from the Postgre less jSONs that expected - meaning it's finished");
                     break;
                 }
