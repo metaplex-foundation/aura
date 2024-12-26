@@ -179,7 +179,6 @@ where
     pub async fn get_async(&self, key: C::KeyType) -> Result<Option<C::ValueType>> {
         let mut result = Ok(None);
         let backend = self.backend.clone();
-        let self_clone = self.clone();
         if let Some(serialized_value) =
             tokio::task::spawn_blocking(move || Self::get_raw(backend, key))
                 .await
