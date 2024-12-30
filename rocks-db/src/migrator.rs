@@ -35,14 +35,7 @@ pub trait RocksMigration {
     const VERSION: u64;
     const DESERIALIZATION_TYPE: SerializationType;
     const SERIALIZATION_TYPE: SerializationType;
-    type NewDataType: Sync
-        + Serialize
-        + DeserializeOwned
-        + Send
-        + TypedColumn
-        // that restrictrion breaks the backward compatibility for the previous migrations
-        // however, it's the simplest way to provide the migration to flatbuffers
-        + ToFlatbuffersConverter<'static>;
+    type NewDataType: Sync + Serialize + DeserializeOwned + Send + TypedColumn;
     type OldDataType: Sync
         + Serialize
         + DeserializeOwned
@@ -185,8 +178,7 @@ impl<'a> MigrationApplier<'a> {
 
     async fn apply_migration<M: RocksMigration>(&self, _: M) -> Result<()>
     where
-        for<'b> <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType:
-            'static + Clone + ToFlatbuffersConverter<'b>,
+        for<'b> <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
         if self.applied_migration_versions.contains(&M::VERSION) {
@@ -278,8 +270,7 @@ impl<'a> MigrationApplier<'a> {
         column: &Column<M::NewDataType>,
     ) -> Result<()>
     where
-        for<'b> <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType:
-            'static + Clone + ToFlatbuffersConverter<'b>,
+        for<'b> <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
         let mut batch = HashMap::new();
@@ -358,8 +349,7 @@ impl<'a> MigrationApplier<'a> {
         column: &Column<M::NewDataType>,
     ) -> Result<()>
     where
-        for<'b> <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType:
-            'static + Clone + ToFlatbuffersConverter<'b>,
+        for<'b> <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
         column.put_batch(std::mem::take(batch)).await
