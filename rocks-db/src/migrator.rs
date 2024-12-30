@@ -178,7 +178,7 @@ impl<'a> MigrationApplier<'a> {
 
     async fn apply_migration<M: RocksMigration>(&self, _: M) -> Result<()>
     where
-        for<'b> <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
+        <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
         if self.applied_migration_versions.contains(&M::VERSION) {
@@ -270,7 +270,7 @@ impl<'a> MigrationApplier<'a> {
         column: &Column<M::NewDataType>,
     ) -> Result<()>
     where
-        for<'b> <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
+        <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
         let mut batch = HashMap::new();
@@ -349,7 +349,7 @@ impl<'a> MigrationApplier<'a> {
         column: &Column<M::NewDataType>,
     ) -> Result<()>
     where
-        for<'b> <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
+        <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
         column.put_batch(std::mem::take(batch)).await
