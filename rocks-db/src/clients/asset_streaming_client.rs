@@ -12,8 +12,10 @@ use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::asset::{AssetCompleteDetails, SlotAssetIdxKey};
-use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
+use crate::cl_items::{ClItemDeprecated, ClItemKey, ClLeaf, ClLeafKey};
+use crate::columns::cl_items::ClItemV2;
 use crate::columns::offchain_data::OffChainData;
+use crate::columns::parameters::{Parameter, ParameterColumn};
 use crate::generated::asset_generated::asset as fb;
 use crate::{
     asset::{AssetLeaf, SlotAssetIdx},
@@ -162,7 +164,7 @@ async fn get_complete_asset_details(
     let cl_items = match cl_leaf {
         None => vec![],
         Some(ref leaf) => {
-            Storage::column::<ClItem>(backend.clone(), metrics.clone())
+            Storage::column::<ClItemV2>(backend.clone(), metrics.clone())
                 .batch_get(
                     get_required_nodes_for_proof(leaf.cli_node_idx as i64)
                         .into_iter()
@@ -205,6 +207,12 @@ async fn get_complete_asset_details(
     let off_chain_data_grpc = Storage::column::<OffChainData>(backend.clone(), metrics.clone())
         .get(url.clone().value)?
         .map(Into::into);
+    let cutoff_slot = Storage::column::<ParameterColumn<u64>>(backend.clone(), metrics.clone())
+        .get(Parameter::TopSeenSlot)?
+        .flatten()
+        .unwrap_or_default()
+        .wrapping_sub(300);
+
     Ok(AssetCompleteDetailsGrpc {
         pubkey: static_data.pubkey,
         specification_asset_class: static_data.specification_asset_class,
@@ -269,14 +277,17 @@ async fn get_complete_asset_details(
         }),
         cl_items: cl_items
             .into_iter()
-            .map(|item| entities::models::ClItem {
-                cli_node_idx: item.cli_node_idx,
-                cli_tree_key: item.cli_tree_key,
-                cli_leaf_idx: item.cli_leaf_idx,
-                cli_seq: item.cli_seq,
-                cli_level: item.cli_level,
-                cli_hash: item.cli_hash,
-                slot_updated: item.slot_updated,
+            .map(|item| {
+                let hash = item.get_updated_hash(cutoff_slot);
+                entities::models::ClItem {
+                    cli_node_idx: item.node_idx,
+                    cli_tree_key: item.tree_key,
+                    cli_leaf_idx: item.leaf_idx,
+                    cli_seq: hash.get_upd_ver_seq().unwrap_or_default(),
+                    cli_level: item.level,
+                    cli_hash: hash.value,
+                    slot_updated: hash.slot_updated,
+                }
             })
             .collect(),
         edition,

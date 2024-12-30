@@ -4,8 +4,9 @@ use crate::asset::{
     AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, FungibleAssetsUpdateIdx,
     MplCoreCollectionAuthority, SlotAssetIdx, SlotAssetIdxKey, SourcedAssetLeaf,
 };
-use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey, SourcedClItem};
+use crate::cl_items::{ClItemKey, ClLeaf, ClLeafKey};
 use crate::column::TypedColumn;
+use crate::columns::cl_items::ClItemV2;
 use crate::columns::offchain_data::OffChainData;
 use crate::errors::StorageError;
 use crate::generated::asset_generated::asset as fb;
@@ -551,23 +552,22 @@ impl Storage {
             )?
         }
         for item in data.cl_items {
-            self.cl_items.merge_with_batch_raw(
+            self.cl_items.merge_with_batch(
                 &mut batch,
                 ClItemKey::new(item.cli_node_idx, item.cli_tree_key),
-                bincode::serialize(&SourcedClItem {
-                    // todo: probably that's a finalized source, needs to be checked
-                    is_from_finalized_source: false,
-                    item: ClItem {
-                        cli_node_idx: item.cli_node_idx,
-                        cli_tree_key: item.cli_tree_key,
-                        cli_leaf_idx: item.cli_leaf_idx,
-                        cli_seq: item.cli_seq,
-                        cli_level: item.cli_level,
-                        cli_hash: item.cli_hash.clone(),
-                        slot_updated: item.slot_updated,
-                    },
-                })
-                .map_err(|e| StorageError::Common(e.to_string()))?,
+                // todo: probably that's a finalized source, needs to be checked
+                &ClItemV2 {
+                    tree_key: item.cli_tree_key,
+                    level: item.cli_level,
+                    node_idx: item.cli_node_idx,
+                    leaf_idx: item.cli_leaf_idx,
+                    finalized_hash: None,
+                    pending_hash: Some(Updated::new(
+                        item.slot_updated,
+                        Some(UpdateVersion::Sequence(item.cli_seq)),
+                        item.cli_hash,
+                    )),
+                },
             )?;
         }
         if let Some(edition) = data.edition {

@@ -164,11 +164,12 @@ pub struct Storage {
     pub asset_collection_data: Column<asset::AssetCollection>,
     pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
     pub asset_offchain_data_deprecated: Column<OffChainDataDeprecated>,
+    pub cl_items_deprecated: Column<cl_items::ClItemDeprecated>,
     // Deprecated, remove end
     pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_offchain_data: Column<OffChainData>,
-    pub cl_items: Column<cl_items::ClItem>,
+    pub cl_items: Column<cl_items::ClItemV2>,
     pub cl_leafs: Column<cl_items::ClLeaf>,
     pub force_reingestable_slots: Column<bubblegum_slots::ForceReingestableSlots>,
     pub db: Arc<DB>,
@@ -220,6 +221,7 @@ impl Storage {
         let asset_collection_data = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_offchain_data_deprecated = Self::column(db.clone(), red_metrics.clone());
+        let cl_items_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_offchain_data = Self::column(db.clone(), red_metrics.clone());
 
         let cl_items = Self::column(db.clone(), red_metrics.clone());
@@ -266,6 +268,7 @@ impl Storage {
             asset_leaf_data,
             asset_collection_data,
             asset_collection_data_deprecated,
+            cl_items_deprecated,
             asset_offchain_data,
             cl_items,
             cl_leafs,
@@ -393,7 +396,8 @@ impl Storage {
             Self::new_cf_descriptor::<MplCoreCollectionAuthority>(migration_state),
             Self::new_cf_descriptor::<MetadataMintMap>(migration_state),
             Self::new_cf_descriptor::<asset::AssetLeaf>(migration_state),
-            Self::new_cf_descriptor::<cl_items::ClItem>(migration_state),
+            Self::new_cf_descriptor::<cl_items::ClItemDeprecated>(migration_state),
+            Self::new_cf_descriptor::<cl_items::ClItemV2>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClLeaf>(migration_state),
             Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(migration_state),
             Self::new_cf_descriptor::<asset::FungibleAssetsUpdateIdx>(migration_state),
@@ -574,11 +578,15 @@ impl Storage {
                     asset::AssetCollection::merge_asset_collection,
                 );
             }
-            cl_items::ClItem::NAME => {
+            cl_items::ClItemDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_cl_item",
-                    cl_items::ClItem::merge_cl_items,
+                    "merge_fn_cl_item_deprecated",
+                    cl_items::ClItemDeprecated::merge_cl_items,
                 );
+            }
+            cl_items::ClItemV2::NAME => {
+                cf_options
+                    .set_merge_operator_associative("merge_fn_cl_item", cl_items::ClItemV2::merge);
             }
             ParameterColumn::<u64>::NAME => {
                 cf_options.set_merge_operator_associative(
@@ -756,7 +764,8 @@ impl Storage {
             MetadataMintMap::NAME,
             asset::AssetLeaf::NAME,
             OffChainData::NAME,
-            cl_items::ClItem::NAME,
+            cl_items::ClItemV2::NAME,
+            cl_items::ClItemDeprecated::NAME,
             cl_items::ClLeaf::NAME,
             bubblegum_slots::ForceReingestableSlots::NAME,
             AssetsUpdateIdx::NAME,
