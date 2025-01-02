@@ -63,17 +63,17 @@ pub enum BackfillSource {
 impl BackfillSource {
     pub async fn new(
         source_mode: &BackfillerSourceMode,
-        solana_rpc_address: String,
-        big_table_config: &BigTableConfig,
+        solana_rpc_address: Option<String>,
+        big_table_config: Option<&BigTableConfig>,
     ) -> Self {
         match source_mode {
             BackfillerSourceMode::Bigtable => Self::Bigtable(Arc::new(
-                connect_new_bigtable_from_config(big_table_config)
+                connect_new_bigtable_from_config(big_table_config.unwrap())
                     .await
                     .unwrap(),
             )),
             BackfillerSourceMode::RPC => {
-                Self::Rpc(Arc::new(BackfillRPC::connect(solana_rpc_address)))
+                Self::Rpc(Arc::new(BackfillRPC::connect(solana_rpc_address.unwrap())))
             }
         }
     }

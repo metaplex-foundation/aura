@@ -4633,6 +4633,7 @@ dependencies = [
  "coingecko",
  "criterion",
  "csv",
+ "dotenvy",
  "entities",
  "env_logger 0.10.2",
  "figment",

@@ -1,0 +1,19 @@
+version: "3.7"
+services:
+  pgdb:
+    image: "postgres:14.15"
+    container_name: pgdb
+    environment:
+      - POSTGRES_USER=solana
+      - POSTGRES_PASSWORD=solana
+      - POSTGRES_DB=aura_db
+    ports:
+      - "5432:5432"
+
+
+  redis:
+    image: redis
+    restart: unless-stopped
+    container_name: redis
+    ports:
+      - "6379:6379"

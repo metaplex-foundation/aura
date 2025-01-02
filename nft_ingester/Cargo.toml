@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+dotenvy = "0.15.7"
 serde_derive = { workspace = true }
 env_logger = { workspace = true }
 thiserror = { workspace = true }

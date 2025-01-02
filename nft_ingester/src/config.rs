@@ -1,6 +1,7 @@
 use core::time;
+use std::fmt::{Display, Formatter};
 use std::net::{SocketAddr, ToSocketAddrs};
-
+use std::path::PathBuf;
 use figment::{providers::Env, Figment};
 use interface::asset_streaming_and_discovery::PeerDiscovery;
 use plerkle_messenger::MessengerConfig;
@@ -20,9 +21,12 @@ pub const JSON_MIGRATOR_CONFIG_PREFIX: &str = "JSON_MIGRATOR_";
 pub struct BackfillerConfig {
     #[serde(default)]
     pub backfiller_source_mode: BackfillerSourceMode,
-    pub big_table_config: BigTableConfig,
-    pub rpc_host: String,
+    // Is Optional if source is RPC
+    pub big_table_config: Option<BigTableConfig>,
+    // Is Optional if source is Bigtable
+    pub rpc_host:  Option<String>,
     pub slot_until: Option<u64>,
+    #[serde(default)]
     pub slot_start_from: u64,
     #[serde(default)]
     pub backfiller_mode: BackfillerMode,
@@ -115,6 +119,15 @@ pub enum MessageSource {
     TCP,
 }
 
+impl Display for MessageSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MessageSource::Redis => write!(f, "Redis"),
+            MessageSource::TCP => write!(f, "TCP"),
+        }
+    }
+}
+
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct RawBackfillConfig {
     #[serde(default = "default_log_level")]
@@ -126,70 +139,111 @@ pub struct RawBackfillConfig {
     pub profiling_file_path_container: Option<String>,
     #[serde(default = "default_heap_path")]
     pub heap_path: String,
-    pub migration_storage_path: String,
 }
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {
+    // PG
     pub database_config: DatabaseConfig,
-    pub tcp_config: TcpConfig,
+    pub rpc_host: String,
+
+    // Provide default for REDIS_URI:redis://localhost:6379
     pub redis_messenger_config: MessengerConfig,
+    pub file_storage_path_container: String,
+    // Default URL: localhost:5000 ???
+    pub tcp_config: TcpConfig,
+
+    ///
+    /// Backfiller
+    ///
+    #[serde(default = "default_is_run_backfiller")]
+    pub is_run_backfiller: bool,
+    #[serde(default = "default_is_run_gapfiller")]
+    pub is_run_gapfiller: bool,
+    
+    #[serde(default = "default_is_run_bubblegum_backfiller")]
+    pub is_run_bubblegum_backfiller: bool,
+    pub backfill_rpc_address: Option<String>,
+    /// Path to the RocksDB instance with slots (required for the backfiller to work)
+    pub slots_db_path: PathBuf,
+    /// Path to the secondary RocksDB instance with slots (required for the backfiller to work)
+    pub secondary_slots_db_path: PathBuf,
+
+
+    // Optional
+    pub metrics_port: Option<u16>,
+    pub log_level: Option<String>,
+    pub run_profiling: Option<bool>,
+    pub store_db_backups: Option<bool>,
+    pub profiling_file_path_container: Option<String>,
+    pub json_middleware_config: Option<JsonMiddlewareConfig>,
+    pub rocks_db_path_container: Option<String>,
+    pub gapfiller_peer_addr: Option<String>,
+
+    // RocksDB storage migration. Right now is not working. (false by default)
+    #[serde(default)]
+    pub enable_migration_rocksdb: bool,
+    pub migration_storage_path: Option<String>,
+
+
+    // Made
+    #[serde(default = "default_is_start_api")]
+    pub is_start_api: bool,
+    #[serde(default = "default_message_source")]
     pub message_source: MessageSource,
+    #[serde(default = "default_accounts_parsing_workers")]
+    pub accounts_parsing_workers: u32,
+    #[serde(default = "default_transactions_parsing_workers")]
+    pub transactions_parsing_workers: u32,
+    #[serde(default = "default_accounts_buffer_size")]
     pub accounts_buffer_size: usize,
+    #[serde(default = "default_peer_grpc_port")]
+    pub peer_grpc_port: u16,
+    #[serde(default = "default_peer_grpc_max_gap_slots")]
+    pub peer_grpc_max_gap_slots: u64,
+
+    //Default
+    #[serde(default = "default_heap_path")]
+    pub heap_path: String,
+    
+    #[serde(default = "default_rocks_backup_url")]
+    pub rocks_backup_url: String,
+    #[serde(default = "default_rocks_backup_dir")]
+    pub rocks_backup_dir: String,
+    #[serde(default = "default_rocks_backup_archives_dir")]
+    pub rocks_backup_archives_dir: String,
+    #[serde(default = "default_check_proofs_commitment")]
+    pub check_proofs_commitment: CommitmentLevel,
+    #[serde(default = "default_check_proofs_probability")]
+    pub check_proofs_probability: f64,
+    #[serde(default = "default_price_monitoring_interval_sec")]
+    pub price_monitoring_interval_sec: u64,
+    #[serde(default = "default_sequence_consistent_checker_wait_period_sec")]
+    pub sequence_consistent_checker_wait_period_sec: u64,
     #[serde(default = "default_snapshot_parsing_workers")]
     pub snapshot_parsing_workers: u32,
     #[serde(default = "default_snapshot_parsing_batch_size")]
     pub snapshot_parsing_batch_size: usize,
-    pub accounts_parsing_workers: u32,
-    pub transactions_parsing_workers: u32,
     #[serde(default = "default_mpl_core_fees_buffer_size")]
     pub mpl_core_fees_buffer_size: usize,
-    pub metrics_port: Option<u16>,
-    pub rocks_db_path_container: Option<String>,
-    #[serde(default = "default_rocks_backup_url")]
-    pub rocks_backup_url: String,
-    #[serde(default = "default_rocks_backup_archives_dir")]
-    pub rocks_backup_archives_dir: String,
-    #[serde(default = "default_rocks_backup_dir")]
-    pub rocks_backup_dir: String,
-    pub run_bubblegum_backfiller: bool,
-    #[serde(default = "default_gapfiller_peer_addr")]
-    pub gapfiller_peer_addr: String,
-    pub peer_grpc_port: u16,
-    pub peer_grpc_max_gap_slots: u64,
-    pub log_level: Option<String>,
-    pub backfill_rpc_address: String,
-    pub run_profiling: Option<bool>,
-    pub profiling_file_path_container: Option<String>,
-    pub store_db_backups: Option<bool>,
+    #[serde(default = "default_synchronizer_parallel_tasks")]
+    pub synchronizer_parallel_tasks: usize,
+    #[serde(default = "default_parallel_json_downloaders")]
+    pub parallel_json_downloaders: i32,
+
+    #[serde(default)]
+    pub check_proofs: bool,
+    #[serde(default)]
+    pub run_fork_cleaner: bool,
+    #[serde(default)]
+    pub restore_rocks_db: bool,
+    #[serde(default)]
+    pub run_temp_sync_during_dump: bool,
     #[serde(default)]
     pub rpc_retry_interval_millis: u64,
     #[serde(default)]
     pub run_sequence_consistent_checker: bool,
     #[serde(default)]
-    pub run_fork_cleaner: bool,
-    #[serde(default = "default_sequence_consistent_checker_wait_period_sec")]
-    pub sequence_consistent_checker_wait_period_sec: u64,
-    pub rpc_host: String,
-    #[serde(default)]
-    pub check_proofs: bool,
-    #[serde(default = "default_check_proofs_probability")]
-    pub check_proofs_probability: f64,
-    #[serde(default = "default_check_proofs_commitment")]
-    pub check_proofs_commitment: CommitmentLevel,
-    #[serde(default)]
     pub backfiller_source_mode: BackfillerSourceMode,
-    #[serde(default = "default_synchronizer_parallel_tasks")]
-    pub synchronizer_parallel_tasks: usize,
-    #[serde(default)]
-    pub run_temp_sync_during_dump: bool,
-    #[serde(default = "default_parallel_json_downloaders")]
-    pub parallel_json_downloaders: i32,
-    pub json_middleware_config: Option<JsonMiddlewareConfig>,
-    #[serde(default = "default_heap_path")]
-    pub heap_path: String,
-    pub migration_storage_path: String,
-    #[serde(default = "default_price_monitoring_interval_sec")]
-    pub price_monitoring_interval_sec: u64,
 }
 
 pub const fn default_parallel_json_downloaders() -> i32 {
@@ -276,40 +330,47 @@ fn default_native_mint() -> String {
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct ApiConfig {
+    pub rpc_host: String,
     pub database_config: DatabaseConfig,
-    pub rocks_db_path_container: Option<String>,
-    pub rocks_db_secondary_path_container: Option<String>,
-    pub rocks_sync_interval_seconds: u64,
-    pub metrics_port: Option<u16>,
-    pub server_port: u16,
-    pub batch_mint_service_port: Option<u16>,
     pub file_storage_path_container: String,
+
     pub log_level: Option<String>,
-    pub peer_grpc_port: u16,
-    pub peer_grpc_max_gap_slots: u64,
+    pub metrics_port: Option<u16>,
+    pub batch_mint_service_port: Option<u16>,
+    pub storage_service_base_url: Option<String>,
+    pub rocks_db_path_container: Option<String>,
+    pub profiling_file_path_container: Option<String>,
+    pub json_middleware_config: Option<JsonMiddlewareConfig>,
+    pub consistence_synchronization_api_threshold: Option<u64>,
+    pub consistence_backfilling_slots_threshold: Option<u64>,
+    pub rocks_db_secondary_path_container: Option<String>,
+    
     #[serde(default)]
     pub run_profiling: bool,
-    pub profiling_file_path_container: Option<String>,
-    pub rpc_host: String,
     #[serde(default)]
     pub check_proofs: bool,
+    #[serde(default)]
+    pub skip_check_tree_gaps: bool,
+    #[serde(default = "default_peer_grpc_port")]
+    pub peer_grpc_port: u16,
+    #[serde(default = "default_server_port")]
+    pub server_port: u16,
+    #[serde(default = "default_max_page_limit")]
+    pub max_page_limit: usize,
+    #[serde(default = "default_heap_path")]
+    pub heap_path: String,
+    #[serde(default = "default_native_mint")]
+    pub native_mint_pubkey: String,
+    #[serde(default = "default_rocks_backup_archives_dir")]
+    pub archives_dir: String,
     #[serde(default = "default_check_proofs_probability")]
     pub check_proofs_probability: f64,
     #[serde(default = "default_check_proofs_commitment")]
     pub check_proofs_commitment: CommitmentLevel,
-    #[serde(default = "default_max_page_limit")]
-    pub max_page_limit: usize,
-    pub json_middleware_config: Option<JsonMiddlewareConfig>,
-    pub archives_dir: String,
-    pub consistence_synchronization_api_threshold: Option<u64>,
-    #[serde(default = "default_heap_path")]
-    pub heap_path: String,
-    pub consistence_backfilling_slots_threshold: Option<u64>,
-    pub storage_service_base_url: Option<String>,
-    #[serde(default)]
-    pub skip_check_tree_gaps: bool,
-    #[serde(default = "default_native_mint")]
-    pub native_mint_pubkey: String,
+    #[serde(default = "default_grpc_max_gap_slots")]
+    pub peer_grpc_max_gap_slots: u64,
+    #[serde(default = "default_rocks_sync_interval_seconds")]
+    pub rocks_sync_interval_seconds: u64,
 }
 
 fn default_heap_path() -> String {
@@ -324,6 +385,46 @@ pub struct JsonMiddlewareConfig {
 
 const fn default_check_proofs_probability() -> f64 {
     0.1
+}
+const fn default_rocks_sync_interval_seconds() -> u64 {
+    2
+}
+const fn default_server_port() -> u16 {
+    8990
+}
+const fn default_grpc_max_gap_slots() -> u64 {
+    1000000
+}
+const fn default_message_source() -> MessageSource {
+    MessageSource::Redis
+}
+const fn default_is_start_api() -> bool {
+    true
+}
+const fn default_accounts_parsing_workers() -> u32 {
+    20
+}
+const fn default_transactions_parsing_workers() -> u32 {
+    20
+}
+const fn default_accounts_buffer_size() -> usize {
+    250
+}
+const fn default_peer_grpc_port() -> u16 {
+    9099
+}
+const fn default_peer_grpc_max_gap_slots() -> u64 {
+    1000000
+}
+
+const fn default_is_run_bubblegum_backfiller() -> bool {
+    true
+}
+const fn default_is_run_backfiller() -> bool {
+    true
+}
+const fn default_is_run_gapfiller() -> bool {
+    false
 }
 
 const fn default_check_proofs_commitment() -> CommitmentLevel {
@@ -351,6 +452,15 @@ impl IngesterConfig {
     pub fn store_db_backups(&self) -> bool {
         self.store_db_backups.unwrap_or_default()
     }
+
+    pub fn rocks_db_path_container(&self) -> String {
+        self.rocks_db_path_container.clone().unwrap_or("./my_rocksdb".to_string())
+    }
+
+    pub fn backfill_rpc_address(&self) -> String {
+        self.rpc_host.to_string()
+    }
+
 }
 
 // Types and constants used for Figment configuration items.
@@ -459,6 +569,8 @@ impl PeerDiscovery for IngesterConfig {
 }
 
 pub fn setup_config<'a, T: Deserialize<'a>>(config_prefix: &str) -> T {
+    dotenvy::dotenv().ok();
+
     let figment = Figment::new()
         .join(Env::prefixed(config_prefix))
         .join(Env::raw());
@@ -499,8 +611,8 @@ mod tests {
             config,
             BackfillerConfig {
                 backfiller_source_mode: BackfillerSourceMode::RPC,
-                big_table_config: BigTableConfig(figment::value::Dict::new()),
-                rpc_host: "f".to_string(),
+                big_table_config: Some(BigTableConfig(figment::value::Dict::new())),
+                rpc_host: Some("f".to_string()),
                 slot_until: None,
                 slot_start_from: 0,
                 backfiller_mode: BackfillerMode::IngestDirectly,
@@ -532,8 +644,8 @@ mod tests {
             config,
             BackfillerConfig {
                 backfiller_source_mode: BackfillerSourceMode::RPC,
-                big_table_config: BigTableConfig(figment::value::Dict::new()),
-                rpc_host: "f".to_string(),
+                big_table_config: Some(BigTableConfig(figment::value::Dict::new())),
+                rpc_host: Some("f".to_string()),
                 slot_until: None,
                 slot_start_from: 0,
                 backfiller_mode: BackfillerMode::Persist,

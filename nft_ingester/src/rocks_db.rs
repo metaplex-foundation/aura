@@ -69,10 +69,7 @@ pub async fn restore_rocksdb(config: &IngesterConfig) -> Result<(), BackupServic
 
     backup_service::restore_external_backup(
         &unpacked_archive,
-        config
-            .rocks_db_path_container
-            .as_deref()
-            .unwrap_or("./my_rocksdb"),
+        &config.rocks_db_path_container(),
     )?;
 
     // remove unpacked files
