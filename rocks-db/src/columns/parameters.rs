@@ -30,6 +30,16 @@ where
         serde_cbor::from_slice(&bytes)
             .map_err(|e| StorageError::Common(format!("Failed to decode key: {}", e)))
     }
+
+    fn encode(v: &Self::ValueType) -> Result<Vec<u8>> {
+        serde_cbor::to_vec(v)
+            .map_err(|e| StorageError::Common(format!("Failed to encode value: {}", e)))
+    }
+
+    fn decode(bytes: &[u8]) -> Result<Self::ValueType> {
+        serde_cbor::from_slice(bytes)
+            .map_err(|e| StorageError::Common(format!("Failed to decode value: {}", e)))
+    }
 }
 
 impl Storage {

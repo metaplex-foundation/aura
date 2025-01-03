@@ -50,7 +50,7 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(100, first_tree_key),
-            ClItem {
+            ClItemDeprecated {
                 cli_node_idx: 100,
                 cli_tree_key: first_tree_key,
                 cli_leaf_idx: None,
@@ -66,7 +66,7 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(101, first_tree_key),
-            ClItem {
+            ClItemDeprecated {
                 cli_node_idx: 101,
                 cli_tree_key: first_tree_key,
                 cli_leaf_idx: None,
@@ -82,7 +82,7 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(102, first_tree_key),
-            ClItem {
+            ClItemDeprecated {
                 cli_node_idx: 102,
                 cli_tree_key: first_tree_key,
                 cli_leaf_idx: None,
@@ -98,7 +98,7 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(103, first_tree_key),
-            ClItem {
+            ClItemDeprecated {
                 cli_node_idx: 103,
                 cli_tree_key: first_tree_key,
                 cli_leaf_idx: None,
@@ -114,7 +114,7 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(104, first_tree_key),
-            ClItem {
+            ClItemDeprecated {
                 cli_node_idx: 104,
                 cli_tree_key: first_tree_key,
                 cli_leaf_idx: None,
@@ -130,7 +130,7 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(105, first_tree_key),
-            ClItem {
+            ClItemDeprecated {
                 cli_node_idx: 105,
                 cli_tree_key: first_tree_key,
                 cli_leaf_idx: None,
@@ -146,7 +146,7 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(106, first_tree_key),
-            ClItem {
+            ClItemDeprecated {
                 cli_node_idx: 106,
                 cli_tree_key: first_tree_key,
                 cli_leaf_idx: None,
@@ -162,7 +162,7 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(100, second_tree_key),
-            ClItem {
+            ClItemDeprecated {
                 cli_node_idx: 100,
                 cli_tree_key: second_tree_key,
                 cli_leaf_idx: None,
@@ -178,7 +178,7 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(101, second_tree_key),
-            ClItem {
+            ClItemDeprecated {
                 cli_node_idx: 101,
                 cli_tree_key: second_tree_key,
                 cli_leaf_idx: None,
@@ -194,7 +194,7 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(104, second_tree_key),
-            ClItem {
+            ClItemDeprecated {
                 cli_node_idx: 104,
                 cli_tree_key: second_tree_key,
                 cli_leaf_idx: None,
@@ -210,7 +210,7 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(106, second_tree_key),
-            ClItem {
+            ClItemDeprecated {
                 cli_node_idx: 106,
                 cli_tree_key: second_tree_key,
                 cli_leaf_idx: None,
@@ -604,7 +604,7 @@ async fn test_clean_forks() {
     let non_forked_first_key_seq = storage.tree_seq_idx.get((first_tree_key, 10006)).unwrap();
     assert_eq!(
         non_forked_first_key_item,
-        Some(ClItem {
+        Some(ClItemDeprecated {
             cli_node_idx: 106,
             cli_tree_key: first_tree_key,
             cli_leaf_idx: None,
@@ -621,7 +621,7 @@ async fn test_clean_forks() {
     let non_forked_second_key_seq = storage.tree_seq_idx.get((second_tree_key, 10003)).unwrap();
     assert_eq!(
         non_forked_second_key_item,
-        Some(ClItem {
+        Some(ClItemDeprecated {
             cli_node_idx: 106,
             cli_tree_key: second_tree_key,
             cli_leaf_idx: None,
@@ -838,7 +838,7 @@ async fn test_process_forked_transaction() {
     for cl_item in storage.cl_items.iter_start() {
         let (_, value) = cl_item.unwrap();
 
-        let value = deserialize::<ClItem>(&value).unwrap();
+        let value = deserialize::<ClItemDeprecated>(&value).unwrap();
 
         // make sure that there should not be either of slots because normal slot is overwritten with forked one such as
         // in forked slot sequence is higher. Merge function for CLItems checks only sequence numbers
