@@ -1,5 +1,4 @@
 use crate::api::dapi::rpc_asset_convertors::parse_files;
-use crate::config::{setup_config, IngesterConfig, INGESTER_CONFIG_PREFIX};
 use async_trait::async_trait;
 use entities::enums::TaskStatus;
 use entities::models::{JsonDownloadTask, OffChainData};

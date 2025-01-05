@@ -14,13 +14,15 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use clap::Parser;
+use figment::value::Dict;
 use futures::FutureExt;
 use grpc::asseturls::asset_url_service_server::AssetUrlServiceServer;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use nft_ingester::json_worker;
-use plerkle_messenger::ConsumptionType;
+use plerkle_messenger::{ConsumptionType, MessengerConfig, MessengerType};
 use pprof::ProfilerGuardBuilder;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::commitment_config::CommitmentLevel;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::sleep as tokio_sleep;
@@ -35,36 +37,26 @@ use metrics_utils::{BackfillerMetricsConfig, MetricState, MetricStatus, MetricsT
 use nft_ingester::ack::create_ack_channel;
 use nft_ingester::api::account_balance::AccountBalanceGetterImpl;
 use nft_ingester::api::service::start_api;
-use nft_ingester::backfiller::{
-    run_slot_force_persister, BackfillSource, DirectBlockParser, ForceReingestableSlotGetter, TransactionsParser,
-};
+use nft_ingester::backfiller::{BackfillSource, DirectBlockParser};
 use nft_ingester::batch_mint::batch_mint_processor::{process_batch_mints, BatchMintProcessor, NoopBatchMintTxSender};
-use nft_ingester::buffer::{debug_buffer, Buffer};
-use nft_ingester::cleaners::fork_cleaner::{run_fork_cleaner, ForkCleaner};
-use nft_ingester::config::{
-    setup_config, ApiConfig, BackfillerConfig, BackfillerMode, IngesterConfig, MessageSource, INGESTER_CONFIG_PREFIX,
-};
+use nft_ingester::config::{BackfillerMode, BackfillerSourceMode, BigTableConfig, IngesterClapArgs, JsonMiddlewareConfig};
 use nft_ingester::gapfiller::{process_asset_details_stream_wrapper, run_sequence_consistent_gapfiller};
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration, init_primary_storage};
 use nft_ingester::json_worker::JsonWorker;
-use nft_ingester::message_handler::MessageHandlerIngester;
 use nft_ingester::processors::accounts_processor::run_accounts_processor;
 use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::processors::transaction_processor::run_transaction_processor;
 use nft_ingester::redis_receiver::RedisReceiver;
-use nft_ingester::rocks_db::{perform_backup, receive_last_saved_slot, restore_rocksdb};
-use nft_ingester::tcp_receiver::{connect_to_geyser, connect_to_snapshot_receiver, TcpReceiver};
+use nft_ingester::rocks_db::{receive_last_saved_slot, restore_rocksdb};
 use nft_ingester::transaction_ingester::BackfillTransactionIngester;
 use nft_ingester::{config::init_logger, error::IngesterError};
-use rocks_db::backup_service::BackupService;
-use rocks_db::storage_traits::AssetSlotStorage;
-use rocks_db::{backup_service, SlotStorage};
+use rocks_db::SlotStorage;
 use tonic::transport::Server;
+use rocks_db::storage_traits::AssetSlotStorage;
 use usecase::asset_streamer::AssetStreamer;
 use usecase::proofs::MaybeProofChecker;
 use usecase::raw_blocks_streamer::BlocksStreamer;
 use usecase::signature_fetcher::SignatureFetcher;
-use usecase::slots_collector::SlotsCollector;
 
 #[cfg(feature = "profiling")]
 #[global_allocator]
@@ -76,24 +68,29 @@ pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 8;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 pub const SECONDS_TO_RETRY_IDXS_CLEANUP: u64 = 15 * 60; // 15 minutes
 
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-
-}
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
-    let args = Args::parse();
-
-    let config = setup_config::<IngesterConfig>(INGESTER_CONFIG_PREFIX);
-    init_logger(&config.get_log_level());
+    let args = IngesterClapArgs::parse();
+    init_logger(&args.log_level);
 
     info!("Starting Ingester...");
+    info!("___________________________________", );
+    info!("API: {}", args.is_run_api);
+    if args.is_run_api {
+        info!("API port: localhost:{}", args.server_port);
+    }
+    info!("Back Filler: {}", args.is_run_backfiller);
+    info!("Bubblegum BackFiller: {}", args.is_run_bubblegum_backfiller);
+    info!("Gap Filler: {}", args.is_run_gapfiller);
+    info!("Run Profiling: {}", args.is_run_profiling);
+    info!("Sequence Consistent Checker: {}", args.run_sequence_consistent_checker );
+    info!("___________________________________", );
+
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
 
-    let guard = config.get_is_run_profiling().then(|| {
+    let guard = args.is_run_profiling.then(|| {
         ProfilerGuardBuilder::default()
             .frequency(100)
             .build()
@@ -101,8 +98,12 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     // try to restore rocksDB first
-    if config.restore_rocks_db {
-        restore_rocksdb(&config).await?;
+    if args.is_restore_rocks_db {
+        restore_rocksdb(
+            &args.rocks_backup_url.expect("rocks_backup_url is required for the restore rocks db process"),
+            &args.rocks_backup_archives_dir.expect("rocks_backup_archives_dir is required for the restore rocks db process"),
+            &args.rocks_db_path_container
+        ).await?;
     }
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
@@ -111,20 +112,18 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Init primary storage...");
     let primary_rocks_storage =
         Arc::new(init_primary_storage(
-                                      &config.rocks_db_path_container(),
-                                      config.enable_migration_rocksdb,
-                                      &config.migration_storage_path,
-                                      &metrics_state,
-                                      mutexed_tasks.clone()).await?);
+            &args.rocks_db_path_container,
+            // RocksDB storage migration. Right now is not working. (false by default)
+            false,
+            &None,
+             &metrics_state,
+            mutexed_tasks.clone()).await?);
 
     info!("Init PG storage...");
     let index_pg_storage = Arc::new(
         init_index_storage_with_migration(
-            &config.database_config.get_database_url()?,
-            config
-                .database_config
-                .get_max_postgres_connections()
-                .unwrap_or(DEFAULT_MAX_POSTGRES_CONNECTIONS),
+            &args.pg_database_url,
+            args.pg_max_db_connections.clone(),
             metrics_state.red_metrics.clone(),
             DEFAULT_MIN_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,
@@ -133,156 +132,67 @@ pub async fn main() -> Result<(), IngesterError> {
         .await?,
     );
 
-    // todo: remove backup service from here and move it to a separate process with a secondary db - verify it's possible first!
-    // start backup service
-    if config.store_db_backups() {
-        info!("Start store DB  backup...");
-        let backup_service = BackupService::new(primary_rocks_storage.db.clone(), &backup_service::load_config()?)?;
-        let cloned_metrics = metrics_state.ingester_metrics.clone();
-        let cloned_rx = shutdown_rx.resubscribe();
-        mutexed_tasks
-            .lock()
-            .await
-            .spawn(perform_backup(backup_service, cloned_rx, cloned_metrics));
-    }
-
     let geyser_bubblegum_updates_processor =
         Arc::new(BubblegumTxProcessor::new(primary_rocks_storage.clone(), metrics_state.ingester_metrics.clone()));
-    let rpc_client = Arc::new(RpcClient::new(config.rpc_host.clone()));
+    let rpc_client = Arc::new(RpcClient::new(args.rpc_host.clone()));
 
+    info!("Init Redis ....");
+    let cloned_rx = shutdown_rx.resubscribe();
+    let message_config = MessengerConfig {
+        messenger_type: MessengerType::Redis,
+        connection_config: args.redis_connection_config.clone(),
+    };
 
-    info!("Config message source {}", config.message_source);
-    match config.message_source {
-        MessageSource::TCP => {
-            let buffer = Arc::new(Buffer::new());
-            // setup receiver
-            let message_handler = Arc::new(MessageHandlerIngester::new(buffer.clone()));
-            let (geyser_tcp_receiver, geyser_addr) = (
-                TcpReceiver::new(message_handler.clone(), config.tcp_config.get_tcp_receiver_reconnect_interval()?),
-                config.tcp_config.get_tcp_receiver_addr_ingester()?,
-            );
-            let cloned_rx = shutdown_rx.resubscribe();
-            mutexed_tasks
-                .lock()
-                .await
-                .spawn(connect_to_geyser(geyser_tcp_receiver, geyser_addr, cloned_rx));
-            let (snapshot_tcp_receiver, snapshot_addr) = (
-                TcpReceiver::new(message_handler.clone(), config.tcp_config.get_tcp_receiver_reconnect_interval()? * 2),
-                config.tcp_config.get_snapshot_addr_ingester()?,
-            );
-            let cloned_rx = shutdown_rx.resubscribe();
-            mutexed_tasks.lock().await.spawn(connect_to_snapshot_receiver(
-                snapshot_tcp_receiver,
-                snapshot_addr,
-                cloned_rx,
-            ));
+    let ack_channel =
+        create_ack_channel(cloned_rx, message_config.clone(), mutexed_tasks.clone()).await;
 
-            let cloned_buffer = buffer.clone();
-            let cloned_rx = shutdown_rx.resubscribe();
-            let cloned_metrics = metrics_state.ingester_metrics.clone();
-            mutexed_tasks
-                .lock()
-                .await
-                .spawn(debug_buffer(cloned_rx, cloned_buffer, cloned_metrics));
-
-            // Workers for snapshot parsing
-            for _ in 0..config.snapshot_parsing_workers {
-                run_accounts_processor(
-                    shutdown_rx.resubscribe(),
-                    mutexed_tasks.clone(),
-                    buffer.clone(),
-                    primary_rocks_storage.clone(),
-                    config.snapshot_parsing_batch_size,
-                    config.mpl_core_fees_buffer_size,
-                    metrics_state.ingester_metrics.clone(),
-                    // during snapshot parsing we don't want to collect message process metrics
-                    None,
-                    index_pg_storage.clone(),
-                    rpc_client.clone(),
-                    mutexed_tasks.clone(),
-                )
-                .await;
-            }
-            for _ in 0..config.accounts_parsing_workers {
-                run_accounts_processor(
-                    shutdown_rx.resubscribe(),
-                    mutexed_tasks.clone(),
-                    buffer.clone(),
-                    primary_rocks_storage.clone(),
-                    config.accounts_buffer_size,
-                    config.mpl_core_fees_buffer_size,
-                    metrics_state.ingester_metrics.clone(),
-                    // TCP sender does not send any ids with timestamps so we may not pass message process metrics here
-                    None,
-                    index_pg_storage.clone(),
-                    rpc_client.clone(),
-                    mutexed_tasks.clone(),
-                )
-                .await;
-            }
-
-            run_transaction_processor(
-                shutdown_rx.resubscribe(),
-                mutexed_tasks.clone(),
-                buffer.clone(),
-                geyser_bubblegum_updates_processor.clone(),
-                // TCP sender does not send any ids with timestamps so we may not pass message process metrics here
-                None,
+    for _ in 0..args.redis_accounts_parsing_workers {
+        let redis_receiver = Arc::new(
+            RedisReceiver::new(
+                message_config.clone(),
+                ConsumptionType::All,
+                ack_channel.clone(),
             )
-            .await;
-        }
-        MessageSource::Redis => {
-            info!("{:?}", config.redis_messenger_config);
-            info!("Redis config {:?}", config.redis_messenger_config);
-            
-            let cloned_rx = shutdown_rx.resubscribe();
-            let ack_channel =
-                create_ack_channel(cloned_rx, config.redis_messenger_config.clone(), mutexed_tasks.clone()).await;
+            .await?,
+        );
 
-            for _ in 0..config.accounts_parsing_workers {
-                let redis_receiver = Arc::new(
-                    RedisReceiver::new(
-                        config.redis_messenger_config.clone(),
-                        ConsumptionType::All,
-                        ack_channel.clone(),
-                    )
-                    .await?,
-                );
-                run_accounts_processor(
-                    shutdown_rx.resubscribe(),
-                    mutexed_tasks.clone(),
-                    redis_receiver,
-                    primary_rocks_storage.clone(),
-                    config.accounts_buffer_size,
-                    config.mpl_core_fees_buffer_size,
-                    metrics_state.ingester_metrics.clone(),
-                    Some(metrics_state.message_process_metrics.clone()),
-                    index_pg_storage.clone(),
-                    rpc_client.clone(),
-                    mutexed_tasks.clone(),
-                )
-                .await;
-            }
-            for _ in 0..config.transactions_parsing_workers {
-                let redis_receiver = Arc::new(
-                    RedisReceiver::new(
-                        config.redis_messenger_config.clone(),
-                        ConsumptionType::All,
-                        ack_channel.clone(),
-                    )
-                    .await?,
-                );
-                run_transaction_processor(
-                    shutdown_rx.resubscribe(),
-                    mutexed_tasks.clone(),
-                    redis_receiver,
-                    geyser_bubblegum_updates_processor.clone(),
-                    Some(metrics_state.message_process_metrics.clone()),
-                )
-                .await;
-            }
-        }
+        run_accounts_processor(
+            shutdown_rx.resubscribe(),
+            mutexed_tasks.clone(),
+            redis_receiver,
+            primary_rocks_storage.clone(),
+            args.account_processor_buffer_size,
+            args.account_processor_mpl_fees_buffer_size,
+            metrics_state.ingester_metrics.clone(),
+            Some(metrics_state.message_process_metrics.clone()),
+            index_pg_storage.clone(),
+            rpc_client.clone(),
+            mutexed_tasks.clone(),
+        )
+        .await;
     }
+
+    for _ in 0..args.redis_transactions_parsing_workers {
+        let redis_receiver = Arc::new(
+            RedisReceiver::new(
+                message_config.clone(),
+                ConsumptionType::All,
+                ack_channel.clone(),
+            )
+            .await?,
+        );
+        run_transaction_processor(
+            shutdown_rx.resubscribe(),
+            mutexed_tasks.clone(),
+            redis_receiver,
+            geyser_bubblegum_updates_processor.clone(),
+            Some(metrics_state.message_process_metrics.clone()),
+        )
+        .await;
+    }
+
+    info!("MessageSource Redis FINISH");
+
 
     //todo Add starting from particular block
     let last_saved_slot = primary_rocks_storage.last_saved_slot()?.unwrap_or_default();
@@ -306,17 +216,20 @@ pub async fn main() -> Result<(), IngesterError> {
             primary_rocks_storage.clone(),
             metrics_state.json_downloader_metrics.clone(),
             metrics_state.red_metrics.clone(),
-            config.parallel_json_downloaders,
+            args.parallel_json_downloaders,
         )
         .await,
     );
 
-    let grpc_client = Client::connect(config.clone())
-        .await
-        .map_err(|e| error!("GRPC Client new: {e}"))
-        .ok();
 
-    if let Some(gaped_data_client) = grpc_client.clone() {
+    if args.is_run_gapfiller {
+        info!("Start gapfiller...");
+        let gaped_data_client = Client::connect(&args.gapfiller_peer_addr)
+            .await
+            .map_err(|e| error!("GRPC Client new: {e}"))
+            .ok()
+            .expect("Failed to create GRPC Client");
+
         while first_processed_slot.load(Ordering::Relaxed) == 0 && shutdown_rx.is_empty() {
             tokio_sleep(Duration::from_millis(100)).await
         }
@@ -352,29 +265,29 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_rocks_storage = primary_rocks_storage.clone();
     let cloned_api_metrics = metrics_state.api_metrics.clone();
     let account_balance_getter = Arc::new(AccountBalanceGetterImpl::new(rpc_client.clone()));
-    let proof_checker = config.check_proofs.then_some(Arc::new(MaybeProofChecker::new(
+    let proof_checker = args.check_proofs.then_some(Arc::new(MaybeProofChecker::new(
         rpc_client.clone(),
-        config.check_proofs_probability,
-        config.check_proofs_commitment,
+        args.check_proofs_probability,
+        args.check_proofs_commitment,
     )));
     let tasks_clone = mutexed_tasks.clone();
     let cloned_rx = shutdown_rx.resubscribe();
-    let file_storage_path = config.file_storage_path_container.clone();
+    let file_storage_path = args.file_storage_path_container.clone();
 
-    let middleware_json_downloader = config
+    let middleware_json_downloader = args
         .json_middleware_config
         .as_ref()
         .filter(|conf| conf.is_enabled)
         .map(|_| json_processor.clone());
 
-    if config.is_start_api {
-        info!("Starting API (ingester)...");
-        let api_config = setup_config::<ApiConfig>(INGESTER_CONFIG_PREFIX);
+
+    if args.is_run_api {
+        info!("Starting API (Ingester)...");
 
         // it will check if asset which was requested is from the tree which has gaps in sequences
         // gap in sequences means missed transactions and  as a result incorrect asset data
         let tree_gaps_checker = {
-            if api_config.skip_check_tree_gaps {
+            if args.skip_check_tree_gaps {
                 None
             } else {
                 Some(cloned_rocks_storage.clone())
@@ -391,22 +304,22 @@ pub async fn main() -> Result<(), IngesterError> {
                 cloned_rx,
                 cloned_api_metrics,
                 Some(red_metrics),
-                api_config.server_port,
+                args.server_port,
                 proof_checker,
                 tree_gaps_checker,
-                api_config.max_page_limit,
+                args.max_page_limit,
                 middleware_json_downloader.clone(),
                 middleware_json_downloader,
-                api_config.json_middleware_config,
+                args.json_middleware_config,
                 tasks_clone,
-                &api_config.archives_dir,
-                api_config.consistence_synchronization_api_threshold,
-                api_config.consistence_backfilling_slots_threshold,
-                api_config.batch_mint_service_port,
-                api_config.file_storage_path_container.as_str(),
+                &args.archives_dir,
+                args.consistence_synchronization_api_threshold,
+                args.consistence_backfilling_slots_threshold,
+                args.batch_mint_service_port,
+                args.file_storage_path_container.as_str(),
                 account_balance_getter,
-                api_config.storage_service_base_url,
-                api_config.native_mint_pubkey,
+                args.storage_service_base_url,
+                args.native_mint_pubkey,
             )
                 .await
             {
@@ -427,52 +340,49 @@ pub async fn main() -> Result<(), IngesterError> {
         .spawn(json_worker::run(cloned_jp, cloned_rx).map(|_| Ok(())));
 
 
-
-    let backfill_bubblegum_updates_processor =
-        Arc::new(BubblegumTxProcessor::new(primary_rocks_storage.clone(), metrics_state.ingester_metrics.clone()));
-    let tx_ingester = Arc::new(BackfillTransactionIngester::new(backfill_bubblegum_updates_processor.clone()));
-    
-    
-    
-    let slot_db = Arc::new(
-        SlotStorage::open_secondary(
-            config.slots_db_path.clone(),
-            config.secondary_slots_db_path.clone(),
-            mutexed_tasks.clone(),
-            metrics_state.red_metrics.clone(),
-        )
-        .expect("Failed to open slot storage"),
-    );
-    
     let shutdown_token = CancellationToken::new();
-    let rpc_backfiller = Arc::new(BackfillRPC::connect(config.backfill_rpc_address()));
 
     // Backfiller
-    if config.is_run_backfiller {
-        info!("Running backfiller...");
-        
-        let backfiller_config = setup_config::<BackfillerConfig>(INGESTER_CONFIG_PREFIX);
+    if args.is_run_backfiller {
+        info!("Start backfiller...");
+
+        let backfill_bubblegum_updates_processor =
+            Arc::new(BubblegumTxProcessor::new(primary_rocks_storage.clone(), metrics_state.ingester_metrics.clone()));
+        let tx_ingester = Arc::new(BackfillTransactionIngester::new(backfill_bubblegum_updates_processor.clone()));
+
+        let slot_db = Arc::new(
+            SlotStorage::open_secondary(
+                args.slots_db_path.clone().expect("slots_db_path is required for SlotStorage"),
+                args.secondary_slots_db_path.clone().expect("secondary_slots_db_path is required for SlotStorage"),
+                mutexed_tasks.clone(),
+                metrics_state.red_metrics.clone(),
+            )
+                .expect("Failed to open slot storage"),
+        );
+
+        let rpc_url = &args.backfill_rpc_address.unwrap_or_else(|| args.rpc_host.clone());
+        let rpc_backfiller = Arc::new(BackfillRPC::connect(rpc_url.clone()));
+
         let backfiller_source = Arc::new(
             BackfillSource::new(
-                &config.backfiller_source_mode,
-                backfiller_config.rpc_host.clone(),
-                backfiller_config.big_table_config.as_ref(),
-            )
-                .await,
+                &args.backfiller_source_mode,
+                Option::from(rpc_url.clone()),
+                args.big_table_config.as_ref(),
+            ).await,
         );
         
     
-        if config.is_run_bubblegum_backfiller {
+        if args.is_run_bubblegum_backfiller {
             info!("Runing Bubblegum backfiller (ingester)...");
             
-            if backfiller_config.should_reingest {
+            if args.should_reingest {
                 warn!("'Reingest' flag is set, deleting last backfilled slot.");
                 primary_rocks_storage
                     .delete_parameter::<u64>(rocks_db::parameters::Parameter::LastBackfilledSlot)
                     .await?;
             }
     
-            match backfiller_config.backfiller_mode {
+            match args.backfiller_mode {
                 BackfillerMode::IngestDirectly => {
                     panic!("IngestDirectly mode is not supported any more.");
                 }
@@ -503,7 +413,7 @@ pub async fn main() -> Result<(), IngesterError> {
             };
         }
 
-        if config.run_sequence_consistent_checker {
+        if args.run_sequence_consistent_checker {
             info!("Running sequence consistent checker...");
             
             let direct_block_parser = Arc::new(DirectBlockParser::new(
@@ -521,77 +431,77 @@ pub async fn main() -> Result<(), IngesterError> {
                 shutdown_rx.resubscribe(),
                 rpc_backfiller.clone(),
                 mutexed_tasks.clone(),
-                config.sequence_consistent_checker_wait_period_sec,
+                args.sequence_consistent_checker_wait_period_sec,
             )
                 .await;
         }
 
-    }
 
-    // setup dependencies for grpc server
-    let uc = AssetStreamer::new(config.peer_grpc_max_gap_slots, primary_rocks_storage.clone());
-    let bs = BlocksStreamer::new(config.peer_grpc_max_gap_slots, slot_db.clone());
-    let serv = PeerGapFillerServiceImpl::new(Arc::new(uc), Arc::new(bs), primary_rocks_storage.clone());
-    let asset_url_serv = AssetUrlServiceImpl::new(primary_rocks_storage.clone());
-    let addr = format!("0.0.0.0:{}", config.peer_grpc_port).parse()?;
-    // Spawn the gRPC server task and add to JoinSet
-    let mut rx = shutdown_rx.resubscribe();
-    
-    mutexed_tasks.lock().await.spawn(async move {
-        if let Err(e) = Server::builder()
-            .add_service(GapFillerServiceServer::new(serv))
-            .add_service(AssetUrlServiceServer::new(asset_url_serv))
-            .serve_with_shutdown(addr, rx.recv().map(|_| ()))
-            .await
-        {
-            error!("Server error: {}", e);
-        }
+        // setup dependencies for grpc server
+        let uc = AssetStreamer::new(args.peer_grpc_max_gap_slots, primary_rocks_storage.clone());
+        let bs = BlocksStreamer::new(args.peer_grpc_max_gap_slots, slot_db.clone());
+        let serv = PeerGapFillerServiceImpl::new(Arc::new(uc), Arc::new(bs), primary_rocks_storage.clone());
+        let asset_url_serv = AssetUrlServiceImpl::new(primary_rocks_storage.clone());
+        let addr = format!("0.0.0.0:{}", args.peer_grpc_port).parse()?;
+        // Spawn the gRPC server task and add to JoinSet
+        let mut rx = shutdown_rx.resubscribe();
 
-        Ok(())
-    });
-
-    Scheduler::run_in_background(Scheduler::new(primary_rocks_storage.clone())).await;
-    
-
-    let rocks_clone = primary_rocks_storage.clone();
-    let signature_fetcher = SignatureFetcher::new(
-        rocks_clone,
-        rpc_backfiller.clone(),
-        tx_ingester.clone(),
-        metrics_state.rpc_backfiller_metrics.clone(),
-    );
-
-    let cloned_rx = shutdown_rx.resubscribe();
-
-    let metrics_clone = metrics_state.rpc_backfiller_metrics.clone();
-
-    mutexed_tasks.lock().await.spawn(async move {
-        let program_id = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
-        while cloned_rx.is_empty() {
-            match signature_fetcher
-                .fetch_signatures(program_id, config.rpc_retry_interval_millis)
+        mutexed_tasks.lock().await.spawn(async move {
+            if let Err(e) = Server::builder()
+                .add_service(GapFillerServiceServer::new(serv))
+                .add_service(AssetUrlServiceServer::new(asset_url_serv))
+                .serve_with_shutdown(addr, rx.recv().map(|_| ()))
                 .await
             {
-                Ok(_) => {
-                    metrics_clone.inc_run_fetch_signatures("fetch_signatures", MetricStatus::SUCCESS);
-                    info!("signatures sync finished successfully for program_id: {}", program_id);
-                }
-                Err(e) => {
-                    metrics_clone.inc_run_fetch_signatures("fetch_signatures", MetricStatus::FAILURE);
-                    error!("signatures sync failed: {:?} for program_id: {}", e, program_id);
-                }
+                error!("Server error: {}", e);
             }
 
-            tokio_sleep(Duration::from_secs(60)).await;
-        }
+            Ok(())
+        });
 
-        Ok(())
-    });
+        let rocks_clone = primary_rocks_storage.clone();
+        let signature_fetcher = SignatureFetcher::new(
+            rocks_clone,
+            rpc_backfiller.clone(),
+            tx_ingester.clone(),
+            metrics_state.rpc_backfiller_metrics.clone(),
+        );
+        let cloned_rx = shutdown_rx.resubscribe();
+        let metrics_clone = metrics_state.rpc_backfiller_metrics.clone();
 
-    
+        mutexed_tasks.lock().await.spawn(async move {
+            let program_id = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
+            while cloned_rx.is_empty() {
+                match signature_fetcher
+                    .fetch_signatures(program_id, args.rpc_retry_interval_millis)
+                    .await
+                {
+                    Ok(_) => {
+                        metrics_clone.inc_run_fetch_signatures("fetch_signatures", MetricStatus::SUCCESS);
+                        info!("signatures sync finished successfully for program_id: {}", program_id);
+                    }
+                    Err(e) => {
+                        metrics_clone.inc_run_fetch_signatures("fetch_signatures", MetricStatus::FAILURE);
+                        error!("signatures sync failed: {:?} for program_id: {}", e, program_id);
+                    }
+                }
+
+                tokio_sleep(Duration::from_secs(60)).await;
+            }
+
+            Ok(())
+        });
+
+    }
+
+    Scheduler::run_in_background(Scheduler::new(primary_rocks_storage.clone())).await;
+
+
     if let Ok(arweave) =
         Arweave::from_keypair_path(PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(), ARWEAVE_BASE_URL.parse().unwrap())
     {
+        info!("Running batch mint processor...");
+
         let arweave = Arc::new(arweave);
         let batch_mint_processor = Arc::new(BatchMintProcessor::new(
             index_pg_storage.clone(),
@@ -624,6 +534,8 @@ pub async fn main() -> Result<(), IngesterError> {
 
     // clean indexes
     for asset_type in ASSET_TYPES {
+        info!("Start cleaning index {:?}", asset_type);
+
         let primary_rocks_storage = primary_rocks_storage.clone();
         let mut rx = shutdown_rx.resubscribe();
         let index_pg_storage = index_pg_storage.clone();
@@ -650,7 +562,7 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
 
-    start_metrics(metrics_state.registry, config.metrics_port).await;
+    start_metrics(metrics_state.registry, args.metrics_port).await;
 
     // --stop
     graceful_stop(
@@ -658,10 +570,27 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         Some(shutdown_token),
         guard,
-        config.profiling_file_path_container,
-        &config.heap_path,
+        args.profiling_file_path_container,
+        &args.heap_path,
     )
     .await;
 
     Ok(())
+
+
+    // todo: remove backup service from here and move it to a separate process with a secondary db - verify it's possible first!
+    // start backup service
+    // if config.store_db_backups() {
+    //     info!("Start store DB  backup...");
+    //     let backup_service = BackupService::new(primary_rocks_storage.db.clone(), &backup_service::load_config()?)?;
+    //     let cloned_metrics = metrics_state.ingester_metrics.clone();
+    //     let cloned_rx = shutdown_rx.resubscribe();
+    //     mutexed_tasks
+    //         .lock()
+    //         .await
+    //         .spawn(perform_backup(backup_service, cloned_rx, cloned_metrics));
+    // }
 }
+
+
+

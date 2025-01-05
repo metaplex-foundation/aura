@@ -1,4 +1,3 @@
-use crate::config::IngesterConfig;
 use crate::error::IngesterError;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::MetricState;
@@ -64,6 +63,7 @@ pub async fn init_primary_storage(
         MigrationState::CreateColumnFamilies,
     )?;
 
+    //todo Deprecated remove?
     if enable_migration_rocksdb {
         let migration_version_manager_dir = TempDir::new()?;
         let migration_version_manager = Storage::open_secondary(
