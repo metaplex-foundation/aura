@@ -1,8 +1,7 @@
 use crate::api::dapi::rpc_asset_convertors::parse_files;
-use crate::config::{setup_config, IngesterConfig, INGESTER_CONFIG_PREFIX};
 use async_trait::async_trait;
 use entities::enums::TaskStatus;
-use entities::models::{JsonDownloadTask, OffChainData};
+use entities::models::JsonDownloadTask;
 use interface::error::JsonDownloaderError;
 use interface::json::{JsonDownloadResult, JsonDownloader, JsonPersister};
 use metrics_utils::red::RequestErrorDurationMetrics;
@@ -10,7 +9,8 @@ use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::tasks::UpdatedTask;
 use postgre_client::PgClient;
 use reqwest::ClientBuilder;
-use rocks_db::asset_previews::UrlToDownload;
+use rocks_db::columns::asset_previews::UrlToDownload;
+use rocks_db::columns::offchain_data::OffChainData;
 use rocks_db::Storage;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -368,6 +368,7 @@ impl JsonPersister for JsonWorker {
     ) -> Result<(), JsonDownloaderError> {
         let mut pg_updates = Vec::new();
         let mut rocks_updates = HashMap::new();
+        let curr_time = chrono::Utc::now().timestamp();
 
         for (metadata_url, result) in results.iter() {
             match result {
@@ -375,8 +376,10 @@ impl JsonPersister for JsonWorker {
                     rocks_updates.insert(
                         metadata_url.clone(),
                         OffChainData {
-                            url: metadata_url.clone(),
-                            metadata: json_file.clone(),
+                            storage_mutability: metadata_url.as_str().into(),
+                            url: Some(metadata_url.clone()),
+                            metadata: Some(json_file.clone()),
+                            last_read_at: curr_time,
                         },
                     );
                     pg_updates.push(UpdatedTask {
@@ -396,12 +399,13 @@ impl JsonPersister for JsonWorker {
                     rocks_updates.insert(
                         metadata_url.clone(),
                         OffChainData {
-                            url: metadata_url.clone(),
-                            metadata: format!(
-                                "{{\"image\":\"{}\",\"type\":\"{}\"}}",
-                                url, mime_type
-                            )
-                            .to_string(),
+                            url: Some(metadata_url.clone()),
+                            metadata: Some(
+                                format!("{{\"image\":\"{}\",\"type\":\"{}\"}}", url, mime_type)
+                                    .to_string(),
+                            ),
+                            last_read_at: curr_time,
+                            storage_mutability: metadata_url.as_str().into(),
                         },
                     );
                     self.metrics.inc_tasks("media", MetricStatus::SUCCESS);
@@ -417,8 +421,10 @@ impl JsonPersister for JsonWorker {
                         rocks_updates.insert(
                             metadata_url.clone(),
                             OffChainData {
-                                url: metadata_url.clone(),
-                                metadata: "".to_string(),
+                                url: Some(metadata_url.clone()),
+                                metadata: Some("".to_string()),
+                                last_read_at: curr_time,
+                                storage_mutability: metadata_url.as_str().into(),
                             },
                         );
 
@@ -473,8 +479,10 @@ impl JsonPersister for JsonWorker {
         if !rocks_updates.is_empty() {
             let urls_to_download = rocks_updates
                 .values()
-                .filter(|data| !data.metadata.is_empty())
-                .filter_map(|data| parse_files(&data.metadata))
+                .filter(|data| {
+                    data.metadata.is_some() && !data.metadata.clone().unwrap().is_empty()
+                })
+                .filter_map(|data| parse_files(data.metadata.clone().unwrap().as_str()))
                 .flat_map(|files| files.into_iter())
                 .filter_map(|file| file.uri)
                 .map(|uri| (uri, UrlToDownload::default()))

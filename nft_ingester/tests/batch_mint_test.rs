@@ -40,7 +40,7 @@ use nft_ingester::processors::transaction_based::bubblegum_updates_processor::Bu
 use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
-use rocks_db::batch_mint::FailedBatchMintKey;
+use rocks_db::columns::batch_mint::FailedBatchMintKey;
 use rocks_db::Storage;
 use serde_json::json;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -749,11 +749,16 @@ async fn batch_mint_persister_test() {
     // Test get asset proof batch
     let payload = GetAssetProofBatch {
         ids: test_batch_mint
-            .batch_mints.into_iter().map(|lu|lu.leaf_update.id().to_string()).take(10).collect(),
+            .batch_mints
+            .into_iter()
+            .map(|lu| lu.leaf_update.id().to_string())
+            .take(10)
+            .collect(),
     };
     let proof_result = api.get_asset_proof_batch(payload).await.unwrap();
-    let asset_proofs: HashMap<String, Option<AssetProof>> = serde_json::from_value(proof_result).unwrap();
-    for (_key, proof) in asset_proofs{
+    let asset_proofs: HashMap<String, Option<AssetProof>> =
+        serde_json::from_value(proof_result).unwrap();
+    for (_key, proof) in asset_proofs {
         assert!(proof.is_some())
     }
 }

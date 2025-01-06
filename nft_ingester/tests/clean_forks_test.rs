@@ -8,8 +8,8 @@ use mpl_bubblegum::types::{BubblegumEventType, LeafSchema, Version};
 use mpl_bubblegum::{InstructionName, LeafSchemaEvent};
 use nft_ingester::cleaners::fork_cleaner::ForkCleaner;
 use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
-use rocks_db::cl_items::ClItem;
 use rocks_db::column::TypedColumn;
+use rocks_db::columns::cl_items::ClItem;
 use rocks_db::transaction::{InstructionResult, TransactionResult, TreeUpdate};
 use rocks_db::tree_seq::TreeSeqIdx;
 use setup::rocks::RocksTestEnvironment;
@@ -925,7 +925,7 @@ async fn test_process_forked_transaction() {
     // for this test all we need is key from Rocks raw_blocks_cbor column family, so RawBlock data could be arbitrary
     storage
         .raw_blocks_cbor
-        .put_cbor_encoded(
+        .put(
             slot_normal_tx,
             RawBlock {
                 slot: slot_normal_tx,
@@ -948,7 +948,7 @@ async fn test_process_forked_transaction() {
     // 16000 is arbitrary number
     storage
         .raw_blocks_cbor
-        .put_cbor_encoded(
+        .put(
             slot_normal_tx + 16000,
             RawBlock {
                 slot: slot_normal_tx + 16000,

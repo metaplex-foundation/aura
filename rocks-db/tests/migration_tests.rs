@@ -1,19 +1,29 @@
 #[cfg(test)]
 mod tests {
-    use bincode::serialize;
     use metrics_utils::red::RequestErrorDurationMetrics;
-    use rocks_db::asset::AssetCollection;
     use rocks_db::column::TypedColumn;
-    use rocks_db::migrations::collection_authority::AssetCollectionVersion0;
+    use rocks_db::columns::offchain_data::{OffChainData, OffChainDataDeprecated};
     use rocks_db::migrator::MigrationState;
     use rocks_db::Storage;
-    use solana_sdk::pubkey::Pubkey;
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
 
-    fn put_unmerged_value_to_storage(path: &str) -> (Pubkey, AssetCollectionVersion0) {
+    #[tokio::test]
+    async fn test_migration() {
+        let dir = TempDir::new().unwrap();
+        let v1 = OffChainDataDeprecated {
+            url: "https://mail.com".to_string(),
+            metadata: "".to_string(),
+        };
+        let url2 = "ipfs://abcdefg";
+        let v2 = OffChainDataDeprecated {
+            url: url2.to_string(),
+            metadata: format!("{{\"image\":\"{}\",\"type\":\"{}\"}}", url2, "image/gif")
+                .to_string(),
+        };
+        let path = dir.path().to_str().unwrap();
         let old_storage = Storage::open(
             path,
             Arc::new(Mutex::new(JoinSet::new())),
@@ -21,103 +31,83 @@ mod tests {
             MigrationState::Version(0),
         )
         .unwrap();
-        let key = Pubkey::new_unique();
         old_storage
-            .asset_collection_data
-            .backend
-            .put_cf(
-                &old_storage
-                    .asset_collection_data
-                    .backend
-                    .cf_handle(AssetCollection::NAME)
-                    .unwrap(),
-                AssetCollection::encode_key(key),
-                serialize(&AssetCollectionVersion0 {
-                    pubkey: Pubkey::new_unique(),
-                    collection: Pubkey::new_unique(),
-                    is_collection_verified: false,
-                    collection_seq: Some(5),
-                    slot_updated: 5,
-                    write_version: Some(5),
-                })
-                .unwrap(),
-            )
-            .unwrap();
-
-        let new_val = AssetCollectionVersion0 {
-            pubkey: Pubkey::new_unique(),
-            collection: Pubkey::new_unique(),
-            is_collection_verified: false,
-            collection_seq: Some(10),
-            slot_updated: 10,
-            write_version: Some(10),
-        };
+            .asset_offchain_data_deprecated
+            .put(v1.url.clone(), v1.clone())
+            .expect("should put");
         old_storage
-            .asset_collection_data
-            .backend
-            .merge_cf(
-                &old_storage
-                    .asset_collection_data
-                    .backend
-                    .cf_handle(AssetCollection::NAME)
-                    .unwrap(),
-                AssetCollection::encode_key(key),
-                serialize(&new_val).unwrap(),
-            )
-            .unwrap();
-        // close connection in the end of the scope
-        (key, new_val)
-    }
-
-    #[test]
-    fn test_merge_fail() {
-        let dir = TempDir::new().unwrap();
-        put_unmerged_value_to_storage(dir.path().to_str().unwrap());
-        assert_eq!(
-            Storage::open(
-                dir.path().to_str().unwrap(),
-                Arc::new(Mutex::new(JoinSet::new())),
-                Arc::new(RequestErrorDurationMetrics::new()),
-                MigrationState::Last,
-            )
-            .err()
-            .unwrap()
-            .to_string(),
-            "storage error: RocksDb(Error { message: \"Corruption: Merge operator failed\" })"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_migration() {
-        let dir = TempDir::new().unwrap();
-        let (key, val) = put_unmerged_value_to_storage(dir.path().to_str().unwrap());
+            .asset_offchain_data_deprecated
+            .put(v2.url.clone(), v2.clone())
+            .expect("should put data");
+        drop(old_storage);
         let secondary_storage_dir = TempDir::new().unwrap();
         let migration_version_manager = Storage::open_secondary(
-            dir.path().to_str().unwrap(),
+            path,
             secondary_storage_dir.path().to_str().unwrap(),
             Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
-            MigrationState::Last,
+            MigrationState::Version(4),
         )
         .unwrap();
+        let binding = TempDir::new().unwrap();
+        let migration_storage_path = binding.path().to_str().unwrap();
         Storage::apply_all_migrations(
-            dir.path().to_str().unwrap(),
-            TempDir::new().unwrap().path().to_str().unwrap(),
+            path,
+            migration_storage_path,
             Arc::new(migration_version_manager),
         )
         .await
         .unwrap();
 
         let new_storage = Storage::open(
-            dir.path().to_str().unwrap(),
+            path,
             Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
-            MigrationState::Last,
+            MigrationState::Version(4),
         )
         .unwrap();
+        let mut it = new_storage
+            .db
+            .raw_iterator_cf(&new_storage.db.cf_handle(OffChainData::NAME).unwrap());
+        it.seek_to_first();
+        assert!(it.valid(), "iterator should be valid on start");
+        while it.valid() {
+            println!("has key {:?} with value {:?}", it.key(), it.value());
+            it.next();
+        }
+        let migrated_v1 = new_storage
+            .db
+            .get_pinned_cf(
+                &new_storage.db.cf_handle(OffChainData::NAME).unwrap(),
+                OffChainData::encode_key(v1.url.clone()),
+            )
+            .expect("expect to get value successfully")
+            .expect("value to be present");
 
-        let selected_val = new_storage.asset_collection_data.get(key).unwrap().unwrap();
-
-        assert_eq!(selected_val.pubkey, val.pubkey)
+        print!("migrated is {:?}", migrated_v1.to_vec());
+        let migrated_v1 = new_storage
+            .asset_offchain_data
+            .get(v1.url.clone())
+            .expect("should get value successfully")
+            .expect("the value should be not empty");
+        assert_eq!(
+            migrated_v1.storage_mutability,
+            rocks_db::columns::offchain_data::StorageMutability::Mutable
+        );
+        assert_eq!(migrated_v1.url, Some(v1.url.to_string()));
+        assert_eq!(migrated_v1.metadata, Some(v1.metadata));
+        assert_eq!(migrated_v1.last_read_at, 0);
+        let migrated_v2 = new_storage
+            .asset_offchain_data
+            .get(v2.url.clone())
+            .expect("should get value successfully")
+            .expect("the value should be not empty");
+        assert_eq!(
+            migrated_v2.storage_mutability,
+            rocks_db::columns::offchain_data::StorageMutability::Immutable
+        );
+        assert_eq!(migrated_v2.url, Some(v2.url.to_string()));
+        assert_eq!(migrated_v2.metadata, Some(v2.metadata));
+        assert_eq!(migrated_v2.last_read_at, 0);
     }
 }

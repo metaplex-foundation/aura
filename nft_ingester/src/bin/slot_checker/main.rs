@@ -7,13 +7,14 @@ use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use metrics_utils::MetricState;
 use rocks_db::column::TypedColumn;
+use rocks_db::columns::offchain_data::OffChainData;
 use rocks_db::migrator::MigrationVersions;
 use rocks_db::Storage;
 use tokio::signal;
 use tokio::sync::{broadcast, Mutex as AsyncMutex};
 use tracing::{error, info, warn};
 
-use entities::models::{OffChainData, RawBlock};
+use entities::models::RawBlock;
 use interface::slots_dumper::SlotsDumper;
 use usecase::bigtable::BigTableClient;
 use usecase::slots_collector::SlotsCollector;
@@ -261,7 +262,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start slot collection
     let _ = slots_collector
-        .collect_slots(&BUBBLEGUM_PROGRAM_ID, last_persisted_slot, args.first_slot.unwrap_or_default(), &shutdown_rx)
+        .collect_slots(
+            &BUBBLEGUM_PROGRAM_ID,
+            last_persisted_slot,
+            args.first_slot.unwrap_or_default(),
+            &shutdown_rx,
+        )
         .await;
 
     // Collection done, stop the spinner

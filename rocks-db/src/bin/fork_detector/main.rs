@@ -1,7 +1,7 @@
 use entities::models::AssetSignature;
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::cl_items::{ClItemKey, ClLeafKey};
 use rocks_db::column::TypedColumn;
+use rocks_db::columns::cl_items::{ClItemKey, ClLeafKey};
 use rocks_db::migrator::MigrationState;
 use rocks_db::{SlotStorage, Storage};
 use solana_sdk::pubkey::Pubkey;
@@ -55,7 +55,8 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
     println!("Opened in {:?}", start.elapsed());
 
     let slots_db = Arc::new(
-        SlotStorage::open_secondary(todo!(), todo!(), js.clone(), red_metrics.clone())
+        // where secondary path comes from?
+        SlotStorage::open_secondary(source_path, source_path, js.clone(), red_metrics.clone())
             .expect("should open slots db"),
     );
 

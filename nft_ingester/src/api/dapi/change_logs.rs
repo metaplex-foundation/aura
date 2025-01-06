@@ -3,7 +3,7 @@ use std::{collections::HashMap, str::FromStr};
 
 use interface::proofs::ProofChecker;
 use metrics_utils::ApiMetricsConfig;
-use rocks_db::cl_items::{ClItemKey, ClLeafKey};
+use rocks_db::columns::cl_items::{ClItemKey, ClLeafKey};
 use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use tracing::{debug, warn};
@@ -11,7 +11,7 @@ use tracing::{debug, warn};
 use crate::api::dapi::model;
 use crate::api::dapi::rpc_asset_models::AssetProof;
 use interface::processing_possibility::ProcessingPossibilityChecker;
-use rocks_db::asset_streaming_client::get_required_nodes_for_proof;
+use rocks_db::clients::asset_streaming_client::get_required_nodes_for_proof;
 use rocks_db::Storage;
 use spl_concurrent_merkle_tree::node::empty_node;
 
@@ -49,10 +49,11 @@ pub async fn get_proof_for_assets<
         asset_ids.iter().map(|id| (id.to_string(), None)).collect();
 
     // Instead of using a HashMap keyed by tree_id, we keep a Vec of (tree_id, pubkey, nonce).
-    let tree_pubkeys: Vec<(Pubkey, Pubkey, u64)> = fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids)
-        .values()
-        .map(|asset| (asset.tree_id, asset.pubkey, asset.nonce.unwrap_or_default()))
-        .collect();
+    let tree_pubkeys: Vec<(Pubkey, Pubkey, u64)> =
+        fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids)
+            .values()
+            .map(|asset| (asset.tree_id, asset.pubkey, asset.nonce.unwrap_or_default()))
+            .collect();
 
     // Construct leaf keys for all requested assets
     let leaf_keys: Vec<ClLeafKey> = tree_pubkeys

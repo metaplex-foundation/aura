@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
 use entities::enums::TaskStatus;
-use entities::models::{OffChainData, Task};
+use entities::models::Task;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait};
 use postgre_client::PgClient;
-use rocks_db::asset::AssetCompleteDetails;
 use rocks_db::column::TypedColumn;
+use rocks_db::columns::asset::AssetCompleteDetails;
+use rocks_db::columns::offchain_data::OffChainData;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::{JoinError, JoinSet};
@@ -18,7 +19,7 @@ use nft_ingester::config::{
 };
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
-use rocks_db::asset_generated::asset as fb;
+use rocks_db::generated::asset_generated::asset as fb;
 use rocks_db::migrator::MigrationState;
 use rocks_db::Storage;
 
@@ -169,15 +170,14 @@ impl JsonMigrator {
 
             match json {
                 Ok((_key, value)) => {
-                    let metadata = bincode::deserialize::<OffChainData>(&value);
+                    let metadata = OffChainData::decode(&value);
 
                     match metadata {
                         Ok(metadata) => {
-                            match self
-                                .target_rocks_db
-                                .asset_offchain_data
-                                .put(metadata.url.clone(), metadata)
-                            {
+                            match self.target_rocks_db.asset_offchain_data.put(
+                                metadata.url.clone().expect("Metadata URL cannot be empty"),
+                                metadata,
+                            ) {
                                 Ok(_) => {
                                     self.metrics
                                         .inc_jsons_migrated("json_migrated", MetricStatus::SUCCESS);

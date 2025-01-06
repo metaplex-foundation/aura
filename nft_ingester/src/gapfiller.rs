@@ -133,7 +133,7 @@ pub async fn process_raw_blocks_stream(
     //         Some(Ok(block)) => {
     //             if let Some(e) = storage
     //                 .raw_blocks_cbor
-    //                 .put_cbor_encoded(block.slot, block)
+    //                 .put(block.slot, block)
     //                 .await
     //                 .err()
     //             {

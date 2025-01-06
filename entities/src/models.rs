@@ -107,13 +107,13 @@ pub struct Creator {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct OffChainData {
+pub struct OffChainDataGrpc {
     pub url: String,
     pub metadata: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct CompleteAssetDetails {
+pub struct AssetCompleteDetailsGrpc {
     // From AssetStaticDetails
     pub pubkey: Pubkey,
     pub specification_asset_class: SpecificationAssetClass,
@@ -172,7 +172,7 @@ pub struct CompleteAssetDetails {
     pub master_edition: Option<MasterEdition>,
 
     // OffChainData
-    pub offchain_data: Option<OffChainData>,
+    pub offchain_data: Option<OffChainDataGrpc>,
 
     // SplMint
     pub spl_mint: Option<SplMint>,
