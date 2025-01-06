@@ -41,7 +41,7 @@ pub struct IngesterClapArgs {
     #[clap(long, default_value = "100")]
     pub pg_max_db_connections: u32,
 
-    #[clap(short('r'), long, default_value="{redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
+    #[clap(short('r'), long, help="example: {redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
     pub redis_connection_config: Dict,
 
     #[clap(long, default_value = "20")]
@@ -103,7 +103,12 @@ pub struct IngesterClapArgs {
     pub rocks_backup_url: Option<String>,
     #[clap(long, help = "Rocks backup archives dir")]
     pub rocks_backup_archives_dir: Option<String>,
-
+    #[clap(long, default_value_t = false, help = "Enable migration for rocksdb (default: false)")]
+    pub rocks_enable_migration: bool,
+    #[clap(long, help = "Migration storage path dir")]
+    pub rocks_migration_storage_path: Option<String>,
+    
+    
     #[clap(
         long,
         default_value_t = false,

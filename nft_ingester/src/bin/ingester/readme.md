@@ -10,7 +10,7 @@ cd nft_ingester
 Build the project using Cargo:
 
 ```bash
-cargo build --release --bin explorer
+cargo build --bin ingester
 ```
 
 ## Running the Service
@@ -44,6 +44,6 @@ To increase log verbosity, set the log level to debug:
 
 ## Tips for local debugging/testing
 
-To fill the local Redis with messages you can use any other Redis that available. 
+To fill the local Redis with messages you can use any other Redis that is available. 
 There is a script that will copy existing messages from one Redis and forward copies of these messages to another one. 
 `nft_ingester/scripts/transfer_redis_messages.py`

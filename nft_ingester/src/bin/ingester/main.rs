@@ -115,9 +115,8 @@ pub async fn main() -> Result<(), IngesterError> {
     let primary_rocks_storage = Arc::new(
         init_primary_storage(
             &args.rocks_db_path_container,
-            // RocksDB storage migration. Right now is not working. (false by default)
-            false,
-            &None,
+            args.rocks_enable_migration,
+            &args.rocks_migration_storage_path,
             &metrics_state,
             mutexed_tasks.clone(),
         )

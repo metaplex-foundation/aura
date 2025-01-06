@@ -63,7 +63,6 @@ pub async fn init_primary_storage(
         MigrationState::CreateColumnFamilies,
     )?;
 
-    //todo Deprecated remove?
     if enable_migration_rocksdb {
         let migration_version_manager_dir = TempDir::new()?;
         let migration_version_manager = Storage::open_secondary(
