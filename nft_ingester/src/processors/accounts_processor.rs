@@ -190,8 +190,11 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         batch_fill_instant: &mut Instant,
     ) {
         for unprocessed_account in unprocessed_accounts {
-            debug!("Process account with Id: {:?} {:?}", &unprocessed_account.id, &unprocessed_account.account);
-            
+            debug!(
+                "Process account with Id: {:?} {:?}",
+                &unprocessed_account.id, &unprocessed_account.account
+            );
+
             let processing_result = match &unprocessed_account.account {
                 UnprocessedAccount::MetadataInfo(metadata_info) => self
                     .mplx_accounts_processor

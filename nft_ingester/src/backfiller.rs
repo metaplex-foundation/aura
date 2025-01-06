@@ -69,15 +69,14 @@ impl BackfillSource {
         match source_mode {
             BackfillerSourceMode::Bigtable => Self::Bigtable(Arc::new(
                 connect_new_bigtable_from_config(
-                    big_table_config.expect("big_table_config is required for Bigtable mode"))
-                    .await
-                    .unwrap(),
+                    big_table_config.expect("big_table_config is required for Bigtable mode"),
+                )
+                .await
+                .unwrap(),
             )),
-            BackfillerSourceMode::RPC => {
-                Self::Rpc(Arc::new(BackfillRPC::connect(
-                    solana_rpc_address.expect("solana_rpc_address is required for RPC mode")
-                )))
-            }
+            BackfillerSourceMode::RPC => Self::Rpc(Arc::new(BackfillRPC::connect(
+                solana_rpc_address.expect("solana_rpc_address is required for RPC mode"),
+            ))),
         }
     }
 }

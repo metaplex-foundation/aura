@@ -1,5 +1,6 @@
+use clap::Parser;
 use entities::enums::ASSET_TYPES;
-use nft_ingester::config::{init_logger, setup_config, IngesterClapArgs, SynchronizerClapArgs};
+use nft_ingester::config::{init_logger, IngesterClapArgs, SynchronizerClapArgs};
 use nft_ingester::error::IngesterError;
 use nft_ingester::index_syncronizer::{SyncStatus, Synchronizer};
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration};
@@ -7,7 +8,6 @@ use postgre_client::PG_MIGRATIONS_PATH;
 use prometheus_client::registry::Registry;
 use std::path::PathBuf;
 use std::sync::Arc;
-use clap::Parser;
 use tokio_util::sync::CancellationToken;
 
 use metrics_utils::SynchronizerMetricsConfig;
@@ -75,7 +75,6 @@ pub async fn main() -> Result<(), IngesterError> {
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     let shutdown_token = CancellationToken::new();
     let shutdown_token_clone = shutdown_token.clone();
-
 
     mutexed_tasks.lock().await.spawn(async move {
         // --stop

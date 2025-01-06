@@ -387,8 +387,16 @@ pub fn asset_to_rpc(
 
     let mpl_core_info = match interface {
         Interface::MplCoreAsset | Interface::MplCoreCollection => Some(MplCoreInfo {
-            num_minted: full_asset.asset_dynamic.num_minted.as_ref().map(|u| u.value),
-            current_size: full_asset.asset_dynamic.current_size.as_ref().map(|u| u.value),
+            num_minted: full_asset
+                .asset_dynamic
+                .num_minted
+                .as_ref()
+                .map(|u| u.value),
+            current_size: full_asset
+                .asset_dynamic
+                .current_size
+                .as_ref()
+                .map(|u| u.value),
             plugins_json_version: full_asset
                 .asset_dynamic
                 .plugins_json_version
@@ -407,14 +415,14 @@ pub fn asset_to_rpc(
                     edition_number: edition_info.edition_number,
                 })
             } else {
-                Some(Supply{
+                Some(Supply {
                     edition_nonce,
                     print_current_supply: 0,
                     print_max_supply: Some(0),
                     edition_number: None,
                 })
             }
-        },
+        }
         _ => None,
     };
 

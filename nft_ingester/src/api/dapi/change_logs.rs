@@ -49,10 +49,11 @@ pub async fn get_proof_for_assets<
         asset_ids.iter().map(|id| (id.to_string(), None)).collect();
 
     // Instead of using a HashMap keyed by tree_id, we keep a Vec of (tree_id, pubkey, nonce).
-    let tree_pubkeys: Vec<(Pubkey, Pubkey, u64)> = fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids)
-        .values()
-        .map(|asset| (asset.tree_id, asset.pubkey, asset.nonce.unwrap_or_default()))
-        .collect();
+    let tree_pubkeys: Vec<(Pubkey, Pubkey, u64)> =
+        fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids)
+            .values()
+            .map(|asset| (asset.tree_id, asset.pubkey, asset.nonce.unwrap_or_default()))
+            .collect();
 
     // Construct leaf keys for all requested assets
     let leaf_keys: Vec<ClLeafKey> = tree_pubkeys

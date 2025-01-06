@@ -48,9 +48,9 @@ use nft_ingester::redis_receiver::RedisReceiver;
 use nft_ingester::rocks_db::{receive_last_saved_slot, restore_rocksdb};
 use nft_ingester::transaction_ingester::BackfillTransactionIngester;
 use nft_ingester::{config::init_logger, error::IngesterError};
+use rocks_db::storage_traits::AssetSlotStorage;
 use rocks_db::SlotStorage;
 use tonic::transport::Server;
-use rocks_db::storage_traits::AssetSlotStorage;
 use usecase::asset_streamer::AssetStreamer;
 use usecase::proofs::MaybeProofChecker;
 use usecase::raw_blocks_streamer::BlocksStreamer;
@@ -66,14 +66,13 @@ pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 8;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 pub const SECONDS_TO_RETRY_IDXS_CLEANUP: u64 = 15 * 60; // 15 minutes
 
-
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
     let args = IngesterClapArgs::parse();
     init_logger(&args.log_level);
 
     info!("Starting Ingester...");
-    info!("___________________________________", );
+    info!("___________________________________",);
     info!("API: {}", args.is_run_api);
     if args.is_run_api {
         info!("API port: localhost:{}", args.server_port);
@@ -82,8 +81,8 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Bubblegum BackFiller: {}", args.is_run_bubblegum_backfiller);
     info!("Gap Filler: {}", args.is_run_gapfiller);
     info!("Run Profiling: {}", args.is_run_profiling);
-    info!("Sequence Consistent Checker: {}", args.run_sequence_consistent_checker );
-    info!("___________________________________", );
+    info!("Sequence Consistent Checker: {}", args.run_sequence_consistent_checker);
+    info!("___________________________________",);
 
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
@@ -98,24 +97,32 @@ pub async fn main() -> Result<(), IngesterError> {
     // try to restore rocksDB first
     if args.is_restore_rocks_db {
         restore_rocksdb(
-            &args.rocks_backup_url.expect("rocks_backup_url is required for the restore rocks db process"),
-            &args.rocks_backup_archives_dir.expect("rocks_backup_archives_dir is required for the restore rocks db process"),
-            &args.rocks_db_path_container
-        ).await?;
+            &args
+                .rocks_backup_url
+                .expect("rocks_backup_url is required for the restore rocks db process"),
+            &args
+                .rocks_backup_archives_dir
+                .expect("rocks_backup_archives_dir is required for the restore rocks db process"),
+            &args.rocks_db_path_container,
+        )
+        .await?;
     }
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
     info!("Init primary storage...");
-    let primary_rocks_storage =
-        Arc::new(init_primary_storage(
+    let primary_rocks_storage = Arc::new(
+        init_primary_storage(
             &args.rocks_db_path_container,
             // RocksDB storage migration. Right now is not working. (false by default)
             false,
             &None,
-             &metrics_state,
-            mutexed_tasks.clone()).await?);
+            &metrics_state,
+            mutexed_tasks.clone(),
+        )
+        .await?,
+    );
 
     info!("Init PG storage...");
     let index_pg_storage = Arc::new(
@@ -141,18 +148,11 @@ pub async fn main() -> Result<(), IngesterError> {
         connection_config: args.redis_connection_config.clone(),
     };
 
-    let ack_channel =
-        create_ack_channel(cloned_rx, message_config.clone(), mutexed_tasks.clone()).await;
+    let ack_channel = create_ack_channel(cloned_rx, message_config.clone(), mutexed_tasks.clone()).await;
 
     for _ in 0..args.redis_accounts_parsing_workers {
-        let redis_receiver = Arc::new(
-            RedisReceiver::new(
-                message_config.clone(),
-                ConsumptionType::All,
-                ack_channel.clone(),
-            )
-            .await?,
-        );
+        let redis_receiver =
+            Arc::new(RedisReceiver::new(message_config.clone(), ConsumptionType::All, ack_channel.clone()).await?);
 
         run_accounts_processor(
             shutdown_rx.resubscribe(),
@@ -171,14 +171,8 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     for _ in 0..args.redis_transactions_parsing_workers {
-        let redis_receiver = Arc::new(
-            RedisReceiver::new(
-                message_config.clone(),
-                ConsumptionType::All,
-                ack_channel.clone(),
-            )
-            .await?,
-        );
+        let redis_receiver =
+            Arc::new(RedisReceiver::new(message_config.clone(), ConsumptionType::All, ack_channel.clone()).await?);
         run_transaction_processor(
             shutdown_rx.resubscribe(),
             mutexed_tasks.clone(),
@@ -190,7 +184,6 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     info!("MessageSource Redis FINISH");
-
 
     //todo Add starting from particular block
     let last_saved_slot = primary_rocks_storage.last_saved_slot()?.unwrap_or_default();
@@ -218,7 +211,6 @@ pub async fn main() -> Result<(), IngesterError> {
         )
         .await,
     );
-
 
     if args.is_run_gapfiller {
         info!("Start gapfiller...");
@@ -278,7 +270,6 @@ pub async fn main() -> Result<(), IngesterError> {
         .filter(|conf| conf.is_enabled)
         .map(|_| json_processor.clone());
 
-
     if args.is_run_api {
         info!("Starting API (Ingester)...");
 
@@ -319,7 +310,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 args.storage_service_base_url,
                 args.native_mint_pubkey,
             )
-                .await
+            .await
             {
                 Ok(_) => Ok(()),
                 Err(e) => {
@@ -337,7 +328,6 @@ pub async fn main() -> Result<(), IngesterError> {
         .await
         .spawn(json_worker::run(cloned_jp, cloned_rx).map(|_| Ok(())));
 
-
     let shutdown_token = CancellationToken::new();
 
     // Backfiller
@@ -350,12 +340,16 @@ pub async fn main() -> Result<(), IngesterError> {
 
         let slot_db = Arc::new(
             SlotStorage::open_secondary(
-                args.slots_db_path.clone().expect("slots_db_path is required for SlotStorage"),
-                args.secondary_slots_db_path.clone().expect("secondary_slots_db_path is required for SlotStorage"),
+                args.slots_db_path
+                    .clone()
+                    .expect("slots_db_path is required for SlotStorage"),
+                args.secondary_slots_db_path
+                    .clone()
+                    .expect("secondary_slots_db_path is required for SlotStorage"),
                 mutexed_tasks.clone(),
                 metrics_state.red_metrics.clone(),
             )
-                .expect("Failed to open slot storage"),
+            .expect("Failed to open slot storage"),
         );
 
         let rpc_url = &args.backfill_rpc_address.unwrap_or_else(|| args.rpc_host.clone());
@@ -366,20 +360,20 @@ pub async fn main() -> Result<(), IngesterError> {
                 &args.backfiller_source_mode,
                 Option::from(rpc_url.clone()),
                 args.big_table_config.as_ref(),
-            ).await,
+            )
+            .await,
         );
-        
-    
+
         if args.is_run_bubblegum_backfiller {
             info!("Runing Bubblegum backfiller (ingester)...");
-            
+
             if args.should_reingest {
                 warn!("'Reingest' flag is set, deleting last backfilled slot.");
                 primary_rocks_storage
                     .delete_parameter::<u64>(rocks_db::parameters::Parameter::LastBackfilledSlot)
                     .await?;
             }
-    
+
             match args.backfiller_mode {
                 BackfillerMode::IngestDirectly => {
                     panic!("IngestDirectly mode is not supported any more.");
@@ -401,7 +395,8 @@ pub async fn main() -> Result<(), IngesterError> {
                     let metrics: Arc<BackfillerMetricsConfig> = metrics_state.backfiller_metrics.clone();
                     let slot_db = slot_db.clone();
                     mutexed_tasks.lock().await.spawn(async move {
-                        nft_ingester::backfiller::run_backfill_slots(shutdown_token, db, slot_db, consumer, metrics).await;
+                        nft_ingester::backfiller::run_backfill_slots(shutdown_token, db, slot_db, consumer, metrics)
+                            .await;
                         Ok(())
                     });
                 }
@@ -413,7 +408,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
         if args.run_sequence_consistent_checker {
             info!("Running sequence consistent checker...");
-            
+
             let direct_block_parser = Arc::new(DirectBlockParser::new(
                 tx_ingester.clone(),
                 primary_rocks_storage.clone(),
@@ -431,9 +426,8 @@ pub async fn main() -> Result<(), IngesterError> {
                 mutexed_tasks.clone(),
                 args.sequence_consistent_checker_wait_period_sec,
             )
-                .await;
+            .await;
         }
-
 
         // setup dependencies for grpc server
         let uc = AssetStreamer::new(args.peer_grpc_max_gap_slots, primary_rocks_storage.clone());
@@ -489,11 +483,9 @@ pub async fn main() -> Result<(), IngesterError> {
 
             Ok(())
         });
-
     }
 
     Scheduler::run_in_background(Scheduler::new(primary_rocks_storage.clone())).await;
-
 
     if let Ok(arweave) =
         Arweave::from_keypair_path(PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(), ARWEAVE_BASE_URL.parse().unwrap())
@@ -516,14 +508,13 @@ pub async fn main() -> Result<(), IngesterError> {
             .await
             .spawn(process_batch_mints(processor_clone, rx));
     }
-    
 
     let batch_mint_persister = BatchMintPersister::new(
         primary_rocks_storage.clone(),
         BatchMintDownloaderForPersister,
         metrics_state.batch_mint_persisting_metrics.clone(),
     );
-    
+
     let rx = shutdown_rx.resubscribe();
     mutexed_tasks.lock().await.spawn(async move {
         info!("Start batch_mint persister...");
@@ -575,7 +566,6 @@ pub async fn main() -> Result<(), IngesterError> {
 
     Ok(())
 
-
     // todo: remove backup service from here and move it to a separate process with a secondary db - verify it's possible first!
     // start backup service
     // if config.store_db_backups() {
@@ -589,6 +579,3 @@ pub async fn main() -> Result<(), IngesterError> {
     //         .spawn(perform_backup(backup_service, cloned_rx, cloned_metrics));
     // }
 }
-
-
-

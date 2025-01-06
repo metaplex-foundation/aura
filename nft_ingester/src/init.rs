@@ -17,8 +17,8 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
 use tracing::log::log;
+use tracing::{error, info};
 
 const MALLOC_CONF_ENV: &str = "MALLOC_CONF";
 
@@ -76,10 +76,14 @@ pub async fn init_primary_storage(
 
         Storage::apply_all_migrations(
             db_path,
-            migration_storage_path.as_deref()
-                .ok_or(IngesterError::ConfigurationError{ msg: "Migration storage path is not set".to_string()})?,
+            migration_storage_path
+                .as_deref()
+                .ok_or(IngesterError::ConfigurationError {
+                    msg: "Migration storage path is not set".to_string(),
+                })?,
             Arc::new(migration_version_manager),
-        ).await?;
+        )
+        .await?;
     }
 
     Ok(Storage::open(

@@ -1,5 +1,4 @@
-use std::sync::Arc;
-
+use clap::Parser;
 use entities::enums::TaskStatus;
 use entities::models::{OffChainData, Task};
 use metrics_utils::red::RequestErrorDurationMetrics;
@@ -8,14 +7,13 @@ use metrics_utils::{JsonMigratorMetricsConfig, MetricState, MetricStatus, Metric
 use postgre_client::PgClient;
 use rocks_db::asset::AssetCompleteDetails;
 use rocks_db::column::TypedColumn;
+use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::{JoinError, JoinSet};
 use tracing::{error, info};
 
-use nft_ingester::config::{
-    init_logger, setup_config, JsonMigratorConfig, JsonMigratorMode, JSON_MIGRATOR_CONFIG_PREFIX,
-};
+use nft_ingester::config::{init_logger, JsonMigratorMode, MigratorClapArgs};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use rocks_db::asset_generated::asset as fb;
@@ -27,25 +25,19 @@ pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
-    let config: JsonMigratorConfig = setup_config(JSON_MIGRATOR_CONFIG_PREFIX);
+    let args = MigratorClapArgs::parse();
+    init_logger(&args.log_level);
 
-    init_logger(&config.get_log_level());
-
-    info!("Started...");
-
-    let max_postgre_connections = config
-        .database_config
-        .get_max_postgres_connections()
-        .unwrap_or(DEFAULT_MAX_POSTGRES_CONNECTIONS);
+    info!("Migrator started...");
 
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
 
     let pg_client = Arc::new(
         PgClient::new(
-            &config.database_config.get_database_url().unwrap(),
-            DEFAULT_MIN_POSTGRES_CONNECTIONS,
-            max_postgre_connections,
+            &args.pg_database_url,
+            args.pg_min_db_connections,
+            args.pg_max_db_connections,
             None,
             metrics_state.red_metrics.clone(),
         )
@@ -53,13 +45,13 @@ pub async fn main() -> Result<(), IngesterError> {
         .unwrap(),
     );
 
-    start_metrics(metrics_state.registry, Some(config.metrics_port)).await;
+    start_metrics(metrics_state.registry, args.metrics_port).await;
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
 
     let storage = Storage::open(
-        config.json_target_db.clone(),
+        args.rocks_json_target_db.clone(),
         mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
@@ -67,9 +59,8 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let target_storage = Arc::new(storage);
-
     let source_storage = Storage::open(
-        &config.json_source_db,
+        args.rocks_json_source_db.clone(),
         mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
@@ -82,7 +73,7 @@ pub async fn main() -> Result<(), IngesterError> {
         source_storage.clone(),
         target_storage.clone(),
         metrics_state.json_migrator_metrics.clone(),
-        config,
+        args.migrator_mode,
     );
 
     let cloned_tasks = mutexed_tasks.clone();
@@ -105,7 +96,7 @@ pub struct JsonMigrator {
     pub source_rocks_db: Arc<Storage>,
     pub target_rocks_db: Arc<Storage>,
     pub metrics: Arc<JsonMigratorMetricsConfig>,
-    pub config: JsonMigratorConfig,
+    pub migrator_mode: JsonMigratorMode,
 }
 
 impl JsonMigrator {
@@ -114,23 +105,19 @@ impl JsonMigrator {
         source_rocks_db: Arc<Storage>,
         target_rocks_db: Arc<Storage>,
         metrics: Arc<JsonMigratorMetricsConfig>,
-        config: JsonMigratorConfig,
+        migrator_mode: JsonMigratorMode,
     ) -> Self {
         Self {
             database_pool,
             source_rocks_db,
             target_rocks_db,
             metrics,
-            config,
+            migrator_mode,
         }
     }
 
-    pub async fn run(
-        &self,
-        rx: Receiver<()>,
-        tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
-    ) {
-        match self.config.work_mode {
+    pub async fn run(&self, rx: Receiver<()>, tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>) {
+        match self.migrator_mode {
             JsonMigratorMode::Full => {
                 info!("Launch JSON migrator in full mode");
 

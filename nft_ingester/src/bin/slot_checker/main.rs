@@ -261,7 +261,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start slot collection
     let _ = slots_collector
-        .collect_slots(&BUBBLEGUM_PROGRAM_ID, last_persisted_slot, args.first_slot.unwrap_or_default(), &shutdown_rx)
+        .collect_slots(
+            &BUBBLEGUM_PROGRAM_ID,
+            last_persisted_slot,
+            args.first_slot.unwrap_or_default(),
+            &shutdown_rx,
+        )
         .await;
 
     // Collection done, stop the spinner

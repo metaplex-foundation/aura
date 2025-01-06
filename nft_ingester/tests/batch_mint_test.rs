@@ -749,11 +749,16 @@ async fn batch_mint_persister_test() {
     // Test get asset proof batch
     let payload = GetAssetProofBatch {
         ids: test_batch_mint
-            .batch_mints.into_iter().map(|lu|lu.leaf_update.id().to_string()).take(10).collect(),
+            .batch_mints
+            .into_iter()
+            .map(|lu| lu.leaf_update.id().to_string())
+            .take(10)
+            .collect(),
     };
     let proof_result = api.get_asset_proof_batch(payload).await.unwrap();
-    let asset_proofs: HashMap<String, Option<AssetProof>> = serde_json::from_value(proof_result).unwrap();
-    for (_key, proof) in asset_proofs{
+    let asset_proofs: HashMap<String, Option<AssetProof>> =
+        serde_json::from_value(proof_result).unwrap();
+    for (_key, proof) in asset_proofs {
         assert!(proof.is_some())
     }
 }
