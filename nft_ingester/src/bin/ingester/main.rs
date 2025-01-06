@@ -128,7 +128,8 @@ pub async fn main() -> Result<(), IngesterError> {
     let index_pg_storage = Arc::new(
         init_index_storage_with_migration(
             &args.pg_database_url,
-            args.pg_max_db_connections.clone(),
+            args.pg_max_db_connections,
+            Some(args.pg_max_lifetime_sec),
             metrics_state.red_metrics.clone(),
             DEFAULT_MIN_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,

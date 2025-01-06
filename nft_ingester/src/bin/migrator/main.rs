@@ -38,6 +38,7 @@ pub async fn main() -> Result<(), IngesterError> {
             &args.pg_database_url,
             args.pg_min_db_connections,
             args.pg_max_db_connections,
+            Some(args.pg_max_lifetime_sec),
             None,
             metrics_state.red_metrics.clone(),
         )

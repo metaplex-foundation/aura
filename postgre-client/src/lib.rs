@@ -57,6 +57,7 @@ impl PgClient {
         url: &str,
         min_connections: u32,
         max_connections: u32,
+        max_lifetime_sec: Option<u64>,
         base_dump_path: Option<PathBuf>,
         metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self, Error> {
@@ -67,6 +68,7 @@ impl PgClient {
         let pool = PgPoolOptions::new()
             .min_connections(min_connections)
             .max_connections(max_connections)
+            .max_lifetime(max_lifetime_sec.map(Duration::from_secs))
             // 1 hour of a timeout, this is set specifically due to synchronizer needing up to 200 connections to do a full sync load
             .acquire_timeout(Duration::from_secs(3600))
             .connect_with(options)

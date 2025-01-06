@@ -25,6 +25,7 @@ const MALLOC_CONF_ENV: &str = "MALLOC_CONF";
 pub async fn init_index_storage_with_migration(
     url: &str,
     max_pg_connections: u32,
+    max_lifetime_sec: Option<u64>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
     min_pg_connections: u32,
     pg_migrations_path: &str,
@@ -34,6 +35,7 @@ pub async fn init_index_storage_with_migration(
         url,
         min_pg_connections,
         max_pg_connections,
+        max_lifetime_sec,
         base_dump_path,
         red_metrics,
     )

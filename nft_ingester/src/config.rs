@@ -40,13 +40,13 @@ pub struct IngesterClapArgs {
 
     #[clap(long, default_value = "100")]
     pub pg_max_db_connections: u32,
+    #[clap(long, default_value = "120")]
+    pub pg_max_lifetime_sec: u64,
 
     #[clap(short('r'), long, default_value="{redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
     pub redis_connection_config: Dict,
-
     #[clap(long, default_value = "20")]
     pub redis_accounts_parsing_workers: u32,
-
     #[clap(long, default_value = "20")]
     pub redis_transactions_parsing_workers: u32,
 
@@ -299,6 +299,8 @@ pub struct MigratorClapArgs {
     pub pg_min_db_connections: u32,
     #[clap(long, default_value = "250")]
     pub pg_max_db_connections: u32,
+    #[clap(long, default_value = "120")]
+    pub pg_max_lifetime_sec: u64,
 
     #[clap(long, help = "Metrics port")]
     pub metrics_port: Option<u16>,
@@ -325,6 +327,8 @@ pub struct ApiClapArgs {
     pub pg_min_db_connections: u32,
     #[clap(long, default_value = "250")]
     pub pg_max_db_connections: u32,
+    #[clap(long, default_value = "120")]
+    pub pg_max_lifetime_sec: u64,
 
     #[clap(
         short('m'),

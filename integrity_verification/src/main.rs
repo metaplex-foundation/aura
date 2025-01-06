@@ -82,6 +82,7 @@ async fn main() {
                     &config.database_url.clone().unwrap(),
                     100,
                     500,
+                     Some(120),
                     config.base_dump_path.clone(),
                     metrics.red_metrics,
                 )
